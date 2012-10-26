@@ -55,6 +55,11 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QStyledItemDelegate>
+
+#if !defined(QT_NO_STYLE_WINDOWS)
+#include <qwindowsstyle.h>
+#endif // QT_NO_STYLE_WINDOWS
+
 #if defined(Q_OS_WIN) || defined(Q_OS_WINCE)
 #  include <windows.h>
 #  include <QtGui/QGuiApplication>
@@ -657,7 +662,7 @@ void tst_QListView::clicked()
         QModelIndex index = view.indexAt(p);
         if (!index.isValid())
             continue;
-        QSignalSpy spy(&view, SIGNAL(clicked(const QModelIndex&)));
+        QSignalSpy spy(&view, SIGNAL(clicked(QModelIndex)));
         QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, p);
         QCOMPARE(spy.count(), 1);
     }
@@ -1568,7 +1573,7 @@ void tst_QListView::task228566_infiniteRelayout()
     view.show();
     QTest::qWait(100); //make sure the layout is done once
 
-    QSignalSpy spy(view.horizontalScrollBar(), SIGNAL(rangeChanged(int, int)));
+    QSignalSpy spy(view.horizontalScrollBar(), SIGNAL(rangeChanged(int,int)));
 
     QTest::qWait(200);
     //the layout should already have been done
@@ -2190,6 +2195,11 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
 
     // create listview
     QListView lv;
+#if !defined(QT_NO_STYLE_WINDOWS)
+    // The test fails on Fusion style
+    // See https://bugreports.qt-project.org/browse/QTBUG-27675
+    lv.setStyle(new QWindowsStyle());
+#endif
     lv.setFlow(static_cast<QListView::Flow>(flow));
     lv.setSpacing(spacing);
     lv.setModel(&model);

@@ -60,6 +60,8 @@ static|staticlib:CMAKE_STATIC_TYPE = true
 
 contains(QT_CONFIG, reduce_relocations):CMAKE_ADD_FPIE_FLAGS = "true"
 
+CMAKE_MKSPEC = $$relative_path($$QMAKESPEC, $$[QT_HOST_DATA/get]/mkspecs)
+
 macx {
     !isEmpty(CMAKE_STATIC_TYPE) {
         CMAKE_LIB_FILE_LOCATION_DEBUG = libQt$${CMAKE_MODULE_NAME}$${QT_LIBINFIX}_debug.a
@@ -153,6 +155,8 @@ INSTALLS += cmake_qt5_module_files
 
 cmake_config_file.input = $$PWD/../cmake/Qt5BasicConfig.cmake.in
 cmake_config_file.output = $$DESTDIR/cmake/Qt5$${CMAKE_MODULE_NAME}/Qt5$${CMAKE_MODULE_NAME}Config.cmake
+
+CMAKE_PACKAGE_VERSION = $$eval(QT.$${MODULE}.VERSION)
 
 cmake_config_version_file.input = $$PWD/../cmake/Qt5ConfigVersion.cmake.in
 cmake_config_version_file.output = $$DESTDIR/cmake/Qt5$${CMAKE_MODULE_NAME}/Qt5$${CMAKE_MODULE_NAME}ConfigVersion.cmake

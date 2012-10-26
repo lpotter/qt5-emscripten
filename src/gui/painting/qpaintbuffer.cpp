@@ -680,7 +680,7 @@ void QPaintBufferEngine::penChanged()
         } else {
             qreal penWidth = (pen.widthF() == 0) ? 1 : pen.widthF();
             QPointF transformedWidth(penWidth, penWidth);
-            if (!pen.isCosmetic())
+            if (!qt_pen_is_cosmetic(pen, state()->renderHints))
                 transformedWidth = painter()->transform().map(transformedWidth);
             buffer->penWidthAdjustment = transformedWidth.x() / 2.0;
         }
@@ -1467,6 +1467,8 @@ void QPainterReplayer::process(const QPaintBufferCommand &cmd)
             painter->setRenderHint(QPainter::SmoothPixmapTransform, nh & QPainter::SmoothPixmapTransform);
         if (xored & QPainter::NonCosmeticDefaultPen)
             painter->setRenderHint(QPainter::NonCosmeticDefaultPen, nh & QPainter::NonCosmeticDefaultPen);
+        if (xored & QPainter::Qt4CompatiblePainting)
+            painter->setRenderHint(QPainter::Qt4CompatiblePainting, nh & QPainter::Qt4CompatiblePainting);
         break; }
 
     case QPaintBufferPrivate::Cmd_SetOpacity: {

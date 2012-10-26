@@ -3,6 +3,7 @@
 HEADERS += \
         styles/qdrawutil.h \
         styles/qstyle.h \
+        styles/qstyleanimation_p.h \
         styles/qstylefactory.h \
         styles/qstyleoption.h \
         styles/qstyleplugin.h \
@@ -11,12 +12,14 @@ HEADERS += \
         styles/qstylehelper_p.h \
         styles/qproxystyle.h \
         styles/qproxystyle_p.h \
+        styles/qcommonstyle_p.h \
         styles/qstylepainter.h \
         styles/qstylesheetstyle_p.h
 
 SOURCES += \
         styles/qdrawutil.cpp \
         styles/qstyle.cpp \
+        styles/qstyleanimation.cpp \
         styles/qstylefactory.cpp \
         styles/qstyleoption.cpp \
         styles/qstyleplugin.cpp \
@@ -34,7 +37,7 @@ wince* {
 }
 
 contains( styles, all ) {
-    styles = mac windows windowsxp windowsvista
+    styles = fusion mac windows windowsxp windowsvista
 }
 
 !macx-*|ios:styles -= mac
@@ -62,6 +65,14 @@ contains( styles, mac ) {
     DEFINES += QT_NO_STYLE_MAC
 }
 
+contains( styles, windows ) {
+    HEADERS += styles/qwindowsstyle.h
+    SOURCES += styles/qwindowsstyle.cpp
+    DEFINES += QT_STYLE_WINDOWS
+} else {
+    DEFINES += QT_NO_STYLE_WINDOWS
+}
+
 contains( styles, windowsvista ) {
     HEADERS += styles/qwindowsvistastyle.h
     HEADERS += styles/qwindowsvistastyle_p.h
@@ -69,7 +80,7 @@ contains( styles, windowsvista ) {
     !contains( styles, windowsxp ) {
         message( windowsvista requires windowsxp )
         styles += windowsxp
-        DEFINES+= QT_STYLE_WINDOWSXP
+        DEFINES += QT_STYLE_WINDOWSXP
     }
 } else {
     DEFINES += QT_NO_STYLE_WINDOWSVISTA
@@ -80,23 +91,11 @@ contains( styles, windowsxp ) {
     SOURCES += styles/qwindowsxpstyle.cpp
     !contains( styles, windows ) {
         message( windowsxp requires windows )
-        styles += windows
-        DEFINES+= QT_STYLE_WINDOWS
+        styles  += windows
+        DEFINES += QT_STYLE_WINDOWS
     }
 } else {
     DEFINES += QT_NO_STYLE_WINDOWSXP
-}
-
-contains( styles, plastique ) {
-    HEADERS += styles/qplastiquestyle.h
-    SOURCES += styles/qplastiquestyle.cpp
-    !contains( styles, windows ) {
-        message( plastique requires windows )
-        styles += windows
-        DEFINES+= QT_STYLE_WINDOWS
-    }
-} else {
-    DEFINES += QT_NO_STYLE_PLASTIQUE
 }
 
 contains( styles, gtk ) {
@@ -106,31 +105,15 @@ contains( styles, gtk ) {
         SOURCES += styles/qgtkstyle.cpp
         SOURCES += styles/qgtkpainter.cpp
         SOURCES += styles/qgtkstyle_p.cpp
-    !contains( styles, cleanlooks ) {
-        styles += cleanlooks
-        DEFINES+= QT_STYLE_CLEANLOOKS
-    }
 } else {
     DEFINES += QT_NO_STYLE_GTK
 }
-
-contains( styles, cleanlooks ) {
-        HEADERS += styles/qcleanlooksstyle.h
-        HEADERS += styles/qcleanlooksstyle_p.h
-        SOURCES += styles/qcleanlooksstyle.cpp
-    !contains( styles, windows ) {
-        styles += windows
-        DEFINES+= QT_STYLE_WINDOWS
-    }
+contains( styles, fusion ) {
+        HEADERS += styles/qfusionstyle.h
+        HEADERS += styles/qfusionstyle_p.h
+        SOURCES += styles/qfusionstyle.cpp
 } else {
-    DEFINES += QT_NO_STYLE_CLEANLOOKS
-}
-
-contains( styles, windows ) {
-    HEADERS += styles/qwindowsstyle.h
-    SOURCES += styles/qwindowsstyle.cpp
-} else {
-    DEFINES += QT_NO_STYLE_WINDOWS
+    DEFINES += QT_NO_STYLE_FUSION
 }
 
 contains( styles, windowsce ) {

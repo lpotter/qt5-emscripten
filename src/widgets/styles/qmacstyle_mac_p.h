@@ -47,7 +47,7 @@
 #undef check
 
 #include "qmacstyle_mac.h"
-#include "qwindowsstyle_p.h"
+#include "qcommonstyle_p.h"
 #include <private/qapplication_p.h>
 #include <private/qcombobox_p.h>
 #include <private/qpainter_p.h>
@@ -139,7 +139,7 @@ enum QAquaWidgetSize { QAquaSizeLarge = 0, QAquaSizeSmall = 1, QAquaSizeMini = 2
 
 bool qt_mac_buttonIsRenderedFlat(const QPushButton *pushButton, const QStyleOptionButton *option);
 
-class QMacStylePrivate : public QWindowsStylePrivate
+class QMacStylePrivate : public QCommonStylePrivate
 {
     Q_DECLARE_PUBLIC(QMacStyle)
 public:
@@ -160,20 +160,14 @@ public:
 
     // Stuff from QAquaAnimate:
     bool addWidget(QWidget *);
-    void removeWidget(QWidget *);
 
     enum Animates { AquaPushButton, AquaProgressBar, AquaListViewItemOpen, AquaScrollBar };
-    bool animatable(Animates, const QWidget *) const;
-    void stopAnimate(Animates, QWidget *);
-    void startAnimate(Animates, QWidget *);
     static ThemeDrawState getDrawState(QStyle::State flags);
     QAquaWidgetSize aquaSizeConstrain(const QStyleOption *option, const QWidget *widg,
                              QStyle::ContentsType ct = QStyle::CT_CustomBase,
                              QSize szHint=QSize(-1, -1), QSize *insz = 0) const;
     void getSliderInfo(QStyle::ComplexControl cc, const QStyleOptionSlider *slider,
                           HIThemeTrackDrawInfo *tdi, const QWidget *needToRemoveMe) const;
-    void animate();
-    bool doAnimate(Animates);
     inline int animateSpeed(Animates) const { return 33; }
 
     // Utility functions
@@ -202,32 +196,31 @@ public:
                                HIThemeButtonDrawInfo *bdi) const;
     QPixmap generateBackgroundPattern() const;
 
-    void startAnimationTimer();
-
 public:
-    QPointer<QPushButton> defaultButton; //default push buttons
-    int timerID;
-    QList<QPointer<QWidget> > progressBars; //existing progress bars that need animation
-    QList<QPointer<QWidget> > scrollBars; //existing scroll bars that need animation
+    mutable QPointer<QObject> pressedButton;
+    mutable QPointer<QObject> defaultButton;
+    mutable QPointer<QObject> autoDefaultButton;
 
     struct OverlayScrollBarInfo {
         OverlayScrollBarInfo()
             : lastValue(-1),
               lastMinimum(-1),
               lastMaximum(-1),
-              lastUpdate(QDateTime::currentDateTime()),
+              lastUpdate(QDateTime::currentMSecsSinceEpoch()),
               hovered(false),
-              lastHovered(QDateTime::fromTime_t(0)),
-              cleared(false)
+              lastHovered(0),
+              cleared(false),
+              animating(false)
         {}
         int lastValue;
         int lastMinimum;
         int lastMaximum;
         QSize lastSize;
-        QDateTime lastUpdate;
+        qint64 lastUpdate;
         bool hovered;
-        QDateTime lastHovered;
+        qint64 lastHovered;
         bool cleared;
+        bool animating;
     };
     mutable QMap<const QWidget*, OverlayScrollBarInfo> scrollBarInfos;
 
@@ -235,7 +228,6 @@ public:
         int frame;
         enum { ButtonDark, ButtonLight } dir;
     } buttonState;
-    UInt8 progressFrame;
     mutable QPointer<QFocusFrame> focusWidget;
     CFAbsoluteTime defaultButtonStart;
     bool mouseDown;

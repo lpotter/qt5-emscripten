@@ -59,9 +59,7 @@ expect_pass(test_dependent_modules)
 expect_fail(test_add_resource_options)
 expect_fail(test_wrap_cpp_options)
 expect_pass("test(needsquoting)dirname")
-if (NOT WIN32)
-    expect_pass(test_platform_defs_include)
-endif()
+expect_pass(test_platform_defs_include)
 expect_pass(test_qtmainwin_library)
 
 # If QtDBus has been installed then run the tests for its macros.
@@ -90,4 +88,27 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E copy
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy
     "${CMAKE_CURRENT_SOURCE_DIR}/test_testlib_definitions/main.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/failbuild/test_testlib_no_link_widgets/test_testlib_no_link_widgets/"
+)
+
+set(qt_module_includes
+  Core QObject
+  Concurrent QtConcurrentRun
+  Gui QImage
+  Widgets QWidget
+  Network QHostInfo
+  OpenGL QGLContext
+  Sql QSqlError
+  Test QSignalSpy
+  Xml QDomDocument
+  PrintSupport QPrintDialog
+)
+
+if (UNIX AND NOT APPLE AND NOT QNXNTO)
+  list(APPEND qt_module_includes
+    DBus QDBusConnection
+  )
+endif()
+
+test_module_includes(
+  ${qt_module_includes}
 )

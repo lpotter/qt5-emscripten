@@ -649,6 +649,24 @@ void QFont::detach()
 }
 
 /*!
+    \internal
+    Detaches the font object from common font attributes data.
+    Call this instead of QFont::detach() if the only font attributes data
+    has been changed (underline, letterSpacing, kerning, etc.).
+*/
+void QFontPrivate::detachButKeepEngineData(QFont *font)
+{
+    if (font->d->ref.load() == 1)
+        return;
+
+    QFontEngineData *engineData = font->d->engineData;
+    if (engineData)
+        engineData->ref.ref();
+    font->d.detach();
+    font->d->engineData = engineData;
+}
+
+/*!
     Constructs a font object that uses the application's default font.
 
     \sa QGuiApplication::setFont(), QGuiApplication::font()
@@ -760,6 +778,9 @@ QString QFont::family() const
 */
 void QFont::setFamily(const QString &family)
 {
+    if ((resolve_mask & QFont::FamilyResolved) && d->request.family == family)
+        return;
+
     detach();
 
     d->request.family = family;
@@ -793,6 +814,9 @@ QString QFont::styleName() const
 */
 void QFont::setStyleName(const QString &styleName)
 {
+    if ((resolve_mask & QFont::StyleNameResolved) && d->request.styleName == styleName)
+        return;
+
     detach();
 
     d->request.styleName = styleName;
@@ -892,6 +916,9 @@ int QFont::pointSize() const
 */
 void QFont::setHintingPreference(HintingPreference hintingPreference)
 {
+    if ((resolve_mask & QFont::HintingPreferenceResolved) && d->request.hintingPreference == hintingPreference)
+        return;
+
     detach();
 
     d->request.hintingPreference = hintingPreference;
@@ -922,6 +949,9 @@ void QFont::setPointSize(int pointSize)
         return;
     }
 
+    if ((resolve_mask & QFont::SizeResolved) && d->request.pointSize == qreal(pointSize))
+        return;
+
     detach();
 
     d->request.pointSize = qreal(pointSize);
@@ -943,6 +973,9 @@ void QFont::setPointSizeF(qreal pointSize)
         qWarning("QFont::setPointSizeF: Point size <= 0 (%f), must be greater than 0", pointSize);
         return;
     }
+
+    if ((resolve_mask & QFont::SizeResolved) && d->request.pointSize == pointSize)
+        return;
 
     detach();
 
@@ -978,6 +1011,9 @@ void QFont::setPixelSize(int pixelSize)
         qWarning("QFont::setPixelSize: Pixel size <= 0 (%d)", pixelSize);
         return;
     }
+
+    if ((resolve_mask & QFont::SizeResolved) && d->request.pixelSize == qreal(pixelSize))
+        return;
 
     detach();
 
@@ -1034,6 +1070,9 @@ QFont::Style QFont::style() const
 */
 void QFont::setStyle(Style style)
 {
+    if ((resolve_mask & QFont::StyleResolved) && d->request.style == style)
+        return;
+
     detach();
 
     d->request.style = style;
@@ -1076,6 +1115,9 @@ int QFont::weight() const
 void QFont::setWeight(int weight)
 {
     Q_ASSERT_X(weight >= 0 && weight <= 99, "QFont::setWeight", "Weight must be between 0 and 99");
+
+    if ((resolve_mask & QFont::WeightResolved) && d->request.weight == weight)
+        return;
 
     detach();
 
@@ -1122,7 +1164,10 @@ bool QFont::underline() const
 */
 void QFont::setUnderline(bool enable)
 {
-    detach();
+    if ((resolve_mask & QFont::UnderlineResolved) && d->underline == enable)
+        return;
+
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->underline = enable;
     resolve_mask |= QFont::UnderlineResolved;
@@ -1145,7 +1190,10 @@ bool QFont::overline() const
 */
 void QFont::setOverline(bool enable)
 {
-    detach();
+    if ((resolve_mask & QFont::OverlineResolved) && d->overline == enable)
+        return;
+
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->overline = enable;
     resolve_mask |= QFont::OverlineResolved;
@@ -1169,7 +1217,10 @@ bool QFont::strikeOut() const
 */
 void QFont::setStrikeOut(bool enable)
 {
-    detach();
+    if ((resolve_mask & QFont::StrikeOutResolved) && d->strikeOut == enable)
+        return;
+
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->strikeOut = enable;
     resolve_mask |= QFont::StrikeOutResolved;
@@ -1193,6 +1244,9 @@ bool QFont::fixedPitch() const
 */
 void QFont::setFixedPitch(bool enable)
 {
+    if ((resolve_mask & QFont::FixedPitchResolved) && d->request.fixedPitch == enable)
+        return;
+
     detach();
 
     d->request.fixedPitch = enable;
@@ -1223,7 +1277,11 @@ bool QFont::kerning() const
 */
 void QFont::setKerning(bool enable)
 {
-    detach();
+    if ((resolve_mask & QFont::KerningResolved) && d->kerning == enable)
+        return;
+
+    QFontPrivate::detachButKeepEngineData(this);
+
     d->kerning = enable;
     resolve_mask |= QFont::KerningResolved;
 }
@@ -1339,12 +1397,12 @@ QFont::StyleHint QFont::styleHint() const
 */
 void QFont::setStyleHint(StyleHint hint, StyleStrategy strategy)
 {
-    detach();
-
     if ((resolve_mask & (QFont::StyleHintResolved | QFont::StyleStrategyResolved)) &&
          (StyleHint) d->request.styleHint == hint &&
          (StyleStrategy) d->request.styleStrategy == strategy)
         return;
+
+    detach();
 
     d->request.styleHint = hint;
     d->request.styleStrategy = strategy;
@@ -1360,11 +1418,11 @@ void QFont::setStyleHint(StyleHint hint, StyleStrategy strategy)
 */
 void QFont::setStyleStrategy(StyleStrategy s)
 {
-    detach();
-
     if ((resolve_mask & QFont::StyleStrategyResolved) &&
          s == (StyleStrategy)d->request.styleStrategy)
         return;
+
+    detach();
 
     d->request.styleStrategy = s;
     resolve_mask |= QFont::StyleStrategyResolved;
@@ -1472,7 +1530,7 @@ void QFont::setLetterSpacing(SpacingType type, qreal spacing)
         d->letterSpacing == newSpacing)
         return;
 
-    detach();
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->letterSpacing = newSpacing;
     d->letterSpacingIsAbsolute = absoluteSpacing;
@@ -1522,7 +1580,7 @@ void QFont::setWordSpacing(qreal spacing)
         d->wordSpacing == newSpacing)
         return;
 
-    detach();
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->wordSpacing = newSpacing;
     resolve_mask |= QFont::WordSpacingResolved;
@@ -1556,7 +1614,7 @@ void QFont::setCapitalization(Capitalization caps)
         capitalization() == caps)
         return;
 
-    detach();
+    QFontPrivate::detachButKeepEngineData(this);
 
     d->capital = caps;
     resolve_mask |= QFont::CapitalizationResolved;
@@ -1593,9 +1651,10 @@ QFont::Capitalization QFont::capitalization() const
 */
 void QFont::setRawMode(bool enable)
 {
-    detach();
-
     if ((bool) d->rawMode == enable) return;
+
+    // might change behavior, thus destroy engine data
+    detach();
 
     d->rawMode = enable;
 }

@@ -392,16 +392,6 @@ void QCoreApplicationPrivate::createEventDispatcher()
 #endif
 }
 
-void QCoreApplicationPrivate::_q_initializeProcessManager()
-{
-#ifndef QT_NO_PROCESS
-#  ifdef Q_OS_UNIX
-    QProcessPrivate::initializeProcessManager();
-#  endif
-#endif
-}
-
-
 QThread *QCoreApplicationPrivate::theMainThread = 0;
 QThread *QCoreApplicationPrivate::mainThread()
 {
@@ -623,6 +613,12 @@ void QCoreApplication::init()
 #ifndef QT_NO_LIBRARY
     if (coreappdata()->app_libpaths)
         d->appendApplicationPathToLibraryPaths();
+#endif
+
+#if defined(Q_OS_UNIX) && !(defined(QT_NO_PROCESS))
+    // Make sure the process manager thread object is created in the main
+    // thread.
+    QProcessPrivate::initializeProcessManager();
 #endif
 
 #ifdef QT_EVAL
@@ -1007,7 +1003,7 @@ int QCoreApplication::exec()
     if (self) {
         self->d_func()->in_exec = false;
         if (!self->d_func()->aboutToQuitEmitted)
-            emit self->aboutToQuit();
+            emit self->aboutToQuit(QPrivateSignal());
         self->d_func()->aboutToQuitEmitted = true;
         sendPostedEvents(0, QEvent::DeferredDelete);
     }
@@ -1800,8 +1796,6 @@ QString QCoreApplication::applicationFilePath()
     if (!executables.empty()) {
         //We assume that there is only one executable in the folder
         return dir.absoluteFilePath(executables.first());
-    } else {
-        return QString();
     }
 #elif defined(Q_OS_MAC)
     QString qAppFileName_str = qAppFileName();
@@ -2364,5 +2358,3 @@ void QCoreApplication::setEventDispatcher(QAbstractEventDispatcher *eventDispatc
 */
 
 QT_END_NAMESPACE
-
-#include "moc_qcoreapplication.cpp"

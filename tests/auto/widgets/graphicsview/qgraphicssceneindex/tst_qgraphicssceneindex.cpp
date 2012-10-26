@@ -132,7 +132,7 @@ void tst_QGraphicsSceneIndex::overlappedItems()
 
     for (int i = 0; i < 10; ++i)
         for (int j = 0; j < 10; ++j)
-            scene.addRect(i*50, j*50, 200, 200);
+            scene.addRect(i*50, j*50, 200, 200)->setPen(QPen(Qt::black, 0));
 
     QCOMPARE(scene.items(QPointF(5, 5)).count(), 1);
     QCOMPARE(scene.items(QPointF(55, 55)).count(), 4);
@@ -189,10 +189,10 @@ void tst_QGraphicsSceneIndex::connectedToSceneRectChanged()
     };
 
     MyScene scene; // Uses QGraphicsSceneBspTreeIndex by default.
-    QCOMPARE(scene.receivers(SIGNAL(sceneRectChanged(const QRectF&))), 1);
+    QCOMPARE(scene.receivers(SIGNAL(sceneRectChanged(QRectF))), 1);
 
     scene.setItemIndexMethod(QGraphicsScene::NoIndex); // QGraphicsSceneLinearIndex
-    QCOMPARE(scene.receivers(SIGNAL(sceneRectChanged(const QRectF&))), 1);
+    QCOMPARE(scene.receivers(SIGNAL(sceneRectChanged(QRectF))), 1);
 }
 
 void tst_QGraphicsSceneIndex::items()

@@ -224,28 +224,28 @@ getXQMakeConf()
     getQMakeConf3 "$1" "$xspecvals"
 }
 
-# relies on $TEST_COMPILER being set correctly
 compilerSupportsFlag()
 {
     cat >conftest.cpp <<EOF
 int main() { return 0; }
 EOF
-    $TEST_COMPILER "$@" -o conftest-out.o conftest.cpp
+    "$@" -o conftest-out.o conftest.cpp
     ret=$?
     rm -f conftest.cpp conftest-out.o
     return $ret
 }
 
-# relies on $TEST_COMPILER being set correctly
 linkerSupportsFlag()
 {
+    compiler=$1
+    shift
     lflags=-Wl
     for flag
     do
 	safe_flag=`shellEscape "$flag"`
 	lflags=$lflags,$safe_flag
     done
-    compilerSupportsFlag "$lflags" >/dev/null 2>&1
+    compilerSupportsFlag $compiler $lflags >/dev/null 2>&1
 }
 
 # $1: newline-separated list of default paths
@@ -727,7 +727,7 @@ mkdir -p "$outpath/config.tests"
 rm -f "$outpath/config.tests/.qmake.cache"
 cp "$QMAKE_VARS_FILE" "$outpath/config.tests/.qmake.cache"
 
-QMakeVar add styles "cde mac motif plastique cleanlooks windows"
+QMakeVar add styles "mac fusion windows"
 
 # QTDIR may be set and point to an old or system-wide Qt installation
 unset QTDIR
@@ -801,6 +801,7 @@ CFG_XINPUT2=auto
 CFG_XINPUT=runtime
 CFG_XKB=auto
 CFG_XCB=auto
+CFG_XCB_GLX=no
 CFG_XCB_LIMITED=yes
 CFG_EGLFS=auto
 CFG_DIRECTFB=auto
@@ -2200,7 +2201,7 @@ if [ "$OPT_SHADOW" = "yes" ]; then
     if [ -x "$relpath/bin/syncqt" ]; then
         mkdir -p "$outpath/bin"
         echo "#!/bin/sh" >"$outpath/bin/syncqt"
-        echo "perl \"$relpath/bin/syncqt\" -qtdir \"$outpath\" \"\$@\"" >>"$outpath/bin/syncqt"
+        echo "perl \"$relpath/bin/syncqt\" -mkspecsdir \"$outpath/mkspecs\" \"\$@\"" >>"$outpath/bin/syncqt"
         chmod 755 "$outpath/bin/syncqt"
     fi
 
@@ -2256,7 +2257,7 @@ if [ "$OPT_SHADOW" = "yes" ]; then
 
     # Prepare doc directory
     mkdir -p "$outpath/doc"
-    ln -s "$relpath"/doc/global "$outpath/doc"
+    ln -f -s "$relpath"/doc/global "$outpath/doc"
 fi
 
 # symlink fonts to be able to run application from build directory
@@ -2669,7 +2670,7 @@ fi
 
 # auto-detect -fstack-protector-strong support (for QNX only currently)
 if [ "$XPLATFORM_QNX" = "yes" ]; then
-    if compilerSupportsFlag -fstack-protector-strong; then
+    if compilerSupportsFlag $TEST_COMPILER -fstack-protector-strong; then
        CFG_STACK_PROTECTOR_STRONG=yes
     else
        CFG_STACK_PROTECTOR_STRONG=no
@@ -3280,11 +3281,6 @@ Additional options:
     -no-feature-<feature> Do not compile in <feature>.
     -feature-<feature> .. Compile in <feature>. The available features
                           are described in src/corelib/global/qfeatures.txt
-
-    -no-freetype ........ Do not compile in Freetype2 support.
-    -qt-freetype ........ Use the libfreetype bundled with Qt.
- *  -system-freetype .... Use libfreetype from the operating system.
-                          See http://www.freetype.org/
 
     -qconfig local ...... Use src/corelib/global/qconfig-local.h rather than the
                           default ($CFG_QCONFIG).
@@ -4795,6 +4791,11 @@ if [ "$CFG_XCB" != "no" ]; then
             QT_CONFIG="$QT_CONFIG xcb-render"
         fi
 
+        if compileTest qpa/xcb-glx "xcb-glx" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
+            CFG_XCB_GLX=yes
+            QT_CONFIG="$QT_CONFIG xcb-glx"
+        fi
+
         if compileTest qpa/xcb-poll-for-queued-event "xcb-poll-for-queued-event" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
             CFG_XCB_LIMITED=no
             QT_CONFIG="$QT_CONFIG xcb-poll-for-queued-event"
@@ -6119,8 +6120,7 @@ cat >>"$CACHEFILE.tmp" <<EOF
 QT_SOURCE_TREE = \$\$quote($relpath)
 QT_BUILD_TREE = \$\$quote($outpath)
 
-include(\$\$PWD/mkspecs/qmodule.pri)
-CONFIG += dylib fix_output_dirs no_private_qt_headers_warning QTDIR_build
+CONFIG += fix_output_dirs no_private_qt_headers_warning QTDIR_build
 
 EOF
 

@@ -49,6 +49,7 @@
 #include <QtCore/QSharedPointer>
 
 struct IBindCtx;
+struct _SHSTOCKICONINFO;
 
 QT_BEGIN_NAMESPACE
 
@@ -99,8 +100,10 @@ struct QWindowsShell32DLL
     inline void init();
 
     typedef HRESULT (WINAPI *SHCreateItemFromParsingName)(PCWSTR, IBindCtx *, const GUID&, void **);
+    typedef HRESULT (WINAPI *SHGetStockIconInfo)(int , int , _SHSTOCKICONINFO *);
 
     SHCreateItemFromParsingName sHCreateItemFromParsingName;
+    SHGetStockIconInfo sHGetStockIconInfo;
 };
 #endif // Q_OS_WINCE
 
@@ -115,7 +118,7 @@ public:
         SI_SupportsTouch = 0x2
     };
 
-    // Verbose flag set by environment variable QT_LIGHTHOUSE_WINDOWS_VERBOSE
+    // Verbose flag set by environment variable QT_QPA_VERBOSE
     static int verboseIntegration;
     static int verboseWindows;
     static int verboseBackingStore;
@@ -181,9 +184,14 @@ public:
 #endif
 
     static QByteArray comErrorString(HRESULT hr);
+    bool asyncExpose() const;
+    void setAsyncExpose(bool value);
 
 private:
     void handleFocusEvent(QtWindows::WindowsEventType et, QWindowsWindow *w);
+#ifndef QT_NO_CONTEXTMENU
+    void handleContextMenuEvent(QWindow *window, const MSG &msg);
+#endif
     void unregisterWindowClasses();
 
     QScopedPointer<QWindowsContextPrivate> d;

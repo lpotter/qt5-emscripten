@@ -192,13 +192,16 @@ defineTest(qtAddToolEnv) {
             equals(QMAKE_DIR_SEP, /) {
                 contains($${env}.CONFIG, prepend): infix = \${$$name:+:\$$$name}
                 else: infix =
-                $$1 = "$$name=$$join(value, :)$$infix $$eval($$1)"
+                val = "$$name=$$join(value, :)$$infix"
             } else {
                 # Escape closing parens when expanding the variable, otherwise cmd confuses itself.
                 contains($${env}.CONFIG, prepend): infix = ;%$$name:)=^)%
                 else: infix =
-                $$1 = "(set $$name=$$join(value, ;)$$infix) & $$eval($$1)"
+                val = "(set $$name=$$join(value, ;)$$infix) &"
             }
+            contains(MAKEFILE_GENERATOR, MS.*): val ~= s,%,%%,g
+            else: val ~= s,\\\$,\$\$,g
+            $$1 = "$$val $$eval($$1)"
         }
     }
     export($$1)
@@ -267,3 +270,29 @@ defineTest(packagesExist) {
     return(true)
 }
 
+# Prepares target that will iterate through all subdirs (except those
+# with no_default_target or no_{name_of_target}_target. The prepared
+# target must still be manually added to QMAKE_EXTRA_TARGETS.
+defineTest(prepareRecursiveTarget) {
+    target = $$1
+    no_$${target}_target: return()
+
+    for(subdir, SUBDIRS) {
+        subdir_config = $$eval($${subdir}.CONFIG)
+        contains(subdir_config, no_default_target): next()
+        contains(subdir_config, no_$${target}_target): next()
+
+        $${target}.recurse += $$subdir
+    }
+
+    # Set up the recurse target only when there
+    # is something to recurse into.
+    isEmpty($${target}.recurse): return()
+
+    $${target}.CONFIG = recursive
+    $${target}.recurse_target = $${target}
+
+    export($${target}.recurse)
+    export($${target}.CONFIG)
+    export($${target}.recurse_target)
+}

@@ -387,7 +387,7 @@ void QCocoaWindow::setWindowShadow(Qt::WindowFlags flags)
     [m_nsWindow setHasShadow:(keepShadow ? YES : NO)];
 }
 
-Qt::WindowFlags QCocoaWindow::setWindowFlags(Qt::WindowFlags flags)
+void QCocoaWindow::setWindowFlags(Qt::WindowFlags flags)
 {
     if (m_nsWindow) {
         NSUInteger styleMask = windowStyleMask(flags);
@@ -398,15 +398,12 @@ Qt::WindowFlags QCocoaWindow::setWindowFlags(Qt::WindowFlags flags)
     }
 
     m_windowFlags = flags;
-    return m_windowFlags;
 }
 
-Qt::WindowState QCocoaWindow::setWindowState(Qt::WindowState state)
+void QCocoaWindow::setWindowState(Qt::WindowState state)
 {
     if ([m_nsWindow isVisible])
         syncWindowState(state);  // Window state set for hidden windows take effect when show() is called.
-
-    return state;
 }
 
 void QCocoaWindow::setWindowTitle(const QString &title)
@@ -428,6 +425,26 @@ void QCocoaWindow::setWindowFilePath(const QString &filePath)
 
     QFileInfo fi(filePath);
     [m_nsWindow setRepresentedFilename: fi.exists() ? QCFString::toNSString(filePath) : @""];
+}
+
+void QCocoaWindow::setWindowIcon(const QIcon &icon)
+{
+    QCocoaAutoReleasePool pool;
+
+    NSButton *iconButton = [m_nsWindow standardWindowButton:NSWindowDocumentIconButton];
+    if (iconButton == nil) {
+        NSString *title = QCFString::toNSString(window()->windowTitle());
+        [m_nsWindow setRepresentedURL:[NSURL fileURLWithPath:title]];
+        iconButton = [m_nsWindow standardWindowButton:NSWindowDocumentIconButton];
+    }
+    if (icon.isNull()) {
+        [iconButton setImage:nil];
+    } else {
+        QPixmap pixmap = icon.pixmap(QSize(22, 22));
+        NSImage *image = static_cast<NSImage *>(qt_mac_create_nsimage(pixmap));
+        [iconButton setImage:image];
+        [image release];
+    }
 }
 
 void QCocoaWindow::raise()
@@ -696,6 +713,7 @@ void QCocoaWindow::setNSWindow(NSWindow *window)
 
 void QCocoaWindow::clearNSWindow(NSWindow *window)
 {
+    [window setContentView:nil];
     [window setDelegate:nil];
     [window clearPlatformWindow];
     [[NSNotificationCenter defaultCenter] removeObserver:m_contentView];

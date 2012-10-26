@@ -98,10 +98,11 @@ public:
     void setGeometry(const QRect &rect);
     void setCocoaGeometry(const QRect &rect);
     void setVisible(bool visible);
-    Qt::WindowFlags setWindowFlags(Qt::WindowFlags flags);
-    Qt::WindowState setWindowState(Qt::WindowState state);
+    void setWindowFlags(Qt::WindowFlags flags);
+    void setWindowState(Qt::WindowState state);
     void setWindowTitle(const QString &title);
     void setWindowFilePath(const QString &filePath);
+    void setWindowIcon(const QIcon &icon);
     void raise();
     void lower();
     void propagateSizeHints();

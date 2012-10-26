@@ -87,8 +87,8 @@ public slots:
                 QNetworkRequest(
                 QUrl("http://" + QtNetworkSettings::serverName() + "/qtest/bigfile")
                 ));
-        connect(reply, SIGNAL(downloadProgress(qint64, qint64)),
-                this, SLOT(dataReadProgress(qint64, qint64)));
+        connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+                this, SLOT(dataReadProgress(qint64,qint64)));
         connect(reply, SIGNAL(readyRead()),
                 this, SLOT(dataReadyRead()));
         connect(reply, SIGNAL(finished()), this, SLOT(finishedFromReply()));
@@ -128,7 +128,8 @@ tst_QNetworkAccessManager_And_QProgressDialog::tst_QNetworkAccessManager_And_QPr
 
 void tst_QNetworkAccessManager_And_QProgressDialog::initTestCase()
 {
-    QVERIFY(QtNetworkSettings::verifyTestNetworkSettings());
+    if (!QtNetworkSettings::verifyTestNetworkSettings())
+        QSKIP("No network test server available");
 }
 
 void tst_QNetworkAccessManager_And_QProgressDialog::downloadCheck_data()

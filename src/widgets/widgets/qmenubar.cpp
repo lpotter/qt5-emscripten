@@ -623,17 +623,6 @@ void QMenuBar::initStyleOption(QStyleOptionMenuItem *option, const QAction *acti
     for items in the menu bar are only shown when the \uicontrol{Alt} key is
     pressed.
 
-    \table
-
-    \row \li \inlineimage plastique-menubar.png A menu bar shown in the
-    Plastique widget style.
-
-    \li The \l{QPlastiqueStyle}{Plastique widget style}, like most
-    other styles, handles the \uicontrol{Help} menu in the same way as it
-    handles any other menu.
-
-    \endtable
-
     \section1 QMenuBar on Mac OS X
 
     QMenuBar on Mac OS X is a wrapper for using the system-wide menu bar.
@@ -1296,6 +1285,8 @@ void QMenuBar::actionEvent(QActionEvent *e)
                 }
             } else if (menu) {
                 menu->setText(e->action()->text());
+                menu->setVisible(e->action()->isVisible());
+                menu->setEnabled(e->action()->isEnabled());
                 d->platformMenuBar->syncMenu(menu);
             }
         }

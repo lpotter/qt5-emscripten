@@ -54,7 +54,6 @@
 #include <private/qmenubar_p.h>
 #include "qpaintengine.h"
 #include "qpainter.h"
-#include "qprogressbar.h"
 #include "qrubberband.h"
 #include "qstyleoption.h"
 #include "qtabbar.h"
@@ -68,8 +67,11 @@
 #include "qlistview.h"
 #include <private/qmath_p.h>
 #include <qmath.h>
+#include <qpa/qplatformtheme.h>
+#include <private/qguiapplication_p.h>
 
 #include <private/qstylehelper_p.h>
+#include <private/qstyleanimation_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -117,7 +119,7 @@ enum QSliderDirection { SlUp, SlDown, SlLeft, SlRight };
     \internal
 */
 QWindowsStylePrivate::QWindowsStylePrivate()
-    : alt_down(false), menuBarTimer(0), animationFps(10), animateTimer(0), animateStep(0)
+    : alt_down(false), menuBarTimer(0)
 {
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
     if ((QSysInfo::WindowsVersion >= QSysInfo::WV_VISTA
@@ -126,27 +128,6 @@ QWindowsStylePrivate::QWindowsStylePrivate()
         pSHGetStockIconInfo = (PtrSHGetStockIconInfo)shellLib.resolve("SHGetStockIconInfo");
     }
 #endif
-    startTime.start();
-}
-
-void QWindowsStylePrivate::startAnimation(QObject *o, QProgressBar *bar)
-{
-    if (!animatedProgressBars.contains(bar)) {
-        animatedProgressBars << bar;
-        if (!animateTimer) {
-            Q_ASSERT(animationFps > 0);
-            animateTimer = o->startTimer(1000 / animationFps);
-        }
-    }
-}
-
-void QWindowsStylePrivate::stopAnimation(QObject *o, QProgressBar *bar)
-{
-    animatedProgressBars.removeAll(bar);
-    if (animatedProgressBars.isEmpty() && animateTimer) {
-        o->killTimer(animateTimer);
-        animateTimer = 0;
-    }
 }
 
 // Returns true if the toplevel parent of \a widget has seen the Alt-key
@@ -154,23 +135,6 @@ bool QWindowsStylePrivate::hasSeenAlt(const QWidget *widget) const
 {
     widget = widget->window();
     return seenAlt.contains(widget);
-}
-
-/*!
-    \reimp
-*/
-void QWindowsStyle::timerEvent(QTimerEvent *event)
-{
-#ifndef QT_NO_PROGRESSBAR
-    Q_D(QWindowsStyle);
-    if (event->timerId() == d->animateTimer) {
-        Q_ASSERT(d->animationFps> 0);
-        d->animateStep = d->startTime.elapsed() / (1000 / d->animationFps);
-        foreach (QProgressBar *bar, d->animatedProgressBars)
-            bar->update();
-    }
-#endif // QT_NO_PROGRESSBAR
-    event->ignore();
 }
 
 /*!
@@ -224,27 +188,6 @@ bool QWindowsStyle::eventFilter(QObject *o, QEvent *e)
         d->seenAlt.removeAll(widget);
         d->seenAlt.removeAll(widget->window());
         break;
-#ifndef QT_NO_PROGRESSBAR
-    case QEvent::StyleChange:
-    case QEvent::Paint:
-    case QEvent::Show:
-        if (QProgressBar *bar = qobject_cast<QProgressBar *>(o)) {
-            // Animation by timer for progress bars that have their min and
-            // max values the same
-            if (bar->minimum() == bar->maximum())
-                d->startAnimation(this, bar);
-            else
-                d->stopAnimation(this, bar);
-        }
-        break;
-    case QEvent::Destroy:
-    case QEvent::Hide:
-        // Do static_cast because there is no type info when getting
-        // the destroy event. We know that it is a QProgressBar, since
-        // we only install a widget event filter for QScrollBars.
-        d->stopAnimation(this, static_cast<QProgressBar *>(o));
-        break;
-#endif // QT_NO_PROGRESSBAR
     default:
         break;
     }
@@ -261,7 +204,7 @@ bool QWindowsStyle::eventFilter(QObject *o, QEvent *e)
     This style is Qt's default GUI style on Windows.
 
     \image qwindowsstyle.png
-    \sa QWindowsXPStyle, QMacStyle, QPlastiqueStyle
+    \sa QWindowsVistaStyle, QMacStyle, QFusionStyle
 */
 
 /*!
@@ -335,23 +278,12 @@ void QWindowsStyle::unpolish(QApplication *app)
 void QWindowsStyle::polish(QWidget *widget)
 {
     QCommonStyle::polish(widget);
-#ifndef QT_NO_PROGRESSBAR
-    if (qobject_cast<QProgressBar *>(widget))
-        widget->installEventFilter(this);
-#endif
 }
 
 /*! \reimp */
 void QWindowsStyle::unpolish(QWidget *widget)
 {
     QCommonStyle::unpolish(widget);
-#ifndef QT_NO_PROGRESSBAR
-    if (QProgressBar *bar=qobject_cast<QProgressBar *>(widget)) {
-        Q_D(QWindowsStyle);
-        widget->removeEventFilter(this);
-        d->stopAnimation(this, bar);
-    }
-#endif
 }
 
 /*!
@@ -538,399 +470,6 @@ int QWindowsStyle::pixelMetric(PixelMetric pm, const QStyleOption *opt, const QW
     return ret;
 }
 
-#ifndef QT_NO_IMAGEFORMAT_XPM
-
-/* XPM */
-static const char * const qt_menu_xpm[] = {
-"16 16 72 1",
-"  c None",
-". c #65AF36",
-"+ c #66B036",
-"@ c #77B94C",
-"# c #A7D28C",
-"$ c #BADBA4",
-"% c #A4D088",
-"& c #72B646",
-"* c #9ACB7A",
-"= c #7FBD56",
-"- c #85C05F",
-"; c #F4F9F0",
-"> c #FFFFFF",
-", c #E5F1DC",
-"' c #ECF5E7",
-") c #7ABA50",
-"! c #83BF5C",
-"~ c #AED595",
-"{ c #D7EACA",
-"] c #A9D28D",
-"^ c #BCDDA8",
-"/ c #C4E0B1",
-"( c #81BE59",
-"_ c #D0E7C2",
-": c #D4E9C6",
-"< c #6FB542",
-"[ c #6EB440",
-"} c #88C162",
-"| c #98CA78",
-"1 c #F4F9F1",
-"2 c #8FC56C",
-"3 c #F1F8EC",
-"4 c #E8F3E1",
-"5 c #D4E9C7",
-"6 c #74B748",
-"7 c #80BE59",
-"8 c #73B747",
-"9 c #6DB43F",
-"0 c #CBE4BA",
-"a c #80BD58",
-"b c #6DB33F",
-"c c #FEFFFE",
-"d c #68B138",
-"e c #F9FCF7",
-"f c #91C66F",
-"g c #E8F3E0",
-"h c #DCEDD0",
-"i c #91C66E",
-"j c #A3CF86",
-"k c #C9E3B8",
-"l c #B0D697",
-"m c #E3F0DA",
-"n c #95C873",
-"o c #E6F2DE",
-"p c #9ECD80",
-"q c #BEDEAA",
-"r c #C7E2B6",
-"s c #79BA4F",
-"t c #6EB441",
-"u c #BCDCA7",
-"v c #FAFCF8",
-"w c #F6FAF3",
-"x c #84BF5D",
-"y c #EDF6E7",
-"z c #FAFDF9",
-"A c #88C263",
-"B c #98CA77",
-"C c #CDE5BE",
-"D c #67B037",
-"E c #D9EBCD",
-"F c #6AB23C",
-"G c #77B94D",
-" .++++++++++++++",
-".+++++++++++++++",
-"+++@#$%&+++*=+++",
-"++-;>,>')+!>~+++",
-"++{>]+^>/(_>:~<+",
-"+[>>}+|>123>456+",
-"+7>>8+->>90>~+++",
-"+a>>b+a>c[0>~+++",
-"+de>=+f>g+0>~+++",
-"++h>i+j>k+0>~+++",
-"++l>mno>p+q>rst+",
-"++duv>wl++xy>zA+",
-"++++B>Cb++++&D++",
-"+++++0zE++++++++",
-"++++++FG+++++++.",
-"++++++++++++++. "};
-
-static const char * const qt_close_xpm[] = {
-"10 10 2 1",
-"# c #000000",
-". c None",
-"..........",
-".##....##.",
-"..##..##..",
-"...####...",
-"....##....",
-"...####...",
-"..##..##..",
-".##....##.",
-"..........",
-".........."};
-
-static const char * const qt_maximize_xpm[]={
-"10 10 2 1",
-"# c #000000",
-". c None",
-"#########.",
-"#########.",
-"#.......#.",
-"#.......#.",
-"#.......#.",
-"#.......#.",
-"#.......#.",
-"#.......#.",
-"#########.",
-".........."};
-
-static const char * const qt_minimize_xpm[] = {
-"10 10 2 1",
-"# c #000000",
-". c None",
-"..........",
-"..........",
-"..........",
-"..........",
-"..........",
-"..........",
-"..........",
-".#######..",
-".#######..",
-".........."};
-
-static const char * const qt_normalizeup_xpm[] = {
-"10 10 2 1",
-"# c #000000",
-". c None",
-"...######.",
-"...######.",
-"...#....#.",
-".######.#.",
-".######.#.",
-".#....###.",
-".#....#...",
-".#....#...",
-".######...",
-".........."};
-
-static const char * const qt_help_xpm[] = {
-"10 10 2 1",
-". c None",
-"# c #000000",
-"..........",
-"..######..",
-".##....##.",
-"......##..",
-".....##...",
-"....##....",
-"....##....",
-"..........",
-"....##....",
-".........."};
-
-static const char * const qt_shade_xpm[] = {
-"10 10 2 1",
-"# c #000000",
-". c None",
-"..........",
-"..........",
-"..........",
-"..........",
-"....#.....",
-"...###....",
-"..#####...",
-".#######..",
-"..........",
-".........."};
-
-static const char * const qt_unshade_xpm[] = {
-"10 10 2 1",
-"# c #000000",
-". c None",
-"..........",
-"..........",
-"..........",
-".#######..",
-"..#####...",
-"...###....",
-"....#.....",
-"..........",
-"..........",
-".........."};
-
-static const char * dock_widget_close_xpm[] = {
-"8 8 2 1",
-"# c #000000",
-". c None",
-"........",
-".##..##.",
-"..####..",
-"...##...",
-"..####..",
-".##..##.",
-"........",
-"........"};
-
-/* XPM */
-static const char * const information_xpm[]={
-"32 32 5 1",
-". c None",
-"c c #000000",
-"* c #999999",
-"a c #ffffff",
-"b c #0000ff",
-"...........********.............",
-"........***aaaaaaaa***..........",
-"......**aaaaaaaaaaaaaa**........",
-".....*aaaaaaaaaaaaaaaaaa*.......",
-"....*aaaaaaaabbbbaaaaaaaac......",
-"...*aaaaaaaabbbbbbaaaaaaaac.....",
-"..*aaaaaaaaabbbbbbaaaaaaaaac....",
-".*aaaaaaaaaaabbbbaaaaaaaaaaac...",
-".*aaaaaaaaaaaaaaaaaaaaaaaaaac*..",
-"*aaaaaaaaaaaaaaaaaaaaaaaaaaaac*.",
-"*aaaaaaaaaabbbbbbbaaaaaaaaaaac*.",
-"*aaaaaaaaaaaabbbbbaaaaaaaaaaac**",
-"*aaaaaaaaaaaabbbbbaaaaaaaaaaac**",
-"*aaaaaaaaaaaabbbbbaaaaaaaaaaac**",
-"*aaaaaaaaaaaabbbbbaaaaaaaaaaac**",
-"*aaaaaaaaaaaabbbbbaaaaaaaaaaac**",
-".*aaaaaaaaaaabbbbbaaaaaaaaaac***",
-".*aaaaaaaaaaabbbbbaaaaaaaaaac***",
-"..*aaaaaaaaaabbbbbaaaaaaaaac***.",
-"...caaaaaaabbbbbbbbbaaaaaac****.",
-"....caaaaaaaaaaaaaaaaaaaac****..",
-".....caaaaaaaaaaaaaaaaaac****...",
-"......ccaaaaaaaaaaaaaacc****....",
-".......*cccaaaaaaaaccc*****.....",
-"........***cccaaaac*******......",
-"..........****caaac*****........",
-".............*caaac**...........",
-"...............caac**...........",
-"................cac**...........",
-".................cc**...........",
-"..................***...........",
-"...................**..........."};
-/* XPM */
-static const char* const warning_xpm[]={
-"32 32 4 1",
-". c None",
-"a c #ffff00",
-"* c #000000",
-"b c #999999",
-".............***................",
-"............*aaa*...............",
-"...........*aaaaa*b.............",
-"...........*aaaaa*bb............",
-"..........*aaaaaaa*bb...........",
-"..........*aaaaaaa*bb...........",
-".........*aaaaaaaaa*bb..........",
-".........*aaaaaaaaa*bb..........",
-"........*aaaaaaaaaaa*bb.........",
-"........*aaaa***aaaa*bb.........",
-".......*aaaa*****aaaa*bb........",
-".......*aaaa*****aaaa*bb........",
-"......*aaaaa*****aaaaa*bb.......",
-"......*aaaaa*****aaaaa*bb.......",
-".....*aaaaaa*****aaaaaa*bb......",
-".....*aaaaaa*****aaaaaa*bb......",
-"....*aaaaaaaa***aaaaaaaa*bb.....",
-"....*aaaaaaaa***aaaaaaaa*bb.....",
-"...*aaaaaaaaa***aaaaaaaaa*bb....",
-"...*aaaaaaaaaa*aaaaaaaaaa*bb....",
-"..*aaaaaaaaaaa*aaaaaaaaaaa*bb...",
-"..*aaaaaaaaaaaaaaaaaaaaaaa*bb...",
-".*aaaaaaaaaaaa**aaaaaaaaaaa*bb..",
-".*aaaaaaaaaaa****aaaaaaaaaa*bb..",
-"*aaaaaaaaaaaa****aaaaaaaaaaa*bb.",
-"*aaaaaaaaaaaaa**aaaaaaaaaaaa*bb.",
-"*aaaaaaaaaaaaaaaaaaaaaaaaaaa*bbb",
-"*aaaaaaaaaaaaaaaaaaaaaaaaaaa*bbb",
-".*aaaaaaaaaaaaaaaaaaaaaaaaa*bbbb",
-"..*************************bbbbb",
-"....bbbbbbbbbbbbbbbbbbbbbbbbbbb.",
-".....bbbbbbbbbbbbbbbbbbbbbbbbb.."};
-/* XPM */
-static const char* const critical_xpm[]={
-"32 32 4 1",
-". c None",
-"a c #999999",
-"* c #ff0000",
-"b c #ffffff",
-"...........********.............",
-".........************...........",
-".......****************.........",
-"......******************........",
-".....********************a......",
-"....**********************a.....",
-"...************************a....",
-"..*******b**********b*******a...",
-"..******bbb********bbb******a...",
-".******bbbbb******bbbbb******a..",
-".*******bbbbb****bbbbb*******a..",
-"*********bbbbb**bbbbb*********a.",
-"**********bbbbbbbbbb**********a.",
-"***********bbbbbbbb***********aa",
-"************bbbbbb************aa",
-"************bbbbbb************aa",
-"***********bbbbbbbb***********aa",
-"**********bbbbbbbbbb**********aa",
-"*********bbbbb**bbbbb*********aa",
-".*******bbbbb****bbbbb*******aa.",
-".******bbbbb******bbbbb******aa.",
-"..******bbb********bbb******aaa.",
-"..*******b**********b*******aa..",
-"...************************aaa..",
-"....**********************aaa...",
-"....a********************aaa....",
-".....a******************aaa.....",
-"......a****************aaa......",
-".......aa************aaaa.......",
-".........aa********aaaaa........",
-"...........aaaaaaaaaaa..........",
-".............aaaaaaa............"};
-/* XPM */
-static const char *const question_xpm[] = {
-"32 32 5 1",
-". c None",
-"c c #000000",
-"* c #999999",
-"a c #ffffff",
-"b c #0000ff",
-"...........********.............",
-"........***aaaaaaaa***..........",
-"......**aaaaaaaaaaaaaa**........",
-".....*aaaaaaaaaaaaaaaaaa*.......",
-"....*aaaaaaaaaaaaaaaaaaaac......",
-"...*aaaaaaaabbbbbbaaaaaaaac.....",
-"..*aaaaaaaabaaabbbbaaaaaaaac....",
-".*aaaaaaaabbaaaabbbbaaaaaaaac...",
-".*aaaaaaaabbbbaabbbbaaaaaaaac*..",
-"*aaaaaaaaabbbbaabbbbaaaaaaaaac*.",
-"*aaaaaaaaaabbaabbbbaaaaaaaaaac*.",
-"*aaaaaaaaaaaaabbbbaaaaaaaaaaac**",
-"*aaaaaaaaaaaaabbbaaaaaaaaaaaac**",
-"*aaaaaaaaaaaaabbaaaaaaaaaaaaac**",
-"*aaaaaaaaaaaaabbaaaaaaaaaaaaac**",
-"*aaaaaaaaaaaaaaaaaaaaaaaaaaaac**",
-".*aaaaaaaaaaaabbaaaaaaaaaaaac***",
-".*aaaaaaaaaaabbbbaaaaaaaaaaac***",
-"..*aaaaaaaaaabbbbaaaaaaaaaac***.",
-"...caaaaaaaaaabbaaaaaaaaaac****.",
-"....caaaaaaaaaaaaaaaaaaaac****..",
-".....caaaaaaaaaaaaaaaaaac****...",
-"......ccaaaaaaaaaaaaaacc****....",
-".......*cccaaaaaaaaccc*****.....",
-"........***cccaaaac*******......",
-"..........****caaac*****........",
-".............*caaac**...........",
-"...............caac**...........",
-"................cac**...........",
-".................cc**...........",
-"..................***...........",
-"...................**..........."};
-
-#endif //QT_NO_IMAGEFORMAT_XPM
-
-#ifdef Q_OS_WIN
-static QPixmap loadIconFromShell32( int resourceId, int size )
-{
-#ifdef Q_OS_WINCE
-    HMODULE hmod = LoadLibrary(L"ceshell");
-#else
-    HMODULE hmod = QSystemLibrary::load(L"shell32");
-#endif
-    if( hmod ) {
-        HICON iconHandle = (HICON)LoadImage(hmod, MAKEINTRESOURCE(resourceId), IMAGE_ICON, size, size, 0);
-        if( iconHandle ) {
-            QPixmap iconpixmap = qt_pixmapFromWinHICON(iconHandle);
-            DestroyIcon(iconHandle);
-            return iconpixmap;
-        }
-    }
-    return QPixmap();
-}
-#endif
-
 /*!
  \reimp
  */
@@ -942,125 +481,32 @@ QPixmap QWindowsStyle::standardPixmap(StandardPixmap standardPixmap, const QStyl
     switch(standardPixmap) {
     case SP_DriveCDIcon:
     case SP_DriveDVDIcon:
-        {
-            desktopIcon = loadIconFromShell32(12, 16);
-            break;
-        }
     case SP_DriveNetIcon:
-        {
-            desktopIcon = loadIconFromShell32(10, 16);
-            break;
-        }
     case SP_DriveHDIcon:
-        {
-            desktopIcon = loadIconFromShell32(9, 16);
-            break;
-        }
     case SP_DriveFDIcon:
-        {
-            desktopIcon = loadIconFromShell32(7, 16);
-            break;
-        }
     case SP_FileIcon:
-        {
-            desktopIcon = loadIconFromShell32(1, 16);
-            break;
-        }
     case SP_FileLinkIcon:
-        {
-            desktopIcon = loadIconFromShell32(1, 16);
-            QPainter painter(&desktopIcon);
-            QPixmap link = loadIconFromShell32(30, 16);
-            painter.drawPixmap(0, 0, 16, 16, link);
-            break;
-        }
     case SP_DirLinkIcon:
-        {
-            desktopIcon = loadIconFromShell32(4, 16);
-            QPainter painter(&desktopIcon);
-            QPixmap link = loadIconFromShell32(30, 16);
-            painter.drawPixmap(0, 0, 16, 16, link);
-            break;
-        }
     case SP_DirClosedIcon:
-        {
-            desktopIcon = loadIconFromShell32(4, 16);
-            break;
-        }
     case SP_DesktopIcon:
-        {
-            desktopIcon = loadIconFromShell32(35, 16);
-            break;
-        }
     case SP_ComputerIcon:
-        {
-            desktopIcon = loadIconFromShell32(16, 16);
-            break;
-        }
     case SP_DirOpenIcon:
-        {
-            desktopIcon = loadIconFromShell32(5, 16);
-            break;
-        }
     case SP_FileDialogNewFolder:
-        {
-            desktopIcon = loadIconFromShell32(319, 16);
-            break;
-        }
     case SP_DirHomeIcon:
-        {
-            desktopIcon = loadIconFromShell32(235, 16);
-            break;
-        }
     case SP_TrashIcon:
-        {
-            desktopIcon = loadIconFromShell32(191, 16);
-            break;
-        }
-    case SP_MessageBoxInformation:
-        {
-            HICON iconHandle = LoadIcon(NULL, IDI_INFORMATION);
-            desktopIcon = qt_pixmapFromWinHICON(iconHandle);
-            DestroyIcon(iconHandle);
-            break;
-        }
-    case SP_MessageBoxWarning:
-        {
-            HICON iconHandle = LoadIcon(NULL, IDI_WARNING);
-            desktopIcon = qt_pixmapFromWinHICON(iconHandle);
-            DestroyIcon(iconHandle);
-            break;
-        }
-    case SP_MessageBoxCritical:
-        {
-            HICON iconHandle = LoadIcon(NULL, IDI_ERROR);
-            desktopIcon = qt_pixmapFromWinHICON(iconHandle);
-            DestroyIcon(iconHandle);
-            break;
-        }
-    case SP_MessageBoxQuestion:
-        {
-            HICON iconHandle = LoadIcon(NULL, IDI_QUESTION);
-            desktopIcon = qt_pixmapFromWinHICON(iconHandle);
-            DestroyIcon(iconHandle);
-            break;
-        }
     case SP_VistaShield:
-        {
-            if (QSysInfo::WindowsVersion >= QSysInfo::WV_VISTA
-                && (QSysInfo::WindowsVersion & QSysInfo::WV_NT_based)
-                && pSHGetStockIconInfo)
-            {
-                QPixmap pixmap;
-                QSHSTOCKICONINFO iconInfo;
-                memset(&iconInfo, 0, sizeof(iconInfo));
-                iconInfo.cbSize = sizeof(iconInfo);
-                if (pSHGetStockIconInfo(_SIID_SHIELD, _SHGFI_ICON | _SHGFI_SMALLICON, &iconInfo) == S_OK) {
-                    pixmap = qt_pixmapFromWinHICON(iconInfo.hIcon);
-                    DestroyIcon(iconInfo.hIcon);
-                    return pixmap;
-                }
-            }
+        if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme()) {
+            QPlatformTheme::StandardPixmap sp = static_cast<QPlatformTheme::StandardPixmap>(standardPixmap);
+            desktopIcon = theme->standardPixmap(sp, QSizeF(16, 16));
+        }
+        break;
+    case SP_MessageBoxInformation:
+    case SP_MessageBoxWarning:
+    case SP_MessageBoxCritical:
+    case SP_MessageBoxQuestion:
+        if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme()) {
+            QPlatformTheme::StandardPixmap sp = static_cast<QPlatformTheme::StandardPixmap>(standardPixmap);
+            desktopIcon = theme->standardPixmap(sp, QSizeF());
         }
         break;
     default:
@@ -1070,38 +516,6 @@ QPixmap QWindowsStyle::standardPixmap(StandardPixmap standardPixmap, const QStyl
         return desktopIcon;
     }
 #endif
-#ifndef QT_NO_IMAGEFORMAT_XPM
-    switch (standardPixmap) {
-    case SP_TitleBarMenuButton:
-        return QPixmap(qt_menu_xpm);
-    case SP_TitleBarShadeButton:
-        return QPixmap(qt_shade_xpm);
-    case SP_TitleBarUnshadeButton:
-        return QPixmap(qt_unshade_xpm);
-    case SP_TitleBarNormalButton:
-        return QPixmap(qt_normalizeup_xpm);
-    case SP_TitleBarMinButton:
-        return QPixmap(qt_minimize_xpm);
-    case SP_TitleBarMaxButton:
-        return QPixmap(qt_maximize_xpm);
-    case SP_TitleBarCloseButton:
-        return QPixmap(qt_close_xpm);
-    case SP_TitleBarContextHelpButton:
-        return QPixmap(qt_help_xpm);
-    case SP_DockWidgetCloseButton:
-        return QPixmap(dock_widget_close_xpm);
-    case SP_MessageBoxInformation:
-        return QPixmap(information_xpm);
-    case SP_MessageBoxWarning:
-        return QPixmap(warning_xpm);
-    case SP_MessageBoxCritical:
-        return QPixmap(critical_xpm);
-    case SP_MessageBoxQuestion:
-        return QPixmap(question_xpm);
-    default:
-        break;
-    }
-#endif //QT_NO_IMAGEFORMAT_XPM
     return QCommonStyle::standardPixmap(standardPixmap, opt, widget);
 }
 
@@ -1424,6 +838,7 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
                 imagePainter.translate(sx + bsx, sy + bsy);
                 imagePainter.setPen(opt->palette.buttonText().color());
                 imagePainter.setBrush(opt->palette.buttonText());
+                imagePainter.setRenderHint(QPainter::Qt4CompatiblePainting);
 
                 if (!(opt->state & State_Enabled)) {
                     imagePainter.translate(1, 1);
@@ -1562,6 +977,7 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
             }
 
             p->save();
+            p->setRenderHint(QPainter::Qt4CompatiblePainting);
             bool down = opt->state & State_Sunken;
             bool enabled = opt->state & State_Enabled;
             bool on = opt->state & State_On;
@@ -1640,41 +1056,6 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
         }
         break;
 #endif // QT_NO_FRAME
-    case PE_IndicatorBranch: {
-        // This is _way_ too similar to the common style.
-        static const int decoration_size = 9;
-        int mid_h = opt->rect.x() + opt->rect.width() / 2;
-        int mid_v = opt->rect.y() + opt->rect.height() / 2;
-        int bef_h = mid_h;
-        int bef_v = mid_v;
-        int aft_h = mid_h;
-        int aft_v = mid_v;
-        if (opt->state & State_Children) {
-            int delta = decoration_size / 2;
-            bef_h -= delta;
-            bef_v -= delta;
-            aft_h += delta;
-            aft_v += delta;
-            p->drawLine(bef_h + 2, bef_v + 4, bef_h + 6, bef_v + 4);
-            if (!(opt->state & State_Open))
-                p->drawLine(bef_h + 4, bef_v + 2, bef_h + 4, bef_v + 6);
-            QPen oldPen = p->pen();
-            p->setPen(opt->palette.dark().color());
-            p->drawRect(bef_h, bef_v, decoration_size - 1, decoration_size - 1);
-            p->setPen(oldPen);
-        }
-        QBrush brush(opt->palette.dark().color(), Qt::Dense4Pattern);
-        if (opt->state & State_Item) {
-            if (opt->direction == Qt::RightToLeft)
-                p->fillRect(opt->rect.left(), mid_v, bef_h - opt->rect.left(), 1, brush);
-            else
-                p->fillRect(aft_h, mid_v, opt->rect.right() - aft_h + 1, 1, brush);
-        }
-        if (opt->state & State_Sibling)
-            p->fillRect(mid_h, aft_v, 1, opt->rect.bottom() - aft_v + 1, brush);
-        if (opt->state & (State_Open | State_Children | State_Item | State_Sibling))
-            p->fillRect(mid_h, opt->rect.y(), 1, bef_v - opt->rect.y(), brush);
-        break; }
     case PE_FrameButtonBevel:
     case PE_PanelButtonBevel: {
         QBrush fill;
@@ -1715,7 +1096,6 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
         qDrawShadePanel(p, opt->rect, opt->palette, true, 1, 0);
         break;
 
-#ifndef QT_NO_PROGRESSBAR
     case PE_IndicatorProgressChunk:
         {
             bool vertical = false, inverted = false;
@@ -1749,7 +1129,6 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
             }
         }
         break;
-#endif // QT_NO_PROGRESSBAR
 
     case PE_FrameTabWidget: {
         qDrawWinButton(p, opt->rect, opt->palette, false, 0);
@@ -2365,7 +1744,7 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
 
 
 #endif // QT_NO_TOOLBAR
-#ifndef QT_NO_PROGRESSBAR
+
     case CE_ProgressBarContents:
         if (const QStyleOptionProgressBar *pb = qstyleoption_cast<const QStyleOptionProgressBar *>(opt)) {
             QRect rect = pb->rect;
@@ -2396,8 +1775,8 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
             if (inverted)
                 reverse = !reverse;
             int w = rect.width();
+            Q_D(const QWindowsStyle);
             if (pb->minimum == 0 && pb->maximum == 0) {
-                Q_D(const QWindowsStyle);
                 const int unit_width = proxy()->pixelMetric(PM_ProgressBarChunkWidth, pb, widget);
                 QStyleOptionProgressBarV2 pbBits = *pb;
                 Q_ASSERT(unit_width >0);
@@ -2405,8 +1784,12 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
                 pbBits.rect = rect;
                 pbBits.palette = pal2;
 
+                int step = 0;
                 int chunkCount = w / unit_width + 1;
-                int step = d->animateStep%chunkCount;
+                if (QProgressStyleAnimation *animation = qobject_cast<QProgressStyleAnimation*>(d->animation(opt->styleObject)))
+                    step = (animation->animationStep() / 3) % chunkCount;
+                else
+                    d->startAnimation(new QProgressStyleAnimation(d->animationFps, opt->styleObject));
                 int chunksInRow = 5;
                 int myY = pbBits.rect.y();
                 int myHeight = pbBits.rect.height();
@@ -2440,11 +1823,11 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
                 p->restore(); //restore state
             }
             else {
+                d->stopAnimation(opt->styleObject);
                 QCommonStyle::drawControl(ce, opt, p, widget);
             }
         }
         break;
-#endif // QT_NO_PROGRESSBAR
 
 #ifndef QT_NO_DOCKWIDGET
     case CE_DockWidgetTitle:
@@ -2701,8 +2084,10 @@ void QWindowsStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComp
                 }
 
                 QBrush oldBrush = p->brush();
+                bool oldQt4CompatiblePainting = p->testRenderHint(QPainter::Qt4CompatiblePainting);
                 p->setPen(Qt::NoPen);
                 p->setBrush(handleBrush);
+                p->setRenderHint(QPainter::Qt4CompatiblePainting);
                 Qt::BGMode oldMode = p->backgroundMode();
                 p->setBackgroundMode(Qt::OpaqueMode);
                 p->drawRect(x1, y1, x2-x1+1, y2-y1+1);
@@ -2785,6 +2170,7 @@ void QWindowsStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComp
                     p->drawLine(x2, y2-1, x2+d, y2-1-d);
                     break;
                 }
+                p->setRenderHint(QPainter::Qt4CompatiblePainting, oldQt4CompatiblePainting);
             }
         }
         break;
@@ -3063,133 +2449,7 @@ QSize QWindowsStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
 QIcon QWindowsStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption *option,
                                   const QWidget *widget) const
 {
-    QIcon icon;
-    QPixmap pixmap;
-#ifdef Q_OS_WIN
-    switch (standardIcon) {
-    case SP_FileDialogNewFolder:
-    {
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(319, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    }
-    case SP_DirHomeIcon:
-    {
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(235, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    }
-    case SP_DirIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(4, size);
-            icon.addPixmap(pixmap, QIcon::Normal, QIcon::Off);
-            pixmap = loadIconFromShell32(5, size);
-            icon.addPixmap(pixmap, QIcon::Normal, QIcon::On);
-        }
-        break;
-    case SP_DirLinkIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            QPixmap link = loadIconFromShell32(30, size);
-            pixmap = loadIconFromShell32(4, size);
-            if (!pixmap.isNull() && !link.isNull()) {
-                QPainter painter(&pixmap);
-                painter.drawPixmap(0, 0, size, size, link);
-                icon.addPixmap(pixmap, QIcon::Normal, QIcon::Off);
-            }
-            link = loadIconFromShell32(30, size);
-            pixmap = loadIconFromShell32(5, size);
-            if (!pixmap.isNull() && !link.isNull()) {
-                QPainter painter(&pixmap);
-                painter.drawPixmap(0, 0, size, size, link);
-                icon.addPixmap(pixmap, QIcon::Normal, QIcon::On);
-            }
-        }
-        break;
-    case SP_FileIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(1, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_ComputerIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(16, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-
-    case SP_DesktopIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(35, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_DriveCDIcon:
-    case SP_DriveDVDIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(12, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_DriveNetIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(10, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_DriveHDIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(9, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_DriveFDIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            pixmap = loadIconFromShell32(7, size);
-            icon.addPixmap(pixmap, QIcon::Normal);
-        }
-        break;
-    case SP_FileLinkIcon:
-        for (int size = 16 ; size <= 32 ; size += 16) {
-            QPixmap link;
-            link = loadIconFromShell32(30, size);
-            pixmap = loadIconFromShell32(1, size);
-            if (!pixmap.isNull() && !link.isNull()) {
-                QPainter painter(&pixmap);
-                painter.drawPixmap(0, 0, size, size, link);
-                icon.addPixmap(pixmap, QIcon::Normal);
-            }
-        }
-        break;
-    case SP_VistaShield:
-        {
-            if (QSysInfo::WindowsVersion >= QSysInfo::WV_VISTA
-                && (QSysInfo::WindowsVersion & QSysInfo::WV_NT_based)
-                && pSHGetStockIconInfo)
-            {
-                icon.addPixmap(proxy()->standardPixmap(SP_VistaShield, option, widget)); //fetches small icon
-                QSHSTOCKICONINFO iconInfo; //append large icon
-                memset(&iconInfo, 0, sizeof(iconInfo));
-                iconInfo.cbSize = sizeof(iconInfo);
-                if (pSHGetStockIconInfo(_SIID_SHIELD, _SHGFI_ICON | _SHGFI_LARGEICON, &iconInfo) == S_OK) {
-                    icon.addPixmap(qt_pixmapFromWinHICON(iconInfo.hIcon));
-                    DestroyIcon(iconInfo.hIcon);
-                }
-            }
-        }
-        break;
-    default:
-        break;
-    }
-#endif
-
-    if (icon.isNull())
-        icon = QCommonStyle::standardIcon(standardIcon, option, widget);
-    return icon;
+    return QCommonStyle::standardIcon(standardIcon, option, widget);
 }
 
 

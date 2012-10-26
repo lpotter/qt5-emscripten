@@ -44,7 +44,7 @@
 #include <QtTest/QtTest>
 #include <QtDebug>
 #include <QMetaObject>
-#include <QPlastiqueStyle>
+#include <QFusionStyle>
 
 #include <private/qstylesheetstyle_p.h>
 
@@ -874,10 +874,6 @@ void tst_QStyleSheetStyle::hoverColors()
         QVERIFY2(testForColors(image, QColor(0xe8, 0xff, 0x66)),
                  (QString::fromLatin1(widget->metaObject()->className())
                  + " did not contain background color #e8ff66").toLocal8Bit().constData());
-#ifdef Q_OS_MAC
-        if (qobject_cast<QComboBox *>(widget))
-            QEXPECT_FAIL("", "Failure only for QPushButton and QComboBox, see QTBUG-23686", Continue);
-#endif
         QVERIFY2(testForColors(image, QColor(0xff, 0x00, 0x84)),
                 (QString::fromLatin1(widget->metaObject()->className())
                 + " did not contain text color #ff0084").toLocal8Bit().constData());
@@ -1593,7 +1589,7 @@ class ChangeEventWidget : public QWidget
             static bool recurse = false;
             if (!recurse) {
                 recurse = true;
-                QStyle *style = new QPlastiqueStyle;
+                QStyle *style = new QFusionStyle
                 style->setParent(this);
                 setStyle(style);
                 recurse = false;

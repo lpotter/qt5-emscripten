@@ -55,10 +55,6 @@
 
 #include <qpa/qplatformintegration.h>
 
-#ifdef XCB_USE_DRI2
-#include "qdri2context.h"
-#endif
-
 // FIXME This workaround can be removed for xcb-icccm > 3.8
 #define class class_name
 #include <xcb/xcb_icccm.h>
@@ -233,9 +229,7 @@ void QXcbWindow::create()
     m_format = window()->requestedFormat();
 
 #if (defined(XCB_USE_GLX) || defined(XCB_USE_EGL)) && defined(XCB_USE_XLIB)
-    if (QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::OpenGL)
-        || m_format.hasAlpha())
-    {
+    if (QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::OpenGL)) {
 #if defined(XCB_USE_GLX)
         XVisualInfo *visualInfo = qglx_findVisualInfo(DISPLAY_FROM_XCB(m_screen), m_screen->screenNumber(), &m_format);
         if (!visualInfo && window()->surfaceType() == QSurface::OpenGLSurface)
@@ -740,7 +734,7 @@ void QXcbWindow::setNetWmStates(NetWmStates states)
     xcb_flush(xcb_connection());
 }
 
-Qt::WindowFlags QXcbWindow::setWindowFlags(Qt::WindowFlags flags)
+void QXcbWindow::setWindowFlags(Qt::WindowFlags flags)
 {
     Qt::WindowType type = static_cast<Qt::WindowType>(int(flags & Qt::WindowType_Mask));
 
@@ -763,8 +757,6 @@ Qt::WindowFlags QXcbWindow::setWindowFlags(Qt::WindowFlags flags)
 
     setTransparentForMouseEvents(flags & Qt::WindowTransparentForInput);
     updateDoesNotAcceptFocus(flags & Qt::WindowDoesNotAcceptFocus);
-
-    return flags;
 }
 
 void QXcbWindow::setMotifWindowFlags(Qt::WindowFlags flags)
@@ -849,10 +841,10 @@ void QXcbWindow::changeNetWmState(bool set, xcb_atom_t one, xcb_atom_t two)
     Q_XCB_CALL(xcb_send_event(xcb_connection(), 0, m_screen->root(), XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&event));
 }
 
-Qt::WindowState QXcbWindow::setWindowState(Qt::WindowState state)
+void QXcbWindow::setWindowState(Qt::WindowState state)
 {
     if (state == m_windowState)
-        return state;
+        return;
 
     // unset old state
     switch (m_windowState) {
@@ -907,7 +899,6 @@ Qt::WindowState QXcbWindow::setWindowState(Qt::WindowState state)
     connection()->sync();
 
     m_windowState = state;
-    return m_windowState;
 }
 
 void QXcbWindow::setNetWmWindowFlags(Qt::WindowFlags flags)
@@ -1396,11 +1387,6 @@ void QXcbWindow::handleConfigureNotifyEvent(const xcb_configure_notify_event_t *
     }
 
     m_dirtyFrameMargins = true;
-
-#if XCB_USE_DRI2
-    if (m_context)
-        static_cast<QDri2Context *>(m_context)->resize(rect.size());
-#endif
 }
 
 bool QXcbWindow::isExposed() const

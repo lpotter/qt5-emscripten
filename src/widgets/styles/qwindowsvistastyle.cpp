@@ -43,6 +43,7 @@
 #include "qwindowsvistastyle_p.h"
 #include <qscreen.h>
 #include <qwindow.h>
+#include <private/qstyleanimation_p.h>
 #include <private/qstylehelper_p.h>
 #include <private/qsystemlibrary_p.h>
 #include <private/qapplication_p.h>
@@ -143,6 +144,20 @@ bool QWindowsVistaStylePrivate::useVista()
              (QSysInfo::WindowsVersion & QSysInfo::WV_NT_based)));
 }
 
+/* \internal
+    Checks and returns the style object
+*/
+inline QObject *styleObject(const QStyleOption *option) {
+    return option ? option->styleObject : 0;
+}
+
+bool canAnimate(const QStyleOption *option) {
+    return option
+            && option->styleObject
+            && !option->styleObject->property("_q_no_animation").toBool();
+}
+
+
 /*!
   \class QWindowsVistaStyle
   \brief The QWindowsVistaStyle class provides a look and feel suitable for applications on Microsoft Windows Vista.
@@ -153,7 +168,7 @@ bool QWindowsVistaStylePrivate::useVista()
   \warning This style is only available on the Windows Vista platform
   because it makes use of Windows Vista's style engine.
 
-  \sa QMacStyle, QWindowsXPStyle, QPlastiqueStyle, QCleanlooksStyle
+  \sa QMacStyle, QWindowsXPStyle, QFusionStyle
 */
 
 /*!
@@ -200,6 +215,11 @@ void QWindowsVistaAnimation::paint(QPainter *painter, const QStyleOption *option
 {
     Q_UNUSED(option);
     Q_UNUSED(painter);
+}
+
+bool QWindowsVistaAnimation::isUpdateNeeded() const
+{
+    return QWindowsVistaStylePrivate::useVista();
 }
 
 /*! \internal
@@ -255,7 +275,7 @@ void QWindowsVistaAnimation::drawBlendedImage(QPainter *painter, QRect rect, flo
 /*! \internal
   Paints a transition state. The result will be a mix between the
   initial and final state of the transition, depending on the time
-  difference between _startTime and current time.
+  difference between startTime and current time.
 */
 void QWindowsVistaTransition::paint(QPainter *painter, const QStyleOption *option)
 {
@@ -263,18 +283,18 @@ void QWindowsVistaTransition::paint(QPainter *painter, const QStyleOption *optio
     if (_duration > 0) {
         QTime current = QTime::currentTime();
 
-        if (_startTime > current)
-            _startTime = current;
+        if (startTime() > current)
+            setStartTime(current);
 
-        int timeDiff = _startTime.msecsTo(current);
+        int timeDiff = startTime().msecsTo(current);
         alpha = timeDiff/(float)_duration;
         if (timeDiff > _duration) {
-            _running = false;
+            stop();
             alpha = 1.0;
         }
     }
     else {
-        _running = false;
+        stop();
     }
     drawBlendedImage(painter, option->rect, alpha);
 }
@@ -282,7 +302,7 @@ void QWindowsVistaTransition::paint(QPainter *painter, const QStyleOption *optio
 /*! \internal
   Paints a pulse. The result will be a mix between the primary and
   secondary pulse images depending on the time difference between
-  _startTime and current time.
+  startTime and current time.
 */
 void QWindowsVistaPulse::paint(QPainter *painter, const QStyleOption *option)
 {
@@ -290,15 +310,15 @@ void QWindowsVistaPulse::paint(QPainter *painter, const QStyleOption *option)
     if (_duration > 0) {
         QTime current = QTime::currentTime();
 
-        if (_startTime > current)
-            _startTime = current;
+        if (startTime() > current)
+            setStartTime(current);
 
-        int timeDiff = _startTime.msecsTo(current) % _duration*2;
+        int timeDiff = startTime().msecsTo(current) % _duration*2;
         if (timeDiff > _duration)
             timeDiff = _duration*2 - timeDiff;
         alpha = timeDiff/(float)_duration;
     } else {
-        _running = false;
+        stop();
     }
     drawBlendedImage(painter, option->rect, alpha);
 }
@@ -322,17 +342,17 @@ void QWindowsVistaPulse::paint(QPainter *painter, const QStyleOption *option)
   transition has completed. During this time, the result will be
   retrieved by the Animation::paint(...) function and not by the style
   itself.
- 
+
   To determine if a transition should occur, the style needs to know
   the previous state of the widget as well as the current one. This is
   solved by updating dynamic properties on the widget every time the
   function is called.
- 
+
   Transitions interrupting existing transitions should always be
   smooth, so whenever a hover-transition is started on a pulsating
   button, it uses the current frame of the pulse-animation as the
   starting image for the hover transition.
- 
+
  */
 void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option,
                                        QPainter *painter, const QWidget *widget) const
@@ -341,140 +361,141 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
 
     int state = option->state;
     if (!QWindowsVistaStylePrivate::useVista()) {
+        foreach (const QObject *target, d->animationTargets())
+            d->stopAnimation(target);
         QWindowsStyle::drawPrimitive(element, option, painter, widget);
         return;
     }
 
-    QRect oldRect;
-    QRect newRect;
-
-    if (widget && d->transitionsEnabled())
-    {
-        /* all widgets that supports state transitions : */
-        if (
-#ifndef QT_NO_LINEEDIT
-            (qobject_cast<const QLineEdit*>(widget) && element == PE_FrameLineEdit) ||
-#endif // QT_NO_LINEEDIT
-            (qobject_cast<const QRadioButton*>(widget)&& element == PE_IndicatorRadioButton) ||
-            (qobject_cast<const QCheckBox*>(widget) && element == PE_IndicatorCheckBox) ||
-            (qobject_cast<const QGroupBox *>(widget)&& element == PE_IndicatorCheckBox) ||
-            (qobject_cast<const QToolButton*>(widget) && element == PE_PanelButtonBevel)
-        )
+    if (d->transitionsEnabled() && canAnimate(option)) {
         {
-            // Retrieve and update the dynamic properties tracking
-            // the previous state of the widget:
-            QWidget *w = const_cast<QWidget *> (widget);
-            int oldState = w->property("_q_stylestate").toInt();
-            oldRect = w->property("_q_stylerect").toRect();
-            newRect = w->rect();
-            w->setProperty("_q_stylestate", (int)option->state);
-            w->setProperty("_q_stylerect", w->rect());
+            QRect oldRect;
+            QRect newRect;
 
-            bool doTransition = oldState && 
-                                ((state & State_Sunken)     != (oldState & State_Sunken) ||
-                                 (state & State_On)         != (oldState & State_On)     ||
-                                 (state & State_MouseOver)  != (oldState & State_MouseOver));
+            /* widgets that support state transitions : */
+            if (   element == PE_FrameLineEdit
+                || element == PE_IndicatorRadioButton
+                || element == PE_IndicatorCheckBox)
+            {
+                // Retrieve and update the dynamic properties tracking
+                // the previous state of the widget:
+                QObject *styleObject = option->styleObject;
+                styleObject->setProperty("_q_no_animation", true);
 
-            if (oldRect != newRect ||
-                (state & State_Enabled) != (oldState & State_Enabled) ||
-                (state & State_Active)  != (oldState & State_Active))
-                    d->stopAnimation(widget);
+                int oldState = styleObject->property("_q_stylestate").toInt();
+                oldRect = styleObject->property("_q_stylerect").toRect();
+                newRect = option->rect;
+                styleObject->setProperty("_q_stylestate", (int)option->state);
+                styleObject->setProperty("_q_stylerect", option->rect);
 
-#ifndef QT_NO_LINEEDIT
-            if (const QLineEdit *edit = qobject_cast<const QLineEdit *>(widget))
-                if (edit->isReadOnly() && element == PE_FrameLineEdit) // Do not animate read only line edits
+                bool doTransition = oldState &&
+                        ((state & State_Sunken)    != (oldState & State_Sunken) ||
+                        (state & State_On)         != (oldState & State_On)     ||
+                        (state & State_MouseOver)  != (oldState & State_MouseOver));
+
+                if (oldRect != newRect ||
+                        (state & State_Enabled) != (oldState & State_Enabled) ||
+                        (state & State_Active)  != (oldState & State_Active))
+                    d->stopAnimation(styleObject);
+
+                if (option->state & State_ReadOnly && element == PE_FrameLineEdit) // Do not animate read only line edits
                     doTransition = false;
-#endif // QT_NO_LINEEDIT
 
-            if (doTransition) {
-
-                // We create separate images for the initial and final transition states and store them in the
-                // Transition object.
-                QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                QImage endImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                QStyleOption opt = *option;
-
-                opt.rect.setRect(0, 0, option->rect.width(), option->rect.height());
-                opt.state = (QStyle::State)oldState;
-                startImage.fill(0);
-                QPainter startPainter(&startImage);
-
-                QWindowsVistaAnimation *anim = d->widgetAnimation(widget);
-                QWindowsVistaTransition *t = new QWindowsVistaTransition;
-                t->setWidget(w);
-
-                // If we have a running animation on the widget already, we will use that to paint the initial
-                // state of the new transition, this ensures a smooth transition from a current animation such as a
-                // pulsating default button into the intended target state.
-
-                if (!anim)
-                    proxy()->drawPrimitive(element, &opt, &startPainter, 0); // Note that the widget pointer is intentionally 0
-                else                                               // this ensures that we do not recurse in the animation logic above
-                    anim->paint(&startPainter, &opt);
-
-                d->startAnimation(t);
-                t->setStartImage(startImage);
-
-                // The end state of the transition is simply the result we would have painted
-                // if the style was not animated.
-
-                QPainter endPainter(&endImage);
-                endImage.fill(0);
-                QStyleOption opt2 = opt;
-                opt2.state = option->state;
-                proxy()->drawPrimitive(element, &opt2, &endPainter, 0); // Note that the widget pointer is intentionally 0
-                                                              // this ensures that we do not recurse in the animation logic above
-                t->setEndImage(endImage);
-
-                HTHEME theme;
-                int partId;
-                int duration;
-                int fromState = 0;
-                int toState = 0;
-
-                //translate state flags to UXTHEME states :
-                if (element == PE_FrameLineEdit) {
-                    theme = pOpenThemeData(0, L"Edit");
-                    partId = EP_EDITBORDER_NOSCROLL;
-
-                    if (oldState & State_MouseOver)
-                        fromState = ETS_HOT;
-                    else if (oldState & State_HasFocus)
-                        fromState = ETS_FOCUSED;
+                if (doTransition) {
+                    QStyleOption *styleOption = 0;
+                    if (const QStyleOptionGroupBox *combo = qstyleoption_cast<const QStyleOptionGroupBox*>(option))
+                        styleOption = new QStyleOptionGroupBox(*combo);
                     else
-                        fromState = ETS_NORMAL;
+                        styleOption = new QStyleOption(*option);
 
-                    if (state & State_MouseOver)
-                        toState = ETS_HOT;
-                    else if (state & State_HasFocus)
-                        toState = ETS_FOCUSED;
+                    styleOption->state = (QStyle::State)oldState;
+                    styleOption->rect = QRect(QPoint(0,0), newRect.size());
+
+                    QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
+                    QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
+
+                    // We create separate images for the initial and final transition states and store them in the
+                    // Transition object.
+                    QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                    startImage.fill(0);
+                    QPainter startPainter(&startImage);
+
+                    QImage endImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                    endImage.fill(0);
+                    QPainter endPainter(&endImage);
+
+                    // If we have a running animation on the widget already, we will use that to paint the initial
+                    // state of the new transition, this ensures a smooth transition from a current animation such as a
+                    // pulsating default button into the intended target state.
+                    if (!anim)
+                        proxy()->drawPrimitive(element, styleOption, &startPainter, widget);
                     else
-                        toState = ETS_NORMAL;
+                        anim->paint(&startPainter, styleOption);
 
-                } else {
-                    theme = pOpenThemeData(0, L"Button");
-                    if (element == PE_IndicatorRadioButton)
-                        partId = BP_RADIOBUTTON;
-                    else if (element == PE_IndicatorCheckBox)
-                        partId = BP_CHECKBOX;
-                    else
-                        partId = BP_PUSHBUTTON;
+                    t->setStartImage(startImage);
 
-                    fromState = buttonStateId(oldState, partId);
-                    toState = buttonStateId(option->state, partId);
+                    // The end state of the transition is simply the result we would have painted
+                    // if the style was not animated.
+                    styleOption->state = option->state;
+                    drawPrimitive(element, styleOption, &endPainter, widget);
+
+
+                    t->setEndImage(endImage);
+
+                    HTHEME theme;
+                    int partId;
+                    int duration;
+                    int fromState = 0;
+                    int toState = 0;
+
+                    //translate state flags to UXTHEME states :
+                    if (element == PE_FrameLineEdit) {
+                        theme = pOpenThemeData(0, L"Edit");
+                        partId = EP_EDITBORDER_NOSCROLL;
+
+                        if (oldState & State_MouseOver)
+                            fromState = ETS_HOT;
+                        else if (oldState & State_HasFocus)
+                            fromState = ETS_FOCUSED;
+                        else
+                            fromState = ETS_NORMAL;
+
+                        if (state & State_MouseOver)
+                            toState = ETS_HOT;
+                        else if (state & State_HasFocus)
+                            toState = ETS_FOCUSED;
+                        else
+                            toState = ETS_NORMAL;
+
+                    } else {
+                        theme = pOpenThemeData(0, L"Button");
+                        if (element == PE_IndicatorRadioButton)
+                            partId = BP_RADIOBUTTON;
+                        else if (element == PE_IndicatorCheckBox)
+                            partId = BP_CHECKBOX;
+                        else
+                            partId = BP_PUSHBUTTON;
+
+                        fromState = buttonStateId(oldState, partId);
+                        toState = buttonStateId(option->state, partId);
+                    }
+
+                    // Retrieve the transition time between the states from the system.
+                    if (theme && pGetThemeTransitionDuration(theme, partId, fromState, toState,
+                                                             TMT_TRANSITIONDURATIONS, &duration) == S_OK)
+                    {
+                        t->setDuration(duration);
+                    }
+                    t->setStartTime(QTime::currentTime());
+
+                    delete styleOption;
+                    d->startAnimation(t);
                 }
-
-                // Retrieve the transition time between the states from the system.
-                if (theme && pGetThemeTransitionDuration(theme, partId, fromState, toState,
-                    TMT_TRANSITIONDURATIONS, &duration) == S_OK)
-                {
-                    t->setDuration(duration);
-                }
-                t->setStartTime(QTime::currentTime());
+                styleObject->setProperty("_q_no_animation", false);
             }
-        }
-    } // End of animation part
 
+        } // End of animation part
+    }
 
     QRect rect = option->rect;
 
@@ -539,7 +560,8 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
     case PE_IndicatorCheckBox:
     case PE_IndicatorRadioButton:
         {
-            if (QWindowsVistaAnimation *a = d->widgetAnimation(widget)) {
+            if (QWindowsVistaAnimation *a =
+                    qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject(option)))){
                 a->paint(painter, option);
             } else {
                 QWindowsXPStyle::drawPrimitive(element, option, painter, widget);
@@ -556,36 +578,32 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
             d->drawBackground(theme);
         }
         break;
-    case PE_Frame:
-#ifndef QT_NO_TEXTEDIT
-        if (const QTextEdit *edit = qobject_cast<const QTextEdit*>(widget)) {
-            painter->save();
-            int stateId = ETS_NORMAL;
-            if (!(state & State_Enabled))
-                stateId = ETS_DISABLED;
-            else if (edit->isReadOnly())
-                stateId = ETS_READONLY;
-            else if (state & State_HasFocus)
-                stateId = ETS_SELECTED;
-            XPThemeData theme(widget, painter,
-                              QWindowsXPStylePrivate::EditTheme,
-                              EP_EDITBORDER_HVSCROLL, stateId, option->rect);
-            uint resolve_mask = option->palette.resolve();
-            if (resolve_mask & (1 << QPalette::Base)) {
-                // Since EP_EDITBORDER_HVSCROLL does not us borderfill, theme.noContent cannot be used for clipping
-                int borderSize = 1;
-                pGetThemeInt(theme.handle(), theme.partId, theme.stateId, TMT_BORDERSIZE, &borderSize);
-                QRegion clipRegion = option->rect;
-                QRegion content = option->rect.adjusted(borderSize, borderSize, -borderSize, -borderSize);
-                clipRegion ^= content;
-                painter->setClipRegion(clipRegion);
-            }
-            d->drawBackground(theme);
-            painter->restore();
-        } else
-#endif // QT_NO_TEXTEDIT
-            QWindowsXPStyle::drawPrimitive(element, option, painter, widget);
-        break;
+    case PE_Frame: {
+        painter->save();
+        int stateId = ETS_NORMAL;
+        if (!(state & State_Enabled))
+            stateId = ETS_DISABLED;
+        else if (state & State_ReadOnly)
+            stateId = ETS_READONLY;
+        else if (state & State_HasFocus)
+            stateId = ETS_SELECTED;
+        XPThemeData theme(widget, painter,
+                          QWindowsXPStylePrivate::EditTheme,
+                          EP_EDITBORDER_HVSCROLL, stateId, option->rect);
+        uint resolve_mask = option->palette.resolve();
+        if (resolve_mask & (1 << QPalette::Base)) {
+            // Since EP_EDITBORDER_HVSCROLL does not us borderfill, theme.noContent cannot be used for clipping
+            int borderSize = 1;
+            pGetThemeInt(theme.handle(), theme.partId, theme.stateId, TMT_BORDERSIZE, &borderSize);
+            QRegion clipRegion = option->rect;
+            QRegion content = option->rect.adjusted(borderSize, borderSize, -borderSize, -borderSize);
+            clipRegion ^= content;
+            painter->setClipRegion(clipRegion);
+        }
+        d->drawBackground(theme);
+        painter->restore();
+    }
+    break;
 
     case PE_PanelLineEdit:
         if (const QStyleOptionFrame *panel = qstyleoption_cast<const QStyleOptionFrame *>(option)) {
@@ -655,7 +673,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
         break;
 
     case PE_FrameLineEdit:
-        if (QWindowsVistaAnimation *anim = d->widgetAnimation(widget)) {
+        if (QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject(option)))) {
             anim->paint(painter, option);
         } else {
             QPainter *p = painter;
@@ -903,6 +921,8 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
     QWindowsVistaStylePrivate *d = const_cast<QWindowsVistaStylePrivate*>(d_func());
 
     if (!QWindowsVistaStylePrivate::useVista()) {
+        foreach (const QObject *target, d->animationTargets())
+            d->stopAnimation(target);
         QWindowsStyle::drawControl(element, option, painter, widget);
         return;
     }
@@ -919,147 +939,166 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
     int partId = 0;
     int stateId = 0;
 
-    QRect oldRect;
-    QRect newRect;
+    if (d->transitionsEnabled() && canAnimate(option))
+    {
+        if (element == CE_PushButtonBevel) {
+            QRect oldRect;
+            QRect newRect;
 
-    if (d->transitionsEnabled() && widget) {
-        if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton *>(option)) {
-            if ((qobject_cast<const QPushButton*>(widget) && element == CE_PushButtonBevel))
-            {
-                QWidget *w = const_cast<QWidget *> (widget);
-                int oldState = w->property("_q_stylestate").toInt();
-                oldRect = w->property("_q_stylerect").toRect();
-                newRect = w->rect();
-                w->setProperty("_q_stylestate", (int)option->state);
-                w->setProperty("_q_stylerect", w->rect());
+            QObject *styleObject = option->styleObject;
 
-                bool wasDefault = w->property("_q_isdefault").toBool();
-                bool isDefault = button->features & QStyleOptionButton::DefaultButton;
-                w->setProperty("_q_isdefault", isDefault);
+            int oldState = styleObject->property("_q_stylestate").toInt();
+            oldRect = styleObject->property("_q_stylerect").toRect();
+            newRect = option->rect;
+            styleObject->setProperty("_q_stylestate", (int)option->state);
+            styleObject->setProperty("_q_stylerect", option->rect);
 
-                bool doTransition = ((state & State_Sunken)     != (oldState & State_Sunken) ||
-                                     (state & State_On)         != (oldState & State_On)     ||
-                                     (state & State_MouseOver)  != (oldState & State_MouseOver));
-
-                if (oldRect != newRect || (wasDefault && !isDefault))
-                {
-                    doTransition = false;
-                    d->stopAnimation(widget);
-                }
-
-                if (doTransition) {
-                    QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                    QImage endImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                    QWindowsVistaAnimation *anim = d->widgetAnimation(widget);
-
-                    QStyleOptionButton opt = *button;
-                    opt.state = (QStyle::State)oldState;
-
-                    startImage.fill(0);
-                    QWindowsVistaTransition *t = new QWindowsVistaTransition;
-                    t->setWidget(w);
-                    QPainter startPainter(&startImage);
-
-                    if (!anim) {
-                        proxy()->drawControl(element, &opt, &startPainter, 0 /* Intentional */);
-                    } else {
-                        anim->paint(&startPainter, &opt);
-                        d->stopAnimation(widget);
-                    }
-
-                    t->setStartImage(startImage);
-                    d->startAnimation(t);
-
-                    endImage.fill(0);
-                    QPainter endPainter(&endImage);
-                    proxy()->drawControl(element, option, &endPainter, 0 /* Intentional */);
-                    t->setEndImage(endImage);
-                    int duration = 0;
-                    HTHEME theme = pOpenThemeData(0, L"Button");
-
-                    int fromState = buttonStateId(oldState, BP_PUSHBUTTON);
-                    int toState = buttonStateId(option->state, BP_PUSHBUTTON);
-                    if (pGetThemeTransitionDuration(theme, BP_PUSHBUTTON, fromState, toState, TMT_TRANSITIONDURATIONS, &duration) == S_OK)
-                        t->setDuration(duration);
-                    else
-                        t->setDuration(0);
-                    t->setStartTime(QTime::currentTime());
-                }
+            bool wasDefault = false;
+            bool isDefault = false;
+            if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton *>(option)) {
+                wasDefault = styleObject->property("_q_isdefault").toBool();
+                isDefault = button->features & QStyleOptionButton::DefaultButton;
+                styleObject->setProperty("_q_isdefault", isDefault);
             }
+
+            bool doTransition = ((state & State_Sunken)     != (oldState & State_Sunken) ||
+                    (state & State_On)         != (oldState & State_On)     ||
+                    (state & State_MouseOver)  != (oldState & State_MouseOver));
+
+            if (oldRect != newRect || (wasDefault && !isDefault)) {
+                doTransition = false;
+                d->stopAnimation(styleObject);
+            }
+
+            if (doTransition) {
+                styleObject->setProperty("_q_no_animation", true);
+
+                QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
+                QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
+                QStyleOption *styleOption = 0;
+                if (const QStyleOptionComboBox *combo = qstyleoption_cast<const QStyleOptionComboBox*>(option))
+                    styleOption = new QStyleOptionComboBox(*combo);
+                else if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton*>(option))
+                    styleOption = new QStyleOptionButton(*button);
+                else
+                    styleOption = new QStyleOption(*option);
+
+                styleOption->state = (QStyle::State)oldState;
+                styleOption->rect = QRect(QPoint(0,0), newRect.size());
+
+                QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                startImage.fill(0);
+                QPainter startPainter(&startImage);
+
+                // Use current state of existing animation if already one is running
+                if (!anim) {
+                    proxy()->drawControl(element, styleOption, &startPainter, widget);
+                } else {
+                    anim->paint(&startPainter, styleOption);
+                    d->stopAnimation(styleObject);
+                }
+
+                t->setStartImage(startImage);
+                QImage endImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                endImage.fill(0);
+                QPainter endPainter(&endImage);
+                styleOption->state = option->state;
+                proxy()->drawControl(element, styleOption, &endPainter, widget);
+                t->setEndImage(endImage);
+
+
+                int duration = 0;
+                HTHEME theme = pOpenThemeData(0, L"Button");
+
+                int fromState = buttonStateId(oldState, BP_PUSHBUTTON);
+                int toState = buttonStateId(option->state, BP_PUSHBUTTON);
+                if (pGetThemeTransitionDuration(theme, BP_PUSHBUTTON, fromState, toState, TMT_TRANSITIONDURATIONS, &duration) == S_OK)
+                    t->setDuration(duration);
+                else
+                    t->setDuration(0);
+                t->setStartTime(QTime::currentTime());
+                styleObject->setProperty("_q_no_animation", false);
+
+                delete styleOption;
+                d->startAnimation(t);
+            }
+
+            QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
+            if (anim) {
+                anim->paint(painter, option);
+                return;
+            }
+
         }
     }
     switch (element) {
     case CE_PushButtonBevel:
         if (const QStyleOptionButton *btn = qstyleoption_cast<const QStyleOptionButton *>(option))
         {
-            QWindowsVistaAnimation *anim = d->widgetAnimation(widget);
-            if (anim && (btn->state & State_Enabled)) {
-                anim->paint(painter, option);
-            } else {
-                themeNumber = QWindowsXPStylePrivate::ButtonTheme;
-                partId = BP_PUSHBUTTON;
-                if (btn->features & QStyleOptionButton::CommandLinkButton)
-                    partId = BP_COMMANDLINK;
-                bool justFlat = (btn->features & QStyleOptionButton::Flat) && !(flags & (State_On|State_Sunken));
-                if (!(flags & State_Enabled) && !(btn->features & QStyleOptionButton::Flat))
-                    stateId = PBS_DISABLED;
-                else if (justFlat)
-                    ;
-                else if (flags & (State_Sunken | State_On))
-                    stateId = PBS_PRESSED;
-                else if (flags & State_MouseOver)
-                    stateId = PBS_HOT;
-                else if (btn->features & QStyleOptionButton::DefaultButton && (state & State_Active))
-                    stateId = PBS_DEFAULTED;
-                else
-                    stateId = PBS_NORMAL;
+            themeNumber = QWindowsXPStylePrivate::ButtonTheme;
+            partId = BP_PUSHBUTTON;
+            if (btn->features & QStyleOptionButton::CommandLinkButton)
+                partId = BP_COMMANDLINK;
+            bool justFlat = (btn->features & QStyleOptionButton::Flat) && !(flags & (State_On|State_Sunken));
+            if (!(flags & State_Enabled) && !(btn->features & QStyleOptionButton::Flat))
+                stateId = PBS_DISABLED;
+            else if (justFlat)
+                ;
+            else if (flags & (State_Sunken | State_On))
+                stateId = PBS_PRESSED;
+            else if (flags & State_MouseOver)
+                stateId = PBS_HOT;
+            else if (btn->features & QStyleOptionButton::DefaultButton && (state & State_Active))
+                stateId = PBS_DEFAULTED;
+            else
+                stateId = PBS_NORMAL;
 
-                if (!justFlat) {
+            if (!justFlat) {
 
-                    if (widget && d->transitionsEnabled() && (btn->features & QStyleOptionButton::DefaultButton) &&
+                if (d->transitionsEnabled() && (btn->features & QStyleOptionButton::DefaultButton) &&
                         !(state & (State_Sunken | State_On)) && !(state & State_MouseOver) &&
-                         (state & State_Enabled) && (state & State_Active))
-                        {
-                        if (!anim && widget) {
-                            QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                            startImage.fill(0);
-                            QImage alternateImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                            alternateImage.fill(0);
+                        (state & State_Enabled) && (state & State_Active))
+                {
+                    QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject(option)));
 
-                            QWindowsVistaPulse *pulse = new QWindowsVistaPulse;
-                            pulse->setWidget(const_cast<QWidget*>(widget));
+                    if (!anim) {
+                        QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                        startImage.fill(0);
+                        QImage alternateImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                        alternateImage.fill(0);
 
-                            QPainter startPainter(&startImage);
-                            stateId = PBS_DEFAULTED;
-                            XPThemeData theme(widget, &startPainter, themeNumber, partId, stateId, rect);
-                            d->drawBackground(theme);
+                        QWindowsVistaPulse *pulse = new QWindowsVistaPulse(styleObject(option));
 
-                            QPainter alternatePainter(&alternateImage);
-                            theme.stateId = PBS_DEFAULTED_ANIMATING;
-                            theme.painter = &alternatePainter;
-                            d->drawBackground(theme);
-                            pulse->setPrimaryImage(startImage);
-                            pulse->setAlternateImage(alternateImage);
-                            pulse->setStartTime(QTime::currentTime());
-                            pulse->setDuration(2000);
-                            d->startAnimation(pulse);
-                            anim = pulse;
-                        }
+                        QPainter startPainter(&startImage);
+                        stateId = PBS_DEFAULTED;
+                        XPThemeData theme(widget, &startPainter, themeNumber, partId, stateId, rect);
+                        d->drawBackground(theme);
 
-                        if (anim)
-                            anim->paint(painter, option);
-                        else {
-                            XPThemeData theme(widget, painter, themeNumber, partId, stateId, rect);
-                            d->drawBackground(theme);
-                        }
+                        QPainter alternatePainter(&alternateImage);
+                        theme.stateId = PBS_DEFAULTED_ANIMATING;
+                        theme.painter = &alternatePainter;
+                        d->drawBackground(theme);
+                        pulse->setPrimaryImage(startImage);
+                        pulse->setAlternateImage(alternateImage);
+                        pulse->setStartTime(QTime::currentTime());
+                        pulse->setDuration(2000);
+                        d->startAnimation(pulse);
+                        anim = pulse;
                     }
+
+                    if (anim)
+                        anim->paint(painter, option);
                     else {
-                        d->stopAnimation(widget);
                         XPThemeData theme(widget, painter, themeNumber, partId, stateId, rect);
                         d->drawBackground(theme);
                     }
                 }
+                else {
+                    XPThemeData theme(widget, painter, themeNumber, partId, stateId, rect);
+                    d->drawBackground(theme);
+                }
             }
+
             if (btn->features & QStyleOptionButton::HasMenu) {
                 int mbiw = 0, mbih = 0;
                 XPThemeData theme(widget, 0, QWindowsXPStylePrivate::ToolBarTheme,
@@ -1082,7 +1121,7 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
             return;
         }
         break;
-#ifndef QT_NO_PROGRESSBAR
+
     case CE_ProgressBarContents:
         if (const QStyleOptionProgressBar *bar
                 = qstyleoption_cast<const QStyleOptionProgressBar *>(option)) {
@@ -1094,17 +1133,11 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                 inverted = pb2->invertedAppearance;
             }
 
-            if (const QProgressBar *progressbar = qobject_cast<const QProgressBar *>(widget)) {
-                if (isIndeterminate || (progressbar->value() > 0 && (progressbar->value() < progressbar->maximum()) && d->transitionsEnabled())) {
-                    if (!d->widgetAnimation(progressbar)) {
-                        QWindowsVistaAnimation *a = new QWindowsVistaAnimation;
-                        a->setWidget(const_cast<QWidget*>(widget));
-                        a->setStartTime(QTime::currentTime());
-                        d->startAnimation(a);
-                    }
-                } else {
-                    d->stopAnimation(progressbar);
-                }
+            if (isIndeterminate || (bar->progress > 0 && (bar->progress < bar->maximum) && d->transitionsEnabled())) {
+                if (!d->animation(styleObject(option)))
+                    d->startAnimation(new QProgressStyleAnimation(d->animationFps, styleObject(option)));
+            } else {
+                d->stopAnimation(styleObject(option));
             }
 
             XPThemeData theme(widget, painter,
@@ -1115,7 +1148,7 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
             QTime current = QTime::currentTime();
 
             if (isIndeterminate) {
-                if (QWindowsVistaAnimation *a = d->widgetAnimation(widget)) {
+                if (QProgressStyleAnimation *a = qobject_cast<QProgressStyleAnimation *>(d->animation(styleObject(option)))) {
                     int glowSize = 120;
                     int animationWidth = glowSize * 2 + (vertical ? theme.rect.height() : theme.rect.width());
                     int animOffset = a->startTime().msecsTo(current) / 4;
@@ -1185,7 +1218,7 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                 }
                 d->drawBackground(theme);
 
-                if (QWindowsVistaAnimation *a = d->widgetAnimation(widget)) {
+                if (QProgressStyleAnimation *a = qobject_cast<QProgressStyleAnimation *>(d->animation(styleObject(option)))) {
                     int glowSize = 140;
                     int animationWidth = glowSize * 2 + (vertical ? theme.rect.height() : theme.rect.width());
                     int animOffset = a->startTime().msecsTo(current) / 4;
@@ -1194,8 +1227,8 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                         if (bar->progress < bar->maximum)
                             a->setStartTime(QTime::currentTime());
                         else
-                            d->stopAnimation(widget); //we stop the glow motion only after it has
-                                                      //moved out of view
+                            d->stopAnimation(styleObject(option)); //we stop the glow motion only after it has
+                                                                   //moved out of view
                     }
                     painter->save();
                     painter->setClipRect(theme.rect);
@@ -1214,7 +1247,7 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
             }
         }
         break;
-#endif // QT_NO_PROGRESSBAR
+
     case CE_MenuBarItem:
         {
 
@@ -1574,6 +1607,8 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
 {
     QWindowsVistaStylePrivate *d = const_cast<QWindowsVistaStylePrivate*>(d_func());
     if (!QWindowsVistaStylePrivate::useVista()) {
+        foreach (const QObject *target, d->animationTargets())
+            d->stopAnimation(target);
         QWindowsStyle::drawComplexControl(control, option, painter, widget);
         return;
     }
@@ -1589,38 +1624,33 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
     if (widget && widget->testAttribute(Qt::WA_UnderMouse) && widget->isActiveWindow())
         flags |= State_MouseOver;
 
-    if (d->transitionsEnabled() && widget) {
-        if ((qobject_cast<const QScrollBar *>(widget) && control == CC_ScrollBar)
-#ifndef QT_NO_SPINBOX
-            || (qobject_cast<const QAbstractSpinBox*>(widget) && control == CC_SpinBox)
-#endif // QT_NO_SPINBOX
-#ifndef QT_NO_COMBOBOX
-            || (qobject_cast<const QComboBox*>(widget) && control == CC_ComboBox)
-#endif // QT_NO_COMBOBOX
-            )
-        {
-            QWidget *w = const_cast<QWidget *> (widget);
+    if (d->transitionsEnabled() && canAnimate(option))
+    {
 
-            int oldState = w->property("_q_stylestate").toInt();
-            int oldActiveControls = w->property("_q_stylecontrols").toInt();
-            QRect oldRect = w->property("_q_stylerect").toRect();
-            w->setProperty("_q_stylestate", (int)option->state);
-            w->setProperty("_q_stylecontrols", (int)option->activeSubControls);
-            w->setProperty("_q_stylerect", w->rect());
+        if (control == CC_ScrollBar || control == CC_SpinBox ) {
+
+            QObject *styleObject = option->styleObject; // Can be widget or qquickitem
+
+            int oldState = styleObject->property("_q_stylestate").toInt();
+            int oldActiveControls = styleObject->property("_q_stylecontrols").toInt();
+
+            QRect oldRect = styleObject->property("_q_stylerect").toRect();
+            styleObject->setProperty("_q_stylestate", (int)option->state);
+            styleObject->setProperty("_q_stylecontrols", (int)option->activeSubControls);
+            styleObject->setProperty("_q_stylerect", option->rect);
 
             bool doTransition = ((state & State_Sunken)     != (oldState & State_Sunken)    ||
                                  (state & State_On)         != (oldState & State_On)        ||
                                  (state & State_MouseOver)  != (oldState & State_MouseOver) ||
-                                  oldActiveControls            != option->activeSubControls);
-
+                                  oldActiveControls         != option->activeSubControls);
 
             if (qstyleoption_cast<const QStyleOptionSlider *>(option)) {
-                QRect oldSliderPos = w->property("_q_stylesliderpos").toRect();
+                QRect oldSliderPos = styleObject->property("_q_stylesliderpos").toRect();
                 QRect currentPos = proxy()->subControlRect(CC_ScrollBar, option, SC_ScrollBarSlider, widget);
-                w->setProperty("_q_stylesliderpos", currentPos);
+                styleObject->setProperty("_q_stylesliderpos", currentPos);
                 if (oldSliderPos != currentPos) {
                     doTransition = false;
-                    d->stopAnimation(widget);
+                    d->stopAnimation(styleObject);
                 }
             } else if (control == CC_SpinBox) {
                 //spinboxes have a transition when focus changes
@@ -1630,59 +1660,51 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
 
             if (oldRect != option->rect) {
                 doTransition = false;
-                d->stopAnimation(widget);
+                d->stopAnimation(styleObject);
             }
 
             if (doTransition) {
                 QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
+                startImage.fill(0);
+                QPainter startPainter(&startImage);
+
                 QImage endImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
-                QWindowsVistaAnimation *anim = d->widgetAnimation(widget);
-                QWindowsVistaTransition *t = new QWindowsVistaTransition;
-                t->setWidget(w);
-                if (!anim) {
-                    if (const QStyleOptionComboBox *combo = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
-                        //Combo boxes are special cased to avoid cleartype issues
-                        startImage.fill(0);
-                        QPainter startPainter(&startImage);
-                        QStyleOptionComboBox startCombo = *combo;
-                        startCombo.state = (QStyle::State)oldState;
-                        startCombo.activeSubControls = (QStyle::SubControl)oldActiveControls;
-                        proxy()->drawComplexControl(control, &startCombo, &startPainter, 0 /* Intentional */);
-                        t->setStartImage(startImage);
-                    } else if (const QStyleOptionSlider *slider = qstyleoption_cast<const QStyleOptionSlider*>(option)) {
-                        //This is a workaround for the direct3d engine as it currently has some issues with grabWindow
-                        startImage.fill(0);
-                        QPainter startPainter(&startImage);
-                        QStyleOptionSlider startSlider = *slider;
-                        startSlider.state = (QStyle::State)oldState;
-                        startSlider.activeSubControls = (QStyle::SubControl)oldActiveControls;
-                        proxy()->drawComplexControl(control, &startSlider, &startPainter, 0 /* Intentional */);
-                        t->setStartImage(startImage);
-                    } else {
-                        QPoint offset(0, 0);
-                        QWindow *window = widget->windowHandle();
-                        if (!window) {
-                            if (const QWidget *nativeParent = widget->nativeParentWidget()) {
-                                offset = widget->mapTo(nativeParent, offset);
-                                window = nativeParent->windowHandle();
-                            }
-                        }
-                        if (window && window->handle()) {
-                            const QPixmap pixmap = window->screen()->grabWindow(window->winId(),
-                                                                                offset.x(), offset.y(), option->rect.width(), option->rect.height());
-                            t->setStartImage(pixmap.toImage());
-                        }
-                    }
-                } else {
-                    startImage.fill(0);
-                    QPainter startPainter(&startImage);
-                    anim->paint(&startPainter, option);
-                    t->setStartImage(startImage);
-                }
-                d->startAnimation(t);
                 endImage.fill(0);
                 QPainter endPainter(&endImage);
-                proxy()->drawComplexControl(control, option, &endPainter, 0 /* Intentional */);
+
+                QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
+                QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
+
+                // Draw the image that ends the animation by using the current styleoption
+                QStyleOptionComplex *styleOption = 0;
+                if (const QStyleOptionSlider *slider = qstyleoption_cast<const QStyleOptionSlider*>(option))
+                    styleOption = new QStyleOptionSlider(*slider);
+                else if (const QStyleOptionSpinBox *spinbox = qstyleoption_cast<const QStyleOptionSpinBox*>(option))
+                    styleOption = new QStyleOptionSpinBox(*spinbox);
+                else
+                    styleOption = new QStyleOptionComplex(*option);
+
+                styleOption->rect = QRect(QPoint(0,0), option->rect.size());
+
+                styleObject->setProperty("_q_no_animation", true);
+
+                // Draw transition source
+                if (!anim) {
+                    styleOption->state = (QStyle::State)oldState;
+                    styleOption->activeSubControls = (QStyle::SubControl)oldActiveControls;
+                    proxy()->drawComplexControl(control, styleOption, &startPainter, widget);
+                } else {
+                    anim->paint(&startPainter, option);
+                }
+                t->setStartImage(startImage);
+
+                // Draw transition target
+                styleOption->state = option->state;
+                styleOption->activeSubControls = option->activeSubControls;
+                proxy()->drawComplexControl(control, styleOption, &endPainter, widget);
+
+                styleObject->setProperty("_q_no_animation", false);
+
                 t->setEndImage(endImage);
                 t->setStartTime(QTime::currentTime());
 
@@ -1690,13 +1712,14 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
                     t->setDuration(150);
                 else
                     t->setDuration(500);
-            }
 
-            if (QWindowsVistaAnimation *anim = d->widgetAnimation(widget)) {
+                delete styleOption;
+                d->startAnimation(t);
+            }
+            if (QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject))) {
                 anim->paint(painter, option);
                 return;
             }
-
         }
     }
 
@@ -2338,29 +2361,6 @@ QRect QWindowsVistaStyle::subControlRect(ComplexControl control, const QStyleOpt
 /*!
  \internal
  */
-bool QWindowsVistaStyle::event(QEvent *e)
-{
-    Q_D(QWindowsVistaStyle);
-    switch (e->type()) {
-    case QEvent::Timer:
-        {
-            QTimerEvent *timerEvent = (QTimerEvent *)e;
-            if (d->animationTimer.timerId() == timerEvent->timerId()) {
-                d->timerEvent();
-                e->accept();
-                return true;
-            }
-        }
-        break;
-    default:
-        break;
-    }
-    return QWindowsXPStyle::event(e);
-}
-
-/*!
- \internal
- */
 QStyle::SubControl QWindowsVistaStyle::hitTestComplexControl(ComplexControl control, const QStyleOptionComplex *option,
                                                           const QPoint &pos, const QWidget *widget) const
 {
@@ -2549,51 +2549,7 @@ QWindowsVistaStylePrivate::QWindowsVistaStylePrivate() :
 
 QWindowsVistaStylePrivate::~QWindowsVistaStylePrivate()
 {
-    qDeleteAll(animations);
     cleanupTreeViewTheming();
-}
-
-void QWindowsVistaStylePrivate::timerEvent()
-{
-    for (int i = animations.size() - 1 ; i >= 0 ; --i) {
-
-        if (animations[i]->widget())
-            animations[i]->widget()->update();
-
-        if (!animations[i]->widget() ||
-            !animations[i]->widget()->isVisible() ||
-            animations[i]->widget()->window()->isMinimized() ||
-            !animations[i]->running() ||
-            !QWindowsVistaStylePrivate::useVista())
-        {
-            QWindowsVistaAnimation *a = animations.takeAt(i);
-            delete a;
-        }
-    }
-    if (animations.size() == 0 && animationTimer.isActive()) {
-        animationTimer.stop();
-    }
-}
-
-void QWindowsVistaStylePrivate::stopAnimation(const QWidget *w)
-{
-    for (int i = animations.size() - 1 ; i >= 0 ; --i) {
-        if (animations[i]->widget() == w) {
-            QWindowsVistaAnimation *a = animations.takeAt(i);
-            delete a;
-            break;
-        }
-    }
-}
-
-void QWindowsVistaStylePrivate::startAnimation(QWindowsVistaAnimation *t)
-{
-    Q_Q(QWindowsVistaStyle);
-    stopAnimation(t->widget());
-    animations.append(t);
-    if (animations.size() > 0 && !animationTimer.isActive()) {
-        animationTimer.start(45, q);
-    }
 }
 
 bool QWindowsVistaStylePrivate::transitionsEnabled() const
@@ -2606,19 +2562,6 @@ bool QWindowsVistaStylePrivate::transitionsEnabled() const
     }
     return false;
 }
-
-
-QWindowsVistaAnimation * QWindowsVistaStylePrivate::widgetAnimation(const QWidget *widget) const
-{
-    if (!widget)
-        return 0;
-    foreach (QWindowsVistaAnimation *a, animations) {
-        if (a->widget() == widget)
-            return a;
-    }
-    return 0;
-}
-
 
 /*! \internal
     Returns true if all the necessary theme engine symbols were

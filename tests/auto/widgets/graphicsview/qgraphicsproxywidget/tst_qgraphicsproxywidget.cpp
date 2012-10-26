@@ -434,8 +434,8 @@ void tst_QGraphicsProxyWidget::setWidget()
 #endif
     widget->setPalette(QPalette(Qt::magenta));
     widget->setLayoutDirection(Qt::RightToLeft);
-    QCleanlooksStyle cleanlooksStyle;
-    widget->setStyle(&cleanlooksStyle);
+    QFusionStyle fusionStyle;
+    widget->setStyle(&fusionStyle);
     widget->setFont(QFont("Times"));
     widget->setVisible(true);
     QApplication::setActiveWindow(widget);
@@ -2768,7 +2768,7 @@ void tst_QGraphicsProxyWidget::windowOpacity()
     QVERIFY(view.isActiveWindow());
 
     qRegisterMetaType<QList<QRectF> >("QList<QRectF>");
-    QSignalSpy signalSpy(&scene, SIGNAL(changed(const QList<QRectF> &)));
+    QSignalSpy signalSpy(&scene, SIGNAL(changed(QList<QRectF>)));
 
     EventSpy eventSpy(widget);
     QVERIFY(widget->isVisible());

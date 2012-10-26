@@ -72,8 +72,8 @@
 #include <qstringlist.h>
 #include <qvalidator.h>
 #include <qcompleter.h>
-#ifndef QT_NO_STYLE_CLEANLOOKS
-#include <qcleanlooksstyle.h>
+#ifndef QT_NO_STYLE_FUSION
+#include <qfusionstyle.h>
 #endif
 #include <qabstractitemview.h>
 #include <qstyleditemdelegate.h>
@@ -116,11 +116,15 @@ private slots:
     void insertOnCurrentIndex();
     void textpixmapdata_data();
     void textpixmapdata();
+    void currentTextChanged_data();
+    void currentTextChanged();
     void editTextChanged();
     void setModel();
     void modelDeleted();
     void setMaxCount();
     void setCurrentIndex();
+    void setCurrentText_data();
+    void setCurrentText();
     void convenienceViews();
     void findText_data();
     void findText();
@@ -133,7 +137,7 @@ private slots:
     void itemListPosition();
     void separatorItem_data();
     void separatorItem();
-#ifndef QT_NO_STYLE_CLEANLOOKS
+#ifndef QT_NO_STYLE_FUSION
     void task190351_layout();
     void task191329_size();
 #endif
@@ -160,15 +164,10 @@ private slots:
     void task_QTBUG_10491_currentIndexAndModelColumn();
     void highlightedSignal();
 
-protected slots:
-    void onEditTextChanged( const QString &newString );
-
 private:
     QComboBox *testWidget;
     QWidget *parent;
     QPushButton* ok;
-    int editTextCount;
-    QString editText;
 };
 
 class MyAbstractItemDelegate : public QAbstractItemDelegate
@@ -403,10 +402,6 @@ void tst_QComboBox::initTestCase()
     testWidget = new QComboBox(parent);
     testWidget->setObjectName("testObject");
     testWidget->setGeometry(0, 0, 100, 100);
-    editTextCount = 0;
-    editText.clear();
-    connect(testWidget, SIGNAL(editTextChanged(const QString&)),
-            this, SLOT(onEditTextChanged(const QString&)));
     parent->show();
 }
 
@@ -1130,7 +1125,7 @@ void tst_QComboBox::currentIndex()
 
         // spy on currentIndexChanged
         QSignalSpy indexChangedInt(testWidget, SIGNAL(currentIndexChanged(int)));
-        QSignalSpy indexChangedString(testWidget, SIGNAL(currentIndexChanged(const QString&)));
+        QSignalSpy indexChangedString(testWidget, SIGNAL(currentIndexChanged(QString)));
 
         // stuff items into it
         foreach(QString text, initialItems) {
@@ -1282,6 +1277,8 @@ void tst_QComboBox::textpixmapdata_data()
     QStringList text;
     IconList icon;
     VariantList variant;
+    QString qtlogoPath = QFINDTESTDATA("qtlogo.png");
+    QString qtlogoinvertedPath = QFINDTESTDATA("qtlogoinverted.png");
 
     {
         text.clear(); icon.clear(); variant.clear();
@@ -1293,7 +1290,7 @@ void tst_QComboBox::textpixmapdata_data()
     {
         text.clear(); icon.clear(); variant.clear();
         text << QString() << QString();
-        icon << QIcon(QPixmap("qtlogo.png")) << QIcon(QPixmap("qtlogoinverted.png"));
+        icon << QIcon(QPixmap(qtlogoPath)) << QIcon(QPixmap(qtlogoinvertedPath));
         variant << QVariant() << QVariant();
         QTest::newRow("just icons") << text << icon << variant;
     }
@@ -1307,7 +1304,7 @@ void tst_QComboBox::textpixmapdata_data()
     {
         text.clear(); icon.clear(); variant.clear();
         text << "foo" << "bar";
-        icon << QIcon(QPixmap("qtlogo.png")) << QIcon(QPixmap("qtlogoinverted.png"));
+        icon << QIcon(QPixmap(qtlogoPath)) << QIcon(QPixmap(qtlogoinvertedPath));
         variant << 12 << "bingo";
         QTest::newRow("text, icons and user data") << text << icon << variant;
     }
@@ -1362,6 +1359,110 @@ void tst_QComboBox::setCurrentIndex()
     QCOMPARE(testWidget->currentText(), QString("foo"));
 }
 
+void tst_QComboBox::setCurrentText_data()
+{
+    QTest::addColumn<bool>("editable");
+    QTest::newRow("editable") << true;
+    QTest::newRow("not editable") << false;
+}
+
+void tst_QComboBox::setCurrentText()
+{
+    QFETCH(bool, editable);
+
+    QCOMPARE(testWidget->count(), 0);
+    testWidget->addItems(QStringList() << "foo" << "bar");
+    QCOMPARE(testWidget->count(), 2);
+
+    testWidget->setEditable(editable);
+    testWidget->setCurrentIndex(0);
+    QCOMPARE(testWidget->currentIndex(), 0);
+
+    // effect on currentText and currentIndex
+    // currentIndex not changed if editable
+    QCOMPARE(testWidget->currentText(), QString("foo"));
+    testWidget->setCurrentText(QString("bar"));
+    QCOMPARE(testWidget->currentText(), QString("bar"));
+    if (editable)
+        QCOMPARE(testWidget->currentIndex(), 0);
+    else
+        QCOMPARE(testWidget->currentIndex(), 1);
+
+    testWidget->setCurrentText(QString("foo"));
+    QCOMPARE(testWidget->currentIndex(), 0);
+    QCOMPARE(testWidget->currentText(), QString("foo"));
+
+    // effect of text not found in list
+    testWidget->setCurrentText(QString("qt"));
+    QCOMPARE(testWidget->currentIndex(), 0);
+    if (editable)
+        QCOMPARE(testWidget->currentText(), QString("qt"));
+    else
+        QCOMPARE(testWidget->currentText(), QString("foo"));
+
+#ifndef QT_NO_PROPERTIES
+    // verify WRITE for currentText property
+    testWidget->setCurrentIndex(0);
+    const QByteArray n("currentText");
+    QCOMPARE(testWidget->property(n).toString(), QString("foo"));
+    testWidget->setProperty(n, QString("bar"));
+    QCOMPARE(testWidget->property(n).toString(), QString("bar"));
+#endif
+}
+
+void tst_QComboBox::currentTextChanged_data()
+{
+    QTest::addColumn<bool>("editable");
+    QTest::newRow("editable") << true;
+    QTest::newRow("not editable") << false;
+}
+
+void tst_QComboBox::currentTextChanged()
+{
+    QFETCH(bool, editable);
+
+    QCOMPARE(testWidget->count(), 0);
+    testWidget->addItems(QStringList() << "foo" << "bar");
+    QCOMPARE(testWidget->count(), 2);
+
+    QSignalSpy spy(testWidget, SIGNAL(currentTextChanged(QString)));
+
+    testWidget->setEditable(editable);
+
+    // set text in list
+    testWidget->setCurrentIndex(0);
+    QCOMPARE(testWidget->currentIndex(), 0);
+    spy.clear();
+    testWidget->setCurrentText(QString("bar"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(qvariant_cast<QString>(spy.at(0).at(0)), QString("bar"));
+
+    // set text not in list
+    testWidget->setCurrentIndex(0);
+    QCOMPARE(testWidget->currentIndex(), 0);
+    spy.clear();
+    testWidget->setCurrentText(QString("qt"));
+    if (editable) {
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(qvariant_cast<QString>(spy.at(0).at(0)), QString("qt"));
+    } else {
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // item changed
+    testWidget->setCurrentIndex(0);
+    QCOMPARE(testWidget->currentIndex(), 0);
+    spy.clear();
+    testWidget->setItemText(0, QString("ape"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(qvariant_cast<QString>(spy.at(0).at(0)), QString("ape"));
+    // change it back
+    spy.clear();
+    testWidget->setItemText(0, QString("foo"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(qvariant_cast<QString>(spy.at(0).at(0)), QString("foo"));
+}
+
 void tst_QComboBox::editTextChanged()
 {
     QCOMPARE(testWidget->count(), 0);
@@ -1373,23 +1474,19 @@ void tst_QComboBox::editTextChanged()
     testWidget->setEditable(false);
     QCOMPARE(testWidget->isEditable(), false);
 
+    QSignalSpy spy(testWidget, SIGNAL(editTextChanged(QString)));
+
     // no signal should be sent when current is set to the same
     QCOMPARE(testWidget->currentIndex(), 0);
-    editTextCount = 0;
-    editText.clear();
     testWidget->setCurrentIndex(0);
     QCOMPARE(testWidget->currentIndex(), 0);
-    QCOMPARE(editTextCount, 0);
-    QCOMPARE(editText.isEmpty(), true);
+    QCOMPARE(spy.count(), 0);
 
     // no signal should be sent when changing to other index because we are not editable
     QCOMPARE(testWidget->currentIndex(), 0);
-    editTextCount = 0;
-    editText.clear();
     testWidget->setCurrentIndex(1);
     QCOMPARE(testWidget->currentIndex(), 1);
-    QCOMPARE(editTextCount, 0);
-    QCOMPARE(editText.isEmpty(), true);
+    QCOMPARE(spy.count(), 0);
 
     // now set to editable and reset current index
     testWidget->setEditable(true);
@@ -1397,35 +1494,25 @@ void tst_QComboBox::editTextChanged()
     testWidget->setCurrentIndex(0);
 
     // no signal should be sent when current is set to the same
+    spy.clear();
     QCOMPARE(testWidget->currentIndex(), 0);
-    editTextCount = 0;
-    editText.clear();
     testWidget->setCurrentIndex(0);
     QCOMPARE(testWidget->currentIndex(), 0);
-    QCOMPARE(editTextCount, 0);
-    QCOMPARE(editText.isEmpty(), true);
+    QCOMPARE(spy.count(), 0);
 
     // signal should be sent when changing to other index
     QCOMPARE(testWidget->currentIndex(), 0);
-    editTextCount = 0;
-    editText.clear();
     testWidget->setCurrentIndex(1);
     QCOMPARE(testWidget->currentIndex(), 1);
-    QCOMPARE(editTextCount, 1);
-    QCOMPARE(editText, QString("bar"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(qvariant_cast<QString>(spy.at(0).at(0)), QString("bar"));
+
 
     // insert some keys and notice they are all signaled
-    editTextCount = 0;
-    editText.clear();
+    spy.clear();
     QTest::keyClicks(testWidget, "bingo");
-    QCOMPARE(editTextCount, 5);
-    QCOMPARE(editText, QString("barbingo"));
-}
-
-void tst_QComboBox::onEditTextChanged(const QString &text)
-{
-    editTextCount++;
-    editText = text;
+    QCOMPARE(spy.count(), 5);
+    QCOMPARE(qvariant_cast<QString>(spy.at(4).at(0)), QString("barbingo"));
 }
 
 void tst_QComboBox::setModel()
@@ -1963,12 +2050,12 @@ void tst_QComboBox::separatorItem()
     }
 }
 
-// This test requires the Cleanlooks style
-#ifndef QT_NO_STYLE_CLEANLOOKS
+// This test requires the Fusionstyle
+#ifndef QT_NO_STYLE_FUSION
 void tst_QComboBox::task190351_layout()
 {
     const QString oldStyle = QApplication::style()->objectName();
-    QApplication::setStyle(new QCleanlooksStyle);
+    QApplication::setStyle(new QFusionStyle);
 
     QComboBox listCombo;
     QListWidget *list = new QListWidget();
@@ -2028,12 +2115,12 @@ void tst_QComboBox::task166349_setEditableOnReturn()
     QCOMPARE(QLatin1String("two1"), comboBox.itemText(comboBox.count() - 1));
 }
 
-// This test requires the Cleanlooks style.
-#ifndef QT_NO_STYLE_CLEANLOOKS
+// This test requires the Fusion style.
+#ifndef QT_NO_STYLE_FUSION
 void tst_QComboBox::task191329_size()
 {
     const QString oldStyle = QApplication::style()->objectName();
-    QApplication::setStyle(new QCleanlooksStyle);
+    QApplication::setStyle(new QFusionStyle);
 
     QComboBox tableCombo;
     int rows;
@@ -2141,7 +2228,7 @@ void tst_QComboBox::task247863_keyBoardSelection()
   QApplication::setActiveWindow(&combo);
   QTRY_COMPARE(QApplication::activeWindow(), static_cast<QWidget *>(&combo));
 
-  QSignalSpy spy(&combo, SIGNAL(activated(const QString &)));
+  QSignalSpy spy(&combo, SIGNAL(activated(QString)));
   qApp->setEffectEnabled(Qt::UI_AnimateCombo, false);
   QTest::keyClick(&combo, Qt::Key_Space);
   qApp->setEffectEnabled(Qt::UI_AnimateCombo, true);

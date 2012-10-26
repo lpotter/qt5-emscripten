@@ -130,7 +130,9 @@ private slots:
     void selectFilter();
     void viewMode();
     void proxymodel();
+    void setNameFilter_data();
     void setNameFilter();
+    void setEmptyNameFilter();
     void focus();
     void caption();
     void historyBack();
@@ -196,7 +198,7 @@ void tst_QFiledialog::currentChangedSignal()
 {
     QNonNativeFileDialog fd;
     fd.setViewMode(QFileDialog::List);
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
 
     QListView* listView = qFindChild<QListView*>(&fd, "listView");
     QVERIFY(listView);
@@ -224,7 +226,7 @@ void tst_QFiledialog::directoryEnteredSignal()
     fd.setOptions(QFileDialog::DontUseNativeDialog);
     fd.show();
     QTRY_COMPARE(fd.isVisible(), true);
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
 
     // sidebar
     QSidebar *sidebar = qFindChild<QSidebar*>(&fd, "sidebar");
@@ -287,7 +289,7 @@ void tst_QFiledialog::filesSelectedSignal()
     fd.setDirectory(testDir);
     QFETCH(QFileDialog::FileMode, fileMode);
     fd.setFileMode(fileMode);
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
 
     fd.show();
     QVERIFY(QTest::qWaitForWindowExposed(&fd));
@@ -327,7 +329,7 @@ void tst_QFiledialog::filterSelectedSignal()
     QNonNativeFileDialog fd;
     fd.setAcceptMode(QFileDialog::AcceptSave);
     fd.show();
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
 
     QStringList filterChoices;
     filterChoices << "Image files (*.png *.xpm *.jpg)"
@@ -368,10 +370,10 @@ void tst_QFiledialog::directory()
     QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
     QVERIFY(model);
     fd.setDirectory(QDir::currentPath());
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
 
     QCOMPARE(QDir::current().absolutePath(), fd.directory().absolutePath());
     QDir temp = QDir::temp();
@@ -559,10 +561,10 @@ void tst_QFiledialog::completer_up()
 {
     QNonNativeFileDialog fd;
     fd.setOptions(QFileDialog::DontUseNativeDialog);
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
 
     fd.show();
     QLineEdit *lineEdit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
@@ -649,10 +651,10 @@ void tst_QFiledialog::filters()
 {
     QNonNativeFileDialog fd;
     fd.setOptions(QFileDialog::DontUseNativeDialog);
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
     QCOMPARE(fd.nameFilters(), QStringList("All Files (*)"));
 
     // effects
@@ -702,7 +704,7 @@ void tst_QFiledialog::filters()
 void tst_QFiledialog::selectFilter()
 {
     QNonNativeFileDialog fd;
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
     QCOMPARE(fd.selectedNameFilter(), QString("All Files (*)"));
     QStringList filters;
     filters << "Image files (*.png *.xpm *.jpg)"
@@ -728,10 +730,10 @@ void tst_QFiledialog::history()
     fd.setViewMode(QFileDialog::List);
     QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
     QVERIFY(model);
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
     QCOMPARE(model->index(fd.history().first()), model->index(QDir::toNativeSeparators(fd.directory().absolutePath())));
     fd.setDirectory(QDir::current().absolutePath());
     QStringList history;
@@ -890,10 +892,10 @@ void tst_QFiledialog::selectFiles()
     QDir dir;
     QVERIFY(dir.mkpath(tempPath));
     fd.setDirectory(tempPath);
-    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(const QString &)));
-    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(const QString &)));
-    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(const QStringList &)));
-    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(const QString &)));
+    QSignalSpy spyCurrentChanged(&fd, SIGNAL(currentChanged(QString)));
+    QSignalSpy spyDirectoryEntered(&fd, SIGNAL(directoryEntered(QString)));
+    QSignalSpy spyFilesSelected(&fd, SIGNAL(filesSelected(QStringList)));
+    QSignalSpy spyFilterSelected(&fd, SIGNAL(filterSelected(QString)));
     fd.show();
     fd.setFileMode(QFileDialog::ExistingFiles);
 
@@ -1003,11 +1005,54 @@ void tst_QFiledialog::proxymodel()
     QCOMPARE(fd.proxyModel(), (QAbstractProxyModel*)0);
 }
 
-void tst_QFiledialog::setNameFilter()
+void tst_QFiledialog::setEmptyNameFilter()
 {
     QNonNativeFileDialog fd;
     fd.setNameFilter(QString());
     fd.setNameFilters(QStringList());
+}
+
+void tst_QFiledialog::setNameFilter_data()
+{
+    QTest::addColumn<bool>("nameFilterDetailsVisible");
+    QTest::addColumn<QStringList>("filters");
+    QTest::addColumn<QString>("selectFilter");
+    QTest::addColumn<QString>("expectedSelectedFilter");
+
+    QTest::newRow("namedetailsvisible-empty") << true << QStringList() << QString() << QString();
+    QTest::newRow("namedetailsinvisible-empty") << false << QStringList() << QString() << QString();
+
+    const QString anyFileNoDetails = QLatin1String("Any files");
+    const QString anyFile = anyFileNoDetails + QLatin1String(" (*)");
+    const QString imageFilesNoDetails = QLatin1String("Image files");
+    const QString imageFiles = imageFilesNoDetails + QLatin1String(" (*.png *.xpm *.jpg)");
+    const QString textFileNoDetails = QLatin1String("Text files");
+    const QString textFile = textFileNoDetails + QLatin1String(" (*.txt)");
+
+    QStringList filters;
+    filters << anyFile << imageFiles << textFile;
+
+    QTest::newRow("namedetailsvisible-images") << true << filters << imageFiles << imageFiles;
+    QTest::newRow("namedetailsinvisible-images") << false << filters << imageFiles << imageFilesNoDetails;
+
+    const QString invalid = "foo";
+    QTest::newRow("namedetailsvisible-invalid") << true << filters << invalid << anyFile;
+    // Potential crash when trying to convert the invalid filter into a list and stripping it, resulting in an empty list.
+    QTest::newRow("namedetailsinvisible-invalid") << false << filters << invalid << anyFileNoDetails;
+}
+
+void tst_QFiledialog::setNameFilter()
+{
+    QFETCH(bool, nameFilterDetailsVisible);
+    QFETCH(QStringList, filters);
+    QFETCH(QString, selectFilter);
+    QFETCH(QString, expectedSelectedFilter);
+
+    QNonNativeFileDialog fd;
+    fd.setNameFilters(filters);
+    fd.setNameFilterDetailsVisible(nameFilterDetailsVisible);
+    fd.selectNameFilter(selectFilter);
+    QCOMPARE(fd.selectedNameFilter(), expectedSelectedFilter);
 }
 
 void tst_QFiledialog::focus()
@@ -1043,7 +1088,7 @@ void tst_QFiledialog::historyBack()
     QToolButton *forwardButton = qFindChild<QToolButton*>(&fd, "forwardButton");
     QVERIFY(forwardButton);
 
-    QSignalSpy spy(model, SIGNAL(rootPathChanged(const QString &)));
+    QSignalSpy spy(model, SIGNAL(rootPathChanged(QString)));
 
     QString home = fd.directory().absolutePath();
     QString desktop = QDir::homePath();
@@ -1091,7 +1136,7 @@ void tst_QFiledialog::historyForward()
 
     QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
     QVERIFY(model);
-    QSignalSpy spy(model, SIGNAL(rootPathChanged(const QString &)));
+    QSignalSpy spy(model, SIGNAL(rootPathChanged(QString)));
 
     QString home = fd.directory().absolutePath();
     QString desktop = QDir::homePath();

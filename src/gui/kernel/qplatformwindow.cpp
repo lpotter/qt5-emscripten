@@ -142,16 +142,15 @@ void QPlatformWindow::setVisible(bool visible)
     QWindowSystemInterface::handleExposeEvent(window(), rect);
     QWindowSystemInterface::flushWindowSystemEvents();
 }
+
 /*!
     Requests setting the window flags of this surface
-    to \a type. Returns the actual flags set.
+    to \a flags.
 */
-Qt::WindowFlags QPlatformWindow::setWindowFlags(Qt::WindowFlags flags)
+void QPlatformWindow::setWindowFlags(Qt::WindowFlags flags)
 {
-    return flags;
+    Q_UNUSED(flags);
 }
-
-
 
 /*!
     Returns if this window is exposed in the windowing system.
@@ -214,13 +213,12 @@ QPoint QPlatformWindow::mapFromGlobal(const QPoint &pos) const
 
 /*!
     Requests setting the window state of this surface
-    to \a type. Returns the actual state set.
+    to \a type.
 
     Qt::WindowActive can be ignored.
 */
-Qt::WindowState QPlatformWindow::setWindowState(Qt::WindowState)
+void QPlatformWindow::setWindowState(Qt::WindowState)
 {
-    return Qt::WindowNoState;
 }
 
 /*!

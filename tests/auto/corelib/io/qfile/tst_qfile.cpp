@@ -131,9 +131,11 @@ private slots:
     void readAll_data();
     void readAll();
     void readAllBuffer();
+#if !defined(Q_OS_WINCE) && !defined(QT_NO_PROCESS)
     void readAllStdin();
     void readLineStdin();
     void readLineStdin_lineByLine();
+#endif
     void text();
     void missingEndOfLine();
     void readBlock();
@@ -143,8 +145,10 @@ private slots:
     void append();
     void permissions_data();
     void permissions();
+#ifdef Q_OS_WIN
     void permissionsNtfs_data();
     void permissionsNtfs();
+#endif
     void setPermissions();
     void copy();
     void copyAfterFail();
@@ -166,7 +170,9 @@ private slots:
 #endif
     void flush();
     void bufferedRead();
+#ifdef Q_OS_UNIX
     void isSequential();
+#endif
     void encodeName();
     void truncate();
     void seekToPos();
@@ -188,7 +194,9 @@ private slots:
     void writeLargeDataBlock();
     void readFromWriteOnlyFile();
     void writeToReadOnlyFile();
+#if defined(Q_OS_LINUX) || defined(Q_OS_AIX) || defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD)
     void virtualFile();
+#endif
     void textFile();
     void rename_data();
     void rename();
@@ -211,8 +219,10 @@ private slots:
     void mapOpenMode_data();
     void mapOpenMode();
 
+#ifndef Q_OS_WINCE
     void openStandardStreamsFileDescriptors();
     void openStandardStreamsBufferedStreams();
+#endif
 
     void resize_data();
     void resize();
@@ -839,14 +849,9 @@ void tst_QFile::readAllBuffer()
     QFile::remove(fileName);
 }
 
+#if !defined(Q_OS_WINCE) && !defined(QT_NO_PROCESS)
 void tst_QFile::readAllStdin()
 {
-#if defined(Q_OS_WINCE)
-    QSKIP("Currently no stdin/out supported for Windows CE");
-#endif
-#if defined(QT_NO_PROCESS)
-    QSKIP("Qt was compiled with QT_NO_PROCESS");
-#else
     QByteArray lotsOfData(1024, '@'); // 10 megs
 
     QProcess process;
@@ -863,17 +868,10 @@ void tst_QFile::readAllStdin()
     process.closeWriteChannel();
     process.waitForFinished();
     QCOMPARE(process.readAll().size(), lotsOfData.size() * 5);
-#endif
 }
 
 void tst_QFile::readLineStdin()
 {
-#if defined(Q_OS_WINCE)
-    QSKIP("Currently no stdin/out supported for Windows CE");
-#endif
-#if defined(QT_NO_PROCESS)
-    QSKIP("Qt was compiled with QT_NO_PROCESS");
-#else
 
     QByteArray lotsOfData(1024, '@'); // 10 megs
     for (int i = 0; i < lotsOfData.size(); ++i) {
@@ -906,17 +904,10 @@ void tst_QFile::readLineStdin()
                 QCOMPARE(char(array[i]), char('0' + i % 32));
         }
     }
-#endif
 }
 
 void tst_QFile::readLineStdin_lineByLine()
 {
-#if defined(Q_OS_WINCE)
-    QSKIP("Currently no stdin/out supported for Windows CE");
-#endif
-#if defined(QT_NO_PROCESS)
-    QSKIP("Qt was compiled with QT_NO_PROCESS");
-#else
     for (int i = 0; i < 2; ++i) {
         QProcess process;
         process.start(QString("stdinprocess/stdinprocess line %1").arg(i), QIODevice::Text | QIODevice::ReadWrite);
@@ -934,8 +925,8 @@ void tst_QFile::readLineStdin_lineByLine()
         process.closeWriteChannel();
         QVERIFY(process.waitForFinished(5000));
     }
-#endif
 }
+#endif
 
 void tst_QFile::text()
 {
@@ -1145,6 +1136,7 @@ void tst_QFile::permissions()
     QCOMPARE((staticResult == QFile::Permissions(perms)), expected);
 }
 
+#ifdef Q_OS_WIN
 void tst_QFile::permissionsNtfs_data()
 {
     permissions_data();
@@ -1152,14 +1144,11 @@ void tst_QFile::permissionsNtfs_data()
 
 void tst_QFile::permissionsNtfs()
 {
-#ifdef Q_OS_WIN
     QScopedValueRollback<int> ntfsMode(qt_ntfs_permission_lookup);
     qt_ntfs_permission_lookup++;
     permissions();
-#else
-    QSKIP("windows test");
-#endif
 }
+#endif
 
 void tst_QFile::setPermissions()
 {
@@ -1596,15 +1585,14 @@ void tst_QFile::bufferedRead()
     fclose(stdFile);
 }
 
+#ifdef Q_OS_UNIX
 void tst_QFile::isSequential()
 {
-#ifndef Q_OS_UNIX
-    QSKIP("Unix only test.");
-#endif
     QFile zero("/dev/null");
     QVERIFY(zero.open(QFile::ReadOnly));
     QVERIFY(zero.isSequential());
 }
+#endif
 
 void tst_QFile::encodeName()
 {
@@ -2304,6 +2292,8 @@ void tst_QFile::writeToReadOnlyFile()
     QCOMPARE(file.write(&c, 1), qint64(-1));
 }
 
+#if defined(Q_OS_LINUX) || defined(Q_OS_AIX) || defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD)
+// This platform have 0-sized virtual files
 void tst_QFile::virtualFile()
 {
     // test if QFile works with virtual files
@@ -2312,10 +2302,8 @@ void tst_QFile::virtualFile()
     fname = "/proc/self/maps";
 #elif defined(Q_OS_AIX)
     fname = QString("/proc/%1/map").arg(getpid());
-#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD)
+#else // defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD)
     fname = "/proc/curproc/map";
-#else
-    QSKIP("This platform does not have 0-sized virtual files");
 #endif
 
     // consistency check
@@ -2348,6 +2336,7 @@ void tst_QFile::virtualFile()
     QVERIFY(f.seek(1));
     QCOMPARE(f.pos(), Q_INT64_C(1));
 }
+#endif
 
 void tst_QFile::textFile()
 {
@@ -3093,14 +3082,12 @@ protected:
 bool MessageHandler::ok = true;
 QtMessageHandler MessageHandler::oldMessageHandler = 0;
 
-void tst_QFile::openStandardStreamsFileDescriptors()
-{
-#ifdef Q_OS_WINCE
     //allthough Windows CE (not mobile!) has functions that allow redirecting
     //the standard file descriptors to a file (see SetStdioPathW/GetStdioPathW)
     //it does not have functions to simply open them like below .
-    QSKIP("Opening standard streams on Windows CE via descriptor not implemented");
-#endif
+#ifndef Q_OS_WINCE
+void tst_QFile::openStandardStreamsFileDescriptors()
+{
 
     // Check that QIODevice::seek() isn't called when opening a sequential device (QFile).
     MessageHandler msgHandler;
@@ -3131,9 +3118,6 @@ void tst_QFile::openStandardStreamsFileDescriptors()
 
 void tst_QFile::openStandardStreamsBufferedStreams()
 {
-#ifdef Q_OS_WINCE
-    QSKIP("Not tested on Windows CE.");
-#endif
     // Check that QIODevice::seek() isn't called when opening a sequential device (QFile).
     MessageHandler msgHandler;
 
@@ -3161,6 +3145,7 @@ void tst_QFile::openStandardStreamsBufferedStreams()
 
     QVERIFY(msgHandler.testPassed());
 }
+#endif
 
 void tst_QFile::writeNothing()
 {
