@@ -53,6 +53,7 @@
 #include <qgroupbox.h>
 #include <qlcdnumber.h>
 #include <qlineedit.h>
+#include <private/qlineedit_p.h>
 #include <qstyle.h>
 #include <qstyleoption.h>
 #include <qtextdocument.h>
@@ -652,6 +653,8 @@ void *QAccessibleLineEdit::interface_cast(QAccessible::InterfaceType t)
 {
     if (t == QAccessible::TextInterface)
         return static_cast<QAccessibleTextInterface*>(this);
+    if (t == QAccessible::EditableTextInterface)
+        return static_cast<QAccessibleEditableTextInterface*>(this);
     return QAccessibleWidget::interface_cast(t);
 }
 
@@ -672,10 +675,20 @@ int QAccessibleLineEdit::cursorPosition() const
     return lineEdit()->cursorPosition();
 }
 
-QRect QAccessibleLineEdit::characterRect(int /*offset*/) const
+QRect QAccessibleLineEdit::characterRect(int offset) const
 {
-    // QLineEdit doesn't hand out character rects
-    return QRect();
+    int x = lineEdit()->d_func()->control->cursorToX(offset);
+    int y;
+    lineEdit()->getTextMargins(0, &y, 0, 0);
+    QFontMetrics fm(lineEdit()->font());
+    const QString ch = text(offset, offset + 1);
+    if (ch.isEmpty())
+        return QRect();
+    int w = fm.width(ch);
+    int h = fm.height();
+    QRect r(x, y, w, h);
+    r.moveTo(lineEdit()->mapToGlobal(r.topLeft()));
+    return r;
 }
 
 int QAccessibleLineEdit::selectionCount() const
@@ -771,6 +784,21 @@ void QAccessibleLineEdit::scrollToSubstring(int startIndex, int endIndex)
 {
     lineEdit()->setCursorPosition(endIndex);
     lineEdit()->setCursorPosition(startIndex);
+}
+
+void QAccessibleLineEdit::deleteText(int startOffset, int endOffset)
+{
+    lineEdit()->setText(lineEdit()->text().remove(startOffset, endOffset - startOffset));
+}
+
+void QAccessibleLineEdit::insertText(int offset, const QString &text)
+{
+    lineEdit()->setText(lineEdit()->text().insert(offset, text));
+}
+
+void QAccessibleLineEdit::replaceText(int startOffset, int endOffset, const QString &text)
+{
+    lineEdit()->setText(lineEdit()->text().replace(startOffset, endOffset - startOffset, text));
 }
 
 #endif // QT_NO_LINEEDIT

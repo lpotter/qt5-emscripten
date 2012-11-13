@@ -140,6 +140,7 @@ private slots:
     void returnValue2_data();
     void returnValue2();
     void connectVirtualSlots();
+    void connectFunctorArgDifference();
 };
 
 class SenderObject : public QObject
@@ -4737,6 +4738,9 @@ class LotsOfSignalsAndSlots: public QObject
         #endif*/
         void slot_vPFvvE(fptr) {}
 
+        void const_slot_v() const {};
+        void const_slot_vi(int) const {};
+
         static void static_slot_v() {}
         static void static_slot_vi(int) {}
         static void static_slot_vii(int, int) {}
@@ -4767,6 +4771,9 @@ class LotsOfSignalsAndSlots: public QObject
         void signal_vOs(short &&);
         #endif*/
         void signal_vPFvvE(fptr);
+
+        void const_signal_v() const;
+        void const_signal_vi(int) const;
 
         void signal(short&, short, long long, short);
         void otherSignal(const char *);
@@ -4879,6 +4886,13 @@ void tst_QObject::connectCxx0xTypeMatching()
     QObject::connect(&obj, &Foo::signal_vPFvvE, &Foo::static_slot_v);
     QObject::connect(&obj, &Foo::signal_vPFvvE, &Foo::static_slot_i);
     QObject::connect(&obj, &Foo::signal_vPFvvE, &Foo::static_slot_vPFvvE);
+
+    QVERIFY(QObject::connect(&obj, &Foo::const_signal_v, &obj, &Foo::const_slot_v));
+    QVERIFY(QObject::connect(&obj, &Foo::const_signal_vi, &obj, &Foo::const_slot_v));
+    QVERIFY(QObject::connect(&obj, &Foo::const_signal_vi, &obj, &Foo::slot_vi));
+    QVERIFY(QObject::connect(&obj, &Foo::signal_vi, &obj, &Foo::const_slot_vi));
+    QVERIFY(QObject::connect(&obj, &Foo::signal_vi, &obj, &Foo::const_slot_v));
+
     QVERIFY(true); //compilation only test
 }
 
@@ -5469,6 +5483,41 @@ void tst_QObject::connectVirtualSlots()
     QVERIFY( QObject::connect(&obj, &VirtualSlotsObjectBase::signal1, &obj, &VirtualSlotsObjectBase::slot1, Qt::UniqueConnection));
     QVERIFY(!QObject::connect(&obj, &VirtualSlotsObjectBase::signal1, &obj, &VirtualSlotsObject::slot1, Qt::UniqueConnection));
     */
+}
+
+struct SlotFunctor
+{
+    void operator()() {}
+};
+
+struct SlotFunctorString
+{
+    void operator()(const QString &) {}
+};
+
+void tst_QObject::connectFunctorArgDifference()
+{
+    QTimer timer;
+    // Compile-time tests that the connection is successful.
+    connect(&timer, &QTimer::timeout, SlotFunctor());
+    connect(&timer, &QTimer::objectNameChanged, SlotFunctorString());
+    connect(qApp, &QCoreApplication::aboutToQuit, SlotFunctor());
+
+    connect(&timer, &QTimer::objectNameChanged, SlotFunctor());
+    QStringListModel model;
+    connect(&model, &QStringListModel::rowsInserted, SlotFunctor());
+
+#if defined(Q_COMPILER_LAMBDA)
+    connect(&timer, &QTimer::timeout, [=](){});
+    connect(&timer, &QTimer::objectNameChanged, [=](const QString &){});
+    connect(qApp, &QCoreApplication::aboutToQuit, [=](){});
+
+    connect(&timer, &QTimer::objectNameChanged, [=](){});
+    connect(&model, &QStringListModel::rowsInserted, [=](){});
+    connect(&model, &QStringListModel::rowsInserted, [=](const QModelIndex &){});
+#endif
+
+    QVERIFY(true);
 }
 
 QTEST_MAIN(tst_QObject)

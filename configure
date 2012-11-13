@@ -785,6 +785,7 @@ CFG_JAVASCRIPTCORE_JIT=auto
 CFG_PKGCONFIG=auto
 CFG_STACK_PROTECTOR_STRONG=auto
 CFG_SLOG2=auto
+CFG_SYSTEM_PROXIES=no
 
 # Target architecture
 CFG_ARCH=
@@ -802,7 +803,6 @@ CFG_XINPUT=runtime
 CFG_XKB=auto
 CFG_XCB=auto
 CFG_XCB_GLX=no
-CFG_XCB_LIMITED=yes
 CFG_EGLFS=auto
 CFG_DIRECTFB=auto
 CFG_LINUXFB=auto
@@ -846,7 +846,6 @@ CFG_INOTIFY=auto
 CFG_RPATH=yes
 CFG_FRAMEWORK=auto
 CFG_MAC_HARFBUZZ=no
-CFG_PREFIX_INSTALL=yes
 CFG_SDK=
 DEFINES=
 D_FLAGS=
@@ -885,6 +884,7 @@ QT_INSTALL_LIBS=
 QT_INSTALL_BINS=
 QT_INSTALL_PLUGINS=
 QT_INSTALL_IMPORTS=
+QT_INSTALL_ARCHDATA=
 QT_INSTALL_DATA=
 QT_INSTALL_TRANSLATIONS=
 QT_INSTALL_SETTINGS=
@@ -993,7 +993,7 @@ while [ "$#" -gt 0 ]; do
         VAL=no
         ;;
     #Qt style options that pass an argument
-    -prefix|-docdir|-headerdir|-plugindir|-importdir|-datadir|-libdir|-bindir|-translationdir|-sysconfdir|-examplesdir|-testsdir|-depths|-make|-nomake|-platform|-xplatform|-device|-device-option|-sdk|-arch|-host-arch|-mysql_config|-sysroot|-hostdatadir|-hostbindir|-qpa|-qconfig)
+    -prefix|-docdir|-headerdir|-plugindir|-importdir|-archdatadir|-datadir|-libdir|-bindir|-translationdir|-sysconfdir|-examplesdir|-testsdir|-depths|-make|-nomake|-platform|-xplatform|-device|-device-option|-sdk|-arch|-host-arch|-mysql_config|-sysroot|-hostdatadir|-hostbindir|-qpa|-qconfig)
         VAR=`echo $1 | sed "s,^-\(.*\),\1,"`
         shift
         VAL="$1"
@@ -1002,6 +1002,14 @@ while [ "$#" -gt 0 ]; do
     -enable-*|-disable-*)
         VAR=`echo $1 | sed "s,^-\([^-]*\)-.*,\1,"`
         VAL=`echo $1 | sed "s,^-[^-]*-\(.*\),\1,"`
+        ;;
+    -system-proxies)
+        VAR=system-proxies
+        VAL=yes
+        ;;
+    -no-system-proxies)
+        VAR=system-proxies
+        VAL=no
         ;;
     #Qt Builtin/System style options
     -no-*|-system-*|-qt-*)
@@ -1199,6 +1207,9 @@ while [ "$#" -gt 0 ]; do
         ;;
     importdir)
         QT_INSTALL_IMPORTS="$VAL"
+        ;;
+    archdatadir)
+        QT_INSTALL_ARCHDATA="$VAL"
         ;;
     datadir)
         QT_INSTALL_DATA="$VAL"
@@ -1414,13 +1425,6 @@ while [ "$#" -gt 0 ]; do
             UNKNOWN_OPT=yes
         fi
         ;;
-    prefix-install)
-        if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
-	    CFG_PREFIX_INSTALL="$VAL"
-        else
-            UNKNOWN_OPT=yes
-        fi
-	;;
     debug)
         CFG_DEBUG="$VAL"
         ;;
@@ -1714,8 +1718,11 @@ while [ "$#" -gt 0 ]; do
         fi
         ;;
     xcb)
-        if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
+        if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ] || [ "$VAL" = "system" ] || [ "$VAL" = "qt" ]; then
             CFG_XCB="$VAL"
+            if [ "$VAL" = "yes" ]; then
+                CFG_XCB="system"
+            fi
         else
             UNKNOWN_OPT=yes
         fi
@@ -2090,6 +2097,13 @@ while [ "$#" -gt 0 ]; do
             UNKNOWN_OPT=yes
         fi
         ;;
+    system-proxies)
+        if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
+            CFG_SYSTEM_PROXIES="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
     *)
         UNKNOWN_OPT=yes
         ;;
@@ -2227,7 +2241,6 @@ if [ "$OPT_SHADOW" = "yes" ]; then
     mkdir -p "$outpath/mkspecs"
     rm -rf "$outpath"/mkspecs/*
     ln -s "$relpath"/mkspecs/* "$outpath/mkspecs"
-    rm -f "$outpath/mkspecs/default"
 
     ShadowMkspecs()
     {
@@ -2763,79 +2776,48 @@ if [ -z "$QT_INSTALL_PREFIX" ]; then
 fi
 QT_INSTALL_PREFIX=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_PREFIX"`
 
-if [ -z "$QT_INSTALL_DOCS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_DOCS="/Developer/Documentation/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_DOCS" ] && QT_INSTALL_DOCS="$QT_INSTALL_PREFIX/doc" #fallback
-
-fi
-QT_INSTALL_DOCS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DOCS"`
-
 if [ -z "$QT_INSTALL_HEADERS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            if [ "$CFG_FRAMEWORK" = "yes" ]; then
-                QT_INSTALL_HEADERS=
-            fi
-        fi
-    fi
-    [ -z "$QT_INSTALL_HEADERS" ] && QT_INSTALL_HEADERS="$QT_INSTALL_PREFIX/include"
-
+    QT_INSTALL_HEADERS="$QT_INSTALL_PREFIX/include"
 fi
 QT_INSTALL_HEADERS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_HEADERS"`
 
 if [ -z "$QT_INSTALL_LIBS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            if [ "$CFG_FRAMEWORK" = "yes" ]; then
-                QT_INSTALL_LIBS="/Library/Frameworks"
-            fi
-        fi
-    fi
-    [ -z "$QT_INSTALL_LIBS" ] && QT_INSTALL_LIBS="$QT_INSTALL_PREFIX/lib" #fallback
+    QT_INSTALL_LIBS="$QT_INSTALL_PREFIX/lib" #fallback
 fi
 QT_INSTALL_LIBS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_LIBS"`
 
+if [ -z "$QT_INSTALL_ARCHDATA" ]; then #default
+    QT_INSTALL_ARCHDATA="$QT_INSTALL_PREFIX" #fallback
+fi
+QT_INSTALL_ARCHDATA=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_ARCHDATA"`
+
+if [ -z "$QT_INSTALL_DATA" ]; then #default
+    QT_INSTALL_DATA="$QT_INSTALL_PREFIX" #fallback
+fi
+QT_INSTALL_DATA=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DATA"`
+
 if [ -z "$QT_INSTALL_BINS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_BINS="/Developer/Applications/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_BINS" ] && QT_INSTALL_BINS="$QT_INSTALL_PREFIX/bin" #fallback
+    QT_INSTALL_BINS="$QT_INSTALL_PREFIX/bin" #fallback
 fi
 QT_INSTALL_BINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_BINS"`
 
+if [ -z "$QT_INSTALL_DOCS" ]; then #default
+    QT_INSTALL_DOCS="$QT_INSTALL_DATA/doc" #fallback
+fi
+QT_INSTALL_DOCS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DOCS"`
+
 if [ -z "$QT_INSTALL_PLUGINS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_PLUGINS="/Developer/Applications/Qt/plugins"
-        fi
-    fi
-    [ -z "$QT_INSTALL_PLUGINS" ] && QT_INSTALL_PLUGINS="$QT_INSTALL_PREFIX/plugins" #fallback
+    QT_INSTALL_PLUGINS="$QT_INSTALL_ARCHDATA/plugins" #fallback
 fi
 QT_INSTALL_PLUGINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_PLUGINS"`
 
 if [ -z "$QT_INSTALL_IMPORTS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_IMPORTS="/Developer/Applications/Qt/imports"
-        fi
-    fi
-    [ -z "$QT_INSTALL_IMPORTS" ] && QT_INSTALL_IMPORTS="$QT_INSTALL_PREFIX/imports" #fallback
+    QT_INSTALL_IMPORTS="$QT_INSTALL_ARCHDATA/imports" #fallback
 fi
 QT_INSTALL_IMPORTS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_IMPORTS"`
 
-if [ -z "$QT_INSTALL_DATA" ]; then #default
-    QT_INSTALL_DATA="$QT_INSTALL_PREFIX"
-fi
-QT_INSTALL_DATA=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DATA"`
-
 if [ -z "$QT_INSTALL_TRANSLATIONS" ]; then #default
-    QT_INSTALL_TRANSLATIONS="$QT_INSTALL_PREFIX/translations"
+    QT_INSTALL_TRANSLATIONS="$QT_INSTALL_DATA/translations" #fallback
 fi
 QT_INSTALL_TRANSLATIONS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_TRANSLATIONS"`
 
@@ -2849,23 +2831,13 @@ fi
 QT_INSTALL_SETTINGS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_SETTINGS"`
 
 if [ -z "$QT_INSTALL_EXAMPLES" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_EXAMPLES="/Developer/Examples/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_EXAMPLES" ] && QT_INSTALL_EXAMPLES="$QT_INSTALL_PREFIX/examples" #fallback
+    QT_INSTALL_EXAMPLES="$QT_INSTALL_PREFIX/examples" #fallback
 fi
 QT_INSTALL_EXAMPLES=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_EXAMPLES"`
 
 #tests
 if [ -z "$QT_INSTALL_TESTS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-        if [ "$BUILD_ON_MAC" = "yes" ]; then
-            QT_INSTALL_TESTS="/Developer/Tests/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_TESTS" ] && QT_INSTALL_TESTS="$QT_INSTALL_PREFIX/tests" #fallback
+    QT_INSTALL_TESTS="$QT_INSTALL_PREFIX/tests" #fallback
 fi
 QT_INSTALL_TESTS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_TESTS"`
 
@@ -2881,12 +2853,7 @@ fi
 
 if [ -z "$QT_HOST_BINS" ]; then #default
     if $haveHpx; then
-        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-            if [ "$BUILD_ON_MAC" = "yes" ]; then
-                QT_HOST_BINS="/Developer/Applications/Qt"
-            fi
-        fi
-        [ -z "$QT_HOST_BINS" ] && QT_HOST_BINS="$QT_HOST_PREFIX/bin" #fallback
+        QT_HOST_BINS="$QT_HOST_PREFIX/bin" #fallback
     else
         QT_HOST_BINS="$QT_INSTALL_BINS"
     fi
@@ -2897,7 +2864,7 @@ if [ -z "$QT_HOST_DATA" ]; then #default
     if $haveHpx; then
         QT_HOST_DATA="$QT_HOST_PREFIX"
     else
-        QT_HOST_DATA="$QT_INSTALL_DATA"
+        QT_HOST_DATA="$QT_INSTALL_ARCHDATA"
     fi
 else
     QT_HOST_DATA=`"$relpath/config.tests/unix/makeabs" "$QT_HOST_DATA"`
@@ -3033,31 +3000,26 @@ Installation options:
                          not given, the current build directory will be used.
                          (default PREFIX)
 
-  * -prefix-install .... Force a sandboxed "local" installation of
-                         Qt. This will install into
-                         $QT_INSTALL_PREFIX, if this option is
-                         disabled then some platforms will attempt a
-                         "system" install by placing default values
-                         in a system location other than PREFIX.
-
  You may use these to separate different parts of the install:
 
     -bindir <dir> ......... Executables will be installed to <dir>
                             (default PREFIX/bin)
-    -libdir <dir> ......... Libraries will be installed to <dir>
-                            (default PREFIX/lib)
-    -docdir <dir> ......... Documentation will be installed to <dir>
-                            (default PREFIX/doc)
     -headerdir <dir> ...... Headers will be installed to <dir>
                             (default PREFIX/include)
-    -plugindir <dir> ...... Plugins will be installed to <dir>
-                            (default PREFIX/plugins)
-    -importdir <dir> ...... Imports for QML will be installed to <dir>
-                            (default PREFIX/imports)
-    -datadir <dir> ........ Data used by Qt programs will be installed to <dir>
+    -libdir <dir> ......... Libraries will be installed to <dir>
+                            (default PREFIX/lib)
+    -archdatadir <dir>..... Arch-dependent data used by Qt will be installed to <dir>
                             (default PREFIX)
+    -plugindir <dir> ...... Plugins will be installed to <dir>
+                            (default ARCHDATADIR/plugins)
+    -importdir <dir> ...... Imports for QML will be installed to <dir>
+                            (default ARCHDATADIR/imports)
+    -datadir <dir> ........ Arch-independent data used by Qt will be installed to <dir>
+                            (default PREFIX)
+    -docdir <dir> ......... Documentation will be installed to <dir>
+                            (default DATADIR/doc)
     -translationdir <dir> . Translations of Qt programs will be installed to <dir>
-                            (default PREFIX/translations)
+                            (default DATADIR/translations)
     -sysconfdir <dir> ..... Settings used by Qt programs will be looked for in <dir>
                             (default PREFIX/etc/settings)
     -examplesdir <dir> .... Examples will be installed to <dir>
@@ -3187,6 +3149,10 @@ Third Party Libraries:
     -qt-pcre ........... Use the PCRE library bundled with Qt.
  +  -system-pcre ....... Use the PCRE library from the operating system.
 
+    -qt-xcb ............ Use xcb- libraries bundled with Qt.
+                         (libxcb.so will still be used from operating system).
+ +  -system-xcb ........ Use xcb- libraries from the operating system.
+
 Additional options:
 
     -make <part> ....... Add part to the list of parts to be built at make time.
@@ -3290,6 +3256,9 @@ Additional options:
                           With no parameter, this will attempt to auto-detect
                           OpenGL ES 2, or regular desktop OpenGL.
                           Use es2 for <api> to override auto-detection.
+
+ *  -no-system-proxies .. Do not use system network proxies by default.
+    -system-proxies ..... Use system network proxies by default.
 
  $GBN  -no-glib ........... Do not compile Glib support.
  $GBY  -glib .............. Compile Glib support.
@@ -3508,6 +3477,9 @@ esac
 #-------------------------------------------------------------------------------
 [ -d "$outpath/src/corelib/global" ] || mkdir -p "$outpath/src/corelib/global"
 
+shortxspec=`echo $XQMAKESPEC | sed "s,^${relpath}/mkspecs/,,"`
+shortspec=`echo $QMAKESPEC | sed "s,^${relpath}/mkspecs/,,"`
+
 cat > "$outpath/src/corelib/global/qconfig.cpp.new" <<EOF
 /* License Info */
 static const char qt_configure_licensee_str          [256 + 12] = "qt_lcnsuser=$Licensee";
@@ -3525,6 +3497,7 @@ static const char qt_configure_prefix_path_strs[][256 + 12] = {
     "qt_binspath=$QT_INSTALL_BINS",
     "qt_plugpath=$QT_INSTALL_PLUGINS",
     "qt_impspath=$QT_INSTALL_IMPORTS",
+    "qt_adatpath=$QT_INSTALL_ARCHDATA",
     "qt_datapath=$QT_INSTALL_DATA",
     "qt_trnspath=$QT_INSTALL_TRANSLATIONS",
     "qt_xmplpath=$QT_INSTALL_EXAMPLES",
@@ -3534,6 +3507,8 @@ static const char qt_configure_prefix_path_strs[][256 + 12] = {
     "qt_hpfxpath=$QT_HOST_PREFIX",
     "qt_hbinpath=$QT_HOST_BINS",
     "qt_hdatpath=$QT_HOST_DATA",
+    "qt_targspec=$shortxspec",
+    "qt_hostspec=$shortspec",
 #endif
 };
 static const char qt_configure_settings_path_str[256 + 12] = "qt_stngpath=$QT_INSTALL_SETTINGS";
@@ -3597,10 +3572,6 @@ setBootstrapVariable()
 if true; then ###[ '!' -f "$outpath/bin/qmake" ];
     echo "Creating qmake. Please wait..."
 
-    #mkspecs/default is used as a (gasp!) default mkspec so QMAKESPEC needn't be set once configured
-    rm -rf mkspecs/default mkspecs/default-host
-    ln -s `echo $XQMAKESPEC | sed "s,^${relpath}/mkspecs/,,"` mkspecs/default
-    ln -s `echo $QMAKESPEC | sed "s,^${relpath}/mkspecs/,,"` mkspecs/default-host
     mkdir -p "$outpath/qmake" || exit
     # fix makefiles
     for mkfile in GNUmakefile Makefile; do
@@ -3685,7 +3656,7 @@ if true; then ###[ '!' -f "$outpath/bin/qmake" ];
         fi
         QMAKE_BIN_DIR="$QT_INSTALL_BINS"
         [ -z "$QMAKE_BIN_DIR" ] && QMAKE_BIN_DIR="${QT_INSTALL_PREFIX}/bin"
-        QMAKE_DATA_DIR="$QT_INSTALL_DATA"
+        QMAKE_DATA_DIR="$QT_INSTALL_ARCHDATA"
         [ -z "$QMAKE_DATA_DIR" ] && QMAKE_DATA_DIR="${QT_INSTALL_PREFIX}"
         echo >>"$mkfile"
 	adjrelpath=`echo "$relpath" | sed 's/ /\\\\\\\\ /g'`
@@ -4782,23 +4753,37 @@ fi
 
 if [ "$CFG_XCB" != "no" ]; then
     if [ -n "$PKG_CONFIG" ] && $PKG_CONFIG --exists "xcb >= 1.5" 2>/dev/null; then
-        QMAKE_CFLAGS_XCB="`$PKG_CONFIG --cflags xcb xcb-image xcb-keysyms xcb-icccm xcb-sync xcb-xfixes xcb-randr 2>/dev/null`"
-        QMAKE_LIBS_XCB="`$PKG_CONFIG --libs xcb xcb-image xcb-keysyms xcb-icccm xcb-sync xcb-xfixes xcb-randr 2>/dev/null`"
+        QMAKE_CFLAGS_XCB="`$PKG_CONFIG --cflags xcb 2>/dev/null`"
+        QMAKE_LIBS_XCB="`$PKG_CONFIG --libs xcb 2>/dev/null`"
     fi
     if compileTest qpa/xcb "xcb" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
-        CFG_XCB=yes
-        if compileTest qpa/xcb-render "xcb-render" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
-            QT_CONFIG="$QT_CONFIG xcb-render"
-        fi
 
-        if compileTest qpa/xcb-glx "xcb-glx" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
-            CFG_XCB_GLX=yes
-            QT_CONFIG="$QT_CONFIG xcb-glx"
-        fi
+        if [ "$CFG_XCB" = "qt" ]; then
+            QT_CONFIG="$QT_CONFIG xcb-qt"
+        else
+            CFG_XCB="system"
 
-        if compileTest qpa/xcb-poll-for-queued-event "xcb-poll-for-queued-event" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
-            CFG_XCB_LIMITED=no
-            QT_CONFIG="$QT_CONFIG xcb-poll-for-queued-event"
+            if [ -n "$PKG_CONFIG" ] && $PKG_CONFIG --exists "xcb >= 1.5" 2>/dev/null; then
+                XCB_PACKAGES="xcb xcb-shm xcb-sync xcb-xfixes xcb-randr xcb-image xcb-keysyms xcb-icccm"
+                QMAKE_CFLAGS_XCB="`$PKG_CONFIG --cflags $XCB_PACKAGES 2>/dev/null`"
+                QMAKE_LIBS_XCB="`$PKG_CONFIG --libs $XCB_PACKAGES 2>/dev/null`"
+            fi
+
+            if compileTest qpa/xcb-syslibs "xcb-syslibs" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
+                if compileTest qpa/xcb-render "xcb-render" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
+                    QT_CONFIG="$QT_CONFIG xcb-render"
+                fi
+
+                if compileTest qpa/xcb-glx "xcb-glx" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
+                    CFG_XCB_GLX=yes
+                    QT_CONFIG="$QT_CONFIG xcb-glx"
+                fi
+            else
+                echo "The test for linking against libxcb and support libraries failed!"
+                echo " You might need install dependency packages, or pass -qt-xcb."
+                echo " See src/plugins/platforms/xcb/README."
+                exit 1
+            fi
         fi
 
         if compileTest qpa/xcb-xlib "xcb-xlib" $QMAKE_CFLAGS_XCB $QMAKE_LIBS_XCB; then
@@ -4823,9 +4808,9 @@ if [ "$CFG_XCB" != "no" ]; then
             fi
         fi
     else
-        if [ "$CFG_XCB" = "yes" ]; then
-            echo "The XCB test failed!"
-            echo " You might need to install dependency packages."
+        if [ "$CFG_XCB" != "auto" ]; then
+            echo "The test for linking against libxcb failed!"
+            echo " You might need to install dependency packages for libxcb."
             echo " See src/plugins/platforms/xcb/README."
             exit 1
         fi
@@ -4943,14 +4928,14 @@ if [ "$CFG_ACCESSIBILITY" != "no" ]; then
     if [ "$CFG_XCB" = "no" ]; then
         CFG_ACCESSIBILITY=yes
     else
-        # linux/xcb accessibility needs dbus and atspi-2
-        if [ "$CFG_DBUS" != "no" ] && [ -n "$PKG_CONFIG" ] && $PKG_CONFIG --exists "atspi-2" 2>/dev/null; then
+        # linux/xcb accessibility needs dbus
+        if [ "$CFG_DBUS" != "no" ] && [ -n "$PKG_CONFIG" ]; then
             CFG_ACCESSIBILITY=yes
         else
             if [ "$CFG_ACCESSIBILITY" = "auto" ]; then
                 CFG_ACCESSIBILITY=no
             else
-                echo "Accessibility support needs pkg-config and libatspi2."
+                echo "Accessibility support needs DBus."
                 exit 101
             fi
         fi
@@ -5452,8 +5437,9 @@ fi
 [ "$CFG_OPENSSL" = "yes" ] && QT_CONFIG="$QT_CONFIG openssl"
 [ "$CFG_OPENSSL" = "linked" ] && QT_CONFIG="$QT_CONFIG openssl-linked"
 [ "$CFG_MAC_HARFBUZZ" = "yes" ] && QT_CONFIG="$QT_CONFIG harfbuzz"
-[ "$CFG_XCB" = "yes" ] && QT_CONFIG="$QT_CONFIG xcb"
+[ "$CFG_XCB" != "no" ] && QT_CONFIG="$QT_CONFIG xcb"
 [ "$CFG_XINPUT2" = "yes" ] && QT_CONFIG="$QT_CONFIG xinput2"
+[ "$CFG_SYSTEM_PROXIES" = "yes" ] && QT_CONFIG="$QT_CONFIG system-proxies"
 
 [ '!' -z "$DEFINES" ] && QMakeVar add DEFINES "$DEFINES"
 [ '!' -z "$L_FLAGS" ] && QMakeVar add LIBS "$L_FLAGS"
@@ -6054,7 +6040,7 @@ fi
 #-------------------------------------------------------------------------------
 QTMODULE="$outpath/mkspecs/qmodule.pri"
 
-echo "CONFIG += $QMAKE_CONFIG create_prl link_prl" >> "$QTMODULE.tmp"
+echo "CONFIG += $QMAKE_CONFIG" >> "$QTMODULE.tmp"
 echo "QT_BUILD_PARTS += $CFG_BUILD_PARTS" >> "$QTMODULE.tmp"
 
 if [ -n "$QT_CFLAGS_PSQL" ]; then
@@ -6119,9 +6105,6 @@ cat >>"$CACHEFILE.tmp" <<EOF
 #paths
 QT_SOURCE_TREE = \$\$quote($relpath)
 QT_BUILD_TREE = \$\$quote($outpath)
-
-CONFIG += fix_output_dirs no_private_qt_headers_warning QTDIR_build
-
 EOF
 
 # replace .qmake.cache if it differs from the newly created temp file
@@ -6235,6 +6218,7 @@ echo "libudev support ........ $CFG_LIBUDEV"
 if [ "$XPLATFORM_QNX" = "yes" ]; then
     echo "SLOG2 support .......... $CFG_SLOG2"
 fi
+echo "Use system proxies ..... $CFG_SYSTEM_PROXIES"
 
 if [ "$CFG_OPENGL" = "desktop" ]; then
     echo "OpenGL support ......... yes (Desktop OpenGL)"
@@ -6290,13 +6274,9 @@ if [ "$BUILD_ON_MAC" = "yes" ]; then
 fi
 echo "libICU support ......... $CFG_ICU"
 echo "PCRE support ........... $CFG_PCRE"
-if [ "$CFG_XCB_LIMITED" = "yes" ] && [ "$CFG_XCB" = "yes" ]; then
-    echo "Xcb support ............ limited (old version)"
-else
-    echo "Xcb support ............ $CFG_XCB"
-fi
+echo "Xcb support ............ $CFG_XCB"
 echo "Xrender support ........ $CFG_XRENDER"
-if [ "$XPLATFORM_MAEMO" = "yes" ] && [ "$CFG_XCB" = "yes" ]; then
+if [ "$XPLATFORM_MAEMO" = "yes" ] && [ "$CFG_XCB" != "no" ]; then
     echo "XInput2 support ........ $CFG_XINPUT2"
 fi
 echo "EGLFS support .......... $CFG_EGLFS"

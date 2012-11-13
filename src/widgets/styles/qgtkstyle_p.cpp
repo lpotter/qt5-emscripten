@@ -62,6 +62,7 @@
 #include <QtCore/QLibrary>
 #include <QtCore/QDebug>
 
+#include <private/qgtk2painter_p.h>
 #include <private/qapplication_p.h>
 #include <private/qiconloader_p.h>
 
@@ -130,10 +131,10 @@ Ptr_gtk_separator_tool_item_new QGtkStylePrivate::gtk_separator_tool_item_new = 
 Ptr_gtk_tree_view_new QGtkStylePrivate::gtk_tree_view_new = 0;
 Ptr_gtk_combo_box_new QGtkStylePrivate::gtk_combo_box_new = 0;
 Ptr_gtk_combo_box_entry_new QGtkStylePrivate::gtk_combo_box_entry_new = 0;
+Ptr_gtk_combo_box_new_with_entry QGtkStylePrivate::gtk_combo_box_new_with_entry = 0;
 Ptr_gtk_progress_bar_new QGtkStylePrivate::gtk_progress_bar_new = 0;
 Ptr_gtk_container_add QGtkStylePrivate::gtk_container_add = 0;
 Ptr_gtk_menu_shell_append QGtkStylePrivate::gtk_menu_shell_append = 0;
-Ptr_gtk_progress_configure QGtkStylePrivate::gtk_progress_configure = 0;
 Ptr_gtk_range_get_adjustment QGtkStylePrivate::gtk_range_get_adjustment = 0;
 Ptr_gtk_range_set_adjustment QGtkStylePrivate::gtk_range_set_adjustment = 0;
 Ptr_gtk_range_set_inverted QGtkStylePrivate::gtk_range_set_inverted = 0;
@@ -146,23 +147,8 @@ Ptr_gtk_fixed_new QGtkStylePrivate::gtk_fixed_new = 0;
 Ptr_gtk_tree_view_column_new QGtkStylePrivate::gtk_tree_view_column_new = 0;
 Ptr_gtk_tree_view_get_column QGtkStylePrivate::gtk_tree_view_get_column = 0;
 Ptr_gtk_tree_view_append_column QGtkStylePrivate::gtk_tree_view_append_column = 0;
-Ptr_gtk_paint_check QGtkStylePrivate::gtk_paint_check = 0;
-Ptr_gtk_paint_box QGtkStylePrivate::gtk_paint_box = 0;
-Ptr_gtk_paint_box_gap QGtkStylePrivate::gtk_paint_box_gap = 0;
-Ptr_gtk_paint_flat_box QGtkStylePrivate::gtk_paint_flat_box = 0;
-Ptr_gtk_paint_option QGtkStylePrivate::gtk_paint_option = 0;
-Ptr_gtk_paint_extension QGtkStylePrivate::gtk_paint_extension = 0;
-Ptr_gtk_paint_slider QGtkStylePrivate::gtk_paint_slider = 0;
-Ptr_gtk_paint_shadow QGtkStylePrivate::gtk_paint_shadow = 0;
-Ptr_gtk_paint_resize_grip QGtkStylePrivate::gtk_paint_resize_grip = 0;
-Ptr_gtk_paint_focus QGtkStylePrivate::gtk_paint_focus = 0;
-Ptr_gtk_paint_arrow QGtkStylePrivate::gtk_paint_arrow = 0;
-Ptr_gtk_paint_handle QGtkStylePrivate::gtk_paint_handle = 0;
-Ptr_gtk_paint_expander QGtkStylePrivate::gtk_paint_expander = 0;
 Ptr_gtk_adjustment_configure QGtkStylePrivate::gtk_adjustment_configure = 0;
 Ptr_gtk_adjustment_new QGtkStylePrivate::gtk_adjustment_new = 0;
-Ptr_gtk_paint_hline QGtkStylePrivate::gtk_paint_hline = 0;
-Ptr_gtk_paint_vline QGtkStylePrivate::gtk_paint_vline = 0;
 Ptr_gtk_menu_item_set_submenu QGtkStylePrivate::gtk_menu_item_set_submenu = 0;
 Ptr_gtk_settings_get_default QGtkStylePrivate::gtk_settings_get_default = 0;
 Ptr_gtk_separator_menu_item_new QGtkStylePrivate::gtk_separator_menu_item_new = 0;
@@ -175,11 +161,18 @@ Ptr_gtk_window_get_type QGtkStylePrivate::gtk_window_get_type = 0;
 Ptr_gtk_widget_get_type QGtkStylePrivate::gtk_widget_get_type = 0;
 Ptr_gtk_widget_get_parent QGtkStylePrivate::gtk_widget_get_parent = 0;
 Ptr_gtk_widget_is_toplevel QGtkStylePrivate::gtk_widget_is_toplevel = 0;
+Ptr_gtk_widget_get_toplevel QGtkStylePrivate::gtk_widget_get_toplevel = 0;
 Ptr_gtk_rc_get_style_by_paths QGtkStylePrivate::gtk_rc_get_style_by_paths = 0;
 Ptr_gtk_check_version QGtkStylePrivate::gtk_check_version = 0;
 Ptr_gtk_border_free QGtkStylePrivate::gtk_border_free = 0;
 Ptr_gtk_widget_get_allocation QGtkStylePrivate::gtk_widget_get_allocation = 0;
 Ptr_gtk_widget_set_allocation QGtkStylePrivate::gtk_widget_set_allocation = 0;
+Ptr_gtk_widget_set_can_default QGtkStylePrivate::gtk_widget_set_can_default = 0;
+Ptr_gtk_window_set_default QGtkStylePrivate::gtk_window_set_default = 0;
+
+Ptr_gdk_event_new QGtkStylePrivate::gdk_event_new = 0;
+Ptr_gdk_event_free QGtkStylePrivate::gdk_event_free = 0;
+Ptr_gtk_widget_send_focus_change QGtkStylePrivate::gtk_widget_send_focus_change = 0;
 
 Ptr_pango_font_description_get_size QGtkStylePrivate::pango_font_description_get_size = 0;
 Ptr_pango_font_description_get_weight QGtkStylePrivate::pango_font_description_get_weight = 0;
@@ -203,12 +196,8 @@ Ptr_gtk_file_chooser_set_filename QGtkStylePrivate::gtk_file_chooser_set_filenam
 Ptr_gdk_pixbuf_get_pixels QGtkStylePrivate::gdk_pixbuf_get_pixels = 0;
 Ptr_gdk_pixbuf_get_width QGtkStylePrivate::gdk_pixbuf_get_width = 0;
 Ptr_gdk_pixbuf_get_height QGtkStylePrivate::gdk_pixbuf_get_height = 0;
-Ptr_gdk_pixmap_new QGtkStylePrivate::gdk_pixmap_new = 0;
 Ptr_gdk_pixbuf_new QGtkStylePrivate::gdk_pixbuf_new = 0;
-Ptr_gdk_pixbuf_get_from_drawable QGtkStylePrivate::gdk_pixbuf_get_from_drawable = 0;
-Ptr_gdk_draw_rectangle QGtkStylePrivate::gdk_draw_rectangle = 0;
 Ptr_gdk_pixbuf_unref QGtkStylePrivate::gdk_pixbuf_unref = 0;
-Ptr_gdk_drawable_unref QGtkStylePrivate::gdk_drawable_unref = 0;
 Ptr_gdk_color_free QGtkStylePrivate::gdk_color_free = 0;
 Ptr_gdk_x11_window_set_user_time QGtkStylePrivate::gdk_x11_window_set_user_time = 0;
 Ptr_gdk_x11_drawable_get_xid QGtkStylePrivate::gdk_x11_drawable_get_xid = 0;
@@ -307,6 +296,14 @@ void QGtkStylePrivate::init()
     initGtkWidgets();
 }
 
+QGtkPainter* QGtkStylePrivate::gtkPainter(QPainter *painter)
+{
+    // TODO: choose between gtk2 and gtk3
+    static QGtk2Painter instance;
+    instance.reset(painter);
+    return &instance;
+}
+
 GtkWidget* QGtkStylePrivate::gtkWidget(const QHashableLatin1Literal &path)
 {
     GtkWidget *widget = gtkWidgetMap()->value(path);
@@ -322,6 +319,24 @@ GtkStyle* QGtkStylePrivate::gtkStyle(const QHashableLatin1Literal &path)
     if (GtkWidget *w = gtkWidgetMap()->value(path))
         return QGtkStylePrivate::gtk_widget_get_style(w);
     return 0;
+}
+
+void QGtkStylePrivate::gtkWidgetSetFocus(GtkWidget *widget, bool focus)
+{
+    if (QGtkStylePrivate::gtk_widget_send_focus_change) {
+        GdkEvent *event = QGtkStylePrivate::gdk_event_new(GDK_FOCUS_CHANGE);
+        event->focus_change.type = GDK_FOCUS_CHANGE;
+        event->focus_change.in = focus;
+        QGtkStylePrivate::gtk_widget_send_focus_change(widget, event);
+        QGtkStylePrivate::gdk_event_free(event);
+    } else {
+#if defined(GTK_WIDGET_SET_FLAGS) && defined(GTK_WIDGET_UNSET_FLAGS)
+        if (focus)
+            GTK_WIDGET_SET_FLAGS(widget, GTK_HAS_FOCUS);
+        else
+            GTK_WIDGET_UNSET_FLAGS(widget, GTK_HAS_FOCUS);
+#endif
+    }
 }
 
 /*! \internal
@@ -356,12 +371,8 @@ void QGtkStylePrivate::resolveGtk() const
     gdk_pixbuf_get_pixels = (Ptr_gdk_pixbuf_get_pixels)libgtk.resolve("gdk_pixbuf_get_pixels");
     gdk_pixbuf_get_width = (Ptr_gdk_pixbuf_get_width)libgtk.resolve("gdk_pixbuf_get_width");
     gdk_pixbuf_get_height = (Ptr_gdk_pixbuf_get_height)libgtk.resolve("gdk_pixbuf_get_height");
-    gdk_pixmap_new = (Ptr_gdk_pixmap_new)libgtk.resolve("gdk_pixmap_new");
     gdk_pixbuf_new = (Ptr_gdk_pixbuf_new)libgtk.resolve("gdk_pixbuf_new");
-    gdk_pixbuf_get_from_drawable = (Ptr_gdk_pixbuf_get_from_drawable)libgtk.resolve("gdk_pixbuf_get_from_drawable");
-    gdk_draw_rectangle = (Ptr_gdk_draw_rectangle)libgtk.resolve("gdk_draw_rectangle");
     gdk_pixbuf_unref = (Ptr_gdk_pixbuf_unref)libgtk.resolve("gdk_pixbuf_unref");
-    gdk_drawable_unref = (Ptr_gdk_drawable_unref)libgtk.resolve("gdk_drawable_unref");
     gdk_color_free = (Ptr_gdk_color_free)libgtk.resolve("gdk_color_free");
     gdk_x11_window_set_user_time = (Ptr_gdk_x11_window_set_user_time)libgtk.resolve("gdk_x11_window_set_user_time");
     gdk_x11_drawable_get_xid = (Ptr_gdk_x11_drawable_get_xid)libgtk.resolve("gdk_x11_drawable_get_xid");
@@ -395,7 +406,8 @@ void QGtkStylePrivate::resolveGtk() const
     gtk_entry_new = (Ptr_gtk_entry_new)libgtk.resolve("gtk_entry_new");
     gtk_tree_view_new = (Ptr_gtk_tree_view_new)libgtk.resolve("gtk_tree_view_new");
     gtk_combo_box_new = (Ptr_gtk_combo_box_new)libgtk.resolve("gtk_combo_box_new");
-    gtk_progress_configure = (Ptr_gtk_progress_configure)libgtk.resolve("gtk_progress_configure");
+    gtk_combo_box_entry_new = (Ptr_gtk_combo_box_entry_new)libgtk.resolve("gtk_combo_box_entry_new");
+    gtk_combo_box_new_with_entry = (Ptr_gtk_combo_box_entry_new)libgtk.resolve("gtk_combo_box_new_with_entry");
     gtk_range_get_adjustment = (Ptr_gtk_range_get_adjustment)libgtk.resolve("gtk_range_get_adjustment");
     gtk_range_set_adjustment = (Ptr_gtk_range_set_adjustment)libgtk.resolve("gtk_range_set_adjustment");
     gtk_range_set_inverted = (Ptr_gtk_range_set_inverted)libgtk.resolve("gtk_range_set_inverted");
@@ -409,23 +421,6 @@ void QGtkStylePrivate::resolveGtk() const
     gtk_tree_view_column_new = (Ptr_gtk_tree_view_column_new)libgtk.resolve("gtk_tree_view_column_new");
     gtk_tree_view_append_column= (Ptr_gtk_tree_view_append_column )libgtk.resolve("gtk_tree_view_append_column");
     gtk_tree_view_get_column = (Ptr_gtk_tree_view_get_column )libgtk.resolve("gtk_tree_view_get_column");
-    gtk_paint_check = (Ptr_gtk_paint_check)libgtk.resolve("gtk_paint_check");
-    gtk_paint_box = (Ptr_gtk_paint_box)libgtk.resolve("gtk_paint_box");
-    gtk_paint_flat_box = (Ptr_gtk_paint_flat_box)libgtk.resolve("gtk_paint_flat_box");
-    gtk_paint_check = (Ptr_gtk_paint_check)libgtk.resolve("gtk_paint_check");
-    gtk_paint_box = (Ptr_gtk_paint_box)libgtk.resolve("gtk_paint_box");
-    gtk_paint_resize_grip = (Ptr_gtk_paint_resize_grip)libgtk.resolve("gtk_paint_resize_grip");
-    gtk_paint_focus = (Ptr_gtk_paint_focus)libgtk.resolve("gtk_paint_focus");
-    gtk_paint_shadow = (Ptr_gtk_paint_shadow)libgtk.resolve("gtk_paint_shadow");
-    gtk_paint_slider = (Ptr_gtk_paint_slider)libgtk.resolve("gtk_paint_slider");
-    gtk_paint_expander = (Ptr_gtk_paint_expander)libgtk.resolve("gtk_paint_expander");
-    gtk_paint_handle = (Ptr_gtk_paint_handle)libgtk.resolve("gtk_paint_handle");
-    gtk_paint_option = (Ptr_gtk_paint_option)libgtk.resolve("gtk_paint_option");
-    gtk_paint_arrow = (Ptr_gtk_paint_arrow)libgtk.resolve("gtk_paint_arrow");
-    gtk_paint_box_gap = (Ptr_gtk_paint_box_gap)libgtk.resolve("gtk_paint_box_gap");
-    gtk_paint_extension = (Ptr_gtk_paint_extension)libgtk.resolve("gtk_paint_extension");
-    gtk_paint_hline = (Ptr_gtk_paint_hline)libgtk.resolve("gtk_paint_hline");
-    gtk_paint_vline = (Ptr_gtk_paint_vline)libgtk.resolve("gtk_paint_vline");
     gtk_adjustment_configure = (Ptr_gtk_adjustment_configure)libgtk.resolve("gtk_adjustment_configure");
     gtk_adjustment_new = (Ptr_gtk_adjustment_new)libgtk.resolve("gtk_adjustment_new");
     gtk_menu_item_set_submenu = (Ptr_gtk_menu_item_set_submenu)libgtk.resolve("gtk_menu_item_set_submenu");
@@ -434,7 +429,6 @@ void QGtkStylePrivate::resolveGtk() const
     gtk_frame_new = (Ptr_gtk_frame_new)libgtk.resolve("gtk_frame_new");
     gtk_expander_new = (Ptr_gtk_expander_new)libgtk.resolve("gtk_expander_new");
     gtk_statusbar_new = (Ptr_gtk_statusbar_new)libgtk.resolve("gtk_statusbar_new");
-    gtk_combo_box_entry_new = (Ptr_gtk_combo_box_entry_new)libgtk.resolve("gtk_combo_box_entry_new");
     gtk_container_forall = (Ptr_gtk_container_forall)libgtk.resolve("gtk_container_forall");
     gtk_widget_size_allocate =(Ptr_gtk_widget_size_allocate)libgtk.resolve("gtk_widget_size_allocate");
     gtk_widget_size_request =(Ptr_gtk_widget_size_request)libgtk.resolve("gtk_widget_size_request");
@@ -445,12 +439,20 @@ void QGtkStylePrivate::resolveGtk() const
     gtk_widget_get_type =(Ptr_gtk_widget_get_type)libgtk.resolve("gtk_widget_get_type");
     gtk_widget_get_parent =(Ptr_gtk_widget_get_parent)libgtk.resolve("gtk_widget_get_parent");
     gtk_widget_is_toplevel =(Ptr_gtk_widget_is_toplevel)libgtk.resolve("gtk_widget_is_toplevel");
+    gtk_widget_get_toplevel =(Ptr_gtk_widget_get_toplevel)libgtk.resolve("gtk_widget_get_toplevel");
 
     gtk_rc_get_style_by_paths =(Ptr_gtk_rc_get_style_by_paths)libgtk.resolve("gtk_rc_get_style_by_paths");
     gtk_check_version =(Ptr_gtk_check_version)libgtk.resolve("gtk_check_version");
     gtk_border_free =(Ptr_gtk_border_free)libgtk.resolve("gtk_border_free");
     gtk_widget_get_allocation = (Ptr_gtk_widget_get_allocation)libgtk.resolve("gtk_widget_get_allocation");
     gtk_widget_set_allocation = (Ptr_gtk_widget_set_allocation)libgtk.resolve("gtk_widget_set_allocation");
+
+    gtk_widget_set_can_default = (Ptr_gtk_widget_set_can_default)libgtk.resolve("gtk_widget_set_can_default");
+    gtk_window_set_default = (Ptr_gtk_window_set_default)libgtk.resolve("gtk_window_set_default");
+
+    gdk_event_new = (Ptr_gdk_event_new)libgtk.resolve("gdk_event_new");
+    gdk_event_free = (Ptr_gdk_event_free)libgtk.resolve("gdk_event_free");
+    gtk_widget_send_focus_change = (Ptr_gtk_widget_send_focus_change)libgtk.resolve("gtk_widget_send_focus_change");
 
     pango_font_description_get_size = (Ptr_pango_font_description_get_size)libgtk.resolve("pango_font_description_get_size");
     pango_font_description_get_weight = (Ptr_pango_font_description_get_weight)libgtk.resolve("pango_font_description_get_weight");
@@ -565,26 +567,28 @@ void QGtkStylePrivate::initGtkWidgets() const
             addWidget(QGtkStylePrivate::gtk_check_button_new());
             addWidget(QGtkStylePrivate::gtk_radio_button_new(NULL));
             addWidget(QGtkStylePrivate::gtk_combo_box_new());
-            addWidget(QGtkStylePrivate::gtk_combo_box_entry_new());
+            if (gtk_combo_box_entry_new)
+                addWidget(QGtkStylePrivate::gtk_combo_box_entry_new());
+            if (gtk_combo_box_new_with_entry)
+                addWidget(QGtkStylePrivate::gtk_combo_box_new_with_entry());
             addWidget(QGtkStylePrivate::gtk_entry_new());
             addWidget(QGtkStylePrivate::gtk_frame_new(NULL));
             addWidget(QGtkStylePrivate::gtk_expander_new(""));
             addWidget(QGtkStylePrivate::gtk_statusbar_new());
-            addWidget(QGtkStylePrivate::gtk_hscale_new((GtkAdjustment*)(QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0))));
+            addWidget(QGtkStylePrivate::gtk_hscale_new((QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0))));
             addWidget(QGtkStylePrivate::gtk_hscrollbar_new(NULL));
             addWidget(QGtkStylePrivate::gtk_scrolled_window_new(NULL, NULL));
 
             initGtkMenu();
             addWidget(QGtkStylePrivate::gtk_notebook_new());
             addWidget(QGtkStylePrivate::gtk_progress_bar_new());
-            addWidget(QGtkStylePrivate::gtk_spin_button_new((GtkAdjustment*)
-                                             (QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0)), 0.1, 3));
+            addWidget(QGtkStylePrivate::gtk_spin_button_new((QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0)), 0.1, 3));
             GtkWidget *toolbar = gtk_toolbar_new();
             g_signal_connect (toolbar, "notify::toolbar-style", G_CALLBACK (update_toolbar_style), toolbar);
             gtk_toolbar_insert((GtkToolbar*)toolbar, gtk_separator_tool_item_new(), -1);
             addWidget(toolbar);
             initGtkTreeview();
-            addWidget(gtk_vscale_new((GtkAdjustment*)(QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0))));
+            addWidget(gtk_vscale_new((QGtkStylePrivate::gtk_adjustment_new(1, 0, 1, 0, 0, 0))));
             addWidget(gtk_vscrollbar_new(NULL));
         }
         else // Rebuild map
@@ -796,7 +800,7 @@ void QGtkStylePrivate::addAllSubWidgets(GtkWidget *widget, gpointer v)
 {
     Q_UNUSED(v);
     addWidgetToMap(widget);
-    if (GTK_CHECK_TYPE ((widget), gtk_container_get_type()))
+    if (G_TYPE_CHECK_INSTANCE_TYPE ((widget), gtk_container_get_type()))
         gtk_container_forall((GtkContainer*)widget, addAllSubWidgets, NULL);
 }
 

@@ -151,10 +151,34 @@ inline QObject *styleObject(const QStyleOption *option) {
     return option ? option->styleObject : 0;
 }
 
+/* \internal
+    Checks if we can animate on a style option
+*/
 bool canAnimate(const QStyleOption *option) {
     return option
             && option->styleObject
             && !option->styleObject->property("_q_no_animation").toBool();
+}
+
+/* \internal
+    Used by animations to clone a styleoption and shift its offset
+*/
+QStyleOption *clonedAnimationStyleOption(const QStyleOption*option) {
+    QStyleOption *styleOption = 0;
+    if (const QStyleOptionSlider *slider = qstyleoption_cast<const QStyleOptionSlider*>(option))
+        styleOption = new QStyleOptionSlider(*slider);
+    else if (const QStyleOptionSpinBox *spinbox = qstyleoption_cast<const QStyleOptionSpinBox*>(option))
+        styleOption = new QStyleOptionSpinBox(*spinbox);
+    else if (const QStyleOptionGroupBox *groupBox = qstyleoption_cast<const QStyleOptionGroupBox*>(option))
+        styleOption = new QStyleOptionGroupBox(*groupBox);
+    else if (const QStyleOptionComboBox *combo = qstyleoption_cast<const QStyleOptionComboBox*>(option))
+        styleOption = new QStyleOptionComboBox(*combo);
+    else if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton*>(option))
+        styleOption = new QStyleOptionButton(*button);
+    else
+        styleOption = new QStyleOption(*option);
+    styleOption->rect = QRect(QPoint(0,0), option->rect.size());
+    return styleOption;
 }
 
 
@@ -176,6 +200,13 @@ bool canAnimate(const QStyleOption *option) {
 */
 QWindowsVistaStyle::QWindowsVistaStyle()
     : QWindowsXPStyle(*new QWindowsVistaStylePrivate)
+{
+}
+
+/*!
+  Destructor.
+*/
+QWindowsVistaStyle::~QWindowsVistaStyle()
 {
 }
 
@@ -211,118 +242,15 @@ static int buttonStateId(int flags, int partId)
     return stateId;
 }
 
-void QWindowsVistaAnimation::paint(QPainter *painter, const QStyleOption *option)
-{
-    Q_UNUSED(option);
-    Q_UNUSED(painter);
-}
-
 bool QWindowsVistaAnimation::isUpdateNeeded() const
 {
     return QWindowsVistaStylePrivate::useVista();
 }
 
-/*! \internal
-
-  Helperfunction to paint the current transition state between two
-  animation frames.
-
-  The result is a blended image consisting of ((alpha)*_primaryImage)
-  + ((1-alpha)*_secondaryImage)
-
-*/
-void QWindowsVistaAnimation::drawBlendedImage(QPainter *painter, QRect rect, float alpha) {
-    if (_secondaryImage.isNull() || _primaryImage.isNull())
-        return;
-
-    if (_tempImage.isNull())
-        _tempImage = _secondaryImage;
-
-    const int a = qRound(alpha*256);
-    const int ia = 256 - a;
-    const int sw = _primaryImage.width();
-    const int sh = _primaryImage.height();
-    const int bpl = _primaryImage.bytesPerLine();
-    switch(_primaryImage.depth()) {
-    case 32:
-        {
-            uchar *mixed_data = _tempImage.bits();
-            const uchar *back_data = _primaryImage.bits();
-            const uchar *front_data = _secondaryImage.bits();
-            for (int sy = 0; sy < sh; sy++) {
-                quint32* mixed = (quint32*)mixed_data;
-                const quint32* back = (const quint32*)back_data;
-                const quint32* front = (const quint32*)front_data;
-                for (int sx = 0; sx < sw; sx++) {
-                    quint32 bp = back[sx];
-                    quint32 fp = front[sx];
-                    mixed[sx] =  qRgba ((qRed(bp)*ia + qRed(fp)*a)>>8,
-                                        (qGreen(bp)*ia + qGreen(fp)*a)>>8,
-                                        (qBlue(bp)*ia + qBlue(fp)*a)>>8,
-                                        (qAlpha(bp)*ia + qAlpha(fp)*a)>>8);
-                }
-                mixed_data += bpl;
-                back_data += bpl;
-                front_data += bpl;
-            }
-        }
-    default:
-        break;
-    }
-    painter->drawImage(rect, _tempImage);
-}
-
-/*! \internal
-  Paints a transition state. The result will be a mix between the
-  initial and final state of the transition, depending on the time
-  difference between startTime and current time.
-*/
-void QWindowsVistaTransition::paint(QPainter *painter, const QStyleOption *option)
+void QWindowsVistaAnimation::paint(QPainter *painter, const QStyleOption *option)
 {
-    float alpha = 1.0;
-    if (_duration > 0) {
-        QTime current = QTime::currentTime();
-
-        if (startTime() > current)
-            setStartTime(current);
-
-        int timeDiff = startTime().msecsTo(current);
-        alpha = timeDiff/(float)_duration;
-        if (timeDiff > _duration) {
-            stop();
-            alpha = 1.0;
-        }
-    }
-    else {
-        stop();
-    }
-    drawBlendedImage(painter, option->rect, alpha);
+    painter->drawImage(option->rect, currentImage());
 }
-
-/*! \internal
-  Paints a pulse. The result will be a mix between the primary and
-  secondary pulse images depending on the time difference between
-  startTime and current time.
-*/
-void QWindowsVistaPulse::paint(QPainter *painter, const QStyleOption *option)
-{
-    float alpha = 1.0;
-    if (_duration > 0) {
-        QTime current = QTime::currentTime();
-
-        if (startTime() > current)
-            setStartTime(current);
-
-        int timeDiff = startTime().msecsTo(current) % _duration*2;
-        if (timeDiff > _duration)
-            timeDiff = _duration*2 - timeDiff;
-        alpha = timeDiff/(float)_duration;
-    } else {
-        stop();
-    }
-    drawBlendedImage(painter, option->rect, alpha);
-}
-
 
 /*!
  \internal
@@ -402,14 +330,8 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                     doTransition = false;
 
                 if (doTransition) {
-                    QStyleOption *styleOption = 0;
-                    if (const QStyleOptionGroupBox *combo = qstyleoption_cast<const QStyleOptionGroupBox*>(option))
-                        styleOption = new QStyleOptionGroupBox(*combo);
-                    else
-                        styleOption = new QStyleOption(*option);
-
+                    QStyleOption *styleOption = clonedAnimationStyleOption(option);
                     styleOption->state = (QStyle::State)oldState;
-                    styleOption->rect = QRect(QPoint(0,0), newRect.size());
 
                     QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
                     QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
@@ -800,8 +722,10 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                 QPixmap pixmap;
 
                 if (vopt->backgroundBrush.style() != Qt::NoBrush) {
+                    const QPointF oldBrushOrigin = painter->brushOrigin();
                     painter->setBrushOrigin(vopt->rect.topLeft());
                     painter->fillRect(vopt->rect, vopt->backgroundBrush);
+                    painter->setBrushOrigin(oldBrushOrigin);
                 }
 
                 if (hover || selected) {
@@ -975,16 +899,8 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
 
                 QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
                 QWindowsVistaAnimation *anim = qobject_cast<QWindowsVistaAnimation *>(d->animation(styleObject));
-                QStyleOption *styleOption = 0;
-                if (const QStyleOptionComboBox *combo = qstyleoption_cast<const QStyleOptionComboBox*>(option))
-                    styleOption = new QStyleOptionComboBox(*combo);
-                else if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton*>(option))
-                    styleOption = new QStyleOptionButton(*button);
-                else
-                    styleOption = new QStyleOption(*option);
-
+                QStyleOption *styleOption = clonedAnimationStyleOption(option);
                 styleOption->state = (QStyle::State)oldState;
-                styleOption->rect = QRect(QPoint(0,0), newRect.size());
 
                 QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
                 startImage.fill(0);
@@ -1078,8 +994,8 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                         theme.stateId = PBS_DEFAULTED_ANIMATING;
                         theme.painter = &alternatePainter;
                         d->drawBackground(theme);
-                        pulse->setPrimaryImage(startImage);
-                        pulse->setAlternateImage(alternateImage);
+                        pulse->setStartImage(startImage);
+                        pulse->setEndImage(alternateImage);
                         pulse->setStartTime(QTime::currentTime());
                         pulse->setDuration(2000);
                         d->startAnimation(pulse);
@@ -1664,6 +1580,7 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
             }
 
             if (doTransition) {
+
                 QImage startImage(option->rect.size(), QImage::Format_ARGB32_Premultiplied);
                 startImage.fill(0);
                 QPainter startPainter(&startImage);
@@ -1676,15 +1593,7 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
                 QWindowsVistaTransition *t = new QWindowsVistaTransition(styleObject);
 
                 // Draw the image that ends the animation by using the current styleoption
-                QStyleOptionComplex *styleOption = 0;
-                if (const QStyleOptionSlider *slider = qstyleoption_cast<const QStyleOptionSlider*>(option))
-                    styleOption = new QStyleOptionSlider(*slider);
-                else if (const QStyleOptionSpinBox *spinbox = qstyleoption_cast<const QStyleOptionSpinBox*>(option))
-                    styleOption = new QStyleOptionSpinBox(*spinbox);
-                else
-                    styleOption = new QStyleOptionComplex(*option);
-
-                styleOption->rect = QRect(QPoint(0,0), option->rect.size());
+                QStyleOptionComplex *styleOption = qstyleoption_cast<QStyleOptionComplex*>(clonedAnimationStyleOption(option));
 
                 styleObject->setProperty("_q_no_animation", true);
 

@@ -53,6 +53,7 @@
 #include <qscrollbar.h>
 #include <qabstractbutton.h>
 #include <private/qtableview_p.h>
+#include <private/qheaderview_p.h>
 #ifndef QT_NO_ACCESSIBILITY
 #include <qaccessible.h>
 #endif
@@ -1181,6 +1182,7 @@ void QTableView::setHorizontalHeader(QHeaderView *header)
         delete d->horizontalHeader;
     d->horizontalHeader = header;
     d->horizontalHeader->setParent(this);
+    d->horizontalHeader->d_func()->setAllowUserMoveOfSection0(true);
     if (!d->horizontalHeader->model()) {
         d->horizontalHeader->setModel(d->model);
         if (d->selectionModel)
@@ -1218,6 +1220,7 @@ void QTableView::setVerticalHeader(QHeaderView *header)
         delete d->verticalHeader;
     d->verticalHeader = header;
     d->verticalHeader->setParent(this);
+    d->verticalHeader->d_func()->setAllowUserMoveOfSection0(true);
     if (!d->verticalHeader->model()) {
         d->verticalHeader->setModel(d->model);
         if (d->selectionModel)
@@ -2198,7 +2201,7 @@ int QTableView::sizeHintForRow(int row) const
             option.rect.setX(columnViewportPosition(index.column()));
             option.rect.setWidth(columnWidth(index.column()));
         }
-        
+
         QWidget *editor = d->editorForIndex(index).widget.data();
         if (editor && d->persistent.contains(editor)) {
             hint = qMax(hint, editor->sizeHint().height());
@@ -2206,7 +2209,7 @@ int QTableView::sizeHintForRow(int row) const
             int max = editor->maximumSize().height();
             hint = qBound(min, hint, max);
         }
-        
+
         hint = qMax(hint, itemDelegate(index)->sizeHint(option, index).height());
     }
 
@@ -2251,7 +2254,7 @@ int QTableView::sizeHintForColumn(int column) const
         if (d->verticalHeader->isSectionHidden(logicalRow))
             continue;
         index = d->model->index(logicalRow, column, d->root);
-        
+
         QWidget *editor = d->editorForIndex(index).widget.data();
         if (editor && d->persistent.contains(editor)) {
             hint = qMax(hint, editor->sizeHint().width());
@@ -2259,7 +2262,7 @@ int QTableView::sizeHintForColumn(int column) const
             int max = editor->maximumSize().width();
             hint = qBound(min, hint, max);
         }
-        
+
         hint = qMax(hint, itemDelegate(index)->sizeHint(option, index).width());
     }
 

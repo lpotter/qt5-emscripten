@@ -478,8 +478,18 @@ QtCore
   - SoftHyphen enum value has been added to specify a line break opportunity
     at a soft hyphen (SHY) character.
   - MandatoryBreak enum value has been added to specify a mandatory (aka "hard") line breaks.
-  - StartWord/EndWord enum values has been logically replaced with StartOfItem/EndOfItem ones
-    to mention they are not about the word boundaries only.
+  - Source-incompatible change: Since the behavior of boundaryReasons() method
+    has been changed a lot, StartWord/EndWord enum values were intentionally replaced
+    with StartOfItem/EndOfItem ones to force the affected code be revised.
+
+* Softkeys API was removed. The following functions and enums were removed:
+  - QAction::setSoftKeyRole()
+  - QAction::softKeyRole()
+  - QAction::SoftKeyRole
+  - Qt::WA_MergeSoftkeys
+  - Qt::WA_MergeSoftkeysRecursively
+  - Qt::WindowSoftkeysVisibleHint
+  - Qt::WindowSoftkeysRespondHint
 
 QtGui
 -----
@@ -587,6 +597,11 @@ QtWidgets
 * [QTBUG-20503] QFileSystemModel no longer masks out write permissions from the permissions
   returned from permissions() or data(FilePermissions), even if in read-only mode
   (QFileSystemModel::isReadOnly()).
+
+* [QTBUG-158 QTBUG-428 QTBUG-26501] QComboBox::currentText improvements
+  Restored currentText as USER property.
+  New setter setCurrentText(), marked as WRITE method, usable by QItemDelegate and QDataWidgetMapper.
+  New signal currentTextChanged() marked as NOTIFY method.
 
 QtNetwork
 ---------

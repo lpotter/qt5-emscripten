@@ -49,6 +49,7 @@
 #include <qdir.h>
 #include <qdiriterator.h>
 #include <qtemporaryfile.h>
+#include <qstandardpaths.h>
 #include <qstack.h>
 #include <qdebug.h>
 #include <qfileinfo.h>
@@ -82,6 +83,12 @@ using namespace std;
 // Macros to simplify options marking
 #define MARK_OPTION(x,y) ( dictionary[ #x ] == #y ? "*" : " " )
 
+static inline void promptKeyPress()
+{
+    cout << "(Press any key to continue...)";
+    if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
+        exit(0);      // Exit cleanly for Ctrl+C
+}
 
 bool writeToFile(const char* text, const QString &filename)
 {
@@ -142,7 +149,7 @@ Configure::Configure(int& argc, char** argv)
     const QString installPath = buildPath;
 #endif
     if (sourceDir != buildDir) { //shadow builds!
-        if (!findFile("perl") && !findFile("perl.exe")) {
+        if (QStandardPaths::findExecutable(QStringLiteral("perl.exe")).isEmpty()) {
             cout << "Error: Creating a shadow build of Qt requires" << endl
                  << "perl to be in the PATH environment";
             exit(0); // Exit cleanly for Ctrl+C
@@ -236,6 +243,7 @@ Configure::Configure(int& argc, char** argv)
     dictionary[ "QT_CUPS" ]         = "auto";
     dictionary[ "CFG_GCC_SYSROOT" ] = "yes";
     dictionary[ "SLOG2" ]           = "no";
+    dictionary[ "SYSTEM_PROXIES" ]  = "no";
 
     //Only used when cross compiling.
     dictionary[ "QT_INSTALL_SETTINGS" ] = "/etc/xdg";
@@ -423,16 +431,20 @@ void Configure::parseCmdLine()
     argCount = configCmdLine.size();
 #endif
 
+    bool isDeviceMkspec = false;
+
     // Look first for XQMAKESPEC
     for (int j = 0 ; j < argCount; ++j)
     {
-        if (configCmdLine.at(j) == "-xplatform") {
+        if ((configCmdLine.at(j) == "-xplatform") || (configCmdLine.at(j) == "-device")) {
+            isDeviceMkspec = (configCmdLine.at(j) == "-device");
             ++j;
             if (j == argCount)
                 break;
             dictionary["XQMAKESPEC"] = configCmdLine.at(j);
             if (!dictionary[ "XQMAKESPEC" ].isEmpty())
                 applySpecSpecifics();
+            break;
         }
     }
 
@@ -511,7 +523,8 @@ void Configure::parseCmdLine()
             dictionary["OBSOLETE_ARCH_ARG"] = "yes";
         } else if (configCmdLine.at(i) == "-embedded") {
             dictionary[ "EMBEDDED" ] = "yes";
-        } else if (configCmdLine.at(i) == "-xplatform") {
+        } else if (configCmdLine.at(i) == "-xplatform"
+                || configCmdLine.at(i) == "-device") {
             ++i;
             // do nothing
         }
@@ -550,8 +563,10 @@ void Configure::parseCmdLine()
 
         else if (configCmdLine.at(i) == "-angle") {
             dictionary[ "ANGLE" ] = "yes";
+            dictionary[ "ANGLE_FROM" ] = "commandline";
         } else if (configCmdLine.at(i) == "-no-angle") {
             dictionary[ "ANGLE" ] = "no";
+            dictionary[ "ANGLE_FROM" ] = "commandline";
         }
 
         // Image formats --------------------------------------------
@@ -660,6 +675,7 @@ void Configure::parseCmdLine()
         // OpenGL Support -------------------------------------------
         else if (configCmdLine.at(i) == "-no-opengl") {
             dictionary[ "OPENGL" ]    = "no";
+            dictionary[ "OPENGL_ES_2" ]     = "no";
         } else if (configCmdLine.at(i) == "-opengl-es-cm") {
             dictionary[ "OPENGL" ]          = "yes";
             dictionary[ "OPENGL_ES_CM" ]    = "yes";
@@ -877,6 +893,10 @@ void Configure::parseCmdLine()
             dictionary[ "SLOG2" ] = "no";
         } else if (configCmdLine.at(i) == "-slog2") {
             dictionary[ "SLOG2" ] = "yes";
+        } else if (configCmdLine.at(i) == "-no-system-proxies") {
+            dictionary[ "SYSTEM_PROXIES" ] = "no";
+        } else if (configCmdLine.at(i) == "-system-proxies") {
+            dictionary[ "SYSTEM_PROXIES" ] = "yes";
         }
 
         // Work around compiler nesting limitation
@@ -1046,6 +1066,13 @@ void Configure::parseCmdLine()
                 break;
             dictionary[ "QT_INSTALL_IMPORTS" ] = configCmdLine.at(i);
         }
+        else if (configCmdLine.at(i) == "-archdatadir") {
+            ++i;
+            if (i == argCount)
+                break;
+            dictionary[ "QT_INSTALL_ARCHDATA" ] = configCmdLine.at(i);
+        }
+
         else if (configCmdLine.at(i) == "-datadir") {
             ++i;
             if (i == argCount)
@@ -1254,11 +1281,32 @@ void Configure::parseCmdLine()
     // Tell the user how to confclean before the next configure
     dictionary["CONFCLEANINSTRUCTION"] = dictionary["MAKE"] + QString(" confclean");
 
-    // Ensure that -spec (XQMAKESPEC) exists in the mkspecs folder as well
-    if (dictionary.contains("XQMAKESPEC") &&
-        !mkspecs.contains(dictionary["XQMAKESPEC"], Qt::CaseInsensitive)) {
+    if (isDeviceMkspec) {
+        const QStringList devices = mkspecs.filter("devices/", Qt::CaseInsensitive);
+        const QStringList family = devices.filter(dictionary["XQMAKESPEC"], Qt::CaseInsensitive);
+
+        if (family.isEmpty()) {
+            dictionary["HELP"] = "yes";
+            cout << "Error: No device matching '" << dictionary["XQMAKESPEC"] << "'." << endl;
+        } else if (family.size() > 1) {
+            dictionary["HELP"] = "yes";
+
+            cout << "Error: Multiple matches for device '" << dictionary["XQMAKESPEC"] << "'. Candidates are:" << endl;
+
+            foreach (const QString &device, family)
+                cout << "\t* " << device << endl;
+        } else {
+            Q_ASSERT(family.size() == 1);
+            dictionary["XQMAKESPEC"] = family.at(0);
+        }
+
+    } else {
+        // Ensure that -spec (XQMAKESPEC) exists in the mkspecs folder as well
+        if (dictionary.contains("XQMAKESPEC") &&
+                !mkspecs.contains(dictionary["XQMAKESPEC"], Qt::CaseInsensitive)) {
             dictionary["HELP"] = "yes";
             cout << "Invalid option \"" << dictionary["XQMAKESPEC"] << "\" for -xplatform." << endl;
+        }
     }
 
     // Ensure that the crt to be deployed can be found
@@ -1515,42 +1563,6 @@ void Configure::applySpecSpecifics()
     }
 }
 
-QString Configure::locateFileInPaths(const QString &fileName, const QStringList &paths)
-{
-    QDir d;
-    for (QStringList::ConstIterator it = paths.begin(); it != paths.end(); ++it) {
-        // Remove any leading or trailing ", this is commonly used in the environment
-        // variables
-        QString path = (*it);
-        if (path.startsWith("\""))
-            path = path.right(path.length() - 1);
-        if (path.endsWith("\""))
-            path = path.left(path.length() - 1);
-        if (d.exists(path + QDir::separator() + fileName)) {
-            return (path);
-        }
-    }
-    return QString();
-}
-
-QString Configure::locateFile(const QString &fileName)
-{
-    QString file = fileName.toLower();
-    QStringList paths;
-#if defined(Q_OS_WIN32)
-    QRegExp splitReg("[;,]");
-#else
-    QRegExp splitReg("[:]");
-#endif
-    if (file.endsWith(".h"))
-        paths = QString::fromLocal8Bit(getenv("INCLUDE")).split(splitReg, QString::SkipEmptyParts);
-    else if (file.endsWith(".lib"))
-        paths = QString::fromLocal8Bit(getenv("LIB")).split(splitReg, QString::SkipEmptyParts);
-    else
-        paths = QString::fromLocal8Bit(getenv("PATH")).split(splitReg, QString::SkipEmptyParts);
-    return locateFileInPaths(file, paths);
-}
-
 // Output helper functions ---------------------------------[ Stop ]-
 
 
@@ -1572,12 +1584,13 @@ bool Configure::displayHelp()
 
         desc(       "-bindir <dir>",                    "Executables will be installed to <dir>\n(default PREFIX/bin)");
         desc(       "-libdir <dir>",                    "Libraries will be installed to <dir>\n(default PREFIX/lib)");
-        desc(       "-docdir <dir>",                    "Documentation will be installed to <dir>\n(default PREFIX/doc)");
         desc(       "-headerdir <dir>",                 "Headers will be installed to <dir>\n(default PREFIX/include)");
-        desc(       "-plugindir <dir>",                 "Plugins will be installed to <dir>\n(default PREFIX/plugins)");
-        desc(       "-importdir <dir>",                 "Imports for QML will be installed to <dir>\n(default PREFIX/imports)");
+        desc(       "-archdatadir <dir>",               "Architecture-dependent data used by Qt will be installed to <dir>\n(default PREFIX)");
+        desc(       "-plugindir <dir>",                 "Plugins will be installed to <dir>\n(default ARCHDATADIR/plugins)");
+        desc(       "-importdir <dir>",                 "Imports for QML1 will be installed to <dir>\n(default ARCHDATADIR/imports)");
         desc(       "-datadir <dir>",                   "Data used by Qt programs will be installed to <dir>\n(default PREFIX)");
-        desc(       "-translationdir <dir>",            "Translations of Qt programs will be installed to <dir>\n(default PREFIX/translations)");
+        desc(       "-docdir <dir>",                    "Documentation will be installed to <dir>\n(default DATADIR/doc)");
+        desc(       "-translationdir <dir>",            "Translations of Qt programs will be installed to <dir>\n(default DATADIR/translations)");
         desc(       "-examplesdir <dir>",               "Examples will be installed to <dir>\n(default PREFIX/examples)");
         desc(       "-testsdir <dir>",                  "Tests will be installed to <dir>\n(default PREFIX/tests)\n");
 
@@ -1681,6 +1694,10 @@ bool Configure::displayHelp()
         desc("QT_GLIB",     "yes",     "-glib",         "Compile Glib support.\n");
 
         desc("QT_INSTALL_SETTINGS", "auto", "-sysconfdir <dir>", "Settings used by Qt programs will be looked for in\n<dir>.\n");
+
+        desc("SYSTEM_PROXIES", "yes",  "-system-proxies",    "Use system network proxies by default.");
+        desc("SYSTEM_PROXIES", "no",   "-no-system-proxies", "Do not use system network proxies by default.\n");
+
 
 #if !defined(EVAL)
         desc(                   "-qtnamespace <name>", "Wraps all Qt library code in 'namespace name {...}'.");
@@ -1820,80 +1837,25 @@ bool Configure::displayHelp()
     return false;
 }
 
-QString Configure::findFileInPaths(const QString &fileName, const QString &paths)
-{
-#if defined(Q_OS_WIN32)
-    QRegExp splitReg("[;,]");
-#else
-    QRegExp splitReg("[:]");
-#endif
-    QStringList pathList = paths.split(splitReg, QString::SkipEmptyParts);
-    QDir d;
-    for (QStringList::ConstIterator it = pathList.begin(); it != pathList.end(); ++it) {
-        // Remove any leading or trailing ", this is commonly used in the environment
-        // variables
-        QString path = (*it);
-        if (path.startsWith('\"'))
-            path = path.right(path.length() - 1);
-        if (path.endsWith('\"'))
-            path = path.left(path.length() - 1);
-        if (d.exists(path + QDir::separator() + fileName))
-            return path;
-    }
-    return QString();
-}
-
-static QString mingwPaths(const QString &mingwPath, const QString &pathName)
-{
-    QString ret;
-    QDir mingwDir = QFileInfo(mingwPath).dir();
-    const QFileInfoList subdirs = mingwDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (int i = 0 ;i < subdirs.length(); ++i) {
-        const QFileInfo &fi = subdirs.at(i);
-        const QString name = fi.fileName();
-        if (name == pathName)
-            ret += fi.absoluteFilePath() + ';';
-        else if (name.contains("mingw"))
-            ret += fi.absoluteFilePath() + QDir::separator() + pathName + ';';
-    }
-    return ret;
-}
-
-bool Configure::findFile(const QString &fileName)
+// Locate a file and return its containing directory.
+QString Configure::locateFile(const QString &fileName) const
 {
     const QString file = fileName.toLower();
-    const QString pathEnvVar = QString::fromLocal8Bit(getenv("PATH"));
-    const QString mingwPath = dictionary["QMAKESPEC"].endsWith("-g++") ?
-        findFileInPaths("g++.exe", pathEnvVar) : QString();
-
-    QString paths;
+    QStringList pathList;
     if (file.endsWith(".h")) {
-        if (!mingwPath.isNull()) {
-            if (!findFileInPaths(file, mingwPaths(mingwPath, "include")).isNull())
-                return true;
-            //now let's try the additional compiler path
-
-            const QFileInfoList mingwConfigs = QDir(mingwPath + QLatin1String("/../lib/gcc")).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-            for (int i = 0; i < mingwConfigs.length(); ++i) {
-                const QDir mingwLibDir = mingwConfigs.at(i).absoluteFilePath();
-                foreach(const QFileInfo &version, mingwLibDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-                    if (!findFileInPaths(file, version.absoluteFilePath() + QLatin1String("/include")).isNull())
-                        return true;
-                }
-            }
-        }
-        paths = QString::fromLocal8Bit(getenv("INCLUDE"));
-        const QByteArray directXSdk = qgetenv("DXSDK_DIR");
-        if (!directXSdk.isEmpty()) // Add Direct X SDK for ANGLE
-            paths += QLatin1Char(';') + QString::fromLocal8Bit(directXSdk) + QLatin1String("/include");
+        static const QStringList headerPaths =
+            Environment::headerPaths(Environment::compilerFromQMakeSpec(dictionary[QStringLiteral("QMAKESPEC")]));
+        pathList = headerPaths;
     } else if (file.endsWith(".lib") ||  file.endsWith(".a")) {
-        if (!mingwPath.isNull() && !findFileInPaths(file, mingwPaths(mingwPath, "lib")).isNull())
-            return true;
-        paths = QString::fromLocal8Bit(getenv("LIB"));
+        static const QStringList libPaths =
+            Environment::libraryPaths(Environment::compilerFromQMakeSpec(dictionary[QStringLiteral("QMAKESPEC")]));
+        pathList = libPaths;
     } else {
-        paths = pathEnvVar;
+         // Fallback for .exe and .dll (latter are not covered by QStandardPaths).
+        static const QStringList exePaths = Environment::path();
+        pathList = exePaths;
     }
-    return !findFileInPaths(file, paths).isNull();
+    return Environment::findFileInPaths(file, pathList);
 }
 
 /*!
@@ -1952,10 +1914,59 @@ QString Configure::defaultTo(const QString &option)
     return "yes";
 }
 
+bool Configure::checkAngleAvailability(QString *errorMessage /* = 0 */) const
+{
+    // Check for Direct X SDK (include lib and direct shader compiler 'fxc').
+    // Up to Direct X SDK June 2010 and for MinGW, this is pointed to by the
+    // DXSDK_DIR variable. Starting with Windows Kit 8, it is included
+    // in the Windows SDK. Checking for the header is not sufficient since
+    // it is also  present in MinGW.
+    const QString directXSdk = Environment::detectDirectXSdk();
+    const Compiler compiler = Environment::compilerFromQMakeSpec(dictionary[QStringLiteral("QMAKESPEC")]);
+    if (compiler < CC_NET2012 && directXSdk.isEmpty()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("There is no Direct X SDK installed or the environment variable \"DXSDK_DIR\" is not set.");
+        return false;
+    }
+    const QString compilerHeader = QStringLiteral("d3dcompiler.h");
+    if (!findFile(compilerHeader)) {
+        if (errorMessage)
+            *errorMessage = QString::fromLatin1("The header '%1' could not be found.").arg(compilerHeader);
+        return false;
+    }
+    if (dictionary["SSE2"] != "no") {
+        const QString intrinHeader = QStringLiteral("intrin.h"); // Not present on MinGW-32
+        if (!findFile(intrinHeader)) {
+            if (errorMessage)
+                *errorMessage = QString::fromLatin1("The header '%1' required for SSE2 could not be found.").arg(intrinHeader);
+            return false;
+        }
+    }
+
+    const QString directXLibrary = QStringLiteral("d3d9.lib");
+    if (!findFile(directXLibrary)) {
+        if (errorMessage)
+            *errorMessage = QString::fromLatin1("The library '%1' could not be found.").arg(directXLibrary);
+        return false;
+    }
+    const QString fxcBinary = QStringLiteral("fxc.exe");
+    QStringList additionalPaths;
+    if (!directXSdk.isEmpty())
+        additionalPaths.push_back(directXSdk + QStringLiteral("/Utilities/bin/x86"));
+    QString fxcPath = QStandardPaths::findExecutable(fxcBinary, additionalPaths);
+    if (fxcPath.isEmpty()) {
+        if (errorMessage)
+            *errorMessage = QString::fromLatin1("The shader compiler '%1' could not be found.").arg(fxcBinary);
+        return false;
+    }
+    return true;
+}
+
 /*!
     Checks the system for the availability of a feature.
     Returns true if the feature is available, else false.
 */
+
 bool Configure::checkAvailability(const QString &part)
 {
     bool available = false;
@@ -1972,8 +1983,9 @@ bool Configure::checkAvailability(const QString &part)
         available = findFile("unicode/utypes.h") && findFile("unicode/ucol.h") && findFile("unicode/ustring.h")
                         && (findFile("icuin.lib") || findFile("libicuin.lib")); // libicun.lib if compiled with mingw
 
-    else if (part == "ANGLE")
-        available = findFile("d3dcompiler.h");
+    else if (part == "ANGLE") {
+        available = checkAngleAvailability();
+    }
 
     else if (part == "LIBJPEG")
         available = findFile("jpeglib.h");
@@ -2035,8 +2047,8 @@ bool Configure::checkAvailability(const QString &part)
     else if (part == "DBUS")
         available = findFile("dbus\\dbus.h");
     else if (part == "CETEST") {
-        QString rapiHeader = locateFile("rapi.h");
-        QString rapiLib = locateFile("rapi.lib");
+        const QString rapiHeader = QDir::toNativeSeparators(locateFile("rapi.h"));
+        const QString rapiLib = QDir::toNativeSeparators(locateFile("rapi.lib"));
         available = (dictionary.value("XQMAKESPEC").startsWith("wince")) && !rapiHeader.isEmpty() && !rapiLib.isEmpty();
         if (available) {
             dictionary[ "QT_CE_RAPI_INC" ] += QLatin1String("\"") + rapiHeader + QLatin1String("\"");
@@ -2048,7 +2060,8 @@ bool Configure::checkAvailability(const QString &part)
             dictionary[ "DONE" ] = "error";
         }
     } else if (part == "INCREDIBUILD_XGE") {
-        available = findFile("BuildConsole.exe") && findFile("xgConsole.exe");
+        available = !QStandardPaths::findExecutable(QStringLiteral("BuildConsole.exe")).isEmpty()
+                    && !QStandardPaths::findExecutable(QStringLiteral("xgConsole.exe")).isEmpty();
     } else if (part == "WMSDK") {
         available = findFile("wmsdk.h");
     } else if (part == "V8SNAPSHOT") {
@@ -2100,8 +2113,12 @@ void Configure::autoDetection()
 
     // ANGLE detection
     if (dictionary["ANGLE"] == "auto") {
-        bool gles2 = (dictionary["OPENGL_ES_2"] == "yes");
-        dictionary["ANGLE"] = (gles2 && checkAvailability("ANGLE")) ? "yes" : "no";
+        if (dictionary["OPENGL_ES_2"] == "yes") {
+            dictionary["ANGLE"] = checkAngleAvailability() ? "yes" : "no";
+            dictionary["ANGLE_FROM"] = "detected";
+        } else {
+            dictionary["ANGLE"] = "no";
+        }
     }
 
     // Image format detection
@@ -2200,6 +2217,7 @@ void Configure::autoDetection()
 
 bool Configure::verifyConfiguration()
 {
+    bool prompt = false;
     if (dictionary["C++11"] != "auto"
             && dictionary["QMAKESPEC"].contains("msvc")) {
         cout << "WARNING: Qt does not support disabling or enabling any existing C++11 support "
@@ -2214,28 +2232,21 @@ bool Configure::verifyConfiguration()
 
     if (dictionary["SQL_SQLITE_LIB"] == "no" && dictionary["SQL_SQLITE"] != "no") {
         cout << "WARNING: Configure could not detect the presence of a system SQLite3 lib." << endl
-             << "Configure will therefore continue with the SQLite3 lib bundled with Qt." << endl
-             << "(Press any key to continue..)";
-        if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
-            exit(0);      // Exit cleanly for Ctrl+C
-
+             << "Configure will therefore continue with the SQLite3 lib bundled with Qt." << endl;
         dictionary["SQL_SQLITE_LIB"] = "qt"; // Set to Qt's bundled lib an continue
+        prompt = true;
     }
     if (dictionary["QMAKESPEC"].endsWith("-g++")
         && dictionary["SQL_OCI"] != "no") {
         cout << "WARNING: Qt does not support compiling the Oracle database driver with" << endl
              << "MinGW, due to lack of such support from Oracle. Consider disabling the" << endl
              << "Oracle driver, as the current build will most likely fail." << endl;
-        cout << "(Press any key to continue..)";
-        if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
-            exit(0);      // Exit cleanly for Ctrl+C
+        prompt = true;
     }
     if (dictionary["QMAKESPEC"].endsWith("win32-msvc.net")) {
         cout << "WARNING: The makespec win32-msvc.net is deprecated. Consider using" << endl
              << "win32-msvc2002 or win32-msvc2003 instead." << endl;
-        cout << "(Press any key to continue..)";
-        if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
-            exit(0);      // Exit cleanly for Ctrl+C
+        prompt = true;
     }
     if (0 != dictionary["ARM_FPU_TYPE"].size()) {
             QStringList l= QStringList()
@@ -2248,11 +2259,38 @@ bool Configure::verifyConfiguration()
     if (dictionary["DIRECTWRITE"] == "yes" && !checkAvailability("DIRECTWRITE")) {
         cout << "WARNING: To be able to compile the DirectWrite font engine you will" << endl
              << "need the Microsoft DirectWrite and Microsoft Direct2D development" << endl
-             << "files such as headers and libraries." << endl
-             << "(Press any key to continue..)";
-        if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
-            exit(0);      // Exit cleanly for Ctrl+C
+             << "files such as headers and libraries." << endl;
+        prompt = true;
     }
+
+    // -angle given on command line, but Direct X cannot be found.
+    if (dictionary["ANGLE"] == "yes") {
+        QString errorMessage;
+        if (!checkAngleAvailability(&errorMessage)) {
+            cout << "WARNING: ANGLE specified, but the DirectX SDK could not be detected:" << endl
+                 << "  " << qPrintable(errorMessage) << endl
+                 <<  "The build will most likely fail." << endl;
+            prompt = true;
+        }
+    } else if (dictionary["ANGLE"] == "no") {
+        if (dictionary["ANGLE_FROM"] == "detected") {
+            QString errorMessage;
+            checkAngleAvailability(&errorMessage);
+            cout << "WARNING: The DirectX SDK could not be detected:" << endl
+                 << "  " << qPrintable(errorMessage) << endl
+                 << "Disabling the ANGLE backend." << endl;
+            prompt = true;
+        }
+        if (dictionary["OPENGL_ES_2"] == "yes") {
+            cout << endl << "WARNING: Using OpenGL ES 2.0 without ANGLE." << endl
+                 << "Specify -opengl desktop to use Open GL." << endl
+                 <<  "The build will most likely fail." << endl;
+            prompt = true;
+        }
+    }
+
+    if (prompt)
+        promptKeyPress();
 
     return true;
 }
@@ -2301,6 +2339,25 @@ void Configure::generateBuildKey()
     // Sorted defines that start with QT_NO_
     QStringList build_defines = qmakeDefines.filter(QRegExp("^QT_NO_"));
     build_defines.sort();
+}
+
+void Configure::generateSystemVars()
+{
+    // Generate an empty .qmake.cache file for config.tests
+    QDir buildDir(buildPath);
+    bool success = true;
+    if (!buildDir.exists("config.tests"))
+        success = buildDir.mkdir("config.tests");
+
+    QString fileName(buildPath + "/config.tests/.qmake.cache");
+    QFile cacheFile(fileName);
+    success &= cacheFile.open(QIODevice::WriteOnly);
+    cacheFile.close();
+
+    if (!success) {
+        cout << "Failed to create file " << qPrintable(QDir::toNativeSeparators(fileName)) << endl;
+        dictionary[ "DONE" ] = "error";
+    }
 }
 
 void Configure::generateOutputVars()
@@ -2560,6 +2617,9 @@ void Configure::generateOutputVars()
     if (dictionary[ "V8SNAPSHOT" ] == "yes")
         qtConfig += "v8snapshot";
 
+    if (dictionary[ "SYSTEM_PROXIES" ] == "yes")
+        qtConfig += "system-proxies";
+
     // Add config levels --------------------------------------------
     QStringList possible_configs = QStringList()
         << "minimal"
@@ -2641,7 +2701,7 @@ void Configure::generateOutputVars()
 
     if (dictionary["QMAKESPEC"].endsWith("-g++")) {
         QString includepath = qgetenv("INCLUDE");
-        bool hasSh = Environment::detectExecutable("sh.exe");
+        const bool hasSh = !QStandardPaths::findExecutable(QStringLiteral("sh.exe")).isEmpty();
         QChar separator = (!includepath.contains(":\\") && hasSh ? QChar(':') : QChar(';'));
         qmakeVars += QString("TMPPATH            = $$quote($$(INCLUDE))");
         qmakeVars += QString("QMAKE_INCDIR_POST += $$split(TMPPATH,\"%1\")").arg(separator);
@@ -2680,7 +2740,6 @@ void Configure::generateCachefile()
         for (QStringList::Iterator var = qmakeVars.begin(); var != qmakeVars.end(); ++var) {
             cacheStream << (*var) << endl;
         }
-        cacheStream << "CONFIG         += " << qmakeConfig.join(' ') << "no_private_qt_headers_warning QTDIR_build" << endl;
 
         cacheStream.flush();
         cacheFile.close();
@@ -2720,7 +2779,7 @@ void Configure::generateCachefile()
         if (!dictionary["DECORATIONS"].isEmpty())
             moduleStream << "decorations += "<<dictionary["DECORATIONS"]<<endl;
 
-        moduleStream << "CONFIG += create_prl link_prl";
+        moduleStream << "CONFIG += " << qmakeConfig.join(' ');
         if (dictionary[ "SSE2" ] == "yes")
             moduleStream << " sse2";
         if (dictionary[ "SSE3" ] == "yes")
@@ -3043,37 +3102,6 @@ QString Configure::addDefine(QString def)
 }
 
 #if !defined(EVAL)
-bool Configure::copySpec(const char *name, const char *pfx, const QString &spec)
-{
-    // "Link" configured mkspec to default directory, but remove the old one first, if there is any
-    QString defSpec = buildPath + "/mkspecs/" + name;
-    QFileInfo defSpecInfo(defSpec);
-    if (defSpecInfo.exists()) {
-        if (!Environment::rmdir(defSpec)) {
-            cout << "Couldn't update default " << pfx << "mkspec! Are files in " << qPrintable(defSpec) << " read-only?" << endl;
-            dictionary["DONE"] = "error";
-            return false;
-        }
-    }
-
-    QDir::current().mkpath(defSpec);
-    QFile qfile(defSpec + "/qmake.conf");
-    if (qfile.open(QFile::WriteOnly | QFile::Text)) {
-        QTextStream fileStream;
-        fileStream.setDevice(&qfile);
-        QString srcSpec = buildPath + "/mkspecs/" + spec; // We copied it to the build dir
-        fileStream << "QMAKESPEC_ORIGINAL = " << formatPath(srcSpec) << endl;
-        fileStream << "include($$QMAKESPEC_ORIGINAL/qmake.conf)" << endl;
-        qfile.close();
-    }
-    if (qfile.error() != QFile::NoError) {
-        cout << "Couldn't update default " << pfx << "mkspec: " << qPrintable(qfile.errorString()) << endl;
-        dictionary["DONE"] = "error";
-        return false;
-    }
-    return true;
-}
-
 void Configure::generateConfigfiles()
 {
     QDir(buildPath).mkpath("src/corelib/global");
@@ -3328,7 +3356,8 @@ void Configure::displayConfig()
     sout << "QtDBus support.............." << dictionary[ "DBUS" ] << endl;
     sout << "QtWidgets module support...." << dictionary[ "WIDGETS" ] << endl;
     sout << "QML debugging..............." << dictionary[ "QML_DEBUG" ] << endl;
-    sout << "DirectWrite support........." << dictionary[ "DIRECTWRITE" ] << endl << endl;
+    sout << "DirectWrite support........." << dictionary[ "DIRECTWRITE" ] << endl;
+    sout << "Use system proxies.........." << dictionary[ "SYSTEM_PROXIES" ] << endl << endl;
 
     sout << "Third Party Libraries:" << endl;
     sout << "    ZLIB support............" << dictionary[ "ZLIB" ] << endl;
@@ -3366,11 +3395,12 @@ void Configure::displayConfig()
     sout << "Install prefix.............." << QDir::toNativeSeparators(dictionary["QT_INSTALL_PREFIX"]) << endl;
     sout << "Headers installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_HEADERS"]) << endl;
     sout << "Libraries installed to......" << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBS"]) << endl;
+    sout << "Arch-dep. data to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_ARCHDATA"]) << endl;
     sout << "Plugins installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_PLUGINS"]) << endl;
     sout << "Imports installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_IMPORTS"]) << endl;
     sout << "Binaries installed to......." << QDir::toNativeSeparators(dictionary["QT_INSTALL_BINS"]) << endl;
+    sout << "Arch-indep. data to........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_DATA"]) << endl;
     sout << "Docs installed to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_DOCS"]) << endl;
-    sout << "Data installed to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_DATA"]) << endl;
     sout << "Translations installed to..." << QDir::toNativeSeparators(dictionary["QT_INSTALL_TRANSLATIONS"]) << endl;
     sout << "Examples installed to......." << QDir::toNativeSeparators(dictionary["QT_INSTALL_EXAMPLES"]) << endl;
     sout << "Tests installed to.........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_TESTS"]) << endl;
@@ -3460,7 +3490,7 @@ void Configure::generateHeaders()
         dictionary["SYNCQT"] = defaultTo("SYNCQT");
 
     if (dictionary["SYNCQT"] == "yes") {
-        if (findFile("perl.exe")) {
+        if (!QStandardPaths::findExecutable(QStringLiteral("perl.exe")).isEmpty()) {
             cout << "Running syncqt..." << endl;
             QStringList args;
             args += buildPath + "/bin/syncqt.bat";
@@ -3478,6 +3508,11 @@ void Configure::generateHeaders()
     }
 }
 
+static QString stripPrefix(const QString &str, const QString &pfx)
+{
+    return str.startsWith(pfx) ? str.mid(pfx.length()) : str;
+}
+
 void Configure::generateQConfigCpp()
 {
     // if QT_INSTALL_* have not been specified on commandline, define them now from QT_INSTALL_PREFIX
@@ -3486,22 +3521,24 @@ void Configure::generateQConfigCpp()
     if (dictionary["QT_INSTALL_PREFIX"].isEmpty())
         qipempty = true;
 
-    if (!dictionary["QT_INSTALL_DOCS"].size())
-        dictionary["QT_INSTALL_DOCS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/doc";
     if (!dictionary["QT_INSTALL_HEADERS"].size())
         dictionary["QT_INSTALL_HEADERS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/include";
     if (!dictionary["QT_INSTALL_LIBS"].size())
         dictionary["QT_INSTALL_LIBS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/lib";
+    if (!dictionary["QT_INSTALL_ARCHDATA"].size())
+        dictionary["QT_INSTALL_ARCHDATA"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"];
     if (!dictionary["QT_INSTALL_BINS"].size())
         dictionary["QT_INSTALL_BINS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/bin";
     if (!dictionary["QT_INSTALL_PLUGINS"].size())
-        dictionary["QT_INSTALL_PLUGINS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/plugins";
+        dictionary["QT_INSTALL_PLUGINS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/plugins";
     if (!dictionary["QT_INSTALL_IMPORTS"].size())
-        dictionary["QT_INSTALL_IMPORTS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/imports";
+        dictionary["QT_INSTALL_IMPORTS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/imports";
     if (!dictionary["QT_INSTALL_DATA"].size())
         dictionary["QT_INSTALL_DATA"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"];
+    if (!dictionary["QT_INSTALL_DOCS"].size())
+        dictionary["QT_INSTALL_DOCS"] = qipempty ? "" : dictionary["QT_INSTALL_DATA"] + "/doc";
     if (!dictionary["QT_INSTALL_TRANSLATIONS"].size())
-        dictionary["QT_INSTALL_TRANSLATIONS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/translations";
+        dictionary["QT_INSTALL_TRANSLATIONS"] = qipempty ? "" : dictionary["QT_INSTALL_DATA"] + "/translations";
     if (!dictionary["QT_INSTALL_EXAMPLES"].size())
         dictionary["QT_INSTALL_EXAMPLES"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/examples";
     if (!dictionary["QT_INSTALL_TESTS"].size())
@@ -3515,11 +3552,15 @@ void Configure::generateQConfigCpp()
     if (dictionary["QT_HOST_BINS"].isEmpty())
         dictionary["QT_HOST_BINS"] = haveHpx ? dictionary["QT_HOST_PREFIX"] + "/bin" : dictionary["QT_INSTALL_BINS"];
     if (dictionary["QT_HOST_DATA"].isEmpty())
-        dictionary["QT_HOST_DATA"] = haveHpx ? dictionary["QT_HOST_PREFIX"] : dictionary["QT_INSTALL_DATA"];
+        dictionary["QT_HOST_DATA"] = haveHpx ? dictionary["QT_HOST_PREFIX"] : dictionary["QT_INSTALL_ARCHDATA"];
 
     // Generate the new qconfig.cpp file
     QDir(buildPath).mkpath("src/corelib/global");
     const QString outName(buildPath + "/src/corelib/global/qconfig.cpp");
+
+    QString specPfx = dictionary["QT_HOST_DATA"] + "/mkspecs/";
+    QString hostSpec = stripPrefix(dictionary["QMAKESPEC"], specPfx);
+    QString targSpec = dictionary.contains("XQMAKESPEC") ? stripPrefix(dictionary["XQMAKESPEC"], specPfx) : hostSpec;
 
     QTemporaryFile tmpFile;
     if (tmpFile.open()) {
@@ -3539,6 +3580,7 @@ void Configure::generateQConfigCpp()
                   << "    \"qt_binspath=" << formatPath(dictionary["QT_INSTALL_BINS"]) << "\","  << endl
                   << "    \"qt_plugpath=" << formatPath(dictionary["QT_INSTALL_PLUGINS"]) << "\","  << endl
                   << "    \"qt_impspath=" << formatPath(dictionary["QT_INSTALL_IMPORTS"]) << "\","  << endl
+                  << "    \"qt_adatpath=" << formatPath(dictionary["QT_INSTALL_ARCHDATA"]) << "\","  << endl
                   << "    \"qt_datapath=" << formatPath(dictionary["QT_INSTALL_DATA"]) << "\","  << endl
                   << "    \"qt_trnspath=" << formatPath(dictionary["QT_INSTALL_TRANSLATIONS"]) << "\"," << endl
                   << "    \"qt_xmplpath=" << formatPath(dictionary["QT_INSTALL_EXAMPLES"]) << "\","  << endl
@@ -3548,6 +3590,8 @@ void Configure::generateQConfigCpp()
                   << "    \"qt_hpfxpath=" << formatPath(dictionary["QT_HOST_PREFIX"]) << "\"," << endl
                   << "    \"qt_hbinpath=" << formatPath(dictionary["QT_HOST_BINS"]) << "\"," << endl
                   << "    \"qt_hdatpath=" << formatPath(dictionary["QT_HOST_DATA"]) << "\"," << endl
+                  << "    \"qt_targspec=" << targSpec << "\"," << endl
+                  << "    \"qt_hostspec=" << hostSpec << "\"," << endl
                   << "#endif" << endl
                   << "};" << endl;
 
@@ -3658,14 +3702,6 @@ void Configure::buildQmake()
 
         confStream.flush();
         confFile.close();
-    }
-
-    //create default mkspecs
-    QString spec = dictionary.contains("XQMAKESPEC") ? dictionary["XQMAKESPEC"] : dictionary["QMAKESPEC"];
-    if (!copySpec("default", "", spec)
-        || !copySpec("default-host", "host ", dictionary["QMAKESPEC"])) {
-        cout << "Error installing default mkspecs" << endl << endl;
-        exit(EXIT_FAILURE);
     }
 
 }
@@ -3931,9 +3967,7 @@ bool Configure::showLicense(QString orgLicenseFile)
             while (i < licenseContent.size()) {
                 cout << licenseContent.at(i) << endl;
                 if (++i % screenHeight == 0) {
-                    cout << "(Press any key for more..)";
-                    if (_getch() == 3) // _Any_ keypress w/no echo(eat <Enter> for stdout)
-                        exit(0);      // Exit cleanly for Ctrl+C
+                    promptKeyPress();
                     cout << "\r";     // Overwrite text above
                 }
             }

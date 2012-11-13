@@ -82,10 +82,8 @@
 #include <time.h>
 #endif
 
-#ifdef Q_WS_MAC
-#include <Carbon/Carbon.h> // for SetFrontProcess
+#ifdef Q_OS_MAC
 #include <IOKit/pwr_mgt/IOPMLib.h>
-#undef verify
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -1203,12 +1201,15 @@ Q_TESTLIB_EXPORT bool printAvailableFunctions = false;
 Q_TESTLIB_EXPORT QStringList testFunctions;
 Q_TESTLIB_EXPORT QStringList testTags;
 
-static void qPrintTestSlots(FILE *stream)
+static void qPrintTestSlots(FILE *stream, const char *filter = 0)
 {
     for (int i = 0; i < QTest::currentTestObject->metaObject()->methodCount(); ++i) {
         QMetaMethod sl = QTest::currentTestObject->metaObject()->method(i);
-        if (isValidSlot(sl))
-            fprintf(stream, "%s\n", sl.methodSignature().constData());
+        if (isValidSlot(sl)) {
+            const QByteArray signature = sl.methodSignature();
+            if (!filter || QString::fromLatin1(signature).contains(QLatin1String(filter), Qt::CaseInsensitive))
+                fprintf(stream, "%s\n", signature.constData());
+        }
     }
 }
 
@@ -1570,9 +1571,10 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
             qsnprintf(buf + off, qMin(512 - off, 3), "()");    // append "()"
             int idx = QTest::currentTestObject->metaObject()->indexOfMethod(buf);
             if (idx < 0 || !isValidSlot(QTest::currentTestObject->metaObject()->method(idx))) {
-                fprintf(stderr, "Unknown testfunction: '%s'\n", buf);
-                fprintf(stderr, "Available testfunctions:\n");
-                qPrintTestSlots(stderr);
+                fprintf(stderr, "Unknown test function: '%s'. Possible matches:\n", buf);
+                buf[off] = 0;
+                qPrintTestSlots(stderr, buf);
+                fprintf(stderr, "\n%s -functions\nlists all available test functions.\n", argv[0]);
                 exit(1);
             }
             testFuncs[testFuncCount].set(idx, data);
@@ -2076,7 +2078,7 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
     int callgrindChildExitCode = 0;
 #endif
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     bool macNeedsActivate = qApp && (qstrcmp(qApp->metaObject()->className(), "QApplication") == 0);
     IOPMAssertionID powerID;
 #endif
@@ -2091,14 +2093,11 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
     SetErrorMode(SetErrorMode(0) | SEM_NOGPFAULTERRORBOX);
 #endif
 
-#ifdef Q_WS_MAC
-    // Starting with Qt 4.4, applications launched from the command line
-    // no longer get focus automatically. Since some tests might depend
-    // on this, call SetFrontProcess here to get the pre 4.4 behavior.
+#ifdef Q_OS_MAC
     if (macNeedsActivate) {
-        ProcessSerialNumber psn = { 0, kCurrentProcess };
-        SetFrontProcess(&psn);
-        IOReturn ok = IOPMAssertionCreate(kIOPMAssertionTypeNoDisplaySleep, kIOPMAssertionLevelOn, &powerID);
+        CFStringRef reasonForActivity= CFSTR("No Display Sleep");
+        IOReturn ok = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep, kIOPMAssertionLevelOn, reasonForActivity, &powerID);
+
         if (ok != kIOReturnSuccess)
             macNeedsActivate = false; // no need to release the assertion on exit.
     }
@@ -2147,7 +2146,7 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
          }
 
         QTestLog::stopLogging();
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
          if (macNeedsActivate) {
              IOPMAssertionRelease(powerID);
          }
@@ -2164,7 +2163,7 @@ int QTest::qExec(QObject *testObject, int argc, char **argv)
 
     QSignalDumper::endDump();
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
      if (macNeedsActivate) {
          IOPMAssertionRelease(powerID);
      }

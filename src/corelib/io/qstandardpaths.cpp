@@ -44,8 +44,11 @@
 #include <qdir.h>
 #include <qfileinfo.h>
 #include <qhash.h>
+
+#ifndef QT_BOOTSTRAPPED
 #include <qobject.h>
 #include <qcoreapplication.h>
+#endif
 
 #ifndef QT_NO_STANDARDPATHS
 
@@ -272,7 +275,7 @@ QString QStandardPaths::findExecutable(const QString &executableName, const QStr
         searchPaths.reserve(rawPaths.size());
         foreach (const QString &rawPath, rawPaths) {
             QString cleanPath = QDir::cleanPath(rawPath);
-            if (cleanPath.size() > 1 && cleanPath.endsWith('/'))
+            if (cleanPath.size() > 1 && cleanPath.endsWith(QLatin1Char('/')))
                 cleanPath.truncate(cleanPath.size() - 1);
             searchPaths.push_back(cleanPath);
         }
@@ -300,7 +303,7 @@ QString QStandardPaths::findExecutable(const QString &executableName, const QStr
     an empty QString if no relevant location can be found.
 */
 
-#ifndef Q_OS_MAC
+#if !defined(Q_OS_MAC) && !defined(QT_BOOTSTRAPPED)
 QString QStandardPaths::displayName(StandardLocation type)
 {
     switch (type) {

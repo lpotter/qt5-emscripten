@@ -261,14 +261,15 @@ static const struct {
     char key[14], value[13];
 } qtConfEntries[] = {
     { "Prefix", "." },
-    { "Documentation", "doc" },
+    { "Documentation", "doc" }, // should be ${Data}/doc
     { "Headers", "include" },
     { "Libraries", "lib" },
     { "Binaries", "bin" },
-    { "Plugins", "plugins" },
-    { "Imports", "imports" },
+    { "Plugins", "plugins" }, // should be ${ArchData}/plugins
+    { "Imports", "imports" }, // should be ${ArchData}/imports
+    { "ArchData", "." },
     { "Data", "." },
-    { "Translations", "translations" },
+    { "Translations", "translations" }, // should be ${Data}/translations
     { "Examples", "examples" },
     { "Tests", "tests" },
 #ifdef QT_BOOTSTRAPPED
@@ -276,6 +277,8 @@ static const struct {
     { "HostPrefix", "" },
     { "HostBinaries", "bin" },
     { "HostData", "." },
+    { "TargetSpec", "" },
+    { "HostSpec", "" },
 #endif
 };
 
@@ -323,7 +326,7 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
 #endif
     {
         const char *path = 0;
-        if (loc >= 0 && loc < sizeof(qt_configure_prefix_path_strs)/sizeof(qt_configure_prefix_path_strs[0]))
+        if (unsigned(loc) < sizeof(qt_configure_prefix_path_strs)/sizeof(qt_configure_prefix_path_strs[0]))
             path = qt_configure_prefix_path_strs[loc] + 12;
 #ifndef Q_OS_WIN // On Windows we use the registry
         else if (loc == SettingsPath)
@@ -336,7 +339,7 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
     } else {
         QString key;
         QString defaultValue;
-        if (loc >= 0 && loc < sizeof(qtConfEntries)/sizeof(qtConfEntries[0])) {
+        if (unsigned(loc) < sizeof(qtConfEntries)/sizeof(qtConfEntries[0])) {
             key = QLatin1String(qtConfEntries[loc].key);
             defaultValue = QLatin1String(qtConfEntries[loc].value);
         }
@@ -356,9 +359,13 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
             ret = config->value(key, defaultValue).toString();
 
 #ifdef QT_BOOTSTRAPPED
-            if (ret.isEmpty() && loc == HostPrefixPath)
-                ret = config->value(QLatin1String(qtConfEntries[PrefixPath].key),
-                                    QLatin1String(qtConfEntries[PrefixPath].value)).toString();
+            if (ret.isEmpty()) {
+                if (loc == HostPrefixPath)
+                    ret = config->value(QLatin1String(qtConfEntries[PrefixPath].key),
+                                        QLatin1String(qtConfEntries[PrefixPath].value)).toString();
+                else if (loc == TargetSpecPath || loc == HostSpecPath)
+                    ret = QString::fromLocal8Bit(qt_configure_prefix_path_strs[loc] + 12);
+            }
 #endif
 
             // expand environment variables in the form $(ENVVAR)
@@ -377,6 +384,12 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
         }
 #endif // QT_NO_SETTINGS
     }
+
+#ifdef QT_BOOTSTRAPPED
+    // The specs need to be returned verbatim.
+    if (loc == TargetSpecPath || loc == HostSpecPath)
+        return ret;
+#endif
 
     if (!ret.isEmpty() && QDir::isRelativePath(ret)) {
         QString baseDir;
@@ -432,7 +445,8 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
     \value BinariesPath The location of installed Qt binaries (tools and applications).
     \value PluginsPath The location of installed Qt plugins.
     \value ImportsPath The location of installed QML extensions to import.
-    \value DataPath The location of general Qt data.
+    \value ArchDataPath The location of general architecture-dependent Qt data.
+    \value DataPath The location of general architecture-independent Qt data.
     \value TranslationsPath The location of translation information for Qt strings.
     \value ExamplesPath The location for examples upon install.
     \value TestsPath The location of installed Qt testcases.

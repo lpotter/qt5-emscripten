@@ -902,7 +902,6 @@ bool QApplication::compressEvent(QEvent *event, QObject *receiver, QPostEventLis
           || event->type() == QEvent::Resize
           || event->type() == QEvent::Move
           || event->type() == QEvent::LanguageChange
-          || event->type() == QEvent::UpdateSoftKeys
           || event->type() == QEvent::InputMethod)) {
         for (QPostEventList::const_iterator it = postedEvents->constBegin(); it != postedEvents->constEnd(); ++it) {
             const QPostEvent &cur = *it;
@@ -916,8 +915,6 @@ bool QApplication::compressEvent(QEvent *event, QObject *receiver, QPostEventLis
             } else if (cur.event->type() == QEvent::Move) {
                 ((QMoveEvent *)(cur.event))->p = ((QMoveEvent *)event)->p;
             } else if (cur.event->type() == QEvent::LanguageChange) {
-                ;
-            } else if (cur.event->type() == QEvent::UpdateSoftKeys) {
                 ;
             } else if ( cur.event->type() == QEvent::InputMethod ) {
                 *(QInputMethodEvent *)(cur.event) = *(QInputMethodEvent *)event;
@@ -2117,20 +2114,23 @@ QWidget *QApplicationPrivate::focusNextPrevChild_helper(QWidget *toplevel, bool 
 }
 
 /*!
-    \fn void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave)
+    \fn void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave, const QPointF &globalPosF)
     \internal
 
     Creates the proper Enter/Leave event when widget \a enter is entered and
     widget \a leave is left.
  */
-void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave) {
+void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave, const QPointF &globalPosF)
+{
+    const QPoint globalPos = globalPosF.toPoint();
 #if 0
     if (leave) {
         QEvent e(QEvent::Leave);
         QApplication::sendEvent(leave, & e);
     }
     if (enter) {
-        QEvent e(QEvent::Enter);
+        const QPoint windowPos = enter->window()->mapFromGlobal(globalPos);
+        QEnterEvent e(enter->mapFromGlobal(globalPos), windowPos, globalPos);
         QApplication::sendEvent(enter, & e);
     }
     return;
@@ -2208,17 +2208,20 @@ void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave) {
             }
         }
     }
-    QPoint posEnter = QCursor::pos();
-    QEvent enterEvent(QEvent::Enter);
-    for (int i = 0; i < enterList.size(); ++i) {
-        w = enterList.at(i);
-        if (!QApplication::activeModalWidget() || QApplicationPrivate::tryModalHelper(w, 0)) {
-            QApplication::sendEvent(w, &enterEvent);
-            if (w->testAttribute(Qt::WA_Hover) &&
-                (!QApplication::activePopupWidget() || QApplication::activePopupWidget() == w->window())) {
-                QHoverEvent he(QEvent::HoverEnter, w->mapFromGlobal(posEnter), QPoint(-1, -1),
-                               QApplication::keyboardModifiers());
-                qApp->d_func()->notify_helper(w, &he);
+    if (!enterList.isEmpty()) {
+        const QPoint windowPos = enterList.front()->window()->mapFromGlobal(globalPos);
+        for (int i = 0; i < enterList.size(); ++i) {
+            w = enterList.at(i);
+            if (!QApplication::activeModalWidget() || QApplicationPrivate::tryModalHelper(w, 0)) {
+                const QPointF localPos = w->mapFromGlobal(globalPos);
+                QEnterEvent enterEvent(localPos, windowPos, globalPosF);
+                QApplication::sendEvent(w, &enterEvent);
+                if (w->testAttribute(Qt::WA_Hover) &&
+                        (!QApplication::activePopupWidget() || QApplication::activePopupWidget() == w->window())) {
+                    QHoverEvent he(QEvent::HoverEnter, localPos, QPoint(-1, -1),
+                                   QApplication::keyboardModifiers());
+                    qApp->d_func()->notify_helper(w, &he);
+                }
             }
         }
     }
@@ -2334,7 +2337,7 @@ bool QApplicationPrivate::isWindowBlocked(QWindow *window, QWindow **blockingWin
                 return false;
         }
 
-        Qt::WindowModality windowModality = modalWindow->windowModality();
+        Qt::WindowModality windowModality = modalWindow->modality();
         QWidgetWindow *modalWidgetWindow = qobject_cast<QWidgetWindow *>(modalWindow);
         if (windowModality == Qt::NonModal) {
             // determine the modality type if it hasn't been set on the
@@ -2485,6 +2488,12 @@ bool QApplicationPrivate::sendMouseEvent(QWidget *receiver, QMouseEvent *event,
 
     bool widgetUnderMouse = QRectF(receiver->rect()).contains(event->localPos());
 
+    // Clear the obsolete leaveAfterRelease value, if mouse button has been released but
+    // leaveAfterRelease has not been updated.
+    // This happens e.g. when modal dialog or popup is shown as a response to button click.
+    if (leaveAfterRelease && !*buttonDown && !event->buttons())
+        leaveAfterRelease = 0;
+
     if (*buttonDown) {
         if (!graphicsWidget) {
             // Register the widget that shall receive a leave event
@@ -2503,9 +2512,9 @@ bool QApplicationPrivate::sendMouseEvent(QWidget *receiver, QMouseEvent *event,
             || (isAlien(lastMouseReceiver) && !alienWidget)) {
             if (activePopupWidget) {
                 if (!QWidget::mouseGrabber())
-                    dispatchEnterLeave(alienWidget ? alienWidget : nativeWidget, lastMouseReceiver);
+                    dispatchEnterLeave(alienWidget ? alienWidget : nativeWidget, lastMouseReceiver, event->screenPos());
             } else {
-                dispatchEnterLeave(receiver, lastMouseReceiver);
+                dispatchEnterLeave(receiver, lastMouseReceiver, event->screenPos());
             }
 
         }
@@ -2537,7 +2546,7 @@ bool QApplicationPrivate::sendMouseEvent(QWidget *receiver, QMouseEvent *event,
             enter = alienGuard ? alienWidget : nativeWidget;
         else // The receiver is typically deleted on mouse release with drag'n'drop.
             enter = QApplication::widgetAt(event->globalPos());
-        dispatchEnterLeave(enter, leaveAfterRelease);
+        dispatchEnterLeave(enter, leaveAfterRelease, event->screenPos());
         leaveAfterRelease = 0;
         lastMouseReceiver = enter;
     } else if (!wasLeaveAfterRelease) {

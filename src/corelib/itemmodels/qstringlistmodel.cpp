@@ -47,6 +47,8 @@
 
 #include <QtCore/qvector.h>
 
+#include <algorithm>
+
 #ifndef QT_NO_STRINGLISTMODEL
 
 QT_BEGIN_NAMESPACE
@@ -124,6 +126,17 @@ int QStringListModel::rowCount(const QModelIndex &parent) const
         return 0;
 
     return lst.count();
+}
+
+/*!
+  \reimp
+*/
+QModelIndex QStringListModel::sibling(int row, int column, const QModelIndex &idx) const
+{
+    if (!idx.isValid() || column != 0 || row >= lst.count())
+        return QModelIndex();
+
+    return createIndex(row, 0);
 }
 
 /*!
@@ -256,9 +269,9 @@ void QStringListModel::sort(int, Qt::SortOrder order)
         list.append(QPair<QString, int>(lst.at(i), i));
 
     if (order == Qt::AscendingOrder)
-        qSort(list.begin(), list.end(), ascendingLessThan);
+        std::sort(list.begin(), list.end(), ascendingLessThan);
     else
-        qSort(list.begin(), list.end(), decendingLessThan);
+        std::sort(list.begin(), list.end(), decendingLessThan);
 
     lst.clear();
     QVector<int> forwarding(list.count());

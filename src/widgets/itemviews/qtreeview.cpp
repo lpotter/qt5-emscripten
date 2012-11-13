@@ -58,6 +58,7 @@
 #endif
 
 #include <private/qtreeview_p.h>
+#include <private/qheaderview_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -313,6 +314,7 @@ void QTreeView::setHeader(QHeaderView *header)
         delete d->header;
     d->header = header;
     d->header->setParent(this);
+    d->header->d_func()->setAllowUserMoveOfSection0(false);
 
     if (!d->header->model()) {
         d->header->setModel(d->model);
@@ -1716,7 +1718,7 @@ void QTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
         // we have to split the focus rect into two rects
         if (allColumnsShowFocus && !option.showDecorationSelected
             && header->sectionsMoved() && (header->visualIndex(0) != 0)) {
-	    QRect sectionRect(0, y, header->sectionPosition(0), height); 
+	    QRect sectionRect(0, y, header->sectionPosition(0), height);
             o.rect = style()->visualRect(layoutDirection(), d->viewport->rect(), sectionRect);
             style()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, painter);
         }

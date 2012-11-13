@@ -1,18 +1,12 @@
 option(host_build)
-TEMPLATE = lib
-TARGET = bootstrap
-CONFIG += static
 
-CONFIG += console qtinc 
-CONFIG -= qt
-CONFIG += exceptions_off
-!build_pass:contains(QT_CONFIG, build_all):CONFIG += release
-mac:CONFIG -= app_bundle incremental
+TARGET = QtBootstrap
+QT =
+CONFIG += no_module_headers internal_module
 
-DEFINES += \
+MODULE_DEFINES = \
         QT_BOOTSTRAPPED \
         QT_LITE_UNICODE \
-        QT_NO_CAST_FROM_ASCII \
         QT_NO_CAST_TO_ASCII \
         QT_NO_CODECS \
         QT_NO_DATASTREAM \
@@ -23,13 +17,28 @@ DEFINES += \
         QT_NO_UNICODETABLES \
         QT_NO_USING_NAMESPACE \
         QT_NO_DEPRECATED \
+        QT_NO_TRANSLATION \
         QT_QMAKE_LOCATION=\\\"$$QMAKE_QMAKE\\\"
 
-INCLUDEPATH += $$QT_BUILD_TREE/include \
-            $$QT_BUILD_TREE/include/QtCore \
-            $$QT_BUILD_TREE/include/QtCore/$$QT_VERSION \
-            $$QT_BUILD_TREE/include/QtCore/$$QT_VERSION/QtCore \
-            $$QT_BUILD_TREE/src/corelib/global
+DEFINES += \
+    $$MODULE_DEFINES \
+    QT_NO_CAST_FROM_ASCII
+
+MODULE_CONFIG = console -app_bundle release
+MODULE_PRIVATE_INCLUDES = \
+    \$\$QT_MODULE_INCLUDE_BASE \
+    \$\$QT_MODULE_INCLUDE_BASE/QtCore \
+    \$\$QT_MODULE_INCLUDE_BASE/QtCore/$$QT_VERSION \
+    \$\$QT_MODULE_INCLUDE_BASE/QtCore/$$QT_VERSION/QtCore \
+    \$\$QT_MODULE_INCLUDE_BASE/QtXml \
+    \$\$QT_MODULE_INCLUDE_BASE/QtXml/$$QT_VERSION \
+    \$\$QT_MODULE_INCLUDE_BASE/QtXml/$$QT_VERSION/QtXml
+
+qtProcessModuleFlags(CONFIG, MODULE_CONFIG)
+
+load(qt_module)
+
+INCLUDEPATH += $$QT_BUILD_TREE/src/corelib/global
 
 DEPENDPATH += $$INCLUDEPATH \
               ../../corelib/global \
@@ -37,7 +46,9 @@ DEPENDPATH += $$INCLUDEPATH \
               ../../corelib/tools \
               ../../corelib/io \
               ../../corelib/codecs \
-              ../../corelib/json
+              ../../corelib/json \
+              ../../xml/dom \
+              ../../xml/sax
 
 SOURCES += \
            ../../corelib/codecs/qlatincodec.cpp \
@@ -76,6 +87,7 @@ SOURCES += \
            ../../corelib/tools/qdatetime.cpp \
            ../../corelib/tools/qhash.cpp \
            ../../corelib/tools/qlist.cpp \
+           ../../corelib/tools/qlinkedlist.cpp \
            ../../corelib/tools/qlocale.cpp \
            ../../corelib/tools/qlocale_tools.cpp \
            ../../corelib/tools/qmap.cpp \
@@ -96,7 +108,9 @@ SOURCES += \
            ../../corelib/json/qjsonarray.cpp \
            ../../corelib/json/qjsonvalue.cpp \
            ../../corelib/json/qjsonparser.cpp \
-           ../../corelib/json/qjsonwriter.cpp
+           ../../corelib/json/qjsonwriter.cpp \
+           ../../xml/dom/qdom.cpp \
+           ../../xml/sax/qxml.cpp
 
 unix:SOURCES += ../../corelib/io/qfilesystemengine_unix.cpp \
                 ../../corelib/io/qfilesystemiterator_unix.cpp \
@@ -114,9 +128,12 @@ macx: {
               ../../corelib/kernel/qcore_mac.cpp
    LIBS += -framework CoreServices
 }
+*-g++*: QMAKE_CXXFLAGS += -ffunction-sections
 
 if(contains(QT_CONFIG, zlib)|cross_compile):include(../../3rdparty/zlib.pri)
 else:include(../../3rdparty/zlib_dependency.pri)
+
+win32:LIBS += -luser32 -lole32 -ladvapi32
 
 lib.CONFIG = dummy_install
 INSTALLS += lib

@@ -1,23 +1,16 @@
 option(host_build)
 TEMPLATE = app
 TARGET = qdoc
+QT = bootstrap-private
 
 DESTDIR = ../../../bin
 DEFINES += QDOC2_COMPAT
 
-include(../bootstrap/bootstrap.pri)
-DEFINES -= QT_NO_CAST_FROM_ASCII
-DEFINES += QT_NO_TRANSLATION
-
 INCLUDEPATH += $$QT_SOURCE_TREE/src/tools/qdoc \
-               $$QT_SOURCE_TREE/src/tools/qdoc/qmlparser \
-               $$QT_BUILD_TREE/include/QtXml \
-               $$QT_BUILD_TREE/include/QtXml/$$QT_VERSION \
-               $$QT_BUILD_TREE/include/QtXml/$$QT_VERSION/QtXml
+               $$QT_SOURCE_TREE/src/tools/qdoc/qmlparser
 
 DEPENDPATH += $$QT_SOURCE_TREE/src/tools/qdoc \
-              $$QT_SOURCE_TREE/src/tools/qdoc/qmlparser \
-              $$QT_SOURCE_TREE/src/xml
+              $$QT_SOURCE_TREE/src/tools/qdoc/qmlparser
 
 # Increase the stack size on MSVC to 4M to avoid a stack overflow
 win32-msvc*:{
@@ -79,9 +72,7 @@ SOURCES += atom.cpp \
            tokenizer.cpp \
            tree.cpp \
            yyindent.cpp \
-           ../../corelib/tools/qcryptographichash.cpp \
-           ../../xml/dom/qdom.cpp \
-           ../../xml/sax/qxml.cpp
+           ../../corelib/tools/qcryptographichash.cpp
 
 ### QML/JS Parser ###
 

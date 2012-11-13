@@ -1136,7 +1136,10 @@ void tst_QLocale::macDefaultLocale()
     QCOMPARE(locale.decimalPoint(), QChar('.'));
     QCOMPARE(locale.groupSeparator(), QChar(','));
     QCOMPARE(locale.dateFormat(QLocale::ShortFormat), QString("M/d/yy"));
-    QCOMPARE(locale.dateFormat(QLocale::LongFormat), QString("MMMM d, yyyy"));
+    if (QSysInfo::MacintoshVersion > QSysInfo::MV_10_6)
+        QCOMPARE(locale.dateFormat(QLocale::LongFormat), QString("MMMM d, y"));
+    else
+        QCOMPARE(locale.dateFormat(QLocale::LongFormat), QString("MMMM d, yyyy"));
     QCOMPARE(locale.timeFormat(QLocale::ShortFormat), QString("h:mm AP"));
     QCOMPARE(locale.timeFormat(QLocale::LongFormat), QString("h:mm:ss AP t"));
 
@@ -1162,6 +1165,7 @@ void tst_QLocale::macDefaultLocale()
     const QString timeString = locale.toString(QTime(1,2,3), QLocale::LongFormat);
     QVERIFY(timeString.contains(QString("1:02:03")));
 
+    // System Preferences->Language & Text, Region Tab, should choose "United States" for Region field
     QCOMPARE(locale.toCurrencyString(qulonglong(1234)), QString("$1,234.00"));
     QCOMPARE(locale.toCurrencyString(qlonglong(-1234)), QString("($1,234.00)"));
     QCOMPARE(locale.toCurrencyString(double(1234.56)), QString("$1,234.56"));

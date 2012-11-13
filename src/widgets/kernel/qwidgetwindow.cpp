@@ -205,6 +205,12 @@ bool QWidgetWindow::event(QEvent *event)
         handleContextMenuEvent(static_cast<QContextMenuEvent *>(event));
         return true;
 #endif
+
+    // Handing show events to widgets (see below) here would cause them to be triggered twice
+    case QEvent::Show:
+    case QEvent::Hide:
+        return QWindow::event(event);
+
     default:
         break;
     }
@@ -224,6 +230,7 @@ void QWidgetWindow::handleEnterLeaveEvent(QEvent *event)
         QWindowSystemInterfacePrivate::EnterEvent *systemEvent =
             static_cast<QWindowSystemInterfacePrivate::EnterEvent *>
             (QWindowSystemInterfacePrivate::peekWindowSystemEvent(QWindowSystemInterfacePrivate::Enter));
+        const QPointF globalPosF = systemEvent ? systemEvent->globalPos : QGuiApplicationPrivate::lastCursorPosition;
         if (systemEvent) {
             if (QWidgetWindow *enterWindow = qobject_cast<QWidgetWindow *>(systemEvent->enter))
             {
@@ -234,6 +241,7 @@ void QWidgetWindow::handleEnterLeaveEvent(QEvent *event)
                 while (enterParent->parent())
                     enterParent = enterParent->parent();
                 if (thisParent == enterParent) {
+                    QGuiApplicationPrivate::currentMouseWindow = enterWindow;
                     enter = enterWindow->widget();
                     QWindowSystemInterfacePrivate::removeWindowSystemEvent(systemEvent);
                 }
@@ -243,12 +251,17 @@ void QWidgetWindow::handleEnterLeaveEvent(QEvent *event)
         // both native and non-native widgets work similarly.
         // When mousegrabbing, leaves are only generated if leaving the parent window.
         if (!enter || !QWidget::mouseGrabber()) {
-            QWidget *leave = qt_last_mouse_receiver ? qt_last_mouse_receiver.data() : m_widget;
-            QApplicationPrivate::dispatchEnterLeave(enter, leave);
+            // Preferred leave target is the last mouse receiver, unless it has native window,
+            // in which case it is assumed to receive it's own leave event when relevant.
+            QWidget *leave = m_widget;
+            if (qt_last_mouse_receiver && !qt_last_mouse_receiver->internalWinId())
+                leave = qt_last_mouse_receiver.data();
+            QApplicationPrivate::dispatchEnterLeave(enter, leave, globalPosF);
             qt_last_mouse_receiver = enter;
         }
     } else {
-        QApplicationPrivate::dispatchEnterLeave(m_widget, 0);
+        const QEnterEvent *ee = static_cast<QEnterEvent *>(event);
+        QApplicationPrivate::dispatchEnterLeave(m_widget, 0, ee->screenPos());
         qt_last_mouse_receiver = m_widget;
     }
 }

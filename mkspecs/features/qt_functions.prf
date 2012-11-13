@@ -14,6 +14,11 @@ defineReplace(qtLibraryTarget) {
    mac:!static:contains(QT_CONFIG, qt_framework) {
       QMAKE_FRAMEWORK_BUNDLE_NAME = $$LIBRARY_NAME
       export(QMAKE_FRAMEWORK_BUNDLE_NAME)
+   } else {
+       # insert the major version in the library name
+       # unless it's a framework build
+       MAJOR_VERSION = $$section(VERSION, ., 0, 0)
+       LIBRARY_NAME ~= s,^Qt,Qt$$MAJOR_VERSION,
    }
    unset(LIBRARY_SUFFIX)
    contains(TEMPLATE, .*lib):LIBRARY_SUFFIX = $$qtPlatformTargetSuffix()
@@ -35,6 +40,17 @@ defineTest(qtAddLibrary) {
     error("No module matching library '$$1' found.")
 }
 
+# target variable, flag source variable
+defineTest(qtProcessModuleFlags) {
+    for(flag, $$2) {
+        contains(flag, ^-.*): \
+            $$1 -= $$replace(flag, ^-, )
+        else: \
+            $$1 += $$flag
+    }
+    export($$1)
+}
+
 # qt module, UsePrivate flag, libs variable
 defineTest(qtAddModule) {
     MODULE_NAME = $$eval(QT.$${1}.name)
@@ -43,8 +59,8 @@ defineTest(qtAddModule) {
     MODULE_CONFIG = $$eval(QT.$${1}.module_config)
     MODULE_MAJOR_VERSION = $$eval(QT.$${1}.MAJOR_VERSION)
 
-    CONFIG += $$eval(QT.$${1}.CONFIG)
-    DEFINES += $$eval(QT.$${1}.DEFINES)
+    qtProcessModuleFlags(CONFIG, QT.$${1}.CONFIG)
+    qtProcessModuleFlags(DEFINES, QT.$${1}.DEFINES)
 
     MODULE_INCLUDES -= $$QMAKE_DEFAULT_INCDIRS
     MODULE_LIBS -= $$QMAKE_DEFAULT_LIBDIRS
@@ -68,12 +84,17 @@ defineTest(qtAddModule) {
         }
     }
 
+    # Re-insert the major version in the library name (cf qtLibraryTarget above)
+    # unless it's a framework build
+    !mac|!contains(MODULE_CONFIG, lib_bundle): \
+        MODULE_NAME ~= s,^Qt,Qt$$MODULE_MAJOR_VERSION,
+
     win32 {
-        # Make sure we link against the version pulled from the module's .pri
+        # Make sure the version number isn't appended again to the lib name
         ver_var    = QMAKE_$${upper($$MODULE_NAME$$QT_LIBINFIX)}_VERSION_OVERRIDE
         dver_var   = QMAKE_$${upper($$MODULE_NAME$$QT_LIBINFIX)}D_VERSION_OVERRIDE
-        $$ver_var  = $$MODULE_MAJOR_VERSION
-        $$dver_var = $$MODULE_MAJOR_VERSION
+        $$ver_var  = 0
+        $$dver_var = 0
         export($$ver_var)
         export($$dver_var)
     }
@@ -88,11 +109,7 @@ defineTest(qtAddModule) {
        isEmpty(lib): lib = -l$${MODULE_NAME}$${QT_LIBINFIX}
        LINKAGE += $$lib
 
-       contains(QT_CONFIG, rpath) {
-           rpath = $$eval(QT.$${1}.rpath)
-           isEmpty(rpath): rpath = $$MODULE_LIBS
-           QMAKE_RPATHDIR *= $$rpath
-       }
+       contains(QT_CONFIG, rpath): QMAKE_RPATHDIR *= $$eval(QT.$${1}.rpath)
 
        # Make sure we can link to uninstalled libraries
        unix:!mac:!isEmpty(QT.$${1}.libs) { # Use unmodified path, so /usr/lib also works
@@ -113,8 +130,6 @@ defineTest(qtAddModule) {
         }
         $$3 += $$LINKAGE
     }
-    export(CONFIG)
-    export(DEFINES)
     export($$3)
     export(INCLUDEPATH)
     export(QMAKE_FRAMEWORKPATH)
@@ -210,29 +225,33 @@ defineTest(qtAddToolEnv) {
 defineTest(qtAddTargetEnv) {
     deps = $$resolve_depends(QT, "QT.")
     !isEmpty(deps) {
-        plugin_paths =
         for(dep, deps) {
             deppath += $$shell_path($$eval(QT.$${dep}.libs))
             for(rpath, QT.$${dep}.rpath_link): \
                 deppath += $$shell_path($$rpath)
-            plugin_paths += $$eval(QT.$${dep}.plugin_path) $$eval(QT.$${dep}.plugins)
         }
-        equals(QMAKE_HOST.os, Windows): \
+        equals(QMAKE_HOST.os, Windows) {
             deppath.name = PATH
-        else:contains(QMAKE_HOST.os, Linux|FreeBSD): \
+        } else:contains(QMAKE_HOST.os, Linux|FreeBSD) {
             deppath.name = LD_LIBRARY_PATH
-        else:equals(QMAKE_HOST.os, Darwin): \
-            deppath.name = DYLD_LIBRARY_PATH
-        else: \
+        } else:equals(QMAKE_HOST.os, Darwin) {
+            contains(QT_CONFIG, qt_framework): \
+                deppath.name = DYLD_FRAMEWORK_PATH
+            else: \
+                deppath.name = DYLD_LIBRARY_PATH
+        } else {
             error("Operating system not supported.")
+        }
         deppath.value = $$unique(deppath)
         deppath.CONFIG = prepend
-        pluginpath.name = QT_PLUGIN_PATH
+
         pluginpath.value =
-        plugin_paths = $$unique(plugin_paths)
-        for(ppath, plugin_paths): \
-            exists($$ppath): \
-                pluginpath.value += $$shell_path($$ppath)
+        for(qmod, QMAKEMODULES) {
+            qmod = $$section(qmod, /, 0, -3)/plugins
+            exists($$qmod): pluginpath.value += $$shell_path($$qmod)
+        }
+        pluginpath.name = QT_PLUGIN_PATH
+
         QT_TOOL_ENV += deppath pluginpath
     }
     qtAddToolEnv($$1, $$QT_TOOL_ENV)

@@ -140,7 +140,9 @@ class Q_WIDGETS_EXPORT QSplitterHandle : public QWidget
 {
     Q_OBJECT
 public:
-    QSplitterHandle(Qt::Orientation o, QSplitter *parent);
+    explicit QSplitterHandle(Qt::Orientation o, QSplitter *parent);
+    ~QSplitterHandle();
+
     void setOrientation(Qt::Orientation o);
     Qt::Orientation orientation() const;
     bool opaqueResize() const;

@@ -1324,14 +1324,11 @@ Q_CORE_EXPORT QString qt_regexp_toCanonical(const QString &pattern, QRegExp::Pat
 #ifndef QT_NO_REGEXP_WILDCARD
     case QRegExp::Wildcard:
         return wc2rx(pattern, false);
-        break;
     case QRegExp::WildcardUnix:
         return wc2rx(pattern, true);
-        break;
 #endif
     case QRegExp::FixedString:
         return QRegExp::escape(pattern);
-        break;
     case QRegExp::W3CXmlSchema11:
     default:
         return pattern;
@@ -3815,7 +3812,7 @@ struct QRegExpPrivate
 };
 
 #if !defined(QT_NO_REGEXP_OPTIM)
-uint qHash(const QRegExpEngineKey &key, uint seed)
+uint qHash(const QRegExpEngineKey &key, uint seed = 0) Q_DECL_NOTHROW
 {
     return qHash(key.pattern, seed);
 }

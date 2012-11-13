@@ -83,6 +83,7 @@ protected:
 
 
 private:
+    friend class QAbstractScrollAreaPrivate;
     friend Q_WIDGETS_EXPORT QStyleOptionSlider qt_qscrollbarStyleOption(QScrollBar *scrollBar);
 
     Q_DISABLE_COPY(QScrollBar)

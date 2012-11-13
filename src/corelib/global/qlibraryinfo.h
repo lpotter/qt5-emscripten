@@ -70,6 +70,7 @@ public:
         BinariesPath,
         PluginsPath,
         ImportsPath,
+        ArchDataPath,
         DataPath,
         TranslationsPath,
         ExamplesPath,
@@ -81,7 +82,9 @@ public:
         HostPrefixPath,
         HostBinariesPath,
         HostDataPath,
-        LastHostPath = HostDataPath,
+        TargetSpecPath,
+        HostSpecPath,
+        LastHostPath = HostSpecPath,
 #endif
         SettingsPath = 100
     };

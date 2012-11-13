@@ -45,7 +45,9 @@
 #include <QtTest/qtestcase.h>
 #include <QtCore/qcoreapplication.h>
 #include <QtCore/qelapsedtimer.h>
-#include <QtGui/QWindow>
+#ifdef QT_GUI_LIB
+#  include <QtGui/QWindow>
+#endif
 #ifdef QT_WIDGETS_LIB
 #  include <QtWidgets/QWidget>
 #endif
@@ -69,6 +71,7 @@ namespace QTest
         } while (timer.elapsed() < ms);
     }
 
+#ifdef QT_GUI_LIB
     inline static bool qWaitForWindowActive(QWindow *window, int timeout = 1000)
     {
         QElapsedTimer timer;
@@ -89,7 +92,7 @@ namespace QTest
         // qWaitForWindowShown() will generate bogus results.
         if (window->isActive()) {
             int waitNo = 0; // 0, 0 might be a valid position after all, so do not wait for ever
-            while (window->pos().isNull()) {
+            while (window->position().isNull()) {
                 if (waitNo++ > timeout / 10)
                     break;
                 qWait(10);
@@ -112,6 +115,7 @@ namespace QTest
         }
         return window->isExposed();
     }
+#endif
 
 #ifdef QT_WIDGETS_LIB
     inline static bool qWaitForWindowActive(QWidget *widget, int timeout = 1000)

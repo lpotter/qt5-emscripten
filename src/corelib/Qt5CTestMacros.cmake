@@ -1,4 +1,11 @@
 
+# This file is not part of the Qt API.  It exists purely as an
+# implementation detail.  This file, and its contents may change from version to
+# version without notice, or even be removed.
+#
+# We mean it.
+
+
 set(BUILD_OPTIONS_LIST)
 
 if (CMAKE_BUILD_TYPE)
@@ -102,6 +109,7 @@ function(test_module_includes)
 
   set(all_args ${ARGN})
   set(includes_string "")
+  set(instances_string "")
   while(all_args)
     list(GET all_args 0 qtmodule)
     list(GET all_args 1 qtinclude)
@@ -113,6 +121,10 @@ function(test_module_includes)
       #include <Qt${qtmodule}>
       #include <Qt${qtmodule}/Qt${qtmodule}>"
     )
+    set(instances_string
+    "${instances_string}
+    ${qtinclude} local${qtinclude};
+    ")
   endwhile()
 
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/module_includes/main.cpp"
@@ -120,7 +132,7 @@ function(test_module_includes)
 
     ${includes_string}
 
-    int main(int, char **) { return 0; }\n"
+    int main(int, char **) { ${instances_string} return 0; }\n"
   )
 
   add_test(module_includes ${CMAKE_CTEST_COMMAND}

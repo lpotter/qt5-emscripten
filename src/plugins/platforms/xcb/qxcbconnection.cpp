@@ -58,6 +58,7 @@
 #include <QTimer>
 #include <QByteArray>
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <errno.h>
 #include <xcb/shm.h>
@@ -281,17 +282,16 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, const char 
         qFatal("QXcbConnection: Could not connect to display %s", m_displayName.constData());
 
     m_reader = new QXcbEventReader(this);
-#ifdef XCB_POLL_FOR_QUEUED_EVENT
     connect(m_reader, SIGNAL(eventPending()), this, SLOT(processXcbEvents()), Qt::QueuedConnection);
-    m_reader->start();
-#else
-    QSocketNotifier *notifier = new QSocketNotifier(xcb_get_file_descriptor(xcb_connection()), QSocketNotifier::Read, this);
-    connect(notifier, SIGNAL(activated(int)), this, SLOT(processXcbEvents()));
+    connect(m_reader, SIGNAL(finished()), this, SLOT(processXcbEvents()));
+    if (!m_reader->startThread()) {
+        QSocketNotifier *notifier = new QSocketNotifier(xcb_get_file_descriptor(xcb_connection()), QSocketNotifier::Read, this);
+        connect(notifier, SIGNAL(activated(int)), this, SLOT(processXcbEvents()));
 
-    QAbstractEventDispatcher *dispatcher = QGuiApplicationPrivate::eventDispatcher;
-    connect(dispatcher, SIGNAL(aboutToBlock()), this, SLOT(processXcbEvents()));
-    connect(dispatcher, SIGNAL(awake()), this, SLOT(processXcbEvents()));
-#endif
+        QAbstractEventDispatcher *dispatcher = QGuiApplicationPrivate::eventDispatcher;
+        connect(dispatcher, SIGNAL(aboutToBlock()), this, SLOT(processXcbEvents()));
+        connect(dispatcher, SIGNAL(awake()), this, SLOT(processXcbEvents()));
+    }
 
     xcb_extension_t *extensions[] = {
         &xcb_shm_id, &xcb_xfixes_id, &xcb_randr_id, &xcb_shape_id, &xcb_sync_id,
@@ -363,10 +363,11 @@ QXcbConnection::~QXcbConnection()
     finalizeXInput2();
 #endif
 
-#ifdef XCB_POLL_FOR_QUEUED_EVENT
-    sendConnectionEvent(QXcbAtom::_QT_CLOSE_CONNECTION);
-    m_reader->wait();
-#endif
+    if (m_reader->isRunning()) {
+        sendConnectionEvent(QXcbAtom::_QT_CLOSE_CONNECTION);
+        m_reader->wait();
+    }
+
     delete m_reader;
 
 #ifdef XCB_USE_EGL
@@ -807,14 +808,37 @@ void QXcbConnection::addPeekFunc(PeekFunc f)
     m_peekFuncs.append(f);
 }
 
-#ifdef XCB_POLL_FOR_QUEUED_EVENT
+QXcbEventReader::QXcbEventReader(QXcbConnection *connection)
+    : m_connection(connection)
+    , m_xcb_poll_for_queued_event(0)
+{
+#ifdef RTLD_DEFAULT
+    m_xcb_poll_for_queued_event = (XcbPollForQueuedEventFunctionPointer)dlsym(RTLD_DEFAULT, "xcb_poll_for_queued_event");
+#endif
+
+#ifdef Q_XCB_DEBUG
+    if (m_xcb_poll_for_queued_event)
+        qDebug("Using threaded event reader with xcb_poll_for_queued_event");
+#endif
+}
+
+bool QXcbEventReader::startThread()
+{
+    if (m_xcb_poll_for_queued_event) {
+        QThread::start();
+        return true;
+    }
+
+    return false;
+}
+
 void QXcbEventReader::run()
 {
     xcb_generic_event_t *event;
     while (m_connection && (event = xcb_wait_for_event(m_connection->xcb_connection()))) {
         m_mutex.lock();
         addEvent(event);
-        while (m_connection && (event = xcb_poll_for_queued_event(m_connection->xcb_connection())))
+        while (m_connection && (event = m_xcb_poll_for_queued_event(m_connection->xcb_connection())))
             addEvent(event);
         m_mutex.unlock();
         emit eventPending();
@@ -823,7 +847,6 @@ void QXcbEventReader::run()
     for (int i = 0; i < m_events.size(); ++i)
         free(m_events.at(i));
 }
-#endif
 
 void QXcbEventReader::addEvent(xcb_generic_event_t *event)
 {
@@ -836,10 +859,10 @@ void QXcbEventReader::addEvent(xcb_generic_event_t *event)
 QXcbEventArray *QXcbEventReader::lock()
 {
     m_mutex.lock();
-#ifndef XCB_POLL_FOR_QUEUED_EVENT
-    while (xcb_generic_event_t *event = xcb_poll_for_event(m_connection->xcb_connection()))
-        m_events << event;
-#endif
+    if (!m_xcb_poll_for_queued_event) {
+        while (xcb_generic_event_t *event = xcb_poll_for_event(m_connection->xcb_connection()))
+            m_events << event;
+    }
     return &m_events;
 }
 
@@ -919,6 +942,12 @@ xcb_timestamp_t QXcbConnection::getTimestamp()
 
 void QXcbConnection::processXcbEvents()
 {
+    int connection_error = xcb_connection_has_error(xcb_connection());
+    if (connection_error) {
+        qWarning("The X11 connection broke (error %d). Did the X11 server die?", connection_error);
+        exit(1);
+    }
+
     QXcbEventArray *eventqueue = m_reader->lock();
 
     for(int i = 0; i < eventqueue->size(); ++i) {
@@ -932,6 +961,14 @@ void QXcbConnection::processXcbEvents()
         if (!response_type) {
             handleXcbError((xcb_generic_error_t *)event);
         } else {
+            if (response_type == XCB_MOTION_NOTIFY) {
+                // compress multiple motion notify events in a row
+                // to avoid swamping the event queue
+                xcb_generic_event_t *next = eventqueue->value(i+1, 0);
+                if (next && (next->response_type & ~0x80) == XCB_MOTION_NOTIFY)
+                    continue;
+            }
+
             QVector<PeekFunc>::iterator it = m_peekFuncs.begin();
             while (it != m_peekFuncs.end()) {
                 // These callbacks return true if the event is what they were

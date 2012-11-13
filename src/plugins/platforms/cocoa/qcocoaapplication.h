@@ -102,13 +102,14 @@
 - (BOOL)qt_filterEvent:(NSEvent *)event;
 @end
 
-@interface QNSApplication : NSApplication {
+@interface QT_MANGLE_NAMESPACE(QNSApplication) : NSApplication {
 }
 @end
 
 QT_BEGIN_NAMESPACE
 
 void qt_redirectNSApplicationSendEvent();
+void qt_resetNSApplicationSendEvent();
 
 QT_END_NAMESPACE
 

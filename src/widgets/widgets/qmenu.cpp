@@ -69,7 +69,6 @@
 #include "qpushbutton.h"
 #include <private/qpushbutton_p.h>
 #include <private/qaction_p.h>
-#include <private/qsoftkeymanager_p.h>
 #include <private/qguiapplication_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -158,15 +157,6 @@ void QMenuPrivate::init()
         QObject::connect(platformMenu, SIGNAL(aboutToShow()), q, SIGNAL(aboutToShow()));
         QObject::connect(platformMenu, SIGNAL(aboutToHide()), q, SIGNAL(aboutToHide()));
     }
-
-#ifdef QT_SOFTKEYS_ENABLED
-    selectAction = QSoftKeyManager::createKeyedAction(QSoftKeyManager::SelectSoftKey, Qt::Key_Select, q);
-    cancelAction = QSoftKeyManager::createKeyedAction(QSoftKeyManager::CancelSoftKey, Qt::Key_Back, q);
-    selectAction->setPriority(QAction::HighPriority);
-    cancelAction->setPriority(QAction::HighPriority);
-    q->addAction(selectAction);
-    q->addAction(cancelAction);
-#endif
 }
 
 int QMenuPrivate::scrollerHeight() const
@@ -553,6 +543,16 @@ void QMenuPrivate::setCurrentAction(QAction *action, int popup, SelectionReason 
 {
     Q_Q(QMenu);
     tearoffHighlighted = 0;
+    // Reselect the currently active action in case mouse moved over other menu items when
+    // moving from sub menu action to sub menu (QTBUG-20094).
+    if (reason != SelectedFromKeyboard && action == currentAction && !(action && action->menu() && action->menu() != activeMenu)) {
+        if (QMenu *menu = qobject_cast<QMenu*>(causedPopup.widget)) {
+            if (causedPopup.action && menu->d_func()->activeMenu == q)
+                menu->d_func()->setCurrentAction(causedPopup.action, 0, reason, false);
+        }
+        return;
+    }
+
     if (currentAction)
         q->update(actionRect(currentAction));
 
@@ -1674,12 +1674,6 @@ void QMenu::clear()
     QList<QAction*> acts = actions();
 
     for(int i = 0; i < acts.size(); i++) {
-#ifdef QT_SOFTKEYS_ENABLED
-        Q_D(QMenu);
-        // Lets not touch to our internal softkey actions
-        if(acts[i] == d->selectAction || acts[i] == d->cancelAction)
-            continue;
-#endif
         removeAction(acts[i]);
         if (acts[i]->parent() == this && acts[i]->d_func()->widgets.isEmpty())
             delete acts[i];
@@ -2382,13 +2376,6 @@ QMenu::event(QEvent *e)
                 e->accept();
         }
         return true;
-#endif
-#ifdef QT_SOFTKEYS_ENABLED
-    case QEvent::LanguageChange: {
-        d->selectAction->setText(QSoftKeyManager::standardSoftKeyText(QSoftKeyManager::SelectSoftKey));
-        d->cancelAction->setText(QSoftKeyManager::standardSoftKeyText(QSoftKeyManager::CancelSoftKey));
-        }
-        break;
 #endif
     default:
         break;

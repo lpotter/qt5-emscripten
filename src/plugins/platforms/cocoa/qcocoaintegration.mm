@@ -97,9 +97,8 @@ void QCocoaScreen::updateGeometry()
     CGDirectDisplayID dpy = [[devDesc objectForKey:@"NSScreenNumber"] unsignedIntValue];
     CGSize size = CGDisplayScreenSize(dpy);
     m_physicalSize = QSizeF(size.width, size.height);
-    NSSize resolution = [[devDesc valueForKey:NSDeviceResolution] sizeValue];
-    m_logicalDpi.first = resolution.width;
-    m_logicalDpi.second = resolution.height;
+    m_logicalDpi.first = 72;
+    m_logicalDpi.second = 72;
     m_refreshRate = CGDisplayModeGetRefreshRate(CGDisplayCopyDisplayMode(dpy));
 
     // Get m_name (brand/model of the monitor)
@@ -110,7 +109,7 @@ void QCocoaScreen::updateGeometry()
     [deviceInfo release];
 
     QWindowSystemInterface::handleScreenGeometryChange(screen(), geometry());
-    QWindowSystemInterface::handleScreenLogicalDotsPerInchChange(screen(), resolution.width, resolution.height);
+    QWindowSystemInterface::handleScreenLogicalDotsPerInchChange(screen(), m_logicalDpi.first, m_logicalDpi.second);
     QWindowSystemInterface::handleScreenRefreshRateChange(screen(), m_refreshRate);
     QWindowSystemInterface::handleScreenAvailableGeometryChange(screen(), availableGeometry());
 }
@@ -180,7 +179,9 @@ QCocoaIntegration::QCocoaIntegration()
     : mFontDb(new QCoreTextFontDatabase())
     , mEventDispatcher(new QCocoaEventDispatcher())
     , mInputContext(new QCocoaInputContext)
+#ifndef QT_NO_ACCESSIBILITY
     , mAccessibility(new QPlatformAccessibility)
+#endif
     , mCocoaClipboard(new QCocoaClipboard)
     , mCocoaDrag(new QCocoaDrag)
     , mNativeInterface(new QCocoaNativeInterface)
@@ -191,7 +192,8 @@ QCocoaIntegration::QCocoaIntegration()
 
     qApp->setAttribute(Qt::AA_DontUseNativeMenuBar, false);
 
-    NSApplication *cocoaApplication = [NSApplication sharedApplication];
+    NSApplication *cocoaApplication = [QT_MANGLE_NAMESPACE(QNSApplication) sharedApplication];
+    qt_redirectNSApplicationSendEvent();
 
     if (qEnvironmentVariableIsEmpty("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM")) {
         // Applications launched from plain executables (without an app
@@ -232,6 +234,8 @@ QCocoaIntegration::QCocoaIntegration()
 
 QCocoaIntegration::~QCocoaIntegration()
 {
+    qt_resetNSApplicationSendEvent();
+
     QCocoaAutoReleasePool pool;
     if (!QCoreApplication::testAttribute(Qt::AA_MacPluginApplication)) {
         // remove the apple event handlers installed by QCocoaApplicationDelegate
@@ -302,11 +306,15 @@ void QCocoaIntegration::updateScreens()
 bool QCocoaIntegration::hasCapability(QPlatformIntegration::Capability cap) const
 {
     switch (cap) {
-    case ThreadedPixmaps: return true;
-    case OpenGL : return true;
-    case ThreadedOpenGL : return true;
-    case BufferQueueingOpenGL: return true;
-    default: return QPlatformIntegration::hasCapability(cap);
+    case ThreadedPixmaps:
+    case OpenGL:
+    case ThreadedOpenGL:
+    case BufferQueueingOpenGL:
+    case WindowMasks:
+    case MultipleWindows:
+        return true;
+    default:
+        return QPlatformIntegration::hasCapability(cap);
     }
 }
 
@@ -349,7 +357,11 @@ QPlatformInputContext *QCocoaIntegration::inputContext() const
 
 QPlatformAccessibility *QCocoaIntegration::accessibility() const
 {
+#ifndef QT_NO_ACCESSIBILITY
     return mAccessibility.data();
+#else
+    return 0;
+#endif
 }
 
 QPlatformClipboard *QCocoaIntegration::clipboard() const

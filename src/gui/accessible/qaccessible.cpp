@@ -41,8 +41,6 @@
 
 #include "qaccessible.h"
 
-#ifndef QT_NO_ACCESSIBILITY
-
 #include "qaccessibleplugin.h"
 #include "qaccessibleobject.h"
 #include "qaccessiblebridge.h"
@@ -436,19 +434,23 @@ QAccessible::RootObjectHandler QAccessible::rootObjectHandler = 0;
 static bool accessibility_active = false;
 static bool cleanupAdded = false;
 
+#ifndef QT_NO_ACCESSIBILITY
 static QPlatformAccessibility *platformAccessibility()
 {
     QPlatformIntegration *pfIntegration = QGuiApplicationPrivate::platformIntegration();
     return pfIntegration ? pfIntegration->accessibility() : 0;
 }
+#endif
 
 /*!
     \internal
 */
 void QAccessible::cleanup()
 {
+#ifndef QT_NO_ACCESSIBILITY
     if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
         pfAccessibility->cleanup();
+#endif
 }
 
 static void qAccessibleCleanup()
@@ -590,8 +592,10 @@ QAccessibleInterface *QAccessible::queryAccessibleInterface(QObject *object)
         mo = mo->superClass();
     }
 
+#ifndef QT_NO_ACCESSIBILITY
     if (object == qApp)
         return new QAccessibleApplication;
+#endif
 
     return 0;
 }
@@ -631,8 +635,10 @@ void QAccessible::setRootObject(QObject *object)
         return;
     }
 
+#ifndef QT_NO_ACCESSIBILITY
     if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
         pfAccessibility->setRootObject(object);
+#endif
 }
 
 /*!
@@ -664,8 +670,10 @@ void QAccessible::updateAccessibility(QAccessibleEvent *event)
     if (!isActive())
         return;
 
+#ifndef QT_NO_ACCESSIBILITY
     if (QPlatformAccessibility *pfAccessibility = platformAccessibility())
         pfAccessibility->notifyAccessibilityUpdate(event);
+#endif
 }
 
 /*!
@@ -1062,8 +1070,10 @@ QColor QAccessibleInterface::backgroundColor() const
 QAccessibleInterface *QAccessibleEvent::accessibleInterface() const
 {
     QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(m_object);
-    if (!iface)
+    if (!iface) {
+        qWarning() << "Cannot create accessible interface for object: " << m_object;
         return 0;
+    }
 
     if (m_child >= 0) {
         QAccessibleInterface *child = iface->child(m_child);
@@ -1265,4 +1275,3 @@ QDebug operator<<(QDebug d, const QAccessibleEvent &ev)
 
 QT_END_NAMESPACE
 
-#endif

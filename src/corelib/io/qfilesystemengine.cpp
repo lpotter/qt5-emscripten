@@ -300,6 +300,13 @@ void QFileSystemMetaData::fillFromDirEnt(const QT_DIRENT &entry)
             const struct dirent_extra_stat * const extra_stat =
                     reinterpret_cast<struct dirent_extra_stat *>(extra);
 
+            // Remember whether this was a link or not, this saves an lstat() call later.
+            if (extra->d_type == _DTYPE_LSTAT) {
+                knownFlagsMask |= QFileSystemMetaData::LinkType;
+                if (S_ISLNK(extra_stat->d_stat.st_mode))
+                    entryFlags |= QFileSystemMetaData::LinkType;
+            }
+
             // For symlinks, the extra type _DTYPE_LSTAT doesn't work for filling out the meta data,
             // as we need the stat() information there, not the lstat() information.
             // In this case, don't use the extra information.
@@ -308,7 +315,7 @@ void QFileSystemMetaData::fillFromDirEnt(const QT_DIRENT &entry)
             if (S_ISLNK(extra_stat->d_stat.st_mode) && extra->d_type == _DTYPE_LSTAT)
                 continue;
 
-#if defined(__EXT_LF64SRC)
+#if defined(QT_USE_XOPEN_LFS_EXTENSIONS) && defined(QT_LARGEFILE_SUPPORT)
             // Even with large file support, d_stat is always of type struct stat, not struct stat64,
             // so it needs to be converted
             struct stat64 statBuf;

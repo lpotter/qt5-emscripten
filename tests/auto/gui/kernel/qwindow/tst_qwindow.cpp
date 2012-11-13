@@ -67,6 +67,7 @@ private slots:
     void touchCancel();
     void touchCancelWithTouchToMouse();
     void orientation();
+    void sizes();
     void close();
     void activateAndClose();
     void mouseEventSequence();
@@ -112,7 +113,7 @@ public:
     Window()
     {
         reset();
-        setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+        setFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
     }
 
     void reset()
@@ -185,10 +186,10 @@ void tst_QWindow::positioning()
 
     QMargins originalMargins = window.frameMargins();
 
-    QCOMPARE(window.pos(), window.framePos() + QPoint(originalMargins.left(), originalMargins.top()));
+    QCOMPARE(window.position(), window.framePos() + QPoint(originalMargins.left(), originalMargins.top()));
     QVERIFY(window.frameGeometry().contains(window.geometry()));
 
-    QPoint originalPos = window.pos();
+    QPoint originalPos = window.position();
     QPoint originalFramePos = window.framePos();
 
     window.setWindowState(Qt::WindowFullScreen);
@@ -199,7 +200,7 @@ void tst_QWindow::positioning()
     QCoreApplication::processEvents();
     QTRY_COMPARE(window.received(QEvent::Resize), 3);
 
-    QTRY_COMPARE(originalPos, window.pos());
+    QTRY_COMPARE(originalPos, window.position());
     QTRY_COMPARE(originalFramePos, window.framePos());
     QTRY_COMPARE(originalMargins, window.frameMargins());
 
@@ -214,14 +215,14 @@ void tst_QWindow::positioning()
         QTRY_VERIFY(window.received(QEvent::Move));
         QTRY_COMPARE(framePos, window.framePos());
         QTRY_COMPARE(originalMargins, window.frameMargins());
-        QCOMPARE(window.pos(), window.framePos() + QPoint(originalMargins.left(), originalMargins.top()));
+        QCOMPARE(window.position(), window.framePos() + QPoint(originalMargins.left(), originalMargins.top()));
 
         // and back to regular positioning
 
         window.reset();
-        window.setPos(originalPos);
+        window.setPosition(originalPos);
         QTRY_VERIFY(window.received(QEvent::Move));
-        QTRY_COMPARE(originalPos, window.pos());
+        QTRY_COMPARE(originalPos, window.position());
     }
 }
 
@@ -267,7 +268,7 @@ void tst_QWindow::isActive()
 
     QTRY_VERIFY(child.isExposed());
 
-    child.requestActivateWindow();
+    child.requestActivate();
 
     QTRY_VERIFY(QGuiApplication::focusWindow() == &child);
     QVERIFY(child.isActive());
@@ -287,7 +288,7 @@ void tst_QWindow::isActive()
     dialog.setGeometry(110, 110, 300, 30);
     dialog.show();
 
-    dialog.requestActivateWindow();
+    dialog.requestActivate();
 
     QTRY_VERIFY(dialog.isExposed());
     QCoreApplication::processEvents();
@@ -301,7 +302,7 @@ void tst_QWindow::isActive()
     // parent is active
     QVERIFY(child.isActive());
 
-    window.requestActivateWindow();
+    window.requestActivate();
 
     QTRY_VERIFY(QGuiApplication::focusWindow() == &window);
     QCoreApplication::processEvents();
@@ -730,13 +731,65 @@ void tst_QWindow::orientation()
     window.reportContentOrientationChange(Qt::PrimaryOrientation);
     QCOMPARE(window.contentOrientation(), Qt::PrimaryOrientation);
 
-    QVERIFY(!window.requestWindowOrientation(Qt::LandscapeOrientation) || window.windowOrientation() == Qt::LandscapeOrientation);
-    QVERIFY(!window.requestWindowOrientation(Qt::PortraitOrientation) || window.windowOrientation() == Qt::PortraitOrientation);
-    QVERIFY(!window.requestWindowOrientation(Qt::PrimaryOrientation) || window.windowOrientation() == Qt::PrimaryOrientation);
+    QVERIFY(!window.requestOrientation(Qt::LandscapeOrientation) || window.orientation() == Qt::LandscapeOrientation);
+    QVERIFY(!window.requestOrientation(Qt::PortraitOrientation) || window.orientation() == Qt::PortraitOrientation);
+    QVERIFY(!window.requestOrientation(Qt::PrimaryOrientation) || window.orientation() == Qt::PrimaryOrientation);
 
     QSignalSpy spy(&window, SIGNAL(contentOrientationChanged(Qt::ScreenOrientation)));
     window.reportContentOrientationChange(Qt::LandscapeOrientation);
     QCOMPARE(spy.count(), 1);
+}
+
+void tst_QWindow::sizes()
+{
+    QWindow window;
+
+    QSignalSpy minimumWidthSpy(&window, SIGNAL(minimumWidthChanged(int)));
+    QSignalSpy minimumHeightSpy(&window, SIGNAL(minimumHeightChanged(int)));
+    QSignalSpy maximumWidthSpy(&window, SIGNAL(maximumWidthChanged(int)));
+    QSignalSpy maximumHeightSpy(&window, SIGNAL(maximumHeightChanged(int)));
+
+    QSize oldMaximum = window.maximumSize();
+
+    window.setMinimumWidth(10);
+    QCOMPARE(window.minimumWidth(), 10);
+    QCOMPARE(window.minimumHeight(), 0);
+    QCOMPARE(window.minimumSize(), QSize(10, 0));
+    QCOMPARE(window.maximumSize(), oldMaximum);
+    QCOMPARE(minimumWidthSpy.count(), 1);
+    QCOMPARE(minimumHeightSpy.count(), 0);
+    QCOMPARE(maximumWidthSpy.count(), 0);
+    QCOMPARE(maximumHeightSpy.count(), 0);
+
+    window.setMinimumHeight(10);
+    QCOMPARE(window.minimumWidth(), 10);
+    QCOMPARE(window.minimumHeight(), 10);
+    QCOMPARE(window.minimumSize(), QSize(10, 10));
+    QCOMPARE(window.maximumSize(), oldMaximum);
+    QCOMPARE(minimumWidthSpy.count(), 1);
+    QCOMPARE(minimumHeightSpy.count(), 1);
+    QCOMPARE(maximumWidthSpy.count(), 0);
+    QCOMPARE(maximumHeightSpy.count(), 0);
+
+    window.setMaximumWidth(100);
+    QCOMPARE(window.maximumWidth(), 100);
+    QCOMPARE(window.maximumHeight(), oldMaximum.height());
+    QCOMPARE(window.minimumSize(), QSize(10, 10));
+    QCOMPARE(window.maximumSize(), QSize(100, oldMaximum.height()));
+    QCOMPARE(minimumWidthSpy.count(), 1);
+    QCOMPARE(minimumHeightSpy.count(), 1);
+    QCOMPARE(maximumWidthSpy.count(), 1);
+    QCOMPARE(maximumHeightSpy.count(), 0);
+
+    window.setMaximumHeight(100);
+    QCOMPARE(window.maximumWidth(), 100);
+    QCOMPARE(window.maximumHeight(), 100);
+    QCOMPARE(window.minimumSize(), QSize(10, 10));
+    QCOMPARE(window.maximumSize(), QSize(100, 100));
+    QCOMPARE(minimumWidthSpy.count(), 1);
+    QCOMPARE(minimumHeightSpy.count(), 1);
+    QCOMPARE(maximumWidthSpy.count(), 1);
+    QCOMPARE(maximumHeightSpy.count(), 1);
 }
 
 void tst_QWindow::close()
@@ -759,7 +812,7 @@ void tst_QWindow::activateAndClose()
     for (int i = 0; i < 10; ++i)  {
        QWindow window;
        window.show();
-       window.requestActivateWindow();
+       window.requestActivate();
        QVERIFY(QTest::qWaitForWindowActive(&window));
        QCOMPARE(qGuiApp->focusWindow(), &window);
     }
@@ -861,29 +914,29 @@ void tst_QWindow::windowModality()
     qRegisterMetaType<Qt::WindowModality>("Qt::WindowModality");
 
     QWindow window;
-    QSignalSpy spy(&window, SIGNAL(windowModalityChanged(Qt::WindowModality)));
+    QSignalSpy spy(&window, SIGNAL(modalityChanged(Qt::WindowModality)));
 
-    QCOMPARE(window.windowModality(), Qt::NonModal);
-    window.setWindowModality(Qt::NonModal);
-    QCOMPARE(window.windowModality(), Qt::NonModal);
+    QCOMPARE(window.modality(), Qt::NonModal);
+    window.setModality(Qt::NonModal);
+    QCOMPARE(window.modality(), Qt::NonModal);
     QCOMPARE(spy.count(), 0);
 
-    window.setWindowModality(Qt::WindowModal);
-    QCOMPARE(window.windowModality(), Qt::WindowModal);
+    window.setModality(Qt::WindowModal);
+    QCOMPARE(window.modality(), Qt::WindowModal);
     QCOMPARE(spy.count(), 1);
-    window.setWindowModality(Qt::WindowModal);
-    QCOMPARE(window.windowModality(), Qt::WindowModal);
+    window.setModality(Qt::WindowModal);
+    QCOMPARE(window.modality(), Qt::WindowModal);
     QCOMPARE(spy.count(), 1);
 
-    window.setWindowModality(Qt::ApplicationModal);
-    QCOMPARE(window.windowModality(), Qt::ApplicationModal);
+    window.setModality(Qt::ApplicationModal);
+    QCOMPARE(window.modality(), Qt::ApplicationModal);
     QCOMPARE(spy.count(), 2);
-    window.setWindowModality(Qt::ApplicationModal);
-    QCOMPARE(window.windowModality(), Qt::ApplicationModal);
+    window.setModality(Qt::ApplicationModal);
+    QCOMPARE(window.modality(), Qt::ApplicationModal);
     QCOMPARE(spy.count(), 2);
 
-    window.setWindowModality(Qt::NonModal);
-    QCOMPARE(window.windowModality(), Qt::NonModal);
+    window.setModality(Qt::NonModal);
+    QCOMPARE(window.modality(), Qt::NonModal);
     QCOMPARE(spy.count(), 3);
 }
 
@@ -997,13 +1050,13 @@ void tst_QWindow::windowModality_QTBUG27039()
     InputTestWindow modalA;
     modalA.setTransientParent(&parent);
     modalA.setGeometry(10, 10, 20, 20);
-    modalA.setWindowModality(Qt::ApplicationModal);
+    modalA.setModality(Qt::ApplicationModal);
     modalA.show();
 
     InputTestWindow modalB;
     modalB.setTransientParent(&parent);
     modalB.setGeometry(30, 10, 20, 20);
-    modalB.setWindowModality(Qt::ApplicationModal);
+    modalB.setModality(Qt::ApplicationModal);
     modalB.show();
 
     QPointF local(5, 5);

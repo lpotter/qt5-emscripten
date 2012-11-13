@@ -62,6 +62,10 @@ QT_BEGIN_NAMESPACE
 class QGuiGLThreadContext
 {
 public:
+    QGuiGLThreadContext()
+        : context(0)
+    {
+    }
     ~QGuiGLThreadContext() {
         if (context)
             context->doneCurrent();
@@ -151,18 +155,25 @@ QMutex QOpenGLContextPrivate::makeCurrentTrackerMutex;
     \sa QOpenGLFunctions, QOpenGLBuffer, QOpenGLShaderProgram, QOpenGLFramebufferObject
 */
 
-void QOpenGLContextPrivate::setCurrentContext(QOpenGLContext *context)
+/*!
+    \internal
+
+    Set the current context. Returns the previously current context.
+*/
+QOpenGLContext *QOpenGLContextPrivate::setCurrentContext(QOpenGLContext *context)
 {
     QGuiGLThreadContext *threadContext = qwindow_context_storage.localData();
     if (!threadContext) {
         if (!QThread::currentThread()) {
             qWarning("No QTLS available. currentContext wont work");
-            return;
+            return 0;
         }
         threadContext = new QGuiGLThreadContext;
         qwindow_context_storage.setLocalData(threadContext);
     }
+    QOpenGLContext *previous = threadContext->context;
     threadContext->context = context;
+    return previous;
 }
 
 int QOpenGLContextPrivate::maxTextureSize()
@@ -505,9 +516,9 @@ bool QOpenGLContext::makeCurrent(QSurface *surface)
         return false;
     }
 
+    QOpenGLContext *previous = QOpenGLContextPrivate::setCurrentContext(this);
 
     if (d->platformGLContext->makeCurrent(surface->surfaceHandle())) {
-        QOpenGLContextPrivate::setCurrentContext(this);
         d->surface = surface;
 
         d->shareGroup->d_func()->deletePendingResources(this);
@@ -518,6 +529,8 @@ bool QOpenGLContext::makeCurrent(QSurface *surface)
 
         return true;
     }
+
+    QOpenGLContextPrivate::setCurrentContext(previous);
 
     return false;
 }
@@ -561,11 +574,6 @@ QSurface *QOpenGLContext::surface() const
 
     Call this to finish a frame of OpenGL rendering, and make sure to
     call makeCurrent() again before you begin a new frame.
-
-    If you have bound a non-default framebuffer object, you need to
-    use bindDefaultFramebufferObject() to make sure that the default
-    framebuffer object is bound before calling swapBuffers(), as
-    some Qt platforms assume that the default framebuffer object is bound.
 */
 void QOpenGLContext::swapBuffers(QSurface *surface)
 {
@@ -594,17 +602,8 @@ void QOpenGLContext::swapBuffers(QSurface *surface)
         return;
 
 #if !defined(QT_NO_DEBUG)
-    if (currentContext() != this)
-        qWarning() << "QOpenGLContext::swapBuffers() called with non-current surface";
-    else if (!QOpenGLContextPrivate::toggleMakeCurrentTracker(this, false))
+    if (!QOpenGLContextPrivate::toggleMakeCurrentTracker(this, false))
         qWarning() << "QOpenGLContext::swapBuffers() called without corresponding makeCurrent()";
-
-    GLint framebufferBinding = 0;
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebufferBinding);
-
-    GLint platformFramebuffer = GLint(d->platformGLContext->defaultFramebufferObject(surfaceHandle));
-    if (framebufferBinding != platformFramebuffer)
-        qWarning() << "QOpenGLContext::swapBuffers() called with non-default framebuffer object bound";
 #endif
     if (surface->format().swapBehavior() == QSurfaceFormat::SingleBuffer)
         glFlush();
