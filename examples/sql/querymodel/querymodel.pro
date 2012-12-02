@@ -7,8 +7,6 @@ SOURCES       = customsqlmodel.cpp \
 QT           += sql widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/querymodel
-sources.files = $$SOURCES *.h $$RESOURCES $$FORMS querymodel.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/querymodel
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/sql/querymodel
+INSTALLS += target
 

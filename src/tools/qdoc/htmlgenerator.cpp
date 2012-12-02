@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
+** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
@@ -94,7 +94,8 @@ static void addLink(const QString &linkTarget,
   Constructs the HTML output generator.
  */
 HtmlGenerator::HtmlGenerator()
-    : helpProjectWriter(0),
+    : codeIndent(0),
+      helpProjectWriter(0),
       inObsoleteLink(false),
       funcLeftParen("\\S(\\()"),
       obsoleteLinks(false)
@@ -210,7 +211,8 @@ void HtmlGenerator::initializeGenerator(const Config &config)
         ++edition;
     }
 
-    codeIndent = config.getInt(CONFIG_CODEINDENT);
+    // The following line was changed to fix QTBUG-27798
+    //codeIndent = config.getInt(CONFIG_CODEINDENT);
 
     helpProjectWriter = new HelpProjectWriter(config, project.toLower() + ".qhp", this);
 
@@ -218,10 +220,12 @@ void HtmlGenerator::initializeGenerator(const Config &config)
     headerScripts = config.getString(HtmlGenerator::format() + Config::dot + CONFIG_HEADERSCRIPTS);
     headerStyles = config.getString(HtmlGenerator::format() + Config::dot + CONFIG_HEADERSTYLES);
 
-    QString prefix = CONFIG_QHP + Config::dot + "Qt" + Config::dot;
+    QString prefix = CONFIG_QHP + Config::dot + project + Config::dot;
     manifestDir = "qthelp://" + config.getString(prefix + "namespace");
     manifestDir += QLatin1Char('/') + config.getString(prefix + "virtualFolder") + QLatin1Char('/');
-
+    examplesPath = config.getString(CONFIG_EXAMPLESINSTALLPATH);
+    if (!examplesPath.isEmpty())
+        examplesPath += QLatin1Char('/');
 }
 
 /*!
@@ -455,9 +459,9 @@ int HtmlGenerator::generateAtom(const Atom *atom, const Node *relative, CodeMark
         break;
     case Atom::AnnotatedList:
         {
-            NodeMap nodeMap;
-            qdb_->getGroup(atom->string(), nodeMap);
-            generateAnnotatedList(relative, marker, nodeMap);
+            DocNode* dn = qdb_->getGroup(atom->string());
+            if (dn)
+                generateAnnotatedList(relative, marker, dn->members());
         }
         break;
     case Atom::GeneratedList:
@@ -481,44 +485,6 @@ int HtmlGenerator::generateAtom(const Atom *atom, const Node *relative, CodeMark
                 if (!m.isEmpty()) {
                     generateAnnotatedList(relative, marker, m);
                 }
-            }
-        }
-        else if (atom->string().contains("classesbyedition")) {
-            QString arg = atom->string().trimmed();
-            QString editionName = atom->string().mid(atom->string().indexOf("classesbyedition") + 16).trimmed();
-            if (editionModuleMap.contains(editionName)) {
-                QDocDatabase* qdb = QDocDatabase::qdocDB();
-                // Add all classes in the modules listed for that edition.
-                NodeMap editionClasses;
-                DocNodeMap::const_iterator i = qdb->modules().begin();
-                while (i != qdb->modules().end()) {
-                    NodeMap m;
-                    DocNode* dn = i.value();
-                    dn->getMemberClasses(m);
-                    if (!m.isEmpty())
-                        editionClasses.unite(m);
-                    m.clear();
-                    ++i;
-                }
-
-                // Add additional groups and remove groups of classes that
-                // should be excluded from the edition.
-
-                const NodeMultiMap& groups = qdb_->groups();
-                foreach (const QString &groupName, editionGroupMap[editionName]) {
-                    QList<Node *> groupClasses;
-                    if (groupName.startsWith(QLatin1Char('-'))) {
-                        groupClasses = groups.values(groupName.mid(1));
-                        foreach (const Node *node, groupClasses)
-                            editionClasses.remove(node->name());
-                    }
-                    else {
-                        groupClasses = groups.values(groupName);
-                        foreach (const Node *node, groupClasses)
-                            editionClasses.insert(node->name(), node);
-                    }
-                }
-                generateAnnotatedList(relative, marker, editionClasses);
             }
         }
         else if (atom->string() == "classhierarchy") {
@@ -550,14 +516,8 @@ int HtmlGenerator::generateAtom(const Atom *atom, const Node *relative, CodeMark
         }
         else if (atom->string() == "related") {
             const DocNode *dn = static_cast<const DocNode *>(relative);
-            if (dn && !dn->members().isEmpty()) {
-                NodeMap groupMembersMap;
-                foreach (const Node *node, dn->members()) {
-                    if (node->type() == Node::Document)
-                        groupMembersMap[node->fullName(relative)] = node;
-                }
-                generateAnnotatedList(dn, marker, groupMembersMap);
-            }
+            if (dn)
+                generateAnnotatedList(dn, marker, dn->members());
         }
         else if (atom->string() == "relatedinline") {
             const DocNode *dn = static_cast<const DocNode *>(relative);
@@ -1373,7 +1333,7 @@ void HtmlGenerator::generateCollisionPages()
             t += protectEnc(fullTitle);
             nm.insertMulti(t,n);
         }
-        generateAnnotatedList(ncn, marker, nm, true);
+        generateAnnotatedList(ncn, marker, nm);
 
         QList<QString> targets;
         if (!ncn->linkTargets().isEmpty()) {
@@ -1612,22 +1572,10 @@ void HtmlGenerator::generateDocNode(DocNode* dn, CodeMarker* marker)
     generateAlsoList(dn, marker);
     generateExtractionMark(dn, EndMark);
 
-    if ((dn->subType() == Node::Group) && !dn->members().isEmpty()) {
-        NodeMap groupMembersMap;
-        foreach (const Node *node, dn->members()) {
-            if (node->type() == Node::Class || node->type() == Node::Namespace)
-                groupMembersMap[node->name()] = node;
-        }
-        generateAnnotatedList(dn, marker, groupMembersMap);
-    }
-    else if ((dn->subType() == Node::QmlModule) && !dn->members().isEmpty()) {
-        NodeMap qmlModuleMembersMap;
-        foreach (const Node* node, dn->members()) {
-            if (node->type() == Node::Document && node->subType() == Node::QmlClass)
-                qmlModuleMembersMap[node->name()] = node;
-        }
-        generateAnnotatedList(dn, marker, qmlModuleMembersMap);
-    }
+    if ((dn->subType() == Node::Group))
+        generateAnnotatedList(dn, marker, dn->members());
+    else if (dn->subType() == Node::QmlModule)
+        generateAnnotatedList(dn, marker, dn->members());
 
     sections = marker->sections(dn, CodeMarker::Detailed, CodeMarker::Okay);
     s = sections.constBegin();
@@ -2198,15 +2146,15 @@ QString HtmlGenerator::generateLowStatusMemberFile(const InnerNode *inner,
     return fileName;
 }
 
-void HtmlGenerator::generateClassHierarchy(const Node *relative, const NodeMap& classMap)
+void HtmlGenerator::generateClassHierarchy(const Node *relative, NodeMap& classMap)
 {
     if (classMap.isEmpty())
         return;
 
     NodeMap topLevel;
-    NodeMap::ConstIterator c = classMap.constBegin();
-    while (c != classMap.constEnd()) {
-        const ClassNode *classe = static_cast<const ClassNode *>(*c);
+    NodeMap::Iterator c = classMap.begin();
+    while (c != classMap.end()) {
+        ClassNode *classe = static_cast<ClassNode *>(*c);
         if (classe->baseClasses().isEmpty())
             topLevel.insert(classe->name(), classe);
         ++c;
@@ -2222,8 +2170,7 @@ void HtmlGenerator::generateClassHierarchy(const Node *relative, const NodeMap& 
             out() << "</ul>\n";
         }
         else {
-            const ClassNode *child =
-                    static_cast<const ClassNode *>(*stack.top().constBegin());
+            ClassNode* child = static_cast<ClassNode*>(*stack.top().begin());
             out() << "<li>";
             generateFullName(child, relative);
             out() << "</li>\n";
@@ -2242,21 +2189,44 @@ void HtmlGenerator::generateClassHierarchy(const Node *relative, const NodeMap& 
     }
 }
 
+/*!
+  Output an annotated list of the nodes in \a nodeMap.
+  A two-column table is output.
+ */
+void HtmlGenerator::generateAnnotatedList(const Node* relative,
+                                          CodeMarker* marker,
+                                          const NodeMap& nodeMap)
+{
+    if (nodeMap.isEmpty())
+        return;
+    NodeList nl;
+    NodeMap::const_iterator i = nodeMap.begin();
+    while (i != nodeMap.end()) {
+        nl.append(i.value());
+        ++i;
+    }
+    generateAnnotatedList(relative, marker, nl);
+}
+
 void HtmlGenerator::generateAnnotatedList(const Node *relative,
                                           CodeMarker *marker,
-                                          const NodeMap &nodeMap,
-                                          bool allOdd)
+                                          const NodeList& nodes)
 {
+    bool allInternal = true;
+    foreach (const Node* node, nodes) {
+        if (!node->isInternal() && node->status() != Node::Obsolete) {
+            allInternal = false;
+        }
+    }
+    if (allInternal)
+        return;
     out() << "<table class=\"annotated\">\n";
-
     int row = 0;
-    foreach (const QString &name, nodeMap.keys()) {
-        const Node *node = nodeMap[name];
-
-        if (node->status() == Node::Obsolete)
+    foreach (const Node* node, nodes) {
+        if (node->isInternal() || node->status() == Node::Obsolete)
             continue;
 
-        if (allOdd || (++row % 2 == 1))
+        if (++row % 2 == 1)
             out() << "<tr class=\"odd topAlign\">";
         else
             out() << "<tr class=\"even topAlign\">";
@@ -2265,7 +2235,7 @@ void HtmlGenerator::generateAnnotatedList(const Node *relative,
         out() << "</p></td>";
 
         if (!(node->type() == Node::Document)) {
-            Text brief = node->doc().trimmedBriefText(name);
+            Text brief = node->doc().trimmedBriefText(node->name());
             if (!brief.isEmpty()) {
                 out() << "<td class=\"tblDescr\"><p>";
                 generateText(brief, node, marker);
@@ -2626,7 +2596,7 @@ void HtmlGenerator::generateOverviewList(const Node *relative)
                 else if (!isGroupPage) {
                     // If we encounter a page that belongs to a group then
                     // we add that page to the list for that group.
-                    const DocNode* gn = qdb_->findGroupNode(QStringList(group));
+                    const DocNode* gn = qdb_->getGroup(group);
                     if (gn)
                         docNodeMap[gn].insert(sortKey, docNode);
                 }
@@ -4092,7 +4062,7 @@ void HtmlGenerator::generateManifestFile(QString manifest, QString element)
         }
         if (!proFiles.isEmpty()) {
             if (proFiles.size() == 1) {
-                writer.writeAttribute("projectPath", proFiles[0]);
+                writer.writeAttribute("projectPath", examplesPath + proFiles[0]);
             }
             else {
                 QString exampleName = en->name().split('/').last();
@@ -4101,13 +4071,13 @@ void HtmlGenerator::generateManifestFile(QString manifest, QString element)
                 {
                     if (proFiles[j].endsWith(QStringLiteral("%1/%1.pro").arg(exampleName))
                             || proFiles[j].endsWith(QStringLiteral("%1/%1.qmlproject").arg(exampleName))) {
-                        writer.writeAttribute("projectPath", proFiles[j]);
+                        writer.writeAttribute("projectPath", examplesPath + proFiles[j]);
                         proWithExampleNameFound = true;
                         break;
                     }
                 }
                 if (!proWithExampleNameFound)
-                    writer.writeAttribute("projectPath", proFiles[0]);
+                    writer.writeAttribute("projectPath", examplesPath + proFiles[0]);
             }
         }
         if (!en->imageFileName().isEmpty())
@@ -4160,7 +4130,7 @@ void HtmlGenerator::generateManifestFile(QString manifest, QString element)
                         writer.writeStartElement("fileToOpen");
                         if (file.startsWith("demos/"))
                             file = file.mid(6);
-                        writer.writeCharacters(file);
+                        writer.writeCharacters(examplesPath + file);
                         writer.writeEndElement(); // fileToOpen
                         usedNames.insert(fileName);
                     }
@@ -4171,7 +4141,7 @@ void HtmlGenerator::generateManifestFile(QString manifest, QString element)
                         writer.writeStartElement("fileToOpen");
                         if (file.startsWith("demos/"))
                             file = file.mid(6);
-                        writer.writeCharacters(file);
+                        writer.writeCharacters(examplesPath + file);
                         writer.writeEndElement(); // fileToOpen
                         usedNames.insert(fileName);
                     }

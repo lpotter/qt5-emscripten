@@ -38,9 +38,10 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
-
 #include "piecesmodel.h"
+
+#include <QIcon>
+#include <QMimeData>
 
 PiecesModel::PiecesModel(int pieceSize, QObject *parent)
     : QAbstractListModel(parent), m_PieceSize(pieceSize)
@@ -66,7 +67,7 @@ QVariant PiecesModel::data(const QModelIndex &index, int role) const
 void PiecesModel::addPiece(const QPixmap &pixmap, const QPoint &location)
 {
     int row;
-    if (int(2.0*qrand()/(RAND_MAX+1.0)) == 1)
+    if (int(2.0 * qrand() / (RAND_MAX + 1.0)) == 1)
         row = 0;
     else
         row = pixmaps.size();
@@ -80,7 +81,7 @@ void PiecesModel::addPiece(const QPixmap &pixmap, const QPoint &location)
 Qt::ItemFlags PiecesModel::flags(const QModelIndex &index) const
 {
     if (index.isValid())
-        return (Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled);
+        return (QAbstractListModel::flags(index)|Qt::ItemIsDragEnabled);
 
     return Qt::ItemIsDropEnabled;
 }
@@ -153,8 +154,9 @@ bool PiecesModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
             endRow = pixmaps.size();
         else
             endRow = qMin(row, pixmaps.size());
-    } else
+    } else {
         endRow = parent.row();
+    }
 
     QByteArray encodedData = data->data("image/x-puzzle-piece");
     QDataStream stream(&encodedData, QIODevice::ReadOnly);

@@ -437,6 +437,9 @@ MakefileGenerator::init()
 
     ProValueMap &v = project->variables();
 
+    if (v["TARGET"].isEmpty())
+        warn_msg(WarnLogic, "TARGET is empty");
+
     chkdir = v["QMAKE_CHK_DIR_EXISTS"].join(' ');
     chkfile = v["QMAKE_CHK_FILE_EXISTS"].join(' ');
     if (chkfile.isEmpty()) // Backwards compat with Qt4 specs
@@ -2189,6 +2192,11 @@ MakefileGenerator::writeStubMakefile(QTextStream &t)
 bool
 MakefileGenerator::writeMakefile(QTextStream &t)
 {
+    QString ofile = Option::fixPathToTargetOS(Option::output.fileName());
+    if (ofile.lastIndexOf(Option::dir_sep) != -1)
+        ofile.remove(0, ofile.lastIndexOf(Option::dir_sep) +1);
+    t << "MAKEFILE      = " << ofile << endl << endl;
+
     t << "####### Compile" << endl << endl;
     writeObj(t, "SOURCES");
     writeObj(t, "GENERATED_SOURCES");

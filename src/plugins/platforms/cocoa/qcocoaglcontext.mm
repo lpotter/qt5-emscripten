@@ -65,9 +65,16 @@ QCocoaGLContext::QCocoaGLContext(const QSurfaceFormat &format, QPlatformOpenGLCo
         [m_context initWithFormat:pixelFormat shareContext:nil];
     }
 
+    [pixelFormat release];
+
     const GLint interval = 1;
     [m_context setValues:&interval forParameter:NSOpenGLCPSwapInterval];
 
+}
+
+QCocoaGLContext::~QCocoaGLContext()
+{
+    [m_context release];
 }
 
 // Match up with createNSOpenGLPixelFormat!
@@ -113,8 +120,19 @@ void QCocoaGLContext::setActiveWindow(QWindow *window)
     QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window->handle());
     cocoaWindow->setCurrentContext(this);
 
-    NSView *view = cocoaWindow->contentView();
-    [m_context setView:view];
+    [(QNSView *) cocoaWindow->contentView() setQCocoaGLContext:this];
+
+    // Enable high-dpi OpenGL for retina displays. Enabling has the side
+    // effect that Cooca will start calling glViewport(0, 0, width, height),
+    // overriding any glViewport calls in application code. This is usually not a
+    // problem, except if the applcation wants to have a "custom" viewport.
+    // (like the hellogl example)
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
+    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
+        if (cocoaWindow->devicePixelRatio() > 1)
+            [cocoaWindow->contentView() setWantsBestResolutionOpenGLSurface:YES];
+    }
+#endif
 }
 
 void QCocoaGLContext::doneCurrent()

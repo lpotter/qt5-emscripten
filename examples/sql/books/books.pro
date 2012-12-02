@@ -8,10 +8,8 @@ FORMS       = bookwindow.ui
 
 QT += sql widgets widgets
 
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/books
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS *.pro images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/books
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/sql/books
+INSTALLS += target
 
 
 wince*: {

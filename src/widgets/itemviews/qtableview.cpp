@@ -1013,10 +1013,10 @@ void QTableViewPrivate::drawCell(QPainter *painter, const QStyleOptionViewItem &
     \table 100%
     \row \li \inlineimage windowsxp-tableview.png Screenshot of a Windows XP style table view
          \li \inlineimage macintosh-tableview.png Screenshot of a Macintosh style table view
-         \li \inlineimage plastique-tableview.png Screenshot of a Plastique style table view
+         \li \inlineimage fusion-tableview.png Screenshot of a Fusion style table view
     \row \li A \l{Windows XP Style Widget Gallery}{Windows XP style} table view.
          \li A \l{Macintosh Style Widget Gallery}{Macintosh style} table view.
-         \li A \l{Plastique Style Widget Gallery}{Plastique style} table view.
+         \li A \l{Fusion Style Widget Gallery}{Fusion style} table view.
     \endtable
 
     \sa QTableWidget, {View Classes}, QAbstractItemModel, QAbstractItemView,
@@ -3133,12 +3133,14 @@ void QTableViewPrivate::selectRow(int row, bool anchor)
                 command |= QItemSelectionModel::Current;
         }
 
-        QModelIndex tl = model->index(qMin(rowSectionAnchor, row), 0, root);
-        QModelIndex br = model->index(qMax(rowSectionAnchor, row), model->columnCount(root) - 1, root);
-        if (verticalHeader->sectionsMoved() && tl.row() != br.row())
+        QModelIndex tl = model->index(qMin(rowSectionAnchor, row), logicalColumn(0), root);
+        QModelIndex br = model->index(qMax(rowSectionAnchor, row), logicalColumn(model->columnCount(root) - 1), root);
+        if ((verticalHeader->sectionsMoved() && tl.row() != br.row())
+            || horizontalHeader->sectionsMoved()) {
             q->setSelection(q->visualRect(tl)|q->visualRect(br), command);
-        else
+        } else {
             selectionModel->select(QItemSelection(tl, br), command);
+        }
     }
 }
 
@@ -3171,13 +3173,15 @@ void QTableViewPrivate::selectColumn(int column, bool anchor)
                 command |= QItemSelectionModel::Current;
         }
 
-        QModelIndex tl = model->index(0, qMin(columnSectionAnchor, column), root);
-        QModelIndex br = model->index(model->rowCount(root) - 1,
+        QModelIndex tl = model->index(logicalRow(0), qMin(columnSectionAnchor, column), root);
+        QModelIndex br = model->index(logicalRow(model->rowCount(root) - 1),
                                       qMax(columnSectionAnchor, column), root);
-        if (horizontalHeader->sectionsMoved() && tl.column() != br.column())
+        if ((horizontalHeader->sectionsMoved() && tl.column() != br.column())
+            || verticalHeader->sectionsMoved()) {
             q->setSelection(q->visualRect(tl)|q->visualRect(br), command);
-        else
+        } else {
             selectionModel->select(QItemSelection(tl, br), command);
+        }
     }
 }
 

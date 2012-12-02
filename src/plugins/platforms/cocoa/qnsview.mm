@@ -55,6 +55,8 @@
 #include <QtGui/QTextFormat>
 #include <QtCore/QDebug>
 #include <private/qguiapplication_p.h>
+#include "qcocoabackingstore.h"
+#include "qcocoaglcontext.h"
 
 #ifdef QT_COCOA_ENABLE_ACCESSIBILITY_INSPECTOR
 #include <accessibilityinspector.h>
@@ -74,13 +76,15 @@ static QTouchDevice *touchDevice = 0;
 {
     self = [super initWithFrame : NSMakeRect(0,0, 300,300)];
     if (self) {
-        m_cgImage = 0;
+        m_backingStore = 0;
         m_maskImage = 0;
         m_maskData = 0;
         m_window = 0;
         m_buttons = Qt::NoButton;
         m_sendKeyEvent = false;
+        m_subscribesForGlobalFrameNotifications = false;
         currentCustomDragTypes = 0;
+
         if (!touchDevice) {
             touchDevice = new QTouchDevice;
             touchDevice->setType(QTouchDevice::TouchPad);
@@ -93,13 +97,17 @@ static QTouchDevice *touchDevice = 0;
 
 - (void)dealloc
 {
-    CGImageRelease(m_cgImage);
-    m_cgImage = 0;
     CGImageRelease(m_maskImage);
     m_maskImage = 0;
     delete[] m_maskData;
     m_maskData = 0;
     m_window = 0;
+    if (m_subscribesForGlobalFrameNotifications) {
+        m_subscribesForGlobalFrameNotifications = false;
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+             name:NSViewGlobalFrameDidChangeNotification
+             object:self];
+}
     [super dealloc];
 }
 
@@ -139,6 +147,28 @@ static QTouchDevice *touchDevice = 0;
                                           object:self];
 
     return self;
+}
+
+- (void) setQCocoaGLContext:(QCocoaGLContext *)context
+{
+    [context->nsOpenGLContext() setView:self];
+    if (!m_subscribesForGlobalFrameNotifications) {
+        // NSOpenGLContext expects us to repaint (or update) the view when
+        // it changes position on screen. Since this happens unnoticed for
+        // the view when the parent view moves, we need to register a special
+        // notification that lets us handle this case:
+        m_subscribesForGlobalFrameNotifications = true;
+        [[NSNotificationCenter defaultCenter] addObserver:self
+            selector:@selector(globalFrameChanged:)
+            name:NSViewGlobalFrameDidChangeNotification
+            object:self];
+    }
+}
+
+- (void) globalFrameChanged:(NSNotification*)notification
+{
+    Q_UNUSED(notification);
+    QWindowSystemInterface::handleExposeEvent(m_window, m_window->geometry());
 }
 
 - (void)updateGeometry
@@ -211,66 +241,12 @@ static QTouchDevice *touchDevice = 0;
     }
 }
 
-static CGImageRef qt_mac_toCGImage(QImage *qImage, bool isMask, uchar **dataCopy)
+- (void) flushBackingStore:(QCocoaBackingStore *)backingStore region:(const QRegion &)region offset:(QPoint)offset
 {
-    int width = qImage->width();
-    int height = qImage->height();
-
-    if (width <= 0 || height <= 0) {
-        qWarning() << Q_FUNC_INFO <<
-            "setting invalid size" << width << "x" << height << "for qnsview image";
-        return 0;
-    }
-
-    const uchar *imageData = qImage->bits();
-    if (dataCopy) {
-        delete[] *dataCopy;
-        *dataCopy = new uchar[qImage->byteCount()];
-        memcpy(*dataCopy, imageData, qImage->byteCount());
-    }
-    int bitDepth = qImage->depth();
-    int colorBufferSize = 8;
-    int bytesPrLine = qImage->bytesPerLine();
-
-    CGDataProviderRef cgDataProviderRef = CGDataProviderCreateWithData(
-                NULL,
-                dataCopy ? *dataCopy : imageData,
-                qImage->byteCount(),
-                NULL);
-
-    CGImageRef cgImage = 0;
-    if (isMask) {
-        cgImage = CGImageMaskCreate(width,
-                                    height,
-                                    colorBufferSize,
-                                    bitDepth,
-                                    bytesPrLine,
-                                    cgDataProviderRef,
-                                    NULL,
-                                    false);
-    } else {
-        CGColorSpaceRef cgColourSpaceRef = CGColorSpaceCreateDeviceRGB();
-        cgImage = CGImageCreate(width,
-                                height,
-                                colorBufferSize,
-                                bitDepth,
-                                bytesPrLine,
-                                cgColourSpaceRef,
-                                kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
-                                cgDataProviderRef,
-                                NULL,
-                                false,
-                                kCGRenderingIntentDefault);
-        CGColorSpaceRelease(cgColourSpaceRef);
-    }
-    CGDataProviderRelease(cgDataProviderRef);
-    return cgImage;
-}
-
-- (void) setImage:(QImage *)image
-{
-    CGImageRelease(m_cgImage);
-    m_cgImage = qt_mac_toCGImage(image, false, 0);
+    m_backingStore = backingStore;
+    m_backingStoreOffset = offset * m_backingStore->getBackingStoreDevicePixelRatio();
+    QRect br = region.boundingRect();
+    [self setNeedsDisplayInRect:NSMakeRect(br.x(), br.y(), br.width(), br.height())];
 }
 
 - (void) setMaskRegion:(const QRegion *)region
@@ -291,36 +267,56 @@ static CGImageRef qt_mac_toCGImage(QImage *qImage, bool isMask, uchar **dataCopy
     p.end();
 
     maskImage = maskImage.convertToFormat(QImage::Format_Indexed8);
-    m_maskImage = qt_mac_toCGImage(&maskImage, true, &m_maskData);
+    m_maskImage = qt_mac_toCGImage(maskImage, true, &m_maskData);
 }
 
 - (void) drawRect:(NSRect)dirtyRect
 {
-    if (!m_cgImage)
+    if (!m_backingStore)
         return;
 
-    CGRect dirtyCGRect = NSRectToCGRect(dirtyRect);
+    // Calculate source and target rects. The target rect is the dirtyRect:
+    CGRect dirtyWindowRect = NSRectToCGRect(dirtyRect);
+
+    // The backing store source rect will be larger on retina displays.
+    // Scale dirtyRect by the device pixel ratio:
+    const qreal devicePixelRatio = m_backingStore->getBackingStoreDevicePixelRatio();
+    CGRect dirtyBackingRect = CGRectMake(dirtyRect.origin.x * devicePixelRatio,
+                                         dirtyRect.origin.y * devicePixelRatio,
+                                         dirtyRect.size.width * devicePixelRatio,
+                                         dirtyRect.size.height * devicePixelRatio);
 
     NSGraphicsContext *nsGraphicsContext = [NSGraphicsContext currentContext];
     CGContextRef cgContext = (CGContextRef) [nsGraphicsContext graphicsPort];
 
-    CGContextSaveGState( cgContext );
-    int dy = dirtyCGRect.origin.y + CGRectGetMaxY(dirtyCGRect);
+    // Translate coordiate system from CoreGraphics (bottom-left) to NSView (top-left):
+    CGContextSaveGState(cgContext);
+    int dy = dirtyWindowRect.origin.y + CGRectGetMaxY(dirtyWindowRect);
+
     CGContextTranslateCTM(cgContext, 0, dy);
     CGContextScaleCTM(cgContext, 1, -1);
 
+    // If a mask is set, modify the sub image accordingly:
     CGImageRef subMask = 0;
     if (m_maskImage) {
-        subMask = CGImageCreateWithImageInRect(m_maskImage, dirtyCGRect);
-        CGContextClipToMask(cgContext, dirtyCGRect, subMask);
+        subMask = CGImageCreateWithImageInRect(m_maskImage, dirtyWindowRect);
+        CGContextClipToMask(cgContext, dirtyWindowRect, subMask);
     }
 
-    CGImageRef subImage = CGImageCreateWithImageInRect(m_cgImage, dirtyCGRect);
-    CGContextDrawImage(cgContext,dirtyCGRect,subImage);
+    // Clip out and draw the correct sub image from the (shared) backingstore:
+    CGRect backingStoreRect = CGRectMake(
+        dirtyBackingRect.origin.x + m_backingStoreOffset.x(),
+        dirtyBackingRect.origin.y + m_backingStoreOffset.y(),
+        dirtyBackingRect.size.width,
+        dirtyBackingRect.size.height
+    );
+    CGImageRef bsCGImage = m_backingStore->getBackingStoreCGImage();
+    CGImageRef cleanImg = CGImageCreateWithImageInRect(bsCGImage, backingStoreRect);
+    CGContextDrawImage(cgContext, dirtyWindowRect, cleanImg);
 
+    // Clean-up:
     CGContextRestoreGState(cgContext);
-
-    CGImageRelease(subImage);
+    CGImageRelease(cleanImg);
     CGImageRelease(subMask);
 }
 
@@ -711,12 +707,12 @@ static CGImageRef qt_mac_toCGImage(QImage *qImage, bool isMask, uchar **dataCopy
         if (phase == NSEventPhaseEnded || phase == NSEventPhaseCancelled) {
             currentWheelModifiers = Qt::NoModifier;
         }
-    }
-#else
-    QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_windowPoint, pixelDelta, angleDelta,
-                                             [self convertKeyModifiers:[theEvent modifierFlags]]);
+    } else
 #endif
-
+    {
+        QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_windowPoint, pixelDelta, angleDelta,
+                                                 [self convertKeyModifiers:[theEvent modifierFlags]]);
+    }
 }
 #endif //QT_NO_WHEELEVENT
 

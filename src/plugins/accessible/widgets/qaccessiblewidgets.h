@@ -76,6 +76,8 @@ class QAccessibleTextWidget : public QAccessibleWidget,
 public:
     QAccessibleTextWidget(QWidget *o, QAccessible::Role r = QAccessible::EditableText, const QString &name = QString());
 
+    QAccessible::State state() const;
+
     // QAccessibleTextInterface
     //  selection
     void selection(int selectionIndex, int *startOffset, int *endOffset) const;
@@ -109,6 +111,8 @@ public:
     void insertText(int offset, const QString &text);
     void replaceText(int startOffset, int endOffset, const QString &text);
 
+    using QAccessibleWidget::text;
+
 protected:
     QTextCursor textCursorForRange(int startOffset, int endOffset) const;
     QPair<int, int> getBoundaries(int offset, QAccessible2::BoundaryType boundaryType) const;
@@ -134,6 +138,9 @@ public:
 
     // QAccessibleTextInterface
     void scrollToSubstring(int startIndex, int endIndex);
+
+    using QAccessibleTextWidget::text;
+
 protected:
     QPlainTextEdit *plainTextEdit() const;
 
@@ -157,6 +164,8 @@ public:
 
     // QAccessibleTextInterface
     void scrollToSubstring(int startIndex, int endIndex);
+
+    using QAccessibleTextWidget::text;
 
 protected:
     QTextEdit *textEdit() const;

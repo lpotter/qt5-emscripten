@@ -15,12 +15,8 @@ SUBDIRS       = \
                 richtext \
                 scroller \
                 statemachine \
+                tools \
                 tutorials \
                 widgets
 
 contains(DEFINES, QT_NO_CURSOR): SUBDIRS -= mainwindows
-
-# install
-sources.files = README *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]
-INSTALLS += sources

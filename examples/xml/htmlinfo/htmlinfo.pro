@@ -13,7 +13,5 @@ wince*:{
 }
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/xml/htmlinfo
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS *.html htmlinfo.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/xml/htmlinfo
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/xml/htmlinfo
+INSTALLS += target

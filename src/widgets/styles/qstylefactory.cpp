@@ -45,28 +45,28 @@
 #include "qmutex.h"
 
 #include "qapplication.h"
-#include "qwindowsstyle.h"
+#include "qwindowsstyle_p.h"
 #ifndef QT_NO_STYLE_FUSION
-#include "qfusionstyle.h"
+#include "qfusionstyle_p.h"
 #endif
 #ifndef QT_NO_STYLE_GTK
-#include "qgtkstyle.h"
+#include "qgtkstyle_p.h"
 #endif
 #ifndef QT_NO_STYLE_WINDOWSXP
-#include "qwindowsxpstyle.h"
+#include "qwindowsxpstyle_p.h"
 #endif
 #ifndef QT_NO_STYLE_WINDOWSVISTA
-#include "qwindowsvistastyle.h"
+#include "qwindowsvistastyle_p.h"
 #endif
 #ifndef QT_NO_STYLE_WINDOWSCE
-#include "qwindowscestyle.h"
+#include "qwindowscestyle_p.h"
 #endif
 #ifndef QT_NO_STYLE_WINDOWSMOBILE
-#include "qwindowsmobilestyle.h"
+#include "qwindowsmobilestyle_p.h"
 #endif
 
 #if !defined(QT_NO_STYLE_MAC) && defined(Q_OS_MAC)
-#  include "qmacstyle_mac.h"
+#  include "qmacstyle_mac_p.h"
 #endif
 
 QT_BEGIN_NAMESPACE

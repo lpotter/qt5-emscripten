@@ -6,10 +6,8 @@ TEMPLATE = app
 SOURCES += hellothreadpool.cpp 
    
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/threads/hellothreadpool
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS hellothreadpool.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/threads/hellothreadpool
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/threads/hellothreadpool
+INSTALLS += target
 
 
 

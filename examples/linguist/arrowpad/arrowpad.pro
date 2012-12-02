@@ -10,10 +10,8 @@ TRANSLATIONS = arrowpad_fr.ts \
 #! [1]
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/linguist/arrowpad
-sources.files = $$SOURCES $$HEADERS *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/linguist/arrowpad
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/linguist/arrowpad
+INSTALLS += target
 
 QT += widgets
 

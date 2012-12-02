@@ -95,7 +95,8 @@ QT_BEGIN_NAMESPACE
 
     \warning When passing a QString to the constructor or calling setText(),
     make sure to sanitize your input, as QLabel tries to guess whether it
-    displays the text as plain text or as rich text. You may want to call
+    displays the text as plain text or as rich text, a subset of HTML 4
+    markup. You may want to call
     setTextFormat() explicitly, e.g. in case you expect the text to be in
     plain format but cannot control the text source (for instance when
     displaying data loaded from the Web).
@@ -137,8 +138,8 @@ QT_BEGIN_NAMESPACE
     \li \inlineimage macintosh-label.png Screenshot of a Macintosh style label
     \li A label shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
     \row
-    \li \inlineimage plastique-label.png Screenshot of a Plastique style label
-    \li A label shown in the \l{Plastique Style Widget Gallery}{Plastique widget style}.
+    \li \inlineimage fusion-label.png Screenshot of a Fusion style label
+    \li A label shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
     \row
     \li \inlineimage windowsxp-label.png Screenshot of a Windows XP style label
     \li A label shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
@@ -259,6 +260,7 @@ void QLabelPrivate::init()
     text, depending on the text format setting; see setTextFormat().
     The default setting is Qt::AutoText; i.e. QLabel will try to
     auto-detect the format of the text set.
+    See \l {Supported HTML Subset} for the definition of rich text.
 
     If a buddy has been set, the buddy mnemonic key is updated
     from the new text.
@@ -560,17 +562,18 @@ QSize QLabelPrivate::sizeForWidth(int w) const
     int vextra = hextra;
     QFontMetrics fm = q->fontMetrics();
 
-    if (pixmap && !pixmap->isNull())
+    if (pixmap && !pixmap->isNull()) {
         br = pixmap->rect();
+        br.setSize(br.size() / pixmap->devicePixelRatio());
 #ifndef QT_NO_PICTURE
-    else if (picture && !picture->isNull())
+    } else if (picture && !picture->isNull()) {
         br = picture->boundingRect();
 #endif
 #ifndef QT_NO_MOVIE
-    else if (movie && !movie->currentPixmap().isNull())
+    } else if (movie && !movie->currentPixmap().isNull()) {
         br = movie->currentPixmap().rect();
 #endif
-    else if (isTextLabel) {
+    } else if (isTextLabel) {
         int align = QStyle::visualAlignment(textDirection(), QFlag(this->align));
         // Add indentation
         int m = indent;

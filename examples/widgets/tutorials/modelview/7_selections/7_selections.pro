@@ -5,10 +5,8 @@ SOURCES += main.cpp \
 HEADERS += mainwindow.h 
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/7_selections
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS 7_selections.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/7_selections
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/modelview/7_selections
+INSTALLS += target
 
 QT += widgets
 

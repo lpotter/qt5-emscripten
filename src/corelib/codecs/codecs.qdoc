@@ -26,18 +26,6 @@
 ****************************************************************************/
 
 /*!
-    \group codecs
-    \title Codecs
-    \ingroup groups
-    \brief Codec support in Qt.
-
-    These \l{Qt Core} codecs classes provide facilities for conversion between
-    Unicode and specific text encodings.
-
-    \annotatedlist codecs
-*/
-
-/*!
     \page codec-big5.html
     \title Big5 Text Codec
     \ingroup codecs

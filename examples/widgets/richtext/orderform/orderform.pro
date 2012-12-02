@@ -5,10 +5,8 @@ SOURCES     = detailsdialog.cpp \
               mainwindow.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/richtext/orderform
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS orderform.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/richtext/orderform
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/richtext/orderform
+INSTALLS += target
 
 QT += widgets
 !isEmpty(QT.printsupport.name): QT += printsupport

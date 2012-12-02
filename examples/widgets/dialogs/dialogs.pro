@@ -9,11 +9,7 @@ SUBDIRS       = classwizard \
                     extension \
                     findfiles
 
+contains(DEFINES, QT_NO_WIZARD): SUBDIRS -= trivialwizard licensewizard classwizard
 wince*: SUBDIRS += sipdialog
-
-# install
-sources.files = README *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/dialogs
-INSTALLS += sources
 
 QT += widgets

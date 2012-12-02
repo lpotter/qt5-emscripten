@@ -28,8 +28,9 @@
 /*!
     \example grabber
     \title Grabber Example
+    \ingroup examples-widgets-opengl
 
-    The Grabber examples shows how to retrieve the contents of an OpenGL framebuffer.
+    \brief The Grabber examples shows how to retrieve the contents of an OpenGL framebuffer.
 
     \image grabber-example.png
 */

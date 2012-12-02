@@ -6,9 +6,7 @@ SOURCES       = main.cpp \
 RESOURCES     = basicdrawing.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/basicdrawing
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS basicdrawing.pro images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/basicdrawing
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/painting/basicdrawing
+INSTALLS += target
 
 QT += widgets

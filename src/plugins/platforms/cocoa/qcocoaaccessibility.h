@@ -45,6 +45,21 @@
 
 #include <QtGui>
 
+#ifndef QT_NO_COCOA_ACCESSIBILITY
+
+#include <qpa/qplatformaccessibility.h>
+
+class QCococaAccessibility : public QPlatformAccessibility
+{
+public:
+    QCococaAccessibility();
+    ~QCococaAccessibility();
+    void notifyAccessibilityUpdate(QAccessibleEvent *event);
+    void setRootObject(QObject *o);
+    void initialize();
+    void cleanup();
+};
+
 namespace QCocoaAccessible {
 
 /*
@@ -52,9 +67,9 @@ namespace QCocoaAccessible {
 
     Cocoa accessibility is implemented in the following files:
 
+    - qcocoaaccessibility (this file) : QCocoaAccessibility "plugin", conversion and helper functions.
     - qnsviewaccessibility            : Root accessibility implementation for QNSView
     - qcocoaaccessibilityelement      : Cocoa accessibility protocol wrapper for QAccessibleInterface
-    - qcocoaaccessibility (this file) : Conversion and helper functions.
 
     The accessibility implementation wraps QAccessibleInterfaces in QCocoaAccessibleElements, which
     implements the cocoa accessibility protocol. The root QAccessibleInterface (the one returned
@@ -65,12 +80,16 @@ namespace QCocoaAccessible {
     demand.
 */
 
-NSString *macRole(QAccessible::Role);
+NSString *macRole(QAccessibleInterface *interface);
 bool shouldBeIgnrored(QAccessibleInterface *interface);
 NSString *getTranslatedAction(const QString &qtAction);
 NSMutableArray *createTranslatedActionsList(const QStringList &qtActions);
 QString translateAction(NSString *nsAction);
+bool hasValueAttribute(QAccessibleInterface *interface);
+id getValueAttribute(QAccessibleInterface *interface);
 
 }
+
+#endif // QT_NO_COCOA_ACCESSIBILITY
 
 #endif

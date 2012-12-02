@@ -7,9 +7,7 @@ SOURCES     = treeitem.cpp \
 CONFIG  += qt
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/simpletreemodel
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.pro *.txt
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/simpletreemodel
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/simpletreemodel
+INSTALLS += target
 
 QT += widgets

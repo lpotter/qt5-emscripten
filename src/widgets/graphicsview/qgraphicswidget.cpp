@@ -734,6 +734,7 @@ void QGraphicsWidget::initStyleOption(QStyleOption *option) const
         option->palette.setCurrentColorGroup(QPalette::Inactive);
     }
     option->fontMetrics = QFontMetrics(font());
+    option->styleObject = const_cast<QGraphicsWidget *>(this);
 }
 
 /*!
@@ -2115,7 +2116,7 @@ QList<QAction *> QGraphicsWidget::actions() const
 
     By default, tab order is defined implicitly using widget creation order.
 
-    \sa focusPolicy, {Keyboard Focus}
+    \sa focusPolicy, {Keyboard Focus in Widgets}
 */
 void QGraphicsWidget::setTabOrder(QGraphicsWidget *first, QGraphicsWidget *second)
 {

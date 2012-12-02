@@ -6,10 +6,8 @@ HEADERS += downloadmanager.h textprogressbar.h
 SOURCES += downloadmanager.cpp main.cpp textprogressbar.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/downloadmanager
-sources.files = $$SOURCES $$HEADERS $$FORMS $$RESOURCES *.pro *.png
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/downloadmanager
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/downloadmanager
+INSTALLS += target
 
 OTHER_FILES += \
     debian/changelog \

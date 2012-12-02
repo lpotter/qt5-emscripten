@@ -46,8 +46,8 @@
 
 #include <Cocoa/Cocoa.h>
 
-#include "qmacstyle_mac.h"
 #include "qmacstyle_mac_p.h"
+#include "qmacstyle_mac_p_p.h"
 #include "qmacstylepixmaps_mac_p.h"
 
 #define QMAC_QAQUASTYLE_SIZE_CONSTRAIN
@@ -68,11 +68,8 @@
 #include <qgroupbox.h>
 #include <qhash.h>
 #include <qheaderview.h>
-#include <qlayout.h>
 #include <qlineedit.h>
-#include <qlistview.h>
 #include <qmainwindow.h>
-#include <qmap.h>
 #include <qmenubar.h>
 #include <qpaintdevice.h>
 #include <qpainter.h>
@@ -84,11 +81,7 @@
 #include <qrubberband.h>
 #include <qscrollbar.h>
 #include <qsizegrip.h>
-#include <qspinbox.h>
-#include <qsplitter.h>
 #include <qstyleoption.h>
-#include <qtextedit.h>
-#include <qtextstream.h>
 #include <qtoolbar.h>
 #include <qtoolbutton.h>
 #include <qtreeview.h>
@@ -469,7 +462,7 @@ class QMacCGContext
 {
     CGContextRef context;
 public:
-    QMacCGContext(QPainter *p); //qpaintengine_mac.cpp
+    QMacCGContext(QPainter *p);
     inline QMacCGContext() { context = 0; }
     inline QMacCGContext(const QPaintDevice *pdev) {
         extern CGContextRef qt_mac_cg_context(const QPaintDevice *);
@@ -2715,6 +2708,7 @@ int QMacStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget *w
     case SH_ScrollBar_Transient:
         ret = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
+    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7)
         ret &= [NSScroller preferredScrollerStyle] == NSScrollerStyleOverlay;
 #endif
         break;
@@ -3117,7 +3111,8 @@ void QMacStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, QPai
                 fdi.state = tds;
                 SInt32 frame_size;
                 if (pe == PE_FrameLineEdit) {
-                    fdi.kind = kHIThemeFrameTextFieldSquare;
+                    fdi.kind = frame->features & QStyleOptionFrame::Rounded ? kHIThemeFrameTextFieldRound :
+                                                                              kHIThemeFrameTextFieldSquare;
                     GetThemeMetric(kThemeMetricEditTextFrameOutset, &frame_size);
                     if ((frame->state & State_ReadOnly) || !(frame->state & State_Enabled))
                         fdi.state = kThemeStateInactive;
@@ -3558,8 +3553,9 @@ void QMacStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPainter
             if (btn->features & QStyleOptionButton::HasMenu) {
                 int mbi = proxy()->pixelMetric(QStyle::PM_MenuButtonIndicator, btn, w);
                 QRect ir = btn->rect;
+                int arrowYOffset = bdi.kind == kThemePushButton ? 4 : 2;
                 HIRect arrowRect = CGRectMake(ir.right() - mbi - QMacStylePrivate::PushButtonRightOffset,
-                                              ir.height() / 2 - 4, mbi, ir.height() / 2);
+                                              ir.height() / 2 - arrowYOffset, mbi, ir.height() / 2);
                 bool drawColorless = btn->palette.currentColorGroup() == QPalette::Active;
                 if (drawColorless && tds == kThemeStateInactive)
                     tds = kThemeStateActive;
@@ -4911,60 +4907,60 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
             if (cc == CC_ScrollBar && proxy()->styleHint(SH_ScrollBar_Transient)) {
-                QObject *styleObject = opt->styleObject;
-                int oldPos = styleObject->property("_q_stylepos").toInt();
-                int oldMin = styleObject->property("_q_stylemin").toInt();
-                int oldMax = styleObject->property("_q_stylemax").toInt();
-                QRect oldRect = styleObject->property("_q_stylerect").toRect();
-                int oldState = styleObject->property("_q_stylestate").toInt();
-                uint oldActiveControls = styleObject->property("_q_stylecontrols").toUInt();
+                bool wasActive = false;
+                CGFloat opacity = 1.0;
+                if (QObject *styleObject = opt->styleObject) {
+                    int oldPos = styleObject->property("_q_stylepos").toInt();
+                    int oldMin = styleObject->property("_q_stylemin").toInt();
+                    int oldMax = styleObject->property("_q_stylemax").toInt();
+                    QRect oldRect = styleObject->property("_q_stylerect").toRect();
+                    int oldState = styleObject->property("_q_stylestate").toInt();
+                    uint oldActiveControls = styleObject->property("_q_stylecontrols").toUInt();
 
-                // a scrollbar is transient when the the scrollbar itself and
-                // its sibling are both inactive (ie. not pressed/hovered/moved)
-                bool transient = !opt->activeSubControls && !(slider->state & State_On);
+                    // a scrollbar is transient when the the scrollbar itself and
+                    // its sibling are both inactive (ie. not pressed/hovered/moved)
+                    bool transient = !opt->activeSubControls && !(slider->state & State_On);
 
-                CGFloat opacity = 0.0;
-                if (!transient ||
-                        oldPos != slider->sliderPosition ||
-                        oldMin != slider->minimum ||
-                        oldMax != slider->maximum ||
-                        oldRect != slider->rect ||
-                        oldState != slider->state ||
-                        oldActiveControls != slider->activeSubControls) {
+                    if (!transient ||
+                            oldPos != slider->sliderPosition ||
+                            oldMin != slider->minimum ||
+                            oldMax != slider->maximum ||
+                            oldRect != slider->rect ||
+                            oldState != slider->state ||
+                            oldActiveControls != slider->activeSubControls) {
 
-                    // if the scrollbar is transient or its attributes, geometry or
-                    // state has changed, the opacity is reset back to 100% opaque
-                    opacity = 1.0;
+                        styleObject->setProperty("_q_stylepos", slider->sliderPosition);
+                        styleObject->setProperty("_q_stylemin", slider->minimum);
+                        styleObject->setProperty("_q_stylemax", slider->maximum);
+                        styleObject->setProperty("_q_stylerect", slider->rect);
+                        styleObject->setProperty("_q_stylestate", static_cast<int>(slider->state));
+                        styleObject->setProperty("_q_stylecontrols", static_cast<uint>(slider->activeSubControls));
 
-                    styleObject->setProperty("_q_stylepos", slider->sliderPosition);
-                    styleObject->setProperty("_q_stylemin", slider->minimum);
-                    styleObject->setProperty("_q_stylemax", slider->maximum);
-                    styleObject->setProperty("_q_stylerect", slider->rect);
-                    styleObject->setProperty("_q_stylestate", static_cast<int>(slider->state));
-                    styleObject->setProperty("_q_stylecontrols", static_cast<uint>(slider->activeSubControls));
-
-                    if (transient) {
-                        QFadeOutAnimation *anim  = qobject_cast<QFadeOutAnimation *>(d->animation(styleObject));
-                        if (!anim) {
-                            anim = new QFadeOutAnimation(styleObject);
-                            d->startAnimation(anim);
+                        if (transient) {
+                            QFadeOutAnimation *anim  = qobject_cast<QFadeOutAnimation *>(d->animation(styleObject));
+                            if (!anim) {
+                                anim = new QFadeOutAnimation(styleObject);
+                                d->startAnimation(anim);
+                            } else {
+                                // the scrollbar was already fading out while the
+                                // state changed -> restart the fade out animation
+                                anim->setCurrentTime(0);
+                            }
                         } else {
-                            // the scrollbar was already fading out while the
-                            // state changed -> restart the fade out animation
-                            anim->setCurrentTime(0);
+                            d->stopAnimation(styleObject);
                         }
-                    } else {
-                        d->stopAnimation(styleObject);
                     }
-                }
 
-                QFadeOutAnimation *anim = qobject_cast<QFadeOutAnimation *>(d->animation(styleObject));
-                if (anim) {
-                    // once a scrollbar was active (hovered/pressed), it retains
-                    // the active look even if it's no longer active while fading out
-                    if (oldActiveControls)
-                        anim->setActive(true);
-                    opacity = anim->currentValue();
+                    QFadeOutAnimation *anim = qobject_cast<QFadeOutAnimation *>(d->animation(styleObject));
+                    if (anim) {
+                        // once a scrollbar was active (hovered/pressed), it retains
+                        // the active look even if it's no longer active while fading out
+                        if (oldActiveControls)
+                            anim->setActive(true);
+
+                        wasActive = anim->wasActive();
+                        opacity = anim->currentValue();
+                    }
                 }
 
                 const bool isHorizontal = slider->orientation == Qt::Horizontal;
@@ -4995,7 +4991,7 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
                 [scroller setScrollerStyle:NSScrollerStyleOverlay];
 
                 // first we draw only the track, by using a disabled scroller
-                if (opt->activeSubControls || (anim && anim->wasActive())) {
+                if (opt->activeSubControls || wasActive) {
                     CGContextBeginTransparencyLayerWithRect(cg, qt_hirectForQRect(slider->rect),
                                                             NULL);
                     CGContextSetAlpha(cg, opacity);
@@ -5287,7 +5283,12 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
                 = qstyleoption_cast<const QStyleOptionGroupBox *>(opt)) {
 
             QStyleOptionGroupBox groupBox(*gb);
-            groupBox.state |= QStyle::State_Mini; // Force mini-sized checkbox to go with small-sized label
+            bool flat = (groupBox.features & QStyleOptionFrameV2::Flat);
+            if (!flat)
+                groupBox.state |= QStyle::State_Mini; // Force mini-sized checkbox to go with small-sized label
+            else
+                groupBox.subControls = groupBox.subControls & ~SC_GroupBoxFrame; // We don't like frames and ugly lines
+
             bool didModifySubControls = false;
             if ((!widget || !widget->testAttribute(Qt::WA_SetFont))
                     && QApplication::desktopSettingsAware()) {
@@ -5307,7 +5308,7 @@ void QMacStyle::drawComplexControl(ComplexControl cc, const QStyleOptionComplex 
                                       textColor.blueF(), textColor.alphaF() };
                 CGContextSetFillColorSpace(cg, qt_mac_genericColorSpace());
                 CGContextSetFillColor(cg, colorComp);
-                tti.fontID = kThemeSmallSystemFont;
+                tti.fontID = flat ? kThemeSystemFont : kThemeSmallSystemFont;
                 tti.horizontalFlushness = kHIThemeTextHorizontalFlushCenter;
                 tti.verticalFlushness = kHIThemeTextVerticalFlushCenter;
                 tti.options = kHIThemeTextBoxOptionNone;
@@ -5749,7 +5750,7 @@ QRect QMacStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex *op
                     HIThemeTextInfo tti;
                     tti.version = qt_mac_hitheme_version;
                     tti.state = kThemeStateActive;
-                    tti.fontID = kThemeSmallSystemFont;
+                    tti.fontID = flat ? kThemeSystemFont : kThemeSmallSystemFont;
                     tti.horizontalFlushness = kHIThemeTextHorizontalFlushCenter;
                     tti.verticalFlushness = kHIThemeTextVerticalFlushCenter;
                     tti.options = kHIThemeTextBoxOptionNone;
@@ -5770,6 +5771,8 @@ QRect QMacStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex *op
 
                 QRect labelRect = alignedRect(groupBox->direction, groupBox->textAlignment,
                                               QSize(tw, h), ret);
+                if (flat && checkable)
+                    labelRect.moveLeft(labelRect.left() + 4);
                 int indicatorWidth = proxy()->pixelMetric(PM_IndicatorWidth, opt, widget);
                 bool rtl = groupBox->direction == Qt::RightToLeft;
                 if (sc == SC_GroupBoxLabel) {
@@ -5777,7 +5780,10 @@ QRect QMacStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex *op
                         int newSum = indicatorWidth + 1;
                         int newLeft = labelRect.left() + (rtl ? -newSum : newSum);
                         labelRect.moveLeft(newLeft);
-                        labelRect.moveTop(labelRect.top() + 5);
+                        if (flat)
+                            labelRect.moveTop(labelRect.top() + 3);
+                        else
+                            labelRect.moveTop(labelRect.top() + 4);
                     } else if (flat) {
                         int newLeft = labelRect.left() - (rtl ? 3 : -3);
                         labelRect.moveLeft(newLeft);
@@ -5792,32 +5798,32 @@ QRect QMacStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex *op
 
                 if (sc == SC_GroupBoxCheckBox) {
                     int left = rtl ? labelRect.right() - indicatorWidth : labelRect.left() - 1;
-                    ret.setRect(left, ret.top() + 6,
+                    int top = flat ? ret.top() + 1 : ret.top() + 5;
+                    ret.setRect(left, top,
                                 indicatorWidth, proxy()->pixelMetric(PM_IndicatorHeight, opt, widget));
                 }
                 break;
             }
             case SC_GroupBoxContents:
             case SC_GroupBoxFrame: {
-                if (flat) {
-                    ret = QCommonStyle::subControlRect(cc, groupBox, sc, widget);
-                    break;
-                }
                 QFontMetrics fm = groupBox->fontMetrics;
-                bool checkable = groupBox->subControls & SC_GroupBoxCheckBox;
                 int yOffset = 3;
-                if (!checkable) {
+                if (!flat) {
                     if (widget && !widget->testAttribute(Qt::WA_SetFont)
                             && QApplication::desktopSettingsAware())
                         fm = QFontMetrics(qt_app_fonts_hash()->value("QSmallFont", QFont()));
                     yOffset = 5;
-                    if (hasNoText)
-                        yOffset = -qCeil(QFontMetricsF(fm).height());
                 }
 
+                if (hasNoText)
+                    yOffset = -qCeil(QFontMetricsF(fm).height());
                 ret = opt->rect.adjusted(0, qCeil(QFontMetricsF(fm).height()) + yOffset, 0, 0);
-                if (sc == SC_GroupBoxContents)
-                    ret.adjust(3, 3, -3, -4);    // guess
+                if (sc == SC_GroupBoxContents) {
+                    if (flat)
+                        ret.adjust(3, -5, -3, -4);   // guess too
+                    else
+                        ret.adjust(3, 3, -3, -4);    // guess
+                }
             }
                 break;
             default:
@@ -6067,7 +6073,10 @@ QSize QMacStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
         // Do this by add enough space around the contents so that rounded
         // borders (including highlighting when active) will show.
         sz.rwidth() += QMacStylePrivate::PushButtonLeftOffset + QMacStylePrivate::PushButtonRightOffset + 12;
-        sz.rheight() += 4;
+        if (opt->state & QStyle::State_Small)
+            sz.rheight() += 14;
+        else
+            sz.rheight() += 4;
         break;
     case QStyle::CT_MenuItem:
         if (const QStyleOptionMenuItem *mi = qstyleoption_cast<const QStyleOptionMenuItem *>(opt)) {
@@ -6467,6 +6476,18 @@ void qt_mac_clip_cg(CGContextRef hd, const QRegion &rgn, CGAffineTransform *orig
     }
 }
 
+// move to QRegion?
+void qt_mac_scale_region(QRegion *region, qreal scaleFactor)
+{
+    QVector<QRect> scaledRects;
+    scaledRects.reserve(region->rects().count());
+
+    foreach (const QRect &rect, region->rects()) {
+        scaledRects.append(QRect(rect.topLeft(), rect.size() * scaleFactor));
+    }
+    region->setRects(&scaledRects[0], scaledRects.count());
+}
+
 QMacCGContext::QMacCGContext(QPainter *p)
 {
     QPaintEngine *pe = p->paintEngine();
@@ -6493,20 +6514,28 @@ QMacCGContext::QMacCGContext(QPainter *p)
         CGContextScaleCTM(context, 1, -1);
 
         if (devType == QInternal::Widget) {
-            QRegion clip = p->paintEngine()->systemClip();
-            QTransform native = p->deviceTransform();
+            // Set the clip rect which is an intersection of the system clip
+            // and the painter clip. To make matters more interesting these
+            // are in device pixels and device-independent pixels, respectively.
+            const qreal devicePixelRatio =  image->devicePixelRatio();
+
+            QRegion clip = p->paintEngine()->systemClip(); // get system clip in device pixels
+            QTransform native = p->deviceTransform();      // get device transform. dx/dy is in device pixels
 
             if (p->hasClipping()) {
-                QRegion r = p->clipRegion();
+                QRegion r = p->clipRegion();               // get painter clip, which is in device-independent pixels
+                qt_mac_scale_region(&r, devicePixelRatio); // scale painter clip to device pixels
                 r.translate(native.dx(), native.dy());
                 if (clip.isEmpty())
                     clip = r;
                 else
                     clip &= r;
             }
-            qt_mac_clip_cg(context, clip, 0);
+            qt_mac_clip_cg(context, clip, 0); // clip in device pixels
 
-            CGContextTranslateCTM(context, native.dx(), native.dy());
+            // Scale the context so that painting happens in device-independet pixels.
+            CGContextScaleCTM(context, devicePixelRatio, devicePixelRatio);
+            CGContextTranslateCTM(context, native.dx() / devicePixelRatio, native.dy() / devicePixelRatio);
         }
     } else {
         qDebug() << "QMacCGContext:: Unsupported painter devtype type" << devType;

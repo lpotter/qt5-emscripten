@@ -5,10 +5,8 @@ HEADERS   = addressbook.h
 QMAKE_PROJECT_NAME = ab_part1
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/addressbook/part1
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS part1.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/addressbook/part1
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/addressbook/part1
+INSTALLS += target
 
 QT += widgets
 

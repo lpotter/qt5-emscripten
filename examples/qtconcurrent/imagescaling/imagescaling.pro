@@ -3,10 +3,8 @@ QT += concurrent widgets
 SOURCES += main.cpp imagescaling.cpp
 HEADERS += imagescaling.h
 
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/qtconcurrent/imagescaling
-sources.files = $$SOURCES $$HEADERS $$FORMS $$RESOURCES *.pro *.png
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/qtconcurrent/imagescaling
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/qtconcurrent/imagescaling
+INSTALLS += target
 
 wince*: DEPLOYMENT_PLUGIN += qgif qjpeg
 

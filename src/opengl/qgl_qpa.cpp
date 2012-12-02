@@ -186,9 +186,14 @@ void QGLContext::reset()
     d->initDone = false;
     QGLContextGroup::removeShare(this);
     if (d->guiGlContext) {
-        if (d->ownContext)
-            delete d->guiGlContext;
-        else
+        if (QOpenGLContext::currentContext() == d->guiGlContext)
+            doneCurrent();
+        if (d->ownContext) {
+            if (d->guiGlContext->thread() == QThread::currentThread())
+                delete d->guiGlContext;
+            else
+                d->guiGlContext->deleteLater();
+        } else
             d->guiGlContext->setQGLContextHandle(0,0);
         d->guiGlContext = 0;
     }
@@ -284,12 +289,6 @@ uint QGLContext::colorIndex(const QColor&) const
     return 0;
 }
 
-void QGLContext::generateFontDisplayLists(const QFont & fnt, int listBase)
-{
-    Q_UNUSED(fnt);
-    Q_UNUSED(listBase);
-}
-
 /*
     QGLTemporaryContext implementation
 */
@@ -371,7 +370,10 @@ void QGLWidget::resizeEvent(QResizeEvent *e)
     makeCurrent();
     if (!d->glcx->initialized())
         glInit();
-    resizeGL(width(), height());
+    const qreal scaleFactor = (window() && window()->windowHandle()) ?
+        window()->windowHandle()->devicePixelRatio() : 1.0;
+
+    resizeGL(width() * scaleFactor, height() * scaleFactor);
 }
 
 

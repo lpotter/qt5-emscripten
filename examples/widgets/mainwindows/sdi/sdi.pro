@@ -4,10 +4,8 @@ SOURCES       = main.cpp \
 RESOURCES     = sdi.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/mainwindows/sdi
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS sdi.pro images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/mainwindows/sdi
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/mainwindows/sdi
+INSTALLS += target
 
 QT += widgets
 

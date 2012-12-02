@@ -9,10 +9,8 @@ HEADERS += mymodel.h
 
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/1_readonly
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS 1_readonly.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/1_readonly
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/modelview/1_readonly
+INSTALLS += target
 
 QT += widgets
 

@@ -3432,6 +3432,11 @@ bool QGraphicsScene::event(QEvent *event)
         // geometries that do not have an explicit style set.
         update();
         break;
+    case QEvent::StyleAnimationUpdate:
+        // Because QGraphicsItem is not a QObject, QStyle driven
+        // animations are forced to update the whole scene
+        update();
+        break;
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd:
@@ -5841,7 +5846,6 @@ bool QGraphicsScenePrivate::sendTouchBeginEvent(QGraphicsItem *origin, QTouchEve
                                                 firstTouchPoint.scenePos(),
                                                 static_cast<QWidget *>(touchEvent->target()));
     }
-    Q_ASSERT(cachedItemsUnderMouse.first() == origin);
 
     // Set focus on the topmost enabled item that can take focus.
     bool setFocus = false;

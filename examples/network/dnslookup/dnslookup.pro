@@ -6,7 +6,5 @@ HEADERS += dnslookup.h
 SOURCES += dnslookup.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/dnslookup
-sources.files = $$SOURCES $$HEADERS $$FORMS $$RESOURCES *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/dnslookup
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/dnslookup
+INSTALLS += target

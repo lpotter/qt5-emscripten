@@ -806,6 +806,24 @@ Qt::ScreenOrientation QWindow::orientation() const
 }
 
 /*!
+    Returns the ratio between physical pixels and device-independent pixels
+    for the window. This value is dependent on the screen the window is on,
+    and may change when the window is moved.
+
+    Common values are 1.0 on normal displays and 2.0 on Apple "retina" displays.
+
+    \sa QWindow::devicePixelRatio();
+    \sa QGuiApplicaiton::devicePixelRatio();
+*/
+qreal QWindow::devicePixelRatio() const
+{
+    Q_D(const QWindow);
+    if (!d->platformWindow)
+        return 1.0;
+    return d->platformWindow->devicePixelRatio();
+}
+
+/*!
     \brief set the screen-occupation state of the window
 
     The window \a state represents whether the window appears in the
@@ -1176,7 +1194,7 @@ QRect QWindow::frameGeometry() const
 
     \sa geometry(), frameGeometry()
 */
-QPoint QWindow::framePos() const
+QPoint QWindow::framePosition() const
 {
     Q_D(const QWindow);
     if (d->platformWindow) {
@@ -1191,7 +1209,7 @@ QPoint QWindow::framePos() const
 
     \sa setGeometry(), frameGeometry()
 */
-void QWindow::setFramePos(const QPoint &point)
+void QWindow::setFramePosition(const QPoint &point)
 {
     Q_D(QWindow);
     d->positionPolicy = QWindowPrivate::WindowFrameInclusive;
@@ -1314,6 +1332,8 @@ QPlatformSurface *QWindow::surfaceHandle() const
 bool QWindow::setKeyboardGrabEnabled(bool grab)
 {
     Q_D(QWindow);
+    if (grab && QGuiApplicationPrivate::noGrab)
+        return false;
     if (d->platformWindow)
         return d->platformWindow->setKeyboardGrabEnabled(grab);
     return false;
@@ -1331,6 +1351,8 @@ bool QWindow::setKeyboardGrabEnabled(bool grab)
 bool QWindow::setMouseGrabEnabled(bool grab)
 {
     Q_D(QWindow);
+    if (grab && QGuiApplicationPrivate::noGrab)
+        return false;
     if (d->platformWindow)
         return d->platformWindow->setMouseGrabEnabled(grab);
     return false;
@@ -1384,8 +1406,16 @@ void QWindow::setScreen(QScreen *newScreen)
 void QWindow::screenDestroyed(QObject *object)
 {
     Q_D(QWindow);
-    if (object == static_cast<QObject *>(d->screen))
+    if (object == static_cast<QObject *>(d->screen)) {
+        const bool wasVisible = isVisible();
         setScreen(0);
+        // destroy() might have hidden our window, show it again.
+        // This might not be the best behavior if the new screen isn't a virtual sibling
+        // of the old one. This can be removed once platform plugins have the power to
+        // update the QScreen of its QWindows itself.
+        if (wasVisible && d->platformWindow)
+            setVisible(true);
+    }
 }
 
 /*!
@@ -1703,6 +1733,7 @@ bool QWindow::event(QEvent *ev)
     case QEvent::WindowStateChange: {
         Q_D(QWindow);
         emit windowStateChanged(d->windowState);
+        break;
     }
 
 #ifndef QT_NO_TABLETEVENT

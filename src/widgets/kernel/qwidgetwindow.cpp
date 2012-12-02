@@ -261,8 +261,10 @@ void QWidgetWindow::handleEnterLeaveEvent(QEvent *event)
         }
     } else {
         const QEnterEvent *ee = static_cast<QEnterEvent *>(event);
-        QApplicationPrivate::dispatchEnterLeave(m_widget, 0, ee->screenPos());
-        qt_last_mouse_receiver = m_widget;
+        QWidget *child = m_widget->childAt(ee->pos());
+        QWidget *receiver = child ? child : m_widget;
+        QApplicationPrivate::dispatchEnterLeave(receiver, 0, ee->screenPos());
+        qt_last_mouse_receiver = receiver;
     }
 }
 
@@ -412,6 +414,8 @@ void QWidgetWindow::handleKeyEvent(QKeyEvent *event)
         receiver = popupFocusWidget ? popupFocusWidget : popup;
     }
     if (!receiver)
+        receiver = QWidget::keyboardGrabber();
+    if (!receiver)
         receiver = focusObject();
     QGuiApplication::sendSpontaneousEvent(receiver, event);
 }
@@ -497,6 +501,10 @@ void QWidgetWindow::handleDragEnterMoveEvent(QDragMoveEvent *event)
         const QPoint mapped = widget->mapFromGlobal(m_widget->mapToGlobal(event->pos()));
         QDragMoveEvent translated(mapped, event->possibleActions(), event->mimeData(), event->mouseButtons(), event->keyboardModifiers());
         translated.setDropAction(event->dropAction());
+        if (event->isAccepted()) { // Handling 'DragEnter' should suffice for the application.
+            translated.accept();
+            translated.setDropAction(event->dropAction());
+        }
         QGuiApplication::sendSpontaneousEvent(widget, &translated);
         if (translated.isAccepted()) {
             event->accept();

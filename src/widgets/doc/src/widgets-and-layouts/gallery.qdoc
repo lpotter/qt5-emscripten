@@ -32,14 +32,10 @@
 
   Qt's support for widget styles and themes enables your application to fit in
   with the native desktop environment. Below, you can find links to the various
-  widget styles that are supplied with Qt 4.
+  widget styles that are supplied with Qt.
 
   \table
   \row
-  \li \image plastique-tabwidget.png Plastique Style Widget Gallery
-  \caption \l{Plastique Style Widget Gallery}
-
-  The Plastique style is provided by QPlastiqueStyle.
   \li \image windowsxp-tabwidget.png Windows XP Style Widget Gallery
   \caption \l{Windows XP Style Widget Gallery}
 
@@ -48,30 +44,23 @@
   \caption \l{Windows Style Widget Gallery}
 
   The Windows style is provided by QWindowsStyle.
-  \endtable
+  \li \image windowsvista-tabwidget.png Windows Vista Style Widget Gallery
+  \caption \l{Windows Vista Style Widget Gallery}
 
-  \table
+  The Windows Vista style is provided by QWindowsVistaStyle.
+
   \row
   \li \image macintosh-tabwidget.png Macintosh Style Widget Gallery
   \caption \l{Macintosh Style Widget Gallery}
 
   The Macintosh style is provided by QMacStyle.
-  \li \image cleanlooks-tabwidget.png Cleanlooks Style Widget Gallery
-  \caption \l{Cleanlooks Style Widget Gallery}
-
-  The Cleanlooks style is provided by QCleanlooksStyle.
-  \li \image windowsvista-tabwidget.png Windows Vista Style Widget Gallery
-  \caption \l{Windows Vista Style Widget Gallery}
-
-  The Windows Vista style is provided by QWindowsVistaStyle.
-  \endtable
-
-  \table
-  \row
   \li \image gtk-tabwidget.png GTK Style Widget Gallery
   \caption \l{GTK Style Widget Gallery}
 
   The GTK style is provided by QGtkStyle.
+  \li \image fusion-tabwidget.png Fusion Style Widget Gallery
+  \caption \l{Fusion Style Widget Gallery}
 
+  The Fusion style is provided by QFusionStyle.
   \endtable
 */

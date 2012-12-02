@@ -1080,16 +1080,16 @@ void QWidgetPrivate::adjustFlags(Qt::WindowFlags &flags, QWidget *w)
     else if (type == Qt::Tool)
         flags |= Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
     else
-        flags |= Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint;
-
+        flags |= Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinimizeButtonHint |
+                Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint | Qt::WindowFullscreenButtonHint;
 
 }
 
 void QWidgetPrivate::init(QWidget *parentWidget, Qt::WindowFlags f)
 {
     Q_Q(QWidget);
-    if (QApplication::type() == QApplication::Tty)
-        qFatal("QWidget: Cannot create a QWidget when no GUI is being used");
+    if (!qobject_cast<QApplication *>(QCoreApplication::instance()))
+        qFatal("QWidget: Cannot create a QWidget without QApplication");
 
     Q_ASSERT(allWidgets);
     if (allWidgets)
@@ -1429,10 +1429,28 @@ QWidget::~QWidget()
     delete d->needsFlush;
     d->needsFlush = 0;
 
+    // The next 20 lines are duplicated from QObject, but required here
+    // since QWidget deletes is children itself
+    bool blocked = d->blockSig;
+    d->blockSig = 0; // unblock signals so we always emit destroyed()
+
+    if (d->isSignalConnected(0)) {
+        QT_TRY {
+            emit destroyed(this);
+        } QT_CATCH(...) {
+            // all the signal/slots connections are still in place - if we don't
+            // quit now, we will crash pretty soon.
+            qWarning("Detected an unexpected exception in ~QWidget while emitting destroyed().");
+            QT_RETHROW;
+        }
+    }
+
     if (d->declarativeData) {
         QAbstractDeclarativeData::destroyed(d->declarativeData, this);
         d->declarativeData = 0;                 // don't activate again in ~QObject
     }
+
+    d->blockSig = blocked;
 
 #ifdef Q_WS_MAC
     // QCocoaView holds a pointer back to this widget. Clear it now
@@ -1774,6 +1792,23 @@ QRegion QWidgetPrivate::clipRegion() const
         }
     }
     return r;
+}
+
+void QWidgetPrivate::setSystemClip(QPaintDevice *paintDevice, const QRegion &region)
+{
+// Transform the system clip region from device-independent pixels to device pixels
+// Qt 5.0.0: This is a Mac-only code path for now, can be made cross-platform once
+// it has been tested.
+    QPaintEngine *paintEngine = paintDevice->paintEngine();
+#ifdef Q_OS_MAC
+    const qreal devicePixelRatio = (paintDevice->physicalDpiX() == 0 || paintDevice->logicalDpiX() == 0) ?
+                                    1.0 : (paintDevice->physicalDpiX() / paintDevice->logicalDpiX());
+    QTransform scaleTransform;
+    scaleTransform.scale(devicePixelRatio, devicePixelRatio);
+    paintEngine->d_func()->systemClip = scaleTransform.map(region);
+#else
+    paintEngine->d_func()->systemClip = region;
+#endif
 }
 
 #ifndef QT_NO_GRAPHICSEFFECT
@@ -4980,13 +5015,12 @@ void QWidgetPrivate::drawWidget(QPaintDevice *pdev, const QRegion &rgn, const QP
             QWidgetPaintContext context(pdev, rgn, offset, flags, sharedPainter, backingStore);
             sourced->context = &context;
             if (!sharedPainter) {
-                QPaintEngine *paintEngine = pdev->paintEngine();
-                paintEngine->d_func()->systemClip = rgn.translated(offset);
+                setSystemClip(pdev, rgn.translated(offset));
                 QPainter p(pdev);
                 p.translate(offset);
                 context.painter = &p;
                 graphicsEffect->draw(&p);
-                paintEngine->d_func()->systemClip = QRegion();
+                setSystemClip(pdev, QRegion());
             } else {
                 context.painter = sharedPainter;
                 if (sharedPainter->worldTransform() != sourced->lastEffectTransform) {
@@ -5043,7 +5077,7 @@ void QWidgetPrivate::drawWidget(QPaintDevice *pdev, const QRegion &rgn, const QP
 
 #endif
                 if (sharedPainter)
-                    paintEngine->d_func()->systemClip = toBePainted;
+                    setSystemClip(pdev, toBePainted);
                 else
                     paintEngine->d_func()->systemRect = q->data->crect;
 
@@ -5055,7 +5089,7 @@ void QWidgetPrivate::drawWidget(QPaintDevice *pdev, const QRegion &rgn, const QP
                 }
 
                 if (!sharedPainter)
-                    paintEngine->d_func()->systemClip = toBePainted.translated(offset);
+                    setSystemClip(pdev, toBePainted.translated(offset));
 
                 if (!onScreen && !asRoot && !isOpaque && q->testAttribute(Qt::WA_TintedBackground)) {
                     QPainter p(q);
@@ -5090,7 +5124,8 @@ void QWidgetPrivate::drawWidget(QPaintDevice *pdev, const QRegion &rgn, const QP
                     paintEngine->d_func()->systemRect = QRect();
                 else
                     paintEngine->d_func()->currentClipDevice = 0;
-                paintEngine->d_func()->systemClip = QRegion();
+
+                setSystemClip(pdev, QRegion());
             }
             q->setAttribute(Qt::WA_WState_InPaintEvent, false);
             if (q->paintingActive())
@@ -5860,7 +5895,7 @@ bool QWidget::hasFocus() const
 
     \sa hasFocus(), clearFocus(), focusInEvent(), focusOutEvent(),
     setFocusPolicy(), focusWidget(), QApplication::focusWidget(), grabKeyboard(),
-    grabMouse(), {Keyboard Focus}, QEvent::RequestSoftwareInputPanel
+    grabMouse(), {Keyboard Focus in Widgets}, QEvent::RequestSoftwareInputPanel
 */
 
 void QWidget::setFocus(Qt::FocusReason reason)
@@ -6222,7 +6257,7 @@ bool QWidget::isActiveWindow() const
     If \a first or \a second has a focus proxy, setTabOrder()
     correctly substitutes the proxy.
 
-    \sa setFocusPolicy(), setFocusProxy(), {Keyboard Focus}
+    \sa setFocusPolicy(), setFocusProxy(), {Keyboard Focus in Widgets}
 */
 void QWidget::setTabOrder(QWidget* first, QWidget *second)
 {

@@ -50,16 +50,12 @@
 #include <qsizegrip.h>
 #include <qlabel.h>
 #include <QtWidgets/QFrame>
-#include <QtWidgets/QWindowsStyle>
+#include <QtWidgets/QStyleFactory>
 #include <QtWidgets/QSizePolicy>
 #include <QtWidgets/QComboBox>
 #include <QPushButton>
 #include <QRadioButton>
 #include <private/qlayoutengine_p.h>
-
-#ifdef Q_OS_MAC
-# include <QtWidgets/QMacStyle>
-#endif
 
 class tst_QLayout : public QObject
 {
@@ -128,7 +124,7 @@ void tst_QLayout::geometry()
 {
     // For QWindowsStyle we know that QWidgetItem::geometry() and QWidget::geometry()
     // should be the same.
-    QApplication::setStyle(new QWindowsStyle);
+    QApplication::setStyle(QStyleFactory::create(QLatin1String("Windows")));
     QWidget topLevel;
     QWidget w(&topLevel);
     QVBoxLayout layout(&w);
@@ -276,7 +272,7 @@ public:
 void tst_QLayout::layoutItemRect()
 {
 #ifdef Q_OS_MAC
-    if (qobject_cast<QMacStyle*>(QApplication::style())) {
+    if (QApplication::style()->inherits("QMacStyle")) {
         QWidget *window = new QWidget;
         QRadioButton *radio = new QRadioButton(window);
         QWidgetItem item(radio);

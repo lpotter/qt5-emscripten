@@ -110,10 +110,10 @@ QT_BEGIN_NAMESPACE
     \table 100%
     \row \li \inlineimage windowsxp-listview.png Screenshot of a Windows XP style list view
          \li \inlineimage macintosh-listview.png Screenshot of a Macintosh style table view
-         \li \inlineimage plastique-listview.png Screenshot of a Plastique style table view
+         \li \inlineimage fusion-listview.png Screenshot of a Fusion style table view
     \row \li A \l{Windows XP Style Widget Gallery}{Windows XP style} list view.
          \li A \l{Macintosh Style Widget Gallery}{Macintosh style} list view.
-         \li A \l{Plastique Style Widget Gallery}{Plastique style} list view.
+         \li A \l{Fusion Style Widget Gallery}{Fusion style} list view.
     \endtable
 
     \section1 Improving Performance
@@ -2546,6 +2546,7 @@ int QListModeViewBase::perItemScrollToValue(int index, int scrollValue, int view
     if (index < 0)
         return scrollValue;
 
+    itemExtent += spacing();
     QVector<int> visibleFlowPositions;
     visibleFlowPositions.reserve(flowPositions.count() - 1);
     for (int i = 0; i < flowPositions.count() - 1; i++) { // flowPositions count is +1 larger than actual row count

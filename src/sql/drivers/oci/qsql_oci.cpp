@@ -82,7 +82,9 @@
 
 //#define QOCI_DEBUG
 
+Q_DECLARE_OPAQUE_POINTER(OCIEnv*);
 Q_DECLARE_METATYPE(OCIEnv*)
+Q_DECLARE_OPAQUE_POINTER(OCIStmt*);
 Q_DECLARE_METATYPE(OCIStmt*)
 
 QT_BEGIN_NAMESPACE
@@ -2040,18 +2042,15 @@ QVariant QOCIResult::lastInsertId() const
 bool QOCIResult::execBatch(bool arrayBind)
 {
     QOCICols::execBatch(d, boundValues(), arrayBind);
-    d->resetBindCount();
-    return d->error.type() == QSqlError::NoError;
+    resetBindCount();
+    return lastError().type() == QSqlError::NoError;
 }
 
 void QOCIResult::virtual_hook(int id, void *data)
 {
     Q_ASSERT(data);
 
-    switch (id) {
-    default:
-        QSqlCachedResult::virtual_hook(id, data);
-    }
+    QSqlCachedResult::virtual_hook(id, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////

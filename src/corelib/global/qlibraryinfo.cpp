@@ -257,16 +257,27 @@ QLibraryInfo::isDebugBuild()
 
 #endif // QT_BOOTSTRAPPED
 
+/*
+ * To add a new entry in QLibrary::LibraryLocation, add it to the enum above the bootstrapped values and:
+ * - add its relative path in the qtConfEntries[] array below
+ *   (the key is what appears in a qt.conf file)
+ * - add a property name in qmake/property.cpp propList[] array
+ *   (it's used with qmake -query)
+ * - add to qt_config.prf, qt_module.prf, qt_module_fwdpri.prf
+ */
+
 static const struct {
-    char key[14], value[13];
+    char key[19], value[13];
 } qtConfEntries[] = {
     { "Prefix", "." },
     { "Documentation", "doc" }, // should be ${Data}/doc
     { "Headers", "include" },
     { "Libraries", "lib" },
+    { "LibraryExecutables", "libexec" }, // should be ${ArchData}/libexec
     { "Binaries", "bin" },
     { "Plugins", "plugins" }, // should be ${ArchData}/plugins
     { "Imports", "imports" }, // should be ${ArchData}/imports
+    { "Qml2Imports", "qml" }, // should be ${ArchData}/qml
     { "ArchData", "." },
     { "Data", "." },
     { "Translations", "translations" }, // should be ${Data}/translations
@@ -442,9 +453,11 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
     \value DocumentationPath The location for documentation upon install.
     \value HeadersPath The location for all headers.
     \value LibrariesPath The location of installed libraries.
+    \value LibraryExecutablesPath The location of installed executables required by libraries at runtime.
     \value BinariesPath The location of installed Qt binaries (tools and applications).
     \value PluginsPath The location of installed Qt plugins.
-    \value ImportsPath The location of installed QML extensions to import.
+    \value ImportsPath The location of installed QML extensions to import (QML 1.x).
+    \value Qml2ImportsPath The location of installed QML extensions to import (QML 2.x).
     \value ArchDataPath The location of general architecture-dependent Qt data.
     \value DataPath The location of general architecture-independent Qt data.
     \value TranslationsPath The location of translation information for Qt strings.

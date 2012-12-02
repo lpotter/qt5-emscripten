@@ -304,11 +304,11 @@ Q_WIDGETS_EXPORT _qt_filedialog_save_filename_hook qt_filedialog_save_filename_h
 
 QT_BEGIN_INCLUDE_NAMESPACE
 #ifdef Q_WS_WIN
-#include <qwindowsstyle.h>
+#include <qwindowsstyle_p.h>
 #endif
 #include <qshortcut.h>
 #ifdef Q_WS_MAC
-#include <qmacstyle_mac.h>
+#include <qmacstyle_mac_p.h>
 #endif
 QT_END_INCLUDE_NAMESPACE
 

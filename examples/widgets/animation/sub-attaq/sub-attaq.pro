@@ -30,13 +30,5 @@ SOURCES += boat.cpp \
 RESOURCES += subattaq.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/animation/sub-attaq
-sources.files = $$SOURCES \
-    $$HEADERS \
-    $$RESOURCES \
-    $$FORMS \
-    sub-attaq.pro \
-    pics
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/animation/sub-attaq
-INSTALLS += target \
-    sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/animation/sub-attaq
+INSTALLS += target

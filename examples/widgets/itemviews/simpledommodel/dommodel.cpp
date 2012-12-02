@@ -38,11 +38,10 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
-#include <QtXml>
-
 #include "domitem.h"
 #include "dommodel.h"
+
+#include <QtXml>
 
 //! [0]
 DomModel::DomModel(QDomDocument document, QObject *parent)
@@ -106,7 +105,7 @@ Qt::ItemFlags DomModel::flags(const QModelIndex &index) const
     if (!index.isValid())
         return 0;
 
-    return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+    return QAbstractItemModel::flags(index);
 }
 //! [5]
 

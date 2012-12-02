@@ -59,6 +59,10 @@
 
 #include "qlocale.h"
 
+#if defined(Q_OS_BLACKBERRY)
+#include "qsocketnotifier.h"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_SYSTEMLOCALE
@@ -133,6 +137,28 @@ namespace QIcu {
 }
 #endif
 
+
+struct QLocaleId
+{
+    // bypass constructors
+    static inline QLocaleId fromIds(ushort language, ushort script, ushort country)
+    {
+        const QLocaleId localeId = { language, script, country };
+        return localeId;
+    }
+
+    inline bool operator==(QLocaleId other) const
+    { return language_id == other.language_id && script_id == other.script_id && country_id == other.country_id; }
+    inline bool operator!=(QLocaleId other) const
+    { return !operator==(other); }
+
+    QLocaleId withLikelySubtagsAdded() const;
+    QLocaleId withLikelySubtagsRemoved() const;
+
+    QString bcp47Name() const;
+
+    ushort language_id, script_id, country_id;
+};
 
 struct QLocaleData
 {
@@ -346,6 +372,25 @@ inline char QLocalePrivate::digitToCLocale(QChar in) const
 
     return 0;
 }
+
+#if defined(Q_OS_BLACKBERRY)
+class QQNXLocaleData: public QObject
+{
+    Q_OBJECT
+public:
+    QQNXLocaleData();
+    virtual ~QQNXLocaleData();
+    void readPPSLocale();
+
+public Q_SLOTS:
+    void updateMeasurementSystem();
+
+public:
+    uint ppsMeasurement;
+    QSocketNotifier *ppsNotifier;
+    int ppsFd;
+};
+#endif
 
 QString qt_readEscapedFormatString(const QString &format, int *idx);
 bool qt_splitLocaleName(const QString &name, QString &lang, QString &script, QString &cntry);

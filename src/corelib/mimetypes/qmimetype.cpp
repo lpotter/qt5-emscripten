@@ -85,6 +85,7 @@ void QMimeTypePrivate::addGlobPattern(const QString &pattern)
 /*!
     \class QMimeType
     \inmodule QtCore
+    \ingroup shared
     \brief The QMimeType class describes types of file or data, represented by a MIME type string.
 
     \since 5.0
@@ -139,6 +140,7 @@ QMimeType &QMimeType::operator=(const QMimeType &other)
 /*!
     \fn QMimeType::QMimeType(const QMimeTypePrivate &dd);
     Assigns the data of the QMimeTypePrivate \a dd to this QMimeType object, and returns a reference to this object.
+    \internal
  */
 QMimeType::QMimeType(const QMimeTypePrivate &dd) :
         d(new QMimeTypePrivate(dd))
@@ -347,6 +349,22 @@ QStringList QMimeType::allAncestors() const
     QStringList allParents;
     collectParentMimeTypes(d->name, allParents);
     return allParents;
+}
+
+/*!
+    Return the list of aliases of this mimetype.
+
+    For instance, for text/csv, the returned list would be:
+    text/x-csv, text/x-comma-separated-values.
+
+    Note that all QMimeType instances refer to proper mimetypes,
+    never to aliases directly.
+
+    The order of the aliases in the list is undefined.
+*/
+QStringList QMimeType::aliases() const
+{
+    return QMimeDatabasePrivate::instance()->provider()->listAliases(d->name);
 }
 
 /*!

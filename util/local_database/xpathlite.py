@@ -150,7 +150,7 @@ def _findEntryInFile(file, path, draft=None, attribute=None):
             tag_name = tag_spec[:left_bracket]
             arg_value = tag_spec[left_bracket+1:-1].split("=")
             if len(arg_value) == 2:
-                arg_name = arg_value[0]
+                arg_name = arg_value[0].replace("@", "").replace("'", "")
                 arg_value = arg_value[1]
             else:
                 arg_value = arg_value[0]
@@ -178,18 +178,56 @@ def _findEntryInFile(file, path, draft=None, attribute=None):
         if elt.attributes.has_key(attribute):
             return (elt.attributes[attribute].nodeValue, None)
         return (None, None)
-    return (elt.firstChild.nodeValue, None)
+    try:
+        return (elt.firstChild.nodeValue, None)
+    except:
+        pass
+    return (None, None)
 
 def findAlias(file):
-    if not doc_cache.has_key(file):
-        return False
-    doc = doc_cache[file]
+    doc = False
+    if doc_cache.has_key(file):
+        doc = doc_cache[file]
+    else:
+        doc = xml.dom.minidom.parse(file)
+        doc_cache[file] = doc
+
     alias_elt = findChild(doc.documentElement, "alias")
     if not alias_elt:
         return False
     if not alias_elt.attributes.has_key('source'):
         return False
     return alias_elt.attributes['source'].nodeValue
+
+parent_locales = {}
+def _fixedLookupChain(dirname, name):
+    # see http://www.unicode.org/reports/tr35/#Parent_Locales
+    if not parent_locales:
+        for ns in findTagsInFile(dirname + "/../supplemental/supplementalData.xml", "parentLocales"):
+            tmp = {}
+            parent_locale = ""
+            for data in ns[1:][0]: # ns looks like this: [u'parentLocale', [(u'parent', u'root'), (u'locales', u'az_Cyrl bs_Cyrl en_Dsrt ..')]]
+                tmp[data[0]] = data[1]
+                if data[0] == u"parent":
+                    parent_locale = data[1]
+            parent_locales[parent_locale] = tmp[u"locales"].split(" ")
+
+    items = name.split("_")
+    # split locale name into items and iterate through them from back to front
+    # example: az_Latn_AZ => [az_Latn_AZ, az_Latn, az]
+    items = list(reversed(map(lambda x: "_".join(items[:x+1]), range(len(items)))))
+
+    for i in range(len(items)):
+        item = items[i]
+        for parent_locale in parent_locales.keys():
+            for locale in parent_locales[parent_locale]:
+                if item == locale:
+                    if parent_locale == u"root":
+                        items = items[:i+1]
+                    else:
+                        items = items[:i+1] + parent_locale.split() + items[i+1:]
+                    return items
+    return items
 
 def _findEntry(base, path, draft=None, attribute=None):
     file = base
@@ -199,10 +237,8 @@ def _findEntry(base, path, draft=None, attribute=None):
     else:
         file = base + ".xml"
     (dirname, filename) = os.path.split(base)
-    items = filename.split("_")
-    # split locale name into items and iterate through them from back to front
-    # example: az_Latn_AZ => [az_Latn_AZ, az_Latn, az]
-    items = reversed(map(lambda x: "_".join(items[:x+1]), range(len(items))))
+
+    items = _fixedLookupChain(dirname, filename)
     for item in items:
         file = dirname + "/" + item + ".xml"
         if os.path.isfile(file):
@@ -242,7 +278,7 @@ def findEntry(base, path, draft=None, attribute=None):
         if result:
             return result
         if not aliaspath:
-            raise Error("findEntry: fatal error: %s: did not found key %s" % (filename, path))
+            raise Error("findEntry: fatal error: %s: can not find key %s" % (filename, path))
         path = aliaspath
 
     return result

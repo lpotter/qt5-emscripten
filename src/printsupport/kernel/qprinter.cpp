@@ -268,7 +268,7 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
   extend printing support to cover new types of printing subsystem by
   subclassing QPrintEngine and reimplementing its interface.
 
-  \sa QPrintDialog, {Printing with Qt}
+  \sa QPrintDialog, {Qt Print Support}
 */
 
 /*!
@@ -1263,7 +1263,7 @@ void QPrinter::setCollateCopies(bool collate)
   printer's margins, so the application must account for the margins
   itself.
 
-  \sa fullPage(), setPaperSize(), width(), height(), {Printing with Qt}
+  \sa fullPage(), setPaperSize(), width(), height()
 */
 
 void QPrinter::setFullPage(bool fp)
@@ -1973,10 +1973,6 @@ QPrinter::PrintRange QPrinter::printRange() const
 
     \value PPK_SupportedResolutions A list of integer QVariants
     describing the set of supported resolutions that the printer has.
-
-    \value PPK_SuppressSystemPrintStatus Suppress the built-in dialog for showing
-    printing progress. As of 4.1 this only has effect on Mac OS X where, by default,
-    a status dialog is shown.
 
     \value PPK_WindowsPageSize An integer specifying a DM_PAPER entry
     on Windows.

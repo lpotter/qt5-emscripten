@@ -40,69 +40,92 @@
 ****************************************************************************/
 
 #include "qcocoabackingstore.h"
-#include "qcocoaautoreleasepool.h"
-
-#include <QtCore/qdebug.h>
 #include <QtGui/QPainter>
+#include "qcocoahelpers.h"
 
 QT_BEGIN_NAMESPACE
 
 QCocoaBackingStore::QCocoaBackingStore(QWindow *window)
     : QPlatformBackingStore(window)
+    , m_cgImage(0)
 {
-    m_image = new QImage(window->geometry().size(),QImage::Format_ARGB32_Premultiplied);
 }
 
 QCocoaBackingStore::~QCocoaBackingStore()
 {
-    delete m_image;
+    CGImageRelease(m_cgImage);
+    m_cgImage = 0;
 }
 
 QPaintDevice *QCocoaBackingStore::paintDevice()
 {
-    return m_image;
+    if (m_qImage.size() / m_qImage.devicePixelRatio() != m_requestedSize) {
+        CGImageRelease(m_cgImage);
+        m_cgImage = 0;
+
+        int scaleFactor = 1;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
+        if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
+            QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window()->handle());
+            if (cocoaWindow && cocoaWindow->m_contentView) {
+                scaleFactor = int([[cocoaWindow->m_contentView window] backingScaleFactor]);
+            }
+        }
+#endif
+
+        m_qImage = QImage(m_requestedSize * scaleFactor, QImage::Format_ARGB32_Premultiplied);
+        m_qImage.setDevicePixelRatio(scaleFactor);
+    }
+    return &m_qImage;
 }
 
-void QCocoaBackingStore::flush(QWindow *widget, const QRegion &region, const QPoint &offset)
+void QCocoaBackingStore::flush(QWindow *win, const QRegion &region, const QPoint &offset)
 {
-    Q_UNUSED(widget);
-    Q_UNUSED(offset);
-    QCocoaAutoReleasePool pool;
-
-    QRect geo = region.boundingRect();
-    NSRect rect = NSMakeRect(geo.x(), geo.y(), geo.width(), geo.height());
-    QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window()->handle());
-    if (cocoaWindow) {
-        if (QSysInfo::QSysInfo::MacintoshVersion >= QSysInfo::MV_10_8) {
-            // Workaround for malfunctioning displayRect on 10.8 where
-            // calling it seems to have no effect. Call setImage like
-            // resize() does.
-            [cocoaWindow->m_contentView setImage:m_image];
-        }
-        [cocoaWindow->m_contentView displayRect:rect];
-   }
+    // A flush means that qImage has changed. Since CGImages are seen as
+    // immutable, CoreImage fails to pick up this change for m_cgImage
+    // (since it usually cached), so we must recreate it. We await doing this
+    // until one of the views needs it, since, together with calling
+    // "setNeedsDisplayInRect" instead of "displayRect" we will, in most
+    // cases, get away with doing this once for every repaint. Also note that
+    // m_cgImage is only a reference to the data inside m_qImage, it is not a copy.
+    CGImageRelease(m_cgImage);
+    m_cgImage = 0;
+    if (QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(win->handle()))
+        [cocoaWindow->m_contentView flushBackingStore:this region:region offset:offset];
 }
 
 void QCocoaBackingStore::resize(const QSize &size, const QRegion &)
 {
-    delete m_image;
-    m_image = new QImage(size, QImage::Format_ARGB32_Premultiplied);
-
-    QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window()->handle());
-    if (cocoaWindow)
-        [static_cast<QNSView *>(cocoaWindow->m_contentView) setImage:m_image];
+    m_requestedSize = size;
 }
 
 bool QCocoaBackingStore::scroll(const QRegion &area, int dx, int dy)
 {
     extern void qt_scrollRectInImage(QImage &img, const QRect &rect, const QPoint &offset);
-    QPoint qpoint(dx, dy);
+    const qreal devicePixelRatio = m_qImage.devicePixelRatio();
+    QPoint qpoint(dx * devicePixelRatio, dy * devicePixelRatio);
     const QVector<QRect> qrects = area.rects();
     for (int i = 0; i < qrects.count(); ++i) {
-        const QRect &qrect = qrects.at(i);
-        qt_scrollRectInImage(*m_image, qrect, qpoint);
+        const QRect &qrect = QRect(qrects.at(i).topLeft() * devicePixelRatio, qrects.at(i).size() * devicePixelRatio);
+        qt_scrollRectInImage(m_qImage, qrect, qpoint);
     }
     return true;
+}
+
+CGImageRef QCocoaBackingStore::getBackingStoreCGImage()
+{
+    if (!m_cgImage)
+        m_cgImage = qt_mac_toCGImage(m_qImage, false, 0);
+
+    // Warning: do not retain/release/cache the returned image from
+    // outside the backingstore since it shares data with a QImage and
+    // needs special memory considerations.
+    return m_cgImage;
+}
+
+qreal QCocoaBackingStore::getBackingStoreDevicePixelRatio()
+{
+    return m_qImage.devicePixelRatio();
 }
 
 QT_END_NAMESPACE

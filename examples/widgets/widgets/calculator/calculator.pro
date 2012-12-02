@@ -5,10 +5,8 @@ SOURCES       = button.cpp \
                 main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/calculator
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS calculator.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/calculator
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/calculator
+INSTALLS += target
 
 QT += widgets
 

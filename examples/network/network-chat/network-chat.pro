@@ -13,9 +13,7 @@ FORMS         = chatdialog.ui
 QT           += network widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/network-chat
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS network-chat.pro *.chat
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/network-chat
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/network-chat
+INSTALLS += target
 
 

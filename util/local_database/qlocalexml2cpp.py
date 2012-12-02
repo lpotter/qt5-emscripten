@@ -52,14 +52,6 @@ class Error:
     def __str__(self):
         return self.msg
 
-def check_static_char_array_length(name, array):
-    # some compilers like VC6 doesn't allow static arrays more than 64K bytes size.
-    size = reduce(lambda x, y: x+len(escapedString(y)), array, 0)
-    if size > 65535:
-        print "\n\n\n#error Array %s is too long! " % name
-        sys.stderr.write("\n\n\nERROR: the content of the array '%s' is too long: %d > 65535 " % (name, size))
-        sys.exit(1)
-
 def wrap_list(lst):
     def split(lst, size):
         for i in range(len(lst)/size+1):
@@ -137,16 +129,29 @@ def loadCountryMap(doc):
 
     return result
 
-def loadDefaultMap(doc):
+def loadLikelySubtagsMap(doc):
     result = {}
 
-    list_elt = firstChildElt(doc.documentElement, "defaultCountryList")
-    elt = firstChildElt(list_elt, "defaultCountry")
+    i = 0
+    list_elt = firstChildElt(doc.documentElement, "likelySubtags")
+    elt = firstChildElt(list_elt, "likelySubtag")
     while elt:
-        country = eltText(firstChildElt(elt, "country"));
-        language = eltText(firstChildElt(elt, "language"));
-        result[language] = country;
-        elt = nextSiblingElt(elt, "defaultCountry");
+        elt_from = firstChildElt(elt, "from")
+        from_language = eltText(firstChildElt(elt_from, "language"));
+        from_script = eltText(firstChildElt(elt_from, "script"));
+        from_country = eltText(firstChildElt(elt_from, "country"));
+
+        elt_to = firstChildElt(elt, "to")
+        to_language = eltText(firstChildElt(elt_to, "language"));
+        to_script = eltText(firstChildElt(elt_to, "script"));
+        to_country = eltText(firstChildElt(elt_to, "country"));
+
+        tmp = {}
+        tmp["from"] = (from_language, from_script, from_country)
+        tmp["to"] = (to_language, to_script, to_country)
+        result[i] = tmp;
+        i += 1
+        elt = nextSiblingElt(elt, "likelySubtag");
     return result
 
 def fixedScriptName(name, dupes):
@@ -286,7 +291,7 @@ class Locale:
         self.currencyFormat = eltText(firstChildElt(elt, "currencyFormat"))
         self.currencyNegativeFormat = eltText(firstChildElt(elt, "currencyNegativeFormat"))
 
-def loadLocaleMap(doc, language_map, script_map, country_map):
+def loadLocaleMap(doc, language_map, script_map, country_map, likely_subtags_map):
     result = {}
 
     locale_list_elt = firstChildElt(doc.documentElement, "localeList")
@@ -302,6 +307,28 @@ def loadLocaleMap(doc, language_map, script_map, country_map):
         country_id = countryNameToId(locale.country, country_map)
         if country_id == -1:
             sys.stderr.write("Cannot find a country id for '%s'\n" % locale.country)
+
+        if language_id != 1: # C
+            if country_id == 0:
+                sys.stderr.write("loadLocaleMap: No country id for '%s'\n" % locale.language)
+
+            if script_id == 0:
+                # find default script for a given language and country (see http://www.unicode.org/reports/tr35/#Likely_Subtags)
+                for key in likely_subtags_map.keys():
+                    tmp = likely_subtags_map[key]
+                    if tmp["from"][0] == locale.language and tmp["from"][1] == "AnyScript" and tmp["from"][2] == locale.country:
+                        locale.script = tmp["to"][1]
+                        script_id = scriptNameToId(locale.script, script_map)
+                        break
+            if script_id == 0 and country_id != 0:
+                # try with no country
+                for key in likely_subtags_map.keys():
+                    tmp = likely_subtags_map[key]
+                    if tmp["from"][0] == locale.language and tmp["from"][1] == "AnyScript" and tmp["from"][2] == "AnyCountry":
+                        locale.script = tmp["to"][1]
+                        script_id = scriptNameToId(locale.script, script_map)
+                        break
+
         result[(language_id, script_id, country_id)] = locale
 
         locale_elt = nextSiblingElt(locale_elt, "locale")
@@ -316,12 +343,20 @@ def compareLocaleKeys(key1, key2):
         l1 = compareLocaleKeys.locale_map[key1]
         l2 = compareLocaleKeys.locale_map[key2]
 
-        if l1.language in compareLocaleKeys.default_map:
-            default = compareLocaleKeys.default_map[l1.language]
-            if l1.country == default and key1[1] == 0:
+        if (l1.language, l1.script) in compareLocaleKeys.default_map.keys():
+            default = compareLocaleKeys.default_map[(l1.language, l1.script)]
+            if l1.country == default:
                 return -1
-            if l2.country == default and key2[1] == 0:
+            if l2.country == default:
                 return 1
+
+        if key1[1] != key2[1]:
+            if (l2.language, l2.script) in compareLocaleKeys.default_map.keys():
+                default = compareLocaleKeys.default_map[(l2.language, l2.script)]
+                if l2.country == default:
+                    return 1
+                if l1.country == default:
+                    return -1
 
         if key1[1] != key2[1]:
             return key1[1] - key2[1]
@@ -467,8 +502,13 @@ def main():
     language_map = loadLanguageMap(doc)
     script_map = loadScriptMap(doc)
     country_map = loadCountryMap(doc)
-    default_map = loadDefaultMap(doc)
-    locale_map = loadLocaleMap(doc, language_map, script_map, country_map)
+    likely_subtags_map = loadLikelySubtagsMap(doc)
+    default_map = {}
+    for key in likely_subtags_map.keys():
+        tmp = likely_subtags_map[key]
+        if tmp["from"][1] == "AnyScript" and tmp["from"][2] == "AnyCountry" and tmp["to"][2] != "AnyCountry":
+            default_map[(tmp["to"][0], tmp["to"][1])] = tmp["to"][2]
+    locale_map = loadLocaleMap(doc, language_map, script_map, country_map, likely_subtags_map)
     dupes = findDupes(language_map, country_map)
 
     cldr_version = eltText(firstChildElt(doc.documentElement, "version"))
@@ -484,6 +524,57 @@ def main():
     cldr2qlocalexml.py and qlocalexml2cpp.py.\n\
 */\n\n\n\
 " % (str(datetime.date.today()), cldr_version) )
+
+    # Likely subtags map
+    data_temp_file.write("static const QLocaleId likely_subtags[] = {\n")
+    index = 0
+    for key in likely_subtags_map.keys():
+        tmp = likely_subtags_map[key]
+        from_language = languageNameToId(tmp["from"][0], language_map)
+        from_script = scriptNameToId(tmp["from"][1], script_map)
+        from_country = countryNameToId(tmp["from"][2], country_map)
+        to_language = languageNameToId(tmp["to"][0], language_map)
+        to_script = scriptNameToId(tmp["to"][1], script_map)
+        to_country = countryNameToId(tmp["to"][2], country_map)
+
+        cmnt_from = ""
+        if from_language != 0:
+            cmnt_from = cmnt_from + language_map[from_language][1]
+        else:
+            cmnt_from = cmnt_from + "und"
+        if from_script != 0:
+            if cmnt_from:
+                cmnt_from = cmnt_from + "_"
+            cmnt_from = cmnt_from + script_map[from_script][1]
+        if from_country != 0:
+            if cmnt_from:
+                cmnt_from = cmnt_from + "_"
+            cmnt_from = cmnt_from + country_map[from_country][1]
+        cmnt_to = ""
+        if to_language != 0:
+            cmnt_to = cmnt_to + language_map[to_language][1]
+        else:
+            cmnt_from = cmnt_from + "und"
+        if to_script != 0:
+            if cmnt_to:
+                cmnt_to = cmnt_to + "_"
+            cmnt_to = cmnt_to + script_map[to_script][1]
+        if to_country != 0:
+            if cmnt_to:
+                cmnt_to = cmnt_to + "_"
+            cmnt_to = cmnt_to + country_map[to_country][1]
+
+        data_temp_file.write("    ")
+        data_temp_file.write("{ %3d, %2d, %3d }, { %3d, %2d, %3d }" % (from_language, from_script, from_country, to_language, to_script, to_country))
+        index += 1
+        if index != len(likely_subtags_map):
+            data_temp_file.write(",")
+        else:
+            data_temp_file.write(" ")
+        data_temp_file.write(" // %s -> %s\n" % (cmnt_from, cmnt_to))
+    data_temp_file.write("};\n")
+
+    data_temp_file.write("\n")
 
     # Locale index
     data_temp_file.write("static const quint16 locale_index[] = {\n")
@@ -580,7 +671,6 @@ def main():
     data_temp_file.write("\n")
 
     # List patterns data
-    #check_static_char_array_length("list_pattern_part", list_pattern_part_data.data)
     data_temp_file.write("static const ushort list_pattern_part_data[] = {\n")
     data_temp_file.write(wrap_list(list_pattern_part_data.data))
     data_temp_file.write("\n};\n")
@@ -588,7 +678,6 @@ def main():
     data_temp_file.write("\n")
 
     # Date format data
-    #check_static_char_array_length("date_format", date_format_data.data)
     data_temp_file.write("static const ushort date_format_data[] = {\n")
     data_temp_file.write(wrap_list(date_format_data.data))
     data_temp_file.write("\n};\n")
@@ -596,7 +685,6 @@ def main():
     data_temp_file.write("\n")
 
     # Time format data
-    #check_static_char_array_length("time_format", time_format_data.data)
     data_temp_file.write("static const ushort time_format_data[] = {\n")
     data_temp_file.write(wrap_list(time_format_data.data))
     data_temp_file.write("\n};\n")
@@ -604,7 +692,6 @@ def main():
     data_temp_file.write("\n")
 
     # Months data
-    #check_static_char_array_length("months", months_data.data)
     data_temp_file.write("static const ushort months_data[] = {\n")
     data_temp_file.write(wrap_list(months_data.data))
     data_temp_file.write("\n};\n")
@@ -612,7 +699,6 @@ def main():
     data_temp_file.write("\n")
 
     # Days data
-    #check_static_char_array_length("days", days_data.data)
     data_temp_file.write("static const ushort days_data[] = {\n")
     data_temp_file.write(wrap_list(days_data.data))
     data_temp_file.write("\n};\n")
@@ -620,7 +706,6 @@ def main():
     data_temp_file.write("\n")
 
     # AM data
-    #check_static_char_array_length("am", am_data.data)
     data_temp_file.write("static const ushort am_data[] = {\n")
     data_temp_file.write(wrap_list(am_data.data))
     data_temp_file.write("\n};\n")
@@ -628,7 +713,6 @@ def main():
     data_temp_file.write("\n")
 
     # PM data
-    #check_static_char_array_length("pm", am_data.data)
     data_temp_file.write("static const ushort pm_data[] = {\n")
     data_temp_file.write(wrap_list(pm_data.data))
     data_temp_file.write("\n};\n")
@@ -636,7 +720,6 @@ def main():
     data_temp_file.write("\n")
 
     # Currency symbol data
-    #check_static_char_array_length("currency_symbol", currency_symbol_data.data)
     data_temp_file.write("static const ushort currency_symbol_data[] = {\n")
     data_temp_file.write(wrap_list(currency_symbol_data.data))
     data_temp_file.write("\n};\n")
@@ -644,7 +727,6 @@ def main():
     data_temp_file.write("\n")
 
     # Currency display name data
-    #check_static_char_array_length("currency_display_name", currency_display_name_data.data)
     data_temp_file.write("static const ushort currency_display_name_data[] = {\n")
     data_temp_file.write(wrap_list(currency_display_name_data.data))
     data_temp_file.write("\n};\n")
@@ -652,13 +734,11 @@ def main():
     data_temp_file.write("\n")
 
     # Currency format data
-    #check_static_char_array_length("currency_format", currency_format_data.data)
     data_temp_file.write("static const ushort currency_format_data[] = {\n")
     data_temp_file.write(wrap_list(currency_format_data.data))
     data_temp_file.write("\n};\n")
 
     # Endonyms data
-    #check_static_char_array_length("endonyms", endonyms_data.data)
     data_temp_file.write("static const ushort endonyms_data[] = {\n")
     data_temp_file.write(wrap_list(endonyms_data.data))
     data_temp_file.write("\n};\n")
@@ -783,6 +863,7 @@ def main():
     data_temp_file.close()
     qlocaledata_file.close()
 
+    os.remove(qtsrcdir + "/src/corelib/tools/qlocale_data_p.h")
     os.rename(data_temp_file_path, qtsrcdir + "/src/corelib/tools/qlocale_data_p.h")
 
     # qlocale.h
@@ -803,9 +884,21 @@ def main():
     for key in language_map.keys():
         language = fixedLanguageName(language_map[key][0], dupes)
         qlocaleh_temp_file.write("        " + language + " = " + str(key) + ",\n")
-    # special cases for norwegian. we really need to make it right at some point.
-    qlocaleh_temp_file.write("        NorwegianBokmal = Norwegian,\n")
-    qlocaleh_temp_file.write("        NorwegianNynorsk = Nynorsk,\n")
+    # legacy. should disappear at some point
+    qlocaleh_temp_file.write("        Norwegian = NorwegianBokmal,\n")
+    qlocaleh_temp_file.write("        Moldavian = Romanian,\n")
+    qlocaleh_temp_file.write("        SerboCroatian = Serbian,\n")
+    qlocaleh_temp_file.write("        Tagalog = Filipino,\n")
+    qlocaleh_temp_file.write("        Twi = Akan,\n")
+    # renamings
+    qlocaleh_temp_file.write("        Afan = Oromo,\n")
+    qlocaleh_temp_file.write("        Byelorussian = Belarusian,\n")
+    qlocaleh_temp_file.write("        Bhutani = Dzongkha,\n")
+    qlocaleh_temp_file.write("        Cambodian = Khmer,\n")
+    qlocaleh_temp_file.write("        Kurundi = Rundi,\n")
+    qlocaleh_temp_file.write("        RhaetoRomance = Romansh,\n")
+    qlocaleh_temp_file.write("        Chewa = Nyanja,\n")
+    qlocaleh_temp_file.write("        Frisian = WesternFrisian,\n")
     qlocaleh_temp_file.write("        LastLanguage = " + language + "\n")
     qlocaleh_temp_file.write("    };\n")
 
@@ -817,6 +910,7 @@ def main():
     for key in script_map.keys():
         script = fixedScriptName(script_map[key][0], dupes)
         qlocaleh_temp_file.write("        " + script + " = " + str(key) + ",\n")
+    # renamings
     qlocaleh_temp_file.write("        SimplifiedChineseScript = SimplifiedHanScript,\n")
     qlocaleh_temp_file.write("        TraditionalChineseScript = TraditionalHanScript,\n")
     qlocaleh_temp_file.write("        LastScript = " + script + "\n")
@@ -828,6 +922,13 @@ def main():
     for key in country_map.keys():
         country = fixedCountryName(country_map[key][0], dupes)
         qlocaleh_temp_file.write("        " + country + " = " + str(key) + ",\n")
+    # renamings
+    qlocaleh_temp_file.write("        DemocraticRepublicOfCongo = CongoKinshasa,\n")
+    qlocaleh_temp_file.write("        PeoplesRepublicOfCongo = CongoBrazzaville,\n")
+    qlocaleh_temp_file.write("        DemocraticRepublicOfKorea = NorthKorea,\n")
+    qlocaleh_temp_file.write("        RepublicOfKorea = SouthKorea,\n")
+    qlocaleh_temp_file.write("        RussianFederation = Russia,\n")
+    qlocaleh_temp_file.write("        SyrianArabRepublic = Syria,\n")
     qlocaleh_temp_file.write("        LastCountry = " + country + "\n")
     qlocaleh_temp_file.write("    };\n")
 
@@ -844,6 +945,7 @@ def main():
     qlocaleh_temp_file.close()
     qlocaleh_file.close()
 
+    os.remove(qtsrcdir + "/src/corelib/tools/qlocale.h")
     os.rename(qlocaleh_temp_file_path, qtsrcdir + "/src/corelib/tools/qlocale.h")
 
     # qlocale.qdoc
@@ -862,6 +964,7 @@ def main():
     qlocaleqdoc_temp_file.close()
     qlocaleqdoc_file.close()
 
+    os.remove(qtsrcdir + "/src/corelib/tools/qlocale.qdoc")
     os.rename(qlocaleqdoc_temp_file_path, qtsrcdir + "/src/corelib/tools/qlocale.qdoc")
 
 if __name__ == "__main__":

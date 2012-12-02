@@ -728,11 +728,15 @@ QWindowsWindow::QWindowsWindow(QWindow *aWindow, const WindowData &data) :
             break;
         }
     }
+    if (QWindowsContext::instance()->systemInfo() & QWindowsContext::SI_SupportsTouch)
+        QWindowsContext::user32dll.registerTouchWindow(m_data.hwnd, 0);
     setWindowState(aWindow->windowState());
 }
 
 QWindowsWindow::~QWindowsWindow()
 {
+    if (QWindowsContext::instance()->systemInfo() & QWindowsContext::SI_SupportsTouch)
+        QWindowsContext::user32dll.unregisterTouchWindow(m_data.hwnd);
     destroyWindow();
     destroyIcon();
 }
@@ -997,7 +1001,7 @@ void QWindowsWindow::handleHidden()
 void QWindowsWindow::setGeometry(const QRect &rectIn)
 {
     QRect rect = rectIn;
-    // This means it is a call from QWindow::setFramePos() and
+    // This means it is a call from QWindow::setFramePosition() and
     // the coordinates include the frame (size is still the contents rectangle).
     if (QWindowsGeometryHint::positionIncludesFrame(window())) {
         const QMargins margins = frameMargins();

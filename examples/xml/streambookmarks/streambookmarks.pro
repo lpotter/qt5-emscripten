@@ -7,8 +7,8 @@ SOURCES       = main.cpp \
                 xbelwriter.cpp
 QT           += xml widgets
 
+EXAMPLE_FILES = frank.xbel jennifer.xbel
+
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/xml/streambookmarks
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS streambookmarks.pro *.xbel
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/xml/streambookmarks
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/xml/streambookmarks
+INSTALLS += target

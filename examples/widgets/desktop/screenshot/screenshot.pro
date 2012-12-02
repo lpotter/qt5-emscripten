@@ -3,10 +3,8 @@ SOURCES             = main.cpp \
                       screenshot.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/desktop/screenshot
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS screenshot.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/desktop/screenshot
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/desktop/screenshot
+INSTALLS += target
 
 QT += widgets
 simulator: warning(This example might not fully work on Simulator platform)

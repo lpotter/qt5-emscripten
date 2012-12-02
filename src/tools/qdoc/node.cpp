@@ -170,6 +170,7 @@ Node::Node(Type type, InnerNode *parent, const QString& name)
       pageType_(NoPageType),
       status_(Commendable),
       indexNodeFlag_(false),
+      seen_(true),
       parent_(parent),
       relatesTo_(0),
       name_(name)
@@ -462,7 +463,7 @@ void Node::setLink(LinkType linkType, const QString &link, const QString &desc)
 */
 void Node::setSince(const QString &since)
 {
-    sinc = since.simplified();
+    since_ = since.simplified();
 }
 
 /*!

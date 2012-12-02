@@ -3,10 +3,8 @@ SOURCES       = imageviewer.cpp \
                 main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/imageviewer
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS imageviewer.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/imageviewer
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/imageviewer
+INSTALLS += target
 
 
 wince*: {

@@ -3,10 +3,8 @@ SOURCES       = main.cpp \
                 window.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/spinboxes
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS spinboxes.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/spinboxes
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/spinboxes
+INSTALLS += target
 
 QT += widgets
 

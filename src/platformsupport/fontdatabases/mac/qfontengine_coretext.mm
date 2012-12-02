@@ -448,7 +448,7 @@ QImage QCoreTextFontEngine::imageForGlyph(glyph_t glyph, QFixed subPixelPosition
         br.y      = QFixed::fromReal(br.y.toReal() * vscale);
     }
 
-    QImage im(qRound(br.width)+2, qRound(br.height)+2, QImage::Format_RGB32);
+    QImage im(qAbs(qRound(br.width))+2, qAbs(qRound(br.height))+2, QImage::Format_RGB32);
     im.fill(0);
 
 #ifndef Q_OS_IOS
@@ -598,6 +598,11 @@ QFontEngine *QCoreTextFontEngine::cloneWithSize(qreal pixelSize) const
     newFontDef.pointSize = pixelSize * 72.0 / qt_defaultDpi();
 
     return new QCoreTextFontEngine(cgFont, newFontDef);
+}
+
+bool QCoreTextFontEngine::supportsTransformations(const QTransform &transform) const
+{
+    return transform.type() > QTransform::TxTranslate;
 }
 
 QT_END_NAMESPACE

@@ -28,8 +28,9 @@
 /*!
     \example sqlwidgetmapper
     \title SQL Widget Mapper Example
+    \ingroup sql_examples
 
-    The SQL Widget Mapper example shows how to use a map information from a
+    \brief The SQL Widget Mapper example shows how to use a map information from a
     database to widgets on a form.
 
     \image sql-widget-mapper.png

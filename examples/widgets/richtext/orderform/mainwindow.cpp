@@ -225,9 +225,10 @@ void MainWindow::openDialog()
 {
     DetailsDialog dialog(tr("Enter Customer Details"), this);
 
-    if (dialog.exec() == QDialog::Accepted)
+    if (dialog.exec() == QDialog::Accepted) {
         createLetter(dialog.senderName(), dialog.senderAddress(),
                      dialog.orderItems(), dialog.sendOffers());
+    }
 }
 //! [16]
 
@@ -239,12 +240,13 @@ void MainWindow::printFile()
 //! [18]
     QPrinter printer;
 
-    QPrintDialog *dialog = new QPrintDialog(&printer, this);
-    dialog->setWindowTitle(tr("Print Document"));
+    QPrintDialog dialog(&printer, this);
+    dialog.setWindowTitle(tr("Print Document"));
     if (editor->textCursor().hasSelection())
-        dialog->addEnabledOption(QAbstractPrintDialog::PrintSelection);
-    if (dialog->exec() != QDialog::Accepted)
+        dialog.addEnabledOption(QAbstractPrintDialog::PrintSelection);
+    if (dialog.exec() != QDialog::Accepted) {
         return;
+    }
 //! [18]
 
     editor->print(&printer);

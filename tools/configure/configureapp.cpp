@@ -240,6 +240,7 @@ Configure::Configure(int& argc, char** argv)
     dictionary[ "POSIX_IPC" ]       = "no";
     dictionary[ "QT_GLIB" ]         = "no";
     dictionary[ "QT_ICONV" ]        = "auto";
+    dictionary[ "QT_INOTIFY" ]      = "auto";
     dictionary[ "QT_CUPS" ]         = "auto";
     dictionary[ "CFG_GCC_SYSROOT" ] = "yes";
     dictionary[ "SLOG2" ]           = "no";
@@ -1032,6 +1033,13 @@ void Configure::parseCmdLine()
             dictionary[ "QT_INSTALL_BINS" ] = configCmdLine.at(i);
         }
 
+        else if (configCmdLine.at(i) == "-libexecdir") {
+            ++i;
+            if (i == argCount)
+                break;
+            dictionary[ "QT_INSTALL_LIBEXECS" ] = configCmdLine.at(i);
+        }
+
         else if (configCmdLine.at(i) == "-libdir") {
             ++i;
             if (i == argCount)
@@ -1066,6 +1074,14 @@ void Configure::parseCmdLine()
                 break;
             dictionary[ "QT_INSTALL_IMPORTS" ] = configCmdLine.at(i);
         }
+
+        else if (configCmdLine.at(i) == "-qmldir") {
+            ++i;
+            if (i == argCount)
+                break;
+            dictionary[ "QT_INSTALL_QML" ] = configCmdLine.at(i);
+        }
+
         else if (configCmdLine.at(i) == "-archdatadir") {
             ++i;
             if (i == argCount)
@@ -1180,6 +1196,12 @@ void Configure::parseCmdLine()
             dictionary["QT_ICONV"] = "sun";
         } else if (configCmdLine.at(i) == "-gnu-iconv") {
             dictionary["QT_ICONV"] = "gnu";
+        }
+
+        else if (configCmdLine.at(i) == "-inotify") {
+            dictionary["QT_INOTIFY"] = "yes";
+        } else if (configCmdLine.at(i) == "-no-inotify") {
+            dictionary["QT_INOTIFY"] = "no";
         }
 
         else if (configCmdLine.at(i) == "-neon") {
@@ -1537,6 +1559,7 @@ void Configure::applySpecSpecifics()
         dictionary[ "IWMMXT" ]              = "no";
         dictionary[ "CE_CRT" ]              = "yes";
         dictionary[ "LARGE_FILE" ]          = "no";
+        dictionary[ "ANGLE" ]               = "no";
         // We only apply MMX/IWMMXT for mkspecs we know they work
         if (dictionary[ "XQMAKESPEC" ].startsWith("wincewm")) {
             dictionary[ "MMX" ]    = "yes";
@@ -1582,12 +1605,14 @@ bool Configure::displayHelp()
 
         desc("You may use these to separate different parts of the install:\n\n");
 
-        desc(       "-bindir <dir>",                    "Executables will be installed to <dir>\n(default PREFIX/bin)");
+        desc(       "-bindir <dir>",                    "User executables will be installed to <dir>\n(default PREFIX/bin)");
         desc(       "-libdir <dir>",                    "Libraries will be installed to <dir>\n(default PREFIX/lib)");
         desc(       "-headerdir <dir>",                 "Headers will be installed to <dir>\n(default PREFIX/include)");
         desc(       "-archdatadir <dir>",               "Architecture-dependent data used by Qt will be installed to <dir>\n(default PREFIX)");
+        desc(       "-libexecdir <dir>",                "Program executables will be installed to <dir>\n(default ARCHDATADIR/libexec)");
         desc(       "-plugindir <dir>",                 "Plugins will be installed to <dir>\n(default ARCHDATADIR/plugins)");
         desc(       "-importdir <dir>",                 "Imports for QML1 will be installed to <dir>\n(default ARCHDATADIR/imports)");
+        desc(       "-qmldir <dir>",                    "Imports for QML2 will be installed to <dir>\n(default ARCHDATADIR/qml)");
         desc(       "-datadir <dir>",                   "Data used by Qt programs will be installed to <dir>\n(default PREFIX)");
         desc(       "-docdir <dir>",                    "Documentation will be installed to <dir>\n(default DATADIR/doc)");
         desc(       "-translationdir <dir>",            "Translations of Qt programs will be installed to <dir>\n(default DATADIR/translations)");
@@ -1683,6 +1708,9 @@ bool Configure::displayHelp()
         desc("QT_ICONV",    "yes",     "-iconv",        "Enable support for iconv(3).");
         desc("QT_ICONV",    "yes",     "-sun-iconv",    "Enable support for iconv(3) using sun-iconv.");
         desc("QT_ICONV",    "yes",     "-gnu-iconv",    "Enable support for iconv(3) using gnu-libiconv.\n");
+
+        desc("QT_INOTIFY",  "yes",     "-inotify",      "Explicitly enable Qt inotify(7) support.");
+        desc("QT_INOTIFY",  "no",      "-no-inotify",   "Explicitly disable Qt inotify(7) support.\n");
 
         desc("LARGE_FILE",  "yes",     "-largefile",    "Enables Qt to access files larger than 4 GB.\n");
 
@@ -2072,6 +2100,8 @@ bool Configure::checkAvailability(const QString &part)
         available = findFile("dwrite.h") && findFile("d2d1.h") && findFile("dwrite.lib");
     } else if (part == "ICONV") {
         available = tryCompileProject("unix/iconv") || tryCompileProject("unix/gnu-libiconv");
+    } else if (part == "INOTIFY") {
+        available = tryCompileProject("unix/inotify");
     } else if (part == "CUPS") {
         available = (platform() != WINDOWS) && (platform() != WINDOWS_CE) && tryCompileProject("unix/cups");
     } else if (part == "STACK_PROTECTOR_STRONG") {
@@ -2196,6 +2226,10 @@ void Configure::autoDetection()
     if (dictionary["QT_ICONV"] == "auto")
         dictionary["QT_ICONV"] = checkAvailability("ICONV") ? "yes" : "no";
 
+    // Detection of inotify
+    if (dictionary["QT_INOTIFY"] == "auto")
+        dictionary["QT_INOTIFY"] = checkAvailability("INOTIFY") ? "yes" : "no";
+
     // Detection of cups support
     if (dictionary["QT_CUPS"] == "auto")
         dictionary["QT_CUPS"] = checkAvailability("CUPS") ? "yes" : "no";
@@ -2281,7 +2315,7 @@ bool Configure::verifyConfiguration()
                  << "Disabling the ANGLE backend." << endl;
             prompt = true;
         }
-        if (dictionary["OPENGL_ES_2"] == "yes") {
+        if ((dictionary["OPENGL_ES_2"] == "yes") && (dictionary.value("XQMAKESPEC").isEmpty())) {
             cout << endl << "WARNING: Using OpenGL ES 2.0 without ANGLE." << endl
                  << "Specify -opengl desktop to use Open GL." << endl
                  <<  "The build will most likely fail." << endl;
@@ -2737,9 +2771,7 @@ void Configure::generateCachefile()
     if (cacheFile.open(QFile::WriteOnly | QFile::Text)) { // Truncates any existing file.
         QTextStream cacheStream(&cacheFile);
 
-        for (QStringList::Iterator var = qmakeVars.begin(); var != qmakeVars.end(); ++var) {
-            cacheStream << (*var) << endl;
-        }
+        // nothing left here
 
         cacheStream.flush();
         cacheFile.close();
@@ -2803,6 +2835,9 @@ void Configure::generateCachefile()
         if (dictionary[ "STRIP" ] == "no")
             moduleStream << " nostrip";
         moduleStream << endl;
+
+        for (QStringList::Iterator var = qmakeVars.begin(); var != qmakeVars.end(); ++var)
+            moduleStream << (*var) << endl;
 
         moduleStream.flush();
         moduleFile.close();
@@ -3349,6 +3384,7 @@ void Configure::displayConfig()
     sout << "Large File support.........." << dictionary[ "LARGE_FILE" ] << endl;
     sout << "NIS support................." << dictionary[ "NIS" ] << endl;
     sout << "Iconv support..............." << dictionary[ "QT_ICONV" ] << endl;
+    sout << "Inotify support............." << dictionary[ "QT_INOTIFY" ] << endl;
     sout << "Glib support................" << dictionary[ "QT_GLIB" ] << endl;
     sout << "CUPS support................" << dictionary[ "QT_CUPS" ] << endl;
     sout << "OpenVG support.............." << dictionary[ "OPENVG" ] << endl;
@@ -3397,7 +3433,9 @@ void Configure::displayConfig()
     sout << "Libraries installed to......" << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBS"]) << endl;
     sout << "Arch-dep. data to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_ARCHDATA"]) << endl;
     sout << "Plugins installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_PLUGINS"]) << endl;
-    sout << "Imports installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_IMPORTS"]) << endl;
+    sout << "Library execs installed to.." << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBEXEC"]) << endl;
+    sout << "QML1 imports installed to..." << QDir::toNativeSeparators(dictionary["QT_INSTALL_IMPORTS"]) << endl;
+    sout << "QML2 imports installed to..." << QDir::toNativeSeparators(dictionary["QT_INSTALL_QML"]) << endl;
     sout << "Binaries installed to......." << QDir::toNativeSeparators(dictionary["QT_INSTALL_BINS"]) << endl;
     sout << "Arch-indep. data to........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_DATA"]) << endl;
     sout << "Docs installed to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_DOCS"]) << endl;
@@ -3527,12 +3565,16 @@ void Configure::generateQConfigCpp()
         dictionary["QT_INSTALL_LIBS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/lib";
     if (!dictionary["QT_INSTALL_ARCHDATA"].size())
         dictionary["QT_INSTALL_ARCHDATA"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"];
+    if (!dictionary["QT_INSTALL_LIBEXECS"].size())
+        dictionary["QT_INSTALL_LIBEXECS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/libexec";
     if (!dictionary["QT_INSTALL_BINS"].size())
         dictionary["QT_INSTALL_BINS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/bin";
     if (!dictionary["QT_INSTALL_PLUGINS"].size())
         dictionary["QT_INSTALL_PLUGINS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/plugins";
     if (!dictionary["QT_INSTALL_IMPORTS"].size())
         dictionary["QT_INSTALL_IMPORTS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/imports";
+    if (!dictionary["QT_INSTALL_QML"].size())
+        dictionary["QT_INSTALL_QML"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/qml";
     if (!dictionary["QT_INSTALL_DATA"].size())
         dictionary["QT_INSTALL_DATA"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"];
     if (!dictionary["QT_INSTALL_DOCS"].size())
@@ -3577,9 +3619,11 @@ void Configure::generateQConfigCpp()
                   << "    \"qt_docspath=" << formatPath(dictionary["QT_INSTALL_DOCS"]) << "\","  << endl
                   << "    \"qt_hdrspath=" << formatPath(dictionary["QT_INSTALL_HEADERS"]) << "\","  << endl
                   << "    \"qt_libspath=" << formatPath(dictionary["QT_INSTALL_LIBS"]) << "\","  << endl
+                  << "    \"qt_lbexpath=" << formatPath(dictionary["QT_INSTALL_LIBEXECS"]) << "\","  << endl
                   << "    \"qt_binspath=" << formatPath(dictionary["QT_INSTALL_BINS"]) << "\","  << endl
                   << "    \"qt_plugpath=" << formatPath(dictionary["QT_INSTALL_PLUGINS"]) << "\","  << endl
                   << "    \"qt_impspath=" << formatPath(dictionary["QT_INSTALL_IMPORTS"]) << "\","  << endl
+                  << "    \"qt_qml2path=" << formatPath(dictionary["QT_INSTALL_QML"]) << "\","  << endl
                   << "    \"qt_adatpath=" << formatPath(dictionary["QT_INSTALL_ARCHDATA"]) << "\","  << endl
                   << "    \"qt_datapath=" << formatPath(dictionary["QT_INSTALL_DATA"]) << "\","  << endl
                   << "    \"qt_trnspath=" << formatPath(dictionary["QT_INSTALL_TRANSLATIONS"]) << "\"," << endl

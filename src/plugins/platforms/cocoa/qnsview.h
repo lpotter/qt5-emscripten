@@ -50,10 +50,13 @@
 
 QT_BEGIN_NAMESPACE
 class QCocoaWindow;
+class QCocoaBackingStore;
+class QCocoaGLContext;
 QT_END_NAMESPACE
 
 @interface QNSView : NSView <NSTextInputClient> {
-    CGImageRef m_cgImage;
+    QCocoaBackingStore* m_backingStore;
+    QPoint m_backingStoreOffset;
     CGImageRef m_maskImage;
     uchar *m_maskData;
     QWindow *m_window;
@@ -64,12 +67,13 @@ QT_END_NAMESPACE
     bool m_sendKeyEvent;
     QStringList *currentCustomDragTypes;
     Qt::KeyboardModifiers currentWheelModifiers;
+    bool m_subscribesForGlobalFrameNotifications;
 }
 
 - (id)init;
 - (id)initWithQWindow:(QWindow *)window platformWindow:(QCocoaWindow *) platformWindow;
-
-- (void)setImage:(QImage *)image;
+- (void)setQCocoaGLContext:(QCocoaGLContext *)context;
+- (void)flushBackingStore:(QCocoaBackingStore *)backingStore region:(const QRegion &)region offset:(QPoint)offset;
 - (void)setMaskRegion:(const QRegion *)region;
 - (void)drawRect:(NSRect)dirtyRect;
 - (void)updateGeometry;

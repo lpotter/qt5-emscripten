@@ -7,15 +7,7 @@ RESOURCES += pbuffers.qrc
 QT += opengl widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/opengl/pbuffers
-sources.files = $$SOURCES \
-    $$HEADERS \
-    $$RESOURCES \
-    pbuffers.pro \
-    *.png
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/opengl/pbuffers
-INSTALLS += target \
-    sources
-
+target.path = $$[QT_INSTALL_EXAMPLES]/opengl/pbuffers
+INSTALLS += target
 
 simulator: warning(This example might not fully work on Simulator platform)

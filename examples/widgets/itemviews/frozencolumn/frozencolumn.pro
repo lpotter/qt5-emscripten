@@ -3,9 +3,7 @@ SOURCES += main.cpp freezetablewidget.cpp
 RESOURCES += grades.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/frozencolumn
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/frozencolumn
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/frozencolumn
+INSTALLS += target
 QT += widgets
 

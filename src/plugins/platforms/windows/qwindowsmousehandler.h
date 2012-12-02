@@ -80,8 +80,10 @@ private:
     QPointer<QWindow> m_windowUnderMouse;
     QPointer<QWindow> m_trackedWindow;
     QHash<DWORD, int> m_touchInputIDToTouchPointID;
+    QHash<int, QPointF> m_lastTouchPositions;
     QTouchDevice *m_touchDevice;
     bool m_leftButtonDown;
+    QWindow *m_previousCaptureWindow;
 };
 
 Qt::MouseButtons QWindowsMouseHandler::keyStateToMouseButtons(int wParam)

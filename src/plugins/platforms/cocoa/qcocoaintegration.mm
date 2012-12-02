@@ -53,6 +53,7 @@
 #include "qcocoatheme.h"
 #include "qcocoainputcontext.h"
 #include "qmacmime.h"
+#include "qcocoaaccessibility.h"
 
 #include <qpa/qplatformaccessibility.h>
 #include <QtCore/qcoreapplication.h>
@@ -112,6 +113,18 @@ void QCocoaScreen::updateGeometry()
     QWindowSystemInterface::handleScreenLogicalDotsPerInchChange(screen(), m_logicalDpi.first, m_logicalDpi.second);
     QWindowSystemInterface::handleScreenRefreshRateChange(screen(), m_refreshRate);
     QWindowSystemInterface::handleScreenAvailableGeometryChange(screen(), availableGeometry());
+}
+
+qreal QCocoaScreen::devicePixelRatio() const
+{
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
+    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
+        return qreal([m_screen backingScaleFactor]);
+    } else
+#endif
+    {
+        return 1.0;
+    }
 }
 
 extern CGContextRef qt_mac_cg_context(const QPaintDevice *pdev);
@@ -179,8 +192,8 @@ QCocoaIntegration::QCocoaIntegration()
     : mFontDb(new QCoreTextFontDatabase())
     , mEventDispatcher(new QCocoaEventDispatcher())
     , mInputContext(new QCocoaInputContext)
-#ifndef QT_NO_ACCESSIBILITY
-    , mAccessibility(new QPlatformAccessibility)
+#ifndef QT_NO_COCOA_ACCESSIBILITY
+    , mAccessibility(new QCococaAccessibility)
 #endif
     , mCocoaClipboard(new QCocoaClipboard)
     , mCocoaDrag(new QCocoaDrag)
@@ -357,7 +370,7 @@ QPlatformInputContext *QCocoaIntegration::inputContext() const
 
 QPlatformAccessibility *QCocoaIntegration::accessibility() const
 {
-#ifndef QT_NO_ACCESSIBILITY
+#ifndef QT_NO_COCOA_ACCESSIBILITY
     return mAccessibility.data();
 #else
     return 0;

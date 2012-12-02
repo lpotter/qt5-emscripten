@@ -55,7 +55,6 @@
 #include <qtoolbutton.h>
 #include <qtoolbar.h>
 
-#include <qwindowsstyle.h>
 #include <qcommonstyle.h>
 #include <qproxystyle.h>
 #include <qstylefactory.h>
@@ -71,25 +70,7 @@
 #include <qmdiarea.h>
 #include <qscrollarea.h>
 
-#ifndef Q_NO_STYLE_FUSION
-#include <qfusionstyle.h>
-#endif
-
-#ifdef Q_OS_MAC
-#include <QMacStyle>
-#endif
-
-#ifdef Q_OS_WIN
-#include <QWindowsXPStyle>
-#include <QWindowsVistaStyle>
-#endif
-
-#ifdef Q_OS_WINCE
-#include <QWindowsCEStyle>
-#endif
-
 #ifdef Q_OS_WINCE_WM
-#include <QWindowsMobileStyle>
 #include <windows.h>
 
 static bool qt_wince_is_smartphone() {
@@ -230,7 +211,7 @@ void tst_QStyle::testProxyStyle()
 {
     QProxyStyle *proxyStyle = new QProxyStyle();
     QVERIFY(proxyStyle->baseStyle());
-    QStyle *style = new QWindowsStyle;
+    QStyle *style = QStyleFactory::create("Windows");
     QVERIFY(style->proxy() == style);
 
     proxyStyle->setBaseStyle(style);
@@ -243,7 +224,7 @@ void tst_QStyle::testProxyStyle()
     QVERIFY(proxyStyle->baseStyle());
     qApp->setStyle(proxyStyle);
 
-    QProxyStyle doubleProxy(new QProxyStyle(new QWindowsStyle()));
+    QProxyStyle doubleProxy(new QProxyStyle(QStyleFactory::create("Windows")));
     QVERIFY(testAllFunctions(&doubleProxy));
 
     CustomProxy customStyle;
@@ -349,7 +330,7 @@ bool tst_QStyle::testScrollBarSubControls(QStyle* style)
 {
     // WinCE SmartPhone doesn't have scrollbar subcontrols, so skip the rest of the test.
 #ifdef Q_OS_WINCE_WM
-    if (qobject_cast<QWindowsMobileStyle*>(style) && qt_wince_is_smartphone())
+    if (style->inherits("QWindowsMobileStyle") && qt_wince_is_smartphone())
         return true;
 #else
     Q_UNUSED(style);
@@ -372,33 +353,36 @@ bool tst_QStyle::testScrollBarSubControls(QStyle* style)
 #ifndef QT_NO_STYLE_FUSION
 void tst_QStyle::testFusionStyle()
 {
-    QFusionStyle fstyle;
-    QVERIFY(testAllFunctions(&fstyle));
-    lineUpLayoutTest(&fstyle);
+    QStyle *fstyle = QStyleFactory::create("Fusion");
+    QVERIFY(testAllFunctions(fstyle));
+    lineUpLayoutTest(fstyle);
+    delete fstyle;
 }
 #endif
 
 void tst_QStyle::testWindowsStyle()
 {
-    QWindowsStyle wstyle;
-    QVERIFY(testAllFunctions(&wstyle));
-    lineUpLayoutTest(&wstyle);
+    QStyle *wstyle = QStyleFactory::create("Windows");
+    QVERIFY(testAllFunctions(wstyle));
+    lineUpLayoutTest(wstyle);
 
     // Tests drawing indeterminate progress with 0 size: QTBUG-15973
     QStyleOptionProgressBar pb;
     pb.rect = QRect(0,0,-9,0);
     QPixmap surface(QSize(200, 200));
     QPainter painter(&surface);
-    wstyle.drawControl(QStyle::CE_ProgressBar, &pb, &painter, 0);
+    wstyle->drawControl(QStyle::CE_ProgressBar, &pb, &painter, 0);
+    delete wstyle;
 }
 
 #if defined(Q_OS_WIN) && !defined(QT_NO_STYLE_WINDOWSXP)
 // WindowsXP style
 void tst_QStyle::testWindowsXPStyle()
 {
-    QWindowsXPStyle xpstyle;
-    QVERIFY(testAllFunctions(&xpstyle));
-    lineUpLayoutTest(&xpstyle);
+    QStyle *xpstyle = QStyleFactory::create("WindowsXP");
+    QVERIFY(testAllFunctions(xpstyle));
+    lineUpLayoutTest(xpstyle);
+    delete xpstyle;
 }
 #endif
 
@@ -419,13 +403,14 @@ QImage readImage(const QString &fileName)
 #if defined(Q_OS_WIN) && !defined(QT_NO_STYLE_WINDOWSVISTA)
 void tst_QStyle::testWindowsVistaStyle()
 {
-    QWindowsVistaStyle vistastyle;
-    QVERIFY(testAllFunctions(&vistastyle));
+    QStyle *vistastyle = QStyleFactory::create("WindowsVista");
+    QVERIFY(testAllFunctions(vistastyle));
 
     if (QSysInfo::WindowsVersion == QSysInfo::WV_VISTA)
-        testPainting(&vistastyle, "vista");
+        testPainting(vistastyle, "vista");
     else if (QSysInfo::WindowsVersion == QSysInfo::WV_XP)
-        testPainting(&vistastyle, "xp");
+        testPainting(vistastyle, "xp");
+    delete vistastyle;
 }
 #endif
 
@@ -538,8 +523,9 @@ qDebug("TEST PAINTING");
 #ifdef Q_OS_MAC
 void tst_QStyle::testMacStyle()
 {
-    QMacStyle mstyle;
-    QVERIFY(testAllFunctions(&mstyle));
+    QStyle *mstyle = QStyleFactory::create("Macintosh");
+    QVERIFY(testAllFunctions(mstyle));
+    delete mstyle;
 }
 #endif
 
@@ -547,8 +533,9 @@ void tst_QStyle::testMacStyle()
 // WindowsCEStyle style
 void tst_QStyle::testWindowsCEStyle()
 {
-    QWindowsCEStyle cstyle;
+    QStyle *cstyle = QStyleFactory::create("WindowsCE");
     QVERIFY(testAllFunctions(&cstyle));
+    delete cstyle;
 }
 #endif
 
@@ -556,8 +543,9 @@ void tst_QStyle::testWindowsCEStyle()
 // WindowsMobileStyle style
 void tst_QStyle::testWindowsMobileStyle()
 {
-    QWindowsMobileStyle cstyle;
+    QStyle *cstyle = QStyleFactory::create("WindowsMobile");
     QVERIFY(testAllFunctions(&cstyle));
+    delete cstyle;
 }
 #endif
 
@@ -578,11 +566,11 @@ void MyWidget::paintEvent( QPaintEvent* )
 }
 
 
-class Qt42Style : public QWindowsStyle
+class Qt42Style : public QCommonStyle
 {
     Q_OBJECT
 public:
-    Qt42Style() : QWindowsStyle()
+    Qt42Style() : QCommonStyle()
     {
         margin_toplevel = 10;
         margin = 5;
@@ -614,7 +602,7 @@ int Qt42Style::pixelMetric(PixelMetric metric, const QStyleOption * option /*= 0
         default:
             break;
     }
-    return QWindowsStyle::pixelMetric(metric, option, widget);
+    return -1;
 }
 
 
@@ -648,15 +636,15 @@ void tst_QStyle::progressBarChangeStyle()
     //test a crashing situation (task 143530)
     //where changing the styles and deleting a progressbar would crash
 
-    QWindowsStyle style1;
-    QFusionStyle style2;
+    QStyle *style1 = QStyleFactory::create("Windows");
+    QStyle *style2 = QStyleFactory::create("Fusion");
 
     QProgressBar *progress=new QProgressBar;
-    progress->setStyle(&style1);
+    progress->setStyle(style1);
 
     progress->show();
 
-    progress->setStyle(&style2);
+    progress->setStyle(style2);
 
     QTest::qWait(100);
     delete progress;
@@ -664,6 +652,8 @@ void tst_QStyle::progressBarChangeStyle()
     QTest::qWait(100);
 
     //before the correction, there would be a crash here
+    delete style1;
+    delete style2;
 }
 #endif
 
@@ -757,17 +747,19 @@ void tst_QStyle::testDrawingShortcuts()
 
 #define SCROLLBAR_SPACING 33
 
-class FrameTestStyle : public QWindowsStyle {
+class FrameTestStyle : public QProxyStyle {
+public:
+    FrameTestStyle() : QProxyStyle(QStyleFactory::create("Windows")) { }
     int styleHint(StyleHint hint, const QStyleOption *opt, const QWidget *widget, QStyleHintReturn *returnData) const {
         if (hint == QStyle::SH_ScrollView_FrameOnlyAroundContents)
             return 1;
-        return QWindowsStyle ::styleHint(hint, opt, widget, returnData);
+        return QProxyStyle ::styleHint(hint, opt, widget, returnData);
     }
 
     int pixelMetric(PixelMetric pm, const QStyleOption *option, const QWidget *widget) const {
         if (pm == QStyle::PM_ScrollView_ScrollBarSpacing)
             return SCROLLBAR_SPACING;
-        return QWindowsStyle ::pixelMetric(pm, option ,widget);
+        return QProxyStyle ::pixelMetric(pm, option ,widget);
     }
 };
 
@@ -775,12 +767,12 @@ void tst_QStyle::testFrameOnlyAroundContents()
 {
     QScrollArea area;
     area.setGeometry(0, 0, 200, 200);
-    QWindowsStyle winStyle;
+    QStyle *winStyle = QStyleFactory::create("Windows");
     FrameTestStyle frameStyle;
     QWidget *widget = new QWidget(&area);
     widget->setGeometry(0, 0, 400, 400);
-    area.setStyle(&winStyle);
-    area.verticalScrollBar()->setStyle(&winStyle);
+    area.setStyle(winStyle);
+    area.verticalScrollBar()->setStyle(winStyle);
     area.setWidget(widget);
     area.setVisible(true);
     int viewPortWidth = area.viewport()->width();
@@ -788,6 +780,7 @@ void tst_QStyle::testFrameOnlyAroundContents()
     area.setStyle(&frameStyle);
     // Test that we reserve space for scrollbar spacing
     QVERIFY(viewPortWidth == area.viewport()->width() + SCROLLBAR_SPACING);
+    delete winStyle;
 }
 
 

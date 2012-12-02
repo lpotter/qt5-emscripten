@@ -150,9 +150,6 @@ public:
     bool autoSwap;
 
     QGLColormap cmap;
-#ifndef QT_OPENGL_ES
-    QMap<QString, int> displayListCache;
-#endif
 
     bool disable_clear_on_painter_begin;
 };
@@ -383,19 +380,18 @@ class Q_OPENGL_EXPORT QGLTextureDestroyer : public QObject
     Q_OBJECT
 public:
     QGLTextureDestroyer() : QObject() {
-        qRegisterMetaType<GLuint>();
-        connect(this, SIGNAL(freeTexture(QGLContext *, QPlatformPixmap *, GLuint)),
-                this, SLOT(freeTexture_slot(QGLContext *, QPlatformPixmap *, GLuint)));
+        connect(this, SIGNAL(freeTexture(QGLContext *, QPlatformPixmap *, quint32)),
+                this, SLOT(freeTexture_slot(QGLContext *, QPlatformPixmap *, quint32)));
     }
     void emitFreeTexture(QGLContext *context, QPlatformPixmap *boundPixmap, GLuint id) {
         emit freeTexture(context, boundPixmap, id);
     }
 
 Q_SIGNALS:
-    void freeTexture(QGLContext *context, QPlatformPixmap *boundPixmap, GLuint id);
+    void freeTexture(QGLContext *context, QPlatformPixmap *boundPixmap, quint32 id);
 
 private slots:
-    void freeTexture_slot(QGLContext *context, QPlatformPixmap *boundPixmap, GLuint id) {
+    void freeTexture_slot(QGLContext *context, QPlatformPixmap *boundPixmap, quint32 id) {
         Q_UNUSED(boundPixmap);
         QGLShareContextScope scope(context);
         glDeleteTextures(1, &id);
@@ -507,7 +503,8 @@ int QGLTextureCache::maxCost()
 
 QGLTexture* QGLTextureCache::getTexture(QGLContext *ctx, qint64 key)
 {
-    QReadLocker locker(&m_lock);
+    // Can't be a QReadLocker since QCache::object() modifies the cache (reprioritizes the object)
+    QWriteLocker locker(&m_lock);
     const QGLTextureCacheKey cacheKey = {key, QGLContextPrivate::contextGroup(ctx)};
     return m_cache.object(cacheKey);
 }

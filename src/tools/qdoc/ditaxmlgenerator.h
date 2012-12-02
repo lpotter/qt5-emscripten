@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
+** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
@@ -378,10 +378,9 @@ private:
     QString generateLowStatusMemberFile(const InnerNode* inner,
                                         CodeMarker* marker,
                                         CodeMarker::Status status);
-    void generateClassHierarchy(const Node* relative, const NodeMap& classMap);
-    void generateAnnotatedList(const Node* relative,
-                               CodeMarker* marker,
-                               const NodeMap& nodeMap);
+    void generateClassHierarchy(const Node* relative, NodeMap& classMap);
+    void generateAnnotatedList(const Node* relative, CodeMarker* marker, const NodeMap& nodeMap);
+    void generateAnnotatedList(const Node* relative, CodeMarker* marker, const NodeList& nodes);
     void generateCompactList(const Node* relative,
                              const NodeMap& classMap,
                              bool includeAlphabet,
@@ -513,7 +512,7 @@ private:
     static QString ditaTags[];
     QStack<QXmlStreamWriter*> xmlWriterStack;
     QStack<DitaTag> tagStack;
-    QStringMultiMap metadataDefaults;
+    QStringPairMap metadataDefaults;
     QVector<NodeMultiMap*> nodeTypeMaps;
     QVector<NodeMultiMap*> nodeSubtypeMaps;
     QVector<NodeMultiMap*> pageTypeMaps;

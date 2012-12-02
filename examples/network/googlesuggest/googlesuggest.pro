@@ -3,10 +3,8 @@ SOURCES =   main.cpp searchbox.cpp googlesuggest.cpp
 HEADERS  =  searchbox.h googlesuggest.h
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/googlesuggest
-sources.files = $$SOURCES $$HEADERS *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/googlesuggest
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/googlesuggest
+INSTALLS += target
 
 
 simulator: warning(This example might not fully work on Simulator platform)

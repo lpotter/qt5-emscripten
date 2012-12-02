@@ -115,8 +115,6 @@ QGLSignalProxy *QGLSignalProxy::instance()
 
     \brief The QGL namespace specifies miscellaneous identifiers used
     in the Qt OpenGL module.
-
-    \ingroup painting-3D
 */
 
 /*!
@@ -162,10 +160,10 @@ QGLSignalProxy *QGLSignalProxy::instance()
 
 /*!
     \class QGLFormat
+    \inmodule QtOpenGL
+
     \brief The QGLFormat class specifies the display format of an OpenGL
     rendering context.
-
-    \ingroup painting-3D
 
     A display format has several characteristics:
     \list
@@ -1809,9 +1807,9 @@ struct DDSFormat {
 
 /*!
     \class QGLContext
-    \brief The QGLContext class encapsulates an OpenGL rendering context.
+    \inmodule QtOpenGL
 
-    \ingroup painting-3D
+    \brief The QGLContext class encapsulates an OpenGL rendering context.
 
     An OpenGL rendering context is a complete set of OpenGL state
     variables. The rendering context's \l {QGL::FormatOption} {format}
@@ -3129,6 +3127,19 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
 }
 
 /*!
+    Moves the QGLContext to the given \a thread.
+
+    Enables calling swapBuffers() and makeCurrent() on the context in
+    the given thread.
+*/
+void QGLContext::moveToThread(QThread *thread)
+{
+    Q_D(QGLContext);
+    if (d->guiGlContext)
+        d->guiGlContext->moveToThread(thread);
+}
+
+/*!
     \fn bool QGLContext::chooseContext(const QGLContext* shareContext = 0)
 
     This semi-internal function is called by create(). It creates a
@@ -3197,16 +3208,18 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
 
     In some very rare cases the underlying call may fail. If this
     occurs an error message is output to stderr.
+
+    If you call this from a thread other than the main UI thread,
+    make sure you've first pushed the context to the relevant thread
+    from the UI thread using moveToThread().
 */
 
 
 /*!
     \fn void QGLContext::swapBuffers() const
 
-    Swaps the screen contents with an off-screen buffer. Only works if
-    the context is in double buffer mode.
-
-    \sa QGLFormat::setDoubleBuffer()
+    Call this to finish a frame of OpenGL rendering, and make sure to
+    call makeCurrent() again before you begin a new frame.
 */
 
 
@@ -3226,17 +3239,6 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
     \sa QGLContext::QGLContext()
 */
 
-/*!
-    \obsolete
-    \fn void QGLContext::generateFontDisplayLists(const QFont& font, int listBase)
-
-    Generates a set of 256 display lists for the 256 first characters
-    in the font \a font. The first list will start at index \a listBase.
-
-    \sa QGLWidget::renderText()
-*/
-
-
 
 /*****************************************************************************
   QGLWidget implementation
@@ -3245,10 +3247,9 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
 
 /*!
     \class QGLWidget
+    \inmodule QtOpenGL
+
     \brief The QGLWidget class is a widget for rendering OpenGL graphics.
-
-    \ingroup painting-3D
-
 
     QGLWidget provides functionality for displaying OpenGL graphics
     integrated into a Qt application. It is very simple to use. You
@@ -3376,13 +3377,18 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
     1. Call doneCurrent() in the main thread when the rendering is
     finished.
 
-    2. Notify the swapping thread that it can grab the context.
+    2. Call QGLContext::moveToThread(swapThread) to transfer ownership
+    of the context to the swapping thread.
 
-    3. Make the rendering context current in the swapping thread with
+    3. Notify the swapping thread that it can grab the context.
+
+    4. Make the rendering context current in the swapping thread with
     makeCurrent() and then call swapBuffers().
 
-    4. Call doneCurrent() in the swapping thread and notify the main
-    thread that swapping is done.
+    5. Call doneCurrent() in the swapping thread.
+
+    6. Call QGLContext::moveToThread(qApp->thread()) and notify the
+    main thread that swapping is done.
 
     Doing this will free up the main thread so that it can continue
     with, for example, handling UI events or network requests. Even if
@@ -3414,7 +3420,10 @@ void QGLContextPrivate::setCurrentContext(QGLContext *context)
     QGLWidgets can only be created in the main GUI thread. This means
     a call to doneCurrent() is necessary to release the GL context
     from the main thread, before the widget can be drawn into by
-    another thread. Also, the main GUI thread will dispatch resize and
+    another thread. You then need to call QGLContext::moveToThread()
+    to transfer ownership of the context to the thread in which you
+    want to make it current.
+    Also, the main GUI thread will dispatch resize and
     paint events to a QGLWidget when the widget is resized, or parts
     of it becomes exposed or needs redrawing. It is therefore
     necessary to handle those events because the default
@@ -3763,7 +3772,7 @@ void QGLWidget::setFormat(const QGLFormat &format)
 
 
 /*!
-    \fn const QGLContext *QGLWidget::context() const
+    \fn QGLContext *QGLWidget::context() const
 
     Returns the context of this widget.
 
@@ -4091,7 +4100,9 @@ void QGLWidget::glDraw()
 #endif
     if (!d->glcx->initialized()) {
         glInit();
-        resizeGL(d->glcx->device()->width(), d->glcx->device()->height()); // New context needs this "resize"
+        const qreal scaleFactor = (window() && window()->windowHandle()) ?
+            window()->windowHandle()->devicePixelRatio() : 1.0;
+        resizeGL(d->glcx->device()->width() * scaleFactor, d->glcx->device()->height() * scaleFactor); // New context needs this "resize"
     }
     paintGL();
     if (doubleBuffer()) {
@@ -4240,67 +4251,6 @@ QImage QGLWidget::convertToGLFormat(const QImage& img)
     \sa colormap()
 */
 
-
-/*!
-    \obsolete
-
-    Returns the value of the first display list that is generated for
-    the characters in the given \a font. \a listBase indicates the base
-    value used when generating the display lists for the font. The
-    default value is 2000.
-
-    \note This function is not supported on OpenGL/ES systems.
-*/
-int QGLWidget::fontDisplayListBase(const QFont & font, int listBase)
-{
-#ifndef QT_OPENGL_ES
-    Q_D(QGLWidget);
-    int base;
-
-    if (!d->glcx) { // this can't happen unless we run out of mem
-        return 0;
-    }
-
-    // always regenerate font disp. lists for pixmaps - hw accelerated
-    // contexts can't handle this otherwise
-    bool regenerate = d->glcx->deviceIsPixmap();
-#ifndef QT_NO_FONTCONFIG
-    // font color needs to be part of the font cache key when using
-    // antialiased fonts since one set of glyphs needs to be generated
-    // for each font color
-    QString color_key;
-    if (font.styleStrategy() != QFont::NoAntialias) {
-        GLfloat color[4];
-        glGetFloatv(GL_CURRENT_COLOR, color);
-        color_key.sprintf("%f_%f_%f",color[0], color[1], color[2]);
-    }
-    QString key = font.key() + color_key + QString::number((int) regenerate);
-#else
-    QString key = font.key() + QString::number((int) regenerate);
-#endif
-    if (!regenerate && (d->displayListCache.find(key) != d->displayListCache.end())) {
-        base = d->displayListCache[key];
-    } else {
-        int maxBase = listBase - 256;
-        QMap<QString,int>::ConstIterator it;
-        for (it = d->displayListCache.constBegin(); it != d->displayListCache.constEnd(); ++it) {
-            if (maxBase < it.value()) {
-                maxBase = it.value();
-            }
-        }
-        maxBase += 256;
-        d->glcx->generateFontDisplayLists(font, maxBase);
-        d->displayListCache[key] = maxBase;
-        base = maxBase;
-    }
-    return base;
-#else // QT_OPENGL_ES
-    Q_UNUSED(font);
-    Q_UNUSED(listBase);
-    return 0;
-#endif
-}
-
 #ifndef QT_OPENGL_ES
 
 static void qt_save_gl_state()
@@ -4367,9 +4317,6 @@ static void qt_gl_draw_text(QPainter *p, int x, int y, const QString &str,
    use the glColor() call (or the qglColor() convenience function),
    just before the renderText() call.
 
-   The \a listBase parameter is obsolete and will be removed in a
-   future version of Qt.
-
    \note This function clears the stencil buffer.
 
    \note This function is not supported on OpenGL/ES systems.
@@ -4379,15 +4326,12 @@ static void qt_gl_draw_text(QPainter *p, int x, int y, const QString &str,
 
    \note This function can only be used inside a
    QPainter::beginNativePainting()/QPainter::endNativePainting() block
-   if the default OpenGL paint engine is QPaintEngine::OpenGL. To make
-   QPaintEngine::OpenGL the default GL engine, call
-   QGL::setPreferredPaintEngine(QPaintEngine::OpenGL) before the
-   QApplication constructor.
+   if a painter is active on the QGLWidget.
 
    \l{Overpainting Example}{Overpaint} with QPainter::drawText() instead.
 */
 
-void QGLWidget::renderText(int x, int y, const QString &str, const QFont &font, int)
+void QGLWidget::renderText(int x, int y, const QString &str, const QFont &font)
 {
 #ifndef QT_OPENGL_ES
     Q_D(QGLWidget);
@@ -4403,18 +4347,14 @@ void QGLWidget::renderText(int x, int y, const QString &str, const QFont &font, 
     bool auto_swap = autoBufferSwap();
 
     QPaintEngine *engine = paintEngine();
-    if (engine && engine->isActive()) {
-        qWarning("QGLWidget::renderText(): Calling renderText() while a GL 2 paint engine is"
-                 " active on the same device is not allowed.");
-        return;
-    }
+
+    qt_save_gl_state();
 
     QPainter *p;
     bool reuse_painter = false;
     if (engine->isActive()) {
         reuse_painter = true;
         p = engine->painter();
-        qt_save_gl_state();
 
         glDisable(GL_DEPTH_TEST);
         glViewport(0, 0, width, height);
@@ -4444,14 +4384,15 @@ void QGLWidget::renderText(int x, int y, const QString &str, const QFont &font, 
 
     qt_gl_draw_text(p, x, y, str, font);
 
-    if (reuse_painter) {
-        qt_restore_gl_state();
-    } else {
+    if (!reuse_painter) {
         p->end();
         delete p;
         setAutoBufferSwap(auto_swap);
         d->disable_clear_on_painter_begin = false;
     }
+
+    qt_restore_gl_state();
+
 #else // QT_OPENGL_ES
     Q_UNUSED(x);
     Q_UNUSED(y);
@@ -4476,9 +4417,13 @@ void QGLWidget::renderText(int x, int y, const QString &str, const QFont &font, 
     before calling this function to annotate the models without
     depth-testing the text.
 
+    \note This function can only be used inside a
+    QPainter::beginNativePainting()/QPainter::endNativePainting() block
+    if a painter is active on the QGLWidget.
+
     \l{Overpainting Example}{Overpaint} with QPainter::drawText() instead.
 */
-void QGLWidget::renderText(double x, double y, double z, const QString &str, const QFont &font, int)
+void QGLWidget::renderText(double x, double y, double z, const QString &str, const QFont &font)
 {
 #ifndef QT_OPENGL_ES
     Q_D(QGLWidget);
@@ -4501,21 +4446,16 @@ void QGLWidget::renderText(double x, double y, double z, const QString &str, con
 
     QPaintEngine *engine = paintEngine();
 
-    if (engine && engine->isActive()) {
-        qWarning("QGLWidget::renderText(): Calling renderText() while a GL 2 paint engine is"
-                 " active on the same device is not allowed.");
-        return;
-    }
-
     QPainter *p;
     bool reuse_painter = false;
     bool use_depth_testing = glIsEnabled(GL_DEPTH_TEST);
     bool use_scissor_testing = glIsEnabled(GL_SCISSOR_TEST);
 
+    qt_save_gl_state();
+
     if (engine->isActive()) {
         reuse_painter = true;
         p = engine->painter();
-        qt_save_gl_state();
     } else {
         setAutoBufferSwap(false);
         // disable glClear() as a result of QPainter::begin()
@@ -4543,14 +4483,15 @@ void QGLWidget::renderText(double x, double y, double z, const QString &str, con
     glTranslated(0, 0, -win_z);
     qt_gl_draw_text(p, qRound(win_x), qRound(win_y), str, font);
 
-    if (reuse_painter) {
-        qt_restore_gl_state();
-    } else {
+    if (!reuse_painter) {
         p->end();
         delete p;
         setAutoBufferSwap(auto_swap);
         d->disable_clear_on_painter_begin = false;
     }
+
+    qt_restore_gl_state();
+
 #else // QT_OPENGL_ES
     Q_UNUSED(x);
     Q_UNUSED(y);
@@ -4567,7 +4508,7 @@ QGLFormat QGLWidget::format() const
     return d->glcx->format();
 }
 
-const QGLContext *QGLWidget::context() const
+QGLContext *QGLWidget::context() const
 {
     Q_D(const QGLWidget);
     return d->glcx;
@@ -4859,12 +4800,14 @@ QGLExtensions::Extensions QGLExtensions::currentContextExtensions()
     if (extensions.match("GL_EXT_bgra"))
         glExtensions |= BGRATextureFormat;
 
+#if !defined(QT_OPENGL_ES)
     {
         GLboolean srgbCapableFramebuffers = false;
         glGetBooleanv(GL_FRAMEBUFFER_SRGB_CAPABLE_EXT, &srgbCapableFramebuffers);
         if (srgbCapableFramebuffers)
             glExtensions |= SRGBFrameBuffer;
     }
+#endif
 
     return glExtensions;
 }

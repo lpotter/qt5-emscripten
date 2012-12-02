@@ -4,9 +4,7 @@ SOURCES     = dragwidget.cpp \
               main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/draganddrop/draggableicons
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.pro images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/draganddrop/draggableicons
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/draganddrop/draggableicons
+INSTALLS += target
 
 QT += widgets

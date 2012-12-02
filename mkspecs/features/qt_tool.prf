@@ -6,10 +6,17 @@ DESTDIR = $$MODULE_BASE_OUTDIR/bin
 CONFIG += qt warn_on console
 isEmpty(QMAKE_INFO_PLIST): CONFIG -= app_bundle
 
-!build_pass:contains(QT_CONFIG, build_all): CONFIG += release
-
-target.path = $$[QT_INSTALL_BINS]
+host_build {
+    !build_pass: CONFIG += release
+    QT = bootstrap-private
+    target.path = $$[QT_HOST_BINS]
+} else {
+    !build_pass:contains(QT_CONFIG, build_all): CONFIG += release
+    target.path = $$[QT_INSTALL_BINS]
+}
 INSTALLS += target
+
+load(qt_targets)
 
 # If we are doing a prefix build, create a "module" pri which enables
 # qtPrepareTool() to work with the non-installed build.
@@ -23,7 +30,7 @@ INSTALLS += target
 
     load(resolve_target)
     cmd = $$shell_path($$QMAKE_RESOLVED_TARGET)
-    qtAddTargetEnv(cmd)
+    !host_build: qtAddTargetEnv(cmd)
 
     TOOL_PRI = $$MODULE_QMAKE_OUTDIR/mkspecs/modules/qt_tool_$${MODULE}.pri
 

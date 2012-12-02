@@ -478,7 +478,7 @@ Node* CppCodeParser::processTopicCommand(const Doc& doc,
         return dn;
     }
     else if (command == COMMAND_GROUP) {
-        DocNode* dn = new DocNode(qdb_->treeRoot(), arg.first, Node::Group, Node::OverviewPage);
+        DocNode* dn = qdb_->addGroup(arg.first);
         dn->setLocation(doc.startLocation());
         return dn;
     }
@@ -489,13 +489,11 @@ Node* CppCodeParser::processTopicCommand(const Doc& doc,
     }
     else if (command == COMMAND_MODULE) {
         DocNode* dn = qdb_->addModule(arg.first);
-        //DocNode* dn = new DocNode(qdb_->treeRoot(), arg.first, Node::Module, Node::OverviewPage);
         dn->setLocation(doc.startLocation());
         return dn;
     }
     else if (command == COMMAND_QMLMODULE) {
         DocNode* dn = qdb_->addQmlModule(arg.first);
-        //DocNode* dn = DocNode::lookupQmlModuleNode(qdb_->tree(), arg);
         dn->setLocation(doc.startLocation());
         return dn;
     }
@@ -2156,8 +2154,8 @@ bool CppCodeParser::matchDocsAndStuff()
             while (n != nodes.end()) {
                 processOtherMetaCommands(*d, *n);
                 (*n)->setDoc(*d);
-                if ((*n)->isInnerNode() &&
-                        ((InnerNode *)*n)->includes().isEmpty()) {
+                checkModuleInclusion(*n);
+                if ((*n)->isInnerNode() && ((InnerNode *)*n)->includes().isEmpty()) {
                     InnerNode *m = static_cast<InnerNode *>(*n);
                     while (m->parent() != qdb_->treeRoot())
                         m = m->parent();

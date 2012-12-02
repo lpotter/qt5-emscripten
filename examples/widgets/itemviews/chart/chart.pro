@@ -6,13 +6,9 @@ SOURCES     = main.cpp \
               pieview.cpp
 unix:!mac:!vxworks:!integrity:LIBS+= -lm
 
-TARGET.EPOCHEAPSIZE = 0x200000 0x800000
-
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/chart
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.pro *.cht
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/chart
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/chart
+INSTALLS += target
 
 QT += widgets
 

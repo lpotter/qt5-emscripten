@@ -71,6 +71,11 @@
 #include <X11/Xlibint.h>
 #endif
 
+#if defined(XCB_USE_XINPUT2) || defined(XCB_USE_XINPUT2_MAEMO)
+#include <X11/extensions/XInput2.h>
+#include <X11/extensions/XI2proto.h>
+#endif
+
 #ifdef XCB_USE_RENDER
 #include <xcb/render.h>
 #endif
@@ -81,11 +86,6 @@
 
 #ifdef XCB_USE_EGL //don't pull in eglext prototypes
 #include <EGL/egl.h>
-#endif
-
-#if defined(XCB_USE_XINPUT2) || defined(XCB_USE_XINPUT2_MAEMO)
-#include <X11/extensions/XInput2.h>
-#include <X11/extensions/XI2proto.h>
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -927,7 +927,7 @@ xcb_timestamp_t QXcbConnection::getTimestamp()
     // to add the new set of events to its event queue
     while (true) {
         connection()->sync();
-        if (event = checkEvent(checker))
+        if ((event = checkEvent(checker)))
             break;
     }
 
@@ -966,6 +966,22 @@ void QXcbConnection::processXcbEvents()
                 // to avoid swamping the event queue
                 xcb_generic_event_t *next = eventqueue->value(i+1, 0);
                 if (next && (next->response_type & ~0x80) == XCB_MOTION_NOTIFY)
+                    continue;
+            }
+
+            if (response_type == XCB_CONFIGURE_NOTIFY) {
+                // compress multiple configure notify events for the same window
+                bool found = false;
+                for (int j = i; j < eventqueue->size(); ++j) {
+                    xcb_generic_event_t *other = eventqueue->at(j);
+                    if (other && (other->response_type & ~0x80) == XCB_CONFIGURE_NOTIFY
+                        && ((xcb_configure_notify_event_t *)other)->event == ((xcb_configure_notify_event_t *)event)->event)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
                     continue;
             }
 

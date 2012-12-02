@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
+** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
@@ -573,7 +573,8 @@ void DitaXmlGenerator::initializeGenerator(const Config &config)
     customHeadElements = config.getStringList(DitaXmlGenerator::format() +
                                               Config::dot +
                                               DITAXMLGENERATOR_CUSTOMHEADELEMENTS);
-    codeIndent = config.getInt(CONFIG_CODEINDENT);
+    // The following line was changed to fix QTBUG-27798
+    //codeIndent = config.getInt(CONFIG_CODEINDENT);
     version = config.getString(CONFIG_VERSION);
     vrm = version.split(QLatin1Char('.'));
 }
@@ -1013,9 +1014,9 @@ int DitaXmlGenerator::generateAtom(const Atom *atom,
         break;
     case Atom::AnnotatedList:
         {
-            NodeMap nodeMap;
-            qdb_->getGroup(atom->string(), nodeMap);
-            generateAnnotatedList(relative, marker, nodeMap);
+            DocNode* dn = qdb_->getGroup(atom->string());
+            if (dn)
+                generateAnnotatedList(relative, marker, dn->members());
         }
         break;
     case Atom::GeneratedList:
@@ -1039,45 +1040,6 @@ int DitaXmlGenerator::generateAtom(const Atom *atom,
                 if (!m.isEmpty()) {
                     generateAnnotatedList(relative, marker, m);
                 }
-            }
-        }
-        else if (atom->string().contains("classesbyedition")) {
-
-            QString arg = atom->string().trimmed();
-            QString editionName = atom->string().mid(atom->string().indexOf("classesbyedition") + 16).trimmed();
-            if (editionModuleMap.contains(editionName)) {
-                QDocDatabase* qdb = QDocDatabase::qdocDB();
-                // Add all classes in the modules listed for that edition.
-                NodeMap editionClasses;
-                DocNodeMap::const_iterator i = qdb->modules().begin();
-                while (i != qdb->modules().end()) {
-                    NodeMap m;
-                    DocNode* dn = i.value();
-                    dn->getMemberClasses(m);
-                    if (!m.isEmpty())
-                        editionClasses.unite(m);
-                    m.clear();
-                    ++i;
-                }
-
-                // Add additional groups and remove groups of classes that
-                // should be excluded from the edition.
-
-                const NodeMultiMap& groups = qdb_->groups();
-                foreach (const QString &groupName, editionGroupMap[editionName]) {
-                    QList<Node *> groupClasses;
-                    if (groupName.startsWith(QLatin1Char('-'))) {
-                        groupClasses = groups.values(groupName.mid(1));
-                        foreach (const Node *node, groupClasses)
-                            editionClasses.remove(node->name());
-                    }
-                    else {
-                        groupClasses = groups.values(groupName);
-                        foreach (const Node *node, groupClasses)
-                            editionClasses.insert(node->name(), node);
-                    }
-                }
-                generateAnnotatedList(relative, marker, editionClasses);
             }
         }
         else if (atom->string() == "classhierarchy") {
@@ -1109,14 +1071,8 @@ int DitaXmlGenerator::generateAtom(const Atom *atom,
         }
         else if (atom->string() == "related") {
             const DocNode *dn = static_cast<const DocNode *>(relative);
-            if (dn && !dn->members().isEmpty()) {
-                NodeMap groupMembersMap;
-                foreach (const Node *node, dn->members()) {
-                    if (node->type() == Node::Document)
-                        groupMembersMap[node->fullName(relative)] = node;
-                }
-                generateAnnotatedList(dn, marker, groupMembersMap);
-            }
+            if (dn)
+                generateAnnotatedList(dn, marker, dn->members());
         }
         break;
     case Atom::SinceList:
@@ -2338,23 +2294,7 @@ void DitaXmlGenerator::generateDocNode(DocNode* dn, CodeMarker* marker)
             generateBody(dn, marker);
         }
         generateAlsoList(dn, marker);
-
-        if ((dn->subType() == Node::QmlModule) && !dn->members().isEmpty()) {
-            NodeMap qmlModuleMembersMap;
-            foreach (const Node* node, dn->members()) {
-                if (node->type() == Node::Document && node->subType() == Node::QmlClass)
-                    qmlModuleMembersMap[node->name()] = node;
-            }
-            generateAnnotatedList(dn, marker, qmlModuleMembersMap);
-        }
-        else if (!dn->members().isEmpty()) {
-            NodeMap groupMembersMap;
-            foreach (const Node *node, dn->members()) {
-                if (node->type() == Node::Class || node->type() == Node::Namespace)
-                    groupMembersMap[node->name()] = node;
-            }
-            generateAnnotatedList(dn, marker, groupMembersMap);
-        }
+        generateAnnotatedList(dn, marker, dn->members());
     }
     leaveSection(); // </section>
     if (!writeEndTag()) { // </body>
@@ -2705,15 +2645,15 @@ void DitaXmlGenerator::generateLowStatusMembers(const InnerNode* inner,
 /*!
   Write the XML for the class hierarchy to the current XML stream.
  */
-void DitaXmlGenerator::generateClassHierarchy(const Node* relative, const NodeMap& classMap)
+void DitaXmlGenerator::generateClassHierarchy(const Node* relative, NodeMap& classMap)
 {
     if (classMap.isEmpty())
         return;
 
     NodeMap topLevel;
-    NodeMap::ConstIterator c = classMap.constBegin();
-    while (c != classMap.constEnd()) {
-        const ClassNode* classe = static_cast<const ClassNode*>(*c);
+    NodeMap::Iterator c = classMap.begin();
+    while (c != classMap.end()) {
+        ClassNode* classe = static_cast<ClassNode*>(*c);
         if (classe->baseClasses().isEmpty())
             topLevel.insert(classe->name(), classe);
         ++c;
@@ -2731,8 +2671,7 @@ void DitaXmlGenerator::generateClassHierarchy(const Node* relative, const NodeMa
                 writeEndTag(); // </li>
         }
         else {
-            const ClassNode *child =
-                    static_cast<const ClassNode *>(*stack.top().constBegin());
+            ClassNode* child = static_cast<ClassNode*>(*stack.top().begin());
             writeStartTag(DT_li);
             generateFullName(child, relative);
             writeEndTag(); // </li>
@@ -2753,8 +2692,8 @@ void DitaXmlGenerator::generateClassHierarchy(const Node* relative, const NodeMa
 }
 
 /*!
-  Write XML for the contents of the \a nodeMap to the current
-  XML stream.
+  Output an annotated list of the nodes in \a nodeMap.
+  A two-column table is output.
  */
 void DitaXmlGenerator::generateAnnotatedList(const Node* relative,
                                              CodeMarker* marker,
@@ -2762,16 +2701,42 @@ void DitaXmlGenerator::generateAnnotatedList(const Node* relative,
 {
     if (nodeMap.isEmpty())
         return;
+    NodeList nl;
+    NodeMap::const_iterator i = nodeMap.begin();
+    while (i != nodeMap.end()) {
+        nl.append(i.value());
+        ++i;
+    }
+    generateAnnotatedList(relative, marker, nl);
+}
+
+/*!
+  Write XML for the contents of the \a nodes to the current
+  XML stream.
+ */
+void DitaXmlGenerator::generateAnnotatedList(const Node* relative,
+                                             CodeMarker* marker,
+                                             const NodeList& nodes)
+{
+    if (nodes.isEmpty())
+        return;
+    bool allInternal = true;
+    foreach (const Node* node, nodes) {
+        if (!node->isInternal() && node->status() != Node::Obsolete) {
+            allInternal = false;
+        }
+    }
+    if (allInternal)
+        return;
+
     writeStartTag(DT_table);
     xmlWriter().writeAttribute("outputclass","annotated");
     writeStartTag(DT_tgroup);
     xmlWriter().writeAttribute("cols","2");
     writeStartTag(DT_tbody);
 
-    foreach (const QString& name, nodeMap.keys()) {
-        const Node* node = nodeMap[name];
-
-        if (node->status() == Node::Obsolete)
+    foreach (const Node* node, nodes) {
+        if (node->isInternal() || node->status() == Node::Obsolete)
             continue;
 
         writeStartTag(DT_row);
@@ -2782,7 +2747,7 @@ void DitaXmlGenerator::generateAnnotatedList(const Node* relative,
         writeEndTag(); // <entry>
 
         if (!(node->type() == Node::Document)) {
-            Text brief = node->doc().trimmedBriefText(name);
+            Text brief = node->doc().trimmedBriefText(node->name());
             if (!brief.isEmpty()) {
                 writeStartTag(DT_entry);
                 writeStartTag(DT_p);
@@ -3169,7 +3134,7 @@ void DitaXmlGenerator::generateOverviewList(const Node* relative)
                 else if (!isGroupPage) {
                     // If we encounter a page that belongs to a group then
                     // we add that page to the list for that group.
-                    const DocNode* gn = qdb_->findGroupNode(QStringList(group));
+                    const DocNode* gn = qdb_->getGroup(group);
                     if (gn)
                         docNodeMap[gn].insert(sortKey, docNode);
                 }
@@ -5883,7 +5848,7 @@ QStringList DitaXmlGenerator::getMetadataElements(const InnerNode* inner,
  */
 QString DitaXmlGenerator::metadataDefault(DitaTag t) const
 {
-    return metadataDefaults.value(ditaTags[t]);
+    return metadataDefaults.value(ditaTags[t]).second;
 }
 
 /*!
@@ -6212,7 +6177,5 @@ void DitaXmlGenerator::generateCollisionPages()
         endSubPage();
     }
 }
-
-
 
 QT_END_NAMESPACE

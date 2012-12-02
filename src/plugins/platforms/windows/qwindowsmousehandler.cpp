@@ -130,7 +130,8 @@ QWindowsMouseHandler::QWindowsMouseHandler() :
     m_windowUnderMouse(0),
     m_trackedWindow(0),
     m_touchDevice(0),
-    m_leftButtonDown(false)
+    m_leftButtonDown(false),
+    m_previousCaptureWindow(0)
 {
 }
 
@@ -189,6 +190,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
     }
 
     QWindowsWindow *platformWindow = static_cast<QWindowsWindow *>(window->handle());
+    const Qt::MouseButtons buttons = keyStateToMouseButtons((int)msg.wParam);
 
     // If the window was recently resized via mouse doubleclick on the frame or title bar,
     // we don't get WM_LBUTTONDOWN or WM_LBUTTONDBLCLK for the second click,
@@ -199,7 +201,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
     if (msg.message == WM_LBUTTONDOWN || msg.message == WM_LBUTTONDBLCLK) {
         m_leftButtonDown = true;
     } else {
-        const bool actualLeftDown = keyStateToMouseButtons((int)msg.wParam) & Qt::LeftButton;
+        const bool actualLeftDown = buttons & Qt::LeftButton;
         if (!m_leftButtonDown && actualLeftDown) {
             // Autocapture the mouse for current window to and ignore further events until release.
             // Capture is necessary so we don't get WM_MOUSELEAVEs to confuse matters.
@@ -211,6 +213,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
                 if (QWindowsContext::verboseEvents)
                     qDebug() << "Automatic mouse capture for missing buttondown event" << window;
             }
+            m_previousCaptureWindow = window;
             return true;
         } else if (m_leftButtonDown && !actualLeftDown) {
             m_leftButtonDown = false;
@@ -236,27 +239,20 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
     } else if (platformWindow->hasMouseCapture()
                && platformWindow->testFlag(QWindowsWindow::AutoMouseCapture)
                && (msg.message == WM_LBUTTONUP || msg.message == WM_MBUTTONUP
-                   || msg.message == WM_RBUTTONUP || msg.message == WM_XBUTTONUP)) {
+                   || msg.message == WM_RBUTTONUP || msg.message == WM_XBUTTONUP)
+               && !buttons) {
         platformWindow->setMouseGrabEnabled(false);
         if (QWindowsContext::verboseEvents)
             qDebug() << "Releasing automatic mouse capture " << window;
     }
-    // Eat mouse move after size grip drag.
-    if (msg.message == WM_MOUSEMOVE) {
-        if (platformWindow->testFlag(QWindowsWindow::SizeGripOperation)) {
-            MSG mouseMsg;
-            while (PeekMessage(&mouseMsg, platformWindow->handle(), WM_MOUSEMOVE, WM_MOUSEMOVE, PM_REMOVE)) ;
-            platformWindow->clearFlag(QWindowsWindow::SizeGripOperation);
-            return true;
-        }
-    }
 
+    const bool hasCapture = platformWindow->hasMouseCapture();
+    const bool currentNotCapturing = hasCapture && currentWindowUnderMouse != window;
 #ifndef Q_OS_WINCE
     // Enter new window: track to generate leave event.
-    // If there is an active capture, we must track the actual capture window instead of window
-    // under cursor or leaves will trigger constantly, so always track the window we got
-    // native mouse event for.
-    if (window != m_trackedWindow) {
+    // If there is an active capture, only track if the current window is capturing,
+    // so we don't get extra leave when cursor leaves the application.
+    if (window != m_trackedWindow && !currentNotCapturing) {
         TRACKMOUSEEVENT tme;
         tme.cbSize = sizeof(TRACKMOUSEEVENT);
         tme.dwFlags = TME_LEAVE;
@@ -268,40 +264,53 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
     }
 #endif // !Q_OS_WINCE
 
-    // Qt expects enter/leave events for windows even when some window is capturing mouse input,
-    // except for automatic capture when mouse button is pressed - in that case enter/leave
-    // should be sent only after the last button is released.
-    // We need to track m_windowUnderMouse separately from m_trackedWindow, as
-    // Windows mouse tracking will not trigger WM_MOUSELEAVE for leaving window when
-    // mouse capture is set.
-    if (!platformWindow->hasMouseCapture()
-        || !platformWindow->testFlag(QWindowsWindow::AutoMouseCapture)) {
-        if (m_windowUnderMouse != currentWindowUnderMouse) {
-            if (m_windowUnderMouse) {
-                if (QWindowsContext::verboseEvents)
-                    qDebug() << "Synthetic leave for " << m_windowUnderMouse;
-                QWindowSystemInterface::handleLeaveEvent(m_windowUnderMouse);
-                // Clear tracking if we are no longer over application,
-                // since we have already sent the leave.
-                if (!currentWindowUnderMouse)
-                    m_trackedWindow = 0;
-            }
-
-            if (currentWindowUnderMouse) {
-                if (QWindowsContext::verboseEvents)
-                    qDebug() << "Entering " << currentWindowUnderMouse;
-                QWindowsWindow::baseWindowOf(currentWindowUnderMouse)->applyCursor();
-                QWindowSystemInterface::handleEnterEvent(currentWindowUnderMouse,
-                                                         currentWindowUnderMouse->mapFromGlobal(globalPosition),
-                                                         globalPosition);
+    // No enter or leave events are sent as long as there is an autocapturing window.
+    if (!hasCapture || !platformWindow->testFlag(QWindowsWindow::AutoMouseCapture)) {
+        // Leave is needed if:
+        // 1) There is no capture and we move from a window to another window.
+        //    Note: Leaving the application entirely is handled in WM_MOUSELEAVE case.
+        // 2) There is capture and we move out of the capturing window.
+        // 3) There is a new capture and we were over another window.
+        if ((m_windowUnderMouse && m_windowUnderMouse != currentWindowUnderMouse
+                && (!hasCapture || window == m_windowUnderMouse))
+            || (hasCapture && m_previousCaptureWindow != window && m_windowUnderMouse
+                && m_windowUnderMouse != window)) {
+            if (QWindowsContext::verboseEvents)
+                qDebug() << "Synthetic leave for " << m_windowUnderMouse;
+            QWindowSystemInterface::handleLeaveEvent(m_windowUnderMouse);
+            if (currentNotCapturing) {
+                // Clear tracking if capturing and current window is not the capturing window
+                // to avoid leave when mouse actually leaves the application.
+                m_trackedWindow = 0;
+                // We are not officially in any window, but we need to set some cursor to clear
+                // whatever cursor the left window had, so apply the cursor of the capture window.
+                QWindowsWindow::baseWindowOf(window)->applyCursor();
             }
         }
+        // Enter is needed if:
+        // 1) There is no capture and we move to a new window.
+        // 2) There is capture and we move into the capturing window.
+        // 3) The capture just ended and we are over non-capturing window.
+        if ((currentWindowUnderMouse && m_windowUnderMouse != currentWindowUnderMouse
+                && (!hasCapture || currentWindowUnderMouse == window))
+            || (m_previousCaptureWindow && window != m_previousCaptureWindow && currentWindowUnderMouse
+                && currentWindowUnderMouse != m_previousCaptureWindow)) {
+            if (QWindowsContext::verboseEvents)
+                qDebug() << "Entering " << currentWindowUnderMouse;
+            QWindowsWindow::baseWindowOf(currentWindowUnderMouse)->applyCursor();
+            QWindowSystemInterface::handleEnterEvent(currentWindowUnderMouse,
+                                                     currentWindowUnderMouse->mapFromGlobal(globalPosition),
+                                                     globalPosition);
+        }
+        // We need to track m_windowUnderMouse separately from m_trackedWindow, as
+        // Windows mouse tracking will not trigger WM_MOUSELEAVE for leaving window when
+        // mouse capture is set.
         m_windowUnderMouse = currentWindowUnderMouse;
     }
 
-    QWindowSystemInterface::handleMouseEvent(window, winEventPosition, globalPosition,
-                                             keyStateToMouseButtons((int)msg.wParam),
+    QWindowSystemInterface::handleMouseEvent(window, winEventPosition, globalPosition, buttons,
                                              QWindowsKeyMapper::queryKeyboardModifiers());
+    m_previousCaptureWindow = hasCapture ? window : 0;
     return true;
 }
 
@@ -386,33 +395,39 @@ bool QWindowsMouseHandler::translateTouchEvent(QWindow *window, HWND,
     QWindowsContext::user32dll.getTouchInputInfo((HANDLE) msg.lParam, msg.wParam, winTouchInputs.data(), sizeof(TOUCHINPUT));
     for (int i = 0; i < winTouchPointCount; ++i) {
         const TOUCHINPUT &winTouchInput = winTouchInputs[i];
+        int id = m_touchInputIDToTouchPointID.value(winTouchInput.dwID, -1);
+        if (id == -1) {
+            id = m_touchInputIDToTouchPointID.size();
+            m_touchInputIDToTouchPointID.insert(winTouchInput.dwID, id);
+        }
         QTouchPoint touchPoint;
         touchPoint.pressure = 1.0;
-        touchPoint.id = m_touchInputIDToTouchPointID.value(winTouchInput.dwID, -1);
-        if (touchPoint.id == -1) {
-            touchPoint.id = m_touchInputIDToTouchPointID.size();
-            m_touchInputIDToTouchPointID.insert(winTouchInput.dwID, touchPoint.id);
-        }
+        touchPoint.id = id;
+        if (m_lastTouchPositions.contains(id))
+            touchPoint.normalPosition = m_lastTouchPositions.value(id);
 
         QPointF screenPos = QPointF(qreal(winTouchInput.x) / qreal(100.), qreal(winTouchInput.y) / qreal(100.));
         if (winTouchInput.dwMask & TOUCHINPUTMASKF_CONTACTAREA)
             touchPoint.area.setSize(QSizeF(qreal(winTouchInput.cxContact) / qreal(100.),
                                            qreal(winTouchInput.cyContact) / qreal(100.)));
         touchPoint.area.moveCenter(screenPos);
+        QPointF normalPosition = QPointF(screenPos.x() / screenGeometry.width(),
+                                         screenPos.y() / screenGeometry.height());
+        const bool stationaryTouchPoint = (normalPosition == touchPoint.normalPosition);
+        touchPoint.normalPosition = normalPosition;
 
         if (winTouchInput.dwFlags & TOUCHEVENTF_DOWN) {
             touchPoint.state = Qt::TouchPointPressed;
+            m_lastTouchPositions.insert(id, touchPoint.normalPosition);
         } else if (winTouchInput.dwFlags & TOUCHEVENTF_UP) {
             touchPoint.state = Qt::TouchPointReleased;
+            m_lastTouchPositions.remove(id);
         } else {
-            // TODO: Previous code checked"
-            // screenPos == touchPoint.normalPosition -> Qt::TouchPointStationary, but
-            // but touchPoint.normalPosition was never initialized?
-            touchPoint.state = touchPoint.state;
+            touchPoint.state = (stationaryTouchPoint
+                     ? Qt::TouchPointStationary
+                     : Qt::TouchPointMoved);
+            m_lastTouchPositions.insert(id, touchPoint.normalPosition);
         }
-
-        touchPoint.normalPosition = QPointF(screenPos.x() / screenGeometry.width(),
-                                 screenPos.y() / screenGeometry.height());
 
         allStates |= touchPoint.state;
 

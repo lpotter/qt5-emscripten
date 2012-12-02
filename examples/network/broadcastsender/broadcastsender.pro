@@ -6,7 +6,5 @@ SOURCES       = sender.cpp \
 QT           += network
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/broadcastsender
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS broadcastsender.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/broadcastsender
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/broadcastsender
+INSTALLS += target

@@ -3,9 +3,7 @@ SOURCES       = digitalclock.cpp \
                 main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/digitalclock
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS digitalclock.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/digitalclock
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/digitalclock
+INSTALLS += target
 
 QT += widgets

@@ -5,9 +5,7 @@ mac:CONFIG -= app_bundle
 SOURCES = main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/statemachine/pingpong
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS pingpong.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/statemachine/pingpong
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/statemachine/pingpong
+INSTALLS += target
 
 

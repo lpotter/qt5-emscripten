@@ -213,7 +213,7 @@ public:
     }
 
     bool isReadOnly() const { return m_readOnly; }
-    void setReadOnly(bool enable) { m_readOnly = enable; }
+    void setReadOnly(bool enable);
 
     QString text() const
     {

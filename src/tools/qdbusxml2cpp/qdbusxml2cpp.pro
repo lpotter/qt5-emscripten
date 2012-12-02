@@ -1,9 +1,4 @@
 option(host_build)
-TEMPLATE = app
-TARGET = qdbusxml2cpp
-QT = bootstrap-private
-
-DESTDIR = ../../../bin
 
 DEFINES += QT_NO_CAST_FROM_ASCII
 
@@ -29,6 +24,4 @@ SOURCES = qdbusxml2cpp.cpp \
           $$QT_SOURCE_TREE/src/dbus/qdbus_symbols.cpp \
           $$QT_SOURCE_TREE/src/dbus/qdbusunixfiledescriptor.cpp
 
-target.path = $$[QT_HOST_BINS]
-INSTALLS += target
-load(qt_targets)
+load(qt_tool)

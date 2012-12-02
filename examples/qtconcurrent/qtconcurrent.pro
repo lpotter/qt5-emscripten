@@ -15,9 +15,3 @@ contains(QT_CONFIG, no-widgets) {
         runfunction \
         wordcount
 }
-
-# install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/qtconcurrent
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS qtconcurrent.pro README
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/qtconcurrent
-INSTALLS += target sources

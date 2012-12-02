@@ -6,11 +6,11 @@ HEADERS += dialog.h
 # Forms and resources
 FORMS += dialog.ui
 
+EXAMPLE_FILES = *.png
+
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/ipc/sharedmemory
-sources.files = $$SOURCES $$HEADERS $$FORMS $$RESOURCES *.pro *.png
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/ipc/sharedmemory
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/ipc/sharedmemory
+INSTALLS += target
 
 QT += widgets
 

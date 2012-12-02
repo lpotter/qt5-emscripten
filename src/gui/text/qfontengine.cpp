@@ -268,6 +268,10 @@ QFixed QFontEngine::averageCharWidth() const
     return bb.xoff;
 }
 
+bool QFontEngine::supportsTransformations(const QTransform &transform) const
+{
+    return (transform.type() >= QTransform::TxProject);
+}
 
 void QFontEngine::getGlyphPositions(const QGlyphLayout &glyphs, const QTransform &matrix, QTextItem::RenderFlags flags,
                                     QVarLengthArray<glyph_t> &glyphs_out, QVarLengthArray<QFixedPoint> &positions)
@@ -1360,8 +1364,7 @@ bool QFontEngineMulti::stringToCMap(const QChar *str, int len,
                                     QGlyphLayout *glyphs, int *nglyphs,
                                     QFontEngine::ShaperFlags flags) const
 {
-    int ng = *nglyphs;
-    if (!engine(0)->stringToCMap(str, len, glyphs, &ng, flags))
+    if (!engine(0)->stringToCMap(str, len, glyphs, nglyphs, flags))
         return false;
 
     const_cast<QFontEngineMulti *>(this)->ensureFallbackFamiliesQueried();
@@ -1411,8 +1414,8 @@ bool QFontEngineMulti::stringToCMap(const QChar *str, int len,
         ++glyph_pos;
     }
 
-    *nglyphs = ng;
-    glyphs->numGlyphs = ng;
+    *nglyphs = glyph_pos;
+    glyphs->numGlyphs = glyph_pos;
 
     return true;
 }

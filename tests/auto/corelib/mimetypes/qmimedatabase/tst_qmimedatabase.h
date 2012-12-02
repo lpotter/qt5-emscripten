@@ -62,6 +62,8 @@ private slots:
     void mimeTypesForFileName();
     void inheritance();
     void aliases();
+    void listAliases_data();
+    void listAliases();
     void icons();
     void mimeTypeForFileWithContent();
     void mimeTypeForUrl();
@@ -97,6 +99,7 @@ private:
     QString m_globalXdgDir;
     QString m_localXdgDir;
     QString m_yastMimeTypes;
+    QString m_qmlAgainFileName;
     QTemporaryDir m_temporaryDir;
     QString m_testSuite;
 };

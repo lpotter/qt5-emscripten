@@ -8,10 +8,8 @@ SOURCES += main.cpp \
 HEADERS += mymodel.h
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/3_changingmodel
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS 3_changingmodel.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview/3_changingmodel
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/modelview/3_changingmodel
+INSTALLS += target
 
 QT += widgets
 

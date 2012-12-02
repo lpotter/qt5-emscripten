@@ -10,8 +10,6 @@ FORMS     += certificateinfo.ui \
 QT        += network widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/securesocketclient
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS *.pro *.png *.jpg images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/network/securesocketclient
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/network/securesocketclient
+INSTALLS += target
 

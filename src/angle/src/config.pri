@@ -46,17 +46,6 @@ DEFINES +=  ANGLE_DISABLE_TRACE \
             ANGLE_COMPILE_OPTIMIZATION_LEVEL=D3DCOMPILE_OPTIMIZATION_LEVEL0 \
             ANGLE_USE_NEW_PREPROCESSOR=1
 
-# Force release builds for now. Debug builds of ANGLE will generate libraries with
-# the 'd' library suffix, but this means that the library name no longer matches that
-# listed in the DEF file which causes errors at runtime. Using the DEF is mandatory
-# to generate the import library because the symbols are not marked with __declspec
-# and therefore not exported by default. With the import library, the debug build is
-# useless, so just disable until we can find another solution.
-CONFIG -= debug
-CONFIG += release
-
-TARGET = $$qtLibraryTarget($$TARGET)
-
 CONFIG(debug, debug|release) {
     DEFINES += _DEBUG
 } else {
@@ -66,6 +55,9 @@ CONFIG(debug, debug|release) {
 # c++11 is needed by MinGW to get support for unordered_map.
 CONFIG -= qt
 CONFIG += stl rtti_off exceptions c++11
+
+contains(QT_CONFIG, debug_and_release):CONFIG += debug_and_release
+contains(QT_CONFIG, build_all):CONFIG += build_all
 
 INCLUDEPATH += . .. $$PWD/../include
 
@@ -82,16 +74,23 @@ msvc {
     #   4245: 'conversion' : conversion from 'type1' to 'type2', signed/unsigned mismatch
     #   4512: 'class' : assignment operator could not be generated
     #   4702: unreachable code
-    QMAKE_CFLAGS_WARN_ON    = -W4 -wd"4100" -wd"4127" -wd"4189" -wd"4239" -wd"4244" -wd"4245" -wd"4512" -wd"4702"
-    QMAKE_CFLAGS_RELEASE    = -O2 -Oy- -MT  -Gy -GS -Gm-
-    QMAKE_CFLAGS_DEBUG      = -Od -Oy- -MTd -Gy -GS -Gm- -RTC1
+    QMAKE_CFLAGS_WARN_ON    -= -W3
+    QMAKE_CFLAGS_WARN_ON    += -W4 -wd"4100" -wd"4127" -wd"4189" -wd"4239" -wd"4244" -wd"4245" -wd"4512" -wd"4702"
+    # Optimizations
+    #   /Oy:   Omits frame pointer (x86 only).
+    #   /Gy:   Enables function-level linking.
+    #   /GS:   Buffers security check.
+    #   /Gm-:  Disable minimal rebuild.
+    #   /RTC1: Run time error checking
+    QMAKE_CFLAGS_RELEASE    += -Oy- -Gy -GS -Gm-
+    QMAKE_CFLAGS_DEBUG      += -Oy- -Gy -GS -Gm- -RTC1
     QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO = -Zi $$QMAKE_CFLAGS_RELEASE
 
     QMAKE_CXXFLAGS_WARN_ON = $$QMAKE_CFLAGS_WARN_ON
 }
 
 gcc {
-    QMAKE_CFLAGS_WARN_ON =  -Wall -Wno-unknown-pragmas -Wno-comment -Wno-missing-field-initializers \
+    QMAKE_CFLAGS_WARN_ON += -Wno-unknown-pragmas -Wno-comment -Wno-missing-field-initializers \
                             -Wno-switch -Wno-unused-parameter -Wno-write-strings -Wno-sign-compare -Wno-missing-braces \
                             -Wno-unused-but-set-variable -Wno-unused-variable -Wno-narrowing -Wno-maybe-uninitialized \
                             -Wno-strict-aliasing -Wno-type-limits

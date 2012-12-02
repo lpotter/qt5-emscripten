@@ -3,9 +3,7 @@ SOURCES     = main.cpp \
               window.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/lineedits
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS lineedits.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/lineedits
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/lineedits
+INSTALLS += target
 
 QT += widgets

@@ -51,6 +51,8 @@
 
 #import <AppKit/NSAccessibility.h>
 
+#ifndef QT_NO_COCOA_ACCESSIBILITY
+
 @implementation QNSView (QNSViewAccessibility)
 
 // The QNSView is a container that the user does not interact directly with:
@@ -62,7 +64,7 @@
 - (id)accessibilityAttributeValue:(NSString *)attribute {
     if ([attribute isEqualToString:NSAccessibilityRoleAttribute]) {
         if (m_accessibleRoot)
-            return QCocoaAccessible::macRole(m_accessibleRoot->role());
+            return QCocoaAccessible::macRole(m_accessibleRoot);
         return NSAccessibilityUnknownRole;
     } else if ([attribute isEqualToString:NSAccessibilityRoleDescriptionAttribute]) {
         return NSAccessibilityRoleDescriptionForUIElement(self);
@@ -101,3 +103,5 @@
 }
 
 @end
+
+#endif // QT_NO_COCOA_ACCESSIBILITY

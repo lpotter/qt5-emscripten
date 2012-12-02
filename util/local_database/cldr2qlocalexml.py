@@ -48,6 +48,7 @@ from  xpathlite import DraftResolution
 from dateconverter import convert_date
 import re
 
+findAlias = xpathlite.findAlias
 findEntry = xpathlite.findEntry
 findEntryInFile = xpathlite._findEntryInFile
 findTagsInFile = xpathlite.findTagsInFile
@@ -116,6 +117,12 @@ def generateLocaleInfo(path):
 
     if not path.endswith(".xml"):
         return {}
+
+    # skip legacy/compatibility ones
+    alias = findAlias(path)
+    if alias:
+        raise xpathlite.Error("alias to \"%s\"" % alias)
+
     language_code = findEntryInFile(path, "identity/language", attribute="type")[0]
     if language_code == 'root':
         # just skip it
@@ -124,37 +131,29 @@ def generateLocaleInfo(path):
     script_code = findEntryInFile(path, "identity/script", attribute="type")[0]
     variant_code = findEntryInFile(path, "identity/variant", attribute="type")[0]
 
-    # we should handle fully qualified names with the territory
-    if not country_code:
-        return {}
-
     # we do not support variants
     # ### actually there is only one locale with variant: en_US_POSIX
     #     does anybody care about it at all?
     if variant_code:
-        return {}
+        raise xpathlite.Error("we do not support variants (\"%s\")" % variant_code)
 
     language_id = enumdata.languageCodeToId(language_code)
-    if language_id == -1:
-        sys.stderr.write("unnknown language code \"" + language_code + "\"\n")
-        return {}
+    if language_id <= 0:
+        raise xpathlite.Error("unknown language code \"%s\"" % language_code)
     language = enumdata.language_list[language_id][0]
 
     script_id = enumdata.scriptCodeToId(script_code)
-    if script_code == -1:
-        sys.stderr.write("unnknown script code \"" + script_code + "\"\n")
-        return {}
-    script = "AnyScript"
-    if script_id != -1:
-        script = enumdata.script_list[script_id][0]
+    if script_id == -1:
+        raise xpathlite.Error("unknown script code \"%s\"" % script_code)
+    script = enumdata.script_list[script_id][0]
 
-    country_id = enumdata.countryCodeToId(country_code)
-    country = ""
-    if country_id != -1:
-        country = enumdata.country_list[country_id][0]
-    if country == "":
-        sys.stderr.write("unnknown country code \"" + country_code + "\"\n")
+    # we should handle fully qualified names with the territory
+    if not country_code:
         return {}
+    country_id = enumdata.countryCodeToId(country_code)
+    if country_id <= 0:
+        raise xpathlite.Error("unknown country code \"%s\"" % country_code)
+    country = enumdata.country_list[country_id][0]
 
     # So we say we accept only those values that have "contributed" or
     # "approved" resolution. see http://www.unicode.org/cldr/process.html
@@ -562,9 +561,13 @@ cldr_files = os.listdir(cldr_dir)
 
 locale_database = {}
 for file in cldr_files:
-    l = generateLocaleInfo(cldr_dir + "/" + file)
-    if not l:
-        sys.stderr.write("skipping file \"" + file + "\"\n")
+    try:
+        l = generateLocaleInfo(cldr_dir + "/" + file)
+        if not l:
+            sys.stderr.write("skipping file \"" + file + "\"\n")
+            continue
+    except xpathlite.Error as e:
+        sys.stderr.write("skipping file \"%s\" (%s)\n" % (file, str(e)))
         continue
 
     locale_database[(l['language_id'], l['script_id'], l['country_id'], l['variant_code'])] = l
@@ -611,109 +614,77 @@ for id in enumdata.country_list:
     print "        </country>"
 print "    </countryList>"
 
-print \
-"    <defaultCountryList>\n\
-        <defaultCountry>\n\
-            <language>Afrikaans</language>\n\
-            <country>SouthAfrica</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Afan</language>\n\
-            <country>Ethiopia</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Afar</language>\n\
-            <country>Djibouti</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Arabic</language>\n\
-            <country>SaudiArabia</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Chinese</language>\n\
-            <country>China</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Dutch</language>\n\
-            <country>Netherlands</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>English</language>\n\
-            <country>UnitedStates</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>French</language>\n\
-            <country>France</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>German</language>\n\
-            <country>Germany</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Greek</language>\n\
-            <country>Greece</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Italian</language>\n\
-            <country>Italy</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Malay</language>\n\
-            <country>Malaysia</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Portuguese</language>\n\
-            <country>Portugal</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Russian</language>\n\
-            <country>RussianFederation</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Serbian</language>\n\
-            <country>SerbiaAndMontenegro</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>SerboCroatian</language>\n\
-            <country>SerbiaAndMontenegro</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Somali</language>\n\
-            <country>Somalia</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Spanish</language>\n\
-            <country>Spain</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Swahili</language>\n\
-            <country>Kenya</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Swedish</language>\n\
-            <country>Sweden</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Tigrinya</language>\n\
-            <country>Eritrea</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Uzbek</language>\n\
-            <country>Uzbekistan</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Persian</language>\n\
-            <country>Iran</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Mongolian</language>\n\
-            <country>Mongolia</country>\n\
-        </defaultCountry>\n\
-        <defaultCountry>\n\
-            <language>Nepali</language>\n\
-            <country>Nepal</country>\n\
-        </defaultCountry>\n\
-    </defaultCountryList>"
+def _parseLocale(l):
+    language = "AnyLanguage"
+    script = "AnyScript"
+    country = "AnyCountry"
+
+    if l == "und":
+        raise xpathlite.Error("we are treating unknown locale like C")
+
+    items = l.split("_")
+    language_code = items[0]
+    if language_code != "und":
+        language_id = enumdata.languageCodeToId(language_code)
+        if language_id == -1:
+            raise xpathlite.Error("unknown language code \"%s\"" % language_code)
+        language = enumdata.language_list[language_id][0]
+
+    if len(items) > 1:
+        script_code = items[1]
+        country_code = ""
+        if len(items) > 2:
+            country_code = items[2]
+        if len(script_code) == 4:
+            script_id = enumdata.scriptCodeToId(script_code)
+            if script_id == -1:
+                raise xpathlite.Error("unknown script code \"%s\"" % script_code)
+            script = enumdata.script_list[script_id][0]
+        else:
+            country_code = script_code
+        if country_code:
+            country_id = enumdata.countryCodeToId(country_code)
+            if country_id == -1:
+                raise xpathlite.Error("unknown country code \"%s\"" % country_code)
+            country = enumdata.country_list[country_id][0]
+
+    return (language, script, country)
+
+print "    <likelySubtags>"
+for ns in findTagsInFile(cldr_dir + "/../supplemental/likelySubtags.xml", "likelySubtags"):
+    tmp = {}
+    for data in ns[1:][0]: # ns looks like this: [u'likelySubtag', [(u'from', u'aa'), (u'to', u'aa_Latn_ET')]]
+        tmp[data[0]] = data[1]
+
+    try:
+        (from_language, from_script, from_country) = _parseLocale(tmp[u"from"])
+    except xpathlite.Error as e:
+        sys.stderr.write("skipping likelySubtag \"%s\" -> \"%s\" (%s)\n" % (tmp[u"from"], tmp[u"to"], str(e)))
+        continue
+    try:
+        (to_language, to_script, to_country) = _parseLocale(tmp[u"to"])
+    except xpathlite.Error as e:
+        sys.stderr.write("skipping likelySubtag \"%s\" -> \"%s\" (%s)\n" % (tmp[u"from"], tmp[u"to"], str(e)))
+        continue
+    # substitute according to http://www.unicode.org/reports/tr35/#Likely_Subtags
+    if to_country == "AnyCountry" and from_country != to_country:
+        to_country = from_country
+    if to_script == "AnyScript" and from_script != to_script:
+        to_script = from_script
+
+    print "        <likelySubtag>"
+    print "            <from>"
+    print "                <language>" + from_language + "</language>"
+    print "                <script>" + from_script + "</script>"
+    print "                <country>" + from_country + "</country>"
+    print "            </from>"
+    print "            <to>"
+    print "                <language>" + to_language + "</language>"
+    print "                <script>" + to_script + "</script>"
+    print "                <country>" + to_country + "</country>"
+    print "            </to>"
+    print "        </likelySubtag>"
+print "    </likelySubtags>"
 
 print "    <localeList>"
 print \

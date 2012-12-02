@@ -60,9 +60,6 @@
 #include <qtablewidget.h>
 #include <qscrollbar.h>
 #include <qboxlayout.h>
-#ifdef Q_OS_MAC
-#include <qmacstyle_mac.h>
-#endif
 
 #include <qstandarditemmodel.h>
 #include <qstringlistmodel.h>
@@ -72,14 +69,10 @@
 #include <qstringlist.h>
 #include <qvalidator.h>
 #include <qcompleter.h>
-#ifndef QT_NO_STYLE_FUSION
-#include <qfusionstyle.h>
-#endif
+#include <qstylefactory.h>
 #include <qabstractitemview.h>
 #include <qstyleditemdelegate.h>
-#ifndef QT_NO_STYLE_WINDOWS
-#include <qwindowsstyle.h>
-#endif
+#include <qproxystyle.h>
 
 class tst_QComboBox : public QObject
 {
@@ -452,7 +445,7 @@ void tst_QComboBox::setEditable()
 void tst_QComboBox::setPalette()
 {
 #ifdef Q_OS_MAC
-    if (qobject_cast<QMacStyle *>(testWidget->style())) {
+    if (testWidget->style()->inherits("QMacStyle")) {
         QSKIP("This test doesn't make sense for pixmap-based styles");
     }
 #endif
@@ -2055,7 +2048,7 @@ void tst_QComboBox::separatorItem()
 void tst_QComboBox::task190351_layout()
 {
     const QString oldStyle = QApplication::style()->objectName();
-    QApplication::setStyle(new QFusionStyle);
+    QApplication::setStyle(QStyleFactory::create(QLatin1String("Fusion")));
 
     QComboBox listCombo;
     QListWidget *list = new QListWidget();
@@ -2120,7 +2113,7 @@ void tst_QComboBox::task166349_setEditableOnReturn()
 void tst_QComboBox::task191329_size()
 {
     const QString oldStyle = QApplication::style()->objectName();
-    QApplication::setStyle(new QFusionStyle);
+    QApplication::setStyle(QStyleFactory::create(QLatin1String("Fusion")));
 
     QComboBox tableCombo;
     int rows;
@@ -2433,9 +2426,11 @@ void tst_QComboBox::subControlRectsWithOffset()
 #ifndef QT_NO_STYLE_WINDOWS
 void tst_QComboBox::task260974_menuItemRectangleForComboBoxPopup()
 {
-    class TestStyle: public QWindowsStyle
+    class TestStyle: public QProxyStyle
     {
     public:
+        TestStyle() : QProxyStyle(QStyleFactory::create("windows")) { }
+
         int styleHint(StyleHint hint, const QStyleOption *option, const QWidget *widget, QStyleHintReturn *ret) const
         {
             if (hint == SH_ComboBox_Popup) return 1;

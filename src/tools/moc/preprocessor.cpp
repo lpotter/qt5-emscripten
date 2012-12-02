@@ -536,51 +536,84 @@ static Symbols tokenize(const QByteArray &input, int lineNum = 1, TokenizeMode m
     return symbols;
 }
 
-void Preprocessor::macroExpandSymbols(int lineNum, const Symbols &symbolList, Symbols &expanded, MacroSafeSet safeset)
+Symbols Preprocessor::macroExpand(Preprocessor *that, Symbols &toExpand, int &index, int lineNum, bool one)
 {
-    Symbols saveSymbols = symbols;
-    int saveIndex = index;
-    symbols = symbolList;
-    index = 0;
+    SymbolStack symbols;
+    SafeSymbols sf;
+    sf.symbols = toExpand;
+    sf.index = index;
+    symbols.push(sf);
 
-    while (hasNext()) {
-        next();
-        macroExpandIdentifier(lineNum, expanded, safeset);
+    Symbols result;
+    if (toExpand.isEmpty())
+        return result;
+
+    for (;;) {
+        QByteArray macro;
+        Symbols newSyms = macroExpandIdentifier(that, symbols, lineNum, &macro);
+
+        if (macro.isEmpty()) {
+            result += newSyms;
+        } else {
+            SafeSymbols sf;
+            sf.symbols = newSyms;
+            sf.index = 0;
+            sf.expandedMacro = macro;
+            symbols.push(sf);
+        }
+        if (!symbols.hasNext() || (one && symbols.size() == 1))
+                break;
+        symbols.next();
     }
 
-    symbols = saveSymbols;
-    index = saveIndex;
+    if (symbols.size())
+        index = symbols.top().index;
+    else
+        index = toExpand.size();
+
+    return result;
 }
 
-void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, MacroSafeSet safeset)
+
+Symbols Preprocessor::macroExpandIdentifier(Preprocessor *that, SymbolStack &symbols, int lineNum, QByteArray *macroName)
 {
-    const Symbol &s = symbol();
+    Symbol s = symbols.symbol();
+
     // not a macro
-    if (s.token != PP_IDENTIFIER || !macros.contains(s) || safeset.contains(s)) {
-        preprocessed += s;
-        preprocessed.last().lineNum = lineNum;
-        return;
+    if (s.token != PP_IDENTIFIER || !that->macros.contains(s) || symbols.dontReplaceSymbol(s.lexem())) {
+        Symbols syms;
+        syms += s;
+        syms.last().lineNum = lineNum;
+        return syms;
     }
 
-    const Macro &macro = macros.value(s);
-    safeset += s;
+    const Macro &macro = that->macros.value(s);
+    *macroName = s.lexem();
 
-    // don't expand macros with arguments for now
-    if (macro.isFunction) {
-        while (test(PP_WHITESPACE)) {}
-        if (!test(PP_LPAREN)) {
-            preprocessed += s;
-            return;
+    Symbols expansion;
+    if (!macro.isFunction) {
+        expansion = macro.symbols;
+    } else {
+        bool haveSpace = false;
+        while (symbols.test(PP_WHITESPACE)) { haveSpace = true; }
+        if (!symbols.test(PP_LPAREN)) {
+            *macroName = QByteArray();
+            Symbols syms;
+            if (haveSpace)
+                syms += Symbol(lineNum, PP_WHITESPACE);
+            syms += s;
+            syms.last().lineNum = lineNum;
+            return syms;
         }
         QList<Symbols> arguments;
-        while (hasNext()) {
+        while (symbols.hasNext()) {
             Symbols argument;
             // strip leading space
-            while (test(PP_WHITESPACE)) {}
+            while (symbols.test(PP_WHITESPACE)) {}
             int nesting = 0;
             bool vararg = macro.isVariadic && (arguments.size() == macro.arguments.size() - 1);
-            while (hasNext()) {
-                Token t = next();
+            while (symbols.hasNext()) {
+                Token t = symbols.next();
                 if (t == PP_LPAREN) {
                     ++nesting;
                 } else if (t == PP_RPAREN) {
@@ -591,13 +624,9 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
                     if (!vararg)
                         break;
                 }
-                argument += symbol();
+                argument += symbols.symbol();
             }
-
-            // each argument undoergoes macro expansion
-            Symbols expanded;
-            macroExpandSymbols(lineNum, argument, expanded, safeset);
-            arguments += expanded;
+            arguments += argument;
 
             if (nesting < 0)
                 break;
@@ -611,11 +640,9 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
             // 0 argument macros are a bit special. They are ok if the
             // argument is pure whitespace or empty
             (macro.arguments.size() != 0 || arguments.size() != 1 || !arguments.at(0).isEmpty()))
-            error("Macro argument mismatch.");
+            that->error("Macro argument mismatch.");
 
         // now replace the macro arguments with the expanded arguments
-
-        Symbols expansion;
         enum Mode {
             Normal,
             Hash,
@@ -630,15 +657,21 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
             }
             int index = macro.arguments.indexOf(s);
             if (mode == Normal) {
-                if (index >= 0)
-                    expansion += arguments.at(index);
-                else
+                if (index >= 0) {
+                    // each argument undoergoes macro expansion if it's not used as part of a # or ##
+                    if (i == macro.symbols.size() - 1 || macro.symbols.at(i + 1).token != PP_HASHHASH) {
+                        Symbols arg = arguments.at(index);
+                        int idx = 1;
+                        expansion += macroExpand(that, arg, idx, lineNum, false);
+                    } else {
+                        expansion += arguments.at(index);
+                    }
+               } else {
                     expansion += s;
+                }
             } else if (mode == Hash) {
-                if (s.token == WHITESPACE)
-                    continue;
                 if (index < 0)
-                    error("'#' is not followed by a macro parameter");
+                    that->error("'#' is not followed by a macro parameter");
 
                 const Symbols &arg = arguments.at(index);
                 QByteArray stringified;
@@ -655,11 +688,6 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
 
                 while (expansion.size() && expansion.last().token == PP_WHITESPACE)
                     expansion.pop_back();
-                if (!expansion.size())
-                    error("'##' can't appear first in macro argument");
-
-                Symbol last = expansion.last();
-                expansion.pop_back();
 
                 Symbol next = s;
                 if (index >= 0) {
@@ -671,14 +699,16 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
                     next = arg.at(0);
                 }
 
-                if (last.token == STRING_LITERAL || s.token == STRING_LITERAL)
-                    error("Can't concatenate non identifier tokens");
+                if (!expansion.isEmpty() && expansion.last().token == s.token) {
+                    Symbol last = expansion.last();
+                    expansion.pop_back();
 
-                if (last.token == s.token) {
+                    if (last.token == STRING_LITERAL || s.token == STRING_LITERAL)
+                        that->error("Can't concatenate non identifier tokens");
+
                     QByteArray lexem = last.lexem() + next.lexem();
                     expansion += Symbol(lineNum, last.token, lexem);
                 } else {
-                    expansion += last;
                     expansion += next;
                 }
 
@@ -691,42 +721,19 @@ void Preprocessor::macroExpandIdentifier(int lineNum, Symbols &preprocessed, Mac
             mode = Normal;
         }
         if (mode != Normal)
-            error("'#' or '##' found at the end of a macro argument");
+            that->error("'#' or '##' found at the end of a macro argument");
 
-        macroExpandSymbols(lineNum, expansion, preprocessed, safeset);
-    } else {
-        macroExpandSymbols(lineNum, macro.symbols, preprocessed, safeset);
     }
+
+    return expansion;
 }
 
-
-void Preprocessor::substituteMacro(const MacroName &macro, Symbols &substituted, MacroSafeSet safeset)
-{
-    Symbols saveSymbols = symbols;
-    int saveIndex = index;
-
-    symbols = macros.value(macro).symbols;
-    index = 0;
-
-    safeset += macro;
-    substituteUntilNewline(substituted, safeset);
-
-    symbols = saveSymbols;
-    index = saveIndex;
-}
-
-
-
-void Preprocessor::substituteUntilNewline(Symbols &substituted, MacroSafeSet safeset)
+void Preprocessor::substituteUntilNewline(Symbols &substituted)
 {
     while (hasNext()) {
         Token token = next();
         if (token == PP_IDENTIFIER) {
-            MacroName macro = symbol();
-            if (macros.contains(macro) && !safeset.contains(macro)) {
-                substituteMacro(macro, substituted, safeset);
-                continue;
-            }
+            substituted += macroExpand(this, symbols, index, symbol().lineNum, true);
         } else if (token == PP_DEFINED) {
             bool braces = test(PP_LPAREN);
             next(PP_IDENTIFIER);
@@ -739,8 +746,9 @@ void Preprocessor::substituteUntilNewline(Symbols &substituted, MacroSafeSet saf
         } else if (token == PP_NEWLINE) {
             substituted += symbol();
             break;
+        } else {
+            substituted += symbol();
         }
-        substituted += symbol();
     }
 }
 
@@ -1067,8 +1075,40 @@ void Preprocessor::preprocess(const QByteArray &filename, Symbols &preprocessed)
             int start = index;
             until(PP_NEWLINE);
             macro.symbols.reserve(index - start - 1);
-            for (int i = start; i < index - 1; ++i)
-                macro.symbols += symbols.at(i);
+
+            // remove whitespace where there shouldn't be any:
+            // Before and after the macro, after a # and around ##
+            Token lastToken = HASH; // skip shitespace at the beginning
+            for (int i = start; i < index - 1; ++i) {
+                Token token = symbols.at(i).token;
+                if (token ==  PP_WHITESPACE || token == WHITESPACE) {
+                    if (lastToken == PP_HASH || lastToken == HASH ||
+                        lastToken == PP_HASHHASH ||
+                        lastToken == PP_WHITESPACE || lastToken == WHITESPACE)
+                        continue;
+                } else if (token == PP_HASHHASH) {
+                    if (!macro.symbols.isEmpty() &&
+                        (lastToken ==  PP_WHITESPACE || lastToken == WHITESPACE))
+                        macro.symbols.pop_back();
+                }
+                macro.symbols.append(symbols.at(i));
+                lastToken = token;
+            }
+            // remove trailing whitespace
+            while (!macro.symbols.isEmpty() &&
+                   (macro.symbols.last().token == PP_WHITESPACE || macro.symbols.last().token == WHITESPACE))
+                macro.symbols.pop_back();
+
+            if (!macro.symbols.isEmpty()) {
+                if (macro.symbols.first().token == PP_HASHHASH ||
+                    macro.symbols.last().token == PP_HASHHASH) {
+                    error("'##' cannot appear at either end of a macro expansion");
+                }
+                if (macro.symbols.last().token == HASH ||
+                    macro.symbols.last().token == PP_HASH) {
+                    error("'#' is not followed by a macro parameter");
+                }
+            }
             macros.insert(name, macro);
             continue;
         }
@@ -1081,7 +1121,7 @@ void Preprocessor::preprocess(const QByteArray &filename, Symbols &preprocessed)
         }
         case PP_IDENTIFIER: {
             // substitute macros
-            macroExpandIdentifier(symbol().lineNum, preprocessed);
+            preprocessed += macroExpand(this, symbols, index, symbol().lineNum, true);
             continue;
         }
         case PP_HASH:

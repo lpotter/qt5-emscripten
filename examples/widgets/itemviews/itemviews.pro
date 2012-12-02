@@ -2,6 +2,7 @@ TEMPLATE      = subdirs
 SUBDIRS       = addressbook \
                 basicsortfiltermodel \
                 chart \
+                coloreditorfactory \
                 combowidgetmapper \
                 customsortfiltermodel \
                 dirview \
@@ -15,11 +16,7 @@ SUBDIRS       = addressbook \
                 simpletreemodel \
                 simplewidgetmapper \
                 spinboxdelegate \
-                spreadsheet
-
-# install
-sources.files = README *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews
-INSTALLS += sources
+                spreadsheet \
+                stardelegate
 
 QT += widgets

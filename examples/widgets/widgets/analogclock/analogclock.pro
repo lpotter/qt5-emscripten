@@ -5,10 +5,8 @@ SOURCES       = analogclock.cpp \
 QMAKE_PROJECT_NAME = widgets_analogclock
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/analogclock
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS analogclock.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/analogclock
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/analogclock
+INSTALLS += target
 
 QT += widgets
 

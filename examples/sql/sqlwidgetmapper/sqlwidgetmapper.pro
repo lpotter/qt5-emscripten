@@ -4,10 +4,8 @@ SOURCES   = main.cpp \
 QT += sql widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/sqlwidgetmapper
-sources.files = $$SOURCES $$HEADERS *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/sql/sqlwidgetmapper
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/sql/sqlwidgetmapper
+INSTALLS += target
 
 wince*: DEPLOYMENT_PLUGIN += qsqlite
 

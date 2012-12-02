@@ -355,6 +355,18 @@ Qt::ScreenOrientation QPlatformWindow::requestWindowOrientation(Qt::ScreenOrient
     return Qt::PrimaryOrientation;
 }
 
+/*!
+    Reimplement this function in subclass to return the device pixel ratio
+    for the window. This is the ratio between physical pixels
+    and device-independent pixels.
+
+    \sa QPlatformWindow::devicePixelRatio();
+*/
+qreal QPlatformWindow::devicePixelRatio() const
+{
+    return 1.0;
+}
+
 bool QPlatformWindow::setKeyboardGrabEnabled(bool grab)
 {
     Q_UNUSED(grab);
@@ -466,13 +478,19 @@ bool QPlatformWindow::frameStrutEventsEnabled() const
         \li Mouse grab: Qt expects windows to automatically grab the mouse if the user presses
             a button until the button is released.
             Automatic grab should be released if some window is explicitly grabbed.
-        \li Enter/Leave events: Enter and leave events should be sent independently of
-            explicit mouse grabs (\c{setMouseGrabEnabled()}). That is, if the mouse leaves
-            a window that has explicit mouse grab, a leave event should be sent and other
-            windows should get enter/leave events as well as the mouse traverses them.
-            For automatic mouse grab, however, a leave event should be sent when the
-            button is released.
-        \li Window positioning: When calling \c{QWindow::setFramePos()}, the flag
+        \li Enter/Leave events: If there is a window explicitly grabbing mouse events
+            (\c{setMouseGrabEnabled()}), enter and leave events should only be sent to the
+            grabbing window when mouse cursor passes over the grabbing window boundary.
+            Other windows will not receive enter or leave events while the grab is active.
+            While an automatic mouse grab caused by a mouse button press is active, no window
+            will receive enter or leave events. When the last mouse button is released, the
+            autograbbing window will receive leave event if mouse cursor is no longer within
+            the window boundary.
+            When any grab starts, the window under cursor will receive a leave event unless
+            it is the grabbing window.
+            When any grab ends, the window under cursor will receive an enter event unless it
+            was the grabbing window.
+        \li Window positioning: When calling \c{QWindow::setFramePosition()}, the flag
             \c{QWindowPrivate::positionPolicy} is set to \c{QWindowPrivate::WindowFrameInclusive}.
             This means the position includes the window frame, whose size is at this point
             unknown and the geometry's topleft point is the position of the window frame.

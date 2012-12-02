@@ -39,6 +39,7 @@
 **
 ****************************************************************************/
 #include "qcocoawindow.h"
+#include "qcocoaintegration.h"
 #include "qnswindowdelegate.h"
 #include "qcocoaautoreleasepool.h"
 #include "qcocoaeventdispatcher.h"
@@ -148,8 +149,8 @@ static bool isMouseEvent(NSEvent *ev)
 
 - (BOOL)canBecomeKeyWindow
 {
-    // Only tool windows should become key for popup types:
-    if (m_cocoaPlatformWindow->window()->type() == Qt::Tool)
+    // Only tool or dialog windows should become key:
+    if (m_cocoaPlatformWindow->window()->type() == Qt::Tool || m_cocoaPlatformWindow->window()->type() == Qt::Dialog)
         return YES;
     return NO;
 }
@@ -214,6 +215,8 @@ QCocoaWindow::~QCocoaWindow()
 
     QCocoaAutoReleasePool pool;
     clearNSWindow(m_nsWindow);
+    if (parent())
+        [m_contentView removeFromSuperview];
     [m_contentView release];
     [m_nsWindow release];
     [m_nsWindowDelegate release];
@@ -297,10 +300,12 @@ void QCocoaWindow::setVisible(bool visible)
                     [m_nsWindow orderFront: nil];
                 }
 
-                // We want the events to properly reach the popup
-                if (window()->type() == Qt::Popup)
+                // We want the events to properly reach the popup and dialog
+                if (window()->type() == Qt::Popup || window()->type() == Qt::Dialog)
                     [(NSPanel *)m_nsWindow setWorksWhenModal:YES];
             }
+        } else {
+            [m_contentView setHidden:NO];
         }
     } else {
         // qDebug() << "close" << this;
@@ -316,6 +321,8 @@ void QCocoaWindow::setVisible(bool visible)
                     [NSApp endSheet:m_nsWindow];
             }
             [m_nsWindow orderOut:m_nsWindow];
+        } else {
+            [m_contentView setHidden:YES];
         }
         if (!QCoreApplication::closingDown())
             QWindowSystemInterface::handleExposeEvent(window(), QRegion());
@@ -378,6 +385,9 @@ NSUInteger QCocoaWindow::windowStyleMask(Qt::WindowFlags flags)
         }
     }
 
+#ifdef QT_COCOA_ENABLE_WINDOW_DEBUG
+    qDebug("windowStyleMask of '%s': flags %X -> styleMask %lX", qPrintable(window()->title()), (int)flags, styleMask);
+#endif
     return styleMask;
 }
 
@@ -637,6 +647,9 @@ void QCocoaWindow::recreateWindow(const QPlatformWindow *parentWindow)
         // Child windows have no NSWindow, link the NSViews instead.
         const QCocoaWindow *parentCococaWindow = static_cast<const QCocoaWindow *>(parentWindow);
         [parentCococaWindow->m_contentView addSubview : m_contentView];
+        QRect rect = window()->geometry();
+        NSRect frame = NSMakeRect(rect.x(), rect.y(), rect.width(), rect.height());
+        [m_contentView setFrame:frame];
     }
 }
 
@@ -653,14 +666,18 @@ NSWindow * QCocoaWindow::createNSWindow()
     NSWindow *createdWindow = 0;
 
     // Use NSPanel for popup-type windows. (Popup, Tool, ToolTip, SplashScreen)
-    if ((type & Qt::Popup) == Qt::Popup) {
+    // and dialogs
+    if ((type & Qt::Popup) == Qt::Popup || (type & Qt::Dialog) == Qt::Dialog) {
         QNSPanel *window;
         window  = [[QNSPanel alloc] initWithContentRect:frame
                                          styleMask: styleMask
                                          backing:NSBackingStoreBuffered
                                          defer:NO]; // Deferring window creation breaks OpenGL (the GL context is set up
                                                     // before the window is shown and needs a proper window.).
-        [window setHasShadow:YES];
+        if ((type & Qt::Popup) == Qt::Popup)
+            [window setHasShadow:YES];
+        else
+             setWindowShadow(flags);
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
         if (QSysInfo::QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
@@ -681,11 +698,10 @@ NSWindow * QCocoaWindow::createNSWindow()
         setWindowShadow(flags);
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
-    if (QSysInfo::QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
-        // All windows with the WindowMaximizeButtonHint set also get a full-screen button.
-        if (flags & Qt::WindowMaximizeButtonHint)
-            [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
-    }
+        if (QSysInfo::QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
+            if (flags & Qt::WindowFullscreenButtonHint)
+                [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
+        }
 #endif
 
         createdWindow = window;
@@ -807,6 +823,20 @@ void QCocoaWindow::setMenubar(QCocoaMenuBar *mb)
 QCocoaMenuBar *QCocoaWindow::menubar() const
 {
     return m_menubar;
+}
+
+qreal QCocoaWindow::devicePixelRatio() const
+{
+    if (!m_nsWindow)
+        return 1.0;
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
+    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7) {
+        return qreal([m_nsWindow backingScaleFactor]);
+    } else
+#endif
+    {
+        return 1.0;
+    }
 }
 
 QMargins QCocoaWindow::frameMargins() const

@@ -6,9 +6,7 @@ SOURCES   = layoutitem.cpp \
 RESOURCES = basicgraphicslayouts.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/basicgraphicslayouts
-sources.files = $$SOURCES $$HEADERS $$RESOURCES basicgraphicslayouts.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/basicgraphicslayouts
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/graphicsview/basicgraphicslayouts
+INSTALLS += target
 
 QT += widgets

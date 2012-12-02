@@ -8,9 +8,7 @@ SUBDIRS = 1_readonly \
           7_selections
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS modelview.pro 
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/tutorials/modelview
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tutorials/modelview
+INSTALLS += target
 
 QT += widgets

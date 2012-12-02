@@ -179,9 +179,13 @@ void QQnxWindow::setGeometry(const QRect &rect)
             m_platformOpenGLContext->requestSurfaceChange();
     }
 
-    // Send a geometry change event to Qt (triggers resizeEvent() in QWindow/QWidget)
+    // Send a geometry change event to Qt (triggers resizeEvent() in QWindow/QWidget).
+
+    // Calling flushWindowSystemEvents() here would flush input events which
+    // could result in re-entering QQnxWindow::setGeometry() again.
+    QWindowSystemInterface::setSynchronousWindowsSystemEvents(true);
     QWindowSystemInterface::handleGeometryChange(window(), rect);
-    QWindowSystemInterface::flushWindowSystemEvents();
+    QWindowSystemInterface::setSynchronousWindowsSystemEvents(false);
 
     // Now move all children.
     if (!oldGeometry.isEmpty()) {
@@ -354,6 +358,19 @@ void QQnxWindow::setBufferSize(const QSize &size)
         if (result != 0) {
             qFatal("QQnxWindow: failed to create window buffers, errno=%d", errno);
         }
+
+        // check if there are any buffers available
+        int bufferCount = 0;
+        result = screen_get_window_property_iv(m_window, SCREEN_PROPERTY_RENDER_BUFFER_COUNT, &bufferCount);
+
+        if (result != 0) {
+            qFatal("QQnxWindow: failed to query window buffer count, errno=%d", errno);
+        }
+
+        if (bufferCount != MAX_BUFFER_COUNT) {
+            qFatal("QQnxWindow: invalid buffer count. Expected = %d, got = %d. You might experience problems.",
+                    MAX_BUFFER_COUNT, bufferCount);
+        }
     }
 
     // Cache new buffer size
@@ -374,22 +391,10 @@ QQnxBuffer &QQnxWindow::renderBuffer()
 
     // Check if render buffer is invalid
     if (m_currentBufferIndex == -1) {
-        // check if there are any buffers available
-        int bufferCount = 0;
-        int result = screen_get_window_property_iv(m_window, SCREEN_PROPERTY_RENDER_BUFFER_COUNT, &bufferCount);
-
-        if (result != 0) {
-            qFatal("QQnxWindow: failed to query window buffer count, errno=%d", errno);
-        }
-
-        if (bufferCount != MAX_BUFFER_COUNT) {
-            qFatal("QQnxWindow: invalid buffer count. Expected = %d, got = %d", MAX_BUFFER_COUNT, bufferCount);
-        }
-
         // Get all buffers available for rendering
         errno = 0;
         screen_buffer_t buffers[MAX_BUFFER_COUNT];
-        result = screen_get_window_property_pv(m_window, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)buffers);
+        const int result = screen_get_window_property_pv(m_window, SCREEN_PROPERTY_RENDER_BUFFERS, (void **)buffers);
         if (result != 0) {
             qFatal("QQnxWindow: failed to query window buffers, errno=%d", errno);
         }

@@ -51,9 +51,9 @@ contains(QT_CONFIG, gtkstyle) {
 
 contains( styles, mac ) {
     HEADERS += \
-        styles/qmacstyle_mac.h \
+        styles/qmacstyle_mac_p.h \
         styles/qmacstylepixmaps_mac_p.h \
-        styles/qmacstyle_mac_p.h
+        styles/qmacstyle_mac_p_p.h
         OBJECTIVE_SOURCES += styles/qmacstyle_mac.mm
 
     !contains( styles, windows ) {
@@ -66,7 +66,8 @@ contains( styles, mac ) {
 }
 
 contains( styles, windows ) {
-    HEADERS += styles/qwindowsstyle.h
+    HEADERS += styles/qwindowsstyle_p.h
+    HEADERS += styles/qwindowsstyle_p_p.h
     SOURCES += styles/qwindowsstyle.cpp
     DEFINES += QT_STYLE_WINDOWS
 } else {
@@ -74,8 +75,8 @@ contains( styles, windows ) {
 }
 
 contains( styles, windowsvista ) {
-    HEADERS += styles/qwindowsvistastyle.h
     HEADERS += styles/qwindowsvistastyle_p.h
+    HEADERS += styles/qwindowsvistastyle_p_p.h
     SOURCES += styles/qwindowsvistastyle.cpp
     !contains( styles, windowsxp ) {
         message( windowsvista requires windowsxp )
@@ -87,7 +88,8 @@ contains( styles, windowsvista ) {
 }
 
 contains( styles, windowsxp ) {
-    HEADERS += styles/qwindowsxpstyle.h
+    HEADERS += styles/qwindowsxpstyle_p.h
+    HEADERS += styles/qwindowsxpstyle_p_p.h
     SOURCES += styles/qwindowsxpstyle.cpp
     !contains( styles, windows ) {
         message( windowsxp requires windows )
@@ -100,10 +102,10 @@ contains( styles, windowsxp ) {
 
 contains( styles, gtk ) {
         HEADERS += styles/qgtkglobal_p.h
-        HEADERS += styles/qgtkstyle.h
+        HEADERS += styles/qgtkstyle_p.h
         HEADERS += styles/qgtkpainter_p.h
         HEADERS += styles/qgtk2painter_p.h
-        HEADERS += styles/qgtkstyle_p.h
+        HEADERS += styles/qgtkstyle_p_p.h
         SOURCES += styles/qgtkstyle.cpp
         SOURCES += styles/qgtkpainter.cpp
         SOURCES += styles/qgtk2painter.cpp
@@ -112,22 +114,24 @@ contains( styles, gtk ) {
     DEFINES += QT_NO_STYLE_GTK
 }
 contains( styles, fusion ) {
-        HEADERS += styles/qfusionstyle.h
         HEADERS += styles/qfusionstyle_p.h
+        HEADERS += styles/qfusionstyle_p_p.h
         SOURCES += styles/qfusionstyle.cpp
 } else {
     DEFINES += QT_NO_STYLE_FUSION
 }
 
 contains( styles, windowsce ) {
-    HEADERS += styles/qwindowscestyle.h
+    HEADERS += styles/qwindowscestyle_p.h
+    HEADERS += styles/qwindowscestyle_p_p.h
     SOURCES += styles/qwindowscestyle.cpp
 } else {
     DEFINES += QT_NO_STYLE_WINDOWSCE
 }
 
 contains( styles, windowsmobile ) {
-    HEADERS += styles/qwindowsmobilestyle.h
+    HEADERS += styles/qwindowsmobilestyle_p.h
+    HEADERS += styles/qwindowsmobilestyle_p_p.h
     SOURCES += styles/qwindowsmobilestyle.cpp
 } else {
     DEFINES += QT_NO_STYLE_WINDOWSMOBILE

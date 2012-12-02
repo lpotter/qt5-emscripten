@@ -251,7 +251,7 @@ QSqlRecord QSqlTableModelPrivate::primaryValues(int row) const
     sort order using setSort(). At the end, you must call select() to
     populate the model with data.
 
-    The \l{sql/tablemodel} example illustrates how to use
+    The \l{tablemodel} example illustrates how to use
     QSqlTableModel as the data source for a QTableView.
 
     QSqlTableModel provides no direct support for foreign keys. Use
@@ -1307,9 +1307,9 @@ Qt::ItemFlags QSqlTableModel::flags(const QModelIndex &index) const
     }
 
     if (!editable)
-        return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
+        return QSqlQueryModel::flags(index);
     else
-        return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable;
+        return QSqlQueryModel::flags(index) | Qt::ItemIsEditable;
 }
 
 QSqlRecord QSqlTableModel::record() const

@@ -2,11 +2,11 @@ HEADERS     = movieplayer.h
 SOURCES     = main.cpp \
               movieplayer.cpp
 
+EXAMPLE_FILES = animation.gif
+
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/movie
-sources.files = $$SOURCES $$HEADERS $$RESOURCES movie.pro animation.gif
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets/movie
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/movie
+INSTALLS += target
 
 
 wince*: {

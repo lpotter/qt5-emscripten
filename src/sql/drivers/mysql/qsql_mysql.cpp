@@ -838,10 +838,7 @@ bool QMYSQLResult::nextResult()
 
 void QMYSQLResult::virtual_hook(int id, void *data)
 {
-    switch (id) {
-    default:
-        QSqlResult::virtual_hook(id, data);
-    }
+    QSqlResult::virtual_hook(id, data);
 }
 
 
@@ -1285,8 +1282,7 @@ bool QMYSQLDriver::open(const QString& db,
                                optionFlags))
     {
         if (!db.isEmpty() && mysql_select_db(d->mysql, db.toLocal8Bit().constData())) {
-            setLastError(qMakeError(tr("Unable to open database '") + db +
-                         QLatin1Char('\''), QSqlError::ConnectionError, d));
+            setLastError(qMakeError(tr("Unable to open database '%1'").arg(db), QSqlError::ConnectionError, d));
             mysql_close(d->mysql);
             setOpenError(true);
             return false;

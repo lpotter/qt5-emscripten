@@ -109,8 +109,15 @@ else:win32:SOURCES += tools/qelapsedtimer_win.cpp tools/qlocale_win.cpp
 else:integrity:SOURCES += tools/qelapsedtimer_unix.cpp tools/qlocale_unix.cpp
 else:SOURCES += tools/qelapsedtimer_generic.cpp
 
-contains(QT_CONFIG, zlib):include($$PWD/../../3rdparty/zlib.pri)
-else:include($$PWD/../../3rdparty/zlib_dependency.pri)
+contains(QT_CONFIG, zlib) {
+    include($$PWD/../../3rdparty/zlib.pri)
+    corelib_zlib_headers.files = $$PWD/../../3rdparty/zlib/zconf.h\
+                                 $$PWD/../../3rdparty/zlib/zlib.h
+    corelib_zlib_headers.path = $$[QT_INSTALL_HEADERS]/QtZlib
+    INSTALLS += corelib_zlib_headers
+} else {
+    include($$PWD/../../3rdparty/zlib_dependency.pri)
+}
 
 contains(QT_CONFIG,icu) {
     SOURCES += tools/qlocale_icu.cpp
@@ -139,9 +146,7 @@ SOURCES += ../3rdparty/harfbuzz/src/harfbuzz-buffer.c \
            tools/qharfbuzz.cpp
 HEADERS += tools/qharfbuzz_p.h
 
-corelib_tools_private_headers.files = ../3rdparty/harfbuzz/src/*.h
-corelib_tools_private_headers.path = $$[QT_INSTALL_HEADERS]/$$TARGET/$$eval(QT.$${MODULE}.VERSION)/$$TARGET
-INSTALLS += corelib_tools_private_headers
+private_headers.files += ../3rdparty/harfbuzz/src/*.h
 
 INCLUDEPATH += ../3rdparty/md5 \
                ../3rdparty/md4
@@ -149,3 +154,4 @@ INCLUDEPATH += ../3rdparty/md5 \
 # Note: libm should be present by default becaue this is C++
 !macx-icc:!vxworks:unix:LIBS_PRIVATE += -lm
 
+TR_EXCLUDE += ../3rdparty/*

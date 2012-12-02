@@ -45,9 +45,6 @@
 #include <QtWidgets>
 #include <private/qgraphicsproxywidget_p.h>
 #include <private/qlayoutengine_p.h>    // qSmartMin functions...
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
-#include <QMacStyle>
-#endif
 
 #include "../../../qtest-config.h"
 
@@ -434,8 +431,7 @@ void tst_QGraphicsProxyWidget::setWidget()
 #endif
     widget->setPalette(QPalette(Qt::magenta));
     widget->setLayoutDirection(Qt::RightToLeft);
-    QFusionStyle fusionStyle;
-    widget->setStyle(&fusionStyle);
+    widget->setStyle(QStyleFactory::create(QLatin1String("Fusion")));
     widget->setFont(QFont("Times"));
     widget->setVisible(true);
     QApplication::setActiveWindow(widget);
@@ -2722,7 +2718,7 @@ void tst_QGraphicsProxyWidget::childPos()
 #if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
         // The Mac style wants the popup to show up at QPoint(4 - 11, 1).
         // See QMacStyle::subControlRect SC_ComboBoxListBoxPopup.
-        if (qobject_cast<QMacStyle *>(QApplication::style()))
+        if (QApplication::style()->inherits("QMacStyle"))
             expectedXPosition = qreal(4 - 11);
 #endif
         QCOMPARE(proxyChild->pos().x(), expectedXPosition);
@@ -2797,7 +2793,7 @@ void tst_QGraphicsProxyWidget::windowOpacity()
 
 void tst_QGraphicsProxyWidget::stylePropagation()
 {
-    QPointer<QWindowsStyle> windowsStyle = new QWindowsStyle;
+    QPointer<QStyle> windowsStyle = QStyleFactory::create("windows");
 
     QLineEdit *edit = new QLineEdit;
     QGraphicsProxyWidget proxy;

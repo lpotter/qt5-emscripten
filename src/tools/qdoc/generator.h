@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
+** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
@@ -56,7 +56,6 @@
 
 QT_BEGIN_NAMESPACE
 
-typedef QMap<QString, const Node*> NodeMap;
 typedef QMultiMap<QString, Node*> NodeMultiMap;
 typedef QMap<Node*, NodeMultiMap> ParentMaps;
 
@@ -95,6 +94,7 @@ public:
     static void setQDocPass(Passes pass) { qdocPass_ = pass; }
     static bool runPrepareOnly() { return (qdocPass_ == Prepare); }
     static bool runGenerateOnly() { return (qdocPass_ == Generate); }
+    static QString defaultModuleName() { return project; }
 
 protected:
     virtual void beginSubPage(const InnerNode* node, const QString& fileName);

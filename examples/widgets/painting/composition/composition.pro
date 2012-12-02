@@ -13,10 +13,8 @@ contains(QT_CONFIG, opengl) {
 QT += widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/composition
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.png *.jpg *.pro *.html
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/composition
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/painting/composition
+INSTALLS += target
 
 
 win32-msvc* {

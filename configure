@@ -797,7 +797,6 @@ CFG_HOST_CPUFEATURES=
 OPT_OBSOLETE_HOST_ARG=no
 
 CFG_USE_GNUMAKE=no
-CFG_IM=yes
 CFG_XINPUT2=auto
 CFG_XINPUT=runtime
 CFG_XKB=auto
@@ -882,8 +881,10 @@ QT_INSTALL_DOCS=
 QT_INSTALL_HEADERS=
 QT_INSTALL_LIBS=
 QT_INSTALL_BINS=
+QT_INSTALL_LIBEXECS=
 QT_INSTALL_PLUGINS=
 QT_INSTALL_IMPORTS=
+QT_INSTALL_QML=
 QT_INSTALL_ARCHDATA=
 QT_INSTALL_DATA=
 QT_INSTALL_TRANSLATIONS=
@@ -993,7 +994,7 @@ while [ "$#" -gt 0 ]; do
         VAL=no
         ;;
     #Qt style options that pass an argument
-    -prefix|-docdir|-headerdir|-plugindir|-importdir|-archdatadir|-datadir|-libdir|-bindir|-translationdir|-sysconfdir|-examplesdir|-testsdir|-depths|-make|-nomake|-platform|-xplatform|-device|-device-option|-sdk|-arch|-host-arch|-mysql_config|-sysroot|-hostdatadir|-hostbindir|-qpa|-qconfig)
+    -prefix|-docdir|-headerdir|-plugindir|-importdir|-qmldir|-archdatadir|-datadir|-libdir|-bindir|-libexecdir|-translationdir|-sysconfdir|-examplesdir|-testsdir|-depths|-make|-nomake|-platform|-xplatform|-device|-device-option|-sdk|-arch|-host-arch|-mysql_config|-sysroot|-hostdatadir|-hostbindir|-qpa|-qconfig)
         VAR=`echo $1 | sed "s,^-\(.*\),\1,"`
         shift
         VAL="$1"
@@ -1107,6 +1108,10 @@ while [ "$#" -gt 0 ]; do
             VAL=`echo $1 | sed 's,-R,,'`
         fi
         ;;
+    -largefile)
+        VAR="largefile"
+        VAL="yes"
+        ;;
     -l?*|-l)
         VAR="add_link"
         if [ "$1" = "-l" ]; then
@@ -1208,6 +1213,9 @@ while [ "$#" -gt 0 ]; do
     importdir)
         QT_INSTALL_IMPORTS="$VAL"
         ;;
+    qmldir)
+        QT_INSTALL_QML="$VAL"
+        ;;
     archdatadir)
         QT_INSTALL_ARCHDATA="$VAL"
         ;;
@@ -1247,6 +1255,9 @@ while [ "$#" -gt 0 ]; do
     bindir)
         QT_INSTALL_BINS="$VAL"
         ;;
+    libexecdir)
+        QT_INSTALL_LIBEXECS="$VAL"
+        ;;
     sse)
         if [ "$VAL" = "yes" ] || [ "$VAL" = "no" ]; then
             CFG_SSE="$VAL"
@@ -1279,6 +1290,7 @@ while [ "$#" -gt 0 ]; do
     sdk)
         if [ "$BUILD_ON_MAC" = "yes" ]; then
             CFG_SDK="$VAL"
+            DeviceVar set QMAKE_MAC_SDK "$VAL"
         else
             UNKNOWN_OPT=yes
         fi
@@ -1897,7 +1909,7 @@ while [ "$#" -gt 0 ]; do
         fi
         ;;
     javascript-jit)
-        if [ "$VAL" = "yes" ] || [ "$VAL" = "auto" ] || [ "$VAL" = "no" ]; then 
+        if [ "$VAL" = "yes" ] || [ "$VAL" = "auto" ] || [ "$VAL" = "no" ]; then
             CFG_JAVASCRIPTCORE_JIT="$VAL"
         else
             UNKNOWN_OPT=yes
@@ -2801,6 +2813,11 @@ if [ -z "$QT_INSTALL_BINS" ]; then #default
 fi
 QT_INSTALL_BINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_BINS"`
 
+if [ -z "$QT_INSTALL_LIBEXECS" ]; then #default
+    QT_INSTALL_LIBEXECS="$QT_INSTALL_ARCHDATA/libexec" #fallback
+fi
+QT_INSTALL_LIBEXECS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_LIBEXECS"`
+
 if [ -z "$QT_INSTALL_DOCS" ]; then #default
     QT_INSTALL_DOCS="$QT_INSTALL_DATA/doc" #fallback
 fi
@@ -2815,6 +2832,12 @@ if [ -z "$QT_INSTALL_IMPORTS" ]; then #default
     QT_INSTALL_IMPORTS="$QT_INSTALL_ARCHDATA/imports" #fallback
 fi
 QT_INSTALL_IMPORTS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_IMPORTS"`
+
+#qml
+if [ -z "$QT_INSTALL_QML" ]; then #default
+    QT_INSTALL_QML="$QT_INSTALL_ARCHDATA/qml" #fallback
+fi
+QT_INSTALL_QML=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_QML"`
 
 if [ -z "$QT_INSTALL_TRANSLATIONS" ]; then #default
     QT_INSTALL_TRANSLATIONS="$QT_INSTALL_DATA/translations" #fallback
@@ -3002,7 +3025,7 @@ Installation options:
 
  You may use these to separate different parts of the install:
 
-    -bindir <dir> ......... Executables will be installed to <dir>
+    -bindir <dir> ......... User executables will be installed to <dir>
                             (default PREFIX/bin)
     -headerdir <dir> ...... Headers will be installed to <dir>
                             (default PREFIX/include)
@@ -3012,8 +3035,12 @@ Installation options:
                             (default PREFIX)
     -plugindir <dir> ...... Plugins will be installed to <dir>
                             (default ARCHDATADIR/plugins)
-    -importdir <dir> ...... Imports for QML will be installed to <dir>
+    -libexecdir <dir> ..... Program executables will be installed to <dir>
+                            (default ARCHDATADIR/libexec)
+    -importdir <dir> ...... Imports for QML1 will be installed to <dir>
                             (default ARCHDATADIR/imports)
+    -qmldir <dir> ......... Imports for QML2 will be installed to <dir>
+                            (default ARCHDATADIR/qml)
     -datadir <dir> ........ Arch-independent data used by Qt will be installed to <dir>
                             (default PREFIX)
     -docdir <dir> ......... Documentation will be installed to <dir>
@@ -3494,9 +3521,11 @@ static const char qt_configure_prefix_path_strs[][256 + 12] = {
     "qt_docspath=$QT_INSTALL_DOCS",
     "qt_hdrspath=$QT_INSTALL_HEADERS",
     "qt_libspath=$QT_INSTALL_LIBS",
+    "qt_lbexpath=$QT_INSTALL_LIBEXECS",
     "qt_binspath=$QT_INSTALL_BINS",
     "qt_plugpath=$QT_INSTALL_PLUGINS",
     "qt_impspath=$QT_INSTALL_IMPORTS",
+    "qt_qml2path=$QT_INSTALL_QML",
     "qt_adatpath=$QT_INSTALL_ARCHDATA",
     "qt_datapath=$QT_INSTALL_DATA",
     "qt_trnspath=$QT_INSTALL_TRANSLATIONS",
@@ -5196,7 +5225,7 @@ if [ "$CFG_ALSA" = "auto" ]; then
     fi
 fi
 
-if [ "$CFG_JAVASCRIPTCORE_JIT" = "yes" ] || [ "$CFG_JAVASCRIPTCORE_JIT" = "auto" ]; then 
+if [ "$CFG_JAVASCRIPTCORE_JIT" = "yes" ] || [ "$CFG_JAVASCRIPTCORE_JIT" = "auto" ]; then
     if [ "$CFG_ARCH" = "arm" ]; then
        compileTest unix/javascriptcore-jit "javascriptcore-jit"
         if [ $? != "0" ]; then
@@ -6079,11 +6108,6 @@ elif [ "$CFG_OPENSSL" = "linked" ]; then
     echo "OPENSSL_LIBS = -lssl -lcrypto" >> "$QTMODULE.tmp"
 fi
 
-#dump in the SDK info
-if [ '!' -z "$CFG_SDK" ]; then
-   echo "QMAKE_MAC_SDK = $CFG_SDK" >> "$QTMODULE.tmp"
-fi
-
 # cmdline args
 cat "$QMAKE_VARS_FILE" >> "$QTMODULE.tmp"
 rm -f "$QMAKE_VARS_FILE" 2>/dev/null
@@ -6248,7 +6272,6 @@ echo "Xi2 support ............ $CFG_XINPUT2"
 echo "MIT-SHM support ........ $CFG_MITSHM"
 echo "FontConfig support ..... $CFG_FONTCONFIG"
 echo "XKB Support ............ $CFG_XKB"
-echo "immodule support ....... $CFG_IM"
 echo "GTK theme support ...... $CFG_QGTKSTYLE"
 
 [ "$CFG_SQL_mysql" != "no" ] && echo "MySQL support .......... $CFG_SQL_mysql"

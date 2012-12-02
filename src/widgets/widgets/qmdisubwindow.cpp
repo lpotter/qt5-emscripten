@@ -161,7 +161,7 @@
 #include <QScrollBar>
 #include <QDebug>
 #if defined(Q_WS_MAC) && !defined(QT_NO_STYLE_MAC)
-#include <QMacStyle>
+#include <private/qmacstyle_mac_p.h>
 #endif
 #include <QMdiArea>
 
@@ -2092,6 +2092,7 @@ void QMdiSubWindowPrivate::setWindowFlags(Qt::WindowFlags windowFlags)
         windowFlags = Qt::FramelessWindowHint;
 
     windowFlags &= ~windowType;
+    windowFlags &= ~Qt::WindowFullscreenButtonHint;
     windowFlags |= Qt::SubWindow;
 
 #ifndef QT_NO_ACTION

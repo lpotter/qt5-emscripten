@@ -39,6 +39,62 @@
 **
 ****************************************************************************/
 #include "qcocoaaccessibility.h"
+#include "qcocoaaccessibilityelement.h"
+#include <qaccessible.h>
+#include <qaccessible2.h>
+#include <private/qcore_mac_p.h>
+
+#ifndef QT_NO_COCOA_ACCESSIBILITY
+
+QCococaAccessibility::QCococaAccessibility()
+{
+
+}
+
+QCococaAccessibility::~QCococaAccessibility()
+{
+
+}
+
+void QCococaAccessibility::notifyAccessibilityUpdate(QAccessibleEvent *event)
+{
+    QObject *object = event->object();
+    if (!object)
+        return;
+
+    QAccessibleInterface *interface = QAccessible::queryAccessibleInterface(object);
+    if (!interface)
+        return;
+
+    switch (event->type()) {
+        case QAccessible::ValueChanged:
+        case QAccessible::TextInserted :
+        case QAccessible::TextRemoved :
+        case QAccessible::TextUpdated : {
+            QCocoaAccessibleElement *element = [QCocoaAccessibleElement elementWithInterface : interface parent : nil];
+            NSAccessibilityPostNotification(element, NSAccessibilityValueChangedNotification);
+        break; }
+
+        default:
+            delete interface;
+        break;
+    }
+}
+
+void QCococaAccessibility::setRootObject(QObject *o)
+{
+    Q_UNUSED(o)
+}
+
+void QCococaAccessibility::initialize()
+{
+
+}
+
+void QCococaAccessibility::cleanup()
+{
+
+}
 
 namespace QCocoaAccessible {
 
@@ -95,8 +151,9 @@ static void populateRoleMap()
     Returns a Mac accessibility role for the given interface, or
     NSAccessibilityUnknownRole if no role mapping is found.
 */
-NSString *macRole(QAccessible::Role qtRole)
+NSString *macRole(QAccessibleInterface *interface)
 {
+    QAccessible::Role qtRole = interface->role();
     QMacAccessibiltyRoleMap &roleMap = *qMacAccessibiltyRoleMap();
 
     if (roleMap.isEmpty())
@@ -106,6 +163,8 @@ NSString *macRole(QAccessible::Role qtRole)
 
     if (roleMap.contains(qtRole)) {
        // MAC_ACCESSIBILTY_DEBUG() << "return" <<  roleMap[qtRole];
+        if (roleMap[qtRole] == NSAccessibilityTextFieldRole && interface->state().multiLine)
+            return NSAccessibilityTextAreaRole;
         return roleMap[qtRole];
     }
 
@@ -136,7 +195,7 @@ bool shouldBeIgnrored(QAccessibleInterface *interface)
         role == QAccessible::ToolBar)       // Access the tool buttons directly.
         return true;
 
-    NSString *mac_role = macRole(interface->role());
+    NSString *mac_role = macRole(interface);
     if (mac_role == NSAccessibilityWindowRole || // We use the system-provided window elements.
         mac_role == NSAccessibilityGroupRole ||
         mac_role == NSAccessibilityUnknownRole)
@@ -218,4 +277,45 @@ QString translateAction(NSString *nsAction)
     return QString();
 }
 
+bool hasValueAttribute(QAccessibleInterface *interface)
+{
+    const QAccessible::Role qtrole = interface->role();
+    if (qtrole == QAccessible::EditableText
+            || interface->valueInterface()) {
+        return true;
+    }
+
+    return false;
+}
+
+id getValueAttribute(QAccessibleInterface *interface)
+{
+    const QAccessible::Role qtrole = interface->role();
+    if (qtrole == QAccessible::EditableText) {
+        if (QAccessibleTextInterface *textInterface = interface->textInterface()) {
+            // VoiceOver will read out the entire text string at once when returning
+            // text as a value. For large text edits the size of the returned string
+            // needs to be limited and text range attributes need to be used instead.
+            // NSTextEdit returns the first sentence as the value, Do the same here:
+            int begin = 0;
+            int end = textInterface->characterCount();
+            // ### call to textAfterOffset hangs. Booo!
+            //if (textInterface->characterCount() > 0)
+            //    textInterface->textAfterOffset(0, QAccessible2::SentenceBoundary, &begin, &end);
+
+            QString text = textInterface->text(begin, end);
+            //qDebug() << "text" << begin << end << text;
+            return QCFString::toNSString(text);
+        }
+    }
+
+    if (QAccessibleValueInterface *valueInterface = interface->valueInterface()) {
+        return QCFString::toNSString(QString::number(valueInterface->currentValue().toDouble()));
+    }
+
+    return nil;
+}
+
 } // namespace QCocoaAccessible
+
+#endif // QT_NO_COCOA_ACCESSIBILITY

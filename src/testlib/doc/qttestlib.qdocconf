@@ -1,0 +1,42 @@
+include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
+
+project                 = qttestlib
+description             = Qt Test Reference Documentation
+url                     = http://qt-project.org/doc/qttest
+version                 = 5.0.0
+
+examplesinstallpath     = qtestlib
+
+qhp.projects            = QtTest
+
+qhp.QtTest.file                = qttestlib.qhp
+qhp.QtTest.namespace           = org.qt-project.qttest.500
+qhp.QtTest.virtualFolder       = qttest
+qhp.QtTest.indexTitle          = Qt Test
+qhp.QtTest.indexRoot           =
+
+qhp.QtTest.filterAttributes    = qttest 5.0.0 qtrefdoc
+qhp.QtTest.customFilters.Qt.name = QtTest 5.0.0
+qhp.QtTest.customFilters.Qt.filterAttributes = qttest 5.0.0
+
+qhp.QtTest.subprojects         = classes
+qhp.QtTest.subprojects.classes.title = C++ Classes
+qhp.QtTest.subprojects.classes.indexTitle = Qt Test C++ Classes
+qhp.QtTest.subprojects.classes.selectors = class fake:headerfile
+qhp.QtTest.subprojects.classes.sortPages = true
+
+tagfile                 = ../../../doc/qttest/qttest.tags
+
+depends                 += qtcore qtdoc qtwidgets qtgui
+
+headerdirs  += ..
+
+sourcedirs  += ..
+
+exampledirs += ../../../examples/qtestlib \
+               ../ \
+               snippets
+
+excludedirs += ../../../examples/widgets/doc
+
+imagedirs   += images

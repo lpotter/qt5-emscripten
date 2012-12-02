@@ -97,6 +97,10 @@ information about a particular change.
     or use static_cast<int>(Qt::SolidLine) to create a QVariant of type int with
     the same value as the enum.
 
+- QLocale:
+  * The historical language and country names were updated to their modern values,
+    some deprecated names were dropped or mapped to their modern alternatives.
+
 - QTestLib:
   * The plain-text, xml and lightxml test output formats have been changed to
     show a test result for every row of test data in data-driven tests.  In
@@ -325,6 +329,27 @@ information about a particular change.
 
 - QThread::terminated() has been removed, since its emission cannot be guaranteed.
 
+- QPrintEngine - Removed the PPK_SuppressSystemPrintStatus key as no longer used.
+
+- QCoreApplication::Type and QApplication::type() have been removed. These
+  Qt3 legacy application types did not match the application types
+  available in Qt5. Use for example qobject_cast instead to dynamically
+  find out the exact application type.
+
+- The following QStyle implementations have been made internal:
+  * QFusionStyle
+  * QGtkStyle
+  * QMacStyle
+  * QWindowsCEStyle
+  * QWindowsMobileStyle
+  * QWindowsStyle
+  * QWindowsVistaStyle
+  * QWindowsXPStyle
+  Instead of creating instances or inheriting these classes directly, use:
+  * QStyleFactory for creating instances of specific styles
+  * QProxyStyle for customizing existing style implementations
+  * QCommonStyle as a base for implementing full custom styles.
+
 ****************************************************************************
 *                           General                                        *
 ****************************************************************************
@@ -345,6 +370,9 @@ General Improvements
 - The Unicode Data and Algorithms has been updated to match the
   Unicode Standard of version 6.2. For more information see http://www.unicode.org/
 
+- The QLocale data has been updated to CLDR 22.1.
+  For more information see http://cldr.unicode.org/
+
 Third party components
 ----------------------
 
@@ -352,6 +380,10 @@ Third party components
 flags are now enabled by default on all platforms, for the sqlite3 copy under
 the 3rdparty directory.
 
+Legal
+-----
+
+ - Copyright of Qt has been transferred to Digia Plc.
 
 ****************************************************************************
 *                          Library                                         *
@@ -491,6 +523,13 @@ QtCore
   - Qt::WindowSoftkeysVisibleHint
   - Qt::WindowSoftkeysRespondHint
 
+* QLocale
+  - [QTBUG-27987] Constructing a QLocale object with the short locale id has been improved.
+
+* QObject
+  - Added overloads of connect() to connect using pointers to member function
+  - Added QObject::isSignalConnected()
+
 QtGui
 -----
 * Accessibility has been refactored. The hierachy of accessible objects is implemented via
@@ -594,6 +633,12 @@ QtWidgets
   by QAbstractProxyModel and related classes. A copy of QProxyModel is available
   in the UiHelpers library.
 
+* The virtual methods QApplication::commitData and QApplication::saveState, used for session
+  management, no longer exist.
+  Connect to the commitDataRequest and saveStateRequest signals instead.
+  The new isSessionSaving() method can be used in the cases where the closeEvent of your
+  window needs to know whether it is being called during shutdown.
+
 * [QTBUG-20503] QFileSystemModel no longer masks out write permissions from the permissions
   returned from permissions() or data(FilePermissions), even if in read-only mode
   (QFileSystemModel::isReadOnly()).
@@ -648,6 +693,20 @@ QtOpenGL
 * The default major version of QGLFormat has been changed to 2 to be aligned
   with QSurfaceFormat. Applications that want to use a different version should
   explicitly request it using QGLFormat::setVersion().
+* void QGLContext::generateFontDisplayLists(const QFont& font, int listBase)
+  and int QGLWidget::fontDisplayListBase(const QFont & fnt, int listBase)
+  which were deprecated in Qt 4 have been removed.
+* Previously deprecated default value listBase parameter has been removed from
+  both QGLWidget::renderText() functions.
+* In order to ensure support on more platforms, stricter requirements have been
+  introduced for doing threaded OpenGL. First, you must call makeCurrent() at
+  least once per swapBuffers() call, so that the platform has a chance to
+  synchronize resizes to the OpenGL surface. Second, before doing makeCurrent()
+  or swapBuffers() in a separate thread, you must call
+  QGLContext::moveToThread(QThread *) to explicitly let Qt know in which thread
+  a QGLContext is currently being used. You also need to make sure that the
+  context is not current in the current thread before moving it to a different
+  thread.
 
 QtScript
 --------
@@ -831,7 +890,7 @@ Qt for Windows CE
 
 * [QTBUG-20785] The moc now has a -b<file> option to #include an additional
   file at the beginning of the generated file.
-
+* moc is now able to fully understand and expands preprocessor macros.
 
 - uic
 

@@ -99,13 +99,28 @@ QLocale::Language QLocalePrivate::codeToLanguage(const QString &code)
     ushort uc2 = len-- > 0 ? code[1].toLower().unicode() : 0;
     ushort uc3 = len-- > 0 ? code[2].toLower().unicode() : 0;
 
-    if (uc1 == 'n' && uc2 == 'o' && uc3 == 0)
-        uc2 = 'b';
-
     const unsigned char *c = language_code_list;
     for (; *c != 0; c += 3) {
         if (uc1 == c[0] && uc2 == c[1] && uc3 == c[2])
             return QLocale::Language((c - language_code_list)/3);
+    }
+
+    // legacy codes
+    if (uc1 == 'n' && uc2 == 'o' && uc3 == 0) { // no -> nb
+        Q_STATIC_ASSERT(QLocale::Norwegian == QLocale::NorwegianBokmal);
+        return QLocale::Norwegian;
+    }
+    if (uc1 == 't' && uc2 == 'l' && uc3 == 0) { // tl -> fil
+        Q_STATIC_ASSERT(QLocale::Tagalog == QLocale::Filipino);
+        return QLocale::Tagalog;
+    }
+    if (uc1 == 's' && uc2 == 'h' && uc3 == 0) { // sh -> sr[_Latn]
+        Q_STATIC_ASSERT(QLocale::SerboCroatian == QLocale::Serbian);
+        return QLocale::SerboCroatian;
+    }
+    if (uc1 == 'm' && uc2 == 'o' && uc3 == 0) { // mo -> ro
+        Q_STATIC_ASSERT(QLocale::Moldavian == QLocale::Romanian);
+        return QLocale::Moldavian;
     }
 
     return QLocale::C;
@@ -193,17 +208,94 @@ QString QLocalePrivate::countryCode() const
     return code;
 }
 
-QString QLocalePrivate::bcp47Name() const
+// http://www.unicode.org/reports/tr35/#Likely_Subtags
+static bool addLikelySubtags(QLocaleId &localeId)
 {
-    if (m_data->m_language_id == QLocale::AnyLanguage)
+    // ### optimize with bsearch
+    const int likely_subtags_count = sizeof(likely_subtags) / sizeof(likely_subtags[0]);
+    const QLocaleId *p = likely_subtags;
+    const QLocaleId *const e = p + likely_subtags_count;
+    for ( ; p < e; p += 2) {
+        if (localeId == p[0]) {
+            localeId = p[1];
+            return true;
+        }
+    }
+    return false;
+}
+
+QLocaleId QLocaleId::withLikelySubtagsAdded() const
+{
+    // language_script_region
+    if (language_id || script_id || country_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, script_id, country_id);
+        if (addLikelySubtags(id))
+            return id;
+    }
+    // language_script
+    if (country_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, script_id, 0);
+        if (addLikelySubtags(id)) {
+            id.country_id = country_id;
+            return id;
+        }
+    }
+    // language_region
+    if (script_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, 0, country_id);
+        if (addLikelySubtags(id)) {
+            id.script_id = script_id;
+            return id;
+        }
+    }
+    // language
+    if (script_id && country_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, 0, 0);
+        if (addLikelySubtags(id)) {
+            id.script_id = script_id;
+            id.country_id = country_id;
+            return id;
+        }
+    }
+    return *this;
+}
+
+QLocaleId QLocaleId::withLikelySubtagsRemoved() const
+{
+    QLocaleId max = withLikelySubtagsAdded();
+    // language
+    {
+        QLocaleId id = QLocaleId::fromIds(language_id, 0, 0);
+        if (id.withLikelySubtagsAdded() == max)
+            return id;
+    }
+    // language_region
+    if (country_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, 0, country_id);
+        if (id.withLikelySubtagsAdded() == max)
+            return id;
+    }
+    // language_script
+    if (script_id) {
+        QLocaleId id = QLocaleId::fromIds(language_id, script_id, 0);
+        if (id.withLikelySubtagsAdded() == max)
+            return id;
+    }
+    return max;
+}
+
+QString QLocaleId::bcp47Name() const
+{
+    if (language_id == QLocale::AnyLanguage)
         return QString();
-    if (m_data->m_language_id == QLocale::C)
+    if (language_id == QLocale::C)
         return QStringLiteral("C");
-    const unsigned char *lang = language_code_list + 3*(uint(m_data->m_language_id));
+
+    const unsigned char *lang = language_code_list + 3*uint(language_id);
     const unsigned char *script =
-            (m_data->m_script_id != QLocale::AnyScript ? script_code_list + 4*(uint(m_data->m_script_id)) : 0);
+            (script_id != QLocale::AnyScript ? script_code_list + 4*uint(script_id) : 0);
     const unsigned char *country =
-            (m_data->m_country_id != QLocale::AnyCountry  ? country_code_list + 3*(uint(m_data->m_country_id)) : 0);
+            (country_id != QLocale::AnyCountry  ? country_code_list + 3*uint(country_id) : 0);
     char len = (lang[2] != 0 ? 3 : 2) + (script ? 4+1 : 0) + (country ? (country[2] != 0 ? 3 : 2)+1 : 0);
     QString name(len, Qt::Uninitialized);
     QChar *uc = name.data();
@@ -228,42 +320,59 @@ QString QLocalePrivate::bcp47Name() const
     return name;
 }
 
+QString QLocalePrivate::bcp47Name() const
+{
+    if (m_data->m_language_id == QLocale::AnyLanguage)
+        return QString();
+    if (m_data->m_language_id == QLocale::C)
+        return QStringLiteral("C");
+
+    QLocaleId localeId = QLocaleId::fromIds(m_data->m_language_id, m_data->m_script_id, m_data->m_country_id);
+    return localeId.withLikelySubtagsRemoved().bcp47Name();
+}
+
 const QLocaleData *QLocaleData::findLocaleData(QLocale::Language language, QLocale::Script script, QLocale::Country country)
 {
-    const unsigned language_id = language;
-    const unsigned script_id = script;
-    const unsigned country_id = country;
+    QLocaleId localeId = QLocaleId::fromIds(language, script, country);
+    localeId = localeId.withLikelySubtagsAdded();
 
-    uint idx = locale_index[language_id];
+    uint idx = locale_index[localeId.language_id];
 
     const QLocaleData *data = locale_data + idx;
 
     if (idx == 0) // default language has no associated country
         return data;
 
-    if (script == QLocale::AnyScript && country == QLocale::AnyCountry)
+    Q_ASSERT(data->m_language_id == localeId.language_id);
+
+    if (localeId.script_id != QLocale::AnyScript && localeId.country_id != QLocale::AnyCountry) {
+        // both script and country are explicitly specified
+        do {
+            if (data->m_script_id == localeId.script_id && data->m_country_id == localeId.country_id)
+                return data;
+            ++data;
+        } while (data->m_language_id == localeId.language_id);
+
+        // no match; try again with default script
+        localeId.script_id = QLocale::AnyScript;
+        data = locale_data + idx;
+    }
+
+    if (localeId.script_id == QLocale::AnyScript && localeId.country_id == QLocale::AnyCountry)
         return data;
 
-    Q_ASSERT(data->m_language_id == language_id);
-
-    if (country == QLocale::AnyCountry) {
-        while (data->m_language_id == language_id && data->m_script_id != script_id)
-            ++data;
-        if (data->m_language_id == language_id && data->m_script_id == script_id)
-            return data;
-    } else if (script == QLocale::AnyScript) {
-        while (data->m_language_id == language_id) {
-            if (data->m_script_id == script_id && data->m_country_id == country_id)
+    if (localeId.script_id == QLocale::AnyScript) {
+        do {
+            if (data->m_country_id == localeId.country_id)
                 return data;
             ++data;
-        }
-    } else {
-        // both script and country are explicitly specified
-        while (data->m_language_id == language_id) {
-            if (data->m_script_id == script_id && data->m_country_id == country_id)
+        } while (data->m_language_id == localeId.language_id);
+    } else if (localeId.country_id == QLocale::AnyCountry) {
+        do {
+            if (data->m_script_id == localeId.script_id)
                 return data;
             ++data;
-        }
+        } while (data->m_language_id == localeId.language_id);
     }
 
     return locale_data + idx;
@@ -618,9 +727,9 @@ QLocale::QLocale(QLocalePrivate &dd)
     "language[_script][_country][.codeset][@modifier]" or "C", where:
 
     \list
-    \li language is a lowercase, two-letter, ISO 639 language code,
+    \li language is a lowercase, two-letter, ISO 639 language code (also some three-letter codes),
     \li script is a titlecase, four-letter, ISO 15924 script code,
-    \li country is an uppercase, two- or three-letter, ISO 3166 country code (also "419" as defined by United Nations),
+    \li country is an uppercase, two-letter, ISO 3166 country code (also "419" as defined by United Nations),
     \li and codeset and modifier are ignored.
     \endlist
 
@@ -1802,6 +1911,9 @@ QLocale QLocale::system()
 
     Getting a list of all locales:
     QList<QLocale> allLocales = QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript, QLocale::AnyCountry);
+
+    Getting a list of locales suitable for Russia:
+    QList<QLocale> locales = QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript, QLocale::Russia);
 */
 QList<QLocale> QLocale::matchingLocales(QLocale::Language language,
                                         QLocale::Script script,
@@ -1811,16 +1923,20 @@ QList<QLocale> QLocale::matchingLocales(QLocale::Language language,
             uint(country) > QLocale::LastCountry)
         return QList<QLocale>();
 
+    if (language == QLocale::C)
+        return QList<QLocale>() << QLocale(QLocale::C);
+
     QList<QLocale> result;
-    const QLocaleData *data = locale_data;
     if (language == QLocale::AnyLanguage && script == QLocale::AnyScript && country == QLocale::AnyCountry)
         result.reserve(locale_data_size);
-    if (language != QLocale::C)
-        data += locale_index[language];
+    const QLocaleData *data = locale_data + locale_index[language];
     while ( (data != locale_data + locale_data_size)
             && (language == QLocale::AnyLanguage || data->m_language_id == uint(language))) {
-        QLocale locale(*new QLocalePrivate(localeDataIndex(data)));
-        result.append(locale);
+        if ((script == QLocale::AnyScript || data->m_script_id == uint(script))
+            && (country == QLocale::AnyCountry || data->m_country_id == uint(country))) {
+            QLocale locale(*new QLocalePrivate(localeDataIndex(data)));
+            result.append(locale);
+        }
         ++data;
     }
     return result;
@@ -1830,7 +1946,7 @@ QList<QLocale> QLocale::matchingLocales(QLocale::Language language,
     \obsolete
     \since 4.3
 
-    Returns the list of countries that have entires for \a language in Qt's locale
+    Returns the list of countries that have entries for \a language in Qt's locale
     database. If the result is an empty list, then \a language is not represented in
     Qt's locale database.
 
@@ -1839,19 +1955,17 @@ QList<QLocale> QLocale::matchingLocales(QLocale::Language language,
 QList<QLocale::Country> QLocale::countriesForLanguage(Language language)
 {
     QList<Country> result;
-
-    unsigned language_id = language;
-    uint idx = locale_index[language_id];
-
     if (language == C) {
         result << AnyCountry;
         return result;
     }
 
-    const QLocaleData *data = locale_data + idx;
-
+    unsigned language_id = language;
+    const QLocaleData *data = locale_data + locale_index[language_id];
     while (data->m_language_id == language_id) {
-        result << static_cast<Country>(data->m_country_id);
+        const QLocale::Country country = static_cast<Country>(data->m_country_id);
+        if (!result.contains(country))
+            result.append(country);
         ++data;
     }
 
@@ -3144,7 +3258,7 @@ QString QLocale::toCurrencyString(qlonglong value, const QString &symbol) const
         size = d->m_data->m_currency_negative_format_size;
         value = -value;
     }
-    QString str = d->longLongToString(value);
+    QString str = toString(value);
     QString sym = symbol.isNull() ? currencySymbol() : symbol;
     if (sym.isEmpty())
         sym = currencySymbol(QLocale::CurrencyIsoCode);
@@ -3169,7 +3283,7 @@ QString QLocale::toCurrencyString(qulonglong value, const QString &symbol) const
     const QLocaleData *data = this->d->m_data;
     quint8 idx = data->m_currency_format_idx;
     quint8 size = data->m_currency_format_size;
-    QString str = d->unsLongLongToString(value);
+    QString str = toString(value);
     QString sym = symbol.isNull() ? currencySymbol() : symbol;
     if (sym.isEmpty())
         sym = currencySymbol(QLocale::CurrencyIsoCode);
@@ -3199,8 +3313,7 @@ QString QLocale::toCurrencyString(double value, const QString &symbol) const
         size = data->m_currency_negative_format_size;
         value = -value;
     }
-    QString str = d->doubleToString(value, d->m_data->m_currency_digits,
-                                    QLocalePrivate::DFDecimal);
+    QString str = toString(value, 'f', d->m_data->m_currency_digits);
     QString sym = symbol.isNull() ? currencySymbol() : symbol;
     if (sym.isEmpty())
         sym = currencySymbol(QLocale::CurrencyIsoCode);
@@ -3212,7 +3325,7 @@ QString QLocale::toCurrencyString(double value, const QString &symbol) const
     \since 4.8
 
     Returns an ordered list of locale names for translation purposes in
-    preference order.
+    preference order (like "en", "en-US", "en-Latn-US").
 
     The return value represents locale names that the user expects to see the
     UI translation in.
@@ -3236,7 +3349,20 @@ QStringList QLocale::uiLanguages() const
         }
     }
 #endif
-    return QStringList(bcp47Name());
+    QLocaleId id = QLocaleId::fromIds(d->m_data->m_language_id, d->m_data->m_script_id, d->m_data->m_country_id);
+    const QLocaleId max = id.withLikelySubtagsAdded();
+    const QLocaleId min = max.withLikelySubtagsRemoved();
+
+    QStringList uiLanguages;
+    uiLanguages.append(min.bcp47Name());
+    if (id.script_id) {
+        id.script_id = 0;
+        if (id != min && id.withLikelySubtagsAdded() == max)
+            uiLanguages.append(id.bcp47Name());
+    }
+    if (max != min && max != id)
+        uiLanguages.append(max.bcp47Name());
+    return uiLanguages;
 }
 
 /*!

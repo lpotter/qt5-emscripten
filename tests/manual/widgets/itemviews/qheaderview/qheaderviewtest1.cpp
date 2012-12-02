@@ -65,8 +65,7 @@ void SomeHandler::slotSectionResized(int logsection, int oldsize, int newsize)
     m_tv->setUpdatesEnabled(false);
     // Do some manual resizing - lets make every section having the new size.
     m_hv->blockSignals(true);
-    for (int u = 0; u < m_hv->count(); ++u)
-        m_hv->resizeSection(u, newsize);
+    m_hv->setDefaultSectionSize(newsize);
     m_hv->blockSignals(false);
 
     // Adjust offset and scrollbar. Maybe it isn't 100% perfect
@@ -97,14 +96,14 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     QTableView tv;
     QStandardItemModel m;
-    m.setRowCount(10);
-    m.setColumnCount(36);
+    m.setRowCount(500);
+    m.setColumnCount(250);
     tv.setModel(&m);
     SomeHandler handler(tv.horizontalHeader(), &tv);
-    tv.horizontalHeader()->setDefaultSectionSize(50);
+    tv.horizontalHeader()->setDefaultSectionSize(30);
+    tv.show();
     tv.horizontalHeader()->setSectionsMovable(true);
-    tv.showMaximized();
+    tv.verticalHeader()->setSectionsMovable(true);
     app.exec();
 }
-
 #include "qheaderviewtest1.moc"

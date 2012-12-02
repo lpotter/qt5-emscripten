@@ -5,9 +5,7 @@ SOURCES     = main.cpp \
 	      window.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/transformations
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS transformations.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/painting/transformations
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/painting/transformations
+INSTALLS += target
 
 QT += widgets

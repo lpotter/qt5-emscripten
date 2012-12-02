@@ -8,10 +8,8 @@ RESOURCES += \
 	mice.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/collidingmice
-sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS collidingmice.pro images
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/collidingmice
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/graphicsview/collidingmice
+INSTALLS += target
 
 QT += widgets
 

@@ -27,8 +27,3 @@ SUBDIRS       = analogclock \
                 windowflags
 
 contains(styles, windows): SUBDIRS += styles
-
-# install
-sources.files = widgets.pro README
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/widgets
-INSTALLS += sources

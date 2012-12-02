@@ -10,9 +10,7 @@ SOURCES     = mainwindow.cpp \
 CONFIG  += qt
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/editabletreemodel
-sources.files = $$FORMS $$HEADERS $$RESOURCES $$SOURCES *.pro *.txt
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/editabletreemodel
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/editabletreemodel
+INSTALLS += target
 
 QT += widgets

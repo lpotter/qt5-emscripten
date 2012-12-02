@@ -9,9 +9,7 @@ build_all:!build_pass {
 RESOURCES += mainwindow.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/mainwindows/mainwindow
-sources.files = $$SOURCES $$HEADERS $$FORMS $$RESOURCES *.png *.jpg *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/mainwindows/mainwindow
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/mainwindows/mainwindow
+INSTALLS += target
 
 QT += widgets

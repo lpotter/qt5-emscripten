@@ -281,6 +281,8 @@ public:
     QGLFormat requestedFormat() const;
     void setFormat(const QGLFormat& format);
 
+    void moveToThread(QThread *thread);
+
     virtual void makeCurrent();
     virtual void doneCurrent();
 
@@ -343,7 +345,6 @@ protected:
     void setWindowCreated(bool on);
     bool initialized() const;
     void setInitialized(bool on);
-    void generateFontDisplayLists(const QFont & fnt, int listBase);
 
     uint colorIndex(const QColor& c) const;
     void setValid(bool valid);
@@ -414,7 +415,7 @@ public:
     QGLFormat format() const;
     void setFormat(const QGLFormat& format);
 
-    const QGLContext* context() const;
+    QGLContext* context() const;
     void setContext(QGLContext* context, const QGLContext* shareContext = 0,
                     bool deleteOldContext = true);
 
@@ -430,9 +431,9 @@ public:
     void  setColormap(const QGLColormap & map);
 
     void renderText(int x, int y, const QString & str,
-                     const QFont & fnt = QFont(), int listBase = 2000);
+                    const QFont & fnt = QFont());
     void renderText(double x, double y, double z, const QString & str,
-                     const QFont & fnt = QFont(), int listBase = 2000);
+                    const QFont & fnt = QFont());
     QPaintEngine *paintEngine() const;
 
     GLuint bindTexture(const QImage &image, GLenum target, GLint format,
@@ -474,7 +475,6 @@ protected:
 
     virtual void glInit();
     virtual void glDraw();
-    int fontDisplayListBase(const QFont & fnt, int listBase = 2000);
 
     QGLWidget(QGLWidgetPrivate &dd,
               const QGLFormat &format = QGLFormat(),

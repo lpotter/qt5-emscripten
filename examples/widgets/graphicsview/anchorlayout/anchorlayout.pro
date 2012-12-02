@@ -1,10 +1,8 @@
 SOURCES   = main.cpp
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/anchorlayout
-sources.files = $$SOURCES $$HEADERS $$RESOURCES anchorlayout.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/graphicsview/anchorlayout
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/graphicsview/anchorlayout
+INSTALLS += target
 
 TARGET = anchorlayout
 QT += widgets

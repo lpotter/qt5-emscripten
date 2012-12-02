@@ -9,8 +9,6 @@ CONFIG  += qt
 QT      += xml widgets
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/simpledommodel
-sources.files = $$SOURCES $$HEADERS $$RESOURCES *.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/qtbase/itemviews/simpledommodel
-INSTALLS += target sources
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/simpledommodel
+INSTALLS += target
 

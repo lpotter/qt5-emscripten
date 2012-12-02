@@ -350,6 +350,7 @@ void QHeaderView::setModel(QAbstractItemModel *model)
     if (model == this->model())
         return;
     Q_D(QHeaderView);
+    d->persistentHiddenSections.clear();
     if (d->model && d->model != QAbstractItemModelPrivate::staticEmptyModel()) {
     if (d->orientation == Qt::Horizontal) {
         QObject::disconnect(d->model, SIGNAL(columnsInserted(QModelIndex,int,int)),
@@ -2332,6 +2333,8 @@ void QHeaderView::mouseMoveEvent(QMouseEvent *e)
             return;
         }
         case QHeaderViewPrivate::MoveSection: {
+            if (d->shouldAutoScroll(e->pos()))
+                d->startAutoScroll();
             if (qAbs(pos - d->firstPos) >= QApplication::startDragDistance()
                 || !d->sectionIndicator->isHidden()) {
                 int visual = visualIndexAt(pos);
@@ -3369,7 +3372,11 @@ void QHeaderViewPrivate::cascadingResize(int visual, int newSize)
 void QHeaderViewPrivate::setDefaultSectionSize(int size)
 {
     Q_Q(QHeaderView);
+    executePostedLayout();
+    invalidateCachedSizeHint();
     defaultSectionSize = size;
+    if (state == QHeaderViewPrivate::ResizeSection)
+        preventCursorChangeInSetOffset = true;
     for (int i = 0; i < sectionItems.count(); ++i) {
         QHeaderViewPrivate::SectionItem &section = sectionItems[i];
         if (sectionHidden.isEmpty() || !sectionHidden.testBit(i)) { // resize on not hidden.
@@ -3382,6 +3389,10 @@ void QHeaderViewPrivate::setDefaultSectionSize(int size)
             }
         }
     }
+    sectionStartposRecalc = true;
+    if (hasAutoResizeSections())
+        doDelayedResizeSections();
+    viewport->update();
 }
 
 void QHeaderViewPrivate::recalcSectionStartPos() const // linear (but fast)
