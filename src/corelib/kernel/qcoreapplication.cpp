@@ -121,8 +121,12 @@
 #else
 #include <qtcore_tracepoints_p.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include <algorithm>
+#include <iostream>
 
 QT_BEGIN_NAMESPACE
 
@@ -499,6 +503,13 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
 
 QCoreApplicationPrivate::~QCoreApplicationPrivate()
 {
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+        //unmount persistent directory as IDBFS
+              FS.unmount('/home/web_user');
+              Module.print("unmount persisted file system..");
+         );
+#endif
 #ifndef QT_NO_QOBJECT
     cleanupThreadData();
 #endif
@@ -789,6 +800,19 @@ void QCoreApplicationPrivate::init()
 
     Q_ASSERT_X(!QCoreApplication::self, "QCoreApplication", "there should be only one application object");
     QCoreApplication::self = q;
+
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+              Module.print("mount persistent directory as IDBFS");
+              FS.mount(IDBFS,{},'/home/web_user');
+              FS.syncfs(true, function(err) {
+              if (err)
+                Module.print(err);
+              Module.print("end persisted to mem file sync..");
+              });
+         );
+
+#endif
 
     // Store app name/version (so they're still available after QCoreApplication is destroyed)
     if (!coreappdata()->applicationNameSet)
@@ -1388,6 +1412,7 @@ void QCoreApplication::exit(int returnCode)
     if (!self)
         return;
     QThreadData *data = self->d_func()->threadData;
+    std::cout << "QCoreApplication::exit(int returnCode)" << std::endl;
     data->quitNow = true;
     for (int i = 0; i < data->eventLoops.size(); ++i) {
         QEventLoop *eventLoop = data->eventLoops.at(i);
@@ -1441,6 +1466,12 @@ void QCoreApplication::exit(int returnCode)
 */
 void QCoreApplication::postEvent(QObject *receiver, QEvent *event, int priority)
 {
+    if (event->type() == QEvent::Quit)
+    {
+        std::cout << "Quit event posted" << std::endl;
+        return;
+    }
+
     if (receiver == 0) {
         qWarning("QCoreApplication::postEvent: Unexpected null receiver");
         delete event;

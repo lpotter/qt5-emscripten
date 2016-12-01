@@ -96,5 +96,6 @@ bool QBearerEngine::configurationsInUse() const
 QT_END_NAMESPACE
 
 #include "moc_qbearerengine_p.cpp"
+QT_END_NAMESPACE
 
 #endif // QT_NO_BEARERMANAGEMENT

@@ -5,5 +5,10 @@ SUBDIRS = \
     ipc \
     mimetypes \
     serialization \
-    threads \
     tools
+
+!emscripten: SUBDIRS += \
+   threads \
+   json
+
+

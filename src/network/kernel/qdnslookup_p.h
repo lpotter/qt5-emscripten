@@ -132,6 +132,7 @@ private:
     QHostAddress nameserver;
 };
 
+#ifndef QT_NO_THREAD
 class QDnsLookupThreadPool : public QThreadPool
 {
     Q_OBJECT
@@ -147,6 +148,7 @@ private:
     QMutex signalsMutex;
     bool signalsConnected;
 };
+#endif
 
 class QDnsRecordPrivate : public QSharedData
 {
