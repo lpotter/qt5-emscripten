@@ -48,8 +48,9 @@
 #include <algorithm>
 
 QT_BEGIN_NAMESPACE
-
+#ifndef QT_NO_THREAD
 Q_GLOBAL_STATIC(QDnsLookupThreadPool, theDnsLookupThreadPool);
+#endif
 
 static bool qt_qdnsmailexchangerecord_less_than(const QDnsMailExchangeRecord &r1, const QDnsMailExchangeRecord &r2)
 {
@@ -503,7 +504,10 @@ void QDnsLookup::lookup()
     connect(d->runnable, SIGNAL(finished(QDnsLookupReply)),
             this, SLOT(_q_lookupFinished(QDnsLookupReply)),
             Qt::BlockingQueuedConnection);
+#ifndef QT_NO_THREAD
     theDnsLookupThreadPool()->start(d->runnable);
+#endif
+
 }
 
 /*!
@@ -1016,6 +1020,7 @@ void QDnsLookupRunnable::run()
     emit finished(reply);
 }
 
+#ifndef QT_NO_THREAD
 QDnsLookupThreadPool::QDnsLookupThreadPool()
     : signalsConnected(false)
 {
@@ -1051,6 +1056,7 @@ void QDnsLookupThreadPool::_q_applicationDestroyed()
     waitForDone();
     signalsConnected = false;
 }
+#endif
 
 QT_END_NAMESPACE
 

@@ -113,6 +113,10 @@
 
 #include <qtgui_tracepoints_p.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <ctype.h>
 
 QT_BEGIN_NAMESPACE
@@ -1582,7 +1586,13 @@ QGuiApplicationPrivate::~QGuiApplicationPrivate()
         qt_gl_set_global_share_context(0);
     }
 #endif
-
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+        //unmount persistent directory as IDBFS
+              FS.unmount('/home/web_user');
+              Module.print("unmount persisted file system..");
+         );
+#endif
     platform_integration->destroy();
 
     delete platform_theme;
