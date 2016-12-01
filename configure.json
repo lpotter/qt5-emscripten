@@ -149,7 +149,8 @@
             "test": "unix/zlib",
             "sources": [
                 { "libs": "-lzdll", "condition": "config.msvc" },
-                { "libs": "-lz", "condition": "!config.msvc" }
+                { "libs": "-lz", "condition": "!config.msvc && !config.emscripten" },
+                { "libs": "-s USE_ZLIB=1", "condition": "config.emscripten" }
             ]
         },
         "dbus": {
@@ -497,7 +498,7 @@
         },
         "use_gold_linker": {
             "label": "Using gold linker",
-            "condition": "!config.msvc && !config.integrity && tests.use_gold_linker",
+            "condition": "!config.msvc && !config.integrity && !config.emscripten && tests.use_gold_linker",
             "output": [ "privateConfig", "useGoldLinker" ]
         },
         "optimize_debug": {
@@ -600,7 +601,7 @@
         },
         "headersclean": {
             "label": "Check for clean headers",
-            "autoDetect": "features.developer-build",
+            "autoDetect": "features.developer-build && !config.emscripten",
             "output": [ "privateConfig" ]
         },
         "framework": {
@@ -952,7 +953,7 @@
         },
         "dbus": {
             "label": "Qt D-Bus",
-            "autoDetect": "!config.uikit && !config.android && !config.winrt",
+            "autoDetect": "!config.uikit && !config.android && !config.winrt && !config.emscripten",
             "output": [ "privateFeature", "feature" ]
         },
         "dbus-linked": {

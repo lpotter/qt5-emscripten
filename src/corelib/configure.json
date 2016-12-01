@@ -225,7 +225,7 @@
         },
         "eventfd": {
             "label": "eventfd",
-            "condition": "tests.eventfd",
+            "condition": "tests.eventfd && !config.emscripten",
             "output": [ "feature" ]
         },
         "glib": {
@@ -314,7 +314,7 @@
         "poll_ppoll": {
             "label": "Native ppoll()",
             "emitIf": "!config.win32",
-            "condition": "tests.ppoll",
+            "condition": "!config.emscripten && tests.ppoll",
             "output": [ "privateFeature" ]
         },
         "poll_pollts": {

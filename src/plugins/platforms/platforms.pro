@@ -46,6 +46,8 @@ haiku {
     SUBDIRS += haiku
 }
 
+emscripten: SUBDIRS = html5
+
 qtConfig(mirclient): SUBDIRS += mirclient
 
 qtConfig(integrityfb): SUBDIRS += integrity
