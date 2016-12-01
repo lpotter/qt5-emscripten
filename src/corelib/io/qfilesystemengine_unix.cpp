@@ -360,8 +360,10 @@ QString QFileSystemEngine::resolveUserName(uint userId)
         size_max = 1024;
     QVarLengthArray<char, 1024> buf(size_max);
 #endif
-
-#if !defined(Q_OS_INTEGRITY)
+#ifdef Q_OS_HTML5
+    Q_UNUSED(userId)
+#endif
+#if !defined(Q_OS_INTEGRITY) && !defined(Q_OS_HTML5)
     struct passwd *pw = 0;
 #if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS)
     struct passwd entry;
@@ -384,8 +386,10 @@ QString QFileSystemEngine::resolveGroupName(uint groupId)
         size_max = 1024;
     QVarLengthArray<char, 1024> buf(size_max);
 #endif
-
-#if !defined(Q_OS_INTEGRITY)
+#ifdef Q_OS_HTML5
+    Q_UNUSED(groupId)
+#endif
+#if !defined(Q_OS_INTEGRITY) && !defined(Q_OS_HTML5)
     struct group *gr = 0;
 #if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS)
     size_max = sysconf(_SC_GETGR_R_SIZE_MAX);

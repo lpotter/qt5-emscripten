@@ -255,15 +255,25 @@ QThread *QThread::create(Function &&f)
 
 class Q_CORE_EXPORT QThread : public QObject
 {
+    Q_OBJECT
 public:
+    explicit QThread(QObject *parent = nullptr);
+    ~QThread();
     static Qt::HANDLE currentThreadId() { return Qt::HANDLE(currentThread()); }
     static QThread* currentThread();
+    static void msleep(unsigned long) {}
+    QAbstractEventDispatcher *eventDispatcher() const;
+    void setEventDispatcher(QAbstractEventDispatcher *eventDispatcher);
+    bool wait(unsigned long time = ULONG_MAX);
 
+Q_SIGNALS:
+    void started(QPrivateSignal);
+    void finished(QPrivateSignal);
 protected:
     QThread(QThreadPrivate &dd, QObject *parent = nullptr);
 
 private:
-    explicit QThread(QObject *parent = nullptr);
+    virtual void run();
     static QThread *instance;
 
     friend class QCoreApplication;

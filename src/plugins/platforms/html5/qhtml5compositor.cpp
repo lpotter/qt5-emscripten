@@ -1,0 +1,338 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 Digia Plc and/or its subsidiary(-ies).
+** Contact: http://www.qt-project.org/legal
+**
+** This file is part of the Qt for Native Client platform plugin.
+**
+** $QT_BEGIN_LICENSE:LGPL3$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPLv3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl.html.
+**
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or later as published by the Free
+** Software Foundation and appearing in the file LICENSE.GPL included in
+** the packaging of this file. Please review the following information to
+** ensure the GNU General Public License version 2.0 requirements will be
+** met: http://www.gnu.org/licenses/gpl-2.0.html.
+** $QT_END_LICENSE$
+**
+****************************************************************************/
+
+#include "qhtml5compositor.h"
+
+#include <QtGui/QPainter>
+#include <qpa/qwindowsysteminterface.h>
+#include <QDebug>
+
+QHtml5CompositedWindow::QHtml5CompositedWindow()
+    : window(0)
+    , frameBuffer(0)
+    , parentWindow(0)
+    , flushPending(false)
+    , visible(false)
+{
+}
+
+QHtml5Compositor::QHtml5Compositor()
+    : m_frameBuffer(0)
+//    , m_context2D(0)
+//    , m_imageData2D(0)
+    , m_needComposit(false)
+    , m_inFlush(false)
+    , m_inResize(false)
+    , m_targetDevicePixelRatio(1)
+{
+    qDebug() << Q_FUNC_INFO;
+ //   m_callbackFactory.Initialize(this);
+}
+
+QHtml5Compositor::~QHtml5Compositor()
+{
+//    delete m_context2D;
+//    delete m_imageData2D;
+    delete m_frameBuffer;
+}
+
+void QHtml5Compositor::addRasterWindow(QWindow *window, QWindow *parentWindow)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "addRasterWindow" << window << parentWindow;
+
+    qDebug() << Q_FUNC_INFO;
+
+    QHtml5CompositedWindow compositedWindow;
+    compositedWindow.window = window;
+    compositedWindow.parentWindow = parentWindow;
+    m_compositedWindows.insert(window, compositedWindow);
+
+    if (parentWindow == 0) {
+        m_windowStack.append(window);
+    } else {
+        m_compositedWindows[parentWindow].childWindows.append(window);
+    }
+}
+
+void QHtml5Compositor::removeWindow(QWindow *window)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "removeWindow" << window;
+    qDebug() << Q_FUNC_INFO;
+
+    QWindow *platformWindow = m_compositedWindows[window].parentWindow;
+    if (platformWindow) {
+        QWindow *parentWindow = window;
+        m_compositedWindows[parentWindow].childWindows.removeAll(window);
+    }
+    m_windowStack.removeAll(window);
+    m_compositedWindows.remove(window);
+}
+
+void QHtml5Compositor::setVisible(QWindow *window, bool visible)
+{
+    qDebug() << Q_FUNC_INFO;
+    QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+    if (compositedWindow.visible == visible)
+        return;
+
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "setVisible (effective)" << window << visible;
+
+    compositedWindow.visible = visible;
+    compositedWindow.flushPending = true;
+    if (visible)
+        compositedWindow.damage = compositedWindow.window->geometry();
+    else
+        globalDamage = compositedWindow.window->geometry(); // repaint previosly covered area.
+    maybeComposit();
+}
+
+void QHtml5Compositor::raise(QWindow *window)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "raise" << window;
+    qDebug() << Q_FUNC_INFO;
+
+    QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+    compositedWindow.damage = compositedWindow.window->geometry();
+    m_windowStack.removeAll(window);
+    m_windowStack.append(window);
+    maybeComposit();
+}
+
+void QHtml5Compositor::lower(QWindow *window)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "lower" << window;
+    qDebug() << Q_FUNC_INFO;
+
+    m_windowStack.removeAll(window);
+    m_windowStack.prepend(window);
+    QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+    globalDamage = compositedWindow.window->geometry(); // repaint previosly covered area.
+}
+
+void QHtml5Compositor::setParent(QWindow *window, QWindow *parent)
+{
+    qDebug() << Q_FUNC_INFO;
+    m_compositedWindows[window].parentWindow = parent;
+}
+
+void QHtml5Compositor::setFrameBuffer(QWindow *window, QImage *frameBuffer)
+{
+    qDebug() << Q_FUNC_INFO;
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "setFrameBuffer" << window << frameBuffer;
+
+    // QPepperBackingStore instances may be created before the corresponding QPepperWindow
+    // instance, in which case this call comes to early. This will be rectified when the
+    // QPepperWindow is created, at which point the backing store resizes the frame buffer.
+    if (!m_compositedWindows.contains(window))
+        return;
+
+    m_compositedWindows[window].frameBuffer = frameBuffer;
+    m_compositedWindows[window].frameBuffer->fill(Qt::darkMagenta);
+}
+
+void QHtml5Compositor::flush(QWindow *window, const QRegion &region)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "flush" << window << region.boundingRect();
+
+    QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+    compositedWindow.flushPending = true;
+    compositedWindow.damage = region;
+    maybeComposit();
+}
+
+void QHtml5Compositor::waitForFlushed(QWindow *surface)
+{
+    if (!m_compositedWindows[surface].flushPending)
+        return;
+}
+
+void QHtml5Compositor::beginResize(QSize newSize, qreal newDevicePixelRatio)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "beginResize" << newSize;
+
+    m_inResize = true;
+    m_targetSize = newSize;
+    m_targetDevicePixelRatio = newDevicePixelRatio;
+
+    // Delete the current frame buffer to trigger creation of a new one later on.
+    delete m_frameBuffer;
+    m_frameBuffer = 0;
+}
+
+void QHtml5Compositor::endResize()
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "endResize";
+    m_inResize = false;
+    globalDamage = QRect(QPoint(), m_targetSize);
+    composit();
+}
+
+QWindow *QHtml5Compositor::windowAt(QPoint p)
+{
+    int index = m_windowStack.count() - 1;
+    // qDebug() << "window at" << "point" << p << "window count" << index;
+
+    while (index >= 0) {
+        QHtml5CompositedWindow &compositedWindow = m_compositedWindows[m_windowStack.at(index)];
+        // qDebug() << "windwAt testing" << compositedWindow.window <<
+        // compositedWindow.window->geometry();
+        if (compositedWindow.visible && compositedWindow.window->geometry().contains(p))
+            return m_windowStack.at(index);
+        --index;
+    }
+    return 0;
+}
+
+QWindow *QHtml5Compositor::keyWindow() { return m_windowStack.at(m_windowStack.count() - 1); }
+
+void QHtml5Compositor::maybeComposit()
+{
+    if (m_inResize)
+        return; // endResize will composit everything.
+
+    if (!m_inFlush)
+        composit();
+    else
+        m_needComposit = true;
+}
+
+void QHtml5Compositor::composit()
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "composit" << m_targetSize;
+
+    if (!m_targetSize.isValid())
+        return;
+
+    if (!m_frameBuffer) {
+        createFrameBuffer();
+    }
+
+    QPainter p(m_frameBuffer);
+    QRegion painted;
+
+    // Composit all windows in stacking order, paint and flush damaged area only.
+    foreach (QWindow *window, m_windowStack) {
+        QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+//        qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "composit window" << window
+//                                               << compositedWindow.frameBuffer;
+
+        if (compositedWindow.visible) {
+            const QRect windowGeometry = compositedWindow.window->geometry();
+            const QRegion globalDamageForWindow = globalDamage.intersected(QRegion(windowGeometry));
+            const QRegion localDamageForWindow = compositedWindow.damage;
+            const QRegion totalDamageForWindow = localDamageForWindow + globalDamageForWindow;
+            const QRect sourceRect = totalDamageForWindow.boundingRect();
+            const QRect destinationRect
+                = QRect(windowGeometry.topLeft() + sourceRect.topLeft(), sourceRect.size());
+            if (compositedWindow.frameBuffer) {
+                p.drawImage(destinationRect, *compositedWindow.frameBuffer, sourceRect);
+                painted += destinationRect;
+            }
+        }
+
+        compositedWindow.flushPending = false;
+        compositedWindow.damage = QRect();
+    }
+
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "composit painted" << painted;
+
+    globalDamage = QRect();
+
+    // m_inFlush = true;
+    // emit flush(painted);
+    if (!painted.isEmpty())
+        flush2(painted);
+}
+
+void QHtml5Compositor::createFrameBuffer()
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "createFrameBuffer" << m_targetSize
+//                                           << m_targetDevicePixelRatio;
+
+//    delete m_imageData2D;
+    delete m_frameBuffer;
+
+    if (!m_targetSize.isValid())
+        return;
+
+//    pp::Size devicePixelSize(m_targetSize.width() * m_targetDevicePixelRatio,
+//                             m_targetSize.height() * m_targetDevicePixelRatio);
+
+//    pp::Instance *instance = QPepperInstancePrivate::getPPInstance();
+
+    // Create new graphics context and frame buffer.
+  //  m_context2D = new pp::Graphics2D(instance, devicePixelSize, false);
+//    if (!instance->BindGraphics(*m_context2D)) {
+//        qWarning("Couldn't bind the device context\n");
+//    }
+
+//    m_imageData2D
+//        = new pp::ImageData(instance, PP_IMAGEDATAFORMAT_BGRA_PREMUL, devicePixelSize, true);
+
+//    m_frameBuffer = new QImage(reinterpret_cast<uchar *>(m_imageData2D->data()),
+//                               m_targetSize.width() * m_targetDevicePixelRatio,
+//                               m_targetSize.height() * m_targetDevicePixelRatio,
+//                               m_imageData2D->stride(), QImage::Format_ARGB32_Premultiplied);
+
+    m_frameBuffer->setDevicePixelRatio(m_targetDevicePixelRatio);
+}
+
+void QHtml5Compositor::flush2(const QRegion &region)
+{
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "flush" << region << m_targetDevicePixelRatio;
+
+//    if (!m_context2D) {
+//        m_inFlush = false;
+//        return;
+//    }
+
+    QRect flushRect = region.boundingRect();
+    QRect deviceRect = QRect(flushRect.topLeft() * m_targetDevicePixelRatio,
+                             flushRect.size() * m_targetDevicePixelRatio);
+
+//    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "flushing" << flushRect << deviceRect;
+  //  m_context2D->PaintImageData(*m_imageData2D, pp::Point(0, 0), toPPRect(deviceRect));
+ //   m_context2D->Flush(m_callbackFactory.NewCallback(&QHtml5Compositor::flushCompletedCallback));
+    m_inFlush = true;
+}
+
+void QHtml5Compositor::flushCompletedCallback(int32_t)
+{
+    m_inFlush = false;
+    if (m_needComposit) {
+        composit();
+        m_needComposit = false;
+    }
+}
