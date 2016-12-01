@@ -206,6 +206,11 @@ nacl: SUBDIRS -= src_network src_testlib
 
 android: SUBDIRS += src_android
 
+emscripten {
+    SUBDIRS -= src_network src_concurrent
+    src_plugins.depends -= src_network
+}
+
 TR_EXCLUDE = \
     src_tools_bootstrap src_tools_moc src_tools_rcc src_tools_uic src_tools_qlalr \
     src_tools_bootstrap_dbus src_tools_qdbusxml2cpp src_tools_qdbuscpp2xml \

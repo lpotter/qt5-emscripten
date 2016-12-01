@@ -487,6 +487,8 @@ QMetaCallEvent::~QMetaCallEvent()
 #ifndef QT_NO_THREAD
     if (semaphore_)
         semaphore_->release();
+#else
+    Q_UNUSED(semaphore_)
 #endif
     if (slotObj_)
         slotObj_->destroyIfLastRef();

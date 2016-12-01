@@ -5,5 +5,7 @@ SUBDIRS = \
     ipc \
     json \
     mimetypes \
-    threads \
     tools
+
+!emscripten: threads
+
