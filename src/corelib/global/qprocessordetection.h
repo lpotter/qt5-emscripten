@@ -319,6 +319,11 @@
 #  endif
 #  define Q_BYTE_ORDER Q_BIG_ENDIAN
 
+// -- Web Assembly --
+#elif defined(__EMSCRIPTEN__)
+#  define Q_PROCESSOR_WASM
+#  define Q_PROCESSOR_X86 6   // enables SIMD support
+#  define Q_BYTE_ORDER Q_LITTLE_ENDIAN
 #endif
 
 /*

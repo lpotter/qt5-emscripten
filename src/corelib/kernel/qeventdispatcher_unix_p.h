@@ -106,6 +106,8 @@ public:
     ~QEventDispatcherUNIX();
 
     bool processEvents(QEventLoop::ProcessEventsFlags flags) Q_DECL_OVERRIDE;
+    void processEvents() Q_DECL_OVERRIDE;
+
     bool hasPendingEvents() Q_DECL_OVERRIDE;
 
     void registerSocketNotifier(QSocketNotifier *notifier) Q_DECL_FINAL;
