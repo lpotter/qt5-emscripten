@@ -57,7 +57,7 @@
 
 QT_BEGIN_NAMESPACE
 
-//#define QHOSTINFO_DEBUG
+#define QHOSTINFO_DEBUG
 
 Q_GLOBAL_STATIC(QHostInfoLookupManager, theHostInfoLookupManager)
 
@@ -221,11 +221,10 @@ static int nextId()
 int QHostInfo::lookupHost(const QString &name, QObject *receiver,
                           const char *member)
 {
-#if defined QHOSTINFO_DEBUG
+//#if defined QHOSTINFO_DEBUG
     qDebug("QHostInfo::lookupHost(\"%s\", %p, %s)",
            name.toLatin1().constData(), receiver, member ? member + 1 : 0);
-#endif
-
+//#endif
     if (!QAbstractEventDispatcher::instance(QThread::currentThread())) {
         qWarning("QHostInfo::lookupHost() called with no event dispatcher");
         return -1;
@@ -252,11 +251,14 @@ int QHostInfo::lookupHost(const QString &name, QObject *receiver,
     QHostInfoLookupManager *manager = theHostInfoLookupManager();
 
     if (manager) {
-        // the application is still alive
+        qDebug() << Q_FUNC_INFO << "the application is still alive";
+
         if (manager->cache.isEnabled()) {
             // check cache first
             bool valid = false;
             QHostInfo info = manager->cache.get(name, &valid);
+            qDebug() << Q_FUNC_INFO << "valid" << valid << receiver;
+
             if (valid) {
                 if (!receiver)
                     return -1;
@@ -269,7 +271,7 @@ int QHostInfo::lookupHost(const QString &name, QObject *receiver,
             }
         }
 
-        // cache is not enabled or it was not in the cache, do normal lookup
+        qDebug() << Q_FUNC_INFO << "cache is not enabled or it was not in the cache, do normal lookup";
         QHostInfoRunnable* runnable = new QHostInfoRunnable(name, id);
         if (receiver)
             QObject::connect(&runnable->resultEmitter, SIGNAL(resultsReady(QHostInfo)), receiver, member, Qt::QueuedConnection);
@@ -528,6 +530,7 @@ int QHostInfo::lookupId() const
 */
 void QHostInfo::setLookupId(int id)
 {
+    qDebug() << Q_FUNC_INFO << id;
     d->lookupId = id;
 }
 
@@ -588,10 +591,10 @@ int QHostInfo::lookupHostImpl(const QString &name,
                               const QObject *receiver,
                               QtPrivate::QSlotObjectBase *slotObj)
 {
-#if defined QHOSTINFO_DEBUG
+//#if defined QHOSTINFO_DEBUG
     qDebug("QHostInfo::lookupHost(\"%s\", %p, %p)",
            name.toLatin1().constData(), receiver, slotObj);
-#endif
+//#endif
 
     if (!QAbstractEventDispatcher::instance(QThread::currentThread())) {
         qWarning("QHostInfo::lookupHost() called with no event dispatcher");
@@ -618,6 +621,8 @@ int QHostInfo::lookupHostImpl(const QString &name,
             // check cache first
             bool valid = false;
             QHostInfo info = manager->cache.get(name, &valid);
+
+            qDebug() << Q_FUNC_INFO << info.addresses() << valid;
             if (valid) {
                 info.setLookupId(id);
                 emit_results_ready(info, receiver, slotObj);
@@ -647,6 +652,7 @@ QHostInfoRunnable::QHostInfoRunnable(const QString &hn, int i, const QObject *re
 // the QHostInfoLookupManager will at some point call this via a QThreadPool
 void QHostInfoRunnable::run()
 {
+    qDebug() << Q_FUNC_INFO;
     QHostInfoLookupManager *manager = theHostInfoLookupManager();
     // check aborted
     if (manager->wasAborted(id)) {
@@ -669,7 +675,7 @@ void QHostInfoRunnable::run()
             manager->cache.put(toBeLookedUp, hostInfo);
         }
     } else {
-        // cache is not enabled, just do the lookup and continue
+        qDebug() << Q_FUNC_INFO << "cache is not enabled, just do the lookup and continue";
         hostInfo = QHostInfoAgent::fromName(toBeLookedUp);
     }
 
@@ -706,9 +712,12 @@ void QHostInfoRunnable::run()
 
 QHostInfoLookupManager::QHostInfoLookupManager() : mutex(QMutex::Recursive), wasDeleted(false)
 {
+#ifndef QT_NO_THREAD
     moveToThread(QCoreApplicationPrivate::mainThread());
     connect(QCoreApplication::instance(), SIGNAL(destroyed()), SLOT(waitForThreadPoolDone()), Qt::DirectConnection);
     threadPool.setMaxThreadCount(20); // do up to 20 DNS lookups in parallel
+#endif
+
 }
 
 QHostInfoLookupManager::~QHostInfoLookupManager()
@@ -731,12 +740,15 @@ void QHostInfoLookupManager::clear()
         finishedLookups.clear();
     }
 
+#ifndef QT_NO_THREAD
     threadPool.waitForDone();
+#endif
     cache.clear();
 }
 
 void QHostInfoLookupManager::work()
 {
+    qDebug() << Q_FUNC_INFO;
     if (wasDeleted)
         return;
 
@@ -775,11 +787,13 @@ void QHostInfoLookupManager::work()
                                        isAlreadyRunning).second,
                            scheduledLookups.end());
 
+#ifndef QT_NO_THREAD
     const int availableThreads = threadPool.maxThreadCount() - currentLookups.size();
     if (availableThreads > 0) {
         int readyToStartCount = qMin(availableThreads, scheduledLookups.size());
         auto it = scheduledLookups.begin();
         while (readyToStartCount--) {
+            qDebug() << Q_FUNC_INFO << "runnable now running in new thread, track this in currentLookups";
             // runnable now running in new thread, track this in currentLookups
             threadPool.start(*it);
             currentLookups.push_back(std::move(*it));
@@ -787,11 +801,29 @@ void QHostInfoLookupManager::work()
         }
         scheduledLookups.erase(scheduledLookups.begin(), it);
     }
+#else //QT_NO_THREAD
+    qDebug() << Q_FUNC_INFO << scheduledLookups.size()
+             << postponedLookups.size();
+
+//    int readyToStartCount = 1;// scheduledLookups.size();
+    auto it = scheduledLookups.begin();
+//    while (readyToStartCount--) {
+        qDebug() << Q_FUNC_INFO << "runnable now running in new thread, track this in currentLookups";
+     //   threadPool.start(*it);
+        (*it)->run();
+#warning FIX ME
+  //      currentLookups.push_back(std::move(*it));
+    //    ++it;
+  //  }
+    scheduledLookups.erase(scheduledLookups.begin(), it);
+#endif
+
 }
 
 // called by QHostInfo
 void QHostInfoLookupManager::scheduleLookup(QHostInfoRunnable *r)
 {
+    qDebug() << Q_FUNC_INFO << "wasDeleted" << wasDeleted;
     if (wasDeleted)
         return;
 
@@ -841,9 +873,16 @@ bool QHostInfoLookupManager::wasAborted(int id)
 // called from QHostInfoRunnable
 void QHostInfoLookupManager::lookupFinished(QHostInfoRunnable *r)
 {
+
+    qDebug() << Q_FUNC_INFO;
     if (wasDeleted)
         return;
+#ifdef QT_NO_THREAD
+    if (currentLookups.size() == 0)
+        return;
+#endif
 
+    qDebug() << Q_FUNC_INFO << "currentLookups" << currentLookups.size();
     QMutexLocker locker(&this->mutex);
     currentLookups.removeOne(r);
     finishedLookups.append(r);
@@ -853,6 +892,7 @@ void QHostInfoLookupManager::lookupFinished(QHostInfoRunnable *r)
 // This function returns immediately when we had a result in the cache, else it will later emit a signal
 QHostInfo qt_qhostinfo_lookup(const QString &name, QObject *receiver, const char *member, bool *valid, int *id)
 {
+    qDebug() << Q_FUNC_INFO;
     *valid = false;
     *id = -1;
 

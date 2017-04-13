@@ -53,6 +53,7 @@ QHttpProtocolHandler::QHttpProtocolHandler(QHttpNetworkConnectionChannel *channe
 
 void QHttpProtocolHandler::_q_receiveReply()
 {
+    qDebug() << Q_FUNC_INFO;
     Q_ASSERT(m_socket);
 
     if (!m_reply) {
@@ -76,7 +77,7 @@ void QHttpProtocolHandler::_q_receiveReply()
     if (socketState == QAbstractSocket::UnconnectedState) {
         if (m_socket->bytesAvailable() <= 0) {
             if (m_reply->d_func()->state == QHttpNetworkReplyPrivate::ReadingDataState) {
-                // finish this reply. this case happens when the server did not send a content length
+                // finish this reply. this case happens when the server did not send a content lengthdataReadProgress
                 m_reply->d_func()->state = QHttpNetworkReplyPrivate::AllDoneState;
                 m_channel->allDone();
                 return;
@@ -96,6 +97,7 @@ void QHttpProtocolHandler::_q_receiveReply()
         lastBytes = bytes;
 
         QHttpNetworkReplyPrivate::ReplyState state = m_reply->d_func()->state;
+        qDebug() << Q_FUNC_INFO << state;
         switch (state) {
         case QHttpNetworkReplyPrivate::NothingDoneState: {
             m_reply->d_func()->state = QHttpNetworkReplyPrivate::ReadingStatusState;
@@ -103,6 +105,7 @@ void QHttpProtocolHandler::_q_receiveReply()
         }
         case QHttpNetworkReplyPrivate::ReadingStatusState: {
             qint64 statusBytes = m_reply->d_func()->readStatus(m_socket);
+            qDebug() << Q_FUNC_INFO << "statusBytes" << statusBytes;
             if (statusBytes == -1) {
                 // connection broke while reading status. also handled if later _q_disconnected is called
                 m_channel->handleUnexpectedEOF();
@@ -134,8 +137,11 @@ void QHttpProtocolHandler::_q_receiveReply()
                     replyPrivate->state = QHttpNetworkReplyPrivate::ReadingStatusState;
                     break; // ignore
                 }
+                qDebug() << Q_FUNC_INFO << "shouldEmitSignals" << replyPrivate->shouldEmitSignals();
+                          qDebug() << Q_FUNC_INFO << m_reply << "<<<<<<<<<<<<<<<<<<<<<<";
                 if (replyPrivate->shouldEmitSignals())
                     emit m_reply->headerChanged();
+//                qApp->processEvents();
                 // After headerChanged had been emitted
                 // we can suddenly have a replyPrivate->userProvidedDownloadBuffer
                 // this is handled in the ReadingDataState however
@@ -265,6 +271,8 @@ bool QHttpProtocolHandler::sendRequest()
         return false;
     }
 
+    qDebug() << Q_FUNC_INFO << "channel state" << m_channel->state;
+
     switch (m_channel->state) {
     case QHttpNetworkConnectionChannel::IdleState: { // write the header
         if (!m_channel->ensureConnection()) {
@@ -272,8 +280,13 @@ bool QHttpProtocolHandler::sendRequest()
             // sendRequest will be called again from either
             // _q_connected or _q_encrypted
             return false;
+        } else {
+
+            qDebug() << Q_FUNC_INFO << "ensureCOnnected returned true";
         }
         QString scheme = m_channel->request.url().scheme();
+
+        qDebug() << Q_FUNC_INFO << scheme;
         if (scheme == QLatin1String("preconnect-http")
             || scheme == QLatin1String("preconnect-https")) {
             m_channel->state = QHttpNetworkConnectionChannel::IdleState;

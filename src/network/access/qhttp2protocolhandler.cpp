@@ -178,6 +178,7 @@ QHttp2ProtocolHandler::QHttp2ProtocolHandler(QHttpNetworkConnectionChannel *chan
 
 void QHttp2ProtocolHandler::_q_uploadDataReadyRead()
 {
+    qDebug() << Q_FUNC_INFO;
     auto data = qobject_cast<QNonContiguousByteDevice *>(sender());
     Q_ASSERT(data);
     const qint32 streamID = data->property("HTTP2StreamID").toInt();

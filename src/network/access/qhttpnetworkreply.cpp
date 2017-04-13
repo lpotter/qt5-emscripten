@@ -57,10 +57,12 @@ QT_BEGIN_NAMESPACE
 QHttpNetworkReply::QHttpNetworkReply(const QUrl &url, QObject *parent)
     : QObject(*new QHttpNetworkReplyPrivate(url), parent)
 {
+    qDebug() << Q_FUNC_INFO << this;
 }
 
 QHttpNetworkReply::~QHttpNetworkReply()
 {
+    qDebug() << Q_FUNC_INFO << this;
     Q_D(QHttpNetworkReply);
     if (d->connection) {
         d->connection->d_func()->removeReply(this);

@@ -79,7 +79,7 @@ QT_BEGIN_NAMESPACE
 
 // HP-UXi has a bug in getaddrinfo(3) that makes it thread-unsafe
 // with this flag. So disable it in that platform.
-#if defined(AI_ADDRCONFIG) && !defined(Q_OS_HPUX)
+#if defined(AI_ADDRCONFIG) && !defined(Q_OS_HPUX) && !defined(__EMSCRIPTEN__)
 #  define Q_ADDRCONFIG          AI_ADDRCONFIG
 #endif
 
@@ -201,7 +201,11 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
 #if !defined (QT_NO_GETADDRINFO)
     // Call getaddrinfo, and place all IPv4 addresses at the start and
     // the IPv6 addresses at the end of the address list in results.
+#ifdef __EMSCRIPTEN__
+    addrinfo *res;
+#else
     addrinfo *res = 0;
+#endif
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
@@ -210,14 +214,14 @@ QHostInfo QHostInfoAgent::fromName(const QString &hostName)
 #endif
 
     int result = getaddrinfo(aceHostname.constData(), 0, &hints, &res);
-# ifdef Q_ADDRCONFIG
+
+#ifdef Q_ADDRCONFIG
     if (result == EAI_BADFLAGS) {
         // if the lookup failed with AI_ADDRCONFIG set, try again without it
         hints.ai_flags = 0;
         result = getaddrinfo(aceHostname.constData(), 0, &hints, &res);
     }
-# endif
-
+#endif
     if (result == 0) {
         addrinfo *node = res;
         QList<QHostAddress> addresses;

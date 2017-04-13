@@ -37,7 +37,7 @@
 **
 ****************************************************************************/
 
-//#define QNETWORKACCESSHTTPBACKEND_DEBUG
+#define QNETWORKACCESSHTTPBACKEND_DEBUG
 
 #include "qnetworkreplyhttpimpl_p.h"
 #include "qnetworkaccessmanager_p.h"
@@ -55,6 +55,7 @@
 #include "qhsts_p.h"
 #include "qthread.h"
 #include "QtCore/qcoreapplication.h"
+#include <QDebug>
 
 #include <QtCore/private/qthread_p.h>
 
@@ -327,6 +328,7 @@ qint64 QNetworkReplyHttpImpl::readData(char* data, qint64 maxlen)
 {
     Q_D(QNetworkReplyHttpImpl);
 
+    qDebug() << Q_FUNC_INFO;
     // cacheload device
     if (d->cacheLoadDevice) {
         // FIXME bytesdownloaded, position etc?
@@ -466,6 +468,7 @@ QNetworkReplyHttpImplPrivate::~QNetworkReplyHttpImplPrivate()
  */
 bool QNetworkReplyHttpImplPrivate::loadFromCacheIfAllowed(QHttpNetworkRequest &httpRequest)
 {
+    qDebug() << Q_FUNC_INFO;
     QNetworkRequest::CacheLoadControl CacheLoadControlAttribute =
         (QNetworkRequest::CacheLoadControl)request.attribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferNetwork).toInt();
     if (CacheLoadControlAttribute == QNetworkRequest::AlwaysNetwork) {
@@ -604,7 +607,7 @@ QHttpNetworkRequest::Priority QNetworkReplyHttpImplPrivate::convert(const QNetwo
 void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpRequest)
 {
     Q_Q(QNetworkReplyHttpImpl);
-
+qDebug() << Q_FUNC_INFO << synchronous;
     QThread *thread = 0;
     if (synchronous) {
         // A synchronous HTTP request uses its own thread
@@ -612,6 +615,7 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
         thread->setObjectName(QStringLiteral("Qt HTTP synchronous thread"));
         QObject::connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
         thread->start();
+
     } else {
         // We use the manager-global thread.
         // At some point we could switch to having multiple threads if it makes sense.
@@ -678,12 +682,14 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
     httpRequest.setRedirectPolicy(redirectPolicy);
 
     httpRequest.setPriority(convert(newHttpRequest.priority()));
-
+qDebug() << Q_FUNC_INFO << operation;
     switch (operation) {
     case QNetworkAccessManager::GetOperation:
         httpRequest.setOperation(QHttpNetworkRequest::Get);
-        if (loadFromCacheIfAllowed(httpRequest))
+        if (loadFromCacheIfAllowed(httpRequest)) {
+            qDebug() << Q_FUNC_INFO << "no need to send the request! :)";
             return; // no need to send the request! :)
+        }
         break;
 
     case QNetworkAccessManager::HeadOperation:
@@ -900,6 +906,7 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
                     q, SLOT(resetUploadDataSlot(bool*)),
                     Qt::BlockingQueuedConnection); // this is the only one with BlockingQueued!
         }
+
     } else if (synchronous) {
         QObject::connect(q, SIGNAL(startHttpRequestSynchronously()), delegate, SLOT(startRequestSynchronously()), Qt::BlockingQueuedConnection);
 
@@ -915,11 +922,12 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
     }
 
 
+#ifndef QT_NO_THREAD
     // Move the delegate to the http thread
     delegate->moveToThread(thread);
     // This call automatically moves the uploadDevice too for the asynchronous case.
-
-    // Prepare timers for progress notifications
+#endif
+    qDebug() << Q_FUNC_INFO<< "Prepare timers for progress notifications";
     downloadProgressSignalChoke.start();
     uploadProgressSignalChoke.invalidate();
 
@@ -952,16 +960,23 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
             replyDownloadData(delegate->synchronousDownloadData);
         }
 
+#ifndef QT_NO_THREAD
         thread->quit();
         thread->wait(5000);
         if (thread->isFinished())
             delete thread;
         else
+#endif
             QObject::connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
 
         finished();
     } else {
+        qDebug() << Q_FUNC_INFO <<"emit startHttpRequest";
+#ifndef QT_NO_THREAD
         emit q->startHttpRequest(); // Signal to the HTTP thread and go back to user.
+#else
+        delegate->startRequest();
+#endif
     }
 }
 
@@ -1016,7 +1031,7 @@ void QNetworkReplyHttpImplPrivate::initCacheSaveDevice()
 void QNetworkReplyHttpImplPrivate::replyDownloadData(QByteArray d)
 {
     Q_Q(QNetworkReplyHttpImpl);
-
+qDebug() << Q_FUNC_INFO;
     // If we're closed just ignore this data
     if (!q->isOpen())
         return;
@@ -1087,6 +1102,7 @@ void QNetworkReplyHttpImplPrivate::replyDownloadData(QByteArray d)
 
 void QNetworkReplyHttpImplPrivate::replyFinished()
 {
+    qDebug() << Q_FUNC_INFO;
     // We are already loading from cache, we still however
     // got this signal because it was posted already
     if (loadingFromCache)
@@ -1213,6 +1229,7 @@ void QNetworkReplyHttpImplPrivate::replyDownloadMetaData(const QList<QPair<QByte
     Q_Q(QNetworkReplyHttpImpl);
     Q_UNUSED(contentLength);
 
+    qDebug() << Q_FUNC_INFO;
     statusCode = sc;
     reasonPhrase = rp;
 
@@ -1317,6 +1334,7 @@ void QNetworkReplyHttpImplPrivate::replyDownloadProgressSlot(qint64 bytesReceive
 {
     Q_Q(QNetworkReplyHttpImpl);
 
+    qDebug() << Q_FUNC_INFO;
     // If we're closed just ignore this data
     if (!q->isOpen())
         return;
@@ -1377,9 +1395,9 @@ void QNetworkReplyHttpImplPrivate::proxyAuthenticationRequired(const QNetworkPro
 void QNetworkReplyHttpImplPrivate::httpError(QNetworkReply::NetworkError errorCode,
                                           const QString &errorString)
 {
-#if defined(QNETWORKACCESSHTTPBACKEND_DEBUG)
+//#if defined(QNETWORKACCESSHTTPBACKEND_DEBUG)
     qDebug() << "http error!" << errorCode << errorString;
-#endif
+//#endif
 
     // FIXME?
     error(errorCode, errorString);
@@ -1748,6 +1766,7 @@ bool QNetworkReplyHttpImplPrivate::start(const QNetworkRequest &newHttpRequest)
     if (!networkSession) {
 #endif
         postRequest(newHttpRequest);
+        qDebug() << Q_FUNC_INFO;
         return true;
 #ifndef QT_NO_BEARERMANAGEMENT
     }

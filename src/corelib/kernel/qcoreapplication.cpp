@@ -281,6 +281,8 @@ void qAddPreRoutine(QtStartUpFunction p)
     // from multiple threads.
 #ifndef QT_NO_THREAD
     QMutexLocker locker(&globalPreRoutinesMutex);
+#else
+#warning QT_NO_THREAD
 #endif
     if (QCoreApplication::instance())
         p();

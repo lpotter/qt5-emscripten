@@ -70,6 +70,7 @@
 #include "qnetworkreplyhttpimpl_p.h"
 
 #include "qthread.h"
+#include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
@@ -1728,10 +1729,12 @@ QNetworkAccessManagerPrivate::~QNetworkAccessManagerPrivate()
 
 QThread * QNetworkAccessManagerPrivate::createThread()
 {
+    qDebug() << Q_FUNC_INFO;
     if (!thread) {
         thread = new QThread;
         thread->setObjectName(QStringLiteral("QNetworkAccessManager thread"));
         thread->start();
+
     }
     Q_ASSERT(thread);
     return thread;
@@ -1740,7 +1743,7 @@ QThread * QNetworkAccessManagerPrivate::createThread()
 void QNetworkAccessManagerPrivate::destroyThread()
 {
     if (thread) {
-        thread->quit();
+       thread->quit();
         thread->wait(5000);
         if (thread->isFinished())
             delete thread;

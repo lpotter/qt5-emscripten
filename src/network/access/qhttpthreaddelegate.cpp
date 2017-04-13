@@ -37,7 +37,7 @@
 **
 ****************************************************************************/
 
-//#define QHTTPTHREADDELEGATE_DEBUG
+#define QHTTPTHREADDELEGATE_DEBUG
 #include "qhttpthreaddelegate_p.h"
 
 #include <QThread>
@@ -250,9 +250,9 @@ QHttpThreadDelegate::QHttpThreadDelegate(QObject *parent) :
 // This is invoked as BlockingQueuedConnection from QNetworkAccessHttpBackend in the user thread
 void QHttpThreadDelegate::startRequestSynchronously()
 {
-#ifdef QHTTPTHREADDELEGATE_DEBUG
+//#ifdef QHTTPTHREADDELEGATE_DEBUG
     qDebug() << "QHttpThreadDelegate::startRequestSynchronously() thread=" << QThread::currentThreadId();
-#endif
+//#endif
     synchronous = true;
 
     QEventLoop synchronousRequestLoop;
@@ -276,9 +276,9 @@ void QHttpThreadDelegate::startRequestSynchronously()
 // This is invoked as QueuedConnection from QNetworkAccessHttpBackend in the user thread
 void QHttpThreadDelegate::startRequest()
 {
-#ifdef QHTTPTHREADDELEGATE_DEBUG
+//#ifdef QHTTPTHREADDELEGATE_DEBUG
     qDebug() << "QHttpThreadDelegate::startRequest() thread=" << QThread::currentThreadId();
-#endif
+//#endif
     // Check QThreadStorage for the QNetworkAccessCache
     // If not there, create this connection cache
     if (!connections.hasLocalData()) {
@@ -359,7 +359,7 @@ void QHttpThreadDelegate::startRequest()
     }
 
 
-    // Send the request to the connection
+    qDebug() << Q_FUNC_INFO << "Send the request to the connection";
     httpReply = httpConnection->sendRequest(httpRequest);
     httpReply->setParent(this);
 
@@ -379,6 +379,8 @@ void QHttpThreadDelegate::startRequest()
 
         // Don't care about ignored SSL errors for now in the synchronous HTTP case.
     } else if (!synchronous) {
+
+        qDebug() << Q_FUNC_INFO << httpReply << "<<<<<<<<<<<<<<<<<<<<<<";
         connect(httpReply,SIGNAL(headerChanged()), this, SLOT(headerChangedSlot()));
         connect(httpReply,SIGNAL(finished()), this, SLOT(finishedSlot()));
         connect(httpReply,SIGNAL(finishedWithError(QNetworkReply::NetworkError,QString)),
@@ -452,6 +454,8 @@ void QHttpThreadDelegate::readBufferFreed(qint64 size)
 
 void QHttpThreadDelegate::readyReadSlot()
 {
+
+    qDebug() << Q_FUNC_INFO;
     if (!httpReply)
         return;
 
@@ -492,9 +496,9 @@ void QHttpThreadDelegate::finishedSlot()
     if (!httpReply)
         return;
 
-#ifdef QHTTPTHREADDELEGATE_DEBUG
+//#ifdef QHTTPTHREADDELEGATE_DEBUG
     qDebug() << "QHttpThreadDelegate::finishedSlot() thread=" << QThread::currentThreadId() << "result=" << httpReply->statusCode();
-#endif
+//#endif
 
     // If there is still some data left emit that now
     while (httpReply->readAnyAvailable()) {
@@ -599,9 +603,9 @@ void QHttpThreadDelegate::headerChangedSlot()
     if (!httpReply)
         return;
 
-#ifdef QHTTPTHREADDELEGATE_DEBUG
+//#ifdef QHTTPTHREADDELEGATE_DEBUG
     qDebug() << "QHttpThreadDelegate::headerChangedSlot() thread=" << QThread::currentThreadId();
-#endif
+//#endif
 
 #ifndef QT_NO_SSL
     if (ssl)

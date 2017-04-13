@@ -443,7 +443,7 @@ bool QNativeSocketEngine::initialize(QAbstractSocket::SocketType socketType, QAb
 
     // Create the socket
     if (!d->createNewSocket(socketType, protocol)) {
-#if defined (QNATIVESOCKETENGINE_DEBUG)
+//#if defined (QNATIVESOCKETENGINE_DEBUG)
         QString typeStr = QLatin1String("UnknownSocketType");
         if (socketType == QAbstractSocket::TcpSocket) typeStr = QLatin1String("TcpSocket");
         else if (socketType == QAbstractSocket::UdpSocket) typeStr = QLatin1String("UdpSocket");
@@ -453,7 +453,7 @@ bool QNativeSocketEngine::initialize(QAbstractSocket::SocketType socketType, QAb
         else if (protocol == QAbstractSocket::IPv6Protocol) protocolStr = QLatin1String("IPv6Protocol");
         qDebug("QNativeSocketEngine::initialize(type == %s, protocol == %s) failed: %s",
                typeStr.toLatin1().constData(), protocolStr.toLatin1().constData(), d->socketErrorString.toLatin1().constData());
-#endif
+//#endif
         return false;
     }
 
@@ -473,11 +473,12 @@ bool QNativeSocketEngine::initialize(QAbstractSocket::SocketType socketType, QAb
 
 
     // Make sure we receive out-of-band data
+ #ifndef __EMSCRIPTEN__
     if (socketType == QAbstractSocket::TcpSocket
         && !setOption(ReceiveOutOfBandData, 1)) {
         qWarning("QNativeSocketEngine::initialize unable to inline out-of-band data");
     }
-
+#endif
     // Before Qt 4.6, we always set the send and receive buffer size to 49152 as
     // this was found to be an optimal value. However, modern OS
     // all have some kind of auto tuning for this and we therefore don't set

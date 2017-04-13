@@ -136,6 +136,10 @@ bool QHttpSocketEngine::connectInternal()
 {
     Q_D(QHttpSocketEngine);
 
+    qDebug() << Q_FUNC_INFO
+             << "state" << d->state
+             << "socket state" << d->socket->state();
+
     d->credentialsSent = false;
 
     // If the handshake is done, enter ConnectedState state and return true.
@@ -154,6 +158,9 @@ bool QHttpSocketEngine::connectInternal()
         //limit buffer in internal socket, data is buffered in the external socket under application control
         d->socket->setReadBufferSize(65536);
         d->socket->connectToHost(d->proxy.hostName(), d->proxy.port());
+    } else {
+
+        qDebug() << Q_FUNC_INFO << "fall through";
     }
 
     // If connected (might happen right away, at least for localhost services
@@ -168,6 +175,7 @@ bool QHttpSocketEngine::connectToHost(const QHostAddress &address, quint16 port)
 {
     Q_D(QHttpSocketEngine);
 
+    qDebug() << Q_FUNC_INFO << address;
     setPeerAddress(address);
     setPeerPort(port);
     d->peerName.clear();
@@ -541,9 +549,13 @@ void QHttpSocketEngine::slotSocketDisconnected()
 
 void QHttpSocketEngine::slotSocketReadNotification()
 {
+    qDebug() << Q_FUNC_INFO;
     Q_D(QHttpSocketEngine);
-    if (d->state != Connected && d->socket->bytesAvailable() == 0)
+    if (d->state != Connected && d->socket->bytesAvailable() == 0) {
+
+        qDebug() << Q_FUNC_INFO << "Not connected and no bytes available";
         return;
+    }
 
     if (d->state == Connected) {
         // Forward as a read notification.

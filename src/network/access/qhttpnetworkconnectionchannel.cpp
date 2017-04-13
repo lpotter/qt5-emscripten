@@ -109,6 +109,7 @@ void QHttpNetworkConnectionChannel::init()
 #else
     socket = new QTcpSocket;
 #endif
+    qDebug() << Q_FUNC_INFO << socket;
 #ifndef QT_NO_BEARERMANAGEMENT
     //push session down to socket
     if (networkSession)
@@ -196,6 +197,7 @@ void QHttpNetworkConnectionChannel::init()
 
 void QHttpNetworkConnectionChannel::close()
 {
+    qDebug() << Q_FUNC_INFO;
     if (!socket)
         state = QHttpNetworkConnectionChannel::IdleState;
     else if (socket->state() == QAbstractSocket::UnconnectedState)
@@ -243,12 +245,14 @@ bool QHttpNetworkConnectionChannel::sendRequest()
 
 void QHttpNetworkConnectionChannel::_q_receiveReply()
 {
+    qDebug() << Q_FUNC_INFO;
     Q_ASSERT(!protocolHandler.isNull());
     protocolHandler->_q_receiveReply();
 }
 
 void QHttpNetworkConnectionChannel::_q_readyRead()
 {
+    qDebug() << Q_FUNC_INFO;
     Q_ASSERT(!protocolHandler.isNull());
     protocolHandler->_q_readyRead();
 }
@@ -282,6 +286,7 @@ bool QHttpNetworkConnectionChannel::ensureConnection()
     if (!isInitialized)
         init();
 
+    qDebug() << Q_FUNC_INFO;
     QAbstractSocket::SocketState socketState = socket->state();
 
     // resend this request after we receive the disconnected signal
@@ -420,6 +425,7 @@ void QHttpNetworkConnectionChannel::allDone()
 {
     Q_ASSERT(reply);
 
+    qDebug() << Q_FUNC_INFO;
     if (!reply) {
         qWarning("QHttpNetworkConnectionChannel::allDone() called without reply. Please report at http://bugreports.qt.io/");
         return;
@@ -547,6 +553,7 @@ void QHttpNetworkConnectionChannel::handleStatus()
 
     int statusCode = reply->statusCode();
     bool resend = false;
+    qDebug() << Q_FUNC_INFO << "statusCode" << statusCode;
 
     switch (statusCode) {
     case 301:
@@ -607,6 +614,8 @@ bool QHttpNetworkConnectionChannel::resetUploadData()
         //this happens if server closes connection while QHttpNetworkConnectionPrivate::_q_startNextRequest is pending
         return false;
     }
+
+    qDebug() << Q_FUNC_INFO;
     QNonContiguousByteDevice* uploadByteDevice = request.uploadByteDevice();
     if (!uploadByteDevice)
         return true;
@@ -741,6 +750,7 @@ bool QHttpNetworkConnectionChannel::isSocketReading() const
 
 void QHttpNetworkConnectionChannel::_q_bytesWritten(qint64 bytes)
 {
+    qDebug() << Q_FUNC_INFO;
     Q_UNUSED(bytes);
     if (ssl) {
         // In the SSL case we want to send data from encryptedBytesWritten signal since that one
@@ -782,6 +792,7 @@ void QHttpNetworkConnectionChannel::_q_disconnected()
 
 void QHttpNetworkConnectionChannel::_q_connected()
 {
+    qDebug() << Q_FUNC_INFO;
     // For the Happy Eyeballs we need to check if this is the first channel to connect.
     if (connection->d_func()->networkLayerState == QHttpNetworkConnectionPrivate::HostLookupPending || connection->d_func()->networkLayerState == QHttpNetworkConnectionPrivate::IPv4or6) {
         if (connection->d_func()->delayedConnectionTimer.isActive())

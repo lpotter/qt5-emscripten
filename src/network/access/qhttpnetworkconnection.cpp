@@ -366,6 +366,7 @@ void QHttpNetworkConnectionPrivate::emitReplyError(QAbstractSocket *socket,
 {
     Q_Q(QHttpNetworkConnection);
 
+    qDebug() << Q_FUNC_INFO;
     int i = 0;
     if (socket)
         i = indexOf(socket);
@@ -613,6 +614,7 @@ QHttpNetworkReply* QHttpNetworkConnectionPrivate::queueRequest(const QHttpNetwor
 {
     Q_Q(QHttpNetworkConnection);
 
+    qDebug() << Q_FUNC_INFO;
     // The reply component of the pair is created initially.
     QHttpNetworkReply *reply = new QHttpNetworkReply(request.url());
     reply->setRequest(request);
@@ -994,6 +996,10 @@ void QHttpNetworkConnectionPrivate::removeReply(QHttpNetworkReply *reply)
 // although it is called _q_startNextRequest, it will actually start multiple requests when possible
 void QHttpNetworkConnectionPrivate::_q_startNextRequest()
 {
+    qDebug() << Q_FUNC_INFO
+             << "networkLayerState" << networkLayerState
+             << "state" << state
+             << "connectionType" << connectionType;
     // If there is no network layer state decided we should not start any new requests.
     if (networkLayerState == Unknown || networkLayerState == HostLookupPending || networkLayerState == IPv4or6)
         return;
@@ -1022,13 +1028,18 @@ void QHttpNetworkConnectionPrivate::_q_startNextRequest()
         if (highPriorityQueue.isEmpty() && lowPriorityQueue.isEmpty())
             return;
 
+        qDebug() << Q_FUNC_INFO << "channelCount" << channelCount;
         // try to get a free AND connected socket
         for (int i = 0; i < channelCount; ++i) {
             if (channels[i].socket) {
+                qDebug() << Q_FUNC_INFO << "socket state" << channels[i].socket->state();
                 if (!channels[i].reply && !channels[i].isSocketBusy() && channels[i].socket->state() == QAbstractSocket::ConnectedState) {
                     if (dequeueRequest(channels[i].socket))
                         channels[i].sendRequest();
                 }
+            } else {
+
+                qDebug() << Q_FUNC_INFO << "channel" << i << "no socket" << channels[i].socket;
             }
         }
         break;
@@ -1124,6 +1135,7 @@ void QHttpNetworkConnectionPrivate::readMoreLater(QHttpNetworkReply *reply)
 // lookup as then the hostinfo will already be in the cache.
 void QHttpNetworkConnectionPrivate::startHostInfoLookup()
 {
+    qDebug() << Q_FUNC_INFO;
     networkLayerState = HostLookupPending;
 
     // check if we already now can decide if this is IPv4 or IPv6
@@ -1140,10 +1152,13 @@ void QHttpNetworkConnectionPrivate::startHostInfoLookup()
         const QAbstractSocket::NetworkLayerProtocol protocol = temp.protocol();
         if (protocol == QAbstractSocket::IPv4Protocol) {
             networkLayerState = QHttpNetworkConnectionPrivate::IPv4;
+
+            qDebug() << Q_FUNC_INFO << "_q_startNextRequest";
             QMetaObject::invokeMethod(this->q_func(), "_q_startNextRequest", Qt::QueuedConnection);
             return;
         } else if (protocol == QAbstractSocket::IPv6Protocol) {
             networkLayerState = QHttpNetworkConnectionPrivate::IPv6;
+            qDebug() << Q_FUNC_INFO << "_q_startNextRequest";
             QMetaObject::invokeMethod(this->q_func(), "_q_startNextRequest", Qt::QueuedConnection);
             return;
         }
@@ -1164,6 +1179,7 @@ void QHttpNetworkConnectionPrivate::startHostInfoLookup()
 
 void QHttpNetworkConnectionPrivate::_q_hostLookupFinished(const QHostInfo &info)
 {
+    qDebug() << Q_FUNC_INFO;
     bool bIpv4 = false;
     bool bIpv6 = false;
     bool foundAddress = false;
@@ -1188,6 +1204,7 @@ void QHttpNetworkConnectionPrivate::_q_hostLookupFinished(const QHostInfo &info)
         }
     }
 
+    qDebug() << Q_FUNC_INFO << addresses;
     if (bIpv4 && bIpv6)
         startNetworkLayerStateLookup();
     else if (bIpv4) {

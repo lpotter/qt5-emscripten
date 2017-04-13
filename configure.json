@@ -91,6 +91,7 @@
             "mips_dspr2": "boolean",
             "mp": { "type": "boolean", "name": "msvc_mp" },
             "nomake": { "type": "addString", "values": [ "examples", "tests", "tools" ] },
+            "thread": "boolean",
             "opensource": { "type": "void", "name": "commercial", "value": "no" },
             "optimize-debug": { "type": "boolean", "name": "optimize_debug" },
             "optimized-qmake": { "type": "boolean", "name": "release_tools" },
@@ -533,6 +534,14 @@
                 { "type": "publicQtConfig", "name": "private_tests" }
             ]
         },
+        "thread": {
+            "label": "Using threads",
+            "output": [
+                { "type": "define", "name": "QT_NO_THREAD", "negative": true },
+                { "type": "publicFeature", "name": "thread", "negative": true },
+                { "type": "publicQtConfig", "name": "thread", "negative": true }
+            ]
+        },
         "debug": {
             "label": "Build for debugging",
             "autoDetect": "features.developer-build || config.win32 || config.darwin"
@@ -949,6 +958,7 @@
             "label": "Qt Concurrent",
             "purpose": "Provides a high-level multi-threading API.",
             "section": "Kernel",
+            "condition": "features.thread",
             "output": [ "publicFeature", "feature" ]
         },
         "dbus": {
@@ -1213,7 +1223,8 @@ Configure with '-qreal float' to create a build that is binary-compatible with 5
                 "pkg-config",
                 "qml-debug",
                 "libudev",
-                "system-zlib"
+                "system-zlib",
+                "thread"
             ]
         }
     ]

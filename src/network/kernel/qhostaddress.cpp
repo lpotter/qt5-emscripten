@@ -204,6 +204,8 @@ static bool parseIp6(const QString &address, QIPAddressUtils::IPv6Address &addr,
 
 bool QHostAddressPrivate::parse(const QString &ipString)
 {
+
+    qDebug() << Q_FUNC_INFO << ipString;
     protocol = QAbstractSocket::UnknownNetworkLayerProtocol;
     QString a = ipString.simplified();
     if (a.isEmpty())

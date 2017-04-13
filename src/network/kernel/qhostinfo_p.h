@@ -67,6 +67,7 @@
 #include "QtCore/qqueue.h"
 #include <QElapsedTimer>
 #include <QCache>
+#include <QDebug>
 
 #include <QNetworkSession>
 #include <QSharedPointer>
@@ -90,13 +91,16 @@ public:
     {
         connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this,
                 &QObject::deleteLater);
+#ifndef QT_NO_THREAD
         if (slotObj && receiver)
             moveToThread(receiver->thread());
+#endif
     }
 
 public Q_SLOTS:
     inline void emitResultsReady(const QHostInfo &info)
     {
+        qDebug() << Q_FUNC_INFO;
         if (slotObj) {
             QHostInfo copy = info;
             void *args[2] = { 0, reinterpret_cast<void *>(&copy) };
