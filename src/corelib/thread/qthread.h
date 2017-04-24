@@ -41,6 +41,7 @@
 #define QTHREAD_H
 
 #include <QtCore/qobject.h>
+#include <QDebug>
 
 // The implementation of QThread::create uses various C++14/C++17 facilities;
 // we must check for their presence. For std::async (used in all codepaths)
@@ -257,6 +258,19 @@ class Q_CORE_EXPORT QThread : public QObject
 {
     Q_OBJECT
 public:
+    enum Priority {
+        IdlePriority,
+
+        LowestPriority,
+        LowPriority,
+        NormalPriority,
+        HighPriority,
+        HighestPriority,
+
+        TimeCriticalPriority,
+
+        InheritPriority
+    };
     explicit QThread(QObject *parent = nullptr);
     ~QThread();
     static Qt::HANDLE currentThreadId() { return Qt::HANDLE(currentThread()); }
@@ -265,6 +279,14 @@ public:
     QAbstractEventDispatcher *eventDispatcher() const;
     void setEventDispatcher(QAbstractEventDispatcher *eventDispatcher);
     bool wait(unsigned long time = ULONG_MAX);
+
+    bool isFinished() const { return true; }
+    bool isRunning() const{ return true; }
+
+public Q_SLOTS:
+    void start(Priority = InheritPriority){}
+    void terminate(){}
+    void quit() {}
 
 Q_SIGNALS:
     void started(QPrivateSignal);

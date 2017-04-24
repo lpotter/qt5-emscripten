@@ -856,7 +856,7 @@ bool QThread::event(QEvent *event)
         return QObject::event(event);
     }
 }
-
+#ifndef QT_NO_THREAD
 /*!
     \since 5.2
 
@@ -978,6 +978,8 @@ QDaemonThread::QDaemonThread(QObject *parent)
 QDaemonThread::~QDaemonThread()
 {
 }
+
+#endif // QT_NO_THREAD
 
 #endif // QT_NO_THREAD
 

@@ -176,12 +176,14 @@ int QEventLoop::exec(ProcessEventsFlags flags)
 
 #ifndef __EMSCRIPTEN__
     //we need to protect from race condition with QThread::exit
+#ifndef QT_NO_THREAD
     QMutexLocker locker(&static_cast<QThreadPrivate *>(QObjectPrivate::get(d->threadData->thread))->mutex);
-
+#else
+    QMutexLocker locker(0);
+#endif
     struct LoopReference {
         QEventLoopPrivate *d;
         QMutexLocker &locker;
-
         bool exceptionCaught;
         LoopReference(QEventLoopPrivate *d, QMutexLocker &locker) : d(d), locker(locker), exceptionCaught(true)
         {
@@ -252,7 +254,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
 #endif // __EMSCRIPTEN__
     return d->returnCode.load();
 }
-
+#ifdef __EMSCRIPTEN__
 void QEventLoop::processEvents(void *eventloop)
 {
     QEventLoop *currentEventloop = (QEventLoop*)eventloop;
@@ -266,7 +268,7 @@ void QEventLoop::processEvents_emscripten()
         return;
     d->threadData->eventDispatcher.load()->processEvents();
 }
-
+#endif
 /*!
     Process pending events that match \a flags for a maximum of \a
     maxTime milliseconds, or until there are no more events to

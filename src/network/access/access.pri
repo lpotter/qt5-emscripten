@@ -80,5 +80,15 @@ SOURCES += \
 
 mac: LIBS_PRIVATE += -framework Security
 
+emscripten: {
+message("EMSCRIPTEN")
+
+    SOURCES += \
+        access/qnetworkreplyemscriptenimpl.cpp
+    HEADERS += \
+        access/qnetworkreplyemscriptenimpl_p.h
+
+}
+
 include($$PWD/../../3rdparty/zlib_dependency.pri)
 include($$PWD/http2/http2.pri)

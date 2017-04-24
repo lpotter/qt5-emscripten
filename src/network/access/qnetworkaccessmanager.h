@@ -188,7 +188,9 @@ private:
     friend class QNetworkReplyHttpImpl;
     friend class QNetworkReplyHttpImplPrivate;
     friend class QNetworkReplyFileImpl;
-
+#ifdef __EMSCRIPTEN__
+    friend class QNetworkReplyEmscriptenImpl;
+#endif
     Q_DECLARE_PRIVATE(QNetworkAccessManager)
     Q_PRIVATE_SLOT(d_func(), void _q_replyFinished())
     Q_PRIVATE_SLOT(d_func(), void _q_replyEncrypted())

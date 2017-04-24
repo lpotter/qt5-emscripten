@@ -71,6 +71,11 @@
 
 #include "qthread.h"
 
+#ifdef __EMSCRIPTEN__
+#include <QDebug>
+#include "qnetworkreplyemscriptenimpl_p.h"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 Q_GLOBAL_STATIC(QNetworkAccessFileBackendFactory, fileBackend)
@@ -1288,6 +1293,11 @@ QNetworkReply *QNetworkAccessManager::createRequest(QNetworkAccessManager::Opera
 
     bool isLocalFile = req.url().isLocalFile();
     QString scheme = req.url().scheme();
+    qDebug() << Q_FUNC_INFO << scheme;
+#ifdef __EMSCRIPTEN__
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https"))
+        return new QNetworkReplyEmscriptenImpl(this, req, op);
+#endif
 
     // fast path for GET on file:// URLs
     // The QNetworkAccessFileBackend will right now only be used for PUT

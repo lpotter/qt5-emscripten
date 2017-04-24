@@ -88,7 +88,7 @@ defineReplace(qtConfFunc_licenseCheck) {
                 logn("Type 'o' if you want to use the Open Source Edition.")
                 logn()
                 for(ever) {
-                    val = $$lower($$prompt("Which edition of Qt do you want to use? ", false))
+                    val = 'o' #$$lower($$prompt("Which edition of Qt do you want to use? ", false))
                     equals(val, c) {
                         commercial = yes
                         QMAKE_SAVED_ARGS += -commercial
@@ -206,7 +206,7 @@ defineReplace(qtConfFunc_licenseCheck) {
     for(ever) {
         logn($$join(msg, $$escape_expand(\\n)))
         for(ever) {
-            val = $$lower($$prompt("Do you accept the terms of $$affix license? ", false))
+            val = 'y' #$$lower($$prompt("Do you accept the terms of $$affix license? ", false))
             equals(val, y)|equals(val, yes) {
                 logn()
                 QMAKE_SAVED_ARGS += -confirm-license

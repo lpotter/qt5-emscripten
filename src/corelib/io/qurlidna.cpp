@@ -42,6 +42,7 @@
 
 #include <QtCore/qstringlist.h>
 #include <algorithm>
+#include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
@@ -2468,6 +2469,7 @@ static int nextDotDelimiter(const QString &domain, int from = 0)
 
 QString qt_ACE_do(const QString &domain, AceOperation op, AceLeadingDot dot)
 {
+    qDebug() << Q_FUNC_INFO << domain;
     if (domain.isEmpty())
         return domain;
 
