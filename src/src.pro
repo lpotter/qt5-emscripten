@@ -66,14 +66,16 @@ src_xml.subdir = $$PWD/xml
 src_xml.target = sub-xml
 src_xml.depends = src_corelib
 
-src_dbus.subdir = $$PWD/dbus
-src_dbus.target = sub-dbus
-src_dbus.depends = src_corelib
-force_dbus_bootstrap: src_dbus.depends += src_tools_bootstrap_dbus  # avoid syncqt race
+!emscripten: {
+    src_dbus.subdir = $$PWD/dbus
+    src_dbus.target = sub-dbus
+    src_dbus.depends = src_corelib
+    force_dbus_bootstrap: src_dbus.depends += src_tools_bootstrap_dbus  # avoid syncqt race
 
-src_concurrent.subdir = $$PWD/concurrent
-src_concurrent.target = sub-concurrent
-src_concurrent.depends = src_corelib
+    src_concurrent.subdir = $$PWD/concurrent
+    src_concurrent.target = sub-concurrent
+    src_concurrent.depends = src_corelib
+}
 
 src_sql.subdir = $$PWD/sql
 src_sql.target = sub-sql
@@ -171,7 +173,7 @@ qtConfig(dbus) {
         src_platformsupport.depends += src_dbus src_tools_qdbusxml2cpp
     src_plugins.depends += src_dbus src_tools_qdbusxml2cpp src_tools_qdbuscpp2xml
 }
-qtConfig(concurrent): SUBDIRS += src_concurrent
+!emscripten: qtConfig(concurrent): SUBDIRS += src_concurrent
 qtConfig(gui) {
     qtConfig(harfbuzz):!qtConfig(system-harfbuzz) {
         SUBDIRS += src_3rdparty_harfbuzzng
@@ -214,10 +216,10 @@ nacl: SUBDIRS -= src_network src_testlib
 
 android: SUBDIRS += src_android
 
-emscripten {
-    SUBDIRS -= src_network src_concurrent
-    src_plugins.depends -= src_network
-}
+#emscripten {
+#    SUBDIRS -= src_network src_concurrent
+#    src_plugins.depends -= src_network
+#}
 
 TR_EXCLUDE = \
     src_tools_bootstrap src_tools_moc src_tools_rcc src_tools_uic src_tools_qlalr \

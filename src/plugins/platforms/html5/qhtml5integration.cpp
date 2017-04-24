@@ -93,7 +93,8 @@ QHTML5Integration::QHTML5Integration()
       mScreen(new QHTML5Screen(EGL_DEFAULT_DISPLAY)),
       m_eventDispatcher(0)
 {
-    qInstallMessageHandler(emscriptenOutput);
+    qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
+   // qInstallMessageHandler(emscriptenOutput);
 
     globalHtml5Integration = this;
     screenAdded(mScreen);
