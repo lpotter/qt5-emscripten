@@ -52,7 +52,13 @@ QT_BEGIN_NAMESPACE
 static QT_MANGLE_NAMESPACE(QNetworkReplyEmscriptenImplPrivate) *gHandler = 0;
 
 QNetworkReplyEmscriptenImplPrivate::QNetworkReplyEmscriptenImplPrivate()
-    : QNetworkReplyPrivate(), managerPrivate(0)
+    : QNetworkReplyPrivate(),
+      managerPrivate(0),
+      downloadBufferReadPosition(0),
+      downloadBufferCurrentSize(0),
+      totalDownloadSize(0),
+      percentFinished(0),
+      downloadZerocopyBuffer(0)
 {
     qDebug() << Q_FUNC_INFO << this;
     gHandler = this;
@@ -77,10 +83,10 @@ QNetworkReplyEmscriptenImpl::QNetworkReplyEmscriptenImpl(QNetworkAccessManager *
 
     d->managerPrivate = manager->d_func();
 
-    if (req.attribute(QNetworkRequest::BackgroundRequestAttribute).toBool()) { // Asynchronous open
-    } else { // Synch open
+//    if (req.attribute(QNetworkRequest::BackgroundRequestAttribute).toBool()) { // Asynchronous open
+//    } else { // Synch open
         d->doSendRequest(methodName(), req);
-    }
+//    }
 }
 
 void QNetworkReplyEmscriptenImpl::connectionFinished()
@@ -131,12 +137,17 @@ void QNetworkReplyEmscriptenImpl::abort()
 qint64 QNetworkReplyEmscriptenImpl::bytesAvailable() const
 {
     Q_D(const QNetworkReplyEmscriptenImpl);
-    qDebug() << Q_FUNC_INFO << d->isFinished
-             << QNetworkReply::bytesAvailable();
+
+    qDebug() << Q_FUNC_INFO
+             << d->isFinished
+             << QNetworkReply::bytesAvailable()
+             << d->downloadBufferCurrentSize
+             << d->downloadBufferReadPosition;
+
     if (!d->isFinished)
         return QNetworkReply::bytesAvailable();
 
-    return QNetworkReply::bytesAvailable()/* + d->realFile->bytesAvailable()*/;
+    return QNetworkReply::bytesAvailable() + d->downloadBufferCurrentSize - d->downloadBufferReadPosition;
 }
 
 bool QNetworkReplyEmscriptenImpl::isSequential() const
@@ -146,35 +157,26 @@ bool QNetworkReplyEmscriptenImpl::isSequential() const
 
 qint64 QNetworkReplyEmscriptenImpl::size() const
 {
-    bool ok;
-    int size = header(QNetworkRequest::ContentLengthHeader).toInt(&ok);
-
-    qDebug() << Q_FUNC_INFO << size;
-    return ok ? size : 0;
+    return QNetworkReply::size();
 }
 
 /*!
     \internal
 */
-qint64 QNetworkReplyEmscriptenImpl::readData(char */*data*/, qint64 /*maxlen*/)
+qint64 QNetworkReplyEmscriptenImpl::readData(char *data, qint64 maxlen)
 {
     Q_D(QNetworkReplyEmscriptenImpl);
 
-    qDebug() << Q_FUNC_INFO;
+    qint64 howMuch = qMin(maxlen, (d->downloadBufferCurrentSize - d->downloadBufferReadPosition));
 
-    if (!d->isFinished)
-        return -1;
+    qDebug() << Q_FUNC_INFO << "howMuch"<< howMuch
+             << "d->downloadBufferReadPosition" << d->downloadBufferReadPosition;
 
-//    qint64 ret = d->realFile->read(data, maxlen);
-//    if (bytesAvailable() == 0)
-//        d->realFile->close();
-//    if (ret == 0 && bytesAvailable() == 0)
-//        return -1;
-//    else {
-//        setAttribute(QNetworkRequest::HttpStatusCodeAttribute, 200);
-//        setAttribute(QNetworkRequest::HttpReasonPhraseAttribute, QLatin1String("OK"));
-//        return ret;
-//    }
+    if (d->downloadZerocopyBuffer) {
+        memcpy(data, d->downloadZerocopyBuffer + d->downloadBufferReadPosition, howMuch);
+        d->downloadBufferReadPosition += howMuch ;
+        return howMuch;
+    }
     return 0;
 }
 
@@ -188,10 +190,11 @@ void QNetworkReplyEmscriptenImpl::emitReplyError(QNetworkReply::NetworkError err
     qApp->processEvents();
 }
 
-
-void QNetworkReplyEmscriptenImplPrivate::onLoadCallback(int readyState, int buffer)
+void QNetworkReplyEmscriptenImplPrivate::onLoadCallback(int readyState, int buffer, int bufferSize)
 {
-    qDebug() << Q_FUNC_INFO << (int)readyState << (char *)buffer;
+    // FIXME TODO do something with null termination lines ??
+    qDebug() << Q_FUNC_INFO << (int)readyState << bufferSize;
+
     switch(readyState) {
     case 0://unsent
         break;
@@ -202,31 +205,38 @@ void QNetworkReplyEmscriptenImplPrivate::onLoadCallback(int readyState, int buff
     case 3://loading
         break;
     case 4://done
+        gHandler->dataReceived((char *)buffer/*, bufferSize*/);
         break;
     };
-    gHandler->dataReceived((char *)buffer);
  }
 
 void QNetworkReplyEmscriptenImplPrivate::onProgressCallback(int done, int total, uint timestamp)
 {
-    qDebug() << Q_FUNC_INFO << done << total << timestamp;
     gHandler->emitDataReadProgress(done, total);
 }
 
-void QNetworkReplyEmscriptenImplPrivate::onRequestErrorCallback(/*int e, int status*/)
+void QNetworkReplyEmscriptenImplPrivate::onRequestErrorCallback(int state, int status)
 {
+    qDebug() << Q_FUNC_INFO << state << status;
     gHandler->emitReplyError(QNetworkReply::UnknownNetworkError);
+}
+
+void QNetworkReplyEmscriptenImplPrivate::onResponseHeadersCallback(int headers)
+{
+qDebug() << Q_FUNC_INFO;// << (char *)headers;
 }
 
 void QNetworkReplyEmscriptenImplPrivate::doSendRequest(const QString &methodName, const QNetworkRequest &request)
 {
-    jsRequest(methodName, request.url().toString(), (void *)&onLoadCallback,
-              (void *)&onProgressCallback, (void *)&onRequestErrorCallback/*, (void *)&onStateChangedCallback */);
+    totalDownloadSize = 0;
 
+    jsRequest(methodName, request.url().toString(), (void *)&onLoadCallback,
+              (void *)&onProgressCallback, (void *)&onRequestErrorCallback, (void *)&onResponseHeadersCallback);
 }
 
+
 /* const QString &body, const QList<QPair<QByteArray, QByteArray> > &headers ,*/
-void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QString &url, void *loadCallback, void *progressCallback, void *errorCallback/*, void *stateChangedCallback*/)
+void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QString &url, void *loadCallback, void *progressCallback, void *errorCallback, void *onResponseHeadersCallback)
 {
     qDebug() << Q_FUNC_INFO << verb << url;
       // Probably a good idea to save any shared pointers as members in C++
@@ -238,7 +248,7 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
           var onLoadCallbackPointer = $2;
           var onProgressCallbackPointer = $3;
           var onErrorCallbackPointer = $4;
-      //    var onStateChangedCallback = $5;
+          var onHeadersCallback = $5;
 
           var xhr;
           xhr = new XMLHttpRequest();
@@ -249,7 +259,6 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
   // xhrReq.open(method, url, async, user, password);
 
         xhr.onprogress = function(e) {
-                            console.log(xhr.status);
             switch(xhr.status) {
               case 200:
               case 206:
@@ -261,72 +270,103 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
                  Runtime.dynCall('viii', onProgressCallbackPointer, [e.loaded, e.total, date]);
               }
              break;
-              default: {
-
-              }
-              break;
            }
         };
-          xhr.onload = function(e) {
-            var byteArray = new Uint8Array(this.response);
-            var buffer = _malloc(byteArray.length);
-            HEAPU8.set(byteArray, buffer);
-            Module.Runtime.dynCall('vii', onLoadCallbackPointer, [this.readyState, buffer]);
-            _free(buffer);
-          };
+        xhr.onreadystatechange = function() {
+//            if (xhr.readyState == xhr.HEADERS_RECEIVED) {
+//                var byteArray = xhr.getAllResponseHeaders();
+//                var buffer = _malloc(byteArray.length);
+//                HEAPU8.set(byteArray, buffer);
+//                Runtime.dynCall('vii', onHeadersCallback, [buffer]);
+//                _free(buffer);
+//              }
+        };
+
+       xhr.onload = function(e) {
+        var byteArray = new Uint8Array(this.response);
+        var buffer = _malloc(byteArray.length);
+        HEAPU8.set(byteArray, buffer);
+        Module.Runtime.dynCall('viii', onLoadCallbackPointer, [this.readyState, buffer, byteArray.length]);
+        _free(buffer);
+      };
 
         // error
         xhr.onerror = function(e) {
-            Runtime.dynCall('vii', onErrorCallbackPointer, [this.readyState, this->status]);
+            Runtime.dynCall('vii', onErrorCallbackPointer, [xhr.readyState, xhr.status]);
         };
         //TODO headers, other operations, handle user/pass, handle binary data
        //xhr.setRequestHeader(header, value);
         xhr.send(null);
 
-      }, verb.toLatin1().data(), url.toLatin1().data(), loadCallback, progressCallback, errorCallback/*, stateChangedCallback*/);
+      }, verb.toLatin1().data(), url.toLatin1().data(), loadCallback, progressCallback, errorCallback, onResponseHeadersCallback/*, stateChangedCallback*/);
 }
-
 
 void QNetworkReplyEmscriptenImplPrivate::emitReplyError(QNetworkReply::NetworkError errorCode)
 {
     qDebug() << Q_FUNC_INFO << this << errorCode;
 
     Q_Q(QNetworkReplyEmscriptenImpl);
-    QMetaObject::invokeMethod(q, "error", Qt::DirectConnection,
-                              Q_ARG(QNetworkReply::NetworkError, QNetworkReply::UnknownNetworkError));
+    emit q->error(QNetworkReply::UnknownNetworkError);
 
-    QMetaObject::invokeMethod(q, "finished", Qt::DirectConnection);
+    emit q->finished();
     qApp->processEvents();
 }
 
 void QNetworkReplyEmscriptenImplPrivate::emitDataReadProgress(qint64 bytesReceived, qint64 bytesTotal)
 {
+ //   Q_Q(QNetworkReplyEmscriptenImpl);
 
-    qDebug() << Q_FUNC_INFO << bytesReceived << bytesTotal;
-    Q_Q(QNetworkReplyEmscriptenImpl);
+    totalDownloadSize = bytesTotal;
 
-    QMetaObject::invokeMethod(q, "downloadProgress", Qt::QueuedConnection,
-                              Q_ARG(qint64, bytesReceived), Q_ARG(qint64, bytesTotal));
-    qApp->processEvents();
+    percentFinished = (bytesReceived / bytesTotal) * 100;
+    qDebug() << Q_FUNC_INFO << bytesReceived << bytesTotal << percentFinished << "%";
+
+
+//    bytesDownloaded = bytesReceived;
+
+//    if (bytesDownloaded != totalDownloadSize) {
+//    } else {
+//    }
+
 }
 
-void QNetworkReplyEmscriptenImplPrivate::dataReceived(const char *buffer)
+void QNetworkReplyEmscriptenImplPrivate::dataReceived(char *buffer/*, qint64 bufferSize*/)
 {
-  //  qDebug() << Q_FUNC_INFO << (int)data << (char *)buffer;
-    qDebug() << Q_FUNC_INFO;
     Q_Q(QNetworkReplyEmscriptenImpl);
+int bufferSize = strlen(buffer);
+    // FIXME TODO do something with null termination lines
+    qDebug() << Q_FUNC_INFO << bufferSize << buffer;
 
-    q->setFinished(true);
-    q->bytesAvailable();
+    if (bufferSize > 0)
+        q->setReadBufferSize(bufferSize);
 
-    QMetaObject::invokeMethod(q, "metaDataChanged", Qt::QueuedConnection);
-    QMetaObject::invokeMethod(q, "downloadProgress", Qt::QueuedConnection,
-        Q_ARG(qint64, sizeof(buffer)), Q_ARG(qint64, sizeof(buffer)));
-    QMetaObject::invokeMethod(q, "readyRead", Qt::QueuedConnection);
-    QMetaObject::invokeMethod(q, "finished", Qt::QueuedConnection);
+    bytesDownloaded = bufferSize;
 
+    if (percentFinished != 100) {
+        downloadBufferCurrentSize += bufferSize;
+    } else {
+        downloadBufferCurrentSize = bufferSize;
+    }
+    totalDownloadSize = downloadBufferCurrentSize;
+
+    emit q->downloadProgress(bytesDownloaded, totalDownloadSize);
     qApp->processEvents();
 
+    qDebug() << Q_FUNC_INFO <<"current size" << downloadBufferCurrentSize;
+    qDebug() << Q_FUNC_INFO <<"total size" << totalDownloadSize;// /*<< (int)state*/ << (char *)buffer;
+
+    downloadZerocopyBuffer = buffer;
+//     q->setAttribute(QNetworkRequest::DownloadBufferAttribute, downloadZerocopyBuffer);
+
+     if (downloadBufferCurrentSize == totalDownloadSize) {
+         q->setFinished(true);
+         emit q->readyRead();
+         emit q->finished();
+     }
+
+    emit q->metaDataChanged();
+
+    qApp->processEvents();
 }
 
 QT_END_NAMESPACE

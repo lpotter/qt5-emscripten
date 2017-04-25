@@ -89,7 +89,7 @@ public:
 
     Q_PRIVATE_SLOT(d_func(), void emitReplyError(QNetworkReply::NetworkError errorCode))
     Q_PRIVATE_SLOT(d_func(), void emitDataReadProgress(qint64 done, qint64 total))
-    Q_PRIVATE_SLOT(d_func(), void dataReceived(const char *buffer))
+    Q_PRIVATE_SLOT(d_func(), void dataReceived(char *buffer))
 
 public Q_SLOTS:
     void emitReplyError(QNetworkReply::NetworkError errorCode);
@@ -108,22 +108,34 @@ public:
     QNetworkReplyEmscriptenImplPrivate();
 
     QNetworkAccessManagerPrivate *managerPrivate;
-//    QPointer<QFile> realFile;
     void doSendRequest(const QString &methodName, const QNetworkRequest &request);
 
-    void jsRequest(const QString &verb, const QString &url, void *, void *, void */*, void **/);
+    void jsRequest(const QString &verb, const QString &url, void *, void *, void *, void *);
 
-    static void onLoadCallback(int data, int text);
+    static void onLoadCallback(int status, int textBuffer, int size);
     static void onProgressCallback(int done, int bytesTotal, uint timestamp);
-    static void onRequestErrorCallback(/*int e, int status*/);
+    static void onRequestErrorCallback(int e, int status);
     static void onStateChangedCallback(int status);
+    static void onResponseHeadersCallback(int headers);
 
     void emitReplyError(QNetworkReply::NetworkError errorCode);
     void emitDataReadProgress(qint64 done, qint64 total);
-    void dataReceived(const char *buffer);
+    void dataReceived(char *buffer/*, qint64 bufferSize*/);
 
-    QIODevice *outgoingData;
-    QSharedPointer<QRingBuffer> outgoingDataBuffer;
+//    QIODevice *outgoingData;
+
+    QSharedPointer<QAtomicInt> pendingDownloadData;
+    QSharedPointer<QAtomicInt> pendingDownloadProgress;
+
+//    QSharedPointer<QRingBuffer> outgoingDataBuffer;
+    qint64 bytesDownloaded;
+    qint64 bytesBuffered;
+
+    qint64 downloadBufferReadPosition;
+    qint64 downloadBufferCurrentSize;
+    qint64 totalDownloadSize;
+    qint64 percentFinished;
+    char *downloadZerocopyBuffer;
 
     Q_DECLARE_PUBLIC(QNetworkReplyEmscriptenImpl)
 };
