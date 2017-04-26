@@ -97,8 +97,6 @@ public Q_SLOTS:
 
 private:
     QByteArray methodName() const;
-  //  QSharedDataPointer<QNetworkReplyEmscriptenImplPrivate> d;
-
 
 };
 
@@ -120,14 +118,13 @@ public:
 
     void emitReplyError(QNetworkReply::NetworkError errorCode);
     void emitDataReadProgress(qint64 done, qint64 total);
-    void dataReceived(char *buffer/*, qint64 bufferSize*/);
+    void dataReceived(char *buffer);
+    void headersReceived(char *buffer);
 
-//    QIODevice *outgoingData;
 
     QSharedPointer<QAtomicInt> pendingDownloadData;
     QSharedPointer<QAtomicInt> pendingDownloadProgress;
 
-//    QSharedPointer<QRingBuffer> outgoingDataBuffer;
     qint64 bytesDownloaded;
     qint64 bytesBuffered;
 

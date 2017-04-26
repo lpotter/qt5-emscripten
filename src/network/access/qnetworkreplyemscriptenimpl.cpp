@@ -223,7 +223,7 @@ void QNetworkReplyEmscriptenImplPrivate::onRequestErrorCallback(int state, int s
 
 void QNetworkReplyEmscriptenImplPrivate::onResponseHeadersCallback(int headers)
 {
-qDebug() << Q_FUNC_INFO;// << (char *)headers;
+    gHandler->headersReceived((char *)headers);
 }
 
 void QNetworkReplyEmscriptenImplPrivate::doSendRequest(const QString &methodName, const QNetworkRequest &request)
@@ -273,13 +273,12 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
            }
         };
         xhr.onreadystatechange = function() {
-//            if (xhr.readyState == xhr.HEADERS_RECEIVED) {
-//                var byteArray = xhr.getAllResponseHeaders();
-//                var buffer = _malloc(byteArray.length);
-//                HEAPU8.set(byteArray, buffer);
-//                Runtime.dynCall('vii', onHeadersCallback, [buffer]);
-//                _free(buffer);
-//              }
+            if (xhr.readyState == xhr.HEADERS_RECEIVED) {
+               var responseStr = xhr.getAllResponseHeaders();
+               var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_NORMAL);
+               Runtime.dynCall('vi', onHeadersCallback, [ptr]);
+               _free(ptr);
+              }
         };
 
        xhr.onload = function(e) {
@@ -314,28 +313,17 @@ void QNetworkReplyEmscriptenImplPrivate::emitReplyError(QNetworkReply::NetworkEr
 
 void QNetworkReplyEmscriptenImplPrivate::emitDataReadProgress(qint64 bytesReceived, qint64 bytesTotal)
 {
- //   Q_Q(QNetworkReplyEmscriptenImpl);
-
     totalDownloadSize = bytesTotal;
 
     percentFinished = (bytesReceived / bytesTotal) * 100;
     qDebug() << Q_FUNC_INFO << bytesReceived << bytesTotal << percentFinished << "%";
-
-
-//    bytesDownloaded = bytesReceived;
-
-//    if (bytesDownloaded != totalDownloadSize) {
-//    } else {
-//    }
-
 }
 
-void QNetworkReplyEmscriptenImplPrivate::dataReceived(char *buffer/*, qint64 bufferSize*/)
+void QNetworkReplyEmscriptenImplPrivate::dataReceived(char *buffer)
 {
     Q_Q(QNetworkReplyEmscriptenImpl);
-int bufferSize = strlen(buffer);
-    // FIXME TODO do something with null termination lines
-    qDebug() << Q_FUNC_INFO << bufferSize << buffer;
+
+    int bufferSize = strlen(buffer);
 
     if (bufferSize > 0)
         q->setReadBufferSize(bufferSize);
@@ -367,6 +355,62 @@ int bufferSize = strlen(buffer);
     emit q->metaDataChanged();
 
     qApp->processEvents();
+}
+
+//taken from qnetworkrequest.cpp
+static int parseHeaderName(const QByteArray &headerName)
+{
+    if (headerName.isEmpty())
+        return -1;
+
+    switch (tolower(headerName.at(0))) {
+    case 'c':
+        if (qstricmp(headerName.constData(), "content-type") == 0)
+            return QNetworkRequest::ContentTypeHeader;
+        else if (qstricmp(headerName.constData(), "content-length") == 0)
+            return QNetworkRequest::ContentLengthHeader;
+        else if (qstricmp(headerName.constData(), "cookie") == 0)
+            return QNetworkRequest::CookieHeader;
+        break;
+
+    case 'l':
+        if (qstricmp(headerName.constData(), "location") == 0)
+            return QNetworkRequest::LocationHeader;
+        else if (qstricmp(headerName.constData(), "last-modified") == 0)
+            return QNetworkRequest::LastModifiedHeader;
+        break;
+
+    case 's':
+        if (qstricmp(headerName.constData(), "set-cookie") == 0)
+            return QNetworkRequest::SetCookieHeader;
+        else if (qstricmp(headerName.constData(), "server") == 0)
+            return QNetworkRequest::ServerHeader;
+        break;
+
+    case 'u':
+        if (qstricmp(headerName.constData(), "user-agent") == 0)
+            return QNetworkRequest::UserAgentHeader;
+        break;
+    }
+
+    return -1; // nothing found
+}
+
+
+void QNetworkReplyEmscriptenImplPrivate::headersReceived(char *buffer)
+{
+    Q_Q(QNetworkReplyEmscriptenImpl);
+
+    QStringList headers = QString(buffer).split("\r\n", QString::SkipEmptyParts);
+
+    for (int i = 0; i < headers.size(); i++) {
+        QString headerName = headers.at(i).split(": ").at(0);
+        QString headersValue = headers.at(i).split(": ").at(1);
+        if (headerName.isEmpty() || headersValue.isEmpty())
+            continue;
+
+       q->setHeader(static_cast<QNetworkRequest::KnownHeaders>(parseHeaderName(headerName.toLocal8Bit())), (QVariant)headersValue);
+    }
 }
 
 QT_END_NAMESPACE
