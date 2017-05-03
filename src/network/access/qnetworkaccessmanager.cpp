@@ -1295,8 +1295,15 @@ QNetworkReply *QNetworkAccessManager::createRequest(QNetworkAccessManager::Opera
     QString scheme = req.url().scheme();
     qDebug() << Q_FUNC_INFO << scheme;
 #ifdef __EMSCRIPTEN__
-    if (scheme == QLatin1String("http") || scheme == QLatin1String("https"))
-        return new QNetworkReplyEmscriptenImpl(this, req, op);
+    if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
+        //        return new QNetworkReplyEmscriptenImpl(this, req, op);
+
+        QNetworkReplyEmscriptenImpl *reply = new QNetworkReplyEmscriptenImpl(this);
+        QNetworkReplyEmscriptenImplPrivate *priv = reply->d_func();
+        priv->manager = this;
+        priv->setup(op, req, outgoingData);
+        return reply;
+    }
 #endif
 
     // fast path for GET on file:// URLs

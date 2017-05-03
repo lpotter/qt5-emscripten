@@ -64,13 +64,14 @@
 QT_BEGIN_NAMESPACE
 
 class QIODevice;
+//class QNetworkAccessBackend;
 
 class QNetworkReplyEmscriptenImplPrivate;
 class QNetworkReplyEmscriptenImpl: public QNetworkReply
 {
     Q_OBJECT
 public:
-    QNetworkReplyEmscriptenImpl(QNetworkAccessManager *manager, const QNetworkRequest &req, const QNetworkAccessManager::Operation op);
+    QNetworkReplyEmscriptenImpl(QObject *parent = 0/*QNetworkAccessManager *manager, const QNetworkRequest &req, const QNetworkAccessManager::Operation op, QIODevice *outgoingData*/);
     ~QNetworkReplyEmscriptenImpl();
     virtual void abort() Q_DECL_OVERRIDE;
 
@@ -106,7 +107,7 @@ public:
     QNetworkReplyEmscriptenImplPrivate();
 
     QNetworkAccessManagerPrivate *managerPrivate;
-    void doSendRequest(const QString &methodName, const QNetworkRequest &request);
+    void doSendRequest();
 
     void jsRequest(const QString &verb, const QString &url, void *, void *, void *, void *);
 
@@ -121,9 +122,16 @@ public:
     void dataReceived(char *buffer);
     void headersReceived(char *buffer);
 
+    void setup(QNetworkAccessManager::Operation op, const QNetworkRequest &request,
+               QIODevice *outgoingData);
+
+    State state;
+    void _q_bufferOutgoingData();
+    void _q_bufferOutgoingDataFinished();
 
     QSharedPointer<QAtomicInt> pendingDownloadData;
     QSharedPointer<QAtomicInt> pendingDownloadProgress;
+   // QNetworkAccessBackend *backend;
 
     qint64 bytesDownloaded;
     qint64 bytesBuffered;
@@ -133,6 +141,9 @@ public:
     qint64 totalDownloadSize;
     qint64 percentFinished;
     char *downloadZerocopyBuffer;
+
+    QIODevice *outgoingData;
+    QSharedPointer<QRingBuffer> outgoingDataBuffer;
 
     Q_DECLARE_PUBLIC(QNetworkReplyEmscriptenImpl)
 };
