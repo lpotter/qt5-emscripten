@@ -40,9 +40,9 @@
 #ifndef QHTML5FONTDATABASE_H
 #define QHTML5FONTDATABASE_H
 
-#include <private/qbasicfontdatabase_p.h>
+#include <QtFontDatabaseSupport/private/qfreetypefontdatabase_p.h>
 
-class QHtml5FontDatabase : public QBasicFontDatabase
+class QHtml5FontDatabase : public QFreeTypeFontDatabase
 {
 public:
     void populateFontDatabase() override;

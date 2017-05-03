@@ -790,6 +790,7 @@ void QHostInfoLookupManager::work()
             ++it;
         }
         scheduledLookups.erase(scheduledLookups.begin(), it);
+    }
 #else //QT_NO_THREAD
     qDebug() << Q_FUNC_INFO << scheduledLookups.size()
              << postponedLookups.size();

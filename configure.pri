@@ -258,9 +258,9 @@ defineTest(qtConfTest_architecture) {
     else: \
         error("$$eval($${1}.label) detection binary not found.")
 
-    arch_magic = ".*==Qt=magic=Qt== Architecture:([^\\0]*).*"
-    subarch_magic = ".*==Qt=magic=Qt== Sub-architecture:([^\\0]*).*"
-    buildabi_magic = ".*==Qt=magic=Qt== Build-ABI:([^\\0]*).*"
+    arch_magic = ".*==Qt=magic=Qt== Architecture:([^\\0\\n]*).*"
+    subarch_magic = ".*==Qt=magic=Qt== Sub-architecture:([^\\0\\n]*).*"
+    buildabi_magic = ".*==Qt=magic=Qt== Build-ABI:([^\\0\\n]*).*"
 
     !contains(content, $$arch_magic)|!contains(content, $$subarch_magic)|!contains(content, $$buildabi_magic): \
         error("$$eval($${1}.label) detection binary does not contain expected data.")

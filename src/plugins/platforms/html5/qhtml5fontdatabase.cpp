@@ -58,13 +58,13 @@ void QHtml5FontDatabase::populateFontDatabase()
             break;
         }
 
-        QBasicFontDatabase::addTTFile(theFont.readAll(), fontFileName.toLatin1());
+        QFreeTypeFontDatabase::addTTFile(theFont.readAll(), fontFileName.toLatin1());
     }
 }
 
 QFontEngine *QHtml5FontDatabase::fontEngine(const QFontDef &fontDef, void *handle)
 {
-    return QBasicFontDatabase::fontEngine(fontDef, handle);
+    return QFreeTypeFontDatabase::fontEngine(fontDef, handle);
 }
 
 QStringList QHtml5FontDatabase::fallbacksForFamily(const QString &family, QFont::Style style,
@@ -72,7 +72,7 @@ QStringList QHtml5FontDatabase::fallbacksForFamily(const QString &family, QFont:
                                                     QChar::Script script) const
 {
     QStringList fallbacks
-        = QBasicFontDatabase::fallbacksForFamily(family, style, styleHint, script);
+        = QFreeTypeFontDatabase::fallbacksForFamily(family, style, styleHint, script);
 
     // Add the vera.ttf font (loaded in populateFontDatabase above) as a falback font
     // to all other fonts (except itself).
@@ -86,10 +86,10 @@ QStringList QHtml5FontDatabase::fallbacksForFamily(const QString &family, QFont:
 QStringList QHtml5FontDatabase::addApplicationFont(const QByteArray &fontData,
                                                     const QString &fileName)
 {
-    return QBasicFontDatabase::addApplicationFont(fontData, fileName);
+    return QFreeTypeFontDatabase::addApplicationFont(fontData, fileName);
 }
 
 void QHtml5FontDatabase::releaseHandle(void *handle)
 {
-    QBasicFontDatabase::releaseHandle(handle);
+    QFreeTypeFontDatabase::releaseHandle(handle);
 }

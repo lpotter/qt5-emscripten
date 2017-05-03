@@ -161,7 +161,6 @@
         "libpng": {
             "label": "libpng",
             "test": "unix/libpng",
-            "use": "zlib",
             "sources": [
                 { "type": "pkgConfig", "args": "libpng" },
                 { "libs": "-llibpng", "condition": "config.msvc" },
