@@ -42,7 +42,19 @@
         from {transform: rotate(0deg);}
         to {transform: rotate(360deg);}
       }
+      #status {
+             display: inline-block;
+             vertical-align: top;
+             margin-top: 30px;
+             margin-left: 20px;
+             font-weight: bold;
+             color: rgb(120, 120, 120);
+           }
 
+      #progress {
+            height: 20px;
+            width: 30px;
+          }
     </style>
   </head>
   <body>
@@ -108,9 +120,10 @@
           Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
         }
       };
+
       Module.setStatus('Downloading...');
       window.onerror = function() {
-        Module.setStatus('Exception thrown, see JavaScript console');
+//        Module.setStatus('Exception thrown, see JavaScript console');
         spinnerElement.style.display = 'none';
         Module.setStatus = function(text) {
           if (text) Module.printErr('[post-exception status] ' + text);
