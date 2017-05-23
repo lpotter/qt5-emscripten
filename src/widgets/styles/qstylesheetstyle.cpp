@@ -2802,6 +2802,22 @@ void QStyleSheetStyle::polish(QWidget *w)
 #endif
 
     QRenderRule rule = renderRule(w, PseudoElement_None, PseudoClass_Any);
+
+    w->setAttribute(Qt::WA_StyleSheetTarget,
+                    rule.hasPalette() ||
+                    rule.hasBackground() ||
+                    rule.hasGradientBackground() ||
+                    !rule.hasNativeBorder() ||
+                    !rule.hasNativeOutline() ||
+                    rule.hasBox() ||
+                    rule.hasPosition() ||
+                    rule.hasGeometry() ||
+                    rule.hasImage() ||
+                    rule.hasFont ||
+                    rule.features ||
+                    !rule.styleHints.isEmpty()
+                    );
+
     if (rule.hasDrawable() || rule.hasBox()) {
         if (w->metaObject() == &QWidget::staticMetaObject
 #ifndef QT_NO_ITEMVIEWS
@@ -2888,6 +2904,7 @@ void QStyleSheetStyle::unpolish(QWidget *w)
     w->setProperty("_q_stylesheet_minh", QVariant());
     w->setProperty("_q_stylesheet_maxw", QVariant());
     w->setProperty("_q_stylesheet_maxh", QVariant());
+    w->setAttribute(Qt::WA_StyleSheetTarget, false);
     w->setAttribute(Qt::WA_StyleSheet, false);
     QObject::disconnect(w, 0, this, 0);
 #ifndef QT_NO_SCROLLAREA
