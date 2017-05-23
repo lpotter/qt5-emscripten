@@ -42,6 +42,8 @@
 
 #include <QtFontDatabaseSupport/private/qfreetypefontdatabase_p.h>
 
+QT_BEGIN_NAMESPACE
+
 class QHtml5FontDatabase : public QFreeTypeFontDatabase
 {
 public:
@@ -53,5 +55,5 @@ public:
     QStringList addApplicationFont(const QByteArray &fontData, const QString &fileName) override;
     void releaseHandle(void *handle) override;
 };
-
+QT_END_NAMESPACE
 #endif

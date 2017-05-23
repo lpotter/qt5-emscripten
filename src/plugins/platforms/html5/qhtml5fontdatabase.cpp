@@ -40,6 +40,7 @@
 #include "qhtml5fontdatabase.h"
 
 #include <QtCore/QFile>
+QT_BEGIN_NAMESPACE
 
 void QHtml5FontDatabase::populateFontDatabase()
 {
@@ -93,3 +94,6 @@ void QHtml5FontDatabase::releaseHandle(void *handle)
 {
     QFreeTypeFontDatabase::releaseHandle(handle);
 }
+
+
+QT_END_NAMESPACE
