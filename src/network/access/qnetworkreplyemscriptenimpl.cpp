@@ -50,7 +50,7 @@
 
 QT_BEGIN_NAMESPACE
 
-static QT_MANGLE_NAMESPACE(QNetworkReplyEmscriptenImplPrivate) *gHandler = 0;
+static QNetworkReplyEmscriptenImplPrivate *gHandler = 0;
 
 QNetworkReplyEmscriptenImplPrivate::QNetworkReplyEmscriptenImplPrivate()
     : QNetworkReplyPrivate(),
