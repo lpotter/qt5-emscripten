@@ -39,32 +39,27 @@
 
 #include "qhtml5backingstore.h"
 #include "qhtml5window.h"
+#include "qhtml5compositor.h"
 
-#include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLTexture>
-#include <QtGui/qopengltextureblitter.h>
 #include <QtGui/QMatrix4x4>
 #include <QtGui/qpainter.h>
 #include <private/qguiapplication_p.h>
 #include <qpa/qplatformscreen.h>
 
 #include <QtGui/qbackingstore.h>
+
 QT_BEGIN_NAMESPACE
 
-QHTML5BackingStore::QHTML5BackingStore(QWindow *window)
+QHTML5BackingStore::QHTML5BackingStore(QHtml5Compositor *compositor, QWindow *window)
     : QPlatformBackingStore(window)
-    , mContext(new QOpenGLContext)
+    , mCompositor(compositor)
     , mTexture(new QOpenGLTexture(QOpenGLTexture::Target2D))
-    , mBlitter(new QOpenGLTextureBlitter)
 {
-    mContext->setFormat(window->requestedFormat());
-    mContext->setScreen(window->screen());
-    mContext->create();
-
     window->setSurfaceType(QSurface::OpenGLSurface);
 
     if (window->handle())
-        (static_cast<QHTML5Window *>(window->handle()))->setBackingStore(this);
+        (static_cast<QHtml5Window *>(window->handle()))->setBackingStore(this);
     else
         (static_cast<QHTML5Screen *>(window->screen()->handle()))->addPendingBackingStore(this);
 }
@@ -80,22 +75,46 @@ QPaintDevice *QHTML5BackingStore::paintDevice()
 
 void QHTML5BackingStore::flush(QWindow *window, const QRegion &region, const QPoint &offset)
 {
+    Q_UNUSED(window);
     Q_UNUSED(region);
     Q_UNUSED(offset);
+
+    mCompositor->requestRedraw();
+
+    /*
+    auto* screen = static_cast<QHTML5Screen *>(window->screen()->handle());
+
     mContext->makeCurrent(window);
-    glViewport(0, 0, window->width(), window->height());
+
+    int dx = window->handle()->winId() == 1 ? 100 : 0;
+    int dy = window->handle()->winId() == 1 ? 100 : 0;
+
+    //glViewport(0, 0, screen->geometry().width(), screen->geometry().height());
+    glViewport(offset.x() + dx, window->screen()->geometry().height() - offset.y() - window->height() - dy, window->width(), window->height());
+
 
     updateTexture();
 
     if (!mBlitter->isCreated())
         mBlitter->create();
 
+    float x = (float)window->x() / (float)screen->geometry().width();
+    float y = 1.0f - (float)window->y() / (float)screen->geometry().height();
+
+    QMatrix4x4 m;
+    //m.translate(offset.x(), offset.y());
+    //m.translate(-0.5f + 1.0f * (float)(window->handle()->winId() - 1), 0.0f);
+    //m.translate(x, y);
+    //m.translate(0, y);
+    //m.scale(0.5f, 0.5f);
+
     mBlitter->bind();
     mBlitter->setRedBlueSwizzle(true);
-    mBlitter->blit(mTexture->textureId(), QMatrix4x4(), QOpenGLTextureBlitter::OriginTopLeft);
+    mBlitter->blit(mTexture->textureId(), m, QOpenGLTextureBlitter::OriginTopLeft);
     mBlitter->release();
 
     mContext->swapBuffers(window);
+    */
 }
 
 void QHTML5BackingStore::updateTexture()
@@ -146,7 +165,7 @@ void QHTML5BackingStore::updateTexture()
 void QHTML5BackingStore::beginPaint(const QRegion &region)
 {
     mDirty |= region;
- mContext->makeCurrent(window());
+    //mContext->makeCurrent(window());
     // Keep backing store device pixel ratio in sync with window
     if (mImage.devicePixelRatio() != window()->devicePixelRatio())
         resize(backingStore()->size(), backingStore()->staticContents());
@@ -164,18 +183,31 @@ void QHTML5BackingStore::resize(const QSize &size, const QRegion &staticContents
 
     mImage = QImage(size, QImage::Format_RGB32);
 
-    mContext->makeCurrent(window());
+    //mContext->makeCurrent(window());
 
     if (mTexture->isCreated())
         mTexture->destroy();
 
+    /*
     updateTexture();
+    */
 }
 
 QImage QHTML5BackingStore::toImage() const
 {
     // used by QPlatformBackingStore::composeAndFlush
     return mImage;
+}
+
+const QImage &QHTML5BackingStore::getImageRef() const
+{
+    return mImage;
+}
+
+const QOpenGLTexture* QHTML5BackingStore::getUpdatedTexture()
+{
+    updateTexture();
+    return mTexture.data();
 }
 
 QT_END_NAMESPACE

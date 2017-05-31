@@ -40,6 +40,7 @@
 #include "qhtml5integration.h"
 #include "qhtml5eventtranslator.h"
 #include "qhtml5eventdispatcher.h"
+#include "qhtml5compositor.h"
 
 #include "qhtml5window.h"
 #ifndef QT_NO_OPENGL
@@ -90,7 +91,8 @@ void emscriptenOutput(QtMsgType type, const QMessageLogContext &context, const Q
 
 QHTML5Integration::QHTML5Integration()
     : mFontDb(0),
-      mScreen(new QHTML5Screen(EGL_DEFAULT_DISPLAY)),
+      mCompositor(new QHtml5Compositor),
+      mScreen(new QHTML5Screen(EGL_DEFAULT_DISPLAY, mCompositor)),
       m_eventDispatcher(0)
 {
     qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
@@ -108,6 +110,7 @@ QHTML5Integration::QHTML5Integration()
 
 QHTML5Integration::~QHTML5Integration()
 {
+    delete mCompositor;
     destroyScreen(mScreen);
     delete mFontDb;
     delete m_eventTranslator;
@@ -120,30 +123,32 @@ bool QHTML5Integration::hasCapability(QPlatformIntegration::Capability cap) cons
     case OpenGL: return true;
     case ThreadedOpenGL: return true;
     case RasterGLSurface: return true;
+    case MultipleWindows: return true;
+    case WindowManagement: return true;
     default: return QPlatformIntegration::hasCapability(cap);
     }
 }
 
 QPlatformWindow *QHTML5Integration::createPlatformWindow(QWindow *window) const
 {
-#ifdef QEGL_EXTRA_DEBUG
+//#ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration::createPlatformWindow %p\n",window);
-#endif
-    QHTML5Window *w = new QHTML5Window(window);
-    if (m_topLevelWindow == 0)
-        m_topLevelWindow = w;
+//#endif
+    QHtml5Window *w = new QHtml5Window(window, mCompositor);
+    //if (m_topLevelWindow == 0)
+        //m_topLevelWindow = w;
 
-    w->requestActivateWindow();
+    //w->requestActivateWindow();
     return w;
 }
 
 QPlatformBackingStore *QHTML5Integration::createPlatformBackingStore(QWindow *window) const
 {
-#ifdef QEGL_EXTRA_DEBUG
+//#ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration::createWindowSurface %p\n", window);
-#endif
+//#endif
 #ifndef QT_NO_OPENGL
-    return new QHTML5BackingStore(window);
+    return new QHTML5BackingStore(mCompositor, window);
 #else
     return nullptr;
 #endif
@@ -180,20 +185,24 @@ QVariant QHTML5Integration::styleHint(QPlatformIntegration::StyleHint hint) cons
 int QHTML5Integration::uiEvent_cb(int eventType, const EmscriptenUiEvent *e, void */*userData*/)
 {
     Q_UNUSED(eventType)
+    Q_UNUSED(e)
 
-    QSize windowSize(e->documentBodyClientWidth, e->documentBodyClientHeight);
-    QRect windowRect(QPoint(0, 0), windowSize);
+    //QSize windowSize(e->documentBodyClientWidth, e->documentBodyClientHeight);
+    //QRect windowRect(QPoint(0, 0), windowSize);
 
-    QHTML5Integration::get()->mScreen->resizeMaximizedWindows();
-    QHTML5Window::get()->setGeometry(windowRect);
+    QHTML5Integration::get()->mScreen->invalidateSize();
+    //QHTML5Integration::get()->mScreen->resizeMaximizedWindows();
+    QHTML5Integration::get()->mCompositor->requestRedraw();
+    //QHtml5Window::get()->setGeometry(windowRect);
 
     return 0;
 }
 
-QHTML5Window *QHTML5Integration::topLevelWindow()
-{
-    return m_topLevelWindow;
-}
+//QHtml5Window *QHTML5Integration::topLevelWindow()
+//{
+    //return m_topLevelWindow;
+    //return nullptr;
+//}
 
 
 QT_END_NAMESPACE

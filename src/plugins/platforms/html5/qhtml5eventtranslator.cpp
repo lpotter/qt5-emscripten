@@ -43,6 +43,8 @@
 #include <qpa/qwindowsysteminterface.h>
 #include <QCoreApplication>
 
+#include <iostream>
+
 QT_BEGIN_NAMESPACE
 
 QHTML5EventTranslator::QHTML5EventTranslator(QObject *parent) : QObject(parent)
@@ -248,11 +250,16 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     Qt::MouseButtons buttons = Qt::NoButton;
     Qt::KeyboardModifiers modifiers = Qt::NoModifier;
 
+    QWindow *window2 = QHTML5Integration::get()->screen()->topLevelAt(point);
+
     switch (eventType) {
     case 5: //down
     {
         buttons = translateMouseButtons(mouseEvent->button);
         modifiers = translateMouseModifier(mouseEvent);
+
+        if (window2)
+            window2->raise();
     }
         break;
     case 6: //up
@@ -261,6 +268,11 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
         break;
     case 8://move //drag event?
     {
+        if (window2 && mouseEvent->buttons && mouseEvent->button == 0) {
+            window2->setX(window2->x() + mouseEvent->movementX);
+            window2->setY(window2->y() + mouseEvent->movementY);
+        }
+
         if (mouseEvent->buttons) {
             buttons = translateMouseButtons(mouseEvent->button);
             modifiers = translateMouseModifier(mouseEvent);
@@ -271,13 +283,11 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
         break;
     };
 
-    QPoint localPoint(point);
-    QWindow *window2 = QHTML5Integration::get()->screen()->topLevelAt(localPoint);
+    QPoint localPoint(point.x() - window2->geometry().x(), point.y() - window2->geometry().y());
 
     QWindowSystemInterface::handleMouseEvent(window2, timestamp, localPoint, point,
                                              buttons, modifiers);
     QCoreApplication::processEvents(); // probably not the best way
-
 }
 
 int QHTML5EventTranslator::focus_cb(int /*eventType*/, const EmscriptenFocusEvent */*focusEvent*/, void */*userData*/)
