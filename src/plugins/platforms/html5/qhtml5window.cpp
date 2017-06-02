@@ -39,8 +39,10 @@
 
 #include <qpa/qwindowsysteminterface.h>
 #include <private/qguiapplication_p.h>
-# include <QtGui/private/qopenglcontext_p.h>
-# include <QtGui/QOpenGLContext>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QStyle>
+#include <QtGui/private/qopenglcontext_p.h>
+#include <QtGui/QOpenGLContext>
 
 #include "qhtml5window.h"
 #include "qhtml5screen.h"
@@ -108,7 +110,7 @@ void QHtml5Window::setGeometry(const QRect &rect)
     QPlatformWindow::setGeometry(screenRect);
 
     if (mOldGeometry != screenRect)
-        QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(0, 0), geometry().size()));
+        QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(100, 100), geometry().size()));
 
     QWindowSystemInterface::flushWindowSystemEvents();
     invalidate();
@@ -152,6 +154,22 @@ void QHtml5Window::setVisible(bool visible)
     QWindowSystemInterface::handleExposeEvent(window(), visible ? QRect(QPoint(), geometry().size()) : QRect());
     QWindowSystemInterface::flushWindowSystemEvents();
     invalidate();
+}
+
+QMargins QHtml5Window::frameMargins() const
+{
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    QStyle *style = app->style();
+    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
+    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+
+    QMargins margins;
+    margins.setLeft(border);
+    margins.setRight(border);
+    margins.setTop(2*border + titleHeight);
+    margins.setBottom(border);
+
+    return margins;
 }
 
 void QHtml5Window::raise()

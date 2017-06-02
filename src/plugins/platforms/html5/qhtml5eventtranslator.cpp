@@ -251,6 +251,9 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     Qt::KeyboardModifiers modifiers = Qt::NoModifier;
 
     QWindow *window2 = QHTML5Integration::get()->screen()->topLevelAt(point);
+    bool onFrame = false;
+    if (window2 && !window2->geometry().contains(point))
+        onFrame = true;
 
     switch (eventType) {
     case 5: //down
@@ -260,17 +263,22 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
 
         if (window2)
             window2->raise();
+
+        if (window2 && onFrame && mouseEvent->button == 0)
+            draggedWindow = window2;
     }
         break;
     case 6: //up
     {
+        if (mouseEvent->button == 0)
+            draggedWindow = nullptr;
     }
         break;
     case 8://move //drag event?
     {
-        if (window2 && mouseEvent->buttons && mouseEvent->button == 0) {
-            window2->setX(window2->x() + mouseEvent->movementX);
-            window2->setY(window2->y() + mouseEvent->movementY);
+        if (draggedWindow) {
+            draggedWindow->setX(draggedWindow->x() + mouseEvent->movementX);
+            draggedWindow->setY(draggedWindow->y() + mouseEvent->movementY);
         }
 
         if (mouseEvent->buttons) {
@@ -285,8 +293,11 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
 
     QPoint localPoint(point.x() - window2->geometry().x(), point.y() - window2->geometry().y());
 
-    QWindowSystemInterface::handleMouseEvent(window2, timestamp, localPoint, point,
-                                             buttons, modifiers);
+    if (window2 && !onFrame) {
+        QWindowSystemInterface::handleMouseEvent(window2, timestamp, localPoint, point,
+                                                buttons, modifiers);
+    }
+
     QCoreApplication::processEvents(); // probably not the best way
 }
 

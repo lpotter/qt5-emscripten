@@ -37,6 +37,8 @@
 #include "qhtml5window.h"
 
 #include <QOpenGLTexture>
+#include <QtWidgets/QStyle>
+#include <QtWidgets/QStyleOptionTitleBar>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/qopengltextureblitter.h>
@@ -45,6 +47,7 @@
 #include <private/qguiapplication_p.h>
 
 #include <qpa/qwindowsysteminterface.h>
+#include <QtWidgets/QApplication>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QDebug>
@@ -271,7 +274,7 @@ QWindow *QHtml5Compositor::windowAt(QPoint p) const
         //qDebug() << "windwAt testing" << compositedWindow.window <<
         //compositedWindow.window->geometry();
 
-        if (compositedWindow.visible && compositedWindow.window->geometry().contains(p))
+        if (compositedWindow.visible && compositedWindow.window->windowFrameGeometry().contains(p))
             return m_windowStack.at(index)->window();
         --index;
     }
@@ -355,6 +358,93 @@ bool QHtml5Compositor::event(QEvent *ev)
     return QObject::event(ev);
 }
 
+void blit(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, const QOpenGLTexture *texture, QRect targetGeometry)
+{
+    QMatrix4x4 m;
+    m.translate(-1.0f, -1.0f);
+
+    m.scale(2.0f / (float)screen->geometry().width(),
+            2.0f / (float)screen->geometry().height());
+
+    m.translate((float)targetGeometry.width() / 2.0f,
+                (float)-targetGeometry.height() / 2.0f);
+
+    m.translate(targetGeometry.x(), screen->geometry().height() - targetGeometry.y());
+
+    m.scale(0.5f * (float)targetGeometry.width(),
+            0.5f * (float)targetGeometry.height());
+
+    blitter->blit(texture->textureId(), m, QOpenGLTextureBlitter::OriginTopLeft);
+}
+
+void drawWindowContent(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
+{
+    QHTML5BackingStore* backingStore = window->backingStore();
+
+    QOpenGLTexture const* texture = backingStore->getUpdatedTexture();
+
+    blit(blitter, screen, texture, window->geometry());
+}
+
+void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
+{
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    QStyle *style = app->style();
+
+
+    int width = window->windowFrameGeometry().width();
+    int height = window->windowFrameGeometry().height();
+    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
+
+    QImage image(QSize(width, height), QImage::Format_RGB32);
+    QPainter painter(&image);
+    painter.fillRect(QRect(0, 0, width, height), painter.background());
+
+    QStyleOptionTitleBar titleBarOptions;
+    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, &titleBarOptions, nullptr);
+    titleBarOptions.rect = QRect(border, border, width - 2*border, titleHeight);
+    titleBarOptions.titleBarFlags = window->window()->flags();
+
+    if (!window->window()->title().isEmpty()) {
+        int titleWidth = style->subControlRect(QStyle::CC_TitleBar, &titleBarOptions,
+                                               QStyle::SC_TitleBarLabel, nullptr).width();
+        titleBarOptions.text = titleBarOptions.fontMetrics
+                               .elidedText(window->window()->title(), Qt::ElideRight, titleWidth);
+    }
+
+    //painter.setBackgroundMode(Qt::OpaqueMode);
+    style->drawComplexControl(QStyle::CC_TitleBar, &titleBarOptions, &painter);
+    //painter.setBackgroundMode(Qt::TransparentMode);
+
+    QStyleOptionFrame frameOptions;
+    frameOptions.rect = QRect(0, 0, width, height);
+    frameOptions.lineWidth = style->pixelMetric(QStyle::PM_MdiSubWindowFrameWidth, 0, nullptr);
+    frameOptions.state.setFlag(QStyle::State_Active, true);
+
+    style->drawPrimitive(QStyle::PE_FrameWindow, &frameOptions, &painter, nullptr);
+
+    painter.end();
+
+    QOpenGLTexture texture(QOpenGLTexture::Target2D);
+    texture.setMinificationFilter(QOpenGLTexture::Nearest);
+    texture.setMagnificationFilter(QOpenGLTexture::Nearest);
+    texture.setWrapMode(QOpenGLTexture::ClampToEdge);
+    texture.setData(image, QOpenGLTexture::DontGenerateMipMaps);
+    texture.create();
+    texture.bind();
+
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE,
+                    image.constScanLine(0));
+
+    blit(blitter, screen, &texture, QRect(window->windowFrameGeometry().topLeft(), QSize(width, height)));
+}
+
+void drawWindow(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
+{
+    drawWindowDecorations(blitter, screen, window);
+    drawWindowContent(blitter, screen, window);
+}
+
 void QHtml5Compositor::frame()
 {
     if (!m_needComposit)
@@ -389,31 +479,7 @@ void QHtml5Compositor::frame()
         if (!compositedWindow.visible)
             continue;
 
-        QHTML5BackingStore* backingStore = window->backingStore();
-
-        QOpenGLTexture const* texture = backingStore->getUpdatedTexture();
-
-        QMatrix4x4 m;
-        m.translate(-1.0f, -1.0f);
-
-        m.scale(2.0f / (float)mScreen->geometry().width(),
-                2.0f / (float)mScreen->geometry().height());
-
-        m.translate((float)window->geometry().width() / 2.0f,
-                    (float)-window->geometry().height() / 2.0f);
-
-        //m.translate(i * 100, i * -200);
-
-        m.translate(window->geometry().x(), mScreen->geometry().height() - window->geometry().y());
-
-        m.scale(0.5f * (float)window->geometry().width(),
-                0.5f * (float)window->geometry().height());
-        /*m.scale((float)window->geometry().width() / (float)mScreen->geometry().width(),
-                (float)window->geometry().height() / (float)mScreen->geometry().height());*/
-        //m.translate((float)window->geometry().width() / 2.0f,
-                    //(float)window->geometry().height() / 2.0f);
-
-        mBlitter->blit(texture->textureId(), m, QOpenGLTextureBlitter::OriginTopLeft);
+        drawWindow(mBlitter.data(), mScreen, window);
     }
 
     mBlitter->release();

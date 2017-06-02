@@ -58,6 +58,7 @@ public:
 
     void setGeometry(const QRect &) Q_DECL_OVERRIDE;
     void setVisible(bool visible) Q_DECL_OVERRIDE;
+    QMargins frameMargins() const Q_DECL_OVERRIDE;
 
     WId winId() const Q_DECL_OVERRIDE;
 

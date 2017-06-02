@@ -192,6 +192,9 @@ private:
     static Qt::MouseButtons translateMouseButtons(unsigned short button);
 
     void processMouse(int eventType, const EmscriptenMouseEvent *mouseEvent);
+
+private:
+    QWindow *draggedWindow;
 };
 
 QT_END_NAMESPACE
