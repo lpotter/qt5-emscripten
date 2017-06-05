@@ -45,15 +45,14 @@
 
 QT_BEGIN_NAMESPACE
 
-class QOpenGLContext;
 class QOpenGLTexture;
-class QOpenGLTextureBlitter;
 class QRegion;
+class QHtml5Compositor;
 
 class QHTML5BackingStore : public QPlatformBackingStore
 {
 public:
-    QHTML5BackingStore(QWindow *window);
+    QHTML5BackingStore(QHtml5Compositor *compositor, QWindow *window);
     ~QHTML5BackingStore();
 
     QPaintDevice *paintDevice() override;
@@ -62,16 +61,20 @@ public:
     void flush(QWindow *window, const QRegion &region, const QPoint &offset) override;
     void resize(const QSize &size, const QRegion &staticContents) override;
     QImage toImage() const override;
+    const QImage &getImageRef() const;
+
+    const QOpenGLTexture* getUpdatedTexture();
 
 protected:
     void updateTexture();
 
 private:
+    QHtml5Compositor *mCompositor;
+
     QImage mImage;
 
-    QScopedPointer<QOpenGLContext> mContext;
     QScopedPointer<QOpenGLTexture> mTexture;
-    QScopedPointer<QOpenGLTextureBlitter> mBlitter;
+
     QRegion mDirty;
 
 };

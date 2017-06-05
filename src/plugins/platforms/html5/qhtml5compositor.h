@@ -41,18 +41,22 @@
 
 QT_BEGIN_NAMESPACE
 
+class QHtml5Window;
+class QHTML5Screen;
+class QOpenGLContext;
+class QOpenGLTextureBlitter;
+
 class QHtml5CompositedWindow
 {
 public:
     QHtml5CompositedWindow();
 
-    QWindow *window;
-    QImage *frameBuffer;
-    QWindow *parentWindow;
+    QHtml5Window *window;
+    QHtml5Window *parentWindow;
     QRegion damage;
     bool flushPending;
     bool visible;
-    QList<QWindow *> childWindows;
+    QList<QHtml5Window *> childWindows;
 };
 
 class QHtml5Compositor : public QObject
@@ -62,39 +66,52 @@ public:
     QHtml5Compositor();
     ~QHtml5Compositor();
 
-    // Client API
-    void addRasterWindow(QWindow *window, QWindow *parentWindow = 0);
-    void removeWindow(QWindow *window);
+    void addWindow(QHtml5Window *window, QHtml5Window *parentWindow = 0);
+    void removeWindow(QHtml5Window *window);
+    void setScreen(QHTML5Screen *screen);
 
-    void setVisible(QWindow *window, bool visible);
-    void raise(QWindow *window);
-    void lower(QWindow *window);
-    void setParent(QWindow *window, QWindow *parent);
+    void setVisible(QHtml5Window *window, bool visible);
+    void raise(QHtml5Window *window);
+    void lower(QHtml5Window *window);
+    void setParent(QHtml5Window *window, QHtml5Window *parent);
 
-    void setFrameBuffer(QWindow *window, QImage *frameBuffer);
-    void flush(QWindow *surface, const QRegion &region);
-    void waitForFlushed(QWindow *surface);
+    //void setFrameBuffer(QWindow *window, QImage *frameBuffer);
+    void flush(QHtml5Window *surface, const QRegion &region);
+    //void waitForFlushed(QWindow *surface);
 
-    // Server API
+    /*
     void beginResize(QSize newSize,
                      qreal newDevicePixelRatio); // call when the frame buffer geometry changes
     void endResize();
+    */
 
-    // Misc API
-public:
-    QWindow *windowAt(QPoint p);
-    QWindow *keyWindow();
-    void maybeComposit();
-    void composit();
+    int windowCount() const;
+    void requestRedraw();
+
+    QWindow *windowAt(QPoint p) const;
+    QWindow *keyWindow() const;
+    //void maybeComposit();
+    //void composit();
+
+    bool event(QEvent *event);
+
+private slots:
+    void frame();
 
 private:
-    void createFrameBuffer();
+    //void createFrameBuffer();
     void flush2(const QRegion &region);
     void flushCompletedCallback(int32_t);
+    void notifyTopWindowChanged(QHtml5Window* window);
 
-    QHash<QWindow *, QHtml5CompositedWindow> m_compositedWindows;
-    QList<QWindow *> m_windowStack;
+private:
     QImage *m_frameBuffer;
+    QScopedPointer<QOpenGLContext> mContext;
+    QScopedPointer<QOpenGLTextureBlitter> mBlitter;
+    QHTML5Screen *mScreen;
+
+    QHash<QHtml5Window *, QHtml5CompositedWindow> m_compositedWindows;
+    QList<QHtml5Window *> m_windowStack;
 //    pp::Graphics2D *m_context2D;
 //    pp::ImageData *m_imageData2D;
     QRegion globalDamage; // damage caused by expose, window close, etc.

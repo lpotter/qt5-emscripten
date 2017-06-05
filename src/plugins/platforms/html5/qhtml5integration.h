@@ -53,9 +53,10 @@ QT_BEGIN_NAMESPACE
 
 class QHTML5EventTranslator;
 class QHtml5FontDatabase;
-class QHTML5Window;
+class QHtml5Window;
 class QHtml5EventDispatcher;
 class QHTML5Screen;
+class QHtml5Compositor;
 
 class QHTML5Integration : public QObject, public QPlatformIntegration
 {
@@ -75,16 +76,19 @@ public:
     QVariant styleHint(QPlatformIntegration::StyleHint hint) const Q_DECL_OVERRIDE;
 
     static QHTML5Integration *get();
-    QHTML5Window *topLevelWindow();
+    //QHTML5Window *topLevelWindow();
     QHTML5Screen *screen() { return mScreen; }
+    QHtml5Compositor *compositor() { return mCompositor; }
+
 private:
     mutable QHtml5FontDatabase *mFontDb;
+    QHtml5Compositor *mCompositor;
     mutable QHTML5Screen *mScreen;
     mutable QHTML5EventTranslator *m_eventTranslator;
     mutable QHtml5EventDispatcher *m_eventDispatcher;
     static int uiEvent_cb(int eventType, const EmscriptenUiEvent *e, void *userData);
 
-    mutable QHTML5Window *m_topLevelWindow;
+    //mutable QHTML5Window *m_topLevelWindow;
 };
 
 QT_END_NAMESPACE

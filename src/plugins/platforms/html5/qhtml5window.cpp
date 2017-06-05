@@ -39,27 +39,35 @@
 
 #include <qpa/qwindowsysteminterface.h>
 #include <private/qguiapplication_p.h>
-# include <QtGui/private/qopenglcontext_p.h>
-# include <QtGui/QOpenGLContext>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QStyle>
+#include <QtGui/private/qopenglcontext_p.h>
+#include <QtGui/QOpenGLContext>
 
 #include "qhtml5window.h"
 #include "qhtml5screen.h"
+#include "qhtml5compositor.h"
 
 #include <QDebug>
+
+#include <iostream>
 
 //#include "qhtml5compositor.h"
 
 QT_BEGIN_NAMESPACE
 
-static QHTML5Window *globalHtml5Window;
-QHTML5Window *QHTML5Window::get() { return globalHtml5Window; }
+//static QHtml5Window *globalHtml5Window;
+//QHtml5Window *QHtml5Window::get() { return globalHtml5Window; }
 
-QHTML5Window::QHTML5Window(QWindow *w)
+QHtml5Window::QHtml5Window(QWindow *w, QHtml5Compositor* compositor)
     : QPlatformWindow(w),
+      mWindow(w),
+      mWindowState(Qt::WindowNoState),
       firstRun(true),
+      mCompositor(compositor),
       m_raster(false)
 {
-    globalHtml5Window = this;
+    //globalHtml5Window = this;
     static int serialNo = 0;
     m_winid  = ++serialNo;
 #ifdef QEGL_EXTRA_DEBUG
@@ -68,47 +76,56 @@ QHTML5Window::QHTML5Window(QWindow *w)
 
 //    m_raster = (w->surfaceType() == QSurface::RasterSurface);
 //    if (m_raster)
-        w->setSurfaceType(QSurface::OpenGLSurface);
+    w->setSurfaceType(QSurface::OpenGLSurface);
+
+    mCompositor->addWindow(this);
 }
 
-QHTML5Window::~QHTML5Window()
+QHtml5Window::~QHtml5Window()
 {
+    mCompositor->removeWindow(this);
 }
 
-QHTML5Screen *QHTML5Window::platformScreen() const
+QHTML5Screen *QHtml5Window::platformScreen() const
 {
     return static_cast<QHTML5Screen *>(window()->screen()->handle());
 }
 
-void QHTML5Window::setGeometry(const QRect &rect)
+void QHtml5Window::setGeometry(const QRect &rect)
 {
+    //auto rect = rect2;
+    //rect.setWidth(500);
+    //rect.setHeight(500);
     mOldGeometry = geometry();
 
     QRect screenRect = rect;
     if ((rect.width() != 0 && rect.height() != 0) && firstRun) {
         //we want to show full screen at first, but resize to browser window for now
-        screenRect = screen()->availableGeometry();
-         firstRun = false;
+        //screenRect = screen()->availableGeometry();
+        screenRect.setWidth(500);
+        screenRect.setHeight(500);
+        firstRun = false;
     }
     QWindowSystemInterface::handleGeometryChange(window(), screenRect);
     QPlatformWindow::setGeometry(screenRect);
 
     if (mOldGeometry != screenRect)
-        QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(0, 0), geometry().size()));
+        QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(100, 100), geometry().size()));
 
     QWindowSystemInterface::flushWindowSystemEvents();
+    invalidate();
 }
 
-void QHTML5Window::setVisible(bool visible)
+void QHtml5Window::setVisible(bool visible)
 {
     QRect newGeom;
-    QHTML5Screen *html5Screen = platformScreen();
+    //QHTML5Screen *html5Screen = platformScreen();
 
     if (visible) {
         bool convOk = false;
         static bool envDisableForceFullScreen = qEnvironmentVariableIntValue("QT_QPA_HTML5_FORCE_FULLSCREEN", &convOk) == 0 && convOk;
 
-        const bool forceFullScreen = !envDisableForceFullScreen && html5Screen->windowCount() == 0;
+        const bool forceFullScreen = !envDisableForceFullScreen && mCompositor->windowCount() == 0;
 
         if (forceFullScreen || (mWindowState & Qt::WindowFullScreen))
             newGeom = platformScreen()->geometry();
@@ -118,10 +135,14 @@ void QHTML5Window::setVisible(bool visible)
 
     QPlatformWindow::setVisible(visible);
 
+    mCompositor->setVisible(this, visible);
+
+    /*
     if (visible)
-        html5Screen->addWindow(this);
+        mCompositor->addWindow(this);
     else
-        html5Screen->removeWindow(this);
+        mCompositor->removeWindow(this);
+    */
 
     if (!newGeom.isEmpty())
         setGeometry(newGeom); // may or may not generate an expose
@@ -132,28 +153,52 @@ void QHTML5Window::setVisible(bool visible)
 //        // just what is needed here.
     QWindowSystemInterface::handleExposeEvent(window(), visible ? QRect(QPoint(), geometry().size()) : QRect());
     QWindowSystemInterface::flushWindowSystemEvents();
+    invalidate();
 }
 
-void QHTML5Window::raise()
+QMargins QHtml5Window::frameMargins() const
 {
-    platformScreen()->raise(this);
-    QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(0, 0), geometry().size()));
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    QStyle *style = app->style();
+    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
+    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+
+    QMargins margins;
+    margins.setLeft(border);
+    margins.setRight(border);
+    margins.setTop(2*border + titleHeight);
+    margins.setBottom(border);
+
+    return margins;
 }
 
-void QHTML5Window::lower()
+void QHtml5Window::raise()
 {
-    platformScreen()->lower(this);
+    mCompositor->raise(this);
     QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(0, 0), geometry().size()));
+    invalidate();
 }
 
-WId QHTML5Window::winId() const
+void QHtml5Window::lower()
+{
+    mCompositor->lower(this);
+    QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(0, 0), geometry().size()));
+    invalidate();
+}
+
+WId QHtml5Window::winId() const
 {
     return m_winid;
 }
 
-void QHTML5Window::propagateSizeHints()
+void QHtml5Window::propagateSizeHints()
 {
 // get rid of base class warning
+}
+
+void QHtml5Window::invalidate()
+{
+    mCompositor->requestRedraw();
 }
 
 QT_END_NAMESPACE

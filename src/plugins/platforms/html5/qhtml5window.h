@@ -50,14 +50,15 @@ QT_BEGIN_NAMESPACE
 
 class QHtml5Compositor;
 
-class QHTML5Window : public QPlatformWindow
+class QHtml5Window : public QPlatformWindow
 {
 public:
-    QHTML5Window(QWindow *w);
-    ~QHTML5Window();
+    QHtml5Window(QWindow *w, QHtml5Compositor* compositor);
+    ~QHtml5Window();
 
     void setGeometry(const QRect &) Q_DECL_OVERRIDE;
     void setVisible(bool visible) Q_DECL_OVERRIDE;
+    QMargins frameMargins() const Q_DECL_OVERRIDE;
 
     WId winId() const Q_DECL_OVERRIDE;
 
@@ -68,19 +69,25 @@ public:
     QHTML5Screen *platformScreen() const;
     void setBackingStore(QHTML5BackingStore *store) { mBackingStore = store; }
     QHTML5BackingStore *backingStore() const { return mBackingStore; }
+    QWindow *window() const { return mWindow; }
 
-    static QHTML5Window *get();
+    //static QHTML5Window *get();
+
+protected:
+    void invalidate();
+
 protected:
     friend class QHtml5Screen;
 
     QHTML5BackingStore *mBackingStore;
+    QWindow* mWindow;
     QRect mOldGeometry;
     Qt::WindowFlags mWindowFlags;
     Qt::WindowState mWindowState;
-private:
+
     WId m_winid;
     bool firstRun;
-    QHtml5Compositor *m_compositor;
+    QHtml5Compositor *mCompositor;
     bool m_raster;
 };
 QT_END_NAMESPACE

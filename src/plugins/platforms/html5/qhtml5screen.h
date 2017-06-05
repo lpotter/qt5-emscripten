@@ -42,6 +42,7 @@
 
 #include <qpa/qplatformscreen.h>
 
+#include <QScopedPointer>
 #include <QtCore/QTextStream>
 
 #include <QtEglSupport/private/qt_egl_p.h>
@@ -49,15 +50,17 @@
 QT_BEGIN_NAMESPACE
 
 class QPlatformOpenGLContext;
-class QHTML5Window;
+class QHtml5Window;
 class QHTML5BackingStore;
+class QHtml5Compositor;
+class QOpenGLContext;
 
 class QHTML5Screen : public QObject, public QPlatformScreen
 {
     Q_OBJECT
 public:
 
-    QHTML5Screen(EGLNativeDisplayType display);
+    QHTML5Screen(EGLNativeDisplayType display, QHtml5Compositor *compositor);
     ~QHTML5Screen();
 
     QRect geometry() const Q_DECL_OVERRIDE;
@@ -70,35 +73,43 @@ public:
     QWindow *topWindow() const;
     QWindow *topLevelAt(const QPoint & p) const Q_DECL_OVERRIDE;
 
-    virtual void addWindow(QHTML5Window *window);
-    virtual void removeWindow(QHTML5Window *window);
-    virtual void raise(QHTML5Window *window);
-    virtual void lower(QHTML5Window *window);
-    virtual void topWindowChanged(QWindow *) {}
-    virtual int windowCount() const;
+    //virtual void addWindow(QHtml5Window *window);
+    //virtual void removeWindow(QHtml5Window *window);
+    //virtual void raise(QHtml5Window *window);
+    //virtual void lower(QHtml5Window *window);
+    //virtual void topWindowChanged(QWindow *) {}
+    //virtual int windowCount() const;
 
     void addPendingBackingStore(QHTML5BackingStore *bs) { mPendingBackingStores << bs; }
 
-    void scheduleUpdate();
+    //void scheduleUpdate();
+
+    void invalidateSize();
 
 public slots:
-    virtual void setDirty(const QRect &rect);
+    //virtual void setDirty(const QRect &rect);
 
 protected:
-    QList<QHTML5Window *> mWindowStack;
-    QRegion mRepaintRegion;
+    //QList<QHtml5Window *> mWindowStack;
+    //QRegion mRepaintRegion;
 
 private:
     void createAndSetPlatformContext() const;
     void createAndSetPlatformContext();
     bool mUpdatePending;
 
+private:
+    QHtml5Compositor *mCompositor;
+
     QRect m_geometry;
     int m_depth;
     QImage::Format m_format;
     QPlatformOpenGLContext *m_platformContext;
+    QScopedPointer<QOpenGLContext> m_context;
+
     EGLDisplay m_dpy;
     EGLSurface m_surface;
+
     QList<QHTML5BackingStore*> mPendingBackingStores;
 
 };

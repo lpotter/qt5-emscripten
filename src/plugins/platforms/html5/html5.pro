@@ -17,14 +17,16 @@ SOURCES =   main.cpp \
             qhtml5screen.cpp \
             qhtml5fontdatabase.cpp \
             qhtml5eventtranslator.cpp \
-            qhtml5eventdispatcher.cpp
+            qhtml5eventdispatcher.cpp \
+            qhtml5compositor.cpp
 
 HEADERS =   qhtml5integration.h \
             qhtml5window.h \
             qhtml5screen.h \
             qhtml5fontdatabase.h \
             qhtml5eventtranslator.h \
-            qhtml5eventdispatcher.h
+            qhtml5eventdispatcher.h \
+            qhtml5compositor.h
 
 RESOURCES += fonts/html5fonts.qrc
 

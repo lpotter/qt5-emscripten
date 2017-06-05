@@ -39,6 +39,7 @@
 
 #include "qhtml5screen.h"
 #include "qhtml5window.h"
+#include "qhtml5compositor.h"
 
 #include <QtEglSupport/private/qeglconvenience_p.h>
 #ifndef QT_NO_OPENGL
@@ -59,17 +60,17 @@ QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_OPENGL
 
-class QHTML5Context : public QEGLPlatformContext
+class QHtml5Context : public QEGLPlatformContext
 {
 public:
-    QHTML5Context(const QSurfaceFormat &format, QPlatformOpenGLContext *share, EGLDisplay display)
+    QHtml5Context(const QSurfaceFormat &format, QPlatformOpenGLContext *share, EGLDisplay display)
         : QEGLPlatformContext(format, share, display, 0, QVariant(), QEGLPlatformContext::NoSurfaceless)
     {
     }
 
     EGLSurface eglSurfaceForPlatformSurface(QPlatformSurface *surface) Q_DECL_OVERRIDE
     {
-        QHTML5Window *window = static_cast<QHTML5Window *>(surface);
+        QHtml5Window *window = static_cast<QHtml5Window *>(surface);
         QHTML5Screen *screen = static_cast<QHTML5Screen *>(window->screen());
         return screen->surface();
     }
@@ -77,10 +78,12 @@ public:
 
 #endif
 
-QHTML5Screen::QHTML5Screen(EGLNativeDisplayType display)
-    : m_depth(32)
+QHTML5Screen::QHTML5Screen(EGLNativeDisplayType display, QHtml5Compositor *compositor)
+    : mCompositor(compositor)
+    , m_depth(32)
     , m_format(QImage::Format_Invalid)
     , m_platformContext(0)
+    , m_context(0)
     , m_surface(0)
 {
 #ifdef QEGL_EXTRA_DEBUG
@@ -107,6 +110,8 @@ QHTML5Screen::QHTML5Screen(EGLNativeDisplayType display)
     }
 
     qWarning("Initialized display %d %d\n", major, minor);
+
+    mCompositor->setScreen(this);
 }
 
 QHTML5Screen::~QHTML5Screen()
@@ -150,9 +155,9 @@ void QHTML5Screen::createAndSetPlatformContext()
 
     EGLNativeWindowType eglWindow = 0;
 
-#ifdef QEGL_EXTRA_DEBUG
+//#ifdef QEGL_EXTRA_DEBUG
     q_printEglConfig(m_dpy, config);
-#endif
+//#endif
 
     m_surface = eglCreateWindowSurface(m_dpy, config, eglWindow, NULL);
     if (Q_UNLIKELY(m_surface == EGL_NO_SURFACE)) {
@@ -161,7 +166,7 @@ void QHTML5Screen::createAndSetPlatformContext()
         qFatal("EGL error");
     }
 
-    QEGLPlatformContext *platformContext = new QHTML5Context(platformFormat, 0, m_dpy);
+    QEGLPlatformContext *platformContext = new QHtml5Context(platformFormat, 0, m_dpy);
     m_platformContext = platformContext;
 
     EGLint w,h;                    // screen size detection
@@ -169,6 +174,11 @@ void QHTML5Screen::createAndSetPlatformContext()
     eglQuerySurface(m_dpy, m_surface, EGL_HEIGHT, &h);
 
     m_geometry = QRect(0,0,w,h);
+
+    //m_context.reset(new QOpenGLContext);
+    //m_context->setFormat(platformFormat);
+    //m_context->setScreen(screen);
+    //m_context->create();
 }
 
 QRect QHTML5Screen::geometry() const
@@ -190,6 +200,7 @@ QImage::Format QHTML5Screen::format() const
         createAndSetPlatformContext();
     return m_format;
 }
+
 #ifndef QT_NO_OPENGL
 QPlatformOpenGLContext *QHTML5Screen::platformContext() const
 {
@@ -206,7 +217,8 @@ void QHTML5Screen::resizeMaximizedWindows()
     QPlatformScreen::resizeMaximizedWindows();
 }
 
-void QHTML5Screen::addWindow(QHTML5Window *window)
+/*
+void QHTML5Screen::addWindow(QHtml5Window *window)
 {
     mWindowStack.prepend(window);
     if (!mPendingBackingStores.isEmpty()) {
@@ -227,8 +239,10 @@ void QHTML5Screen::addWindow(QHTML5Window *window)
     QWindowSystemInterface::handleWindowActivated(w);
     topWindowChanged(w);
 }
+*/
 
-void QHTML5Screen::removeWindow(QHTML5Window *window)
+/*
+void QHTML5Screen::removeWindow(QHtml5Window *window)
 {
     mWindowStack.removeOne(window);
     setDirty(window->geometry());
@@ -236,8 +250,10 @@ void QHTML5Screen::removeWindow(QHTML5Window *window)
     QWindowSystemInterface::handleWindowActivated(w);
     topWindowChanged(w);
 }
+*/
 
-void QHTML5Screen::raise(QHTML5Window *window)
+/*
+void QHTML5Screen::raise(QHtml5Window *window)
 {
     int index = mWindowStack.indexOf(window);
     if (index <= 0)
@@ -248,8 +264,10 @@ void QHTML5Screen::raise(QHTML5Window *window)
     QWindowSystemInterface::handleWindowActivated(w);
     topWindowChanged(w);
 }
+*/
 
-void QHTML5Screen::lower(QHTML5Window *window)
+/*
+void QHTML5Screen::lower(QHtml5Window *window)
 {
     int index = mWindowStack.indexOf(window);
     if (index == -1 || index == (mWindowStack.size() - 1))
@@ -260,30 +278,48 @@ void QHTML5Screen::lower(QHTML5Window *window)
     QWindowSystemInterface::handleWindowActivated(w);
     topWindowChanged(w);
 }
+*/
 
 QWindow *QHTML5Screen::topWindow() const
 {
-    for (QHTML5Window *fbw : mWindowStack) {
+    /*
+    for (QHtml5Window *fbw : mWindowStack) {
         if (fbw->window()->type() == Qt::Window || fbw->window()->type() == Qt::Dialog)
             return fbw->window();
     }
     return nullptr;
+    */
+
+    return mCompositor->keyWindow();
 }
 
 QWindow *QHTML5Screen::topLevelAt(const QPoint & p) const
 {
-    for (QHTML5Window *fbw : mWindowStack) {
+    /*
+    for (QHtml5Window *fbw : mWindowStack) {
         if (fbw->geometry().contains(p, false) && fbw->window()->isVisible())
+        {
             return fbw->window();
+        }
     }
     return nullptr;
+    */
+    return mCompositor->windowAt(p);
 }
 
+void QHTML5Screen::invalidateSize()
+{
+    m_geometry = QRect();
+}
+
+/*
 int QHTML5Screen::windowCount() const
 {
     return mWindowStack.count();
 }
+*/
 
+/*
 void QHTML5Screen::setDirty(const QRect &rect)
 {
     const QRect intersection = rect.intersected(m_geometry);
@@ -299,5 +335,6 @@ void QHTML5Screen::scheduleUpdate()
         QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest));
     }
 }
+*/
 
 QT_END_NAMESPACE
