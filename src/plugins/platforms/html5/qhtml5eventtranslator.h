@@ -40,6 +40,7 @@
 #define QHTML5EVENTTRANSLATOR_H
 
 #include <QObject>
+#include <QRect>
 #include <QtCore/QPoint>
 #include <emscripten/html5.h>
 
@@ -177,6 +178,18 @@ class QHTML5EventTranslator : public QObject
       };
 
 public:
+    enum ResizeMode {
+        ResizeNone,
+        ResizeTopLeft,
+        ResizeTop,
+        ResizeTopRight,
+        ResizeRight,
+        ResizeBottomRight,
+        ResizeBottom,
+        ResizeBottomLeft,
+        ResizeLeft
+    };
+
     explicit QHTML5EventTranslator(QObject *parent = 0);
 
     static int keyboard_cb(int eventType, const EmscriptenKeyboardEvent *keyEvent, void *userData);
@@ -195,6 +208,9 @@ private:
 
 private:
     QWindow *draggedWindow;
+    ResizeMode resizeMode;
+    QPoint resizePoint;
+    QRect resizeStartRect;
 };
 
 QT_END_NAMESPACE

@@ -134,6 +134,7 @@ QPlatformWindow *QHTML5Integration::createPlatformWindow(QWindow *window) const
 //#ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration::createPlatformWindow %p\n",window);
 //#endif
+    qDebug() << "Window flags: " << window->flags();
     QHtml5Window *w = new QHtml5Window(window, mCompositor);
     //if (m_topLevelWindow == 0)
         //m_topLevelWindow = w;

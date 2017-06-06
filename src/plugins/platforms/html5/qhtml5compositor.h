@@ -88,7 +88,7 @@ public:
     int windowCount() const;
     void requestRedraw();
 
-    QWindow *windowAt(QPoint p) const;
+    QWindow *windowAt(QPoint p, int padding = 0) const;
     QWindow *keyWindow() const;
     //void maybeComposit();
     //void composit();

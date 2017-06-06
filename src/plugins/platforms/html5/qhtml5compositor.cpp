@@ -86,7 +86,9 @@ void QHtml5Compositor::addWindow(QHtml5Window *window, QHtml5Window *parentWindo
 {
 //    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "addRasterWindow" << window << parentWindow;
 
-    qDebug() << Q_FUNC_INFO;
+    //qDebug() << Q_FUNC_INFO;
+
+    qDebug() << "window: " << window->window()->flags();
 
     QHtml5CompositedWindow compositedWindow;
     compositedWindow.window = window;
@@ -264,7 +266,7 @@ void QHtml5Compositor::requestRedraw()
     QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest));
 }
 
-QWindow *QHtml5Compositor::windowAt(QPoint p) const
+QWindow *QHtml5Compositor::windowAt(QPoint p, int padding) const
 {
     int index = m_windowStack.count() - 1;
     // qDebug() << "window at" << "point" << p << "window count" << index;
@@ -274,7 +276,11 @@ QWindow *QHtml5Compositor::windowAt(QPoint p) const
         //qDebug() << "windwAt testing" << compositedWindow.window <<
         //compositedWindow.window->geometry();
 
-        if (compositedWindow.visible && compositedWindow.window->windowFrameGeometry().contains(p))
+
+        QRect geometry = compositedWindow.window->windowFrameGeometry()
+                         .adjusted(-padding, -padding, padding, padding);
+
+        if (compositedWindow.visible && geometry.contains(p))
             return m_windowStack.at(index)->window();
         --index;
     }
@@ -390,7 +396,6 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
 {
     QApplication *app = static_cast<QApplication*>(QApplication::instance());
     QStyle *style = app->style();
-
 
     int width = window->windowFrameGeometry().width();
     int height = window->windowFrameGeometry().height();

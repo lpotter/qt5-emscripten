@@ -160,8 +160,11 @@ QMargins QHtml5Window::frameMargins() const
 {
     QApplication *app = static_cast<QApplication*>(QApplication::instance());
     QStyle *style = app->style();
-    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
-    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+
+    bool hasTitle = window()->flags().testFlag(Qt::WindowTitleHint);
+
+    int border = hasTitle ? style->pixelMetric(QStyle::PM_MDIFrameWidth) : 0;
+    int titleHeight = hasTitle ? style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr) : 0;
 
     QMargins margins;
     margins.setLeft(border);
