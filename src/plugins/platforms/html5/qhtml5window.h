@@ -56,6 +56,8 @@ public:
     QHtml5Window(QWindow *w, QHtml5Compositor* compositor);
     ~QHtml5Window();
 
+    void create();
+
     void setGeometry(const QRect &) Q_DECL_OVERRIDE;
     void setVisible(bool visible) Q_DECL_OVERRIDE;
     QMargins frameMargins() const Q_DECL_OVERRIDE;
