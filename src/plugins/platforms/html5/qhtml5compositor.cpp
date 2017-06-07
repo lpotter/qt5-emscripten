@@ -409,6 +409,30 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
     int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, &titleBarOptions, nullptr);
     titleBarOptions.rect = QRect(border, border, width - 2*border, titleHeight);
     titleBarOptions.titleBarFlags = window->window()->flags();
+    titleBarOptions.titleBarState = window->window()->windowState();
+
+    QPalette palette;
+    palette.setColor(QPalette::Active, QPalette::Highlight,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Active, QPalette::Base,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Inactive, QPalette::Highlight,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::Base,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::HighlightedText,
+                     palette.color(QPalette::Inactive, QPalette::Window));
+
+    titleBarOptions.palette = palette;
+
+    if (window->window()->isActive()) {
+        titleBarOptions.state |= QStyle::State_Active;
+        titleBarOptions.titleBarState |= QStyle::State_Active;
+        titleBarOptions.palette.setCurrentColorGroup(QPalette::Active);
+    } else {
+        titleBarOptions.state &= ~QStyle::State_Active;
+        titleBarOptions.palette.setCurrentColorGroup(QPalette::Inactive);
+    }
 
     if (!window->window()->title().isEmpty()) {
         int titleWidth = style->subControlRect(QStyle::CC_TitleBar, &titleBarOptions,
@@ -417,14 +441,12 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
                                .elidedText(window->window()->title(), Qt::ElideRight, titleWidth);
     }
 
-    //painter.setBackgroundMode(Qt::OpaqueMode);
     style->drawComplexControl(QStyle::CC_TitleBar, &titleBarOptions, &painter);
-    //painter.setBackgroundMode(Qt::TransparentMode);
 
     QStyleOptionFrame frameOptions;
     frameOptions.rect = QRect(0, 0, width, height);
     frameOptions.lineWidth = style->pixelMetric(QStyle::PM_MdiSubWindowFrameWidth, 0, nullptr);
-    frameOptions.state.setFlag(QStyle::State_Active, true);
+    frameOptions.state.setFlag(QStyle::State_Active, window->window()->isActive());
 
     style->drawPrimitive(QStyle::PE_FrameWindow, &frameOptions, &painter, nullptr);
 
