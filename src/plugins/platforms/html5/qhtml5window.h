@@ -53,6 +53,18 @@ class QHtml5Compositor;
 class QHtml5Window : public QPlatformWindow
 {
 public:
+    enum ResizeMode {
+        ResizeNone,
+        ResizeTopLeft,
+        ResizeTop,
+        ResizeTopRight,
+        ResizeRight,
+        ResizeBottomRight,
+        ResizeBottom,
+        ResizeBottomLeft,
+        ResizeLeft
+    };
+
     QHtml5Window(QWindow *w, QHtml5Compositor* compositor);
     ~QHtml5Window();
 
@@ -73,7 +85,17 @@ public:
     QHTML5BackingStore *backingStore() const { return mBackingStore; }
     QWindow *window() const { return mWindow; }
 
-    //static QHTML5Window *get();
+    void injectMousePressed(const QPoint &local, const QPoint &global,
+                            Qt::MouseButton button, Qt::KeyboardModifiers mods);
+
+    int getTitleHeight() const;
+    int getBorderWidth() const;
+    QRect getTitleGeometry() const;
+    QRegion getResizeRegion() const;
+    bool isPointOnTitle(QPoint point) const;
+    bool isPointOnResizeRegion(QPoint point) const;
+    ResizeMode getResizeModeAtPoint(QPoint point) const;
+    QRegion getTitleControlRegion() const;
 
 protected:
     void invalidate();

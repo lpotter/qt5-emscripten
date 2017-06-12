@@ -59,6 +59,12 @@ QT_BEGIN_NAMESPACE
 //static QHtml5Window *globalHtml5Window;
 //QHtml5Window *QHtml5Window::get() { return globalHtml5Window; }
 
+QStyle *getAppStyle()
+{
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    return app->style();
+}
+
 QHtml5Window::QHtml5Window(QWindow *w, QHtml5Compositor* compositor)
     : QPlatformWindow(w),
       mWindow(w),
@@ -202,6 +208,100 @@ WId QHtml5Window::winId() const
 void QHtml5Window::propagateSizeHints()
 {
 // get rid of base class warning
+}
+
+void QHtml5Window::injectMousePressed(const QPoint &local, const QPoint &global,
+                                      Qt::MouseButton button, Qt::KeyboardModifiers mods)
+{
+    if (button != Qt::LeftButton)
+        return;
+
+}
+
+int QHtml5Window::getTitleHeight() const
+{
+    return getAppStyle()->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+}
+
+int QHtml5Window::getBorderWidth() const
+{
+    return getAppStyle()->pixelMetric(QStyle::PM_MDIFrameWidth, nullptr, nullptr);
+}
+
+QRect QHtml5Window::getTitleGeometry() const
+{
+    int border = getBorderWidth();
+
+    QRect result(window()->frameGeometry().x() + border,
+                 window()->frameGeometry().y() + border,
+                 window()->frameGeometry().width() - 2*border,
+                 getTitleHeight());
+
+    return result;
+}
+
+QRegion QHtml5Window::getResizeRegion() const
+{
+    int border = getBorderWidth();
+    QRegion result(window()->frameGeometry().adjusted(-border, -border, border, border));
+    result -= window()->frameGeometry().adjusted(border, border, -border, -border);
+
+    return result;
+}
+
+bool QHtml5Window::isPointOnTitle(QPoint point) const
+{
+    return getTitleGeometry().contains(point);
+}
+
+bool QHtml5Window::isPointOnResizeRegion(QPoint point) const
+{
+    return getResizeRegion().contains(point);
+}
+
+QHtml5Window::ResizeMode QHtml5Window::getResizeModeAtPoint(QPoint point) const
+{
+    QPoint p1 = window()->frameGeometry().topLeft() - QPoint(5, 5);
+    QPoint p2 = window()->frameGeometry().bottomRight() + QPoint(5, 5);
+    int corner = 20;
+
+    QRect top(p1, QPoint(p2.x(), p1.y() + corner));
+    QRect middle(QPoint(p1.x(), p1.y() + corner), QPoint(p2.x(), p2.y() - corner));
+    QRect bottom(QPoint(p1.x(), p2.y() - corner), p2);
+
+    QRect left(p1, QPoint(p1.x() + corner, p2.y()));
+    QRect center(QPoint(p1.x() + corner, p1.y()), QPoint(p2.x() - corner, p2.y()));
+    QRect right(QPoint(p2.x() - corner, p1.y()), p2);
+
+    if (top.contains(point)) {
+        // Top
+        if (left.contains(point))
+            return ResizeTopLeft;
+        if (center.contains(point))
+            return ResizeTop;
+        if (right.contains(point))
+            return ResizeTopRight;
+    } else if (middle.contains(point)) {
+        // Middle
+        if (left.contains(point))
+            return ResizeLeft;
+        if (right.contains(point))
+            return ResizeRight;
+    } else if (bottom.contains(point)) {
+        // Bottom
+        if (left.contains(point))
+            return ResizeBottomLeft;
+        if (center.contains(point))
+            return ResizeBottom;
+        if (right.contains(point))
+            return ResizeBottomRight;
+    }
+
+    return ResizeNone;
+}
+
+QRegion QHtml5Window::getTitleControlRegion() const
+{
 }
 
 void QHtml5Window::invalidate()

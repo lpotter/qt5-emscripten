@@ -131,16 +131,13 @@ bool QHTML5Integration::hasCapability(QPlatformIntegration::Capability cap) cons
 
 QPlatformWindow *QHTML5Integration::createPlatformWindow(QWindow *window) const
 {
-//#ifdef QEGL_EXTRA_DEBUG
+#ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration::createPlatformWindow %p\n",window);
-//#endif
-    qDebug() << "Window flags: " << window->flags();
+#endif
+
     QHtml5Window *w = new QHtml5Window(window, mCompositor);
     w->create();
-    //if (m_topLevelWindow == 0)
-        //m_topLevelWindow = w;
 
-    //w->requestActivateWindow();
     return w;
 }
 

@@ -392,6 +392,23 @@ void drawWindowContent(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHt
     blit(blitter, screen, texture, window->geometry());
 }
 
+QPalette makeWindowPalette()
+{
+    QPalette palette;
+    palette.setColor(QPalette::Active, QPalette::Highlight,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Active, QPalette::Base,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Inactive, QPalette::Highlight,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::Base,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::HighlightedText,
+                     palette.color(QPalette::Inactive, QPalette::Window));
+
+    return palette;
+}
+
 void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
 {
     QApplication *app = static_cast<QApplication*>(QApplication::instance());
@@ -411,19 +428,7 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
     titleBarOptions.titleBarFlags = window->window()->flags();
     titleBarOptions.titleBarState = window->window()->windowState();
 
-    QPalette palette;
-    palette.setColor(QPalette::Active, QPalette::Highlight,
-                     palette.color(QPalette::Active, QPalette::Highlight));
-    palette.setColor(QPalette::Active, QPalette::Base,
-                     palette.color(QPalette::Active, QPalette::Highlight));
-    palette.setColor(QPalette::Inactive, QPalette::Highlight,
-                     palette.color(QPalette::Inactive, QPalette::Dark));
-    palette.setColor(QPalette::Inactive, QPalette::Base,
-                     palette.color(QPalette::Inactive, QPalette::Dark));
-    palette.setColor(QPalette::Inactive, QPalette::HighlightedText,
-                     palette.color(QPalette::Inactive, QPalette::Window));
-
-    titleBarOptions.palette = palette;
+    titleBarOptions.palette = makeWindowPalette();
 
     if (window->window()->isActive()) {
         titleBarOptions.state |= QStyle::State_Active;
