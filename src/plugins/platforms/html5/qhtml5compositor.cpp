@@ -86,7 +86,9 @@ void QHtml5Compositor::addWindow(QHtml5Window *window, QHtml5Window *parentWindo
 {
 //    qCDebug(QT_PLATFORM_PEPPER_COMPOSITOR) << "addRasterWindow" << window << parentWindow;
 
-    qDebug() << Q_FUNC_INFO;
+    //qDebug() << Q_FUNC_INFO;
+
+    qDebug() << "window: " << window->window()->flags();
 
     QHtml5CompositedWindow compositedWindow;
     compositedWindow.window = window;
@@ -264,7 +266,7 @@ void QHtml5Compositor::requestRedraw()
     QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest));
 }
 
-QWindow *QHtml5Compositor::windowAt(QPoint p) const
+QWindow *QHtml5Compositor::windowAt(QPoint p, int padding) const
 {
     int index = m_windowStack.count() - 1;
     // qDebug() << "window at" << "point" << p << "window count" << index;
@@ -274,7 +276,11 @@ QWindow *QHtml5Compositor::windowAt(QPoint p) const
         //qDebug() << "windwAt testing" << compositedWindow.window <<
         //compositedWindow.window->geometry();
 
-        if (compositedWindow.visible && compositedWindow.window->windowFrameGeometry().contains(p))
+
+        QRect geometry = compositedWindow.window->windowFrameGeometry()
+                         .adjusted(-padding, -padding, padding, padding);
+
+        if (compositedWindow.visible && geometry.contains(p))
             return m_windowStack.at(index)->window();
         --index;
     }
@@ -391,7 +397,6 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
     QApplication *app = static_cast<QApplication*>(QApplication::instance());
     QStyle *style = app->style();
 
-
     int width = window->windowFrameGeometry().width();
     int height = window->windowFrameGeometry().height();
     int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
@@ -404,6 +409,30 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
     int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, &titleBarOptions, nullptr);
     titleBarOptions.rect = QRect(border, border, width - 2*border, titleHeight);
     titleBarOptions.titleBarFlags = window->window()->flags();
+    titleBarOptions.titleBarState = window->window()->windowState();
+
+    QPalette palette;
+    palette.setColor(QPalette::Active, QPalette::Highlight,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Active, QPalette::Base,
+                     palette.color(QPalette::Active, QPalette::Highlight));
+    palette.setColor(QPalette::Inactive, QPalette::Highlight,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::Base,
+                     palette.color(QPalette::Inactive, QPalette::Dark));
+    palette.setColor(QPalette::Inactive, QPalette::HighlightedText,
+                     palette.color(QPalette::Inactive, QPalette::Window));
+
+    titleBarOptions.palette = palette;
+
+    if (window->window()->isActive()) {
+        titleBarOptions.state |= QStyle::State_Active;
+        titleBarOptions.titleBarState |= QStyle::State_Active;
+        titleBarOptions.palette.setCurrentColorGroup(QPalette::Active);
+    } else {
+        titleBarOptions.state &= ~QStyle::State_Active;
+        titleBarOptions.palette.setCurrentColorGroup(QPalette::Inactive);
+    }
 
     if (!window->window()->title().isEmpty()) {
         int titleWidth = style->subControlRect(QStyle::CC_TitleBar, &titleBarOptions,
@@ -412,14 +441,12 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
                                .elidedText(window->window()->title(), Qt::ElideRight, titleWidth);
     }
 
-    //painter.setBackgroundMode(Qt::OpaqueMode);
     style->drawComplexControl(QStyle::CC_TitleBar, &titleBarOptions, &painter);
-    //painter.setBackgroundMode(Qt::TransparentMode);
 
     QStyleOptionFrame frameOptions;
     frameOptions.rect = QRect(0, 0, width, height);
     frameOptions.lineWidth = style->pixelMetric(QStyle::PM_MdiSubWindowFrameWidth, 0, nullptr);
-    frameOptions.state.setFlag(QStyle::State_Active, true);
+    frameOptions.state.setFlag(QStyle::State_Active, window->window()->isActive());
 
     style->drawPrimitive(QStyle::PE_FrameWindow, &frameOptions, &painter, nullptr);
 

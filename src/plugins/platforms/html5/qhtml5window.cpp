@@ -63,7 +63,6 @@ QHtml5Window::QHtml5Window(QWindow *w, QHtml5Compositor* compositor)
     : QPlatformWindow(w),
       mWindow(w),
       mWindowState(Qt::WindowNoState),
-      firstRun(true),
       mCompositor(compositor),
       m_raster(false)
 {
@@ -86,6 +85,33 @@ QHtml5Window::~QHtml5Window()
     mCompositor->removeWindow(this);
 }
 
+void QHtml5Window::create()
+{
+    QRect rect = windowGeometry();
+
+    QPlatformWindow::setGeometry(rect);
+
+    const QSize minimumSize = windowMinimumSize();
+    if (rect.width() > 0 || rect.height() > 0) {
+        rect.setWidth(qBound(1, rect.width(), 2000));
+        rect.setHeight(qBound(1, rect.height(), 2000));
+    } else if (minimumSize.width() > 0 || minimumSize.height() > 0) {
+        rect.setSize(minimumSize);
+    } else {
+        /*
+        rect.setWidth(QHighDpi::toNativePixels(int(defaultWindowWidth), platformScreen->QPlatformScreen::screen()));
+        rect.setHeight(QHighDpi::toNativePixels(int(defaultWindowHeight), platformScreen->QPlatformScreen::screen()));
+        */
+    }
+
+    setWindowState(window()->windowStates());
+    setWindowFlags(window()->flags());
+    setWindowTitle(window()->title());
+
+    if (window()->isTopLevel())
+        setWindowIcon(window()->icon());
+}
+
 QHTML5Screen *QHtml5Window::platformScreen() const
 {
     return static_cast<QHTML5Screen *>(window()->screen()->handle());
@@ -93,24 +119,15 @@ QHTML5Screen *QHtml5Window::platformScreen() const
 
 void QHtml5Window::setGeometry(const QRect &rect)
 {
-    //auto rect = rect2;
-    //rect.setWidth(500);
-    //rect.setHeight(500);
-    mOldGeometry = geometry();
+    QRect r = rect;
 
-    QRect screenRect = rect;
-    if ((rect.width() != 0 && rect.height() != 0) && firstRun) {
-        //we want to show full screen at first, but resize to browser window for now
-        //screenRect = screen()->availableGeometry();
-        screenRect.setWidth(500);
-        screenRect.setHeight(500);
-        firstRun = false;
-    }
-    QWindowSystemInterface::handleGeometryChange(window(), screenRect);
-    QPlatformWindow::setGeometry(screenRect);
+    int yMin = window()->geometry().top() - window()->frameGeometry().top();
 
-    if (mOldGeometry != screenRect)
-        QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(100, 100), geometry().size()));
+    if (r.y() < yMin)
+        r.moveTop(yMin);
+
+    QWindowSystemInterface::handleGeometryChange(window(), r);
+    QPlatformWindow::setGeometry(r);
 
     QWindowSystemInterface::flushWindowSystemEvents();
     invalidate();
@@ -119,7 +136,6 @@ void QHtml5Window::setGeometry(const QRect &rect)
 void QHtml5Window::setVisible(bool visible)
 {
     QRect newGeom;
-    //QHTML5Screen *html5Screen = platformScreen();
 
     if (visible) {
         bool convOk = false;
@@ -137,20 +153,9 @@ void QHtml5Window::setVisible(bool visible)
 
     mCompositor->setVisible(this, visible);
 
-    /*
-    if (visible)
-        mCompositor->addWindow(this);
-    else
-        mCompositor->removeWindow(this);
-    */
-
     if (!newGeom.isEmpty())
         setGeometry(newGeom); // may or may not generate an expose
 
-//    if (newGeom.isEmpty() || newGeom == mOldGeometry) {
-//        // QWindow::isExposed() maps to QWindow::visible() by default so simply
-//        // generating an expose event regardless of this being a show or hide is
-//        // just what is needed here.
     QWindowSystemInterface::handleExposeEvent(window(), visible ? QRect(QPoint(), geometry().size()) : QRect());
     QWindowSystemInterface::flushWindowSystemEvents();
     invalidate();
@@ -160,8 +165,11 @@ QMargins QHtml5Window::frameMargins() const
 {
     QApplication *app = static_cast<QApplication*>(QApplication::instance());
     QStyle *style = app->style();
-    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
-    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+
+    bool hasTitle = window()->flags().testFlag(Qt::WindowTitleHint);
+
+    int border = hasTitle ? style->pixelMetric(QStyle::PM_MDIFrameWidth) : 0;
+    int titleHeight = hasTitle ? style->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr) : 0;
 
     QMargins margins;
     margins.setLeft(border);
