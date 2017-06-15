@@ -308,8 +308,8 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     auto timestamp = mouseEvent->timestamp;
     QPoint point(mouseEvent->canvasX, mouseEvent->canvasY);
 
-    Qt::MouseButton button = Qt::NoButton;
-    Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+    Qt::MouseButton button = translateMouseButton(mouseEvent->button);
+    Qt::KeyboardModifiers modifiers = translateMouseModifier(mouseEvent);
 
     QWindow *window2 = QHTML5Integration::get()->compositor()->windowAt(point, 5);
     QHtml5Window *htmlWindow = static_cast<QHtml5Window*>(window2->handle());
@@ -322,20 +322,19 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     switch (eventType) {
     case 5: //down
     {
-        button = translateMouseButton(mouseEvent->button);
-        modifiers = translateMouseModifier(mouseEvent);
-
         if (window2)
             window2->raise();
 
         pressedButtons.setFlag(button);
 
         if (mouseEvent->button == 0) {
+            pressedWindow = window2;
+
             if (htmlWindow && htmlWindow->isPointOnTitle(point))
                 draggedWindow = window2;
             else if (htmlWindow && htmlWindow->isPointOnResizeRegion(point)) {
                 draggedWindow = window2;
-                resizeMode = htmlWindow->getResizeModeAtPoint(point);
+                resizeMode = htmlWindow->resizeModeAtPoint(point);
                 resizePoint = point;
                 resizeStartRect = window2->geometry();
             }
@@ -348,10 +347,21 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     {
         pressedButtons.setFlag(translateMouseButton(mouseEvent->button), false);
 
+        QHtml5Window *oldWindow = nullptr;
+
+        if (mouseEvent->button == 0 && pressedWindow) {
+            oldWindow = static_cast<QHtml5Window*>(pressedWindow->handle());
+            pressedWindow = nullptr;
+        }
+
+
         if (mouseEvent->button == 0) {
             draggedWindow = nullptr;
             resizeMode = QHtml5Window::ResizeNone;
         }
+
+        if (oldWindow)
+            oldWindow->injectMouseReleased(localPoint, point, button, modifiers);
     }
         break;
     case 8://move //drag event?
@@ -364,11 +374,6 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
         if (resizeMode != QHtml5Window::ResizeNone) {
             QPoint delta = QPoint(mouseEvent->canvasX, mouseEvent->canvasY) - resizePoint;
             resizeWindow(draggedWindow, resizeMode, resizeStartRect, delta);
-        }
-
-        if (mouseEvent->buttons) {
-            button = translateMouseButton(mouseEvent->button);
-            modifiers = translateMouseModifier(mouseEvent);
         }
     }
         break;

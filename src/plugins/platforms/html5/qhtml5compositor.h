@@ -38,6 +38,7 @@
 
 #include <QtGui/QRegion>
 #include <qpa/qplatformwindow.h>
+#include <QtWidgets/QStyleOptionTitleBar>
 
 QT_BEGIN_NAMESPACE
 
@@ -45,6 +46,8 @@ class QHtml5Window;
 class QHTML5Screen;
 class QOpenGLContext;
 class QOpenGLTextureBlitter;
+
+QStyleOptionTitleBar makeTitleBarOptions(const QHtml5Window *window);
 
 class QHtml5CompositedWindow
 {
