@@ -424,6 +424,9 @@ QStyleOptionTitleBar makeTitleBarOptions(const QHtml5Window *window)
     titleBarOptions.titleBarFlags = window->window()->flags();
     titleBarOptions.titleBarState = window->window()->windowState();
 
+    // Disable minimize button
+    titleBarOptions.titleBarFlags.setFlag(Qt::WindowMinimizeButtonHint, false);
+
     titleBarOptions.palette = makeWindowPalette();
 
     if (window->window()->isActive()) {
