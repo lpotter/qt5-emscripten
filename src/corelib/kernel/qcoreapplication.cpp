@@ -116,6 +116,10 @@
 #  include <taskLib.h>
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <algorithm>
 
 QT_BEGIN_NAMESPACE
@@ -439,6 +443,16 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
     , q_ptr(0)
 #endif
 {
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+        //mount persistent directory as IDBFS
+              FS.mount(IDBFS,{},'/home/web_user');
+              FS.syncfs(true, function(err) {
+                      assert(!err);
+                      Module.print("end persisted to mem file sync..");
+              });
+         );
+#endif
     app_compile_version = flags & 0xffffff;
     static const char *const empty = "";
     if (argc == 0 || argv == 0) {
