@@ -59,12 +59,19 @@ QT_BEGIN_NAMESPACE
 //static QHtml5Window *globalHtml5Window;
 //QHtml5Window *QHtml5Window::get() { return globalHtml5Window; }
 
+QStyle *getAppStyle()
+{
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    return app->style();
+}
+
 QHtml5Window::QHtml5Window(QWindow *w, QHtml5Compositor* compositor)
     : QPlatformWindow(w),
       mWindow(w),
       mWindowState(Qt::WindowNoState),
       mCompositor(compositor),
-      m_raster(false)
+      m_raster(false),
+      mActiveControl(QStyle::SC_None)
 {
     //globalHtml5Window = this;
     static int serialNo = 0;
@@ -204,9 +211,177 @@ void QHtml5Window::propagateSizeHints()
 // get rid of base class warning
 }
 
+void QHtml5Window::injectMousePressed(const QPoint &local, const QPoint &global,
+                                      Qt::MouseButton button, Qt::KeyboardModifiers mods)
+{
+    Q_UNUSED(local);
+    Q_UNUSED(mods);
+
+    if (button != Qt::LeftButton)
+        return;
+
+    if (maxButtonRect().contains(global))
+        mActiveControl = QStyle::SC_TitleBarMaxButton;
+    else if (minButtonRect().contains(global))
+        mActiveControl = QStyle::SC_TitleBarMinButton;
+    else if (closeButtonRect().contains(global))
+        mActiveControl = QStyle::SC_TitleBarCloseButton;
+
+    invalidate();
+}
+
+void QHtml5Window::injectMouseReleased(const QPoint &local, const QPoint &global,
+                                       Qt::MouseButton button, Qt::KeyboardModifiers mods)
+{
+    Q_UNUSED(local);
+    Q_UNUSED(global);
+    Q_UNUSED(mods);
+
+    if (button != Qt::LeftButton)
+        return;
+
+    if (closeButtonRect().contains(global) && mActiveControl == QStyle::SC_TitleBarCloseButton)
+        window()->close();
+
+    mActiveControl = QStyle::SC_None;
+
+    invalidate();
+}
+
+int QHtml5Window::titleHeight() const
+{
+    return getAppStyle()->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
+}
+
+int QHtml5Window::borderWidth() const
+{
+    return getAppStyle()->pixelMetric(QStyle::PM_MDIFrameWidth, nullptr, nullptr);
+}
+
+QRegion QHtml5Window::titleGeometry() const
+{
+    int border = borderWidth();
+
+    QRegion result(window()->frameGeometry().x() + border,
+                   window()->frameGeometry().y() + border,
+                   window()->frameGeometry().width() - 2*border,
+                   titleHeight());
+
+    result -= titleControlRegion();
+
+    return result;
+}
+
+QRegion QHtml5Window::resizeRegion() const
+{
+    int border = borderWidth();
+    QRegion result(window()->frameGeometry().adjusted(-border, -border, border, border));
+    result -= window()->frameGeometry().adjusted(border, border, -border, -border);
+
+    return result;
+}
+
+bool QHtml5Window::isPointOnTitle(QPoint point) const
+{
+    return titleGeometry().contains(point);
+}
+
+bool QHtml5Window::isPointOnResizeRegion(QPoint point) const
+{
+    return resizeRegion().contains(point);
+}
+
+QHtml5Window::ResizeMode QHtml5Window::resizeModeAtPoint(QPoint point) const
+{
+    QPoint p1 = window()->frameGeometry().topLeft() - QPoint(5, 5);
+    QPoint p2 = window()->frameGeometry().bottomRight() + QPoint(5, 5);
+    int corner = 20;
+
+    QRect top(p1, QPoint(p2.x(), p1.y() + corner));
+    QRect middle(QPoint(p1.x(), p1.y() + corner), QPoint(p2.x(), p2.y() - corner));
+    QRect bottom(QPoint(p1.x(), p2.y() - corner), p2);
+
+    QRect left(p1, QPoint(p1.x() + corner, p2.y()));
+    QRect center(QPoint(p1.x() + corner, p1.y()), QPoint(p2.x() - corner, p2.y()));
+    QRect right(QPoint(p2.x() - corner, p1.y()), p2);
+
+    if (top.contains(point)) {
+        // Top
+        if (left.contains(point))
+            return ResizeTopLeft;
+        if (center.contains(point))
+            return ResizeTop;
+        if (right.contains(point))
+            return ResizeTopRight;
+    } else if (middle.contains(point)) {
+        // Middle
+        if (left.contains(point))
+            return ResizeLeft;
+        if (right.contains(point))
+            return ResizeRight;
+    } else if (bottom.contains(point)) {
+        // Bottom
+        if (left.contains(point))
+            return ResizeBottomLeft;
+        if (center.contains(point))
+            return ResizeBottom;
+        if (right.contains(point))
+            return ResizeBottomRight;
+    }
+
+    return ResizeNone;
+}
+
+QRect getSubControlRect(const QHtml5Window *window, QStyle::ComplexControl control, QStyle::SubControl subControl)
+{
+    QStyle *style = getAppStyle();
+    QStyleOptionTitleBar options = makeTitleBarOptions(window);
+
+    QRect r = style->subControlRect(control, &options, subControl, nullptr);
+    r.translate(window->window()->frameGeometry().x(), window->window()->frameGeometry().y());;
+
+    return r;
+}
+
+QRect QHtml5Window::maxButtonRect() const
+{
+    return getSubControlRect(this, QStyle::CC_TitleBar, QStyle::SC_TitleBarMaxButton);
+}
+
+QRect QHtml5Window::minButtonRect() const
+{
+    return getSubControlRect(this, QStyle::CC_TitleBar, QStyle::SC_TitleBarMinButton);
+}
+
+QRect QHtml5Window::closeButtonRect() const
+{
+    return getSubControlRect(this, QStyle::CC_TitleBar, QStyle::SC_TitleBarCloseButton);
+}
+
+QRect QHtml5Window::sysMenuRect() const
+{
+    return getSubControlRect(this, QStyle::CC_TitleBar, QStyle::SC_TitleBarSysMenu);
+}
+
+QRegion QHtml5Window::titleControlRegion() const
+{
+    QRegion result;
+    result += closeButtonRect();
+    result += minButtonRect();
+    result += maxButtonRect();
+    result += sysMenuRect();
+
+    return result;
+}
+
 void QHtml5Window::invalidate()
 {
     mCompositor->requestRedraw();
+}
+
+QStyle::SubControl QHtml5Window::activeSubControl() const
+{
+    return mActiveControl;
 }
 
 QT_END_NAMESPACE

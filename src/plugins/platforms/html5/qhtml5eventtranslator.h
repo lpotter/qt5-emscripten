@@ -43,6 +43,7 @@
 #include <QRect>
 #include <QtCore/QPoint>
 #include <emscripten/html5.h>
+#include "qhtml5window.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -178,17 +179,6 @@ class QHTML5EventTranslator : public QObject
       };
 
 public:
-    enum ResizeMode {
-        ResizeNone,
-        ResizeTopLeft,
-        ResizeTop,
-        ResizeTopRight,
-        ResizeRight,
-        ResizeBottomRight,
-        ResizeBottom,
-        ResizeBottomLeft,
-        ResizeLeft
-    };
 
     explicit QHTML5EventTranslator(QObject *parent = 0);
 
@@ -202,13 +192,16 @@ private:
     static Qt::Key translateEmscriptKey(const EmscriptenKeyboardEvent *emscriptKey, bool *outAlphanumretic);
     static QFlags<Qt::KeyboardModifier> translateKeyModifier(const EmscriptenKeyboardEvent *keyEvent);
     static QFlags<Qt::KeyboardModifier> translateMouseModifier(const EmscriptenMouseEvent *mouseEvent);
-    static Qt::MouseButtons translateMouseButtons(unsigned short button);
+    static Qt::MouseButton translateMouseButton(unsigned short button);
 
     void processMouse(int eventType, const EmscriptenMouseEvent *mouseEvent);
 
 private:
     QWindow *draggedWindow;
-    ResizeMode resizeMode;
+    QWindow *pressedWindow;
+    Qt::MouseButtons pressedButtons;
+
+    QHtml5Window::ResizeMode resizeMode;
     QPoint resizePoint;
     QRect resizeStartRect;
 };

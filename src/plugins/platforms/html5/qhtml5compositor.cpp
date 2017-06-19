@@ -392,25 +392,8 @@ void drawWindowContent(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHt
     blit(blitter, screen, texture, window->geometry());
 }
 
-void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
+QPalette makeWindowPalette()
 {
-    QApplication *app = static_cast<QApplication*>(QApplication::instance());
-    QStyle *style = app->style();
-
-    int width = window->windowFrameGeometry().width();
-    int height = window->windowFrameGeometry().height();
-    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
-
-    QImage image(QSize(width, height), QImage::Format_RGB32);
-    QPainter painter(&image);
-    painter.fillRect(QRect(0, 0, width, height), painter.background());
-
-    QStyleOptionTitleBar titleBarOptions;
-    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, &titleBarOptions, nullptr);
-    titleBarOptions.rect = QRect(border, border, width - 2*border, titleHeight);
-    titleBarOptions.titleBarFlags = window->window()->flags();
-    titleBarOptions.titleBarState = window->window()->windowState();
-
     QPalette palette;
     palette.setColor(QPalette::Active, QPalette::Highlight,
                      palette.color(QPalette::Active, QPalette::Highlight));
@@ -423,7 +406,28 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
     palette.setColor(QPalette::Inactive, QPalette::HighlightedText,
                      palette.color(QPalette::Inactive, QPalette::Window));
 
-    titleBarOptions.palette = palette;
+    return palette;
+}
+
+QStyleOptionTitleBar makeTitleBarOptions(const QHtml5Window *window)
+{
+    int width = window->windowFrameGeometry().width();
+
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    QStyle *style = app->style();
+
+    int border = style->pixelMetric(QStyle::PM_MDIFrameWidth);
+
+    QStyleOptionTitleBar titleBarOptions;
+    int titleHeight = style->pixelMetric(QStyle::PM_TitleBarHeight, &titleBarOptions, nullptr);
+    titleBarOptions.rect = QRect(border, border, width - 2*border, titleHeight);
+    titleBarOptions.titleBarFlags = window->window()->flags();
+    titleBarOptions.titleBarState = window->window()->windowState();
+
+    // Disable minimize button
+    titleBarOptions.titleBarFlags.setFlag(Qt::WindowMinimizeButtonHint, false);
+
+    titleBarOptions.palette = makeWindowPalette();
 
     if (window->window()->isActive()) {
         titleBarOptions.state |= QStyle::State_Active;
@@ -434,12 +438,34 @@ void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen,
         titleBarOptions.palette.setCurrentColorGroup(QPalette::Inactive);
     }
 
+    if (window->activeSubControl() != QStyle::SC_None) {
+        titleBarOptions.activeSubControls = window->activeSubControl();
+        titleBarOptions.state |= QStyle::State_Sunken;
+    }
+
     if (!window->window()->title().isEmpty()) {
         int titleWidth = style->subControlRect(QStyle::CC_TitleBar, &titleBarOptions,
                                                QStyle::SC_TitleBarLabel, nullptr).width();
         titleBarOptions.text = titleBarOptions.fontMetrics
                                .elidedText(window->window()->title(), Qt::ElideRight, titleWidth);
     }
+
+    return titleBarOptions;
+}
+
+void drawWindowDecorations(QOpenGLTextureBlitter *blitter, QHTML5Screen *screen, QHtml5Window *window)
+{
+    QApplication *app = static_cast<QApplication*>(QApplication::instance());
+    QStyle *style = app->style();
+
+    int width = window->windowFrameGeometry().width();
+    int height = window->windowFrameGeometry().height();
+
+    QImage image(QSize(width, height), QImage::Format_RGB32);
+    QPainter painter(&image);
+    painter.fillRect(QRect(0, 0, width, height), painter.background());
+
+    QStyleOptionTitleBar titleBarOptions = makeTitleBarOptions(window);
 
     style->drawComplexControl(QStyle::CC_TitleBar, &titleBarOptions, &painter);
 

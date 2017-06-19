@@ -45,6 +45,7 @@
 #include <emscripten/html5.h>
 #include "qhtml5backingstore.h"
 #include "qhtml5screen.h"
+#include <QtWidgets/QStyle>
 
 QT_BEGIN_NAMESPACE
 
@@ -53,6 +54,18 @@ class QHtml5Compositor;
 class QHtml5Window : public QPlatformWindow
 {
 public:
+    enum ResizeMode {
+        ResizeNone,
+        ResizeTopLeft,
+        ResizeTop,
+        ResizeTopRight,
+        ResizeRight,
+        ResizeBottomRight,
+        ResizeBottom,
+        ResizeBottomLeft,
+        ResizeLeft
+    };
+
     QHtml5Window(QWindow *w, QHtml5Compositor* compositor);
     ~QHtml5Window();
 
@@ -73,7 +86,24 @@ public:
     QHTML5BackingStore *backingStore() const { return mBackingStore; }
     QWindow *window() const { return mWindow; }
 
-    //static QHTML5Window *get();
+    void injectMousePressed(const QPoint &local, const QPoint &global,
+                            Qt::MouseButton button, Qt::KeyboardModifiers mods);
+    void injectMouseReleased(const QPoint &local, const QPoint &global,
+                            Qt::MouseButton button, Qt::KeyboardModifiers mods);
+
+    int titleHeight() const;
+    int borderWidth() const;
+    QRegion titleGeometry() const;
+    QRegion resizeRegion() const;
+    bool isPointOnTitle(QPoint point) const;
+    bool isPointOnResizeRegion(QPoint point) const;
+    ResizeMode resizeModeAtPoint(QPoint point) const;
+    QRect maxButtonRect() const;
+    QRect minButtonRect() const;
+    QRect closeButtonRect() const;
+    QRect sysMenuRect() const;
+    QRegion titleControlRegion() const;
+    QStyle::SubControl activeSubControl() const;
 
 protected:
     void invalidate();
@@ -91,6 +121,8 @@ protected:
     bool firstRun;
     QHtml5Compositor *mCompositor;
     bool m_raster;
+
+    QStyle::SubControl mActiveControl;
 };
 QT_END_NAMESPACE
 #endif // QHTML5WINDOW_H
