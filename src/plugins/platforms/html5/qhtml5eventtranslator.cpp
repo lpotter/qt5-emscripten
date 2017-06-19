@@ -54,7 +54,8 @@ QT_BEGIN_NAMESPACE
 QHTML5EventTranslator::QHTML5EventTranslator(QObject *parent)
     : QObject(parent)
     , draggedWindow(nullptr)
-    , resizeMode(ResizeNone)
+    , pressedButtons(Qt::NoButton)
+    , resizeMode(QHtml5Window::ResizeNone)
 {
     emscripten_set_keydown_callback(0,(void *)this,1,&keyboard_cb);
     emscripten_set_keyup_callback(0,(void *)this,1,&keyboard_cb);
@@ -227,19 +228,16 @@ Qt::Key QHTML5EventTranslator::translateEmscriptKey(const EmscriptenKeyboardEven
     return qtKey;
 }
 
-Qt::MouseButtons QHTML5EventTranslator::translateMouseButtons(unsigned short button)
+Qt::MouseButton QHTML5EventTranslator::translateMouseButton(unsigned short button)
 {
-    Qt::MouseButtons buttons = Qt::NoButton;
-    if (button == 0) {
-        buttons |= Qt::LeftButton;
-    }
-    if (button == 1) {
-        buttons |= Qt::MiddleButton;
-    }
-    if (button == 2) {
-        buttons |= Qt::RightButton;
-    }
-    return buttons;
+    if (button == 0)
+        return Qt::LeftButton;
+    else if (button == 1)
+        return Qt::MiddleButton;
+    else if (button == 2)
+        return Qt::RightButton;
+
+    return Qt::NoButton;
 }
 
 int QHTML5EventTranslator::mouse_cb(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData)
@@ -249,81 +247,27 @@ int QHTML5EventTranslator::mouse_cb(int eventType, const EmscriptenMouseEvent *m
     return 0;
 }
 
-QStyle *getAppStyle()
-{
-    QApplication *app = static_cast<QApplication*>(QApplication::instance());
-    return app->style();
-}
-
-int getWindowTitleHeight()
-{
-    return getAppStyle()->pixelMetric(QStyle::PM_TitleBarHeight, nullptr, nullptr);
-}
-
-int getWindowBorderWidth()
-{
-    return getAppStyle()->pixelMetric(QStyle::PM_MDIFrameWidth, nullptr, nullptr);
-}
-
-QRect getWindowTitleGeometry(QWindow *window)
-{
-    //QMargins margins = window->frameMargins();
-    int border = getWindowBorderWidth();
-
-    QRect result(window->frameGeometry().x() + border,
-                 window->frameGeometry().y() + border,
-                 window->frameGeometry().width() - 2*border,
-                 getWindowTitleHeight());
-
-    return result;
-}
-
-QRegion getWindowResizeRegion(QWindow *window)
-{
-    if (!window)
-        return QRegion();
-
-    int border = getWindowBorderWidth();
-    QRegion result(window->frameGeometry().adjusted(-border, -border, border, border));
-    result -= window->frameGeometry().adjusted(border, border, -border, -border);
-
-    return result;
-}
-
-bool isPointOnTitle(QWindow *window, QPoint point)
-{
-    if (!window)
-        return false;
-
-    return getWindowTitleGeometry(window).contains(point);
-}
-
-bool isPointOnResizeRegion(QWindow *window, QPoint point)
-{
-    return getWindowResizeRegion(window).contains(point);
-}
-
-void resizeWindow(QWindow *window, QHTML5EventTranslator::ResizeMode mode,
+void resizeWindow(QWindow *window, QHtml5Window::ResizeMode mode,
                   QRect startRect, QPoint amount)
 {
-    if (mode == QHTML5EventTranslator::ResizeNone)
+    if (mode == QHtml5Window::ResizeNone)
         return;
 
-    bool top = mode == QHTML5EventTranslator::ResizeTopLeft ||
-               mode == QHTML5EventTranslator::ResizeTop ||
-               mode == QHTML5EventTranslator::ResizeTopRight;
+    bool top = mode == QHtml5Window::ResizeTopLeft ||
+               mode == QHtml5Window::ResizeTop ||
+               mode == QHtml5Window::ResizeTopRight;
 
-    bool bottom = mode == QHTML5EventTranslator::ResizeBottomLeft ||
-                  mode == QHTML5EventTranslator::ResizeBottom ||
-                  mode == QHTML5EventTranslator::ResizeBottomRight;
+    bool bottom = mode == QHtml5Window::ResizeBottomLeft ||
+                  mode == QHtml5Window::ResizeBottom ||
+                  mode == QHtml5Window::ResizeBottomRight;
 
-    bool left = mode == QHTML5EventTranslator::ResizeLeft ||
-                mode == QHTML5EventTranslator::ResizeTopLeft ||
-                mode == QHTML5EventTranslator::ResizeBottomLeft;
+    bool left = mode == QHtml5Window::ResizeLeft ||
+                mode == QHtml5Window::ResizeTopLeft ||
+                mode == QHtml5Window::ResizeBottomLeft;
 
-    bool right = mode == QHTML5EventTranslator::ResizeRight ||
-                 mode == QHTML5EventTranslator::ResizeTopRight ||
-                 mode == QHTML5EventTranslator::ResizeBottomRight;
+    bool right = mode == QHtml5Window::ResizeRight ||
+                 mode == QHtml5Window::ResizeTopRight ||
+                 mode == QHtml5Window::ResizeBottomRight;
 
     int x1 = startRect.left();
     int y1 = startRect.top();
@@ -359,104 +303,77 @@ void resizeWindow(QWindow *window, QHTML5EventTranslator::ResizeMode mode,
     window->setGeometry(x1, y1, w, h);
 }
 
-QHTML5EventTranslator::ResizeMode getResizeModeOnWindow(QWindow *window, QPoint point)
-{
-    QPoint p1 = window->frameGeometry().topLeft() - QPoint(5, 5);
-    QPoint p2 = window->frameGeometry().bottomRight() + QPoint(5, 5);
-    int corner = 20;
-
-    QRect top(p1, QPoint(p2.x(), p1.y() + corner));
-    QRect middle(QPoint(p1.x(), p1.y() + corner), QPoint(p2.x(), p2.y() - corner));
-    QRect bottom(QPoint(p1.x(), p2.y() - corner), p2);
-
-    QRect left(p1, QPoint(p1.x() + corner, p2.y()));
-    QRect center(QPoint(p1.x() + corner, p1.y()), QPoint(p2.x() - corner, p2.y()));
-    QRect right(QPoint(p2.x() - corner, p1.y()), p2);
-
-    if (top.contains(point)) {
-        // Top
-        if (left.contains(point))
-            return QHTML5EventTranslator::ResizeTopLeft;
-        if (center.contains(point))
-            return QHTML5EventTranslator::ResizeTop;
-        if (right.contains(point))
-            return QHTML5EventTranslator::ResizeTopRight;
-    } else if (middle.contains(point)) {
-        // Middle
-        if (left.contains(point))
-            return QHTML5EventTranslator::ResizeLeft;
-        if (right.contains(point))
-            return QHTML5EventTranslator::ResizeRight;
-    } else if (bottom.contains(point)) {
-        // Bottom
-        if (left.contains(point))
-            return QHTML5EventTranslator::ResizeBottomLeft;
-        if (center.contains(point))
-            return QHTML5EventTranslator::ResizeBottom;
-        if (right.contains(point))
-            return QHTML5EventTranslator::ResizeBottomRight;
-    }
-
-    return QHTML5EventTranslator::ResizeNone;
-}
-
 void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEvent *mouseEvent)
 {
     auto timestamp = mouseEvent->timestamp;
     QPoint point(mouseEvent->canvasX, mouseEvent->canvasY);
 
-    Qt::MouseButtons buttons = Qt::NoButton;
-    Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+    Qt::MouseButton button = translateMouseButton(mouseEvent->button);
+    Qt::KeyboardModifiers modifiers = translateMouseModifier(mouseEvent);
 
     QWindow *window2 = QHTML5Integration::get()->compositor()->windowAt(point, 5);
+    QHtml5Window *htmlWindow = static_cast<QHtml5Window*>(window2->handle());
     bool onFrame = false;
     if (window2 && !window2->geometry().contains(point))
         onFrame = true;
 
+    QPoint localPoint(point.x() - window2->geometry().x(), point.y() - window2->geometry().y());
+
     switch (eventType) {
     case 5: //down
     {
-        buttons = translateMouseButtons(mouseEvent->button);
-        modifiers = translateMouseModifier(mouseEvent);
-
         if (window2)
             window2->raise();
 
+        pressedButtons.setFlag(button);
+
         if (mouseEvent->button == 0) {
-            if (isPointOnTitle(window2, point))
+            pressedWindow = window2;
+
+            if (htmlWindow && htmlWindow->isPointOnTitle(point))
                 draggedWindow = window2;
-            else if (isPointOnResizeRegion(window2, point)) {
+            else if (htmlWindow && htmlWindow->isPointOnResizeRegion(point)) {
                 draggedWindow = window2;
-                resizeMode = getResizeModeOnWindow(window2, point);
+                resizeMode = htmlWindow->resizeModeAtPoint(point);
                 resizePoint = point;
                 resizeStartRect = window2->geometry();
             }
         }
+
+        htmlWindow->injectMousePressed(localPoint, point, button, modifiers);
     }
         break;
     case 6: //up
     {
+        pressedButtons.setFlag(translateMouseButton(mouseEvent->button), false);
+
+        QHtml5Window *oldWindow = nullptr;
+
+        if (mouseEvent->button == 0 && pressedWindow) {
+            oldWindow = static_cast<QHtml5Window*>(pressedWindow->handle());
+            pressedWindow = nullptr;
+        }
+
+
         if (mouseEvent->button == 0) {
             draggedWindow = nullptr;
-            resizeMode = ResizeNone;
+            resizeMode = QHtml5Window::ResizeNone;
         }
+
+        if (oldWindow)
+            oldWindow->injectMouseReleased(localPoint, point, button, modifiers);
     }
         break;
     case 8://move //drag event?
     {
-        if (resizeMode == ResizeNone && draggedWindow) {
+        if (resizeMode == QHtml5Window::ResizeNone && draggedWindow) {
             draggedWindow->setX(draggedWindow->x() + mouseEvent->movementX);
             draggedWindow->setY(draggedWindow->y() + mouseEvent->movementY);
         }
 
-        if (resizeMode != ResizeNone) {
+        if (resizeMode != QHtml5Window::ResizeNone) {
             QPoint delta = QPoint(mouseEvent->canvasX, mouseEvent->canvasY) - resizePoint;
             resizeWindow(draggedWindow, resizeMode, resizeStartRect, delta);
-        }
-
-        if (mouseEvent->buttons) {
-            buttons = translateMouseButtons(mouseEvent->button);
-            modifiers = translateMouseModifier(mouseEvent);
         }
     }
         break;
@@ -464,11 +381,9 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
         break;
     };
 
-    QPoint localPoint(point.x() - window2->geometry().x(), point.y() - window2->geometry().y());
-
     if (window2 && !onFrame) {
         QWindowSystemInterface::handleMouseEvent(window2, timestamp, localPoint, point,
-                                                buttons, modifiers);
+                                                 pressedButtons, modifiers);
     }
 
     QCoreApplication::processEvents(); // probably not the best way
