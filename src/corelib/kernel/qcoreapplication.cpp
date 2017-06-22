@@ -443,16 +443,6 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
     , q_ptr(0)
 #endif
 {
-#ifdef __EMSCRIPTEN__
-        EM_ASM(
-        //mount persistent directory as IDBFS
-              FS.mount(IDBFS,{},'/home/web_user');
-              FS.syncfs(true, function(err) {
-                      assert(!err);
-                      Module.print("end persisted to mem file sync..");
-              });
-         );
-#endif
     app_compile_version = flags & 0xffffff;
     static const char *const empty = "";
     if (argc == 0 || argv == 0) {
@@ -483,6 +473,13 @@ QCoreApplicationPrivate::QCoreApplicationPrivate(int &aargc, char **aargv, uint 
 
 QCoreApplicationPrivate::~QCoreApplicationPrivate()
 {
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+        //unmount persistent directory as IDBFS
+              FS.unmount('/home/web_user');
+              Module.print("unmount persisted file system..");
+         );
+#endif
 #ifndef QT_NO_QOBJECT
     cleanupThreadData();
 #endif
@@ -779,6 +776,19 @@ void QCoreApplicationPrivate::init()
 
     Q_ASSERT_X(!QCoreApplication::self, "QCoreApplication", "there should be only one application object");
     QCoreApplication::self = q;
+
+#ifdef __EMSCRIPTEN__
+        EM_ASM(
+              Module.print("mount persistent directory as IDBFS");
+              FS.mount(IDBFS,{},'/home/web_user');
+              FS.syncfs(true, function(err) {
+              if (err)
+                Module.print(err);
+              Module.print("end persisted to mem file sync..");
+              });
+         );
+
+#endif
 
     // Store app name/version (so they're still available after QCoreApplication is destroyed)
     if (!coreappdata()->applicationNameSet)
