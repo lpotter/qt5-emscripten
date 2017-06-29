@@ -255,8 +255,12 @@ void QNetworkReplyEmscriptenImplPrivate::doSendRequest()
 {
     Q_Q(QNetworkReplyEmscriptenImpl);
     totalDownloadSize = 0;
-    jsRequest(q->methodName(), request.url().toString(), (void *)&onLoadCallback,
-              (void *)&onProgressCallback, (void *)&onRequestErrorCallback, (void *)&onResponseHeadersCallback);
+    jsRequest(q->methodName(), // GET POST
+              request.url().toString(),
+              (void *)&onLoadCallback,
+              (void *)&onProgressCallback,
+              (void *)&onRequestErrorCallback,
+              (void *)&onResponseHeadersCallback);
 }
 
 
@@ -277,7 +281,17 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
       // Probably a good idea to save any shared pointers as members in C++
       // so the objects they point to survive as long as you need them
 
-    //     QList<QByteArray> headers = newHttpRequest.rawHeaderList();
+         QList<QByteArray> headersData = request.rawHeaderList();
+         QStringList headersList;
+         for (int i = 0; i < headersData.size(); ++i) {
+             qDebug()  << i
+                       << headersData.at(i)
+                       << request.rawHeader(headersData.at(i));
+
+             headersList << QString(headersData.at(i)+":"+ request.rawHeader(headersData.at(i)));
+         }
+
+//         qDebug() << Q_FUNC_INFO << headersData;
 
         EM_ASM_ARGS({
           var verb = Pointer_stringify($0);
@@ -288,7 +302,8 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
           var onHeadersCallback = $5;
 
          var formData = new FormData();
-         var extraData = Pointer_stringify($6);
+         var extraData = Pointer_stringify($6); // request parameters
+         var headersData = Pointer_stringify($7);
 
          if (extraData) {
              var extra = extraData.split("&");
@@ -297,7 +312,6 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
                   formData.append(extra[i].split("=")[0],extra[i].split("=")[1]);
              }
          }
-
           var xhr;
           xhr = new XMLHttpRequest();
           xhr.responseType = "arraybuffer";
@@ -306,8 +320,13 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
           xhr.open(verb, url, true); //async
   // xhrReq.open(method, url, async, user, password);
 
-//  xhr.setRequestHeader('Connection','Keep-Alive');
-//  xhr.setRequestHeader('Access-Control-Expose-Headers', 'Content-Type, Location');
+        if (headersData) {
+            var headers = headersData.split("&");
+            for (var i = 0; i < headers.length; i++) {
+                 xhr.setRequestHeader(headers[i].split(":")[0],headers[i].split(":")[1]);
+                 console.log(headers[i].split(":")[0]);
+            }
+        }
   //xhr.withCredentials = true;
 
 
@@ -352,11 +371,18 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
                             Runtime.dynCall('vi', onHeadersCallback, [ptr]);
                             _free(ptr);
         };
-        //TODO headers, other operations, handle user/pass, handle binary data
+        //TODO other operations, handle user/pass, handle binary data
        //xhr.setRequestHeader(header, value);
         xhr.send(formData);
 
-      }, verb.toLatin1().data(), url.toLatin1().data(), loadCallback, progressCallback, errorCallback, onResponseHeadersCallback, extraData.toLatin1().data()/*, stateChangedCallback*/);
+      }, verb.toLatin1().data(),
+                    url.toLatin1().data(),
+                    loadCallback,
+                    progressCallback,
+                    errorCallback,
+                    onResponseHeadersCallback,
+                    extraData.toLatin1().data(),
+                    headersList.join("&").toLatin1().data());
 }
 
 void QNetworkReplyEmscriptenImplPrivate::emitReplyError(QNetworkReply::NetworkError errorCode)
