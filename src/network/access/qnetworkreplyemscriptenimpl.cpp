@@ -269,7 +269,9 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
 {
 
     qDebug() << Q_FUNC_INFO << verb;
-    QString extraData = outgoingData->readAll();
+    QString extraData;
+    if (outgoingData)
+        extraData = outgoingData->readAll();
 
     if (verb == "POST" && extraData.startsWith("?"))
         extraData.remove("?");
@@ -301,6 +303,8 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
           var onErrorCallbackPointer = $4;
           var onHeadersCallback = $5;
 
+          Module.print("Used method: " + verb);
+
          var formData = new FormData();
          var extraData = Pointer_stringify($6); // request parameters
          var headersData = Pointer_stringify($7);
@@ -323,10 +327,11 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
         if (headersData) {
             var headers = headersData.split("&");
             for (var i = 0; i < headers.length; i++) {
-                 xhr.setRequestHeader(headers[i].split(":")[0],headers[i].split(":")[1]);
-                 console.log(headers[i].split(":")[0]);
+                 //xhr.setRequestHeader(headers[i].split(":")[0],headers[i].split(":")[1]);
+                 Module.print(headers[i].split(":")[0]);
             }
         }
+
   //xhr.withCredentials = true;
 
 
@@ -348,6 +353,7 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
             if (xhr.readyState == xhr.DONE) {
 
                var responseStr = xhr.getAllResponseHeaders();
+               Module.print("response headers: " + responseStr);
                var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_NORMAL);
                Runtime.dynCall('vi', onHeadersCallback, [ptr]);
                _free(ptr);
@@ -356,6 +362,7 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
 
        xhr.onload = function(e) {
         var byteArray = new Uint8Array(this.response);
+        Module.print("response: " + this.response + " " + byteArray.length);
         var buffer = _malloc(byteArray.length);
         HEAPU8.set(byteArray, buffer);
         Module.Runtime.dynCall('viii', onLoadCallbackPointer, [this.readyState, buffer, byteArray.length]);
@@ -495,7 +502,12 @@ void QNetworkReplyEmscriptenImplPrivate::headersReceived(char *buffer)
             continue;
 qDebug() << Q_FUNC_INFO << headerName << headersValue;
 
-       q->setHeader(static_cast<QNetworkRequest::KnownHeaders>(parseHeaderName(headerName.toLocal8Bit())), (QVariant)headersValue);
+        int headerIndex = parseHeaderName(headerName.toLocal8Bit());
+
+        if (headerIndex == -1)
+            q->setRawHeader(headerName.toLocal8Bit(), headersValue.toLocal8Bit());
+        else
+            q->setHeader(static_cast<QNetworkRequest::KnownHeaders>(headerIndex), (QVariant)headersValue);
     }
 }
 
