@@ -39,6 +39,7 @@
 #include <QOpenGLTexture>
 #include <QtWidgets/QStyle>
 #include <QtWidgets/QStyleOptionTitleBar>
+#include <QtGui/private/qwindow_p.h>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/qopengltextureblitter.h>
@@ -508,6 +509,20 @@ void QHtml5Compositor::frame()
     if (m_windowStack.empty() || !mScreen)
         return;
 
+    QHtml5Window *someWindow = nullptr;
+
+    foreach (QHtml5Window *window, m_windowStack) {
+        if (window->window()->surfaceClass() == QSurface::Window
+            && qt_window_private(static_cast<QWindow *>(window->window()))->receivedExpose)
+        {
+            someWindow = window;
+            break;
+        }
+    }
+
+    if (!someWindow)
+        return;
+
     if (mContext.isNull()) {
         mContext.reset(new QOpenGLContext());
         //mContext->setFormat(mScreen->format());
@@ -515,7 +530,7 @@ void QHtml5Compositor::frame()
         mContext->create();
     }
 
-    mContext->makeCurrent(m_windowStack[0]->window());
+    mContext->makeCurrent(someWindow->window());
 
     if (!mBlitter->isCreated())
         mBlitter->create();
@@ -529,6 +544,7 @@ void QHtml5Compositor::frame()
 
     foreach (QHtml5Window *window, m_windowStack) {
         QHtml5CompositedWindow &compositedWindow = m_compositedWindows[window];
+
         if (!compositedWindow.visible)
             continue;
 
@@ -537,7 +553,8 @@ void QHtml5Compositor::frame()
 
     mBlitter->release();
 
-    mContext->swapBuffers(m_windowStack[0]->window());
+    if (someWindow)
+        mContext->swapBuffers(someWindow->window());
 }
 
 /*
