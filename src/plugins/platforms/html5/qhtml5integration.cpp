@@ -143,9 +143,9 @@ QPlatformWindow *QHTML5Integration::createPlatformWindow(QWindow *window) const
 
 QPlatformBackingStore *QHTML5Integration::createPlatformBackingStore(QWindow *window) const
 {
-//#ifdef QEGL_EXTRA_DEBUG
+#ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration::createWindowSurface %p\n", window);
-//#endif
+#endif
 #ifndef QT_NO_OPENGL
     return new QHTML5BackingStore(mCompositor, window);
 #else

@@ -38,6 +38,10 @@
 #include <QtCore/QDebug>
 #include <QtCore/QCoreApplication>
 
+#include <emscripten.h>
+
+#include <iostream>
+
 QHtml5EventDispatcher::QHtml5EventDispatcher(QObject *parent)
     : QUnixEventDispatcherQPA(parent)
     , m_hasPendingProcessEvents(false)
@@ -59,6 +63,13 @@ bool QHtml5EventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         processed = QUnixEventDispatcherQPA::processEvents(flags);
         processedCount += 1;
     } while (processed && hasPendingEvents() && processedCount < maxProcessedEvents);
+
+    std::cout << "sleeping" << std::endl;
+    emscripten_sleep_with_yield(30);
+
+    return hasPendingEvents();
+
+    /*
     // Schedule a new processing loop if we still have events pending
     if (hasPendingEvents()) {
      //   qDebug() << "scheduleProcessEvents";
@@ -66,6 +77,7 @@ bool QHtml5EventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
     //    scheduleProcessEvents();
     }
     return true;
+    */
 }
 
 bool QHtml5EventDispatcher::hasPendingEvents()
