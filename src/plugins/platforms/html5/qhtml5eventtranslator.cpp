@@ -48,6 +48,7 @@
 #include <QtGlobal>
 
 #include <iostream>
+#include <vector>
 
 QT_BEGIN_NAMESPACE
 
@@ -57,6 +58,8 @@ QHTML5EventTranslator::QHTML5EventTranslator(QObject *parent)
     , pressedButtons(Qt::NoButton)
     , resizeMode(QHtml5Window::ResizeNone)
 {
+    mouseEvents.reserve(250);
+    keyboardEvents.reserve(250);
     emscripten_set_keydown_callback(0,(void *)this,1,&keyboard_cb);
     emscripten_set_keyup_callback(0,(void *)this,1,&keyboard_cb);
 
@@ -109,8 +112,18 @@ QFlags<Qt::KeyboardModifier> QHTML5EventTranslator::translateMouseModifier(const
 
 int QHTML5EventTranslator::keyboard_cb(int eventType, const EmscriptenKeyboardEvent *keyEvent, void *userData)
 {
-    Q_UNUSED(userData)
+    QHTML5EventTranslator *translator = reinterpret_cast<QHTML5EventTranslator*>(userData);
 
+    if (translator->keyboardEvents.size() == 250)
+        return 0;
+
+    translator->keyboardEvents.push_back(std::make_pair(eventType, *keyEvent));
+
+    return 0;
+}
+
+void QHTML5EventTranslator::processKeyboard(int eventType, const EmscriptenKeyboardEvent *keyEvent)
+{
     int key = keyEvent->key[0];
     if (key == 0) {
         key = keyEvent->which + 32;
@@ -131,13 +144,13 @@ int QHTML5EventTranslator::keyboard_cb(int eventType, const EmscriptenKeyboardEv
         break;
     };
 
+    QString str(keyEvent->key);
     if (alphanumeric) {
-        QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, translateKeyModifier(keyEvent), QString(keyEvent->key));
+        QWindowSystemInterface::handleKeyEvent<QWindowSystemInterface::SynchronousDelivery>(0, keyType, qtKey, translateKeyModifier(keyEvent), str);
     } else {
         QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, translateKeyModifier(keyEvent));
     }
-    QCoreApplication::processEvents();
-    return 0;
+    //QCoreApplication::processEvents();
 }
 
 Qt::Key QHTML5EventTranslator::translateEmscriptKey(const EmscriptenKeyboardEvent *emscriptKey, bool *outAlphanumeric)
@@ -240,10 +253,43 @@ Qt::MouseButton QHTML5EventTranslator::translateMouseButton(unsigned short butto
     return Qt::NoButton;
 }
 
+void QHTML5EventTranslator::processEvents()
+{
+    if (!mouseEvents.empty())
+    {
+        std::vector<std::pair<int, EmscriptenMouseEvent>> events;
+        mouseEvents.swap(events);
+
+        mouseEvents.reserve(250);
+
+        for (auto const& e : events)
+        {
+            processMouse(e.first, &e.second);
+        }
+    }
+
+    if (!keyboardEvents.empty())
+    {
+        std::vector<std::pair<int, EmscriptenKeyboardEvent>> events2;
+        keyboardEvents.swap(events2);
+
+        keyboardEvents.reserve(250);
+
+        for (auto const& e : events2)
+        {
+            processKeyboard(e.first, &e.second);
+        }
+    }
+}
+
 int QHTML5EventTranslator::mouse_cb(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData)
 {
-    QHTML5EventTranslator *translator = (QHTML5EventTranslator*)userData;
-    translator->processMouse(eventType,mouseEvent);
+    QHTML5EventTranslator *translator = reinterpret_cast<QHTML5EventTranslator*>(userData);
+    if (translator->mouseEvents.size() == 250)
+        return 0;
+
+    translator->mouseEvents.push_back(std::make_pair(eventType, *mouseEvent));
+
     return 0;
 }
 
@@ -382,11 +428,15 @@ void QHTML5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
     };
 
     if (window2 && !onFrame) {
-        QWindowSystemInterface::handleMouseEvent(window2, timestamp, localPoint, point,
-                                                 pressedButtons, modifiers);
+        QWindowSystemInterface::handleMouseEvent<QWindowSystemInterface::SynchronousDelivery>(window2,
+                                                                                              timestamp,
+                                                                                              localPoint,
+                                                                                              point,
+                                                                                              pressedButtons,
+                                                                                              modifiers);
     }
 
-    QCoreApplication::processEvents(); // probably not the best way
+    //QCoreApplication::processEvents(); // probably not the best way
 }
 
 int QHTML5EventTranslator::focus_cb(int /*eventType*/, const EmscriptenFocusEvent */*focusEvent*/, void */*userData*/)

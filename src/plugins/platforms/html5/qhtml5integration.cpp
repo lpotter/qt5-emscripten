@@ -57,6 +57,8 @@
 // this is where EGL headers are pulled in, make sure it is last
 #include "qhtml5screen.h"
 
+#include <iostream>
+
 QT_BEGIN_NAMESPACE
 
 static QHTML5Integration *globalHtml5Integration;
@@ -91,21 +93,32 @@ void emscriptenOutput(QtMsgType type, const QMessageLogContext &context, const Q
 
 QHTML5Integration::QHTML5Integration()
     : mFontDb(0),
-      mCompositor(new QHtml5Compositor),
-      mScreen(new QHTML5Screen(EGL_DEFAULT_DISPLAY, mCompositor)),
+      //mCompositor(new QHtml5Compositor),
+      //mScreen(new QHTML5Screen(EGL_DEFAULT_DISPLAY, mCompositor)),
+      mCompositor(0),
+      mScreen(0),
       m_eventDispatcher(0)
 {
+    std::cout << "QHTML5Integration::QHTML5Integration() 1" << std::endl;
+    mCompositor = new QHtml5Compositor;
+    std::cout << "QHTML5Integration::QHTML5Integration() 1.1" << std::endl;
+    mScreen = new QHTML5Screen(EGL_DEFAULT_DISPLAY, mCompositor);
+    std::cout << "QHTML5Integration::QHTML5Integration() 1.2" << std::endl;
+
     qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
    // qInstallMessageHandler(emscriptenOutput);
 
+    std::cout << "QHTML5Integration::QHTML5Integration() 2" << std::endl;
     globalHtml5Integration = this;
     screenAdded(mScreen);
     emscripten_set_resize_callback(0, (void *)this, 1, uiEvent_cb);
 
+    std::cout << "QHTML5Integration::QHTML5Integration() 3" << std::endl;
     m_eventTranslator = new QHTML5EventTranslator();
 #ifdef QEGL_EXTRA_DEBUG
     qWarning("QHTML5Integration\n");
 #endif
+    std::cout << "QHTML5Integration::QHTML5Integration() 4" << std::endl;
 }
 
 QHTML5Integration::~QHTML5Integration()
@@ -183,6 +196,7 @@ QVariant QHTML5Integration::styleHint(QPlatformIntegration::StyleHint hint) cons
 
 int QHTML5Integration::uiEvent_cb(int eventType, const EmscriptenUiEvent *e, void */*userData*/)
 {
+    std::cout << "QHTMLIntegration::uiEvent_cb enter" << std::endl;
     Q_UNUSED(eventType)
     Q_UNUSED(e)
 
@@ -194,6 +208,7 @@ int QHTML5Integration::uiEvent_cb(int eventType, const EmscriptenUiEvent *e, voi
     QHTML5Integration::get()->mCompositor->requestRedraw();
     //QHtml5Window::get()->setGeometry(windowRect);
 
+    std::cout << "QHTMLIntegration::uiEvent_cb exit" << std::endl;
     return 0;
 }
 

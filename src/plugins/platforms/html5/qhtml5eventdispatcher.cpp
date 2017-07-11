@@ -34,7 +34,10 @@
 ****************************************************************************/
 
 #include "qhtml5eventdispatcher.h"
+#include "qhtml5integration.h"
+#include "qhtml5eventtranslator.h"
 
+#include <qpa/qwindowsysteminterface.h>
 #include <QtCore/QDebug>
 #include <QtCore/QCoreApplication>
 
@@ -51,38 +54,50 @@ QHtml5EventDispatcher::QHtml5EventDispatcher(QObject *parent)
 
 QHtml5EventDispatcher::~QHtml5EventDispatcher() {}
 
+extern uint qGlobalPostedEventsCount(); // from qapplication.cpp
+
 bool QHtml5EventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
 {
     bool processed = false;
 
     // We need to give the control back to the browser due to lack of PTHREADS
     // Limit the number of events that may be processed at the time
-    int maxProcessedEvents = 2;
+    int maxProcessedEvents = 130;
     int processedCount = 0;
     do {
         processed = QUnixEventDispatcherQPA::processEvents(flags);
         processedCount += 1;
     } while (processed && hasPendingEvents() && processedCount < maxProcessedEvents);
 
-    std::cout << "sleeping" << std::endl;
-    emscripten_sleep_with_yield(30);
+    std::cout << "processed " << processedCount << " events." << std::endl;
+    std::cout << "global events: " << qGlobalPostedEventsCount()
+        << " window system events: " << QWindowSystemInterface::windowSystemEventsQueued()
+        << std::endl;
 
-    return hasPendingEvents();
-
-    /*
-    // Schedule a new processing loop if we still have events pending
-    if (hasPendingEvents()) {
-     //   qDebug() << "scheduleProcessEvents";
-        QCoreApplication::processEvents();
-    //    scheduleProcessEvents();
+    bool pending = hasPendingEvents();
+    if (pending)
+    {
+        std::cout << "Pending events -> sleep(30)" << std::endl;
+        emscripten_sleep_with_yield(30);
     }
-    return true;
-    */
+    else
+    {
+        std::cout << "No pending events -> sleep(30)" << std::endl;
+        emscripten_sleep_with_yield(30);
+    }
+
+    QHTML5Integration::get()->eventTranslator()->processEvents();
+
+    return pending;
 }
 
 bool QHtml5EventDispatcher::hasPendingEvents()
 {
     return QUnixEventDispatcherQPA::hasPendingEvents();
+}
+
+void QHtml5EventDispatcher::wakeUp()
+{
 }
 
 //void QHtml5EventDispatcher::timerCallback(int32_t result, int32_t timerSerial)

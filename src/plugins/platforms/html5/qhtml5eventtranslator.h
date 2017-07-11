@@ -186,6 +186,8 @@ public:
     static int mouse_cb(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData);
     static int focus_cb(int eventType, const EmscriptenFocusEvent *focusEvent, void *userData);
 
+    void processEvents();
+
 Q_SIGNALS:
     void getWindowAt(const QPoint &point, QWindow **window);
 private:
@@ -195,8 +197,12 @@ private:
     static Qt::MouseButton translateMouseButton(unsigned short button);
 
     void processMouse(int eventType, const EmscriptenMouseEvent *mouseEvent);
+    void processKeyboard(int eventType, const EmscriptenKeyboardEvent *keyboardEvent);
 
 private:
+    std::vector<std::pair<int, EmscriptenMouseEvent>> mouseEvents;
+    std::vector<std::pair<int, EmscriptenKeyboardEvent>> keyboardEvents;
+
     QWindow *draggedWindow;
     QWindow *pressedWindow;
     Qt::MouseButtons pressedButtons;

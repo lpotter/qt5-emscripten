@@ -62,38 +62,10 @@ protected:
 //    bool unregisterTimer(int timerId) Q_DECL_OVERRIDE;
 //    bool unregisterTimers(QObject *object) Q_DECL_OVERRIDE;
 
-//    void flush() Q_DECL_OVERRIDE;
-  //  void wakeUp() Q_DECL_OVERRIDE;
+    //void flush() Q_DECL_OVERRIDE;
+    void wakeUp() Q_DECL_OVERRIDE;
 
 private:
-//    struct PepperTimerInfo {
-
-//        PepperTimerInfo(){};
-//        PepperTimerInfo(int timerId, int interval, Qt::TimerType timerType, QObject *object)
-//            : timerId(timerId)
-//            , interval(interval)
-//            , timerType(timerType)
-//            , object(object)
-//        {
-//        }
-//        int timerId;
-//        int interval;
-//        Qt::TimerType timerType;
-//        QObject *object;
-//    };
-
-  //  void startTimer(PepperTimerInfo info);
-  //  void timerCallback(int32_t result, int32_t timerSerial);
-  //  void scheduleProcessEvents();
-   // void processEventsCallback(int32_t status);
-
-//    int m_currentTimerSerial;
-//    QHash<int, int> m_activeTimerIds;                // timer serial -> Qt timer id
-//    QHash<int, int> m_activeTimerSerials;            // Qt timer id -> timer serial
-//    QMultiHash<QObject *, int> m_activeObjectTimers; // QObject * -> Qt timer id
-//    QHash<int, PepperTimerInfo> m_timerDetails;
-//    pp::MessageLoop m_messageLoop;
-//    pp::CompletionCallbackFactory<QHtml5EventDispatcher> m_completionCallbackFactory;
     bool m_hasPendingProcessEvents;
 };
 

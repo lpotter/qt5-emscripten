@@ -354,7 +354,7 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
 
                var responseStr = xhr.getAllResponseHeaders();
                Module.print("response headers: " + responseStr);
-               var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_NORMAL);
+               var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_STACK);
                Runtime.dynCall('vi', onHeadersCallback, [ptr]);
                _free(ptr);
               }
@@ -374,10 +374,11 @@ void QNetworkReplyEmscriptenImplPrivate::jsRequest(const QString &verb, const QS
             Runtime.dynCall('vii', onErrorCallbackPointer, [xhr.readyState, xhr.status]);
 
                             var responseStr = xhr.getAllResponseHeaders();
-                            var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_NORMAL);
+                            var ptr = allocate(intArrayFromString(responseStr), 'i8', ALLOC_STACK);
                             Runtime.dynCall('vi', onHeadersCallback, [ptr]);
                             _free(ptr);
         };
+        Module.print("Send xhr: " + verb + ": " + url);
         //TODO other operations, handle user/pass, handle binary data
        //xhr.setRequestHeader(header, value);
         xhr.send(formData);

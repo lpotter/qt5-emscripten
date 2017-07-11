@@ -34,6 +34,7 @@
 ****************************************************************************/
 
 #include "qhtml5compositor.h"
+#include "qhtml5eventtranslator.h"
 #include "qhtml5window.h"
 
 #include <QOpenGLTexture>

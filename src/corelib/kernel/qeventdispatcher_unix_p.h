@@ -120,7 +120,7 @@ public:
 
     int remainingTime(int timerId) Q_DECL_FINAL;
 
-    void wakeUp() Q_DECL_FINAL;
+    void wakeUp() Q_DECL_OVERRIDE;// Q_DECL_FINAL;
     void interrupt() Q_DECL_FINAL;
     void flush() Q_DECL_OVERRIDE;
 

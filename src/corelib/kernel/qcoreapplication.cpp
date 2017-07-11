@@ -121,7 +121,6 @@
 #endif
 
 #include <algorithm>
-#include <iostream>
 
 QT_BEGIN_NAMESPACE
 

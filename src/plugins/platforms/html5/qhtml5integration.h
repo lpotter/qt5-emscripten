@@ -79,6 +79,7 @@ public:
     //QHTML5Window *topLevelWindow();
     QHTML5Screen *screen() { return mScreen; }
     QHtml5Compositor *compositor() { return mCompositor; }
+    QHTML5EventTranslator *eventTranslator() { return m_eventTranslator; }
 
 private:
     mutable QHtml5FontDatabase *mFontDb;
