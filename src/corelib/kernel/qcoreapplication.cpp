@@ -776,18 +776,20 @@ void QCoreApplicationPrivate::init()
 
     Q_ASSERT_X(!QCoreApplication::self, "QCoreApplication", "there should be only one application object");
     QCoreApplication::self = q;
-
 #ifdef __EMSCRIPTEN__
+    QDir configDir("/home/web_user/.config");
+    if (!configDir.exists()) {
+          configDir.mkdir(".");
+    }
         EM_ASM(
               Module.print("mount persistent directory as IDBFS");
-              FS.mount(IDBFS,{},'/home/web_user');
+              FS.mount(IDBFS,{},'/home/web_user/.config');
               FS.syncfs(true, function(err) {
               if (err)
                 Module.print(err);
               Module.print("end persisted to mem file sync..");
               });
          );
-
 #endif
 
     // Store app name/version (so they're still available after QCoreApplication is destroyed)
