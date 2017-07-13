@@ -77,6 +77,7 @@ public:
     bool firstRun;
     void cleanup();
     void switchLoop_emscripten(void *userData);
+    bool exitLoop;
 #endif
     int exec(ProcessEventsFlags flags = AllEvents);
     void exit(int returnCode = 0);

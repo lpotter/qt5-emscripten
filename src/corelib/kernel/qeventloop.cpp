@@ -54,7 +54,7 @@
     #include <emscripten.h>
 #endif
 
-#include <iostream>
+
 
 QT_BEGIN_NAMESPACE
 
@@ -167,7 +167,6 @@ bool QEventLoop::processEvents(ProcessEventsFlags flags)
 */
 int QEventLoop::exec(ProcessEventsFlags flags)
 {
-    std::cout << "QEventLoop::exec: " << this << std::endl;
     Q_D(QEventLoop);
     if (d->threadData->quitNow)
         return -1;
@@ -177,7 +176,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
         return -1;
     }
 
-//#ifndef __EMSCRIPTEN__
+#ifndef __EMSCRIPTEN__
     //we need to protect from race condition with QThread::exit
 #ifndef QT_NO_THREAD
     QMutexLocker locker(&static_cast<QThreadPrivate *>(QObjectPrivate::get(d->threadData->thread))->mutex);
@@ -225,12 +224,10 @@ int QEventLoop::exec(ProcessEventsFlags flags)
         processEvents(flags | WaitForMoreEvents | EventLoopExec);
 
     ref.exceptionCaught = false;
-/*
 #else // __EMSCRIPTEN__
-    Q_UNUSED(flags)
     d->inExec = true;
     d->exit.storeRelease(false);
-    int oldLoopLevel = d->threadData->loopLevel;
+    exitLoop = false;
     ++d->threadData->loopLevel;
     d->threadData->eventLoops.push(d->q_func());
 
@@ -239,46 +236,22 @@ int QEventLoop::exec(ProcessEventsFlags flags)
     if (app && app->thread() == thread())
         QCoreApplication::removePostedEvents(app, QEvent::Quit);
 
-    if (oldLoopLevel == 0 && d->threadData->loopLevel == 1) {
-        std::cout << "exec main loop" << std::endl;
-        // main loop. can be only one
-        emscripten_set_main_loop_arg(QEventLoop::processEvents, (void*)this, 0, 1);
-    } else {
-        // child loops
-        std::cout << "exec child loop" << std::endl;
-        while (!d->exit.loadAcquire()) {
-            emscripten_sleep(10);
-            processEvents((void *)this);
-        }
-    }
+    while (!exitLoop)
+        processEvents(flags | WaitForMoreEvents | EventLoopExec);
 
     QEventLoop *eventLoop = d->threadData->eventLoops.pop();
     Q_ASSERT_X(eventLoop == d->q_func(), "QEventLoop::exec()", "internal error");
     Q_UNUSED(eventLoop); // --release warning
     d->inExec = false;
     --d->threadData->loopLevel;
+    if (d->threadData->loopLevel == 0)
+        emscripten_force_exit(0);
+
 #endif // __EMSCRIPTEN__
-*/
-    std::cout << "QEventLoop::exec return" << std::endl;
+
     return d->returnCode.load();
 }
-/*
-#ifdef __EMSCRIPTEN__
-void QEventLoop::processEvents(void *eventloop)
-{
-    QEventLoop *currentEventloop = (QEventLoop*)eventloop;
-    currentEventloop->processEvents_emscripten();
-}
 
-void QEventLoop::processEvents_emscripten()
-{
-    Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher.load())
-        return;
-    d->threadData->eventDispatcher.load()->processEvents();
-}
-#endif
-*/
 /*!
     Process pending events that match \a flags for a maximum of \a
     maxTime milliseconds, or until there are no more events to
@@ -326,57 +299,16 @@ void QEventLoop::processEvents(ProcessEventsFlags flags, int maxTime)
 */
 void QEventLoop::exit(int returnCode)
 {
-    std::cout << "Eventloop exit 1: " << returnCode << std::endl;
     Q_D(QEventLoop);
     if (!d->threadData->eventDispatcher.load())
         return;
-
-    std::cout << "Eventloop exit 2" << std::endl;
     d->returnCode.store(returnCode);
-    std::cout << "Eventloop exit 3" << std::endl;
     d->exit.storeRelease(true);
-    std::cout << "Eventloop exit 4" << std::endl;
     d->threadData->eventDispatcher.load()->interrupt();
-/*
-#ifdef __EMSCRIPTEN__
-
-    std::cout << "Eventloop exit 5" << std::endl;
-    if (d->threadData->loopLevel == 1) {
-        std::cout << "Eventloop exit 6" << std::endl;
-        emscripten_cancel_main_loop();
-        emscripten_force_exit(returnCode);
-    } else {
-        std::cout << "Eventloop exit 7" << std::endl;
-        cleanup();
-        d->threadData->eventLoops.at(0)->switchLoop_emscripten( d->threadData->eventLoops.at(0));
-    }
-    std::cout << "Eventloop exit 8" << std::endl;
+#if __EMSCRIPTEN__
+    exitLoop = true;
 #endif
-*/
 }
-
-/*
-#ifdef __EMSCRIPTEN__
-void QEventLoop::switchLoop_emscripten(void *userData)
-{
-   emscripten_cancel_main_loop();
-   emscripten_set_main_loop_arg(QEventLoop::processEvents, userData, 0, 1);
-}
-
-void QEventLoop::cleanup()
-{
-    Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher.load())
-        return;
-
-    QEventLoop *eventLoop = d->threadData->eventLoops.pop();
-    Q_ASSERT_X(eventLoop == d->q_func(), "QEventLoop::exec()", "internal error");
-    Q_UNUSED(eventLoop); // --release warning
-    d->inExec = false;
-    --d->threadData->loopLevel;
-}
-#endif
-*/
 
 /*!
     Returns \c true if the event loop is running; otherwise returns
