@@ -69,8 +69,8 @@ public:
     QHtml5Window(QWindow *w, QHtml5Compositor* compositor);
     ~QHtml5Window();
 
-    inline bool setKeyboardGrabEnabled(bool grab) override { return true; }
-    inline bool setMouseGrabEnabled(bool grab) override { return true; }
+    inline bool setKeyboardGrabEnabled(bool /*grab*/) override { return true; }
+    inline bool setMouseGrabEnabled(bool /*grab*/) override { return true; }
 
     void create();
 

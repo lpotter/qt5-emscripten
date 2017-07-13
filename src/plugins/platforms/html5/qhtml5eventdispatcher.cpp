@@ -43,8 +43,6 @@
 
 #include <emscripten.h>
 
-#include <iostream>
-
 QHtml5EventDispatcher::QHtml5EventDispatcher(QObject *parent)
     : QUnixEventDispatcherQPA(parent)
     , m_hasPendingProcessEvents(false)
@@ -69,20 +67,10 @@ bool QHtml5EventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         processedCount += 1;
     } while (processed && hasPendingEvents() && processedCount < maxProcessedEvents);
 
-    std::cout << "processed " << processedCount << " events." << std::endl;
-    std::cout << "global events: " << qGlobalPostedEventsCount()
-        << " window system events: " << QWindowSystemInterface::windowSystemEventsQueued()
-        << std::endl;
-
     bool pending = hasPendingEvents();
-    if (pending)
-    {
-        std::cout << "Pending events -> sleep(30)" << std::endl;
+    if (pending) {
         emscripten_sleep_with_yield(30);
-    }
-    else
-    {
-        std::cout << "No pending events -> sleep(30)" << std::endl;
+    } else {
         emscripten_sleep_with_yield(30);
     }
 

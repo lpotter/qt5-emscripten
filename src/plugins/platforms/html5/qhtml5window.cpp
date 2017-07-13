@@ -50,7 +50,7 @@
 
 #include <QDebug>
 
-#include <iostream>
+
 
 //#include "qhtml5compositor.h"
 

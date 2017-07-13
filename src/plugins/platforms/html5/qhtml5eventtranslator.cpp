@@ -47,7 +47,7 @@
 #include <QtWidgets/QStyle>
 #include <QtGlobal>
 
-#include <iostream>
+
 #include <vector>
 
 QT_BEGIN_NAMESPACE
@@ -255,28 +255,24 @@ Qt::MouseButton QHTML5EventTranslator::translateMouseButton(unsigned short butto
 
 void QHTML5EventTranslator::processEvents()
 {
-    if (!mouseEvents.empty())
-    {
+    if (!mouseEvents.empty()) {
         std::vector<std::pair<int, EmscriptenMouseEvent>> events;
         mouseEvents.swap(events);
 
         mouseEvents.reserve(250);
 
-        for (auto const& e : events)
-        {
+        for (auto const& e : events) {
             processMouse(e.first, &e.second);
         }
     }
 
-    if (!keyboardEvents.empty())
-    {
+    if (!keyboardEvents.empty()) {
         std::vector<std::pair<int, EmscriptenKeyboardEvent>> events2;
         keyboardEvents.swap(events2);
 
         keyboardEvents.reserve(250);
 
-        for (auto const& e : events2)
-        {
+        for (auto const& e : events2) {
             processKeyboard(e.first, &e.second);
         }
     }
