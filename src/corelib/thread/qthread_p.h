@@ -226,6 +226,8 @@ public:
 
     void ref() {}
     void deref() {}
+    bool exited;
+    int returnCode;
 
     Q_DECLARE_PUBLIC(QThread)
 };
