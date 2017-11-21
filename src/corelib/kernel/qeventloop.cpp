@@ -50,7 +50,7 @@
 #include <QDebug>
 
 
-#ifdef __EMSCRIPTEN__
+#ifdef Q_OS_HTML5
     #include <emscripten.h>
 #endif
 
@@ -176,7 +176,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
         return -1;
     }
 
-#ifndef __EMSCRIPTEN__
+#ifndef Q_OS_HTML5
     //we need to protect from race condition with QThread::exit
 #ifndef QT_NO_THREAD
     QMutexLocker locker(&static_cast<QThreadPrivate *>(QObjectPrivate::get(d->threadData->thread))->mutex);
@@ -225,7 +225,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
 
     ref.exceptionCaught = false;
 
-#else // __EMSCRIPTEN__
+#else // Q_OS_HTML5
     Q_UNUSED(flags)
     d->inExec = true;
     d->exit.storeRelease(false);
@@ -254,12 +254,12 @@ int QEventLoop::exec(ProcessEventsFlags flags)
     Q_UNUSED(eventLoop); // --release warning
     d->inExec = false;
     --d->threadData->loopLevel;
-#endif // __EMSCRIPTEN__
+#endif // Q_OS_HTML5
 
     return d->returnCode.load();
 }
 
-#ifdef __EMSCRIPTEN__
+#ifdef Q_OS_HTML5
 void QEventLoop::processEvents(void *eventloop)
 {
     QEventLoop *currentEventloop = (QEventLoop*)eventloop;
@@ -330,7 +330,7 @@ void QEventLoop::exit(int returnCode)
     d->exit.storeRelease(true);
     d->threadData->eventDispatcher.load()->interrupt();
 
-#ifdef __EMSCRIPTEN__
+#ifdef Q_OS_HTML5
 
     if (d->threadData->loopLevel == 1) {
         emscripten_cancel_main_loop();
@@ -344,7 +344,7 @@ void QEventLoop::exit(int returnCode)
 }
 
 
-#ifdef __EMSCRIPTEN__
+#ifdef Q_OS_HTML5
 void QEventLoop::switchLoop_emscripten(void *userData)
 {
    emscripten_cancel_main_loop();
