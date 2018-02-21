@@ -32,6 +32,7 @@
 #include "qhtml5eventdispatcher.h"
 #include "qhtml5compositor.h"
 #include "qhtml5openglcontext.h"
+#include "qhtml5clipboard.h"
 
 #include "qhtml5window.h"
 #ifndef QT_NO_OPENGL
@@ -58,8 +59,24 @@ void browserBeforeUnload() {
     QHtml5Integration::QHtml5BrowserExit();
 }
 
+void copyClipboard() {
+    qDebug() << Q_FUNC_INFO;
+    QHtml5Clipboard::QHtml5ClipboardCopy();
+}
+
+void pasteClipboard(emscripten::val data) {
+
+    QString qstr = QString::fromStdString(data.as<std::string>());
+    qDebug() << Q_FUNC_INFO << qstr;
+    QMimeData *mMimeData = new QMimeData;
+    mMimeData->setText(qstr);
+    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+}
+
 EMSCRIPTEN_BINDINGS(my_module) {
     function("browserBeforeUnload", &browserBeforeUnload);
+    function("copyClipboard", &copyClipboard);
+    function("pasteClipboard", &pasteClipboard);
 }
 
 static QHtml5Integration *globalHtml5Integration;
@@ -98,8 +115,11 @@ QHtml5Integration::QHtml5Integration()
       mScreen(new QHtml5Screen(mCompositor)),
       m_eventDispatcher(0)
 {
+
     qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
    // qInstallMessageHandler(emscriptenOutput);
+
+    initClipboardPasteEvents();
 
     globalHtml5Integration = this;
 
@@ -108,6 +128,8 @@ QHtml5Integration::QHtml5Integration()
     emscripten_set_resize_callback(0, (void *)this, 1, uiEvent_cb);
 
     m_eventTranslator = new QHtml5EventTranslator();
+   // m_clipboard = new QHtml5Clipboard();
+
 #ifdef QEGL_EXTRA_DEBUG
     qWarning("QHtml5Integration\n");
 #endif
@@ -116,6 +138,8 @@ QHtml5Integration::QHtml5Integration()
            Module.browserBeforeUnload();
            };
      );
+    initClipboardCopyEvents();//order after keyevents
+
 }
 
 QHtml5Integration::~QHtml5Integration()
@@ -235,6 +259,87 @@ void QHtml5Integration::updateQScreenAndCanvasRenderSize()
     QSizeF cssSize(css_width, css_height);
     QHtml5Integration::get()->mScreen->setGeometry(QRect(QPoint(0, 0), cssSize.toSize()));
     QHtml5Integration::get()->mCompositor->requestRedraw();
+}
+
+QPlatformClipboard* QHtml5Integration::clipboard() const
+{
+    if (!m_clipboard) {
+        m_clipboard = new QHtml5Clipboard;
+    }
+    return m_clipboard;
+}
+
+void QHtml5Integration::initClipboardPasteEvents()
+{
+    EM_ASM(
+//            document.addEventListener('cut', function(event){
+//                                          console.log(event);
+//                                      });
+
+    document.addEventListener('paste', function(ev){
+                                  console.log("document paste");
+                                  var data;
+
+                                  var items = ev.clipboardData.items;
+
+                                  for (var i = 0; i < items.length; i++) {
+                                      if (items[i].type.indexOf("text") == 0) {
+                                          data = ev.clipboardData.getData('text');
+                                      }
+                                      if (items[i].type.indexOf("image") == 0) {
+                                          // Retrieve image on clipboard as blob
+                                          // data = items[i].getAsFile();
+                                          // if(typeof(callback) == "function"){
+                                          //  callback(blob);
+                                          //}
+                                      }
+                                  }
+                                  ev.preventDefault();
+                                  Module.pasteClipboard(data);
+                              });
+
+/// these do not seem to happen with firefox for us
+
+    Module.canvas.addEventListener('paste', function (ev) {
+                                       console.log('canvas clipboard paste ' + ev.clipboardData.getData('text'));
+                                       ev.preventDefault();
+                                   }, true);
+    );
+    //            window.oncopy = function(event) {
+    //            console.log("windw copy");
+    //              };
+}
+
+
+void QHtml5Integration::initClipboardCopyEvents()
+{
+    EM_ASM(
+                document.addEventListener('copy', function(ev){
+                     console.log("document copy");
+                     var clipdata = Module.getClipboardData();
+                     var clipFormat = Module.getClipboardFormat();
+
+                     ev.clipboardData.setData(clipFormat,clipdata);
+                      ev.preventDefault();
+                     //get selected text here
+                });
+
+//            document.addEventListener('cut', function(event){
+//                                          console.log(event);
+//                                      });
+
+
+/// these do not seem to happen with firefox for us
+    Module.canvas.addEventListener('copy', function (ev) {
+                                       console.log('canvas clipboard copy');
+//                                       ev.clipboardData.setData('text/plain', 'TEST TEST TEST: ' + new Date);
+                                       Module.copyClipboard();
+                                       ev.preventDefault();
+                                   }, true);
+    // window.oncopy = function(event) {
+    // console.log("windw copy");
+    // };
+    );
 }
 
 QT_END_NAMESPACE

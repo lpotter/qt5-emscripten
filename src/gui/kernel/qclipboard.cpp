@@ -592,6 +592,7 @@ void QClipboard::emitChanged(Mode mode)
 {
     switch (mode) {
         case Clipboard:
+        qDebug() << Q_FUNC_INFO;
             emit dataChanged();
         break;
         case Selection:

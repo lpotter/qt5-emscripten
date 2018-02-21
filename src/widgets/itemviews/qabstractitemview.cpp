@@ -671,35 +671,38 @@ void QAbstractItemView::setModel(QAbstractItemModel *model)
     Q_D(QAbstractItemView);
     if (model == d->model)
         return;
-    if (d->model && d->model != QAbstractItemModelPrivate::staticEmptyModel()) {
-        disconnect(d->model, SIGNAL(destroyed()),
-                   this, SLOT(_q_modelDestroyed()));
-        disconnect(d->model, SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)),
-                   this, SLOT(dataChanged(QModelIndex,QModelIndex,QVector<int>)));
-        disconnect(d->model, SIGNAL(headerDataChanged(Qt::Orientation,int,int)),
-                   this, SLOT(_q_headerDataChanged()));
-        disconnect(d->model, SIGNAL(rowsInserted(QModelIndex,int,int)),
-                   this, SLOT(rowsInserted(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(rowsAboutToBeRemoved(QModelIndex,int,int)),
-                   this, SLOT(rowsAboutToBeRemoved(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(rowsRemoved(QModelIndex,int,int)),
-                   this, SLOT(_q_rowsRemoved(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(rowsMoved(QModelIndex,int,int,QModelIndex,int)),
-                   this, SLOT(_q_rowsMoved(QModelIndex,int,int,QModelIndex,int)));
-        disconnect(d->model, SIGNAL(rowsInserted(QModelIndex,int,int)),
-                   this, SLOT(_q_rowsInserted(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(columnsAboutToBeRemoved(QModelIndex,int,int)),
-                   this, SLOT(_q_columnsAboutToBeRemoved(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(columnsRemoved(QModelIndex,int,int)),
-                   this, SLOT(_q_columnsRemoved(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(columnsInserted(QModelIndex,int,int)),
-                   this, SLOT(_q_columnsInserted(QModelIndex,int,int)));
-        disconnect(d->model, SIGNAL(columnsMoved(QModelIndex,int,int,QModelIndex,int)),
-                   this, SLOT(_q_columnsMoved(QModelIndex,int,int,QModelIndex,int)));
+#ifndef Q_OS_HTML5
+//    if (d->model && d->model != QAbstractItemModselPrivate::staticEmptyModel()) {
+//    }
+//        disconnect(d->model, SIGNAL(destroyed()),
+//                   this, SLOT(_q_modelDestroyed()));
+//        disconnect(d->model, SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)),
+//                   this, SLOT(dataChanged(QModelIndex,QModelIndex,QVector<int>)));
+//        disconnect(d->model, SIGNAL(headerDataChanged(Qt::Orientation,int,int)),
+//                   this, SLOT(_q_headerDataChanged()));
+//        disconnect(d->model, SIGNAL(rowsInserted(QModelIndex,int,int)),
+//                   this, SLOT(rowsInserted(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(rowsAboutToBeRemoved(QModelIndex,int,int)),
+//                   this, SLOT(rowsAboutToBeRemoved(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(rowsRemoved(QModelIndex,int,int)),
+//                   this, SLOT(_q_rowsRemoved(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(rowsMoved(QModelIndex,int,int,QModelIndex,int)),
+//                   this, SLOT(_q_rowsMoved(QModelIndex,int,int,QModelIndex,int)));
+//        disconnect(d->model, SIGNAL(rowsInserted(QModelIndex,int,int)),
+//                   this, SLOT(_q_rowsInserted(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(columnsAboutToBeRemoved(QModelIndex,int,int)),
+//                   this, SLOT(_q_columnsAboutToBeRemoved(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(columnsRemoved(QModelIndex,int,int)),
+//                   this, SLOT(_q_columnsRemoved(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(columnsInserted(QModelIndex,int,int)),
+//                   this, SLOT(_q_columnsInserted(QModelIndex,int,int)));
+//        disconnect(d->model, SIGNAL(columnsMoved(QModelIndex,int,int,QModelIndex,int)),
+//                   this, SLOT(_q_columnsMoved(QModelIndex,int,int,QModelIndex,int)));
 
-        disconnect(d->model, SIGNAL(modelReset()), this, SLOT(reset()));
-        disconnect(d->model, SIGNAL(layoutChanged()), this, SLOT(_q_layoutChanged()));
-    }
+//        disconnect(d->model, SIGNAL(modelReset()), this, SLOT(reset()));
+//        disconnect(d->model, SIGNAL(layoutChanged()), this, SLOT(_q_layoutChanged()));
+//    }
+#endif
     d->model = (model ? model : QAbstractItemModelPrivate::staticEmptyModel());
 
     // These asserts do basic sanity checking of the model

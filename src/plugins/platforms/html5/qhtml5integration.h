@@ -49,6 +49,7 @@ class QHtml5EventDispatcher;
 class QHtml5Screen;
 class QHtml5Compositor;
 class QHtml5BackingStore;
+class QHtml5Clipboard;
 
 class QHtml5Integration : public QObject, public QPlatformIntegration
 {
@@ -66,10 +67,12 @@ public:
     QPlatformFontDatabase *fontDatabase() const override;
     QAbstractEventDispatcher *createEventDispatcher() const override;
     QVariant styleHint(QPlatformIntegration::StyleHint hint) const override;
+    QPlatformClipboard* clipboard() const override;
 
     static QHtml5Integration *get();
     QHtml5Screen *screen() { return mScreen; }
     QHtml5Compositor *compositor() { return mCompositor; }
+    QHtml5Clipboard *clipboard() { return m_clipboard; }
     static void QHtml5BrowserExit();
     static void updateQScreenAndCanvasRenderSize();
 
@@ -79,10 +82,15 @@ private:
     mutable QHtml5Screen *mScreen;
     mutable QHtml5EventTranslator *m_eventTranslator;
     mutable QHtml5EventDispatcher *m_eventDispatcher;
+    mutable QHtml5Clipboard *m_clipboard;
     static int uiEvent_cb(int eventType, const EmscriptenUiEvent *e, void *userData);
     mutable QHash<QWindow *, QHtml5BackingStore *> m_backingStores;
+
+    void initClipboardPasteEvents();
+    void initClipboardCopyEvents();
 };
 
 QT_END_NAMESPACE
+
 
 #endif // QHTML5INTEGRATION_H
