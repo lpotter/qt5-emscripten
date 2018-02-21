@@ -125,6 +125,13 @@ void QPlatformClipboard::emitChanged(QClipboard::Mode mode)
         QGuiApplication::clipboard()->emitChanged(mode);
 }
 
+#ifdef Q_OS_HTML5
+QMimeData *QPlatformClipboard::platformClipData()
+{
+    return q_clipboardData()->source();
+}
+#endif
+
 QT_END_NAMESPACE
 
 #endif //QT_NO_CLIPBOARD

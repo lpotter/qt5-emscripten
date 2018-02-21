@@ -68,7 +68,11 @@ public:
     virtual bool supportsMode(QClipboard::Mode mode) const;
     virtual bool ownsMode(QClipboard::Mode mode) const;
     void emitChanged(QClipboard::Mode mode);
+#ifdef Q_OS_HTML5
+    QMimeData *platformClipData();
+#endif
 };
+
 
 QT_END_NAMESPACE
 

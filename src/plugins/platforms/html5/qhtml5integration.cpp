@@ -32,6 +32,7 @@
 #include "qhtml5eventdispatcher.h"
 #include "qhtml5compositor.h"
 #include "qhtml5openglcontext.h"
+#include "qhtml5clipboard.h"
 
 #include "qhtml5window.h"
 #ifndef QT_NO_OPENGL
@@ -58,8 +59,28 @@ void browserBeforeUnload() {
     QHtml5Integration::QHtml5BrowserExit();
 }
 
+void pasteClipboardData(emscripten::val format, int dataPtr, int size) {
+
+    QString formatString = QString::fromStdString(format.as<std::string>());
+    QByteArray dataArray = QByteArray::fromRawData(reinterpret_cast<char *>(dataPtr), size);
+    QMimeData *mMimeData = new QMimeData;
+    mMimeData->setData(formatString, dataArray);
+    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+}
+
+void pasteClipboard(emscripten::val data) {
+    QString qstr = QString::fromStdString(data.as<std::string>());
+    qDebug() << Q_FUNC_INFO << qstr;
+
+    QMimeData *mMimeData = new QMimeData;
+    mMimeData->setText(qstr);
+    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+}
+
 EMSCRIPTEN_BINDINGS(my_module) {
     function("browserBeforeUnload", &browserBeforeUnload);
+    function("pasteClipboard", &pasteClipboard);
+    function("pasteClipboardData", &pasteClipboardData);
 }
 
 static QHtml5Integration *globalHtml5Integration;
@@ -96,10 +117,14 @@ QHtml5Integration::QHtml5Integration()
     : mFontDb(0),
       mCompositor(new QHtml5Compositor),
       mScreen(new QHtml5Screen(mCompositor)),
-      m_eventDispatcher(0)
+      m_eventDispatcher(0),
+      m_clipboard(new QHtml5Clipboard)
 {
+
     qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
    // qInstallMessageHandler(emscriptenOutput);
+
+    initClipboardEvents();
 
     globalHtml5Integration = this;
 
@@ -108,6 +133,7 @@ QHtml5Integration::QHtml5Integration()
     emscripten_set_resize_callback(0, (void *)this, 1, uiEvent_cb);
 
     m_eventTranslator = new QHtml5EventTranslator();
+
 #ifdef QEGL_EXTRA_DEBUG
     qWarning("QHtml5Integration\n");
 #endif
@@ -116,6 +142,7 @@ QHtml5Integration::QHtml5Integration()
            Module.browserBeforeUnload();
            };
      );
+
 }
 
 QHtml5Integration::~QHtml5Integration()
@@ -235,6 +262,64 @@ void QHtml5Integration::updateQScreenAndCanvasRenderSize()
     QSizeF cssSize(css_width, css_height);
     QHtml5Integration::get()->mScreen->setGeometry(QRect(QPoint(0, 0), cssSize.toSize()));
     QHtml5Integration::get()->mCompositor->requestRedraw();
+}
+
+QPlatformClipboard* QHtml5Integration::clipboard() const
+{
+    if (!m_clipboard) {
+        m_clipboard = new QHtml5Clipboard;
+    }
+    return m_clipboard;
+}
+
+void QHtml5Integration::initClipboardEvents()
+{
+    EM_ASM(
+            document.addEventListener('paste', function(ev) {
+                      var data;
+                      var items = ev.clipboardData.items;
+                     console.log("items.length "+ items.length);
+                      for (var i = 0; i < items.length; i++) {
+                       console.log("item: " + i + " " + items[i].type);
+
+                          if (items[i].type.indexOf("text") == 0) {
+                              data = ev.clipboardData.getData('text');
+                              if (data.length > 0)
+                                  Module.pasteClipboard(data);
+                          }
+                          if (items[i].type.indexOf("image") == 0) {
+
+                             var blob = items[i].getAsFile();
+
+                             var format = items[i].type;
+                             if (blob !== null) {
+                                  var reader = new FileReader();
+                                  reader.onload = function () {
+                                      var dataArray = new Uint8Array(reader.result);
+                                      var ptrBuffer = _malloc(dataArray.length);
+                                      HEAPU8.set(dataArray, ptrBuffer);
+
+                                      Module.pasteClipboardData(format, ptrBuffer, dataArray.length);
+                                      _free(ptrBuffer);
+                                  };
+                                reader.readAsArrayBuffer(blob);
+                              }/* else {
+                                  console.log("blob is null");
+                              }*/
+                          }
+                      }
+                 ev.preventDefault();
+              });
+            );
+
+    EM_ASM(
+            document.addEventListener('copy', function(ev) {
+                      var clipdata = Module.getClipboardData();
+                      var clipFormat = Module.getClipboardFormat();
+                      ev.clipboardData.setData(clipFormat,clipdata);
+                      ev.preventDefault();
+             });
+        );
 }
 
 QT_END_NAMESPACE

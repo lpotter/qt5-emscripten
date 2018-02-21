@@ -30,6 +30,7 @@
 #include "qhtml5eventtranslator.h"
 #include "qhtml5compositor.h"
 #include "qhtml5integration.h"
+#include "qhtml5clipboard.h"
 
 #include <QDebug>
 #include <QEvent>
@@ -108,7 +109,8 @@ int QHtml5EventTranslator::keyboard_cb(int eventType, const EmscriptenKeyboardEv
     bool alphanumeric;
     Qt::Key qtKey = translateEmscriptKey(keyEvent, &alphanumeric);
 
-    QEvent::Type keyType;
+    QEvent::Type keyType = QEvent::None;
+
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYPRESS:
     case EMSCRIPTEN_EVENT_KEYDOWN: //down
@@ -121,12 +123,34 @@ int QHtml5EventTranslator::keyboard_cb(int eventType, const EmscriptenKeyboardEv
         break;
     };
 
-    if (alphanumeric) {
-        QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, translateKeyModifier(keyEvent), QString(keyEvent->key));
-    } else {
-        QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, translateKeyModifier(keyEvent));
+    QHtml5Integration::get()->clipboard()->copyKeyMode = false;
+    QHtml5Integration::get()->clipboard()->pasteKeyMode = false;
+    QFlags<Qt::KeyboardModifier> mods = translateKeyModifier(keyEvent);
+    if (keyType == QEvent::KeyPress &&
+            mods.testFlag(Qt::ControlModifier)
+            && qtKey == Qt::Key_C) {
+        QHtml5Integration::get()->clipboard()->copyKeyMode = true;
     }
-    QCoreApplication::processEvents();
+    if (keyType == QEvent::KeyPress &&
+            mods.testFlag(Qt::ControlModifier)
+            && qtKey == Qt::Key_V) {
+        qDebug() << Q_FUNC_INFO << "<<<<<<<<<<<<<<<<<<<<<<<< Ctrl V";
+        QHtml5Integration::get()->clipboard()->pasteKeyMode = true;
+    }
+
+
+    if (!QHtml5Integration::get()->clipboard()->copyKeyMode)
+        QCoreApplication::processEvents();
+
+    if (alphanumeric) {
+        QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, mods, QString(keyEvent->key));
+    } else {
+        QWindowSystemInterface::handleKeyEvent(0, keyType, qtKey, mods);
+    }
+
+    if (QHtml5Integration::get()->clipboard()->copyKeyMode)
+        QCoreApplication::processEvents();
+
     return 0;
 }
 
@@ -330,6 +354,7 @@ void QHtml5EventTranslator::processMouse(int eventType, const EmscriptenMouseEve
             }
         }
 
+        qDebug() << Q_FUNC_INFO << htmlWindow << window2;
         htmlWindow->injectMousePressed(localPoint, point, button, modifiers);
     }
         break;

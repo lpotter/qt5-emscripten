@@ -940,6 +940,7 @@ void QWidgetTextControl::cut()
 
 void QWidgetTextControl::copy()
 {
+    qDebug() << Q_FUNC_INFO;
     Q_D(QWidgetTextControl);
     if (!d->cursor.hasSelection())
         return;
