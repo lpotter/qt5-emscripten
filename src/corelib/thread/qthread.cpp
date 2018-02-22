@@ -868,6 +868,7 @@ void QThread::setEventDispatcher(QAbstractEventDispatcher *eventDispatcher)
     }
 }
 
+#ifdef QT_NO_THREAD
 void QThread::exit(int returnCode)
 {
     Q_D(QThread);
@@ -880,8 +881,7 @@ void QThread::exit(int returnCode)
         eventLoop->exit(returnCode);
     }
 }
-
-#ifndef QT_NO_THREAD
+#else
 /*!
     \reimp
 */
@@ -894,7 +894,6 @@ bool QThread::event(QEvent *event)
         return QObject::event(event);
     }
 }
-#ifndef QT_NO_THREAD
 /*!
     \since 5.2
 
@@ -1047,7 +1046,6 @@ QDaemonThread::~QDaemonThread()
 
 #endif // QT_NO_THREAD
 
-#endif // QT_NO_THREAD
 
 QT_END_NAMESPACE
 
