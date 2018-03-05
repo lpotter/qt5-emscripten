@@ -49,9 +49,13 @@ public:
     bool supportsMode(QClipboard::Mode mode) const override;
     bool ownsMode(QClipboard::Mode mode) const override;
 
-    static void QHtml5ClipboardPaste(QMimeData *mData);
+    static void QHtml5ClipboardPaste(QString format, QByteArray mData, bool finished);
     bool copyKeyMode = false;
     bool pasteKeyMode = false;
+    bool pasteMode = false;
+    void setPasteMode(bool p) { pasteMode = p; }
+    void collectMimeData(QString format, QByteArray mData, bool isFinished);
+    QMimeData *m_mimeData;
 
 };
 

@@ -57,12 +57,14 @@ EMSCRIPTEN_BINDINGS(clipboard_module) {
     function("getClipboardFormat", &getClipboardFormat);
 }
 
-QHtml5Clipboard::QHtml5Clipboard()
+QHtml5Clipboard::QHtml5Clipboard():
+    m_mimeData(new QMimeData)
 {
 }
 
 QHtml5Clipboard::~QHtml5Clipboard()
 {
+    delete m_mimeData;
 }
 
 QMimeData* QHtml5Clipboard::mimeData(QClipboard::Mode mode)
@@ -75,31 +77,37 @@ QMimeData* QHtml5Clipboard::mimeData(QClipboard::Mode mode)
 
 void QHtml5Clipboard::setMimeData(QMimeData* mimeData, QClipboard::Mode mode)
 {
-    qDebug() << Q_FUNC_INFO << mimeData->formats();
+    qDebug() << Q_FUNC_INFO << mimeData->formats() << "pasteMode" << pasteMode
+             << "copyKeyMode" << copyKeyMode << "pasteKeyMode" << pasteKeyMode;
+    if (!pasteMode) {
+        if (mimeData->formats().at(0).startsWith("image") ) { // "image/*"
+            qDebug() << Q_FUNC_INFO << "has image" << mimeData->hasImage();
+            m_clipboardArray = mimeData->data(mimeData->formats().at(0));
+            m_clipboardFormat = mimeData->formats().at(0).toUtf8().constData();
+        } else if (mimeData->hasText()) {
+            m_clipboardFormat = "text/plain";
+            m_clipboardArray = mimeData->text().toUtf8().constData();
+        } else if (mimeData->hasHtml()) {
+            m_clipboardFormat = "text/html";
+            m_clipboardArray = mimeData->html().toUtf8().constData();
+        } else if (mimeData->hasColor()) { //application/x-color
+            qDebug() << Q_FUNC_INFO << "has color";
+            //    else if (mMimeData->hasFormat())
+        }
+    } /*else {
 
-    if (mimeData->hasText()) {
-        m_clipboardFormat = "text/plain";
-        m_clipboardArray = mimeData->text().toUtf8().constData();
-    } else if (mimeData->hasHtml()) {
-        m_clipboardFormat = "text/html";
-        m_clipboardArray = mimeData->html().toUtf8().constData();
-    } else if (mimeData->formats().at(0).startsWith("image") ) { // "image/*"
-        qDebug() << Q_FUNC_INFO << "has image";
-        m_clipboardArray = mimeData->data(mimeData->formats().at(0));
-        m_clipboardFormat = mimeData->formats().at(0).toUtf8().constData();
-    } else if (mimeData->hasColor()) { //application/x-color
-        qDebug() << Q_FUNC_INFO << "has color";
-        //    else if (mMimeData->hasFormat())
-    }
+    }*/
 
     qDebug() << Q_FUNC_INFO << "copyKeyMode" << copyKeyMode << "pasteKeyMode" << pasteKeyMode;
-    if (copyKeyMode || !pasteKeyMode) {//menu copy need to manually copy up
+    if (copyKeyMode || (!pasteKeyMode && !pasteMode)) {//menu copy need to manually copy up
         EM_ASM(
                 document.execCommand('copy');
                 );
     }
 
     QPlatformClipboard::setMimeData(mimeData, mode);
+//    if (pasteMode)
+//        m_mimeData->clear();  //fix
 }
 
 bool QHtml5Clipboard::supportsMode(QClipboard::Mode mode) const
@@ -113,8 +121,20 @@ bool QHtml5Clipboard::ownsMode(QClipboard::Mode mode) const
     return false;
 }
 
-void QHtml5Clipboard::QHtml5ClipboardPaste(QMimeData *mData)
+void QHtml5Clipboard::QHtml5ClipboardPaste(QString format, QByteArray mData, bool finished)
 {
-    qDebug() << Q_FUNC_INFO;
-    QHtml5Integration::get()->clipboard()->setMimeData(mData, QClipboard::Clipboard);
+    qDebug() << Q_FUNC_INFO << finished;
+    QHtml5Integration::get()->clipboard()->setPasteMode(true);
+    QHtml5Integration::get()->clipboard()->collectMimeData(format,mData,finished);
 }
+
+void QHtml5Clipboard::collectMimeData(QString format, QByteArray mData, bool isFinished)
+{
+    qDebug() << Q_FUNC_INFO << format << mData.size() << isFinished;
+    m_mimeData->setData(format, mData);
+    if (isFinished) {
+        setMimeData(m_mimeData, QClipboard::Clipboard);
+        setPasteMode(false);
+     }
+}
+

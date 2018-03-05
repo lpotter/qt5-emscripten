@@ -59,22 +59,22 @@ void browserBeforeUnload() {
     QHtml5Integration::QHtml5BrowserExit();
 }
 
-void pasteClipboardData(emscripten::val format, int dataPtr, int size) {
-
+void pasteClipboardData(emscripten::val format, int dataPtr, int size, bool isFinished) {
+qDebug() << Q_FUNC_INFO;
     QString formatString = QString::fromStdString(format.as<std::string>());
     QByteArray dataArray = QByteArray::fromRawData(reinterpret_cast<char *>(dataPtr), size);
-    QMimeData *mMimeData = new QMimeData;
-    mMimeData->setData(formatString, dataArray);
-    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+    QHtml5Clipboard::QHtml5ClipboardPaste(formatString, dataArray,isFinished);
 }
 
-void pasteClipboard(emscripten::val data) {
-    QString qstr = QString::fromStdString(data.as<std::string>());
+void pasteClipboard(emscripten::val format, emscripten::val data, bool isFinished) {
+    QString formatString = QString::fromStdString(format.as<std::string>());
+    QByteArray qstr = QByteArray::fromStdString(data.as<std::string>());
     qDebug() << Q_FUNC_INFO << qstr;
 
-    QMimeData *mMimeData = new QMimeData;
-    mMimeData->setText(qstr);
-    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+//    QMimeData *mMimeData = new QMimeData;
+//    mMimeData->setData(formatString,qstr);
+//    QHtml5Clipboard::QHtml5ClipboardPaste(mMimeData);
+    QHtml5Clipboard::QHtml5ClipboardPaste(formatString, qstr,isFinished);
 }
 
 EMSCRIPTEN_BINDINGS(my_module) {
@@ -120,7 +120,6 @@ QHtml5Integration::QHtml5Integration()
       m_eventDispatcher(0),
       m_clipboard(new QHtml5Clipboard)
 {
-
     qSetMessagePattern(QString("(%{function}:%{line}) - %{message}"));
    // qInstallMessageHandler(emscriptenOutput);
 
@@ -279,34 +278,40 @@ void QHtml5Integration::initClipboardEvents()
                       var data;
                       var items = ev.clipboardData.items;
                      console.log("items.length "+ items.length);
+                     var isFinished = false;
                       for (var i = 0; i < items.length; i++) {
-                       console.log("item: " + i + " " + items[i].type);
+                          if (i === items.length - 1)
+                              isFinished = true;
+                         var format = items[i].type;
+                         console.log("item: " + i + " " + format);
 
-                          if (items[i].type.indexOf("text") == 0) {
-                              data = ev.clipboardData.getData('text');
-                              if (data.length > 0)
-                                  Module.pasteClipboard(data);
-                          }
-                          if (items[i].type.indexOf("image") == 0) {
+                          if (format.indexOf("text") == 0) {
+                              data = ev.clipboardData.getData(format);
+                              if (data.length > 0) {
+                                  console.log(data.length+" "+data);
+                                  Module.pasteClipboard(format, data, isFinished);
+                             }
+                         } else if (format.indexOf("image") == 0) {
 
                              var blob = items[i].getAsFile();
 
-                             var format = items[i].type;
                              if (blob !== null) {
                                   var reader = new FileReader();
                                   reader.onload = function () {
-                                      var dataArray = new Uint8Array(reader.result);
+                                      var dataArray = new Int8Array(reader.result);
                                       var ptrBuffer = _malloc(dataArray.length);
                                       HEAPU8.set(dataArray, ptrBuffer);
 
-                                      Module.pasteClipboardData(format, ptrBuffer, dataArray.length);
+                                      Module.pasteClipboardData(format, ptrBuffer, dataArray.length, isFinished);
                                       _free(ptrBuffer);
                                   };
                                 reader.readAsArrayBuffer(blob);
-                              }/* else {
+                              } /* else {
                                   console.log("blob is null");
                               }*/
-                          }
+                             } else { //other formats
+
+                             }
                       }
                  ev.preventDefault();
               });
