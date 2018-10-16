@@ -1,3 +1,6 @@
+QT += widgets
+requires(qtConfig(listwidget))
+
 HEADERS = window.h \
           animation.h
 SOURCES = main.cpp \
@@ -10,6 +13,3 @@ RESOURCES = easing.qrc
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/animation/easing
 INSTALLS += target
-
-QT += widgets
-

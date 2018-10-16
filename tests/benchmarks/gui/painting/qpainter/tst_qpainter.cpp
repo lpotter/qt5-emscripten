@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,21 +29,13 @@
 #include <qtest.h>
 #include <QPainter>
 #include <QPixmap>
-#include <QDialog>
 #include <QImage>
 #include <QPaintEngine>
 #include <QTileRules>
-#include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <qmath.h>
 
 #include <private/qpixmap_raster_p.h>
 
-Q_DECLARE_METATYPE(QLine)
-Q_DECLARE_METATYPE(QRect)
-Q_DECLARE_METATYPE(QSize)
-Q_DECLARE_METATYPE(QPoint)
 Q_DECLARE_METATYPE(QPainterPath)
 Q_DECLARE_METATYPE(QPainter::RenderHint)
 Q_DECLARE_METATYPE(QPainter::CompositionMode)
@@ -148,7 +127,7 @@ QPixmap rasterPixmap(const QImage &image)
     QPlatformPixmap *data =
         new QRasterPlatformPixmap(QPlatformPixmap::PixmapType);
 
-    data->fromImage(image, Qt::AutoColor);
+    data->fromImage(image, Qt::AutoColor | Qt::NoFormatConversion);
 
     return QPixmap(data);
 }
@@ -245,6 +224,7 @@ private:
     void createPrimitives();
 
     void drawPrimitives_data_helper(bool fancypens);
+    void drawPixmapImage_data_helper(bool);
     void fillPrimitives_helper(QPainter *painter, PrimitiveType type, PrimitiveSet *s);
 
     QTransform transformForAngle(qreal angle);
@@ -625,7 +605,7 @@ void tst_QPainter::drawLine_antialiased_clipped()
     p.end();
 }
 
-void tst_QPainter::drawPixmap_data()
+void tst_QPainter::drawPixmapImage_data_helper(bool pixmaps)
 {
     QTest::addColumn<QImage::Format>("sourceFormat");
     QTest::addColumn<QImage::Format>("targetFormat");
@@ -633,9 +613,7 @@ void tst_QPainter::drawPixmap_data()
     QTest::addColumn<int>("type"); // 0 = circle, 1 = diag line, 2 = solid rect, 3 = alpharect
 
     QList<QSize> sizes;
-    sizes << QSize(1, 1)
-          << QSize(10, 10)
-          << QSize(100, 100)
+    sizes << QSize(10, 10)
           << QSize(1000, 1000);
 
     const char *typeNames[] = {
@@ -661,32 +639,70 @@ void tst_QPainter::drawPixmap_data()
         "ARGB8555_pm",
         "RGB888",
         "RGB444",
-        "ARGB4444_pm"
+        "ARGB4444_pm",
+        "RGBx8888",
+        "RGBA8888",
+        "RGBA8888_pm",
+        "BGR30",
+        "A2BGR30_pm",
+        "RGB30",
+        "A2RGB30_pm",
+        "Alpha8",
+        "Grayscale8",
+        "RGBx64",
+        "RGBA64",
+        "RGBA64_pm",
     };
 
-    for (int tar=4; tar<QImage::NImageFormats; ++tar) {
-        for (int src=4; src<QImage::NImageFormats; ++src) {
+    const QImage::Format pixmapFormats[] = {
+        QImage::Format_RGB32,
+        QImage::Format_ARGB32_Premultiplied,
+        QImage::Format_RGB16,
+        QImage::Format_BGR30,
+        QImage::Format_Invalid
+    };
 
-            // skip the low-priority formats to keep resultset manageable...
-            if (tar == QImage::Format_RGB444 || src == QImage::Format_RGB444
-                || tar == QImage::Format_RGB555 || src == QImage::Format_RGB555
-                || tar == QImage::Format_RGB666 || src == QImage::Format_RGB666
-                || tar == QImage::Format_RGB888 || src == QImage::Format_RGB888
-                || tar == QImage::Format_ARGB4444_Premultiplied
-                || src == QImage::Format_ARGB4444_Premultiplied
-                || tar == QImage::Format_ARGB6666_Premultiplied
-                || src == QImage::Format_ARGB6666_Premultiplied)
-                continue;
+    const QImage::Format targetImageFormats[] = {
+        QImage::Format_RGB32,
+        QImage::Format_ARGB32,
+        QImage::Format_ARGB32_Premultiplied,
+        QImage::Format_RGB16,
+        QImage::Format_ARGB8565_Premultiplied,
+        QImage::Format_RGBX8888,
+        QImage::Format_RGBA8888_Premultiplied,
+        QImage::Format_BGR30,
+        QImage::Format_A2RGB30_Premultiplied,
+        QImage::Format_Grayscale8,
+        QImage::Format_Invalid
+    };
 
-            foreach (const QSize &s, sizes) {
+    const QImage::Format sourceImageFormats[] = {
+        QImage::Format_Indexed8,
+        QImage::Format_RGB32,
+        QImage::Format_ARGB32,
+        QImage::Format_ARGB32_Premultiplied,
+        QImage::Format_RGB16,
+        QImage::Format_RGB888,
+        QImage::Format_RGBX8888,
+        QImage::Format_RGBA8888,
+        QImage::Format_RGB30,
+        QImage::Format_Grayscale8,
+        QImage::Format_Invalid
+    };
+
+    const QImage::Format *targetFormats = pixmaps ? pixmapFormats : targetImageFormats;
+    for (; *targetFormats != QImage::Format_Invalid; ++targetFormats) {
+        const QImage::Format *sourceFormats = pixmaps ? pixmapFormats : sourceImageFormats;
+        for (; *sourceFormats != QImage::Format_Invalid; ++sourceFormats) {
+            for (const QSize &s : qAsConst(sizes)) {
                 for (int type=0; type<=3; ++type) {
                     QString name = QString::fromLatin1("%1 on %2, (%3x%4), %5")
-                                   .arg(formatNames[src])
-                                   .arg(formatNames[tar])
+                                   .arg(formatNames[*sourceFormats])
+                                   .arg(formatNames[*targetFormats])
                                    .arg(s.width()).arg(s.height())
                                    .arg(typeNames[type]);
-                    QTest::newRow(name.toLatin1()) << (QImage::Format) src
-                                                   << (QImage::Format) tar
+                    QTest::newRow(name.toLatin1()) << *sourceFormats
+                                                   << *targetFormats
                                                    << s
                                                    << type;
                 }
@@ -720,6 +736,11 @@ static QImage createImage(int type, const QSize &size) {
 }
 
 
+void tst_QPainter::drawPixmap_data()
+{
+    drawPixmapImage_data_helper(true);
+}
+
 void tst_QPainter::drawPixmap()
 {
     QFETCH(QImage::Format, sourceFormat);
@@ -742,7 +763,7 @@ void tst_QPainter::drawPixmap()
 
 void tst_QPainter::drawImage_data()
 {
-    drawPixmap_data();
+    drawPixmapImage_data_helper(false);
 }
 
 
@@ -1204,7 +1225,7 @@ QTransform tst_QPainter::transformForAngle(qreal angle)
     QTransform rotTrans2;
     rotTrans2.translate(40, 0);
 
-    qreal rad = angle * 2. * M_PI / 360.;
+    qreal rad = qDegreesToRadians(angle);
     qreal c = ::cos(rad);
     qreal s = ::sin(rad);
 
@@ -1294,7 +1315,7 @@ void tst_QPainter::drawScaledAntialiasedRoundedRect_data()
 {
     QTest::addColumn<float>("scale");
 
-    for (float i = 0; i < 3; i += .1)
+    for (float i = 0; i < 3; i += .1f)
         QTest::newRow(QString(QLatin1String("scale=%1")).arg(i).toLatin1()) << i;
 }
 
@@ -1475,7 +1496,7 @@ void tst_QPainter::drawScaledBorderPixmapRoundedRect_data()
     QTest::addColumn<float>("scale");
     QTest::addColumn<int>("imageType");
 
-    for (float i = 0; i < 3; i += .1)
+    for (float i = 0; i < 3; i += .1f)
         QTest::newRow(QString(QLatin1String("scale=%1; imagetype=ARGB32_Pre")).arg(i).toLatin1()) << i << (int)QImage::Format_ARGB32_Premultiplied;
     //for (float i = 0; i < 3; i += .1)
     //    QTest::newRow(QString(QLatin1String("scale=%1; imagetype=ARGB8565_Pre")).arg(i).toLatin1()) << i << (int)QImage::Format_ARGB8565_Premultiplied;

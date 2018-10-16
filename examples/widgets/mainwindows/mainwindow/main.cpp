@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -45,9 +54,10 @@
 #include <QPainterPath>
 #include <QPainter>
 #include <QMap>
-#include <qdebug.h>
+#include <QDebug>
 
-void render_qt_text(QPainter *painter, int w, int h, const QColor &color) {
+void render_qt_text(QPainter *painter, int w, int h, const QColor &color)
+{
     QPainterPath path;
     path.moveTo(-0.083695, 0.283849);
     path.cubicTo(-0.049581, 0.349613, -0.012720, 0.397969, 0.026886, 0.428917);
@@ -116,47 +126,69 @@ void render_qt_text(QPainter *painter, int w, int h, const QColor &color) {
     painter->drawPath(path);
 }
 
-void usage()
+static void usage()
 {
     qWarning() << "Usage: mainwindow [-SizeHint<color> <width>x<height>] ...";
     exit(1);
 }
 
-QMap<QString, QSize> parseCustomSizeHints(int argc, char **argv)
+enum ParseCommandLineArgumentsResult {
+    CommandLineArgumentsOk,
+    CommandLineArgumentsError,
+    HelpRequested
+};
+
+static ParseCommandLineArgumentsResult
+    parseCustomSizeHints(const QStringList &arguments, MainWindow::CustomSizeHintMap *result)
 {
-    QMap<QString, QSize> result;
-
-    for (int i = 1; i < argc; ++i) {
-        QString arg = QString::fromLocal8Bit(argv[i]);
-
+    result->clear();
+    const int argumentCount = arguments.size();
+    for (int i = 1; i < argumentCount; ++i) {
+        const QString &arg = arguments.at(i);
         if (arg.startsWith(QLatin1String("-SizeHint"))) {
-            QString name = arg.mid(9);
+            const QString name = arg.mid(9);
             if (name.isEmpty())
-                usage();
-            if (++i == argc)
-                usage();
-            QString sizeStr = QString::fromLocal8Bit(argv[i]);
-            int idx = sizeStr.indexOf(QLatin1Char('x'));
+                return CommandLineArgumentsError;
+            if (++i == argumentCount)
+                return CommandLineArgumentsError;
+            const QString sizeStr = arguments.at(i);
+            const int idx = sizeStr.indexOf(QLatin1Char('x'));
             if (idx == -1)
-                usage();
+                return CommandLineArgumentsError;
             bool ok;
-            int w = sizeStr.left(idx).toInt(&ok);
+            const int w = sizeStr.leftRef(idx).toInt(&ok);
             if (!ok)
-                usage();
-            int h = sizeStr.mid(idx + 1).toInt(&ok);
+                return CommandLineArgumentsError;
+            const int h = sizeStr.midRef(idx + 1).toInt(&ok);
             if (!ok)
-                usage();
-            result[name] = QSize(w, h);
+                return CommandLineArgumentsError;
+            result->insert(name, QSize(w, h));
+        } else if (arg == QLatin1String("-h") || arg == QLatin1String("--help")) {
+            return HelpRequested;
+        } else {
+            return CommandLineArgumentsError;
         }
     }
 
-    return result;
+    return CommandLineArgumentsOk;
 }
 
 int main(int argc, char **argv)
 {
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QApplication app(argc, argv);
-    QMap<QString, QSize> customSizeHints = parseCustomSizeHints(argc, argv);
+    MainWindow::CustomSizeHintMap customSizeHints;
+    switch (parseCustomSizeHints(QCoreApplication::arguments(), &customSizeHints)) {
+    case CommandLineArgumentsOk:
+        break;
+    case CommandLineArgumentsError:
+        usage();
+        return -1;
+    case HelpRequested:
+        usage();
+        return 0;
+    }
     MainWindow mainWin(customSizeHints);
     mainWin.resize(800, 600);
     mainWin.show();

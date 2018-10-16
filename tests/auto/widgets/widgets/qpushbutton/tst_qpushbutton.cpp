@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,22 +41,15 @@
 #include <QStyleFactory>
 #include <QTabWidget>
 
-Q_DECLARE_METATYPE(QPushButton*)
-
 class tst_QPushButton : public QObject
 {
 Q_OBJECT
-public:
-    tst_QPushButton();
-    virtual ~tst_QPushButton();
 
-
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
     void init();
-    void cleanup();
-private slots:
+
     void getSetCheck();
     void autoRepeat();
     void pressed();
@@ -86,11 +66,7 @@ private slots:
     void sizeHint_data();
     void sizeHint();
     void taskQTBUG_20191_shortcutWithKeypadModifer();
-/*
-    void state();
-    void group();
-    void stateChanged();
-*/
+    void emitReleasedAfterChange();
 
 protected slots:
     void resetCounters();
@@ -121,14 +97,6 @@ void tst_QPushButton::getSetCheck()
     obj1.setMenu((QMenu *)0);
     QCOMPARE((QMenu *)0, obj1.menu());
     delete var1;
-}
-
-tst_QPushButton::tst_QPushButton()
-{
-}
-
-tst_QPushButton::~tst_QPushButton()
-{
 }
 
 void tst_QPushButton::initTestCase()
@@ -162,11 +130,6 @@ void tst_QPushButton::init()
 
     resetCounters();
 }
-
-void tst_QPushButton::cleanup()
-{
-}
-
 
 void tst_QPushButton::resetCounters()
 {
@@ -220,9 +183,7 @@ void tst_QPushButton::autoRepeat()
     testWidget->setAutoRepeat( false );
     QTest::keyPress( testWidget, Qt::Key_Space );
 
-    QTest::qWait( 300 );
-
-    QVERIFY( testWidget->isDown() );
+    QTRY_VERIFY( testWidget->isDown() );
     QVERIFY( toggle_count == 0 );
     QVERIFY( press_count == 1 );
     QVERIFY( release_count == 0 );
@@ -237,13 +198,12 @@ void tst_QPushButton::autoRepeat()
     testWidget->setDown( false );
     testWidget->setAutoRepeat( true );
     QTest::keyPress( testWidget, Qt::Key_Space );
-    QTest::qWait(900);
+    QTRY_VERIFY(press_count > 3);
     QVERIFY( testWidget->isDown() );
     QVERIFY( toggle_count == 0 );
     QTest::keyRelease( testWidget, Qt::Key_Space );
-    QVERIFY(press_count == release_count);
-    QVERIFY(release_count == click_count);
-    QVERIFY(press_count > 1);
+    QCOMPARE(press_count, release_count);
+    QCOMPARE(release_count, click_count);
 
     // #### shouldn't I check here to see if multiple signals have been fired???
 
@@ -278,23 +238,19 @@ void tst_QPushButton::autoRepeat()
 void tst_QPushButton::pressed()
 {
     QTest::keyPress( testWidget, ' ' );
-//    QTest::qWait( 300 );
     QCOMPARE( press_count, (uint)1 );
     QCOMPARE( release_count, (uint)0 );
 
     QTest::keyRelease( testWidget, ' ' );
-//    QTest::qWait( 300 );
     QCOMPARE( press_count, (uint)1 );
     QCOMPARE( release_count, (uint)1 );
 
     QTest::keyPress( testWidget,Qt::Key_Enter );
-//    QTest::qWait( 300 );
     QCOMPARE( press_count, (uint)1 );
     QCOMPARE( release_count, (uint)1 );
 
     testWidget->setAutoDefault(true);
     QTest::keyPress( testWidget,Qt::Key_Enter );
-//    QTest::qWait( 300 );
     QCOMPARE( press_count, (uint)2 );
     QCOMPARE( release_count, (uint)2 );
     testWidget->setAutoDefault(false);
@@ -377,14 +333,8 @@ void tst_QPushButton::setAccel()
     // window and has focus
     QApplication::setActiveWindow(testWidget);
     testWidget->setFocus();
-    for (int i = 0; !testWidget->isActiveWindow() && i < 1000; ++i) {
-        testWidget->activateWindow();
-        QApplication::instance()->processEvents();
-        QTest::qWait(100);
-    }
-    QVERIFY(testWidget->isActiveWindow());
+    QVERIFY(QTest::qWaitForWindowActive(testWidget));
     QTest::keyClick( testWidget, 'A', Qt::AltModifier );
-    QTest::qWait( 50 );
     QTRY_VERIFY( click_count == 1 );
     QVERIFY( press_count == 1 );
     QVERIFY( release_count == 1 );
@@ -429,19 +379,6 @@ void tst_QPushButton::clicked()
     QCOMPARE( release_count, (uint)10 );
 }
 
-/*
-void tst_QPushButton::group()
-{
-}
-
-void tst_QPushButton::state()
-{
-}
-
-void tst_QPushButton::stateChanged()
-{
-}
-*/
 QPushButton *pb = 0;
 void tst_QPushButton::helperSlotDelete()
 {
@@ -492,8 +429,8 @@ void tst_QPushButton::defaultAndAutoDefault()
     // Adding buttons to QDialog through a layout
     QDialog dialog;
 
-	QPushButton button3;
-	button3.setAutoDefault(false);
+    QPushButton button3;
+    button3.setAutoDefault(false);
 
     QPushButton button1;
     QVERIFY(!button1.autoDefault());
@@ -514,7 +451,7 @@ void tst_QPushButton::defaultAndAutoDefault()
     layout.addWidget(&button2, 0, 2);
     layout.addWidget(&button1, 0, 1);
     dialog.setLayout(&layout);
-	button3.setFocus();
+    button3.setFocus();
     QVERIFY(button1.autoDefault());
     QVERIFY(button1.isDefault());
     QVERIFY(button2.autoDefault());
@@ -564,37 +501,20 @@ void tst_QPushButton::sizeHint_data()
 #if !defined(QT_NO_STYLE_WINDOWS)
     QTest::newRow("windows") << QString::fromLatin1("windows");
 #endif
-#if !defined(QT_NO_STYLE_GTK)
-    QTest::newRow("gtk") << QString::fromLatin1("gtk");
-#endif
 #if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
-    QTest::newRow("mac") << QString::fromLatin1("mac");
+    QTest::newRow("macintosh") << QString::fromLatin1("macintosh");
 #endif
 #if !defined(QT_NO_STYLE_FUSION)
     QTest::newRow("fusion") << QString::fromLatin1("fusion");
 #endif
-#if defined(Q_OS_WIN) && !defined(QT_NO_STYLE_WINDOWSXP)
-    QTest::newRow("windowsxp") << QString::fromLatin1("windowsxp");
-#endif
-#if defined(Q_OS_WIN) && !defined(QT_NO_STYLE_WINDOWSVISTA)
+#if defined(Q_OS_WIN) && !defined(QT_NO_STYLE_WINDOWSVISTA) && !defined(Q_OS_WINRT)
     QTest::newRow("windowsvista") << QString::fromLatin1("windowsvista");
-#endif
-#if defined(Q_OS_WINCE) && !defined(QT_NO_STYLE_WINDOWSCE)
-    QTest::newRow("windowsce") << QString::fromLatin1("windowsce");
-#endif
-#if defined(Q_OS_WINCE_WM) && !defined(QT_NO_STYLE_WINDOWSCE)
-    QTest::newRow("windowsmobile") << QString::fromLatin1("windowsmobile");
 #endif
 }
 
 void tst_QPushButton::sizeHint()
 {
     QFETCH(QString, stylename);
-
-#ifdef Q_OS_MAC
-    if (stylename == "mac")
-        QSKIP("QStyleFactory cannot create the Mac style, see QTBUG-23680");
-#endif
 
     QStyle *style = QStyleFactory::create(stylename);
     if (!style)
@@ -640,13 +560,11 @@ void tst_QPushButton::sizeHint()
         tabWidget->addTab(tab2, "2");
         QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
         mainLayout->addWidget(tabWidget);
-        dialog->show();
+        dialog->showNormal();
         tabWidget->setCurrentWidget(tab2);
         tabWidget->setCurrentWidget(tab1);
-        QTest::qWait(100);
-        QApplication::processEvents();
 
-        QCOMPARE(button1_2->size(), button2_2->size());
+        QTRY_COMPARE(button1_2->size(), button2_2->size());
     }
 }
 
@@ -661,7 +579,7 @@ void tst_QPushButton::taskQTBUG_20191_shortcutWithKeypadModifer()
     QDialog dialog;
     dialog.setLayout(layout);
     dialog.show();
-    QTest::qWaitForWindowShown(&dialog);
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
     QApplication::setActiveWindow(&dialog);
 
     // add shortcut '5' to button1 and test with keyboard and keypad '5' keys
@@ -694,6 +612,37 @@ void tst_QPushButton::taskQTBUG_20191_shortcutWithKeypadModifer()
     QTest::qWait(300);
     QCOMPARE(spy1.count(), 0);
     QCOMPARE(spy2.count(), 1);
+}
+
+void tst_QPushButton::emitReleasedAfterChange()
+{
+    QPushButton *button1 = new QPushButton("A");
+    QPushButton *button2 = new QPushButton("B");
+    QVBoxLayout *layout = new QVBoxLayout();
+    layout->addWidget(button1);
+    layout->addWidget(button2);
+    QDialog dialog;
+    dialog.setLayout(layout);
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+    QApplication::setActiveWindow(&dialog);
+    button1->setFocus();
+
+    QSignalSpy spy(button1, SIGNAL(released()));
+    QTest::mousePress(button1, Qt::LeftButton);
+    QVERIFY(button1->isDown());
+    QTest::keyClick(&dialog, Qt::Key_Tab);
+    QVERIFY(!button1->isDown());
+    QCOMPARE(spy.count(), 1);
+    spy.clear();
+
+    QCOMPARE(spy.count(), 0);
+    button1->setFocus();
+    QTest::mousePress(button1, Qt::LeftButton);
+    QVERIFY(button1->isDown());
+    button1->setEnabled(false);
+    QVERIFY(!button1->isDown());
+    QCOMPARE(spy.count(), 1);
 }
 
 QTEST_MAIN(tst_QPushButton)

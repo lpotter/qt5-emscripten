@@ -5,8 +5,8 @@ SOURCES     = domitem.cpp \
               dommodel.cpp \
               main.cpp \
               mainwindow.cpp
-CONFIG  += qt
 QT      += xml widgets
+requires(qtConfig(filedialog))
 
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/simpledommodel

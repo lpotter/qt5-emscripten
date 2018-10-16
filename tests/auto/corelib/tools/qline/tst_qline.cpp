@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,6 +43,12 @@ private slots:
 
     void testLength();
     void testLength_data();
+
+    void testCenter();
+    void testCenter_data();
+
+    void testCenterF();
+    void testCenterF_data();
 
     void testNormalVector();
     void testNormalVector_data();
@@ -173,9 +166,6 @@ void tst_QLine::testIntersection_data()
                                    << 100.1599256468622
                                    << 50.0;
 
-    QLineF baseA(0, -50, 0, 50);
-    QLineF baseB(-50, 0, 50, 0);
-
     for (int i = 0; i < 1000; ++i) {
         QLineF a = QLineF::fromPolar(50, i);
         a.setP1(-a.p2());
@@ -187,7 +177,7 @@ void tst_QLine::testIntersection_data()
         a = a.translated(1, 1);
         b = b.translated(1, 1);
 
-        QTest::newRow(qPrintable(QString::fromLatin1("rotation-%0").arg(i)))
+        QTest::newRow(("rotation-" + QByteArray::number(i)).constData())
             << (double)a.x1() << (double)a.y1() << (double)a.x2() << (double)a.y2()
             << (double)b.x1() << (double)b.y1() << (double)b.x2() << (double)b.y2()
             << int(QLineF::BoundedIntersection)
@@ -281,6 +271,77 @@ void tst_QLine::testLength()
     QCOMPARE(l.dy(), qreal(vy));
 }
 
+void tst_QLine::testCenter()
+{
+    QFETCH(int, x1);
+    QFETCH(int, y1);
+    QFETCH(int, x2);
+    QFETCH(int, y2);
+    QFETCH(int, centerX);
+    QFETCH(int, centerY);
+
+    const QPoint c = QLine(x1, y1, x2, y2).center();
+    QCOMPARE(centerX, c.x());
+    QCOMPARE(centerY, c.y());
+}
+
+void tst_QLine::testCenter_data()
+{
+    QTest::addColumn<int>("x1");
+    QTest::addColumn<int>("y1");
+    QTest::addColumn<int>("x2");
+    QTest::addColumn<int>("y2");
+    QTest::addColumn<int>("centerX");
+    QTest::addColumn<int>("centerY");
+
+    QTest::newRow("[0, 0]") << 0 << 0 << 0 << 0 << 0 << 0;
+    QTest::newRow("top") << 0 << 0 << 2 << 0 << 1 << 0;
+    QTest::newRow("right") << 0 << 0 << 0 << 2 << 0 << 1;
+    QTest::newRow("bottom") << 0 << 0 << -2 << 0 << -1 << 0;
+    QTest::newRow("left") << 0 << 0 << 0 << -2 << 0 << -1;
+
+    QTest::newRow("precision+") << 0 << 0 << 1 << 1 << 0 << 0;
+    QTest::newRow("precision-") << -1 << -1 << 0 << 0 << 0 << 0;
+
+    const int max = std::numeric_limits<int>::max();
+    const int min = std::numeric_limits<int>::min();
+    QTest::newRow("max") << max << max << max << max << max << max;
+    QTest::newRow("min") << min << min << min << min << min << min;
+    QTest::newRow("minmax") << min << min << max << max << 0 << 0;
+}
+
+void tst_QLine::testCenterF()
+{
+    QFETCH(double, x1);
+    QFETCH(double, y1);
+    QFETCH(double, x2);
+    QFETCH(double, y2);
+    QFETCH(double, centerX);
+    QFETCH(double, centerY);
+
+    const QPointF c = QLineF(x1, y1, x2, y2).center();
+    QCOMPARE(centerX, c.x());
+    QCOMPARE(centerY, c.y());
+}
+
+void tst_QLine::testCenterF_data()
+{
+    QTest::addColumn<double>("x1");
+    QTest::addColumn<double>("y1");
+    QTest::addColumn<double>("x2");
+    QTest::addColumn<double>("y2");
+    QTest::addColumn<double>("centerX");
+    QTest::addColumn<double>("centerY");
+
+    QTest::newRow("[0, 0]") << 0.0 << 0.0 << 0.0 << 0.0 << 0.0 << 0.0;
+    QTest::newRow("top") << 0.0 << 0.0 << 1.0 << 0.0 << 0.5 << 0.0;
+    QTest::newRow("right") << 0.0 << 0.0 << 0.0 << 1.0 << 0.0 << 0.5;
+    QTest::newRow("bottom") << 0.0 << 0.0 << -1.0 << 0.0 << -0.5 << 0.0;
+    QTest::newRow("left") << 0.0 << 0.0 << 0.0 << -1.0 << 0.0 << -0.5;
+
+    const double max = std::numeric_limits<qreal>::max();
+    QTest::newRow("max") << max << max << max << max << max << max;
+}
 
 void tst_QLine::testNormalVector_data()
 {
@@ -340,7 +401,7 @@ void tst_QLine::testAngle_data()
                               << 135.0;
 
     for (int i=0; i<180; ++i) {
-        QTest::newRow(QString("angle:%1").arg(i).toLatin1())
+        QTest::newRow(("angle:" + QByteArray::number(i)).constData())
             << 0.0 << 0.0 << double(cos(i*M_2PI/360)) << double(sin(i*M_2PI/360))
             << 0.0 << 0.0 << 1.0 << 0.0
             << double(i);
@@ -468,7 +529,7 @@ void tst_QLine::testAngleTo_data()
 
     for (int i = 0; i < 360; ++i) {
         const QLineF l = QLineF::fromPolar(1, i);
-        QTest::newRow(QString("angle:%1").arg(i).toLatin1())
+        QTest::newRow(("angle:" + QByteArray::number(i)).constData())
             << qreal(0.0) << qreal(0.0) << qreal(1.0) << qreal(0.0)
             << qreal(0.0) << qreal(0.0) << l.p2().x() << l.p2().y()
             << qreal(i);

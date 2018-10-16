@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -72,8 +70,8 @@ QT_BEGIN_NAMESPACE
 
 static bool qt_pixmap_thread_test()
 {
-    if (!QCoreApplication::instance()) {
-        qFatal("QPixmap: Must construct a QApplication before a QPaintDevice");
+    if (Q_UNLIKELY(!QCoreApplication::instance())) {
+        qFatal("QPixmap: Must construct a QGuiApplication before a QPixmap");
         return false;
     }
 
@@ -127,12 +125,8 @@ QPixmap::QPixmap()
 */
 
 QPixmap::QPixmap(int w, int h)
-    : QPaintDevice()
+    : QPixmap(QSize(w, h))
 {
-    if (!qt_pixmap_thread_test())
-        doInit(0, 0, QPlatformPixmap::PixmapType);
-    else
-        doInit(w, h, QPlatformPixmap::PixmapType);
 }
 
 /*!
@@ -146,12 +140,8 @@ QPixmap::QPixmap(int w, int h)
 */
 
 QPixmap::QPixmap(const QSize &size)
-    : QPaintDevice()
+    : QPixmap(size, QPlatformPixmap::PixmapType)
 {
-    if (!qt_pixmap_thread_test())
-        doInit(0, 0, QPlatformPixmap::PixmapType);
-    else
-        doInit(size.width(), size.height(), QPlatformPixmap::PixmapType);
 }
 
 /*!
@@ -258,9 +248,9 @@ QPixmap::QPixmap(const char * const xpm[])
     QImage image(xpm);
     if (!image.isNull()) {
         if (data && data->pixelType() == QPlatformPixmap::BitmapType)
-            *this = QBitmap::fromImage(image);
+            *this = QBitmap::fromImage(std::move(image));
         else
-            *this = fromImage(image);
+            *this = fromImage(std::move(image));
     }
 }
 #endif
@@ -392,6 +382,14 @@ QPixmap &QPixmap::operator=(const QPixmap &pixmap)
 }
 
 /*!
+    \fn QPixmap &QPixmap::operator=(QPixmap &&other)
+
+    Move-assigns \a other to this QPixmap instance.
+
+    \since 5.2
+*/
+
+/*!
     \fn void QPixmap::swap(QPixmap &other)
     \since 4.8
 
@@ -410,7 +408,7 @@ QPixmap::operator QVariant() const
 /*!
     \fn bool QPixmap::operator!() const
 
-    Returns true if this is a null pixmap; otherwise returns false.
+    Returns \c true if this is a null pixmap; otherwise returns \c false.
 
     \sa isNull()
 */
@@ -476,18 +474,18 @@ QMatrix QPixmap::trueMatrix(const QMatrix &m, int w, int h)
 /*!
     \fn bool QPixmap::isQBitmap() const
 
-    Returns true if this is a QBitmap; otherwise returns false.
+    Returns \c true if this is a QBitmap; otherwise returns \c false.
 */
 
 bool QPixmap::isQBitmap() const
 {
-    return data->type == QPlatformPixmap::BitmapType;
+    return data && data->type == QPlatformPixmap::BitmapType;
 }
 
 /*!
     \fn bool QPixmap::isNull() const
 
-    Returns true if this is a null pixmap; otherwise returns false.
+    Returns \c true if this is a null pixmap; otherwise returns \c false.
 
     A null pixmap has zero width, zero height and no contents. You
     cannot draw in a null pixmap.
@@ -598,56 +596,19 @@ void QPixmap::setMask(const QBitmap &mask)
        return;
 
     detach();
-
-    QImage image = data->toImage();
-    if (mask.size().isEmpty()) {
-        if (image.depth() != 1) { // hw: ????
-            image = image.convertToFormat(QImage::Format_RGB32);
-        }
-    } else {
-        const int w = image.width();
-        const int h = image.height();
-
-        switch (image.depth()) {
-        case 1: {
-            const QImage imageMask = mask.toImage().convertToFormat(image.format());
-            for (int y = 0; y < h; ++y) {
-                const uchar *mscan = imageMask.scanLine(y);
-                uchar *tscan = image.scanLine(y);
-                int bytesPerLine = image.bytesPerLine();
-                for (int i = 0; i < bytesPerLine; ++i)
-                    tscan[i] &= mscan[i];
-            }
-            break;
-        }
-        default: {
-            const QImage imageMask = mask.toImage().convertToFormat(QImage::Format_MonoLSB);
-            image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-            for (int y = 0; y < h; ++y) {
-                const uchar *mscan = imageMask.scanLine(y);
-                QRgb *tscan = (QRgb *)image.scanLine(y);
-                for (int x = 0; x < w; ++x) {
-                    if (!(mscan[x>>3] & (1 << (x&7))))
-                        tscan[x] = 0;
-                }
-            }
-            break;
-        }
-        }
-    }
-    data->fromImage(image, Qt::AutoColor);
+    data->setMask(mask);
 }
 
 /*!
     Returns the device pixel ratio for the pixmap. This is the
-    ratio between pixmap pixels and device-independent pixels.
+    ratio between \e{device pixels} and \e{device independent pixels}.
 
     Use this function when calculating layout geometry based on
     the pixmap size: QSize layoutSize = image.size() / image.devicePixelRatio()
 
     The default value is 1.0.
 
-    \sa setDevicePixelRatio()
+    \sa setDevicePixelRatio(), QImageReader
 */
 qreal QPixmap::devicePixelRatio() const
 {
@@ -657,10 +618,10 @@ qreal QPixmap::devicePixelRatio() const
 }
 
 /*!
-    Sets the the device pixel ratio for the pixmap. This is the
+    Sets the device pixel ratio for the pixmap. This is the
     ratio between image pixels and device-independent pixels.
 
-    The default value is 1.0. Setting it to something else has
+    The default \a scaleFactor is 1.0. Setting it to something else has
     two effects:
 
     QPainters that are opened on the pixmap will be scaled. For
@@ -672,12 +633,19 @@ qreal QPixmap::devicePixelRatio() const
     pixmap size will take the ratio into account:
     QSize layoutSize = pixmap.size() / pixmap.devicePixelRatio()
     The net effect of this is that the pixmap is displayed as
-    high-dpi pixmap rather than a large pixmap.
+    high-DPI pixmap rather than a large pixmap
+    (see \l{Drawing High Resolution Versions of Pixmaps and Images}).
 
-        \sa devicePixelRatio()
+    \sa devicePixelRatio()
 */
 void QPixmap::setDevicePixelRatio(qreal scaleFactor)
 {
+    if (isNull())
+        return;
+
+    if (scaleFactor == data->devicePixelRatio())
+        return;
+
     detach();
     data->setDevicePixelRatio(scaleFactor);
 }
@@ -723,13 +691,13 @@ QBitmap QPixmap::createHeuristicMask(bool clipTight) const
 QBitmap QPixmap::createMaskFromColor(const QColor &maskColor, Qt::MaskMode mode) const
 {
     QImage image = toImage().convertToFormat(QImage::Format_ARGB32);
-    return QBitmap::fromImage(image.createMaskFromColor(maskColor.rgba(), mode));
+    return QBitmap::fromImage(std::move(image).createMaskFromColor(maskColor.rgba(), mode));
 }
 
 /*!
     Loads a pixmap from the file with the given \a fileName. Returns
     true if the pixmap was successfully loaded; otherwise invalidates
-    the pixmap and returns false.
+    the pixmap and returns \c false.
 
     The loader attempts to read the pixmap using the specified \a
     format. If the \a format is not specified (which is the default),
@@ -755,37 +723,37 @@ QBitmap QPixmap::createMaskFromColor(const QColor &maskColor, Qt::MaskMode mode)
 
 bool QPixmap::load(const QString &fileName, const char *format, Qt::ImageConversionFlags flags)
 {
-    if (fileName.isEmpty()) {
-        data.reset();
-        return false;
+    if (!fileName.isEmpty()) {
+
+        QFileInfo info(fileName);
+        // Note: If no extension is provided, we try to match the
+        // file against known plugin extensions
+        if (info.completeSuffix().isEmpty() || info.exists()) {
+
+            QString key = QLatin1String("qt_pixmap")
+                    % info.absoluteFilePath()
+                    % HexString<uint>(info.lastModified().toSecsSinceEpoch())
+                    % HexString<quint64>(info.size())
+                    % HexString<uint>(data ? data->pixelType() : QPlatformPixmap::PixmapType);
+
+            if (QPixmapCache::find(key, this))
+                return true;
+
+            data = QPlatformPixmap::create(0, 0, data ? data->pixelType() : QPlatformPixmap::PixmapType);
+
+            if (data->fromFile(fileName, format, flags)) {
+                QPixmapCache::insert(key, *this);
+                return true;
+            }
+        }
     }
 
-    QFileInfo info(fileName);
-    QString key = QLatin1String("qt_pixmap")
-                  % info.absoluteFilePath()
-                  % HexString<uint>(info.lastModified().toTime_t())
-                  % HexString<quint64>(info.size())
-                  % HexString<uint>(data ? data->pixelType() : QPlatformPixmap::PixmapType);
-
-    // Note: If no extension is provided, we try to match the
-    // file against known plugin extensions
-    if (!info.completeSuffix().isEmpty() && !info.exists()) {
-        data.reset();
-        return false;
+    if (!isNull()) {
+        if (isQBitmap())
+            *this = QBitmap();
+        else
+            data.reset();
     }
-
-    if (QPixmapCache::find(key, this))
-        return true;
-
-    if (!data)
-        data = QPlatformPixmap::create(0, 0, QPlatformPixmap::PixmapType);
-
-    if (data->fromFile(fileName, format, flags)) {
-        QPixmapCache::insert(key, *this);
-        return true;
-    }
-
-    data.reset();
     return false;
 }
 
@@ -793,8 +761,8 @@ bool QPixmap::load(const QString &fileName, const char *format, Qt::ImageConvers
     \fn bool QPixmap::loadFromData(const uchar *data, uint len, const char *format, Qt::ImageConversionFlags flags)
 
     Loads a pixmap from the \a len first bytes of the given binary \a
-    data.  Returns true if the pixmap was loaded successfully;
-    otherwise invalidates the pixmap and returns false.
+    data.  Returns \c true if the pixmap was loaded successfully;
+    otherwise invalidates the pixmap and returns \c false.
 
     The loader attempts to read the pixmap using the specified \a
     format. If the \a format is not specified (which is the default),
@@ -815,8 +783,7 @@ bool QPixmap::loadFromData(const uchar *buf, uint len, const char *format, Qt::I
         return false;
     }
 
-    if (!data)
-        data = QPlatformPixmap::create(0, 0, QPlatformPixmap::PixmapType);
+    data = QPlatformPixmap::create(0, 0, QPlatformPixmap::PixmapType);
 
     if (data->fromData(buf, len, format, flags))
         return true;
@@ -837,8 +804,8 @@ bool QPixmap::loadFromData(const uchar *buf, uint len, const char *format, Qt::I
 
 /*!
     Saves the pixmap to the file with the given \a fileName using the
-    specified image file \a format and \a quality factor. Returns true
-    if successful; otherwise returns false.
+    specified image file \a format and \a quality factor. Returns \c true
+    if successful; otherwise returns \c false.
 
     The \a quality factor must be in the range [0,100] or -1. Specify
     0 to obtain small compressed files, 100 for large uncompressed
@@ -899,7 +866,7 @@ void QPixmap::fill(const QPaintDevice *device, const QPoint &p)
 {
     Q_UNUSED(device)
     Q_UNUSED(p)
-    qWarning("%s is deprecated, ignored", Q_FUNC_INFO);
+    qWarning("this function is deprecated, ignored");
 }
 
 
@@ -1051,9 +1018,9 @@ QDataStream &operator>>(QDataStream &stream, QPixmap &pixmap)
     if (image.isNull()) {
         pixmap = QPixmap();
     } else if (image.depth() == 1) {
-        pixmap = QBitmap::fromImage(image);
+        pixmap = QBitmap::fromImage(std::move(image));
     } else {
-        pixmap = QPixmap::fromImage(image);
+        pixmap = QPixmap::fromImage(std::move(image));
     }
     return stream;
 }
@@ -1073,7 +1040,7 @@ bool QPixmap::isDetached() const
     Replaces this pixmap's data with the given \a image using the
     specified \a flags to control the conversion.  The \a flags
     argument is a bitwise-OR of the \l{Qt::ImageConversionFlags}.
-    Passing 0 for \a flags sets all the default options. Returns true
+    Passing 0 for \a flags sets all the default options. Returns \c true
     if the result is that this pixmap is not null.
 
     Note: this function was part of Qt 3 support in Qt 4.6 and earlier.
@@ -1085,6 +1052,7 @@ bool QPixmap::isDetached() const
 */
 bool QPixmap::convertFromImage(const QImage &image, Qt::ImageConversionFlags flags)
 {
+    detach();
     if (image.isNull() || !data)
         *this = QPixmap::fromImage(image, flags);
     else
@@ -1279,8 +1247,8 @@ QPixmap QPixmap::transformed(const QMatrix &matrix, Qt::TransformationMode mode)
     and for direct pixel access and manipulation, while QPixmap is
     designed and optimized for showing images on screen. QBitmap is
     only a convenience class that inherits QPixmap, ensuring a depth
-    of 1. The isQBitmap() function returns true if a QPixmap object is
-    really a bitmap, otherwise returns false. Finally, the QPicture class
+    of 1. The isQBitmap() function returns \c true if a QPixmap object is
+    really a bitmap, otherwise returns \c false. Finally, the QPicture class
     is a paint device that records and replays QPainter commands.
 
     A QPixmap can easily be displayed on the screen using QLabel or
@@ -1305,9 +1273,7 @@ QPixmap QPixmap::transformed(const QMatrix &matrix, Qt::TransformationMode mode)
     file, optionally manipulating the image data, before the QImage
     object is converted into a QPixmap to be shown on
     screen. Alternatively, if no manipulation is desired, the image
-    file can be loaded directly into a QPixmap. On Windows, the
-    QPixmap class also supports conversion between \c HBITMAP and
-    QPixmap.
+    file can be loaded directly into a QPixmap.
 
     QPixmap provides a collection of functions that can be used to
     obtain a variety of information about the pixmap. In addition,
@@ -1367,8 +1333,8 @@ QPixmap QPixmap::transformed(const QMatrix &matrix, Qt::TransformationMode mode)
     \li Alpha component
     \li
 
-    The hasAlphaChannel() returns true if the pixmap has a format that
-    respects the alpha channel, otherwise returns false. The hasAlpha(),
+    The hasAlphaChannel() returns \c true if the pixmap has a format that
+    respects the alpha channel, otherwise returns \c false. The hasAlpha(),
     setMask() and mask() functions are legacy and should not be used.
     They are potentially very slow.
 
@@ -1405,15 +1371,8 @@ QPixmap QPixmap::transformed(const QMatrix &matrix, Qt::TransformationMode mode)
     QPixmap using the fromImage(). If this is too expensive an
     operation, you can use QBitmap::fromImage() instead.
 
-    In addition, on Windows, the QPixmap class supports conversion to
-    and from HBITMAP: the toWinHBITMAP() function creates a HBITMAP
-    equivalent to the QPixmap, based on the given HBitmapFormat, and
-    returns the HBITMAP handle. The fromWinHBITMAP() function returns
-    a QPixmap that is equivalent to the given bitmap which has the
-    specified format. The QPixmap class also supports conversion to
-    and from HICON: the toWinHICON() function creates a HICON equivalent
-    to the QPixmap, and returns the HICON handle. The fromWinHICON()
-    function returns a QPixmap that is equivalent to the given icon.
+    To convert a QPixmap to and from HICON you can use the QtWinExtras
+    functions QtWin::toHICON() and QtWin::fromHICON() respectively.
 
     \section1 Pixmap Transformations
 
@@ -1451,8 +1410,8 @@ QPixmap QPixmap::transformed(const QMatrix &matrix, Qt::TransformationMode mode)
 */
 
 /*!
-    Returns true if this pixmap has an alpha channel, \e or has a
-    mask, otherwise returns false.
+    Returns \c true if this pixmap has an alpha channel, \e or has a
+    mask, otherwise returns \c false.
 
     \sa hasAlphaChannel(), mask()
 */
@@ -1462,8 +1421,8 @@ bool QPixmap::hasAlpha() const
 }
 
 /*!
-    Returns true if the pixmap has a format that respects the alpha
-    channel, otherwise returns false.
+    Returns \c true if the pixmap has a format that respects the alpha
+    channel, otherwise returns \c false.
 
     \sa hasAlpha()
 */
@@ -1500,36 +1459,7 @@ QPaintEngine *QPixmap::paintEngine() const
 */
 QBitmap QPixmap::mask() const
 {
-    if (!data || !hasAlphaChannel())
-        return QBitmap();
-
-    const QImage img = toImage();
-    const QImage image = (img.depth() < 32 ? img.convertToFormat(QImage::Format_ARGB32_Premultiplied) : img);
-    const int w = image.width();
-    const int h = image.height();
-
-    QImage mask(w, h, QImage::Format_MonoLSB);
-    if (mask.isNull()) // allocation failed
-        return QBitmap();
-
-    mask.setColorCount(2);
-    mask.setColor(0, QColor(Qt::color0).rgba());
-    mask.setColor(1, QColor(Qt::color1).rgba());
-
-    const int bpl = mask.bytesPerLine();
-
-    for (int y = 0; y < h; ++y) {
-        const QRgb *src = reinterpret_cast<const QRgb*>(image.scanLine(y));
-        uchar *dest = mask.scanLine(y);
-        memset(dest, 0, bpl);
-        for (int x = 0; x < w; ++x) {
-            if (qAlpha(*src) > 0)
-                dest[x >> 3] |= (1 << (x & 7));
-            ++src;
-        }
-    }
-
-    return QBitmap::fromImage(mask);
+    return data ? data->mask() : QBitmap();
 }
 
 /*!
@@ -1537,12 +1467,18 @@ QBitmap QPixmap::mask() const
 
     On all platforms the depth of the primary screen will be returned.
 
+    \note QGuiApplication must be created before calling this function.
+
     \sa depth(), QColormap::depth(), {QPixmap#Pixmap Information}{Pixmap Information}
 
 */
 int QPixmap::defaultDepth()
 {
-    return QGuiApplication::primaryScreen()->depth();
+    QScreen *primary = QGuiApplication::primaryScreen();
+    if (Q_LIKELY(primary))
+        return primary->depth();
+    qWarning("QPixmap: QGuiApplication must be created before calling defaultDepth().");
+    return 0;
 }
 
 /*!
@@ -1607,6 +1543,28 @@ QPixmap QPixmap::fromImage(const QImage &image, Qt::ImageConversionFlags flags)
 
     QScopedPointer<QPlatformPixmap> data(QGuiApplicationPrivate::platformIntegration()->createPlatformPixmap(QPlatformPixmap::PixmapType));
     data->fromImage(image, flags);
+    return QPixmap(data.take());
+}
+
+/*!
+    \fn QPixmap QPixmap::fromImage(QImage &&image, Qt::ImageConversionFlags flags)
+    \since 5.3
+    \overload
+
+    Converts the given \a image to a pixmap without copying if possible.
+*/
+
+
+/*!
+    \internal
+*/
+QPixmap QPixmap::fromImageInPlace(QImage &image, Qt::ImageConversionFlags flags)
+{
+    if (image.isNull())
+        return QPixmap();
+
+    QScopedPointer<QPlatformPixmap> data(QGuiApplicationPrivate::platformIntegration()->createPlatformPixmap(QPlatformPixmap::PixmapType));
+    data->fromImageInPlace(image, flags);
     return QPixmap(data.take());
 }
 
@@ -1678,8 +1636,8 @@ QPixmap QPixmap::fromImageReader(QImageReader *imageReader, Qt::ImageConversionF
 
 QPixmap QPixmap::grabWindow(WId window, int x, int y, int w, int h)
 {
-    qWarning("%s is deprecated, use QScreen::grabWindow() instead."
-             " Defaulting to primary screen.", Q_FUNC_INFO);
+    qWarning("this function is deprecated, use QScreen::grabWindow() instead."
+             " Defaulting to primary screen.");
     return QGuiApplication::primaryScreen()->grabWindow(window, x, y, w, h);
 }
 
@@ -1694,8 +1652,19 @@ QPlatformPixmap* QPixmap::handle() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QPixmap &r)
 {
-    dbg.nospace() << "QPixmap(" << r.size() << ')';
-    return dbg.space();
+    QDebugStateSaver saver(dbg);
+    dbg.resetFormat();
+    dbg.nospace();
+    dbg << "QPixmap(";
+    if (r.isNull()) {
+        dbg << "null";
+    } else {
+        dbg << r.size() << ",depth=" << r.depth()
+            << ",devicePixelRatio=" << r.devicePixelRatio()
+            << ",cacheKey=" << showbase << hex << r.cacheKey() << dec << noshowbase;
+    }
+    dbg << ')';
+    return dbg;
 }
 #endif
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +42,7 @@
 #include "qobject_p.h"
 #include "qmetaobject_p.h"
 
+#include <vector>
 #include <stdlib.h>
 
 QT_BEGIN_NAMESPACE
@@ -90,7 +89,7 @@ Q_CORE_EXPORT bool isBuiltinType(const QByteArray &type)
 } // namespace QtPrivate
 
 // copied from qmetaobject.cpp
-static inline const QMetaObjectPrivate *priv(const uint* data)
+static inline Q_DECL_UNUSED const QMetaObjectPrivate *priv(const uint* data)
 { return reinterpret_cast<const QMetaObjectPrivate*>(data); }
 
 class QMetaMethodBuilderPrivate
@@ -147,6 +146,7 @@ public:
         return signature.left(qMax(signature.indexOf('('), 0));
     }
 };
+Q_DECLARE_TYPEINFO(QMetaMethodBuilderPrivate, Q_MOVABLE_TYPE);
 
 class QMetaPropertyBuilderPrivate
 {
@@ -184,20 +184,24 @@ public:
             flags &= ~f;
     }
 };
+Q_DECLARE_TYPEINFO(QMetaPropertyBuilderPrivate, Q_MOVABLE_TYPE);
 
 class QMetaEnumBuilderPrivate
 {
 public:
     QMetaEnumBuilderPrivate(const QByteArray& _name)
-        : name(_name), isFlag(false)
+        : name(_name), enumName(_name), isFlag(false), isScoped(false)
     {
     }
 
     QByteArray name;
+    QByteArray enumName;
     bool isFlag;
+    bool isScoped;
     QList<QByteArray> keys;
-    QList<int> values;
+    QVector<int> values;
 };
+Q_DECLARE_TYPEINFO(QMetaEnumBuilderPrivate, Q_MOVABLE_TYPE);
 
 class QMetaObjectBuilderPrivate
 {
@@ -215,20 +219,20 @@ public:
     QByteArray className;
     const QMetaObject *superClass;
     QMetaObjectBuilder::StaticMetacallFunction staticMetacallFunction;
-    QList<QMetaMethodBuilderPrivate> methods;
-    QList<QMetaMethodBuilderPrivate> constructors;
-    QList<QMetaPropertyBuilderPrivate> properties;
+    std::vector<QMetaMethodBuilderPrivate> methods;
+    std::vector<QMetaMethodBuilderPrivate> constructors;
+    std::vector<QMetaPropertyBuilderPrivate> properties;
     QList<QByteArray> classInfoNames;
     QList<QByteArray> classInfoValues;
-    QList<QMetaEnumBuilderPrivate> enumerators;
+    std::vector<QMetaEnumBuilderPrivate> enumerators;
     QList<const QMetaObject *> relatedMetaObjects;
     int flags;
 };
 
 bool QMetaObjectBuilderPrivate::hasRevisionedProperties() const
 {
-    for (int i = 0; i < properties.size(); ++i) {
-        if (properties.at(i).revision)
+    for (const auto &property : properties) {
+        if (property.revision)
             return true;
     }
     return false;
@@ -236,8 +240,8 @@ bool QMetaObjectBuilderPrivate::hasRevisionedProperties() const
 
 bool QMetaObjectBuilderPrivate::hasRevisionedMethods() const
 {
-    for (int i = 0; i < methods.size(); ++i) {
-        if (methods.at(i).revision)
+    for (const auto &method : methods) {
+        if (method.revision)
             return true;
     }
     return false;
@@ -355,7 +359,7 @@ void QMetaObjectBuilder::setFlags(MetaObjectFlags flags)
 */
 int QMetaObjectBuilder::methodCount() const
 {
-    return d->methods.size();
+    return int(d->methods.size());
 }
 
 /*!
@@ -365,7 +369,7 @@ int QMetaObjectBuilder::methodCount() const
 */
 int QMetaObjectBuilder::constructorCount() const
 {
-    return d->constructors.size();
+    return int(d->constructors.size());
 }
 
 /*!
@@ -376,7 +380,7 @@ int QMetaObjectBuilder::constructorCount() const
 */
 int QMetaObjectBuilder::propertyCount() const
 {
-    return d->properties.size();
+    return int(d->properties.size());
 }
 
 /*!
@@ -388,7 +392,7 @@ int QMetaObjectBuilder::propertyCount() const
 */
 int QMetaObjectBuilder::enumeratorCount() const
 {
-    return d->enumerators.size();
+    return int(d->enumerators.size());
 }
 
 /*!
@@ -429,8 +433,8 @@ int QMetaObjectBuilder::relatedMetaObjectCount() const
 */
 QMetaMethodBuilder QMetaObjectBuilder::addMethod(const QByteArray& signature)
 {
-    int index = d->methods.size();
-    d->methods.append(QMetaMethodBuilderPrivate(QMetaMethod::Method, signature));
+    int index = int(d->methods.size());
+    d->methods.push_back(QMetaMethodBuilderPrivate(QMetaMethod::Method, signature));
     return QMetaMethodBuilder(this, index);
 }
 
@@ -446,8 +450,8 @@ QMetaMethodBuilder QMetaObjectBuilder::addMethod(const QByteArray& signature)
 QMetaMethodBuilder QMetaObjectBuilder::addMethod
     (const QByteArray& signature, const QByteArray& returnType)
 {
-    int index = d->methods.size();
-    d->methods.append(QMetaMethodBuilderPrivate
+    int index = int(d->methods.size());
+    d->methods.push_back(QMetaMethodBuilderPrivate
         (QMetaMethod::Method, signature, returnType));
     return QMetaMethodBuilder(this, index);
 }
@@ -493,8 +497,8 @@ QMetaMethodBuilder QMetaObjectBuilder::addMethod(const QMetaMethod& prototype)
 */
 QMetaMethodBuilder QMetaObjectBuilder::addSlot(const QByteArray& signature)
 {
-    int index = d->methods.size();
-    d->methods.append(QMetaMethodBuilderPrivate(QMetaMethod::Slot, signature));
+    int index = int(d->methods.size());
+    d->methods.push_back(QMetaMethodBuilderPrivate(QMetaMethod::Slot, signature));
     return QMetaMethodBuilder(this, index);
 }
 
@@ -508,9 +512,9 @@ QMetaMethodBuilder QMetaObjectBuilder::addSlot(const QByteArray& signature)
 */
 QMetaMethodBuilder QMetaObjectBuilder::addSignal(const QByteArray& signature)
 {
-    int index = d->methods.size();
-    d->methods.append(QMetaMethodBuilderPrivate
-        (QMetaMethod::Signal, signature, QByteArray("void"), QMetaMethod::Protected));
+    int index = int(d->methods.size());
+    d->methods.push_back(QMetaMethodBuilderPrivate
+        (QMetaMethod::Signal, signature, QByteArray("void"), QMetaMethod::Public));
     return QMetaMethodBuilder(this, index);
 }
 
@@ -525,9 +529,9 @@ QMetaMethodBuilder QMetaObjectBuilder::addSignal(const QByteArray& signature)
 */
 QMetaMethodBuilder QMetaObjectBuilder::addConstructor(const QByteArray& signature)
 {
-    int index = d->constructors.size();
-    d->constructors.append(QMetaMethodBuilderPrivate(QMetaMethod::Constructor, signature,
-                                                     /*returnType=*/QByteArray()));
+    int index = int(d->constructors.size());
+    d->constructors.push_back(QMetaMethodBuilderPrivate(QMetaMethod::Constructor, signature,
+                                                        /*returnType=*/QByteArray()));
     return QMetaMethodBuilder(this, -(index + 1));
 }
 
@@ -566,8 +570,8 @@ QMetaMethodBuilder QMetaObjectBuilder::addConstructor(const QMetaMethod& prototy
 QMetaPropertyBuilder QMetaObjectBuilder::addProperty
     (const QByteArray& name, const QByteArray& type, int notifierId)
 {
-    int index = d->properties.size();
-    d->properties.append(QMetaPropertyBuilderPrivate(name, type, notifierId));
+    int index = int(d->properties.size());
+    d->properties.push_back(QMetaPropertyBuilderPrivate(name, type, notifierId));
     return QMetaPropertyBuilder(this, index);
 }
 
@@ -617,8 +621,8 @@ QMetaPropertyBuilder QMetaObjectBuilder::addProperty(const QMetaProperty& protot
 */
 QMetaEnumBuilder QMetaObjectBuilder::addEnumerator(const QByteArray& name)
 {
-    int index = d->enumerators.size();
-    d->enumerators.append(QMetaEnumBuilderPrivate(name));
+    int index = int(d->enumerators.size());
+    d->enumerators.push_back(QMetaEnumBuilderPrivate(name));
     return QMetaEnumBuilder(this, index);
 }
 
@@ -634,7 +638,9 @@ QMetaEnumBuilder QMetaObjectBuilder::addEnumerator(const QByteArray& name)
 QMetaEnumBuilder QMetaObjectBuilder::addEnumerator(const QMetaEnum& prototype)
 {
     QMetaEnumBuilder en = addEnumerator(prototype.name());
+    en.setEnumName(prototype.enumName());
     en.setIsFlag(prototype.isFlag());
+    en.setIsScoped(prototype.isScoped());
     int count = prototype.keyCount();
     for (int index = 0; index < count; ++index)
         en.addKey(prototype.key(index), prototype.value(index));
@@ -741,7 +747,7 @@ void QMetaObjectBuilder::addMetaObject
 
     if ((members & RelatedMetaObjects) != 0) {
         Q_ASSERT(priv(prototype->d.data)->revision >= 2);
-        const QMetaObject **objects = prototype->d.relatedMetaObjects;
+        const QMetaObject * const *objects = prototype->d.relatedMetaObjects;
         if (objects) {
             while (*objects != 0) {
                 addRelatedMetaObject(*objects);
@@ -764,7 +770,7 @@ void QMetaObjectBuilder::addMetaObject
 */
 QMetaMethodBuilder QMetaObjectBuilder::method(int index) const
 {
-    if (index >= 0 && index < d->methods.size())
+    if (uint(index) < d->methods.size())
         return QMetaMethodBuilder(this, index);
     else
         return QMetaMethodBuilder();
@@ -777,7 +783,7 @@ QMetaMethodBuilder QMetaObjectBuilder::method(int index) const
 */
 QMetaMethodBuilder QMetaObjectBuilder::constructor(int index) const
 {
-    if (index >= 0 && index < d->constructors.size())
+    if (uint(index) < d->constructors.size())
         return QMetaMethodBuilder(this, -(index + 1));
     else
         return QMetaMethodBuilder();
@@ -790,7 +796,7 @@ QMetaMethodBuilder QMetaObjectBuilder::constructor(int index) const
 */
 QMetaPropertyBuilder QMetaObjectBuilder::property(int index) const
 {
-    if (index >= 0 && index < d->properties.size())
+    if (uint(index) < d->properties.size())
         return QMetaPropertyBuilder(this, index);
     else
         return QMetaPropertyBuilder();
@@ -804,7 +810,7 @@ QMetaPropertyBuilder QMetaObjectBuilder::property(int index) const
 */
 QMetaEnumBuilder QMetaObjectBuilder::enumerator(int index) const
 {
-    if (index >= 0 && index < d->enumerators.size())
+    if (uint(index) < d->enumerators.size())
         return QMetaEnumBuilder(this, index);
     else
         return QMetaEnumBuilder();
@@ -868,15 +874,15 @@ QByteArray QMetaObjectBuilder::classInfoValue(int index) const
 */
 void QMetaObjectBuilder::removeMethod(int index)
 {
-    if (index >= 0 && index < d->methods.size()) {
-        d->methods.removeAt(index);
-        for (int prop = 0; prop < d->properties.size(); ++prop) {
+    if (uint(index) < d->methods.size()) {
+        d->methods.erase(d->methods.begin() + index);
+        for (auto &property : d->properties) {
             // Adjust the indices of property notify signal references.
-            if (d->properties[prop].notifySignal == index) {
-                d->properties[prop].notifySignal = -1;
-                d->properties[prop].setFlag(Notify, false);
-            } else if (d->properties[prop].notifySignal > index)
-                (d->properties[prop].notifySignal)--;
+            if (property.notifySignal == index) {
+                property.notifySignal = -1;
+                property.setFlag(Notify, false);
+            } else if (property.notifySignal > index)
+                property.notifySignal--;
         }
     }
 }
@@ -890,8 +896,8 @@ void QMetaObjectBuilder::removeMethod(int index)
 */
 void QMetaObjectBuilder::removeConstructor(int index)
 {
-    if (index >= 0 && index < d->constructors.size())
-        d->constructors.removeAt(index);
+    if (uint(index) < d->constructors.size())
+        d->constructors.erase(d->constructors.begin() + index);
 }
 
 /*!
@@ -902,8 +908,8 @@ void QMetaObjectBuilder::removeConstructor(int index)
 */
 void QMetaObjectBuilder::removeProperty(int index)
 {
-    if (index >= 0 && index < d->properties.size())
-        d->properties.removeAt(index);
+    if (uint(index) < d->properties.size())
+        d->properties.erase(d->properties.begin() + index);
 }
 
 /*!
@@ -915,8 +921,8 @@ void QMetaObjectBuilder::removeProperty(int index)
 */
 void QMetaObjectBuilder::removeEnumerator(int index)
 {
-    if (index >= 0 && index < d->enumerators.size())
-        d->enumerators.removeAt(index);
+    if (uint(index) < d->enumerators.size())
+        d->enumerators.erase(d->enumerators.begin() + index);
 }
 
 /*!
@@ -961,9 +967,9 @@ void QMetaObjectBuilder::removeRelatedMetaObject(int index)
 int QMetaObjectBuilder::indexOfMethod(const QByteArray& signature)
 {
     QByteArray sig = QMetaObject::normalizedSignature(signature);
-    for (int index = 0; index < d->methods.size(); ++index) {
-        if (sig == d->methods[index].signature)
-            return index;
+    for (const auto &method : d->methods) {
+        if (sig == method.signature)
+            return int(&method - &d->methods.front());
     }
     return -1;
 }
@@ -977,10 +983,9 @@ int QMetaObjectBuilder::indexOfMethod(const QByteArray& signature)
 int QMetaObjectBuilder::indexOfSignal(const QByteArray& signature)
 {
     QByteArray sig = QMetaObject::normalizedSignature(signature);
-    for (int index = 0; index < d->methods.size(); ++index) {
-        if (sig == d->methods[index].signature &&
-                d->methods[index].methodType() == QMetaMethod::Signal)
-            return index;
+    for (const auto &method : d->methods) {
+        if (method.methodType() == QMetaMethod::Signal && sig == method.signature)
+            return int(&method - &d->methods.front());
     }
     return -1;
 }
@@ -994,10 +999,9 @@ int QMetaObjectBuilder::indexOfSignal(const QByteArray& signature)
 int QMetaObjectBuilder::indexOfSlot(const QByteArray& signature)
 {
     QByteArray sig = QMetaObject::normalizedSignature(signature);
-    for (int index = 0; index < d->methods.size(); ++index) {
-        if (sig == d->methods[index].signature &&
-                d->methods[index].methodType() == QMetaMethod::Slot)
-            return index;
+    for (const auto &method : d->methods) {
+        if (method.methodType() == QMetaMethod::Slot && sig == method.signature)
+            return int(&method - &d->methods.front());
     }
     return -1;
 }
@@ -1011,9 +1015,9 @@ int QMetaObjectBuilder::indexOfSlot(const QByteArray& signature)
 int QMetaObjectBuilder::indexOfConstructor(const QByteArray& signature)
 {
     QByteArray sig = QMetaObject::normalizedSignature(signature);
-    for (int index = 0; index < d->constructors.size(); ++index) {
-        if (sig == d->constructors[index].signature)
-            return index;
+    for (const auto &constructor : d->constructors) {
+        if (sig == constructor.signature)
+            return int(&constructor - &d->constructors.front());
     }
     return -1;
 }
@@ -1026,9 +1030,9 @@ int QMetaObjectBuilder::indexOfConstructor(const QByteArray& signature)
 */
 int QMetaObjectBuilder::indexOfProperty(const QByteArray& name)
 {
-    for (int index = 0; index < d->properties.size(); ++index) {
-        if (name == d->properties[index].name)
-            return index;
+    for (const auto &property : d->properties) {
+        if (name == property.name)
+            return int(&property - &d->properties.front());
     }
     return -1;
 }
@@ -1041,9 +1045,9 @@ int QMetaObjectBuilder::indexOfProperty(const QByteArray& name)
 */
 int QMetaObjectBuilder::indexOfEnumerator(const QByteArray& name)
 {
-    for (int index = 0; index < d->enumerators.size(); ++index) {
-        if (name == d->enumerators[index].name)
-            return index;
+    for (const auto &enumerator : d->enumerators) {
+        if (name == enumerator.name)
+            return int(&enumerator - &d->enumerators.front());
     }
     return -1;
 }
@@ -1075,8 +1079,14 @@ int QMetaObjectBuilder::indexOfClassInfo(const QByteArray& name)
     \brief The QMetaStringTable class can generate a meta-object string table at runtime.
 */
 
-QMetaStringTable::QMetaStringTable()
-    : m_index(0) {}
+QMetaStringTable::QMetaStringTable(const QByteArray &className)
+    : m_index(0)
+    , m_className(className)
+{
+    const int index = enter(m_className);
+    Q_ASSERT(index == 0);
+    Q_UNUSED(index);
+}
 
 // Enters the given value into the string table (if it hasn't already been
 // entered). Returns the index of the string.
@@ -1106,41 +1116,56 @@ int QMetaStringTable::blobSize() const
     return size;
 }
 
+static void writeString(char *out, int i, const QByteArray &str,
+                        const int offsetOfStringdataMember, int &stringdataOffset)
+{
+    int size = str.size();
+    qptrdiff offset = offsetOfStringdataMember + stringdataOffset
+            - i * sizeof(QByteArrayData);
+    const QByteArrayData data =
+        Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(size, offset);
+
+    memcpy(out + i * sizeof(QByteArrayData), &data, sizeof(QByteArrayData));
+
+    memcpy(out + offsetOfStringdataMember + stringdataOffset, str.constData(), size);
+    out[offsetOfStringdataMember + stringdataOffset + size] = '\0';
+
+    stringdataOffset += size + 1;
+}
+
 // Writes strings to string data struct.
 // The struct consists of an array of QByteArrayData, followed by a char array
 // containing the actual strings. This format must match the one produced by
 // moc (see generator.cpp).
-void QMetaStringTable::writeBlob(char *out)
+void QMetaStringTable::writeBlob(char *out) const
 {
     Q_ASSERT(!(reinterpret_cast<quintptr>(out) & (preferredAlignment()-1)));
 
     int offsetOfStringdataMember = m_entries.size() * sizeof(QByteArrayData);
     int stringdataOffset = 0;
-    for (int i = 0; i < m_entries.size(); ++i) {
-        const QByteArray &str = m_entries.key(i);
-        int size = str.size();
-        qptrdiff offset = offsetOfStringdataMember + stringdataOffset
-                - i * sizeof(QByteArrayData);
-        const QByteArrayData data =
-            Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(size, offset);
 
-        memcpy(out + i * sizeof(QByteArrayData), &data, sizeof(QByteArrayData));
+    // qt_metacast expects the first string in the string table to be the class name.
+    writeString(out, /*index*/0, m_className, offsetOfStringdataMember, stringdataOffset);
 
-        memcpy(out + offsetOfStringdataMember + stringdataOffset, str.constData(), size);
-        out[offsetOfStringdataMember + stringdataOffset + size] = '\0';
+    for (Entries::ConstIterator it = m_entries.constBegin(), end = m_entries.constEnd();
+         it != end; ++it) {
+        const int i = it.value();
+        if (i == 0)
+            continue;
+        const QByteArray &str = it.key();
 
-        stringdataOffset += size + 1;
+        writeString(out, i, str, offsetOfStringdataMember, stringdataOffset);
     }
 }
 
 // Returns the sum of all parameters (including return type) for the given
 // \a methods. This is needed for calculating the size of the methods'
 // parameter type/name meta-data.
-static int aggregateParameterCount(const QList<QMetaMethodBuilderPrivate> &methods)
+static int aggregateParameterCount(const std::vector<QMetaMethodBuilderPrivate> &methods)
 {
     int sum = 0;
-    for (int i = 0; i < methods.size(); ++i)
-        sum += methods.at(i).parameterCount() + 1; // +1 for return type
+    for (const auto &method : methods)
+        sum += method.parameterCount() + 1; // +1 for return type
     return sum;
 }
 
@@ -1181,8 +1206,8 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
         = reinterpret_cast<QMetaObjectPrivate *>(buf + size);
     int pmetaSize = size;
     dataIndex = MetaObjectPrivateFieldCount;
-    for (index = 0; index < d->properties.size(); ++index) {
-        if (d->properties[index].notifySignal != -1) {
+    for (const auto &property : d->properties) {
+        if (property.notifySignal != -1) {
             hasNotifySignals = true;
             break;
         }
@@ -1190,10 +1215,10 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
     int methodParametersDataSize =
             ((aggregateParameterCount(d->methods)
              + aggregateParameterCount(d->constructors)) * 2) // types and parameter names
-            - d->methods.size()       // return "parameters" don't have names
-            - d->constructors.size(); // "this" parameters don't have names
+            - int(d->methods.size())       // return "parameters" don't have names
+            - int(d->constructors.size()); // "this" parameters don't have names
     if (buf) {
-        Q_STATIC_ASSERT_X(QMetaObjectPrivate::OutputRevision == 7, "QMetaObjectBuilder should generate the same version as moc");
+        Q_STATIC_ASSERT_X(QMetaObjectPrivate::OutputRevision == 8, "QMetaObjectBuilder should generate the same version as moc");
         pmeta->revision = QMetaObjectPrivate::OutputRevision;
         pmeta->flags = d->flags;
         pmeta->className = 0;   // Class name is always the first string.
@@ -1203,51 +1228,49 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
         pmeta->classInfoData = dataIndex;
         dataIndex += 2 * d->classInfoNames.size();
 
-        pmeta->methodCount = d->methods.size();
+        pmeta->methodCount = int(d->methods.size());
         pmeta->methodData = dataIndex;
-        dataIndex += 5 * d->methods.size();
+        dataIndex += 5 * int(d->methods.size());
         if (hasRevisionedMethods)
-            dataIndex += d->methods.size();
+            dataIndex += int(d->methods.size());
         paramsIndex = dataIndex;
         dataIndex += methodParametersDataSize;
 
-        pmeta->propertyCount = d->properties.size();
+        pmeta->propertyCount = int(d->properties.size());
         pmeta->propertyData = dataIndex;
-        dataIndex += 3 * d->properties.size();
+        dataIndex += 3 * int(d->properties.size());
         if (hasNotifySignals)
-            dataIndex += d->properties.size();
+            dataIndex += int(d->properties.size());
         if (hasRevisionedProperties)
-            dataIndex += d->properties.size();
+            dataIndex += int(d->properties.size());
 
-        pmeta->enumeratorCount = d->enumerators.size();
+        pmeta->enumeratorCount = int(d->enumerators.size());
         pmeta->enumeratorData = dataIndex;
-        dataIndex += 4 * d->enumerators.size();
+        dataIndex += 5 * int(d->enumerators.size());
 
-        pmeta->constructorCount = d->constructors.size();
+        pmeta->constructorCount = int(d->constructors.size());
         pmeta->constructorData = dataIndex;
-        dataIndex += 5 * d->constructors.size();
+        dataIndex += 5 * int(d->constructors.size());
     } else {
-        dataIndex += 2 * d->classInfoNames.size();
-        dataIndex += 5 * d->methods.size();
+        dataIndex += 2 * int(d->classInfoNames.size());
+        dataIndex += 5 * int(d->methods.size());
         if (hasRevisionedMethods)
-            dataIndex += d->methods.size();
+            dataIndex += int(d->methods.size());
         paramsIndex = dataIndex;
         dataIndex += methodParametersDataSize;
-        dataIndex += 3 * d->properties.size();
+        dataIndex += 3 * int(d->properties.size());
         if (hasNotifySignals)
-            dataIndex += d->properties.size();
+            dataIndex += int(d->properties.size());
         if (hasRevisionedProperties)
-            dataIndex += d->properties.size();
-        dataIndex += 4 * d->enumerators.size();
-        dataIndex += 5 * d->constructors.size();
+            dataIndex += int(d->properties.size());
+        dataIndex += 5 * int(d->enumerators.size());
+        dataIndex += 5 * int(d->constructors.size());
     }
 
     // Allocate space for the enumerator key names and values.
     enumIndex = dataIndex;
-    for (index = 0; index < d->enumerators.size(); ++index) {
-        QMetaEnumBuilderPrivate *enumerator = &(d->enumerators[index]);
-        dataIndex += 2 * enumerator->keys.size();
-    }
+    for (const auto &enumerator : d->enumerators)
+        dataIndex += 2 * enumerator.keys.size();
 
     // Zero terminator at the end of the data offset table.
     ++dataIndex;
@@ -1270,8 +1293,7 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
     // Reset the current data position to just past the QMetaObjectPrivate.
     dataIndex = MetaObjectPrivateFieldCount;
 
-    QMetaStringTable strings;
-    strings.enter(d->className);
+    QMetaStringTable strings(d->className);
 
     // Output the class infos,
     Q_ASSERT(!buf || dataIndex == pmeta->classInfoData);
@@ -1287,44 +1309,41 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
 
     // Output the methods in the class.
     Q_ASSERT(!buf || dataIndex == pmeta->methodData);
-    for (index = 0; index < d->methods.size(); ++index) {
-        QMetaMethodBuilderPrivate *method = &(d->methods[index]);
-        int name = strings.enter(method->name());
-        int argc = method->parameterCount();
-        int tag = strings.enter(method->tag);
-        int attrs = method->attributes;
+    for (const auto &method : d->methods) {
+        int name = strings.enter(method.name());
+        int argc = method.parameterCount();
+        int tag = strings.enter(method.tag);
+        int attrs = method.attributes;
         if (buf) {
             data[dataIndex]     = name;
             data[dataIndex + 1] = argc;
             data[dataIndex + 2] = paramsIndex;
             data[dataIndex + 3] = tag;
             data[dataIndex + 4] = attrs;
-            if (method->methodType() == QMetaMethod::Signal)
+            if (method.methodType() == QMetaMethod::Signal)
                 pmeta->signalCount++;
         }
         dataIndex += 5;
         paramsIndex += 1 + argc * 2;
     }
     if (hasRevisionedMethods) {
-        for (index = 0; index < d->methods.size(); ++index) {
-            QMetaMethodBuilderPrivate *method = &(d->methods[index]);
+        for (const auto &method : d->methods) {
             if (buf)
-                data[dataIndex] = method->revision;
+                data[dataIndex] = method.revision;
             ++dataIndex;
         }
     }
 
     // Output the method parameters in the class.
-    Q_ASSERT(!buf || dataIndex == pmeta->methodData + d->methods.size() * 5
-             + (hasRevisionedMethods ? d->methods.size() : 0));
+    Q_ASSERT(!buf || dataIndex == pmeta->methodData + int(d->methods.size()) * 5
+             + (hasRevisionedMethods ? int(d->methods.size()) : 0));
     for (int x = 0; x < 2; ++x) {
-        QList<QMetaMethodBuilderPrivate> &methods = (x == 0) ? d->methods : d->constructors;
-        for (index = 0; index < methods.size(); ++index) {
-            QMetaMethodBuilderPrivate *method = &(methods[index]);
-            QList<QByteArray> paramTypeNames = method->parameterTypes();
+        const std::vector<QMetaMethodBuilderPrivate> &methods = (x == 0) ? d->methods : d->constructors;
+        for (const auto &method : methods) {
+            const QList<QByteArray> paramTypeNames = method.parameterTypes();
             int paramCount = paramTypeNames.size();
             for (int i = -1; i < paramCount; ++i) {
-                const QByteArray &typeName = (i < 0) ? method->returnType : paramTypeNames.at(i);
+                const QByteArray &typeName = (i < 0) ? method.returnType : paramTypeNames.at(i);
                 int typeInfo;
                 if (QtPrivate::isBuiltinType(typeName))
                     typeInfo = QMetaType::type(typeName);
@@ -1335,7 +1354,7 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
                 ++dataIndex;
             }
 
-            QList<QByteArray> paramNames = method->parameterNames;
+            QList<QByteArray> paramNames = method.parameterNames;
             while (paramNames.size() < paramCount)
                 paramNames.append(QByteArray());
             for (int i = 0; i < paramCount; ++i) {
@@ -1349,19 +1368,18 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
 
     // Output the properties in the class.
     Q_ASSERT(!buf || dataIndex == pmeta->propertyData);
-    for (index = 0; index < d->properties.size(); ++index) {
-        QMetaPropertyBuilderPrivate *prop = &(d->properties[index]);
-        int name = strings.enter(prop->name);
+    for (const auto &prop : d->properties) {
+        int name = strings.enter(prop.name);
 
         int typeInfo;
-        if (QtPrivate::isBuiltinType(prop->type))
-            typeInfo = QMetaType::type(prop->type);
+        if (QtPrivate::isBuiltinType(prop.type))
+            typeInfo = QMetaType::type(prop.type);
         else
-            typeInfo = IsUnresolvedType | strings.enter(prop->type);
+            typeInfo = IsUnresolvedType | strings.enter(prop.type);
 
-        int flags = prop->flags;
+        int flags = prop.flags;
 
-        if (!QtPrivate::isBuiltinType(prop->type))
+        if (!QtPrivate::isBuiltinType(prop.type))
             flags |= EnumOrFlag;
 
         if (buf) {
@@ -1372,11 +1390,10 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
         dataIndex += 3;
     }
     if (hasNotifySignals) {
-        for (index = 0; index < d->properties.size(); ++index) {
-            QMetaPropertyBuilderPrivate *prop = &(d->properties[index]);
+        for (const auto &prop : d->properties) {
             if (buf) {
-                if (prop->notifySignal != -1)
-                    data[dataIndex] = prop->notifySignal;
+                if (prop.notifySignal != -1)
+                    data[dataIndex] = prop.notifySignal;
                 else
                     data[dataIndex] = 0;
             }
@@ -1384,47 +1401,47 @@ static int buildMetaObject(QMetaObjectBuilderPrivate *d, char *buf,
         }
     }
     if (hasRevisionedProperties) {
-        for (index = 0; index < d->properties.size(); ++index) {
-            QMetaPropertyBuilderPrivate *prop = &(d->properties[index]);
+        for (const auto &prop : d->properties) {
             if (buf)
-                data[dataIndex] = prop->revision;
+                data[dataIndex] = prop.revision;
             ++dataIndex;
         }
     }
 
     // Output the enumerators in the class.
     Q_ASSERT(!buf || dataIndex == pmeta->enumeratorData);
-    for (index = 0; index < d->enumerators.size(); ++index) {
-        QMetaEnumBuilderPrivate *enumerator = &(d->enumerators[index]);
-        int name = strings.enter(enumerator->name);
-        int isFlag = (int)(enumerator->isFlag);
-        int count = enumerator->keys.size();
+    for (const auto &enumerator : d->enumerators) {
+        int name = strings.enter(enumerator.name);
+        int enumName = strings.enter(enumerator.enumName);
+        int isFlag = enumerator.isFlag ? EnumIsFlag : 0;
+        int isScoped = enumerator.isScoped ? EnumIsScoped : 0;
+        int count = enumerator.keys.size();
         int enumOffset = enumIndex;
         if (buf) {
             data[dataIndex]     = name;
-            data[dataIndex + 1] = isFlag;
-            data[dataIndex + 2] = count;
-            data[dataIndex + 3] = enumOffset;
+            data[dataIndex + 1] = enumName;
+            data[dataIndex + 2] = isFlag | isScoped;
+            data[dataIndex + 3] = count;
+            data[dataIndex + 4] = enumOffset;
         }
         for (int key = 0; key < count; ++key) {
-            int keyIndex = strings.enter(enumerator->keys[key]);
+            int keyIndex = strings.enter(enumerator.keys[key]);
             if (buf) {
                 data[enumOffset++] = keyIndex;
-                data[enumOffset++] = enumerator->values[key];
+                data[enumOffset++] = enumerator.values[key];
             }
         }
-        dataIndex += 4;
+        dataIndex += 5;
         enumIndex += 2 * count;
     }
 
     // Output the constructors in the class.
     Q_ASSERT(!buf || dataIndex == pmeta->constructorData);
-    for (index = 0; index < d->constructors.size(); ++index) {
-        QMetaMethodBuilderPrivate *method = &(d->constructors[index]);
-        int name = strings.enter(method->name());
-        int argc = method->parameterCount();
-        int tag = strings.enter(method->tag);
-        int attrs = method->attributes;
+    for (const auto &ctor : d->constructors) {
+        int name = strings.enter(ctor.name());
+        int argc = ctor.parameterCount();
+        int tag = strings.enter(ctor.tag);
+        int attrs = ctor.attributes;
         if (buf) {
             data[dataIndex]     = name;
             data[dataIndex + 1] = argc;
@@ -1594,10 +1611,10 @@ void QMetaObjectBuilder::serialize(QDataStream& stream) const
 
     // Write the counts for each type of class member.
     stream << d->classInfoNames.size();
-    stream << d->methods.size();
-    stream << d->properties.size();
-    stream << d->enumerators.size();
-    stream << d->constructors.size();
+    stream << int(d->methods.size());
+    stream << int(d->properties.size());
+    stream << int(d->enumerators.size());
+    stream << int(d->constructors.size());
     stream << d->relatedMetaObjects.size();
 
     // Write the items of class information.
@@ -1607,45 +1624,42 @@ void QMetaObjectBuilder::serialize(QDataStream& stream) const
     }
 
     // Write the methods.
-    for (index = 0; index < d->methods.size(); ++index) {
-        const QMetaMethodBuilderPrivate *method = &(d->methods[index]);
-        stream << method->signature;
-        stream << method->returnType;
-        stream << method->parameterNames;
-        stream << method->tag;
-        stream << method->attributes;
-        if (method->revision)
-            stream << method->revision;
+    for (const auto &method : d->methods) {
+        stream << method.signature;
+        stream << method.returnType;
+        stream << method.parameterNames;
+        stream << method.tag;
+        stream << method.attributes;
+        if (method.revision)
+            stream << method.revision;
     }
 
     // Write the properties.
-    for (index = 0; index < d->properties.size(); ++index) {
-        const QMetaPropertyBuilderPrivate *property = &(d->properties[index]);
-        stream << property->name;
-        stream << property->type;
-        stream << property->flags;
-        stream << property->notifySignal;
-        if (property->revision)
-            stream << property->revision;
+    for (const auto &property : d->properties) {
+        stream << property.name;
+        stream << property.type;
+        stream << property.flags;
+        stream << property.notifySignal;
+        if (property.revision)
+            stream << property.revision;
     }
 
     // Write the enumerators.
-    for (index = 0; index < d->enumerators.size(); ++index) {
-        const QMetaEnumBuilderPrivate *enumerator = &(d->enumerators[index]);
-        stream << enumerator->name;
-        stream << enumerator->isFlag;
-        stream << enumerator->keys;
-        stream << enumerator->values;
+    for (const auto &enumerator : d->enumerators) {
+        stream << enumerator.name;
+        stream << enumerator.isFlag;
+        stream << enumerator.isScoped;
+        stream << enumerator.keys;
+        stream << enumerator.values;
     }
 
     // Write the constructors.
-    for (index = 0; index < d->constructors.size(); ++index) {
-        const QMetaMethodBuilderPrivate *method = &(d->constructors[index]);
-        stream << method->signature;
-        stream << method->returnType;
-        stream << method->parameterNames;
-        stream << method->tag;
-        stream << method->attributes;
+    for (const auto &ctor : d->constructors) {
+        stream << ctor.signature;
+        stream << ctor.returnType;
+        stream << ctor.parameterNames;
+        stream << ctor.tag;
+        stream << ctor.attributes;
     }
 
     // Write the related meta objects.
@@ -1752,14 +1766,14 @@ void QMetaObjectBuilder::deserialize
             return;
         stream >> name;
         addMethod(name);
-        QMetaMethodBuilderPrivate *method = &(d->methods[index]);
-        stream >> method->returnType;
-        stream >> method->parameterNames;
-        stream >> method->tag;
-        stream >> method->attributes;
-        if (method->attributes & MethodRevisioned)
-            stream >> method->revision;
-        if (method->methodType() == QMetaMethod::Constructor) {
+        QMetaMethodBuilderPrivate &method = d->methods[index];
+        stream >> method.returnType;
+        stream >> method.parameterNames;
+        stream >> method.tag;
+        stream >> method.attributes;
+        if (method.attributes & MethodRevisioned)
+            stream >> method.revision;
+        if (method.methodType() == QMetaMethod::Constructor) {
             // Cannot add a constructor in this set of methods.
             stream.setStatus(QDataStream::ReadCorruptData);
             return;
@@ -1774,23 +1788,23 @@ void QMetaObjectBuilder::deserialize
         stream >> name;
         stream >> type;
         addProperty(name, type);
-        QMetaPropertyBuilderPrivate *property = &(d->properties[index]);
-        stream >> property->flags;
-        stream >> property->notifySignal;
-        if (property->notifySignal < -1 ||
-            property->notifySignal >= d->methods.size()) {
+        QMetaPropertyBuilderPrivate &property = d->properties[index];
+        stream >> property.flags;
+        stream >> property.notifySignal;
+        if (property.notifySignal < -1 ||
+            property.notifySignal >= int(d->methods.size())) {
             // Notify signal method index is out of range.
             stream.setStatus(QDataStream::ReadCorruptData);
             return;
         }
-        if (property->notifySignal >= 0 &&
-            d->methods[property->notifySignal].methodType() != QMetaMethod::Signal) {
+        if (property.notifySignal >= 0 &&
+            d->methods[property.notifySignal].methodType() != QMetaMethod::Signal) {
             // Notify signal method index does not refer to a signal.
             stream.setStatus(QDataStream::ReadCorruptData);
             return;
         }
-        if (property->flags & Revisioned)
-            stream >> property->revision;
+        if (property.flags & Revisioned)
+            stream >> property.revision;
     }
 
     // Read the enumerators.
@@ -1799,11 +1813,12 @@ void QMetaObjectBuilder::deserialize
             return;
         stream >> name;
         addEnumerator(name);
-        QMetaEnumBuilderPrivate *enumerator = &(d->enumerators[index]);
-        stream >> enumerator->isFlag;
-        stream >> enumerator->keys;
-        stream >> enumerator->values;
-        if (enumerator->keys.size() != enumerator->values.size()) {
+        QMetaEnumBuilderPrivate &enumerator = d->enumerators[index];
+        stream >> enumerator.isFlag;
+        stream >> enumerator.isScoped;
+        stream >> enumerator.keys;
+        stream >> enumerator.values;
+        if (enumerator.keys.size() != enumerator.values.size()) {
             // Mismatch between number of keys and number of values.
             stream.setStatus(QDataStream::ReadCorruptData);
             return;
@@ -1816,12 +1831,12 @@ void QMetaObjectBuilder::deserialize
             return;
         stream >> name;
         addConstructor(name);
-        QMetaMethodBuilderPrivate *method = &(d->constructors[index]);
-        stream >> method->returnType;
-        stream >> method->parameterNames;
-        stream >> method->tag;
-        stream >> method->attributes;
-        if (method->methodType() != QMetaMethod::Constructor) {
+        QMetaMethodBuilderPrivate &method = d->constructors[index];
+        stream >> method.returnType;
+        stream >> method.parameterNames;
+        stream >> method.tag;
+        stream >> method.attributes;
+        if (method.methodType() != QMetaMethod::Constructor) {
             // The type must be Constructor.
             stream.setStatus(QDataStream::ReadCorruptData);
             return;
@@ -1857,9 +1872,9 @@ void QMetaObjectBuilder::deserialize
 QMetaMethodBuilderPrivate *QMetaMethodBuilder::d_func() const
 {
     // Positive indices indicate methods, negative indices indicate constructors.
-    if (_mobj && _index >= 0 && _index < _mobj->d->methods.size())
+    if (_mobj && _index >= 0 && _index < int(_mobj->d->methods.size()))
         return &(_mobj->d->methods[_index]);
-    else if (_mobj && -_index >= 1 && -_index <= _mobj->d->constructors.size())
+    else if (_mobj && -_index >= 1 && -_index <= int(_mobj->d->constructors.size()))
         return &(_mobj->d->constructors[(-_index) - 1]);
     else
         return 0;
@@ -2005,8 +2020,7 @@ void QMetaMethodBuilder::setTag(const QByteArray& value)
 /*!
     Returns the access specification of this method (private, protected,
     or public).  The default value is QMetaMethod::Public for methods,
-    slots, and constructors.  The default value is QMetaMethod::Protected
-    for signals.
+    slots, signals and constructors.
 
     \sa setAccess()
 */
@@ -2099,7 +2113,7 @@ void QMetaMethodBuilder::setRevision(int revision)
 
 QMetaPropertyBuilderPrivate *QMetaPropertyBuilder::d_func() const
 {
-    if (_mobj && _index >= 0 && _index < _mobj->d->properties.size())
+    if (_mobj && _index >= 0 && _index < int(_mobj->d->properties.size()))
         return &(_mobj->d->properties[_index]);
     else
         return 0;
@@ -2145,7 +2159,7 @@ QByteArray QMetaPropertyBuilder::type() const
 }
 
 /*!
-    Returns true if this property has a notify signal; false otherwise.
+    Returns \c true if this property has a notify signal; false otherwise.
 
     \sa notifySignal(), setNotifySignal(), removeNotifySignal()
 */
@@ -2206,7 +2220,7 @@ void QMetaPropertyBuilder::removeNotifySignal()
 }
 
 /*!
-    Returns true if this property is readable; otherwise returns false.
+    Returns \c true if this property is readable; otherwise returns \c false.
     The default value is true.
 
     \sa setReadable(), isWritable()
@@ -2221,7 +2235,7 @@ bool QMetaPropertyBuilder::isReadable() const
 }
 
 /*!
-    Returns true if this property is writable; otherwise returns false.
+    Returns \c true if this property is writable; otherwise returns \c false.
     The default value is true.
 
     \sa setWritable(), isReadable()
@@ -2236,8 +2250,8 @@ bool QMetaPropertyBuilder::isWritable() const
 }
 
 /*!
-    Returns true if this property can be reset to a default value; otherwise
-    returns false.  The default value is false.
+    Returns \c true if this property can be reset to a default value; otherwise
+    returns \c false.  The default value is false.
 
     \sa setResettable()
 */
@@ -2251,7 +2265,7 @@ bool QMetaPropertyBuilder::isResettable() const
 }
 
 /*!
-    Returns true if this property is designable; otherwise returns false.
+    Returns \c true if this property is designable; otherwise returns \c false.
     This default value is false.
 
     \sa setDesignable(), isScriptable(), isStored()
@@ -2266,7 +2280,7 @@ bool QMetaPropertyBuilder::isDesignable() const
 }
 
 /*!
-    Returns true if the property is scriptable; otherwise returns false.
+    Returns \c true if the property is scriptable; otherwise returns \c false.
     This default value is true.
 
     \sa setScriptable(), isDesignable(), isStored()
@@ -2281,7 +2295,7 @@ bool QMetaPropertyBuilder::isScriptable() const
 }
 
 /*!
-    Returns true if the property is stored; otherwise returns false.
+    Returns \c true if the property is stored; otherwise returns \c false.
     This default value is false.
 
     \sa setStored(), isDesignable(), isScriptable()
@@ -2296,7 +2310,7 @@ bool QMetaPropertyBuilder::isStored() const
 }
 
 /*!
-    Returns true if the property is editable; otherwise returns false.
+    Returns \c true if the property is editable; otherwise returns \c false.
     This default value is false.
 
     \sa setEditable(), isDesignable(), isScriptable(), isStored()
@@ -2311,7 +2325,7 @@ bool QMetaPropertyBuilder::isEditable() const
 }
 
 /*!
-    Returns true if this property is designated as the \c USER
+    Returns \c true if this property is designated as the \c USER
     property, i.e., the one that the user can edit or that is
     significant in some other way.  Otherwise it returns
     false.  This default value is false.
@@ -2328,7 +2342,7 @@ bool QMetaPropertyBuilder::isUser() const
 }
 
 /*!
-    Returns true if the property has a C++ setter function that
+    Returns \c true if the property has a C++ setter function that
     follows Qt's standard "name" / "setName" pattern. Designer and uic
     query hasStdCppSet() in order to avoid expensive
     QObject::setProperty() calls. All properties in Qt [should] follow
@@ -2346,8 +2360,8 @@ bool QMetaPropertyBuilder::hasStdCppSet() const
 }
 
 /*!
-    Returns true if the property is an enumerator or flag type;
-    otherwise returns false.  This default value is false.
+    Returns \c true if the property is an enumerator or flag type;
+    otherwise returns \c false.  This default value is false.
 
     \sa setEnumOrFlag()
 */
@@ -2361,7 +2375,7 @@ bool QMetaPropertyBuilder::isEnumOrFlag() const
 }
 
 /*!
-    Returns true if the property is constant; otherwise returns false.
+    Returns \c true if the property is constant; otherwise returns \c false.
     The default value is false.
 */
 bool QMetaPropertyBuilder::isConstant() const
@@ -2374,7 +2388,7 @@ bool QMetaPropertyBuilder::isConstant() const
 }
 
 /*!
-    Returns true if the property is final; otherwise returns false.
+    Returns \c true if the property is final; otherwise returns \c false.
     The default value is false.
 */
 bool QMetaPropertyBuilder::isFinal() const
@@ -2571,7 +2585,7 @@ void QMetaPropertyBuilder::setRevision(int revision)
 
 QMetaEnumBuilderPrivate *QMetaEnumBuilder::d_func() const
 {
-    if (_mobj && _index >= 0 && _index < _mobj->d->enumerators.size())
+    if (_mobj && _index >= 0 && _index < int(_mobj->d->enumerators.size()))
         return &(_mobj->d->enumerators[_index]);
     else
         return 0;
@@ -2589,7 +2603,7 @@ QMetaEnumBuilderPrivate *QMetaEnumBuilder::d_func() const
 */
 
 /*!
-    Returns the name of the enumerator (without the scope).
+    Returns the type name of the enumerator (without the scope).
 */
 QByteArray QMetaEnumBuilder::name() const
 {
@@ -2601,7 +2615,34 @@ QByteArray QMetaEnumBuilder::name() const
 }
 
 /*!
-    Returns true if this enumerator is used as a flag; otherwise returns
+    Returns the enum name of the enumerator (without the scope).
+
+    \since 5.12
+*/
+QByteArray QMetaEnumBuilder::enumName() const
+{
+    QMetaEnumBuilderPrivate *d = d_func();
+    if (d)
+        return d->enumName;
+    else
+        return QByteArray();
+}
+
+/*!
+    Sets this enumerator to have the enum name \c alias.
+
+    \since 5.12
+    \sa isFlag(), enumName()
+*/
+void QMetaEnumBuilder::setEnumName(const QByteArray &alias)
+{
+    QMetaEnumBuilderPrivate *d = d_func();
+    if (d)
+        d->enumName = alias;
+}
+
+/*!
+    Returns \c true if this enumerator is used as a flag; otherwise returns
     false.
 
     \sa setIsFlag()
@@ -2625,6 +2666,31 @@ void QMetaEnumBuilder::setIsFlag(bool value)
     QMetaEnumBuilderPrivate *d = d_func();
     if (d)
         d->isFlag = value;
+}
+
+/*!
+    Return \c true if this enumerator should be considered scoped (C++11 enum class).
+
+    \sa setIsScoped()
+*/
+bool QMetaEnumBuilder::isScoped() const
+{
+    QMetaEnumBuilderPrivate *d = d_func();
+    if (d)
+        return d->isScoped;
+    return false;
+}
+
+/*!
+    Sets this enumerator to be a scoped enum if \value is true
+
+    \sa isScoped()
+*/
+void QMetaEnumBuilder::setIsScoped(bool value)
+{
+    QMetaEnumBuilderPrivate *d = d_func();
+    if (d)
+        d->isScoped = value;
 }
 
 /*!

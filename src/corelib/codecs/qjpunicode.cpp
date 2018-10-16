@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -351,15 +349,15 @@ public:
 //    uint Jisx0201ToUnicode(uint h, uint l) const;
 //    uint Jisx0201LatinToUnicode(uint h, uint l) const;
 //    uint Jisx0201KanaToUnicode(uint h, uint l) const;
-    uint jisx0208ToUnicode(uint h, uint l) const;
-    uint jisx0212ToUnicode(uint h, uint l) const;
+    uint jisx0208ToUnicode(uint h, uint l) const override;
+    uint jisx0212ToUnicode(uint h, uint l) const override;
 
 //    uint UnicodeToAscii(uint h, uint l) const;
 //    uint UnicodeToJisx0201(uint h, uint l) const;
 //    uint UnicodeToJisx0201Latin(uint h, uint l) const;
 //    uint UnicodeToJisx0201Kana(uint h, uint l) const;
-    uint unicodeToJisx0208(uint h, uint l) const;
-    uint unicodeToJisx0212(uint h, uint l) const;
+    uint unicodeToJisx0208(uint h, uint l) const override;
+    uint unicodeToJisx0212(uint h, uint l) const override;
 };
 
 uint QJpUnicodeConv_Unicode_ASCII::jisx0208ToUnicode(uint h, uint l) const
@@ -408,18 +406,18 @@ class QJpUnicodeConv_JISX0221_JISX0201 : public QJpUnicodeConv {
 public:
     QJpUnicodeConv_JISX0221_JISX0201(int r) : QJpUnicodeConv(r) {}
 
-    uint asciiToUnicode(uint h, uint l) const;
+    uint asciiToUnicode(uint h, uint l) const override;
 //    uint Jisx0201ToUnicode(uint h, uint l) const;
 //    uint Jisx0201LatinToUnicode(uint h, uint l) const;
 //    uint Jisx0201KanaToUnicode(uint h, uint l) const;
-    uint jisx0208ToUnicode(uint h, uint l) const;
+    uint jisx0208ToUnicode(uint h, uint l) const override;
 //    uint Jisx0212ToUnicode(uint h, uint l) const;
 
-    uint unicodeToAscii(uint h, uint l) const;
+    uint unicodeToAscii(uint h, uint l) const override;
 //    uint UnicodeToJisx0201(uint h, uint l) const;
 //    uint UnicodeToJisx0201Latin(uint h, uint l) const;
 //    uint UnicodeToJisx0201Kana(uint h, uint l) const;
-    uint unicodeToJisx0208(uint h, uint l) const;
+    uint unicodeToJisx0208(uint h, uint l) const override;
 //    uint UnicodeToJisx0212(uint h, uint l) const;
 };
 
@@ -464,17 +462,17 @@ public:
 
 //    uint AsciiToUnicode(uint h, uint l) const;
 //    uint Jisx0201ToUnicode(uint h, uint l) const;
-    uint jisx0201LatinToUnicode(uint h, uint l) const;
+    uint jisx0201LatinToUnicode(uint h, uint l) const override;
 //    uint Jisx0201KanaToUnicode(uint h, uint l) const;
-    uint jisx0208ToUnicode(uint h, uint l) const;
-    uint jisx0212ToUnicode(uint h, uint l) const;
+    uint jisx0208ToUnicode(uint h, uint l) const override;
+    uint jisx0212ToUnicode(uint h, uint l) const override;
 
 //    uint UnicodeToAscii(uint h, uint l) const;
 //    uint UnicodeToJisx0201(uint h, uint l) const;
-    uint unicodeToJisx0201Latin(uint h, uint l) const;
+    uint unicodeToJisx0201Latin(uint h, uint l) const override;
 //    uint UnicodeToJisx0201Kana(uint h, uint l) const;
-    uint unicodeToJisx0208(uint h, uint l) const;
-    uint unicodeToJisx0212(uint h, uint l) const;
+    uint unicodeToJisx0208(uint h, uint l) const override;
+    uint unicodeToJisx0212(uint h, uint l) const override;
 };
 
 uint QJpUnicodeConv_JISX0221_ASCII::jisx0201LatinToUnicode(uint h, uint l) const
@@ -560,17 +558,17 @@ public:
 
 //    uint AsciiToUnicode(uint h, uint l) const;
 //    uint Jisx0201ToUnicode(uint h, uint l) const;
-    uint jisx0201LatinToUnicode(uint h, uint l) const;
+    uint jisx0201LatinToUnicode(uint h, uint l) const override;
 //    uint Jisx0201KanaToUnicode(uint h, uint l) const;
-    uint jisx0208ToUnicode(uint h, uint l) const;
-    uint jisx0212ToUnicode(uint h, uint l) const;
+    uint jisx0208ToUnicode(uint h, uint l) const override;
+    uint jisx0212ToUnicode(uint h, uint l) const override;
 
-    uint unicodeToAscii(uint h, uint l) const;
+    uint unicodeToAscii(uint h, uint l) const override;
 //    uint UnicodeToJisx0201(uint h, uint l) const;
-    uint unicodeToJisx0201Latin(uint h, uint l) const;
+    uint unicodeToJisx0201Latin(uint h, uint l) const override;
 //    uint UnicodeToJisx0201Kana(uint h, uint l) const;
-    uint unicodeToJisx0208(uint h, uint l) const;
-    uint unicodeToJisx0212(uint h, uint l) const;
+    uint unicodeToJisx0208(uint h, uint l) const override;
+    uint unicodeToJisx0212(uint h, uint l) const override;
 };
 
 uint QJpUnicodeConv_Sun::jisx0201LatinToUnicode(uint h, uint l) const
@@ -649,17 +647,17 @@ public:
 
 //    uint AsciiToUnicode(uint h, uint l) const;
 //    uint Jisx0201ToUnicode(uint h, uint l) const;
-    uint jisx0201LatinToUnicode(uint h, uint l) const;
+    uint jisx0201LatinToUnicode(uint h, uint l) const override;
 //    uint Jisx0201KanaToUnicode(uint h, uint l) const;
-    uint jisx0208ToUnicode(uint h, uint l) const;
-    uint jisx0212ToUnicode(uint h, uint l) const;
+    uint jisx0208ToUnicode(uint h, uint l) const override;
+    uint jisx0212ToUnicode(uint h, uint l) const override;
 
 //    uint UnicodeToAscii(uint h, uint l) const;
 //    uint UnicodeToJisx0201(uint h, uint l) const;
-    uint unicodeToJisx0201Latin(uint h, uint l) const;
+    uint unicodeToJisx0201Latin(uint h, uint l) const override;
 //    uint UnicodeToJisx0201Kana(uint h, uint l) const;
-    uint unicodeToJisx0208(uint h, uint l) const;
-    uint unicodeToJisx0212(uint h, uint l) const;
+    uint unicodeToJisx0208(uint h, uint l) const override;
+    uint unicodeToJisx0212(uint h, uint l) const override;
 };
 
 uint QJpUnicodeConv_Microsoft::jisx0201LatinToUnicode(uint h, uint l) const
@@ -10537,7 +10535,7 @@ static unsigned short const sjis208ibmvdc_unicode[] = {
 
 uint QJpUnicodeConv::sjisibmvdcToUnicode(uint h, uint l) const
 {
-    if (((rule & IBM_VDC) || (rule & Microsoft_CP932))  && IsSjisIBMVDCChar1(h)) 
+    if (((rule & IBM_VDC) || (rule & Microsoft_CP932))  && IsSjisIBMVDCChar1(h))
           return sjis208ibmvdc_unicode[((h - 0x00fa)*189 + (l-0x0040))];
     else
         return 0;
@@ -10632,9 +10630,9 @@ static unsigned short const cp932_ed_ee_unicode[] = {
 uint QJpUnicodeConv::cp932ToUnicode(uint h, uint l) const
 {
     if (rule & Microsoft_CP932) {
-        if (h == 0x0087 && (l >= 0x0040 && l <= 0x009c)) 
+        if (h == 0x0087 && (l >= 0x0040 && l <= 0x009c))
             return cp932_87_unicode[l-0x0040];
-        else if ((h == 0x00ed || h == 0x00ee)  && (l >= 0x0040 && l <= 0x00fc)) 
+        else if ((h == 0x00ed || h == 0x00ee)  && (l >= 0x0040 && l <= 0x00fc))
             return cp932_ed_ee_unicode[((h - 0x00ed)*189 + (l-0x0040))];
     }
     return 0;

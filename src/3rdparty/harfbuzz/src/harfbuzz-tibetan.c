@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
+ * Copyright (C) 2015 The Qt Company Ltd
  *
  * This is part of HarfBuzz, an OpenType Layout engine library.
  *
@@ -90,7 +90,7 @@ static const unsigned char tibetanForm[0x80] = {
 
 
 #define tibetan_form(c) \
-    (TibetanForm)tibetanForm[c - 0x0f40]
+    ((c) >= 0x0f40 && (c) < 0x0fc0 ? (TibetanForm)tibetanForm[(c) - 0x0f40] : TibetanOther)
 
 #ifndef NO_OPENTYPE
 static const HB_OpenTypeFeature tibetan_features[] = {
@@ -115,6 +115,7 @@ static HB_Bool tibetan_shape_syllable(HB_Bool openType, HB_ShaperItem *item, HB_
 
     if (item->num_glyphs < item->item.length + 4) {
         item->num_glyphs = item->item.length + 4;
+        HB_FREE_STACKARRAY(reordered);
         return FALSE;
     }
 

@@ -1,14 +1,13 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qmovie
 QT += testlib
-!contains(QT_CONFIG, no-widgets): QT += widgets
+QT_FOR_CONFIG += gui-private
+qtHaveModule(widgets): QT += widgets
 SOURCES += tst_qmovie.cpp
 MOC_DIR=tmp
 
-!contains(QT_CONFIG, no-gif):DEFINES += QTEST_HAVE_GIF
-!contains(QT_CONFIG, no-jpeg):DEFINES += QTEST_HAVE_JPEG
+qtConfig(gif): DEFINES += QTEST_HAVE_GIF
+qtConfig(jpeg): DEFINES += QTEST_HAVE_JPEG
 
 RESOURCES += resources.qrc
 TESTDATA += animations/*
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

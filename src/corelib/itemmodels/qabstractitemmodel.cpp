@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,10 +47,14 @@
 #include <qvector.h>
 #include <qstack.h>
 #include <qbitarray.h>
+#include <qdatetime.h>
+#include <qloggingcategory.h>
 
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
+
+Q_LOGGING_CATEGORY(lcCheckIndex, "qt.core.qabstractitemmodel.checkindex")
 
 QPersistentModelIndexData *QPersistentModelIndexData::create(const QModelIndex &index)
 {
@@ -60,8 +62,8 @@ QPersistentModelIndexData *QPersistentModelIndexData::create(const QModelIndex &
     QPersistentModelIndexData *d = 0;
     QAbstractItemModel *model = const_cast<QAbstractItemModel *>(index.model());
     QHash<QModelIndex, QPersistentModelIndexData *> &indexes = model->d_func()->persistent.indexes;
-    const QHash<QModelIndex, QPersistentModelIndexData *>::iterator it = indexes.find(index);
-    if (it != indexes.end()) {
+    const auto it = indexes.constFind(index);
+    if (it != indexes.cend()) {
         d = (*it);
     } else {
         d = new QPersistentModelIndexData(index);
@@ -105,6 +107,23 @@ void QPersistentModelIndexData::destroy(QPersistentModelIndexData *data)
   before using them.
 
   \sa {Model/View Programming}, QModelIndex, QAbstractItemModel
+*/
+
+/*!
+    \fn QPersistentModelIndex::QPersistentModelIndex(QPersistentModelIndex &&other)
+
+    Move-constructs a QPersistentModelIndex instance, making it point at the same
+    object that \a other was pointing to.
+
+    \since 5.2
+*/
+
+/*!
+    \fn QPersistentModelIndex &QPersistentModelIndex::operator=(QPersistentModelIndex &&other)
+
+    Move-assigns \a other to this QPersistentModelIndex instance.
+
+    \since 5.2
 */
 
 
@@ -160,11 +179,11 @@ QPersistentModelIndex::~QPersistentModelIndex()
 }
 
 /*!
-  Returns true if this persistent model index is equal to the \a other
-  persistent model index; otherwise returns false.
+  Returns \c{true} if this persistent model index is equal to the \a other
+  persistent model index; otherwise returns \c{false}.
 
-  All values in the persistent model index are used when comparing
-  with another persistent model index.
+  The internal data pointer, row, column, and model values in the persistent
+  model index are used when comparing with another persistent model index.
 */
 
 bool QPersistentModelIndex::operator==(const QPersistentModelIndex &other) const
@@ -177,11 +196,11 @@ bool QPersistentModelIndex::operator==(const QPersistentModelIndex &other) const
 /*!
     \since 4.1
 
-    Returns true if this persistent model index is smaller than the \a other
-    persistent model index; otherwise returns false.
+    Returns \c{true} if this persistent model index is smaller than the \a other
+    persistent model index; otherwise returns \c{false}.
 
-    All values in the persistent model index are used when comparing
-    with another persistent model index.
+    The internal data pointer, row, column, and model values in the persistent
+    model index are used when comparing with another persistent model index.
 */
 
 bool QPersistentModelIndex::operator<(const QPersistentModelIndex &other) const
@@ -196,8 +215,8 @@ bool QPersistentModelIndex::operator<(const QPersistentModelIndex &other) const
     \fn bool QPersistentModelIndex::operator!=(const QPersistentModelIndex &other) const
     \since 4.2
 
-    Returns true if this persistent model index is not equal to the \a
-    other persistent model index; otherwise returns false.
+    Returns \c{true} if this persistent model index is not equal to the \a
+    other persistent model index; otherwise returns \c{false}.
 */
 
 /*!
@@ -256,13 +275,11 @@ QPersistentModelIndex::operator const QModelIndex&() const
 }
 
 /*!
-    \fn bool QPersistentModelIndex::operator==(const QModelIndex &other) const
+    Returns \c{true} if this persistent model index refers to the same location as
+    the \a other model index; otherwise returns \c{false}.
 
-    Returns true if this persistent model index refers to the same location as
-    the \a other model index; otherwise returns false.
-
-    All values in the persistent model index are used when comparing with
-    another model index.
+    The internal data pointer, row, column, and model values in the persistent
+    model index are used when comparing with another model index.
 */
 
 bool QPersistentModelIndex::operator==(const QModelIndex &other) const
@@ -275,8 +292,8 @@ bool QPersistentModelIndex::operator==(const QModelIndex &other) const
 /*!
     \fn bool QPersistentModelIndex::operator!=(const QModelIndex &other) const
 
-    Returns true if this persistent model index does not refer to the same
-    location as the \a other model index; otherwise returns false.
+    Returns \c{true} if this persistent model index does not refer to the same
+    location as the \a other model index; otherwise returns \c{false}.
 */
 
 bool QPersistentModelIndex::operator!=(const QModelIndex &other) const
@@ -348,7 +365,7 @@ quintptr QPersistentModelIndex::internalId() const
     Returns the parent QModelIndex for this persistent index, or an invalid
     QModelIndex if it has no parent.
 
-    \sa child(), sibling(), model()
+    \sa sibling(), model()
 */
 QModelIndex QPersistentModelIndex::parent() const
 {
@@ -361,7 +378,7 @@ QModelIndex QPersistentModelIndex::parent() const
     Returns the sibling at \a row and \a column or an invalid QModelIndex if
     there is no sibling at this position.
 
-    \sa parent(), child()
+    \sa parent()
 */
 
 QModelIndex QPersistentModelIndex::sibling(int row, int column) const
@@ -371,7 +388,12 @@ QModelIndex QPersistentModelIndex::sibling(int row, int column) const
     return QModelIndex();
 }
 
+#if QT_DEPRECATED_SINCE(5, 8)
 /*!
+    \obsolete
+
+    Use QAbstractItemModel::index() instead.
+
     Returns the child of the model index that is stored in the given \a row
     and \a column.
 
@@ -381,9 +403,10 @@ QModelIndex QPersistentModelIndex::sibling(int row, int column) const
 QModelIndex QPersistentModelIndex::child(int row, int column) const
 {
     if (d)
-        return d->index.child(row, column);
+        return d->index.model()->index(row, column, d->index);
     return QModelIndex();
 }
+#endif
 
 /*!
     Returns the data for the given \a role for the item referred to by the
@@ -423,8 +446,8 @@ const QAbstractItemModel *QPersistentModelIndex::model() const
 /*!
     \fn bool QPersistentModelIndex::isValid() const
 
-    Returns true if this persistent model index is valid; otherwise returns
-    false.
+    Returns \c{true} if this persistent model index is valid; otherwise returns
+    \c{false}.
 
     A valid index belongs to a model, and has non-negative row and column
     numbers.
@@ -440,9 +463,10 @@ bool QPersistentModelIndex::isValid() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QModelIndex &idx)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QModelIndex(" << idx.row() << ',' << idx.column()
                   << ',' << idx.internalPointer() << ',' << idx.model() << ')';
-    return dbg.space();
+    return dbg;
 }
 
 QDebug operator<<(QDebug dbg, const QPersistentModelIndex &idx)
@@ -459,19 +483,55 @@ class QEmptyItemModel : public QAbstractItemModel
 {
 public:
     explicit QEmptyItemModel(QObject *parent = 0) : QAbstractItemModel(parent) {}
-    QModelIndex index(int, int, const QModelIndex &) const { return QModelIndex(); }
-    QModelIndex parent(const QModelIndex &) const { return QModelIndex(); }
-    int rowCount(const QModelIndex &) const { return 0; }
-    int columnCount(const QModelIndex &) const { return 0; }
-    bool hasChildren(const QModelIndex &) const { return false; }
-    QVariant data(const QModelIndex &, int) const { return QVariant(); }
+    QModelIndex index(int, int, const QModelIndex &) const override { return QModelIndex(); }
+    QModelIndex parent(const QModelIndex &) const override { return QModelIndex(); }
+    int rowCount(const QModelIndex &) const override { return 0; }
+    int columnCount(const QModelIndex &) const override { return 0; }
+    bool hasChildren(const QModelIndex &) const override { return false; }
+    QVariant data(const QModelIndex &, int) const override { return QVariant(); }
 };
 
 Q_GLOBAL_STATIC(QEmptyItemModel, qEmptyModel)
 
+
+QAbstractItemModelPrivate::QAbstractItemModelPrivate()
+    : QObjectPrivate(),
+      supportedDragActions(-1),
+      roleNames(defaultRoleNames())
+{
+}
+
+QAbstractItemModelPrivate::~QAbstractItemModelPrivate()
+{
+}
+
 QAbstractItemModel *QAbstractItemModelPrivate::staticEmptyModel()
 {
     return qEmptyModel();
+}
+
+void QAbstractItemModelPrivate::invalidatePersistentIndexes()
+{
+    for (QPersistentModelIndexData *data : qAsConst(persistent.indexes)) {
+        data->index = QModelIndex();
+        data->model = 0;
+    }
+    persistent.indexes.clear();
+}
+
+/*!
+    \internal
+    Clean the QPersistentModelIndex relative to the index if there is one.
+    To be used before an index is invalided
+*/
+void QAbstractItemModelPrivate::invalidatePersistentIndex(const QModelIndex &index) {
+    const auto it = persistent.indexes.constFind(index);
+    if (it != persistent.indexes.cend()) {
+        QPersistentModelIndexData *data = *it;
+        persistent.indexes.erase(it);
+        data->index = QModelIndex();
+        data->model = 0;
+    }
 }
 
 namespace {
@@ -493,6 +553,43 @@ Q_GLOBAL_STATIC(DefaultRoleNames, qDefaultRoleNames)
 const QHash<int,QByteArray> &QAbstractItemModelPrivate::defaultRoleNames()
 {
     return *qDefaultRoleNames();
+}
+
+bool QAbstractItemModelPrivate::isVariantLessThan(const QVariant &left, const QVariant &right,
+                                                  Qt::CaseSensitivity cs, bool isLocaleAware)
+{
+    if (left.userType() == QVariant::Invalid)
+        return false;
+    if (right.userType() == QVariant::Invalid)
+        return true;
+    switch (left.userType()) {
+    case QVariant::Int:
+        return left.toInt() < right.toInt();
+    case QVariant::UInt:
+        return left.toUInt() < right.toUInt();
+    case QVariant::LongLong:
+        return left.toLongLong() < right.toLongLong();
+    case QVariant::ULongLong:
+        return left.toULongLong() < right.toULongLong();
+    case QMetaType::Float:
+        return left.toFloat() < right.toFloat();
+    case QVariant::Double:
+        return left.toDouble() < right.toDouble();
+    case QVariant::Char:
+        return left.toChar() < right.toChar();
+    case QVariant::Date:
+        return left.toDate() < right.toDate();
+    case QVariant::Time:
+        return left.toTime() < right.toTime();
+    case QVariant::DateTime:
+        return left.toDateTime() < right.toDateTime();
+    case QVariant::String:
+    default:
+        if (isLocaleAware)
+            return left.toString().localeAwareCompare(right.toString()) < 0;
+        else
+            return left.toString().compare(right.toString(), cs) < 0;
+    }
 }
 
 
@@ -522,7 +619,7 @@ static uint typeOfVariant(const QVariant &value)
 
 /*!
     \internal
-    return true if \a value contains a numerical type
+    Return \c{true} if \a value contains a numerical type.
 
     This function is used by our Q{Tree,Widget,Table}WidgetModel classes to sort.
 */
@@ -551,13 +648,13 @@ void QAbstractItemModelPrivate::removePersistentIndexData(QPersistentModelIndexD
     }
     // make sure our optimization still works
     for (int i = persistent.moved.count() - 1; i >= 0; --i) {
-        int idx = persistent.moved[i].indexOf(data);
+        int idx = persistent.moved.at(i).indexOf(data);
         if (idx >= 0)
             persistent.moved[i].remove(idx);
     }
     // update the references to invalidated persistent indexes
     for (int i = persistent.invalidated.count() - 1; i >= 0; --i) {
-        int idx = persistent.invalidated[i].indexOf(data);
+        int idx = persistent.invalidated.at(i).indexOf(data);
         if (idx >= 0)
             persistent.invalidated[i].remove(idx);
     }
@@ -592,7 +689,7 @@ void QAbstractItemModelPrivate::rowsInserted(const QModelIndex &parent,
          it != persistent_moved.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
         QModelIndex old = data->index;
-        persistent.indexes.erase(persistent.indexes.find(old));
+        persistent.indexes.erase(persistent.indexes.constFind(old));
         data->index = q_func()->index(old.row() + count, old.column(), parent);
         if (data->index.isValid()) {
             persistent.insertMultiAtEnd(data->index, data);
@@ -667,7 +764,7 @@ void QAbstractItemModelPrivate::itemsAboutToBeMoved(const QModelIndex &srcParent
   column value depending on the value of \a orientation. The indexes may also be moved to a different parent if \a parent
   differs from the existing parent for the index.
 */
-void QAbstractItemModelPrivate::movePersistentIndexes(QVector<QPersistentModelIndexData *> indexes, int change, const QModelIndex &parent, Qt::Orientation orientation)
+void QAbstractItemModelPrivate::movePersistentIndexes(const QVector<QPersistentModelIndexData *> &indexes, int change, const QModelIndex &parent, Qt::Orientation orientation)
 {
     QVector<QPersistentModelIndexData *>::const_iterator it;
     const QVector<QPersistentModelIndexData *>::const_iterator begin = indexes.constBegin();
@@ -685,7 +782,7 @@ void QAbstractItemModelPrivate::movePersistentIndexes(QVector<QPersistentModelIn
         else
             column += change;
 
-        persistent.indexes.erase(persistent.indexes.find(data->index));
+        persistent.indexes.erase(persistent.indexes.constFind(data->index));
         data->index = q_func()->index(row, column, parent);
         if (data->index.isValid()) {
             persistent.insertMultiAtEnd(data->index, data);
@@ -752,7 +849,7 @@ void QAbstractItemModelPrivate::rowsRemoved(const QModelIndex &parent,
          it != persistent_moved.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
         QModelIndex old = data->index;
-        persistent.indexes.erase(persistent.indexes.find(old));
+        persistent.indexes.erase(persistent.indexes.constFind(old));
         data->index = q_func()->index(old.row() - count, old.column(), parent);
         if (data->index.isValid()) {
             persistent.insertMultiAtEnd(data->index, data);
@@ -764,7 +861,7 @@ void QAbstractItemModelPrivate::rowsRemoved(const QModelIndex &parent,
     for (QVector<QPersistentModelIndexData *>::const_iterator it = persistent_invalidated.constBegin();
          it != persistent_invalidated.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
-        persistent.indexes.erase(persistent.indexes.find(data->index));
+        persistent.indexes.erase(persistent.indexes.constFind(data->index));
         data->index = QModelIndex();
         data->model = 0;
     }
@@ -797,7 +894,7 @@ void QAbstractItemModelPrivate::columnsInserted(const QModelIndex &parent,
          it != persistent_moved.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
         QModelIndex old = data->index;
-        persistent.indexes.erase(persistent.indexes.find(old));
+        persistent.indexes.erase(persistent.indexes.constFind(old));
         data->index = q_func()->index(old.row(), old.column() + count, parent);
         if (data->index.isValid()) {
             persistent.insertMultiAtEnd(data->index, data);
@@ -847,7 +944,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
          it != persistent_moved.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
         QModelIndex old = data->index;
-        persistent.indexes.erase(persistent.indexes.find(old));
+        persistent.indexes.erase(persistent.indexes.constFind(old));
         data->index = q_func()->index(old.row(), old.column() - count, parent);
         if (data->index.isValid()) {
             persistent.insertMultiAtEnd(data->index, data);
@@ -859,10 +956,31 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     for (QVector<QPersistentModelIndexData *>::const_iterator it = persistent_invalidated.constBegin();
          it != persistent_invalidated.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
-        persistent.indexes.erase(persistent.indexes.find(data->index));
+        persistent.indexes.erase(persistent.indexes.constFind(data->index));
         data->index = QModelIndex();
         data->model = 0;
     }
+}
+
+/*!
+    \since 4.8
+
+    This slot is called just after the internal data of a model is cleared
+    while it is being reset.
+
+    This slot is provided the convenience of subclasses of concrete proxy
+    models, such as subclasses of QSortFilterProxyModel which maintain extra
+    data.
+
+    \snippet code/src_corelib_kernel_qabstractitemmodel.cpp 12
+
+    \note Due to a mistake, this slot is missing in Qt 5.0.
+
+    \sa modelAboutToBeReset(), modelReset()
+*/
+void QAbstractItemModel::resetInternalData()
+{
+
 }
 
 /*!
@@ -952,9 +1070,9 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 */
 
 /*!
-    \fn void *QModelIndex::internalId() const
+    \fn quintptr QModelIndex::internalId() const
 
-    Returns a \c{qint64} used by the model to associate
+    Returns a \c{quintptr} used by the model to associate
     the index with the internal data structure.
 
     \sa QAbstractItemModel::createIndex()
@@ -963,7 +1081,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 /*!
     \fn bool QModelIndex::isValid() const
 
-    Returns true if this model index is valid; otherwise returns false.
+    Returns \c{true} if this model index is valid; otherwise returns \c{false}.
 
     A valid index belongs to a model, and has non-negative row and column
     numbers.
@@ -988,11 +1106,35 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     Returns the sibling at \a row and \a column. If there is no sibling at this
     position, an invalid QModelIndex is returned.
 
-    \sa parent(), child()
+    \sa parent(), siblingAtColumn(), siblingAtRow()
+*/
+
+/*!
+    \fn QModelIndex QModelIndex::siblingAtColumn(int column) const
+
+    Returns the sibling at \a column for the current row. If there is no sibling
+    at this position, an invalid QModelIndex is returned.
+
+    \sa sibling(), siblingAtRow()
+    \since 5.11
+*/
+
+/*!
+    \fn QModelIndex QModelIndex::siblingAtRow(int row) const
+
+    Returns the sibling at \a row for the current column. If there is no sibling
+    at this position, an invalid QModelIndex is returned.
+
+    \sa sibling(), siblingAtColumn()
+    \since 5.11
 */
 
 /*!
     \fn QModelIndex QModelIndex::child(int row, int column) const
+
+    \obsolete
+
+    Use QAbstractItemModel::index() instead.
 
     Returns the child of the model index that is stored in the given \a row and
     \a column.
@@ -1020,19 +1162,19 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 /*!
     \fn bool QModelIndex::operator==(const QModelIndex &other) const
 
-    Returns true if this model index refers to the same location as the
-    \a other model index; otherwise returns false.
+    Returns \c{true} if this model index refers to the same location as the
+    \a other model index; otherwise returns \c{false}.
 
-    All values in the model index are used when comparing with another model
-    index.
+    The internal data pointer, row, column, and model values are used when
+    comparing with another model index.
 */
 
 
 /*!
     \fn bool QModelIndex::operator!=(const QModelIndex &other) const
 
-    Returns true if this model index does not refer to the same location as
-    the \a other model index; otherwise returns false.
+    Returns \c{true} if this model index does not refer to the same location as
+    the \a other model index; otherwise returns \c{false}.
 */
 
 
@@ -1042,7 +1184,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     Returns the parent of the model index, or QModelIndex() if it has no
     parent.
 
-    \sa child(), sibling(), model()
+    \sa sibling(), model()
 */
 
 /*!
@@ -1063,7 +1205,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     The QAbstractItemModel class is one of the \l{Model/View Classes}
     and is part of Qt's \l{Model/View Programming}{model/view framework}. It
     can be used as the underlying data model for the item view elements in
-    QML or the item view classes in the QtWidgets module.
+    QML or the item view classes in the Qt Widgets module.
 
     If you need a model to use with an item view such as QML's List View
     element or the C++ widgets QListView or QTableView, you should consider
@@ -1092,7 +1234,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     Items can be queried with flags() (see \l Qt::ItemFlag) to see if they can
     be selected, dragged, or manipulated in other ways.
 
-    If an item has child objects, hasChildren() returns true for the
+    If an item has child objects, hasChildren() returns \c{true} for the
     corresponding index.
 
     The model has a rowCount() and a columnCount() for each level of the
@@ -1215,7 +1357,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     Inserts a single column before the given \a column in the child items of
     the \a parent specified.
 
-    Returns true if the column is inserted; otherwise returns false.
+    Returns \c{true} if the column is inserted; otherwise returns \c{false}.
 
     \sa insertColumns(), insertRow(), removeColumn()
 */
@@ -1228,14 +1370,9 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 
     \note This function calls the virtual method insertRows.
 
-    Returns true if the row is inserted; otherwise returns false.
+    Returns \c{true} if the row is inserted; otherwise returns \c{false}.
 
     \sa insertRows(), insertColumn(), removeRow()
-*/
-
-/*!
-    \fn QObject *QAbstractItemModel::parent() const
-    \internal
 */
 
 /*!
@@ -1263,7 +1400,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     Removes the given \a column from the child items of the \a parent
     specified.
 
-    Returns true if the column is removed; otherwise returns false.
+    Returns \c{true} if the column is removed; otherwise returns \c{false}.
 
     \sa removeColumns(), removeRow(), insertColumn()
 */
@@ -1273,7 +1410,7 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 
     Removes the given \a row from the child items of the \a parent specified.
 
-    Returns true if the row is removed; otherwise returns false.
+    Returns \c{true} if the row is removed; otherwise returns \c{false}.
 
     This is a convenience function that calls removeRows(). The
     QAbstractItemModel implementation of removeRows() does nothing.
@@ -1282,13 +1419,13 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
 */
 
 /*!
-    \fn bool QAbstractItemModel::moveRow(const QModelIndex &sourceParent, int sourceColumn, const QModelIndex &destinationParent, int destinationChild)
+    \fn bool QAbstractItemModel::moveRow(const QModelIndex &sourceParent, int sourceRow, const QModelIndex &destinationParent, int destinationChild)
 
-    On models that support this, moves \a sourceColumn from \a sourceParent to \a destinationChild under
+    On models that support this, moves \a sourceRow from \a sourceParent to \a destinationChild under
     \a destinationParent.
 
-    Returns true if the columns were successfully moved; otherwise returns
-    false.
+    Returns \c{true} if the rows were successfully moved; otherwise returns
+    \c{false}.
 
     \sa moveRows(), moveColumn()
 */
@@ -1299,8 +1436,8 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
     On models that support this, moves \a sourceColumn from \a sourceParent to \a destinationChild under
     \a destinationParent.
 
-    Returns true if the columns were successfully moved; otherwise returns
-    false.
+    Returns \c{true} if the columns were successfully moved; otherwise returns
+    \c{false}.
 
     \sa moveColumns(), moveRow()
 */
@@ -1437,7 +1574,7 @@ QAbstractItemModel::~QAbstractItemModel()
 
     For example:
 
-    \snippet itemviews/simpledommodel/dommodel.cpp 2
+    \snippet ../widgets/itemviews/simpledommodel/dommodel.cpp 2
 
     \note When implementing a table based model, columnCount() should return 0
     when the parent is valid.
@@ -1466,10 +1603,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::rowsInserted(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::rowsInserted(const QModelIndex &parent, int first, int last)
 
     This signal is emitted after rows have been inserted into the
-    model. The new items are those between \a start and \a end
+    model. The new items are those between \a first and \a last
     inclusive, under the given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes in the
@@ -1494,10 +1631,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::rowsRemoved(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::rowsRemoved(const QModelIndex &parent, int first, int last)
 
     This signal is emitted after rows have been removed from the model. The
-    removed items are those between \a start and \a end inclusive, under the
+    removed items are those between \a first and \a last inclusive, under the
     given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes
@@ -1508,10 +1645,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::rowsAboutToBeRemoved(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::rowsAboutToBeRemoved(const QModelIndex &parent, int first, int last)
 
     This signal is emitted just before rows are removed from the model. The
-    items that will be removed are those between \a start and \a end inclusive,
+    items that will be removed are those between \a first and \a last inclusive,
     under the given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes
@@ -1522,13 +1659,13 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::rowsMoved(const QModelIndex &sourceParent, int sourceStart, int sourceEnd, const QModelIndex &destinationParent, int destinationRow)
+    \fn void QAbstractItemModel::rowsMoved(const QModelIndex &parent, int start, int end, const QModelIndex &destination, int row)
     \since 4.6
 
     This signal is emitted after rows have been moved within the
-    model. The items between \a sourceStart and \a sourceEnd
-    inclusive, under the given \a sourceParent item have been moved to \a destinationParent
-    starting at the row \a destinationRow.
+    model. The items between \a start and \a end
+    inclusive, under the given \a parent item have been moved to \a destination
+    starting at the row \a row.
 
     \b{Note:} Components connected to this signal use it to adapt to changes
     in the model's dimensions. It can only be emitted by the QAbstractItemModel
@@ -1554,13 +1691,13 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::columnsMoved(const QModelIndex &sourceParent, int sourceStart, int sourceEnd, const QModelIndex &destinationParent, int destinationColumn)
+    \fn void QAbstractItemModel::columnsMoved(const QModelIndex &parent, int start, int end, const QModelIndex &destination, int column)
     \since 4.6
 
     This signal is emitted after columns have been moved within the
-    model. The items between \a sourceStart and \a sourceEnd
-    inclusive, under the given \a sourceParent item have been moved to \a destinationParent
-    starting at the column \a destinationColumn.
+    model. The items between \a start and \a end
+    inclusive, under the given \a parent item have been moved to \a destination
+    starting at the column \a column.
 
     \b{Note:} Components connected to this signal use it to adapt to changes
     in the model's dimensions. It can only be emitted by the QAbstractItemModel
@@ -1586,10 +1723,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::columnsInserted(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::columnsInserted(const QModelIndex &parent, int first, int last)
 
     This signal is emitted after columns have been inserted into the model. The
-    new items are those between \a start and \a end inclusive, under the given
+    new items are those between \a first and \a last inclusive, under the given
     \a parent item.
 
     \note Components connected to this signal use it to adapt to changes in the
@@ -1600,10 +1737,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::columnsAboutToBeInserted(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::columnsAboutToBeInserted(const QModelIndex &parent, int first, int last)
 
     This signal is emitted just before columns are inserted into the model. The
-    new items will be positioned between \a start and \a end inclusive, under
+    new items will be positioned between \a first and \a last inclusive, under
     the given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes in the
@@ -1614,10 +1751,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::columnsRemoved(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::columnsRemoved(const QModelIndex &parent, int first, int last)
 
     This signal is emitted after columns have been removed from the model.
-    The removed items are those between \a start and \a end inclusive,
+    The removed items are those between \a first and \a last inclusive,
     under the given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes in
@@ -1628,10 +1765,10 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    \fn void QAbstractItemModel::columnsAboutToBeRemoved(const QModelIndex &parent, int start, int end)
+    \fn void QAbstractItemModel::columnsAboutToBeRemoved(const QModelIndex &parent, int first, int last)
 
     This signal is emitted just before columns are removed from the model. The
-    items to be removed are those between \a start and \a end inclusive, under
+    items to be removed are those between \a first and \a last inclusive, under
     the given \a parent item.
 
     \note Components connected to this signal use it to adapt to changes in the
@@ -1642,8 +1779,8 @@ QAbstractItemModel::~QAbstractItemModel()
 */
 
 /*!
-    Returns true if the model returns a valid QModelIndex for \a row and
-    \a column with \a parent, otherwise returns false.
+    Returns \c{true} if the model returns a valid QModelIndex for \a row and
+    \a column with \a parent, otherwise returns \c{false}.
 */
 bool QAbstractItemModel::hasIndex(int row, int column, const QModelIndex &parent) const
 {
@@ -1654,9 +1791,12 @@ bool QAbstractItemModel::hasIndex(int row, int column, const QModelIndex &parent
 
 
 /*!
-    Returns true if \a parent has any children; otherwise returns false.
+    Returns \c{true} if \a parent has any children; otherwise returns \c{false}.
 
     Use rowCount() on the parent to find out the number of children.
+
+    Note that it is undefined behavior to report that a particular index hasChildren
+    with this method if the same index has the flag Qt::ItemNeverHasChildren set.
 
     \sa parent(), index()
 */
@@ -1708,12 +1848,12 @@ QMap<int, QVariant> QAbstractItemModel::itemData(const QModelIndex &index) const
 /*!
     Sets the \a role data for the item at \a index to \a value.
 
-    Returns true if successful; otherwise returns false.
+    Returns \c{true} if successful; otherwise returns \c{false}.
 
     The dataChanged() signal should be emitted if the data was successfully
     set.
 
-    The base class implementation returns false. This function and data() must
+    The base class implementation returns \c{false}. This function and data() must
     be reimplemented for editable models.
 
     \sa Qt::ItemDataRole, data(), itemData()
@@ -1725,6 +1865,23 @@ bool QAbstractItemModel::setData(const QModelIndex &index, const QVariant &value
     Q_UNUSED(role);
     return false;
 }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+/*!
+    \since 6.0
+    Removes the data stored in all the roles for the given \a index.
+    Returns \c{true} if successful; otherwise returns \c{false}.
+    The dataChanged() signal should be emitted if the data was successfully
+    removed.
+    The base class implementation returns \c{false}
+    \sa data(), itemData(), setData(), setItemData()
+*/
+bool QAbstractItemModel::clearItemData(const QModelIndex &index)
+{
+    Q_UNUSED(index);
+    return false;
+}
+#endif
 
 /*!
     \fn QVariant QAbstractItemModel::data(const QModelIndex &index, int role) const = 0
@@ -1742,7 +1899,7 @@ bool QAbstractItemModel::setData(const QModelIndex &index, const QVariant &value
     Sets the role data for the item at \a index to the associated value in
     \a roles, for every Qt::ItemDataRole.
 
-    Returns true if successful; otherwise returns false.
+    Returns \c{true} if successful; otherwise returns \c{false}.
 
     Roles that are not in \a roles will not be modified.
 
@@ -1757,25 +1914,37 @@ bool QAbstractItemModel::setItemData(const QModelIndex &index, const QMap<int, Q
 }
 
 /*!
-    Returns a list of MIME types that can be used to describe a list of model
-    indexes.
+    Returns the list of allowed MIME types. By default, the built-in
+    models and views use an internal MIME type:
+    \c{application/x-qabstractitemmodeldatalist}.
 
-    \sa mimeData()
+    When implementing drag and drop support in a custom model, if you
+    will return data in formats other than the default internal MIME
+    type, reimplement this function to return your list of MIME types.
+
+    If you reimplement this function in your custom model, you must
+    also reimplement the member functions that call it: mimeData() and
+    dropMimeData().
+
+    \sa mimeData(), dropMimeData()
 */
 QStringList QAbstractItemModel::mimeTypes() const
 {
     QStringList types;
-    types << QLatin1String("application/x-qabstractitemmodeldatalist");
+    types << QStringLiteral("application/x-qabstractitemmodeldatalist");
     return types;
 }
 
 /*!
     Returns an object that contains serialized items of data corresponding to
-    the list of \a indexes specified. The formats used to describe the encoded
-    data is obtained from the mimeTypes() function.
+    the list of \a indexes specified. The format used to describe the encoded
+    data is obtained from the mimeTypes() function. This default implementation
+    uses the default MIME type returned by the default implementation of
+    mimeTypes(). If you reimplement mimeTypes() in your custom model to return
+    more MIME types, reimplement this function to make use of them.
 
-    If the list of indexes is empty, or there are no supported MIME types, 0 is
-    returned rather than a serialized empty list.
+    If the list of \a indexes is empty, or there are no supported MIME types, 0
+    is returned rather than a serialized empty list.
 
     \sa mimeTypes(), dropMimeData()
 */
@@ -1796,13 +1965,15 @@ QMimeData *QAbstractItemModel::mimeData(const QModelIndexList &indexes) const
 }
 
 /*!
-    Returns whether a model can accept a drop of data.
+    Returns \c{true} if a model can accept a drop of the \a data. This
+    default implementation only checks if \a data has at least one format
+    in the list of mimeTypes() and if \a action is among the
+    model's supportedDropActions().
 
-    This can be used to indicate whether a drop of certain data is allowed, for example
-    by using a 'forbidden' emblem on a mouse cursor during a drag operation.
-
-    This method returns true by default. Reimplementations can return whether the
-    \a data can be dropped at \a row, \a column, \a parent with \a action.
+    Reimplement this function in your custom model, if you want to
+    test whether the \a data can be dropped at \a row, \a column,
+    \a parent with \a action. If you don't need that test, it is not
+    necessary to reimplement this function.
 
     \sa dropMimeData(), {Using drag and drop with item views}
  */
@@ -1810,20 +1981,27 @@ bool QAbstractItemModel::canDropMimeData(const QMimeData *data, Qt::DropAction a
                                          int row, int column,
                                          const QModelIndex &parent) const
 {
-    Q_UNUSED(data)
-    Q_UNUSED(action)
     Q_UNUSED(row)
     Q_UNUSED(column)
     Q_UNUSED(parent)
-    return true;
+
+    if (!(action & supportedDropActions()))
+        return false;
+
+    const QStringList modelTypes = mimeTypes();
+    for (int i = 0; i < modelTypes.count(); ++i) {
+        if (data->hasFormat(modelTypes.at(i)))
+            return true;
+    }
+    return false;
 }
 
 /*!
     Handles the \a data supplied by a drag and drop operation that ended with
     the given \a action.
 
-    Returns true if the data and action can be handled by the model; otherwise
-    returns false.
+    Returns \c{true} if the data and action were handled by the model; otherwise
+    returns \c{false}.
 
     The specified \a row, \a column and \a parent indicate the location of an
     item in the model where the operation ended. It is the responsibility of
@@ -1835,9 +2013,15 @@ bool QAbstractItemModel::canDropMimeData(const QMimeData *data, Qt::DropAction a
 
     When \a row and \a column are -1 it means that the dropped data should be
     considered as dropped directly on \a parent. Usually this will mean
-    appending the data as child items of \a parent. If \a row and column are
+    appending the data as child items of \a parent. If \a row and \a column are
     greater than or equal zero, it means that the drop occurred just before the
     specified \a row and \a column in the specified \a parent.
+
+    The mimeTypes() member is called to get the list of acceptable MIME types.
+    This default implementation assumes the default implementation of mimeTypes(),
+    which returns a single default MIME type. If you reimplement mimeTypes() in
+    your custom model to return multiple MIME types, you must reimplement this
+    function to make use of them.
 
     \sa supportedDropActions(), canDropMimeData(), {Using drag and drop with item views}
 */
@@ -1887,8 +2071,8 @@ Qt::DropActions QAbstractItemModel::supportedDropActions() const
 /*!
     Returns the actions supported by the data in this model.
 
-    The default implementation returns supportedDropActions() unless specific
-    values have been set with setSupportedDragActions().
+    The default implementation returns supportedDropActions(). Reimplement
+    this function if you wish to support additional actions.
 
     supportedDragActions() is used by QAbstractItemView::startDrag() as the
     default values when a drag occurs.
@@ -1898,7 +2082,7 @@ Qt::DropActions QAbstractItemModel::supportedDropActions() const
 Qt::DropActions QAbstractItemModel::supportedDragActions() const
 {
     Q_D(const QAbstractItemModel);
-    if (d->supportedDragActions != -1)
+    if (int(d->supportedDragActions) != -1)
         return d->supportedDragActions;
     return supportedDropActions();
 }
@@ -1917,6 +2101,8 @@ void QAbstractItemModel::doSetSupportedDragActions(Qt::DropActions actions)
     \obsolete
     \fn void QAbstractItemModel::setSupportedDragActions(Qt::DropActions actions)
 
+    This function is obsolete. Reimplement supportedDragActions() instead.
+
     Sets the supported drag \a actions for the items in the model.
 
     \sa supportedDragActions(), {Using drag and drop with item views}
@@ -1924,7 +2110,7 @@ void QAbstractItemModel::doSetSupportedDragActions(Qt::DropActions actions)
 
 /*!
     \note The base class implementation of this function does nothing and
-    returns false.
+    returns \c{false}.
 
     On models that support this, inserts \a count rows into the model before
     the given \a row. Items in the new row will be children of the item
@@ -1938,8 +2124,8 @@ void QAbstractItemModel::doSetSupportedDragActions(Qt::DropActions actions)
     If \a parent has no children, a single column with \a count rows is
     inserted.
 
-    Returns true if the rows were successfully inserted; otherwise returns
-    false.
+    Returns \c{true} if the rows were successfully inserted; otherwise returns
+    \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support insertions. Alternatively, you can provide your own API for
@@ -1967,10 +2153,10 @@ bool QAbstractItemModel::insertRows(int, int, const QModelIndex &)
     If \a parent has no children, a single row with \a count columns is
     inserted.
 
-    Returns true if the columns were successfully inserted; otherwise returns
-    false.
+    Returns \c{true} if the columns were successfully inserted; otherwise returns
+    \c{false}.
 
-    The base class implementation does nothing and returns false.
+    The base class implementation does nothing and returns \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support insertions. Alternatively, you can provide your own API for
@@ -1987,10 +2173,10 @@ bool QAbstractItemModel::insertColumns(int, int, const QModelIndex &)
     On models that support this, removes \a count rows starting with the given
     \a row under parent \a parent from the model.
 
-    Returns true if the rows were successfully removed; otherwise returns
-    false.
+    Returns \c{true} if the rows were successfully removed; otherwise returns
+    \c{false}.
 
-    The base class implementation does nothing and returns false.
+    The base class implementation does nothing and returns \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support removing. Alternatively, you can provide your own API for
@@ -2008,10 +2194,10 @@ bool QAbstractItemModel::removeRows(int, int, const QModelIndex &)
     On models that support this, removes \a count columns starting with the
     given \a column under parent \a parent from the model.
 
-    Returns true if the columns were successfully removed; otherwise returns
-    false.
+    Returns \c{true} if the columns were successfully removed; otherwise returns
+    \c{false}.
 
-    The base class implementation does nothing and returns false.
+    The base class implementation does nothing and returns \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support removing. Alternatively, you can provide your own API for
@@ -2030,10 +2216,10 @@ bool QAbstractItemModel::removeColumns(int, int, const QModelIndex &)
     \a sourceRow under parent \a sourceParent to row \a destinationChild under
     parent \a destinationParent.
 
-    Returns true if the rows were successfully moved; otherwise returns
-    false.
+    Returns \c{true} if the rows were successfully moved; otherwise returns
+    \c{false}.
 
-    The base class implementation does nothing and returns false.
+    The base class implementation does nothing and returns \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support moving. Alternatively, you can provide your own API for
@@ -2051,10 +2237,10 @@ bool QAbstractItemModel::moveRows(const QModelIndex &, int , int , const QModelI
     \a sourceColumn under parent \a sourceParent to column \a destinationChild under
     parent \a destinationParent.
 
-    Returns true if the columns were successfully moved; otherwise returns
-    false.
+    Returns \c{true} if the columns were successfully moved; otherwise returns
+    \c{false}.
 
-    The base class implementation does nothing and returns false.
+    The base class implementation does nothing and returns \c{false}.
 
     If you implement your own model, you can reimplement this function if you
     want to support moving. Alternatively, you can provide your own API for
@@ -2083,14 +2269,13 @@ void QAbstractItemModel::fetchMore(const QModelIndex &)
 }
 
 /*!
-    Returns true if there is more data available for \a parent; otherwise
-    returns false.
+    Returns \c{true} if there is more data available for \a parent; otherwise
+    returns \c{false}.
 
-    The default implementation always returns false.
+    The default implementation always returns \c{false}.
 
-    If canFetchMore() returns true, QAbstractItemView will call fetchMore().
-    However, the fetchMore() function is only called when the model is being
-    populated incrementally.
+    If canFetchMore() returns \c true, the fetchMore() function should
+    be called. This is the behavior of QAbstractItemView, for example.
 
     \sa fetchMore()
 */
@@ -2274,7 +2459,31 @@ void QAbstractItemModel::doSetRoleNames(const QHash<int,QByteArray> &roleNames)
 
     Returns the model's role names.
 
-    \sa setRoleNames()
+    The default role names set by Qt are:
+
+    \table
+    \header
+    \li Qt Role
+    \li QML Role Name
+    \row
+    \li Qt::DisplayRole
+    \li display
+    \row
+    \li Qt::DecorationRole
+    \li decoration
+    \row
+    \li Qt::EditRole
+    \li edit
+    \row
+    \li Qt::ToolTipRole
+    \li toolTip
+    \row
+    \li Qt::StatusTipRole
+    \li statusTip
+    \row
+    \li Qt::WhatsThisRole
+    \li whatsThis
+    \endtable
 */
 QHash<int,QByteArray> QAbstractItemModel::roleNames() const
 {
@@ -2286,7 +2495,7 @@ QHash<int,QByteArray> QAbstractItemModel::roleNames() const
     Lets the model know that it should submit cached information to permanent
     storage. This function is typically used for row editing.
 
-    Returns true if there is no error; otherwise returns false.
+    Returns \c{true} if there is no error; otherwise returns \c{false}.
 
     \sa revert()
 */
@@ -2331,7 +2540,7 @@ QVariant QAbstractItemModel::headerData(int section, Qt::Orientation orientation
     Sets the data for the given \a role and \a section in the header with the
     specified \a orientation to the \a value supplied.
 
-    Returns true if the header's data was updated; otherwise returns false.
+    Returns \c{true} if the header's data was updated; otherwise returns \c{false}.
 
     When reimplementing this function, the headerDataChanged() signal must be
     emitted explicitly.
@@ -2421,13 +2630,13 @@ bool QAbstractItemModel::decodeData(int row, int column, const QModelIndex &pare
     for (int i = 0; i < rows.count(); ++i)
         rowsToInsert[rows.at(i)] = 1;
     for (int i = 0; i < rowsToInsert.count(); ++i) {
-        if (rowsToInsert[i] == 1){
+        if (rowsToInsert.at(i) == 1){
             rowsToInsert[i] = dragRowCount;
             ++dragRowCount;
         }
     }
     for (int i = 0; i < rows.count(); ++i)
-        rows[i] = top + rowsToInsert[rows[i]];
+        rows[i] = top + rowsToInsert.at(rows.at(i));
 
     QBitArray isWrittenTo(dragRowCount * dragColumnCount);
 
@@ -2515,6 +2724,7 @@ bool QAbstractItemModel::decodeData(int row, int column, const QModelIndex &pare
 void QAbstractItemModel::beginInsertRows(const QModelIndex &parent, int first, int last)
 {
     Q_ASSERT(first >= 0);
+    Q_ASSERT(first <= rowCount(parent)); // == is allowed, to insert at the end
     Q_ASSERT(last >= first);
     Q_D(QAbstractItemModel);
     d->changes.push(QAbstractItemModelPrivate::Change(parent, first, last));
@@ -2570,6 +2780,7 @@ void QAbstractItemModel::beginRemoveRows(const QModelIndex &parent, int first, i
 {
     Q_ASSERT(first >= 0);
     Q_ASSERT(last >= first);
+    Q_ASSERT(last < rowCount(parent));
     Q_D(QAbstractItemModel);
     d->changes.push(QAbstractItemModelPrivate::Change(parent, first, last));
     emit rowsAboutToBeRemoved(parent, first, last, QPrivateSignal());
@@ -2635,7 +2846,7 @@ bool QAbstractItemModelPrivate::allowMove(const QModelIndex &srcParent, int star
     persistent indexes in the model, which you would otherwise be
     required to do yourself. Using beginMoveRows and endMoveRows
     is an alternative to emitting layoutAboutToBeChanged and
-    layoutChanged directly along with changePersistentIndexes.
+    layoutChanged directly along with changePersistentIndex.
 
     The \a sourceParent index corresponds to the parent from which the
     rows are moved; \a sourceFirst and \a sourceLast are the first and last
@@ -2658,7 +2869,7 @@ bool QAbstractItemModelPrivate::allowMove(const QModelIndex &srcParent, int star
     you must ensure that the \a destinationChild is not within the range
     of \a sourceFirst and \a sourceLast + 1.  You must also ensure that you
     do not attempt to move a row to one of its own children or ancestors.
-    This method returns false if either condition is true, in which case you
+    This method returns \c{false} if either condition is true, in which case you
     should abort your move operation.
 
     \table 80%
@@ -2816,6 +3027,7 @@ void QAbstractItemModel::endMoveRows()
 void QAbstractItemModel::beginInsertColumns(const QModelIndex &parent, int first, int last)
 {
     Q_ASSERT(first >= 0);
+    Q_ASSERT(first <= columnCount(parent)); // == is allowed, to insert at the end
     Q_ASSERT(last >= first);
     Q_D(QAbstractItemModel);
     d->changes.push(QAbstractItemModelPrivate::Change(parent, first, last));
@@ -2872,6 +3084,7 @@ void QAbstractItemModel::beginRemoveColumns(const QModelIndex &parent, int first
 {
     Q_ASSERT(first >= 0);
     Q_ASSERT(last >= first);
+    Q_ASSERT(last < columnCount(parent));
     Q_D(QAbstractItemModel);
     d->changes.push(QAbstractItemModelPrivate::Change(parent, first, last));
     emit columnsAboutToBeRemoved(parent, first, last, QPrivateSignal());
@@ -2900,9 +3113,9 @@ void QAbstractItemModel::endRemoveColumns()
     When reimplementing a subclass, this method simplifies moving
     entities in your model. This method is responsible for moving
     persistent indexes in the model, which you would otherwise be
-    required to do yourself. Using beginMoveRows and endMoveRows
+    required to do yourself. Using beginMoveColumns and endMoveColumns
     is an alternative to emitting layoutAboutToBeChanged and
-    layoutChanged directly along with changePersistentIndexes.
+    layoutChanged directly along with changePersistentIndex.
 
     The \a sourceParent index corresponds to the parent from which the
     columns are moved; \a sourceFirst and \a sourceLast are the first and last
@@ -2925,7 +3138,7 @@ void QAbstractItemModel::endRemoveColumns()
     you must ensure that the \a destinationChild is not within the range
     of \a sourceFirst and \a sourceLast + 1.  You must also ensure that you
     do not attempt to move a column to one of its own children or ancestors.
-    This method returns false if either condition is true, in which case you
+    This method returns \c{false} if either condition is true, in which case you
     should abort your move operation.
 
     \sa endMoveColumns()
@@ -3055,6 +3268,7 @@ void QAbstractItemModel::endResetModel()
 {
     Q_D(QAbstractItemModel);
     d->invalidatePersistentIndexes();
+    QMetaObject::invokeMethod(this, "resetInternalData");
     emit modelReset(QPrivateSignal());
 }
 
@@ -3073,8 +3287,8 @@ void QAbstractItemModel::changePersistentIndex(const QModelIndex &from, const QM
     if (d->persistent.indexes.isEmpty())
         return;
     // find the data and reinsert it sorted
-    const QHash<QModelIndex, QPersistentModelIndexData *>::iterator it = d->persistent.indexes.find(from);
-    if (it != d->persistent.indexes.end()) {
+    const auto it = d->persistent.indexes.constFind(from);
+    if (it != d->persistent.indexes.cend()) {
         QPersistentModelIndexData *data = *it;
         d->persistent.indexes.erase(it);
         data->index = to;
@@ -3088,11 +3302,11 @@ void QAbstractItemModel::changePersistentIndex(const QModelIndex &from, const QM
 /*!
     \since 4.1
 
-    Changes the QPersistentModelIndexes that is equal to the indexes in the
+    Changes the {QPersistentModelIndex}es that are equal to the indexes in the
     given \a from model index list to the given \a to model index list.
 
     If no persistent model indexes equal to the indexes in the given \a from
-    model index list was found, nothing is changed.
+    model index list are found, nothing is changed.
 
     \sa persistentIndexList(), changePersistentIndex()
 */
@@ -3107,8 +3321,8 @@ void QAbstractItemModel::changePersistentIndexList(const QModelIndexList &from,
     for (int i = 0; i < from.count(); ++i) {
         if (from.at(i) == to.at(i))
             continue;
-        const QHash<QModelIndex, QPersistentModelIndexData *>::iterator it = d->persistent.indexes.find(from.at(i));
-        if (it != d->persistent.indexes.end()) {
+        const auto it = d->persistent.indexes.constFind(from.at(i));
+        if (it != d->persistent.indexes.cend()) {
             QPersistentModelIndexData *data = *it;
             d->persistent.indexes.erase(it);
             data->index = to.at(i);
@@ -3135,6 +3349,7 @@ QModelIndexList QAbstractItemModel::persistentIndexList() const
 {
     Q_D(const QAbstractItemModel);
     QModelIndexList result;
+    result.reserve(d->persistent.indexes.count());
     for (QHash<QModelIndex, QPersistentModelIndexData *>::const_iterator it = d->persistent.indexes.constBegin();
          it != d->persistent.indexes.constEnd(); ++it) {
         QPersistentModelIndexData *data = *it;
@@ -3143,6 +3358,140 @@ QModelIndexList QAbstractItemModel::persistentIndexList() const
     return result;
 }
 
+/*!
+    \enum QAbstractItemModel::CheckIndexOption
+    \since 5.11
+
+    This enum can be used to control the checks performed by
+    QAbstractItemModel::checkIndex().
+
+    \value NoOption No check options are specified.
+
+    \value IndexIsValid The model index passed to
+    QAbstractItemModel::checkIndex() is checked to be a valid model index.
+
+    \value DoNotUseParent Does not perform any check
+    involving the usage of the parent of the index passed to
+    QAbstractItemModel::checkIndex().
+
+    \value ParentIsInvalid The parent of the model index
+    passed to QAbstractItemModel::checkIndex() is checked to be an invalid
+    model index. If both this option and DoNotUseParent
+    are specified, then this option is ignored.
+*/
+
+/*!
+    \since 5.11
+
+    This function checks whether \a index is a legal model index for
+    this model. A legal model index is either an invalid model index, or a
+    valid model index for which all the following holds:
+
+    \list
+
+    \li the index' model is \c{this};
+    \li the index' row is greater or equal than zero;
+    \li the index' row is less than the row count for the index' parent;
+    \li the index' column is greater or equal than zero;
+    \li the index' column is less than the column count for the index' parent.
+
+    \endlist
+
+    The \a options argument may change some of these checks. If \a options
+    contains \c{IndexIsValid}, then \a index must be a valid
+    index; this is useful when reimplementing functions such as \l{data()} or
+    \l{setData()}, which expect valid indexes.
+
+    If \a options contains \c{DoNotUseParent}, then the
+    checks that would call \l{parent()} are omitted; this allows calling this
+    function from a \l{parent()} reimplementation (otherwise, this would result
+    in endless recursion and a crash).
+
+    If \a options does not contain \c{DoNotUseParent}, and it
+    contains \c{ParentIsInvalid}, then an additional check is
+    performed: the parent index is checked for not being valid. This is useful
+    when implementing flat models such as lists or tables, where no model index
+    should have a valid parent index.
+
+    This function returns true if all the checks succeeded, and false otherwise.
+    This allows to use the function in \l{Q_ASSERT} and similar other debugging
+    mechanisms. If some check failed, a warning message will be printed in the
+    \c{qt.core.qabstractitemmodel.checkindex} logging category, containing
+    some information that may be useful for debugging the failure.
+
+    \note This function is a debugging helper for implementing your own item
+    models. When developing complex models, as well as when building
+    complicated model hierarchies (e.g. using proxy models), it is useful to
+    call this function in order to catch bugs relative to illegal model indices
+    (as defined above) accidentally passed to some QAbstractItemModel API.
+
+    \warning Note that it's undefined behavior to pass illegal indices to item
+    models, so applications must refrain from doing so, and not rely on any
+    "defensive" programming that item models could employ to handle illegal
+    indexes gracefully.
+
+    \sa QModelIndex
+*/
+bool QAbstractItemModel::checkIndex(const QModelIndex &index, CheckIndexOptions options) const
+{
+    if (!index.isValid()) {
+        if (options & CheckIndexOption::IndexIsValid) {
+            qCWarning(lcCheckIndex) << "Index" << index << "is not valid (expected valid)";
+            return false;
+        }
+        return true;
+    }
+
+    if (index.model() != this) {
+        qCWarning(lcCheckIndex) << "Index" << index
+                                << "is for model" << index.model()
+                                << "which is different from this model" << this;
+        return false;
+    }
+
+    if (index.row() < 0) {
+        qCWarning(lcCheckIndex) << "Index" << index
+                                << "has negative row" << index.row();
+        return false;
+    }
+
+    if (index.column() < 0) {
+        qCWarning(lcCheckIndex) << "Index" << index
+                                << "has negative column" << index.column();
+        return false;
+    }
+
+    if (!(options & CheckIndexOption::DoNotUseParent)) {
+        const QModelIndex parentIndex = index.parent();
+        if (options & CheckIndexOption::ParentIsInvalid) {
+            if (parentIndex.isValid()) {
+                qCWarning(lcCheckIndex) << "Index" << index
+                                        << "has valid parent" << parentIndex
+                                        << "(expected an invalid parent)";
+                return false;
+            }
+        }
+
+        const int rc = rowCount(parentIndex);
+        if (index.row() >= rc) {
+            qCWarning(lcCheckIndex) << "Index" << index
+                                    << "has out of range row" << index.row()
+                                    << "rowCount() is" << rc;
+            return false;
+        }
+
+        const int cc = columnCount(parentIndex);
+        if (index.column() >= cc) {
+            qCWarning(lcCheckIndex) << "Index" << index
+                                    << "has out of range column" << index.column()
+                                    << "columnCount() is" << cc;
+            return false;
+
+        }
+    }
+
+    return true;
+}
 
 /*!
     \class QAbstractTableModel
@@ -3264,11 +3613,30 @@ QModelIndex QAbstractTableModel::parent(const QModelIndex &) const
     return QModelIndex();
 }
 
+/*!
+    \reimp
+*/
+QModelIndex QAbstractTableModel::sibling(int row, int column, const QModelIndex &) const
+{
+    return index(row, column);
+}
+
 bool QAbstractTableModel::hasChildren(const QModelIndex &parent) const
 {
     if (parent.model() == this || !parent.isValid())
         return rowCount(parent) > 0 && columnCount(parent) > 0;
     return false;
+}
+
+/*!
+    \reimp
+ */
+Qt::ItemFlags QAbstractTableModel::flags(const QModelIndex &index) const
+{
+    Qt::ItemFlags f = QAbstractItemModel::flags(index);
+    if (index.isValid())
+        f |= Qt::ItemNeverHasChildren;
+    return f;
 }
 
 /*!
@@ -3287,7 +3655,7 @@ bool QAbstractTableModel::hasChildren(const QModelIndex &parent) const
     QAbstractItemModel, it is not suitable for use with tree views; you will
     need to subclass QAbstractItemModel if you want to provide a model for
     that purpose. If you need to use a number of list models to manage data,
-    it may be more appropriate to subclass QAbstractTableModel class instead.
+    it may be more appropriate to subclass QAbstractTableModel instead.
 
     Simple models can be created by subclassing this class and implementing
     the minimum number of required functions. For example, we could implement
@@ -3307,8 +3675,11 @@ bool QAbstractTableModel::hasChildren(const QModelIndex &parent) const
     of the rowCount() and data() functions. Well behaved models also provide
     a headerData() implementation.
 
+    If your model is used within QML and requires roles other than the
+    default ones provided by the roleNames() function, you must override it.
+
     For editable list models, you must also provide an implementation of
-    setData(), implement the flags() function so that it returns a value
+    setData(), and implement the flags() function so that it returns a value
     containing \l{Qt::ItemFlags}{Qt::ItemIsEditable}.
 
     Note that QAbstractListModel provides a default implementation of
@@ -3389,6 +3760,25 @@ QModelIndex QAbstractListModel::index(int row, int column, const QModelIndex &pa
 QModelIndex QAbstractListModel::parent(const QModelIndex & /* index */) const
 {
     return QModelIndex();
+}
+
+/*!
+    \reimp
+*/
+QModelIndex QAbstractListModel::sibling(int row, int column, const QModelIndex &) const
+{
+    return index(row, column);
+}
+
+/*!
+    \reimp
+ */
+Qt::ItemFlags QAbstractListModel::flags(const QModelIndex &index) const
+{
+    Qt::ItemFlags f = QAbstractItemModel::flags(index);
+    if (index.isValid())
+        f |= Qt::ItemNeverHasChildren;
+    return f;
 }
 
 /*!
@@ -3524,7 +3914,7 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
     \fn QAbstractItemModel::modelAboutToBeReset()
     \since 4.2
 
-    This signal is emitted when reset() is called, before the model's internal
+    This signal is emitted when beginResetModel() is called, before the model's internal
     state (e.g. persistent model indexes) has been invalidated.
 
     \sa beginResetModel(), modelReset()
@@ -3534,7 +3924,7 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
     \fn QAbstractItemModel::modelReset()
     \since 4.1
 
-    This signal is emitted when reset() or endResetModel() is called, after the
+    This signal is emitted when endResetModel() is called, after the
     model's internal state (e.g. persistent model indexes) has been invalidated.
 
     Note that if a model is reset it should be considered that all information
@@ -3549,8 +3939,8 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
     \fn bool QModelIndex::operator<(const QModelIndex &other) const
     \since 4.1
 
-    Returns true if this model index is smaller than the \a other
-    model index; otherwise returns false.
+    Returns \c{true} if this model index is smaller than the \a other
+    model index; otherwise returns \c{false}.
 
     The less than calculation is not directly useful to developers - the way that indexes
     with different parents compare is not defined. This operator only exists so that the
@@ -3590,3 +3980,5 @@ void QAbstractItemModelPrivate::Persistent::insertMultiAtEnd(const QModelIndex& 
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qabstractitemmodel.cpp"

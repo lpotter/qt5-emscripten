@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,14 +41,14 @@
 #include "qwindowsmime.h"
 #include "qwindowscontext.h"
 \
-#include <QtGui/QMouseEvent>
-#include <QtGui/QWindow>
-#include <QtGui/QPainter>
-#include <QtGui/QCursor>
-#include <QtGui/QGuiApplication>
+#include <QtGui/qevent.h>
+#include <QtGui/qwindow.h>
+#include <QtGui/qpainter.h>
+#include <QtGui/qcursor.h>
+#include <QtGui/qguiapplication.h>
 
-#include <QtCore/QMimeData>
-#include <QtCore/QDebug>
+#include <QtCore/qmimedata.h>
+#include <QtCore/qdebug.h>
 
 #include <shlobj.h>
 
@@ -76,19 +74,13 @@ QT_BEGIN_NAMESPACE
 */
 
 QWindowsOleDataObject::QWindowsOleDataObject(QMimeData *mimeData) :
-    m_refs(1), data(mimeData),
-    CF_PERFORMEDDROPEFFECT(RegisterClipboardFormat(CFSTR_PERFORMEDDROPEFFECT)),
-    performedEffect(DROPEFFECT_NONE)
+    data(mimeData),
+    CF_PERFORMEDDROPEFFECT(RegisterClipboardFormat(CFSTR_PERFORMEDDROPEFFECT))
 {
-    if (QWindowsContext::verboseOLE)
-        qDebug("%s '%s'", __FUNCTION__, qPrintable(mimeData->formats().join(QStringLiteral(", "))));
+    qCDebug(lcQpaMime) << __FUNCTION__ << mimeData->formats();
 }
 
-QWindowsOleDataObject::~QWindowsOleDataObject()
-{
-    if (QWindowsContext::verboseOLE)
-        qDebug("%s", __FUNCTION__);
-}
+QWindowsOleDataObject::~QWindowsOleDataObject() = default;
 
 void QWindowsOleDataObject::releaseQt()
 {
@@ -105,49 +97,10 @@ DWORD QWindowsOleDataObject::reportedPerformedEffect() const
     return performedEffect;
 }
 
-//---------------------------------------------------------------------
-//                    IUnknown Methods
-//---------------------------------------------------------------------
-
-STDMETHODIMP
-QWindowsOleDataObject::QueryInterface(REFIID iid, void FAR* FAR* ppv)
-{
-    if (iid == IID_IUnknown || iid == IID_IDataObject) {
-        *ppv = this;
-        AddRef();
-        return NOERROR;
-    }
-    *ppv = NULL;
-    return ResultFromScode(E_NOINTERFACE);
-}
-
-STDMETHODIMP_(ULONG)
-QWindowsOleDataObject::AddRef(void)
-{
-    return ++m_refs;
-}
-
-STDMETHODIMP_(ULONG)
-QWindowsOleDataObject::Release(void)
-{
-    if (--m_refs == 0) {
-        releaseQt();
-        delete this;
-        return 0;
-    }
-    return m_refs;
-}
-
 STDMETHODIMP
 QWindowsOleDataObject::GetData(LPFORMATETC pformatetc, LPSTGMEDIUM pmedium)
 {
     HRESULT hr = ResultFromScode(DATA_E_FORMATETC);
-
-    if (QWindowsContext::verboseOLE) {
-        wchar_t buf[256] = {0};
-        GetClipboardFormatName(pformatetc->cfFormat, buf, 255);
-        qDebug("%s CF = %d : %s", __FUNCTION__, pformatetc->cfFormat, qPrintable(QString::fromWCharArray(buf)));
-    }
 
     if (data) {
         const QWindowsMimeConverter &mc = QWindowsContext::instance()->mimeConverter();
@@ -156,12 +109,8 @@ QWindowsOleDataObject::GetData(LPFORMATETC pformatetc, LPSTGMEDIUM pmedium)
                 hr = ResultFromScode(S_OK);
     }
 
-    if (QWindowsContext::verboseOLE) {
-        wchar_t buf[256] = {0};
-        GetClipboardFormatName(pformatetc->cfFormat, buf, 255);
-        qDebug("%s CF = %d : %s returns 0x%x", __FUNCTION__, pformatetc->cfFormat,
-               qPrintable(QString::fromWCharArray(buf)), int(hr));
-    }
+    if (QWindowsContext::verbose > 1 && lcQpaMime().isDebugEnabled())
+        qCDebug(lcQpaMime) <<__FUNCTION__ << *pformatetc << "returns" << hex << showbase << quint64(hr);
 
     return hr;
 }
@@ -177,16 +126,16 @@ QWindowsOleDataObject::QueryGetData(LPFORMATETC pformatetc)
 {
     HRESULT hr = ResultFromScode(DATA_E_FORMATETC);
 
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s", __FUNCTION__);
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) << __FUNCTION__;
 
     if (data) {
         const QWindowsMimeConverter &mc = QWindowsContext::instance()->mimeConverter();
         hr = mc.converterFromMime(*pformatetc, data) ?
              ResultFromScode(S_OK) : ResultFromScode(S_FALSE);
     }
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s returns 0x%x", __FUNCTION__, int(hr));
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) <<  __FUNCTION__ << " returns 0x" << hex << int(hr);
     return hr;
 }
 
@@ -200,8 +149,8 @@ QWindowsOleDataObject::GetCanonicalFormatEtc(LPFORMATETC, LPFORMATETC pformatetc
 STDMETHODIMP
 QWindowsOleDataObject::SetData(LPFORMATETC pFormatetc, STGMEDIUM *pMedium, BOOL fRelease)
 {
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s", __FUNCTION__);
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) << __FUNCTION__;
 
     HRESULT hr = ResultFromScode(E_NOTIMPL);
 
@@ -213,8 +162,8 @@ QWindowsOleDataObject::SetData(LPFORMATETC pFormatetc, STGMEDIUM *pMedium, BOOL 
             ReleaseStgMedium(pMedium);
         hr = ResultFromScode(S_OK);
     }
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s returns 0x%x", __FUNCTION__, int(hr));
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) <<  __FUNCTION__ << " returns 0x" << hex << int(hr);
     return hr;
 }
 
@@ -222,8 +171,8 @@ QWindowsOleDataObject::SetData(LPFORMATETC pFormatetc, STGMEDIUM *pMedium, BOOL 
 STDMETHODIMP
 QWindowsOleDataObject::EnumFormatEtc(DWORD dwDirection, LPENUMFORMATETC FAR* ppenumFormatEtc)
 {
-     if (QWindowsContext::verboseOLE > 1)
-         qDebug("%s", __FUNCTION__);
+     if (QWindowsContext::verbose > 1)
+         qCDebug(lcQpaMime) << __FUNCTION__ << "dwDirection=" << dwDirection;
 
     if (!data)
         return ResultFromScode(DATA_E_FORMATETC);
@@ -236,7 +185,7 @@ QWindowsOleDataObject::EnumFormatEtc(DWORD dwDirection, LPENUMFORMATETC FAR* ppe
         fmtetcs = mc.allFormatsForMime(data);
     } else {
         FORMATETC formatetc;
-        formatetc.cfFormat = CF_PERFORMEDDROPEFFECT;
+        formatetc.cfFormat = CLIPFORMAT(CF_PERFORMEDDROPEFFECT);
         formatetc.dwAspect = DVASPECT_CONTENT;
         formatetc.lindex = -1;
         formatetc.ptd = NULL;
@@ -282,15 +231,14 @@ QWindowsOleDataObject::EnumDAdvise(LPENUMSTATDATA FAR*)
     \ingroup qt-lighthouse-win
 */
 
-QWindowsOleEnumFmtEtc::QWindowsOleEnumFmtEtc(const QVector<FORMATETC> &fmtetcs) :
-    m_dwRefs(1), m_nIndex(0), m_isNull(false)
+QWindowsOleEnumFmtEtc::QWindowsOleEnumFmtEtc(const QVector<FORMATETC> &fmtetcs)
 {
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s", __FUNCTION__);
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) << __FUNCTION__ << fmtetcs;
     m_lpfmtetcs.reserve(fmtetcs.count());
     for (int idx = 0; idx < fmtetcs.count(); ++idx) {
         LPFORMATETC destetc = new FORMATETC();
-        if (copyFormatEtc(destetc, (LPFORMATETC)&(fmtetcs.at(idx)))) {
+        if (copyFormatEtc(destetc, &(fmtetcs.at(idx)))) {
             m_lpfmtetcs.append(destetc);
         } else {
             m_isNull = true;
@@ -300,11 +248,10 @@ QWindowsOleEnumFmtEtc::QWindowsOleEnumFmtEtc(const QVector<FORMATETC> &fmtetcs) 
     }
 }
 
-QWindowsOleEnumFmtEtc::QWindowsOleEnumFmtEtc(const QVector<LPFORMATETC> &lpfmtetcs) :
-    m_dwRefs(1), m_nIndex(0), m_isNull(false)
+QWindowsOleEnumFmtEtc::QWindowsOleEnumFmtEtc(const QVector<LPFORMATETC> &lpfmtetcs)
 {
-    if (QWindowsContext::verboseOLE > 1)
-        qDebug("%s", __FUNCTION__);
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaMime) << __FUNCTION__;
     m_lpfmtetcs.reserve(lpfmtetcs.count());
     for (int idx = 0; idx < lpfmtetcs.count(); ++idx) {
         LPFORMATETC srcetc = lpfmtetcs.at(idx);
@@ -341,35 +288,6 @@ bool QWindowsOleEnumFmtEtc::isNull() const
     return m_isNull;
 }
 
-// IUnknown methods
-STDMETHODIMP
-QWindowsOleEnumFmtEtc::QueryInterface(REFIID riid, void FAR* FAR* ppvObj)
-{
-    if (riid == IID_IUnknown || riid == IID_IEnumFORMATETC) {
-        *ppvObj = this;
-        AddRef();
-        return NOERROR;
-    }
-    *ppvObj = NULL;
-    return ResultFromScode(E_NOINTERFACE);
-}
-
-STDMETHODIMP_(ULONG)
-QWindowsOleEnumFmtEtc::AddRef(void)
-{
-    return ++m_dwRefs;
-}
-
-STDMETHODIMP_(ULONG)
-QWindowsOleEnumFmtEtc::Release(void)
-{
-    if (--m_dwRefs == 0) {
-        delete this;
-        return 0;
-    }
-    return m_dwRefs;
-}
-
 // IEnumFORMATETC methods
 STDMETHODIMP
 QWindowsOleEnumFmtEtc::Next(ULONG celt, LPFORMATETC rgelt, ULONG FAR* pceltFetched)
@@ -384,14 +302,14 @@ QWindowsOleEnumFmtEtc::Next(ULONG celt, LPFORMATETC rgelt, ULONG FAR* pceltFetch
         nOffset = m_nIndex + i;
 
         if (nOffset < ULONG(m_lpfmtetcs.count())) {
-            copyFormatEtc((LPFORMATETC)&(rgelt[i]), m_lpfmtetcs.at(nOffset));
+            copyFormatEtc(rgelt + i, m_lpfmtetcs.at(int(nOffset)));
             i++;
         } else {
             break;
         }
     }
 
-    m_nIndex += (WORD)i;
+    m_nIndex += i;
 
     if (pceltFetched != NULL)
         *pceltFetched = i;
@@ -418,7 +336,7 @@ QWindowsOleEnumFmtEtc::Skip(ULONG celt)
         }
     }
 
-    m_nIndex += (WORD)i;
+    m_nIndex += i;
 
     if (i != celt)
         return ResultFromScode(S_FALSE);
@@ -445,14 +363,13 @@ QWindowsOleEnumFmtEtc::Clone(LPENUMFORMATETC FAR* newEnum)
     if (result->isNull()) {
         delete result;
         return ResultFromScode(E_OUTOFMEMORY);
-    } else {
-        *newEnum = result;
     }
 
+    *newEnum = result;
     return NOERROR;
 }
 
-bool QWindowsOleEnumFmtEtc::copyFormatEtc(LPFORMATETC dest, LPFORMATETC src) const
+bool QWindowsOleEnumFmtEtc::copyFormatEtc(LPFORMATETC dest, const FORMATETC *src) const
 {
     if (dest == NULL || src == NULL)
         return false;

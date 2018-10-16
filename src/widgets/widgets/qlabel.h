@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,9 +40,10 @@
 #ifndef QLABEL_H
 #define QLABEL_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qframe.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(label);
 
 QT_BEGIN_NAMESPACE
 
@@ -68,8 +67,8 @@ class Q_WIDGETS_EXPORT QLabel : public QFrame
     Q_PROPERTY(QString selectedText READ selectedText)
 
 public:
-    explicit QLabel(QWidget *parent=0, Qt::WindowFlags f=0);
-    explicit QLabel(const QString &text, QWidget *parent=0, Qt::WindowFlags f=0);
+    explicit QLabel(QWidget *parent=nullptr, Qt::WindowFlags f=Qt::WindowFlags());
+    explicit QLabel(const QString &text, QWidget *parent=nullptr, Qt::WindowFlags f=Qt::WindowFlags());
     ~QLabel();
 
     QString text() const;
@@ -77,7 +76,7 @@ public:
 #ifndef QT_NO_PICTURE
     const QPicture *picture() const;
 #endif
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     QMovie *movie() const;
 #endif
 
@@ -98,13 +97,13 @@ public:
 
     bool hasScaledContents() const;
     void setScaledContents(bool);
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 #ifndef QT_NO_SHORTCUT
     void setBuddy(QWidget *);
     QWidget *buddy() const;
 #endif
-    int heightForWidth(int) const;
+    int heightForWidth(int) const override;
 
     bool openExternalLinks() const;
     void setOpenExternalLinks(bool open);
@@ -123,7 +122,7 @@ public Q_SLOTS:
 #ifndef QT_NO_PICTURE
     void setPicture(const QPicture &);
 #endif
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     void setMovie(QMovie *movie);
 #endif
     void setNum(int);
@@ -135,35 +134,38 @@ Q_SIGNALS:
     void linkHovered(const QString& link);
 
 protected:
-    bool event(QEvent *e);
-    void keyPressEvent(QKeyEvent *ev);
-    void paintEvent(QPaintEvent *);
-    void changeEvent(QEvent *);
-    void mousePressEvent(QMouseEvent *ev);
-    void mouseMoveEvent(QMouseEvent *ev);
-    void mouseReleaseEvent(QMouseEvent *ev);
-    void contextMenuEvent(QContextMenuEvent *ev);
-    void focusInEvent(QFocusEvent *ev);
-    void focusOutEvent(QFocusEvent *ev);
-    bool focusNextPrevChild(bool next);
+    bool event(QEvent *e) override;
+    void keyPressEvent(QKeyEvent *ev) override;
+    void paintEvent(QPaintEvent *) override;
+    void changeEvent(QEvent *) override;
+    void mousePressEvent(QMouseEvent *ev) override;
+    void mouseMoveEvent(QMouseEvent *ev) override;
+    void mouseReleaseEvent(QMouseEvent *ev) override;
+#ifndef QT_NO_CONTEXTMENU
+    void contextMenuEvent(QContextMenuEvent *ev) override;
+#endif // QT_NO_CONTEXTMENU
+    void focusInEvent(QFocusEvent *ev) override;
+    void focusOutEvent(QFocusEvent *ev) override;
+    bool focusNextPrevChild(bool next) override;
 
 
 private:
     Q_DISABLE_COPY(QLabel)
     Q_DECLARE_PRIVATE(QLabel)
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     Q_PRIVATE_SLOT(d_func(), void _q_movieUpdated(const QRect&))
     Q_PRIVATE_SLOT(d_func(), void _q_movieResized(const QSize&))
 #endif
     Q_PRIVATE_SLOT(d_func(), void _q_linkHovered(const QString &))
 
+#ifndef QT_NO_SHORTCUT
+    Q_PRIVATE_SLOT(d_func(), void _q_buddyDeleted())
+#endif
     friend class QTipLabel;
     friend class QMessageBoxPrivate;
     friend class QBalloonTip;
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLABEL_H

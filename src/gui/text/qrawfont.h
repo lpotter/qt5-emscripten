@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QRAWFONT_H
 #define QRAWFONT_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qiodevice.h>
 #include <QtCore/qglobal.h>
@@ -52,8 +51,6 @@
 #include <QtGui/qfontdatabase.h>
 
 #if !defined(QT_NO_RAWFONT)
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -67,6 +64,13 @@ public:
         SubPixelAntialiasing
     };
 
+    enum LayoutFlag {
+        SeparateAdvances = 0,
+        KernedAdvances = 1,
+        UseDesignMetrics = 2
+    };
+    Q_DECLARE_FLAGS(LayoutFlags, LayoutFlag)
+
     QRawFont();
     QRawFont(const QString &fileName,
              qreal pixelSize,
@@ -75,13 +79,15 @@ public:
              qreal pixelSize,
              QFont::HintingPreference hintingPreference = QFont::PreferDefaultHinting);
     QRawFont(const QRawFont &other);
+#ifdef Q_COMPILER_RVALUE_REFS
+    QRawFont &operator=(QRawFont &&other) Q_DECL_NOTHROW { swap(other); return *this; }
+#endif
+    QRawFont &operator=(const QRawFont &other);
     ~QRawFont();
 
+    void swap(QRawFont &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
+
     bool isValid() const;
-
-    QRawFont &operator=(const QRawFont &other);
-
-    void swap(QRawFont &other) { qSwap(d, other.d); }
 
     bool operator==(const QRawFont &other) const;
     inline bool operator!=(const QRawFont &other) const
@@ -95,8 +101,10 @@ public:
 
     QVector<quint32> glyphIndexesForString(const QString &text) const;
     inline QVector<QPointF> advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes) const;
+    inline QVector<QPointF> advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes, LayoutFlags layoutFlags) const;
     bool glyphIndexesForChars(const QChar *chars, int numChars, quint32 *glyphIndexes, int *numGlyphs) const;
     bool advancesForGlyphIndexes(const quint32 *glyphIndexes, QPointF *advances, int numGlyphs) const;
+    bool advancesForGlyphIndexes(const quint32 *glyphIndexes, QPointF *advances, int numGlyphs, LayoutFlags layoutFlags) const;
 
     QImage alphaMapForGlyph(quint32 glyphIndex,
                             AntialiasingType antialiasingType = SubPixelAntialiasing,
@@ -110,6 +118,7 @@ public:
     QFont::HintingPreference hintingPreference() const;
 
     qreal ascent() const;
+    qreal capHeight() const;
     qreal descent() const;
     qreal leading() const;
     qreal xHeight() const;
@@ -147,17 +156,24 @@ private:
 
 Q_DECLARE_SHARED(QRawFont)
 
-inline QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes) const
+Q_DECLARE_OPERATORS_FOR_FLAGS(QRawFont::LayoutFlags)
+
+Q_GUI_EXPORT uint qHash(const QRawFont &font, uint seed = 0) Q_DECL_NOTHROW;
+
+inline QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes, QRawFont::LayoutFlags layoutFlags) const
 {
     QVector<QPointF> advances(glyphIndexes.size());
-    if (advancesForGlyphIndexes(glyphIndexes.constData(), advances.data(), glyphIndexes.size()))
+    if (advancesForGlyphIndexes(glyphIndexes.constData(), advances.data(), glyphIndexes.size(), layoutFlags))
         return advances;
     return QVector<QPointF>();
 }
 
-QT_END_NAMESPACE
+inline QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes) const
+{
+    return advancesForGlyphIndexes(glyphIndexes, QRawFont::SeparateAdvances);
+}
 
-QT_END_HEADER
+QT_END_NAMESPACE
 
 #endif // QT_NO_RAWFONT
 

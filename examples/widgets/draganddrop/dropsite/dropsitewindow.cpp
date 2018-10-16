@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -55,8 +65,8 @@ DropSiteWindow::DropSiteWindow()
 
 //! [constructor part2]
     dropArea = new DropArea;
-    connect(dropArea, SIGNAL(changed(const QMimeData*)),
-            this, SLOT(updateFormatsTable(const QMimeData*)));
+    connect(dropArea, &DropArea::changed,
+            this, &DropSiteWindow::updateFormatsTable);
 //! [constructor part2]
 
 //! [constructor part3]
@@ -78,17 +88,16 @@ DropSiteWindow::DropSiteWindow()
     buttonBox->addButton(clearButton, QDialogButtonBox::ActionRole);
     buttonBox->addButton(quitButton, QDialogButtonBox::RejectRole);
 
-    connect(quitButton, SIGNAL(pressed()), this, SLOT(close()));
-    connect(clearButton, SIGNAL(pressed()), dropArea, SLOT(clear()));
+    connect(quitButton, &QAbstractButton::clicked, this, &QWidget::close);
+    connect(clearButton, &QAbstractButton::clicked, dropArea, &DropArea::clear);
 //! [constructor part4]
 
 //! [constructor part5]
-    QVBoxLayout *mainLayout = new QVBoxLayout;
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(abstractLabel);
     mainLayout->addWidget(dropArea);
     mainLayout->addWidget(formatsTable);
     mainLayout->addWidget(buttonBox);
-    setLayout(mainLayout);
 
     setWindowTitle(tr("Drop Site"));
     setMinimumSize(350, 500);
@@ -103,8 +112,8 @@ void DropSiteWindow::updateFormatsTable(const QMimeData *mimeData)
         return;
 //! [updateFormatsTable() part1]
 
-//! [updateFormatsTable() part2]        
-    foreach (QString format, mimeData->formats()) {
+//! [updateFormatsTable() part2]
+    for (const QString &format : mimeData->formats()) {
         QTableWidgetItem *formatItem = new QTableWidgetItem(format);
         formatItem->setFlags(Qt::ItemIsEnabled);
         formatItem->setTextAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -112,24 +121,20 @@ void DropSiteWindow::updateFormatsTable(const QMimeData *mimeData)
 
 //! [updateFormatsTable() part3]
         QString text;
-        if (format == "text/plain") {
+        if (format == QLatin1String("text/plain")) {
             text = mimeData->text().simplified();
-        } else if (format == "text/html") {
+        } else if (format == QLatin1String("text/html")) {
             text = mimeData->html().simplified();
-        } else if (format == "text/uri-list") {
+        } else if (format == QLatin1String("text/uri-list")) {
             QList<QUrl> urlList = mimeData->urls();
             for (int i = 0; i < urlList.size() && i < 32; ++i)
-                text.append(urlList[i].toString() + " ");
+                text.append(urlList.at(i).toString() + QLatin1Char(' '));
         } else {
             QByteArray data = mimeData->data(format);
-            for (int i = 0; i < data.size() && i < 32; ++i) {
-                QString hex = QString("%1").arg(uchar(data[i]), 2, 16,
-                                                QChar('0'))
-                                           .toUpper();
-                text.append(hex + " ");
-            }
+            for (int i = 0; i < data.size() && i < 32; ++i)
+                text.append(QStringLiteral("%1 ").arg(uchar(data[i]), 2, 16, QLatin1Char('0')).toUpper());
         }
-//! [updateFormatsTable() part3]   
+//! [updateFormatsTable() part3]
 
 //! [updateFormatsTable() part4]
         int row = formatsTable->rowCount();
@@ -137,7 +142,7 @@ void DropSiteWindow::updateFormatsTable(const QMimeData *mimeData)
         formatsTable->setItem(row, 0, new QTableWidgetItem(format));
         formatsTable->setItem(row, 1, new QTableWidgetItem(text));
     }
-    
+
     formatsTable->resizeColumnToContents(0);
 }
-//! [updateFormatsTable() part4] 
+//! [updateFormatsTable() part4]

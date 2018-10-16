@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +43,7 @@
 #include <private/qdatabuffer_p.h>
 #include <private/qnumeric_p.h>
 #include <qmath.h>
+#include <algorithm>
 
 /**
   The algorithm is as follows:
@@ -259,8 +258,6 @@ class SegmentTree
 public:
     SegmentTree(QPathSegments &segments);
 
-    QRectF boundingRect() const;
-
     void produceIntersections(int segment);
 
 private:
@@ -309,12 +306,6 @@ SegmentTree::SegmentTree(QPathSegments &segments)
 
     TreeNode root = buildTree(0, m_index.size(), 0, m_bounds);
     m_tree[0] = root;
-}
-
-QRectF SegmentTree::boundingRect() const
-{
-    return QRectF(QPointF(m_bounds.x1, m_bounds.y1),
-                  QPointF(m_bounds.x2, m_bounds.y2));
 }
 
 static inline qreal coordinate(const QPointF &pos, int axis)
@@ -555,10 +546,10 @@ void SegmentTree::produceIntersectionsLeaf(const TreeNode &node, int segment)
 
         for (int k = 0; k < m_intersections.size(); ++k) {
             QPathSegments::Intersection i_isect, j_isect;
-            i_isect.vertex = j_isect.vertex = m_segments.addPoint(m_intersections.at(k).pos);
-
             i_isect.t = m_intersections.at(k).alphaA;
             j_isect.t = m_intersections.at(k).alphaB;
+
+            i_isect.vertex = j_isect.vertex = m_segments.addPoint(m_intersections.at(k).pos);
 
             i_isect.next = 0;
             j_isect.next = 0;
@@ -713,8 +704,7 @@ class QKdPointFinder
 {
 public:
     QKdPointFinder(int point, const QPathSegments &segments, QKdPointTree &tree)
-        : m_point(point)
-        , m_result(-1)
+        : m_result(-1)
         , m_segments(&segments)
         , m_tree(&tree)
     {
@@ -759,7 +749,6 @@ public:
     }
 
 private:
-    int m_point;
     qreal pointComponents[2];
     int m_result;
     const QPathSegments *m_segments;
@@ -826,7 +815,7 @@ void QWingedEdge::intersectAndAdd()
             }
         }
 
-        qSort(intersections.data(), intersections.data() + intersections.size());
+        std::sort(intersections.data(), intersections.data() + intersections.size());
 
         int first = m_segments.segmentAt(i).va;
         int second = m_segments.segmentAt(i).vb;
@@ -1036,16 +1025,6 @@ qreal QWingedEdge::delta(int vertex, int a, int b) const
         return result + 128.;
     else
         return result;
-}
-
-static inline QPointF midPoint(const QWingedEdge &list, int ei)
-{
-    const QPathEdge *ep = list.edge(ei);
-    Q_ASSERT(ep);
-
-    const QPointF a = *list.vertex(ep->first);
-    const QPointF b = *list.vertex(ep->second);
-    return a + 0.5 * (b - a);
 }
 
 QWingedEdge::TraversalStatus QWingedEdge::findInsertStatus(int vi, int ei) const
@@ -1479,25 +1458,6 @@ QPathClipper::QPathClipper(const QPainterPath &subject,
     bMask = clipPath.fillRule() == Qt::WindingFill ? ~0x0 : 0x1;
 }
 
-template <typename Iterator, typename Equality>
-Iterator qRemoveDuplicates(Iterator begin, Iterator end, Equality eq)
-{
-    if (begin == end)
-        return end;
-
-    Iterator last = begin;
-    ++begin;
-    Iterator insert = begin;
-    for (Iterator it = begin; it != end; ++it) {
-        if (!eq(*it, *last)) {
-            *insert++ = *it;
-            last = it;
-        }
-    }
-
-    return insert;
-}
-
 static void clear(QWingedEdge& list, int edge, QPathEdge::Traversal traversal)
 {
     QWingedEdge::TraversalStatus status;
@@ -1663,13 +1623,13 @@ bool QPathClipper::doClip(QWingedEdge &list, ClipperMode mode)
     for (int i = 0; i < list.vertexCount(); ++i)
         y_coords << list.vertex(i)->y;
 
-    qSort(y_coords.begin(), y_coords.end());
-    y_coords.resize(qRemoveDuplicates(y_coords.begin(), y_coords.end(), fuzzyCompare) - y_coords.begin());
+    std::sort(y_coords.begin(), y_coords.end());
+    y_coords.erase(std::unique(y_coords.begin(), y_coords.end(), fuzzyCompare), y_coords.end());
 
 #ifdef QDEBUG_CLIPPER
     printf("sorted y coords:\n");
     for (int i = 0; i < y_coords.size(); ++i) {
-        printf("%.9f\n", y_coords[i]);
+        printf("%.9f\n", y_coords.at(i));
     }
 #endif
 
@@ -1707,23 +1667,23 @@ bool QPathClipper::doClip(QWingedEdge &list, ClipperMode mode)
             QPathVertex *b = list.vertex(edge->second);
 
             // FIXME: this can be optimized by using binary search
-            const int first = qFuzzyFind(y_coords.begin(), y_coords.end(), qMin(a->y, b->y)) - y_coords.begin();
-            const int last = qFuzzyFind(y_coords.begin() + first, y_coords.end(), qMax(a->y, b->y)) - y_coords.begin();
+            const int first = qFuzzyFind(y_coords.cbegin(), y_coords.cend(), qMin(a->y, b->y)) - y_coords.cbegin();
+            const int last = qFuzzyFind(y_coords.cbegin() + first, y_coords.cend(), qMax(a->y, b->y)) - y_coords.cbegin();
 
             Q_ASSERT(first < y_coords.size() - 1);
             Q_ASSERT(last < y_coords.size());
 
-            qreal bestY = 0.5 * (y_coords[first] + y_coords[first+1]);
-            qreal biggestGap = y_coords[first+1] - y_coords[first];
-
+            qreal biggestGap = y_coords.at(first + 1) - y_coords.at(first);
+            int bestIdx = first;
             for (int i = first + 1; i < last; ++i) {
-                qreal gap = y_coords[i+1] - y_coords[i];
+                qreal gap = y_coords.at(i + 1) - y_coords.at(i);
 
                 if (gap > biggestGap) {
-                    bestY = 0.5 * (y_coords[i] + y_coords[i+1]);
+                    bestIdx = i;
                     biggestGap = gap;
                 }
             }
+            const qreal bestY = 0.5 * (y_coords.at(bestIdx) + y_coords.at(bestIdx + 1));
 
 #ifdef QDEBUG_CLIPPER
             printf("y: %.9f, gap: %.9f\n", bestY, biggestGap);
@@ -1774,13 +1734,14 @@ struct QCrossingEdge
         return x < edge.x;
     }
 };
+Q_DECLARE_TYPEINFO(QCrossingEdge, Q_PRIMITIVE_TYPE);
 
 static bool bool_op(bool a, bool b, QPathClipper::Operation op)
 {
     switch (op) {
     case QPathClipper::BoolAnd:
         return a && b;
-    case QPathClipper::BoolOr: // fall-through
+    case QPathClipper::BoolOr:
     case QPathClipper::Simplify:
         return a || b;
     case QPathClipper::BoolSub:
@@ -1839,7 +1800,7 @@ bool QPathClipper::handleCrossingEdges(QWingedEdge &list, qreal y, ClipperMode m
     QVector<QCrossingEdge> crossings = findCrossings(list, y);
 
     Q_ASSERT(!crossings.isEmpty());
-    qSort(crossings.begin(), crossings.end());
+    std::sort(crossings.begin(), crossings.end());
 
     int windingA = 0;
     int windingB = 0;
@@ -1908,10 +1869,10 @@ bool QPathClipper::handleCrossingEdges(QWingedEdge &list, qreal y, ClipperMode m
 
 namespace {
 
-QList<QPainterPath> toSubpaths(const QPainterPath &path)
+QVector<QPainterPath> toSubpaths(const QPainterPath &path)
 {
 
-    QList<QPainterPath> subpaths;
+    QVector<QPainterPath> subpaths;
     if (path.isEmpty())
         return subpaths;
 
@@ -1976,7 +1937,7 @@ QPointF intersectLine(const QPointF &a, const QPointF &b, qreal t)
 {
     QLineF line(a, b);
     switch (edge) {
-    case Left: // fall-through
+    case Left:
     case Right:
         return line.pointAt((t - a.x()) / (b.x() - a.x()));
     default:
@@ -2111,7 +2072,7 @@ QPainterPath clip(const QPainterPath &path, qreal t)
 
 QPainterPath intersectPath(const QPainterPath &path, const QRectF &rect)
 {
-    QList<QPainterPath> subpaths = toSubpaths(path);
+    QVector<QPainterPath> subpaths = toSubpaths(path);
 
     QPainterPath result;
     result.setFillRule(path.fillRule());
@@ -2135,7 +2096,12 @@ QPainterPath intersectPath(const QPainterPath &path, const QRectF &rect)
                 result.addPath(subPath);
         }
     }
-    return result;
+    // The algorithm above might return one side of \a rect if there was no intersection,
+    // so only return intersections that are not empty rectangles.
+    if (result.boundingRect().isEmpty())
+        return QPainterPath();
+    else
+        return result;
 }
 
 }

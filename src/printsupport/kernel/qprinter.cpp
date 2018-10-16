@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,20 +46,18 @@
 #include <qpa/qplatformprintersupport.h>
 
 #include "qprintengine.h"
-#include "qprinterinfo.h"
 #include "qlist.h"
 #include <qcoreapplication.h>
 #include <qfileinfo.h>
 
 #include <private/qpagedpaintdevice_p.h>
 
-
-#ifndef QT_NO_PDF
 #include "qprintengine_pdf_p.h"
-#endif
 
 #include <qpicture.h>
+#if QT_CONFIG(printpreviewwidget)
 #include <private/qpaintengine_preview_p.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -71,39 +67,14 @@ QT_BEGIN_NAMESPACE
         return; \
     }
 
-// NB! This table needs to be in sync with QPrinter::PaperSize
-static const float qt_paperSizes[][2] = {
-    {210, 297}, // A4
-    {176, 250}, // B5
-    {215.9f, 279.4f}, // Letter
-    {215.9f, 355.6f}, // Legal
-    {190.5f, 254}, // Executive
-    {841, 1189}, // A0
-    {594, 841}, // A1
-    {420, 594}, // A2
-    {297, 420}, // A3
-    {148, 210}, // A5
-    {105, 148}, // A6
-    {74, 105}, // A7
-    {52, 74}, // A8
-    {37, 52}, // A8
-    {1000, 1414}, // B0
-    {707, 1000}, // B1
-    {31, 44}, // B10
-    {500, 707}, // B2
-    {353, 500}, // B3
-    {250, 353}, // B4
-    {125, 176}, // B6
-    {88, 125}, // B7
-    {62, 88}, // B8
-    {33, 62}, // B9
-    {163, 229}, // C5E
-    {105, 241}, // US Common
-    {110, 220}, // DLE
-    {210, 330}, // Folio
-    {431.8f, 279.4f}, // Ledger
-    {279.4f, 431.8f} // Tabloid
-};
+#define ABORT_IF_ACTIVE_RETURN(location, retValue) \
+    if (d->printEngine->printerState() == QPrinter::Active) { \
+        qWarning("%s: Cannot be changed while printer is active", location); \
+        return retValue; \
+    }
+
+extern qreal qt_pixelMultiplier(int resolution);
+extern QMarginsF qt_convertMargins(const QMarginsF &margins, QPageLayout::Unit fromUnits, QPageLayout::Unit toUnits);
 
 /// return the multiplier of converting from the unit value to postscript-points.
 Q_PRINTSUPPORT_EXPORT double qt_multiplierForUnit(QPrinter::Unit unit, int resolution)
@@ -133,33 +104,90 @@ Q_PRINTSUPPORT_EXPORT QSizeF qt_printerPaperSize(QPrinter::Orientation orientati
                            QPrinter::Unit unit,
                            int resolution)
 {
-    int width_index = 0;
-    int height_index = 1;
-    if (orientation == QPrinter::Landscape) {
-        width_index = 1;
-        height_index = 0;
-    }
-    const qreal multiplier = qt_multiplierForUnit(unit, resolution);
-    return QSizeF((qt_paperSizes[paperSize][width_index] * 72 / 25.4) / multiplier,
-                  (qt_paperSizes[paperSize][height_index] * 72 / 25.4) / multiplier);
+    QPageSize pageSize = QPageSize(QPageSize::PageSizeId(paperSize));
+    QSizeF sizef;
+    if (unit == QPrinter::DevicePixel)
+        sizef = pageSize.size(QPageSize::Point) * qt_multiplierForUnit(unit, resolution);
+    else
+        sizef = pageSize.size(QPageSize::Unit(unit));
+    return orientation == QPrinter::Landscape ? sizef.transposed() : sizef;
 }
 
-void QPrinterPrivate::createDefaultEngines()
+QPrinterInfo QPrinterPrivate::findValidPrinter(const QPrinterInfo &printer)
 {
-    QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
-    if (outputFormat == QPrinter::NativeFormat && ps) {
-        printEngine = ps->createNativePrintEngine(printerMode);
+    // Try find a valid printer to use, either the one given, the default or the first available
+    QPrinterInfo printerToUse = printer;
+    if (printerToUse.isNull()) {
+        printerToUse = QPrinterInfo::defaultPrinter();
+        if (printerToUse.isNull()) {
+            QStringList availablePrinterNames = QPrinterInfo::availablePrinterNames();
+            if (!availablePrinterNames.isEmpty())
+                printerToUse = QPrinterInfo::printerInfo(availablePrinterNames.at(0));
+        }
+    }
+    return printerToUse;
+}
+
+void QPrinterPrivate::initEngines(QPrinter::OutputFormat format, const QPrinterInfo &printer)
+{
+    // Default to PdfFormat
+    outputFormat = QPrinter::PdfFormat;
+    QPlatformPrinterSupport *ps = nullptr;
+    QString printerName;
+
+    // Only set NativeFormat if we have a valid plugin and printer to use
+    if (format == QPrinter::NativeFormat) {
+        ps = QPlatformPrinterSupportPlugin::get();
+        QPrinterInfo printerToUse = findValidPrinter(printer);
+        if (ps && !printerToUse.isNull()) {
+            outputFormat = QPrinter::NativeFormat;
+            printerName = printerToUse.printerName();
+        }
+    }
+
+    if (outputFormat == QPrinter::NativeFormat) {
+        printEngine = ps->createNativePrintEngine(printerMode, printerName);
         paintEngine = ps->createPaintEngine(printEngine, printerMode);
     } else {
-        QPdfPrintEngine *pdfEngine = new QPdfPrintEngine(printerMode);
+        const auto pdfEngineVersion = (pdfVersion == QPrinter::PdfVersion_1_4 ? QPdfEngine::Version_1_4 : QPdfEngine::Version_A1b);
+        QPdfPrintEngine *pdfEngine = new QPdfPrintEngine(printerMode, pdfEngineVersion);
         paintEngine = pdfEngine;
         printEngine = pdfEngine;
     }
+
     use_default_engine = true;
     had_default_engines = true;
+    validPrinter = true;
 }
 
-#ifndef QT_NO_PRINTPREVIEWWIDGET
+void QPrinterPrivate::changeEngines(QPrinter::OutputFormat format, const QPrinterInfo &printer)
+{
+    QPrintEngine *oldPrintEngine = printEngine;
+    const bool def_engine = use_default_engine;
+
+    initEngines(format, printer);
+
+    if (oldPrintEngine) {
+        const auto properties = m_properties; // take a copy: setProperty() below modifies m_properties
+        for (const auto &key : properties) {
+            QVariant prop;
+            // PPK_NumberOfCopies need special treatmeant since it in most cases
+            // will return 1, disregarding the actual value that was set
+            // PPK_PrinterName also needs special treatment as initEngines has set it already
+            if (key == QPrintEngine::PPK_NumberOfCopies)
+                prop = QVariant(q_ptr->copyCount());
+            else if (key != QPrintEngine::PPK_PrinterName)
+                prop = oldPrintEngine->property(key);
+            if (prop.isValid())
+                setProperty(key, prop);
+        }
+    }
+
+    if (def_engine)
+        delete oldPrintEngine;
+}
+
+#if QT_CONFIG(printpreviewwidget)
 QList<const QPicture *> QPrinterPrivate::previewPages() const
 {
     if (previewEngine)
@@ -184,15 +212,88 @@ void QPrinterPrivate::setPreviewMode(bool enable)
         use_default_engine = had_default_engines;
     }
 }
-#endif // QT_NO_PRINTPREVIEWWIDGET
+#endif // QT_CONFIG(printpreviewwidget)
 
-void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey key)
+void QPrinterPrivate::setProperty(QPrintEngine::PrintEnginePropertyKey key, const QVariant &value)
 {
-    for (int c = 0; c < manualSetList.size(); ++c) {
-        if (manualSetList[c] == key) return;
-    }
-    manualSetList.append(key);
+    printEngine->setProperty(key, value);
+    m_properties.insert(key);
 }
+
+
+class QPrinterPagedPaintDevicePrivate : public QPagedPaintDevicePrivate
+{
+public:
+    QPrinterPagedPaintDevicePrivate(QPrinter *p)
+        : QPagedPaintDevicePrivate(), m_printer(p)
+    {}
+
+    virtual ~QPrinterPagedPaintDevicePrivate()
+    {}
+
+    bool setPageLayout(const QPageLayout &newPageLayout) override
+    {
+        QPrinterPrivate *pd = QPrinterPrivate::get(m_printer);
+
+        if (pd->paintEngine->type() != QPaintEngine::Pdf
+            && pd->printEngine->printerState() == QPrinter::Active) {
+            qWarning("QPrinter::setPageLayout: Cannot be changed while printer is active");
+            return false;
+        }
+
+        // Try to set the print engine page layout
+        pd->setProperty(QPrintEngine::PPK_QPageLayout, QVariant::fromValue(newPageLayout));
+
+        return pageLayout().isEquivalentTo(newPageLayout);
+    }
+
+    bool setPageSize(const QPageSize &pageSize) override
+    {
+        QPrinterPrivate *pd = QPrinterPrivate::get(m_printer);
+
+        if (pd->paintEngine->type() != QPaintEngine::Pdf
+            && pd->printEngine->printerState() == QPrinter::Active) {
+            qWarning("QPrinter::setPageLayout: Cannot be changed while printer is active");
+            return false;
+        }
+
+
+        // Try to set the print engine page size
+        pd->setProperty(QPrintEngine::PPK_QPageSize, QVariant::fromValue(pageSize));
+
+        return pageLayout().pageSize().isEquivalentTo(pageSize);
+    }
+
+    bool setPageOrientation(QPageLayout::Orientation orientation) override
+    {
+        QPrinterPrivate *pd = QPrinterPrivate::get(m_printer);
+
+        // Set the print engine value
+        pd->setProperty(QPrintEngine::PPK_Orientation, orientation);
+
+        return pageLayout().orientation() == orientation;
+    }
+
+    bool setPageMargins(const QMarginsF &margins, QPageLayout::Unit units) override
+    {
+        QPrinterPrivate *pd = QPrinterPrivate::get(m_printer);
+
+        // Try to set print engine margins
+        QPair<QMarginsF, QPageLayout::Unit> pair = qMakePair(margins, units);
+        pd->setProperty(QPrintEngine::PPK_QPageMargins, QVariant::fromValue(pair));
+
+        return pageLayout().margins() == margins && pageLayout().units() == units;
+    }
+
+    QPageLayout pageLayout() const override
+    {
+        QPrinterPrivate *pd = QPrinterPrivate::get(m_printer);
+
+        return pd->printEngine->property(QPrintEngine::PPK_QPageLayout).value<QPageLayout>();
+    }
+
+    QPrinter *m_printer;
+};
 
 
 /*!
@@ -212,7 +313,7 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
   features, such as orientation and resolution, and to step through
   the pages in a document as it is generated.
 
-  When printing directly to a printer on Windows or Mac OS X, QPrinter uses
+  When printing directly to a printer on Windows or \macos, QPrinter uses
   the built-in printer drivers. On X11, QPrinter uses the
   \l{Common Unix Printing System (CUPS)}
   to send PDF output to the printer. As an alternative,
@@ -295,9 +396,9 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
     lower quality output than HighResolution and should only be used
     for drafts.
 
-    \value PrinterResolution This value is deprecated. Is is
+    \value PrinterResolution This value is deprecated. It is
     equivalent to ScreenResolution on Unix and HighResolution on
-    Windows and Mac. Due do the difference between ScreenResolution
+    Windows and Mac. Due to the difference between ScreenResolution
     and HighResolution, use of this value may lead to non-portable
     printer code.
 
@@ -339,57 +440,31 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
     \value PageRange The specified page range should be printed.
     \value CurrentPage Only the current page should be printed.
 
-    \sa QAbstractPrintDialog::PrintRange
+    \sa setPrintRange(), printRange(), QAbstractPrintDialog::PrintRange
 */
 
 /*!
-  \enum QPrinter::PaperSize
-  \since 4.4
+    \typedef QPrinter::PaperSize
+    \since 4.4
 
-  This enum type specifies what paper size QPrinter should use.
-  QPrinter does not check that the paper size is available; it just
-  uses this information, together with QPrinter::Orientation and
-  QPrinter::setFullPage(), to determine the printable area.
+    typdef for the enum QPagedPaintDevice::PageSize.
 
-  The defined sizes (with setFullPage(true)) are:
+    This enum type specifies what paper size QPrinter should use.
+    QPrinter does not check that the paper size is available; it just
+    uses this information, together with QPrinter::Orientation and
+    QPrinter::setFullPage(), to determine the printable area.
 
-  \value A0 841 x 1189 mm
-  \value A1 594 x 841 mm
-  \value A2 420 x 594 mm
-  \value A3 297 x 420 mm
-  \value A4 210 x 297 mm, 8.26 x 11.69 inches
-  \value A5 148 x 210 mm
-  \value A6 105 x 148 mm
-  \value A7 74 x 105 mm
-  \value A8 52 x 74 mm
-  \value A9 37 x 52 mm
-  \value B0 1000 x 1414 mm
-  \value B1 707 x 1000 mm
-  \value B2 500 x 707 mm
-  \value B3 353 x 500 mm
-  \value B4 250 x 353 mm
-  \value B5 176 x 250 mm, 6.93 x 9.84 inches
-  \value B6 125 x 176 mm
-  \value B7 88 x 125 mm
-  \value B8 62 x 88 mm
-  \value B9 33 x 62 mm
-  \value B10 31 x 44 mm
-  \value C5E 163 x 229 mm
-  \value Comm10E 105 x 241 mm, U.S. Common 10 Envelope
-  \value DLE 110 x 220 mm
-  \value Executive 7.5 x 10 inches, 190.5 x 254 mm
-  \value Folio 210 x 330 mm
-  \value Ledger 431.8 x 279.4 mm
-  \value Legal 8.5 x 14 inches, 215.9 x 355.6 mm
-  \value Letter 8.5 x 11 inches, 215.9 x 279.4 mm
-  \value Tabloid 279.4 x 431.8 mm
-  \value Custom Unknown, or a user defined size.
+    The defined sizes (with setFullPage(true)) are found in QPagedPaintDevice.
 
-  With setFullPage(false) (the default), the metrics will be a bit
-  smaller; how much depends on the printer in use.
+    With setFullPage(false) (the default), the metrics will be a bit
+    smaller; how much depends on the printer in use.
 
-  \omitvalue NPageSize
-  \omitvalue NPaperSize
+    Due to historic reasons QPageSize::Executive is not the same as the standard
+    Postscript and Windows Executive size, use QPageSize::ExecutiveStandard instead.
+
+    The Postscript standard size QPageSize::Folio is different to the Windows
+    DMPAPER_FOLIO size, use the Postscript standard size QPageSize::FanFoldGermanLegal
+    if needed.
 */
 
 
@@ -436,12 +511,15 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
   \value LargeCapacity
   \value LargeFormat
   \value Lower
-  \value MaxPageSource
+  \value MaxPageSource Deprecated, use LastPaperSource instead
   \value Middle
   \value Manual
   \value OnlyOne
   \value Tractor
   \value SmallFormat
+  \value Upper
+  \value CustomSource A PaperSource defined by the printer that is unknown to Qt
+  \value LastPaperSource The highest valid PaperSource value, currently CustomSource
 */
 
 /*!
@@ -465,35 +543,14 @@ void QPrinterPrivate::addToManualSetList(QPrintEngine::PrintEnginePropertyKey ke
   the printer.
 */
 
-
-/*
-  \enum QPrinter::PrintRange
-
-  This enum is used to specify which print range the application
-  should use to print.
-
-  \value AllPages All the pages should be printed.
-  \value Selection Only the selection should be printed.
-  \value PageRange Print according to the from page and to page options.
-  \value CurrentPage Only the current page should be printed.
-
-  \sa setPrintRange(), printRange()
-*/
-
 /*!
     Creates a new printer object with the given \a mode.
 */
 QPrinter::QPrinter(PrinterMode mode)
-    : QPagedPaintDevice(),
+    : QPagedPaintDevice(new QPrinterPagedPaintDevicePrivate(this)),
       d_ptr(new QPrinterPrivate(this))
 {
-    d_ptr->init(mode);
-    QPrinterInfo defPrn(QPrinterInfo::defaultPrinter());
-    if (!defPrn.isNull()) {
-        setPrinterName(defPrn.printerName());
-    } else if (QPrinterInfo::availablePrinters().isEmpty()) {
-        setOutputFormat(QPrinter::PdfFormat);
-    }
+    d_ptr->init(QPrinterInfo(), mode);
 }
 
 /*!
@@ -502,29 +559,22 @@ QPrinter::QPrinter(PrinterMode mode)
     Creates a new printer object with the given \a printer and \a mode.
 */
 QPrinter::QPrinter(const QPrinterInfo& printer, PrinterMode mode)
-    : QPagedPaintDevice(),
+    : QPagedPaintDevice(new QPrinterPagedPaintDevicePrivate(this)),
       d_ptr(new QPrinterPrivate(this))
 {
-    d_ptr->init(mode);
-    setPrinterName(printer.printerName());
+    d_ptr->init(printer, mode);
 }
 
-void QPrinterPrivate::init(QPrinter::PrinterMode mode)
+void QPrinterPrivate::init(const QPrinterInfo &printer, QPrinter::PrinterMode mode)
 {
-    if (!QCoreApplication::instance()) {
-        qFatal("QPrinter: Must construct a QApplication before a QPaintDevice");
+    if (Q_UNLIKELY(!QCoreApplication::instance())) {
+        qFatal("QPrinter: Must construct a QCoreApplication before a QPrinter");
         return;
     }
 
     printerMode = mode;
-    outputFormat = QPrinter::NativeFormat;
-    createDefaultEngines();
 
-#ifndef QT_NO_PRINTPREVIEWWIDGET
-    previewEngine = 0;
-#endif
-    realPrintEngine = 0;
-    realPaintEngine = 0;
+    initEngines(QPrinter::NativeFormat, printer);
 }
 
 /*!
@@ -564,7 +614,7 @@ QPrinter::~QPrinter()
     Q_D(QPrinter);
     if (d->use_default_engine)
         delete d->printEngine;
-#ifndef QT_NO_PRINTPREVIEWWIDGET
+#if QT_CONFIG(printpreviewwidget)
     delete d->previewEngine;
 #endif
 }
@@ -589,45 +639,30 @@ QPrinter::~QPrinter()
     \since 4.1
 
     Sets the output format for this printer to \a format.
+
+    If \a format is the same value as currently set then no change will be made.
+
+    If \a format is NativeFormat then the printerName will be set to the default
+    printer.  If there are no valid printers configured then no change will be made.
+    If you want to set NativeFormat with a specific printerName then use
+    setPrinterName().
+
+    \sa setPrinterName()
 */
 void QPrinter::setOutputFormat(OutputFormat format)
 {
-
-#ifndef QT_NO_PDF
     Q_D(QPrinter);
-    if (d->validPrinter && d->outputFormat == format)
+
+    if (d->outputFormat == format)
         return;
-    d->outputFormat = format;
 
-    QPrintEngine *oldPrintEngine = d->printEngine;
-    const bool def_engine = d->use_default_engine;
-    d->printEngine = 0;
-
-    d->createDefaultEngines();
-
-    if (oldPrintEngine) {
-        for (int i = 0; i < d->manualSetList.size(); ++i) {
-            QPrintEngine::PrintEnginePropertyKey key = d->manualSetList[i];
-            QVariant prop;
-            // PPK_NumberOfCopies need special treatmeant since it in most cases
-            // will return 1, disregarding the actual value that was set
-            if (key == QPrintEngine::PPK_NumberOfCopies)
-                prop = QVariant(copyCount());
-            else
-                prop = oldPrintEngine->property(key);
-            if (prop.isValid())
-                d->printEngine->setProperty(key, prop);
-        }
+    if (format == QPrinter::NativeFormat) {
+        QPrinterInfo printerToUse = d->findValidPrinter();
+        if (!printerToUse.isNull())
+            d->changeEngines(format, printerToUse);
+    } else {
+        d->changeEngines(format, QPrinterInfo());
     }
-
-    if (def_engine)
-        delete oldPrintEngine;
-
-    if (d->outputFormat == QPrinter::PdfFormat)
-        d->validPrinter = true;
-#else
-    Q_UNUSED(format);
-#endif
 }
 
 /*!
@@ -641,7 +676,37 @@ QPrinter::OutputFormat QPrinter::outputFormat() const
     return d->outputFormat;
 }
 
+/*!
+    \since 5.10
 
+    Sets the PDF version for this printer to \a version.
+
+    If \a version is the same value as currently set then no change will be made.
+*/
+void QPrinter::setPdfVersion(PdfVersion version)
+{
+    Q_D(QPrinter);
+
+    if (d->pdfVersion == version)
+        return;
+
+    d->pdfVersion = version;
+
+    if (d->outputFormat == QPrinter::PdfFormat) {
+        d->changeEngines(d->outputFormat, QPrinterInfo());
+    }
+}
+
+/*!
+    \since 5.10
+
+    Returns the PDF version for this printer. The default is \c PdfVersion_1_4.
+*/
+QPrinter::PdfVersion QPrinter::pdfVersion() const
+{
+    Q_D(const QPrinter);
+    return d->pdfVersion;
+}
 
 /*! \internal
 */
@@ -665,36 +730,43 @@ QString QPrinter::printerName() const
 /*!
     Sets the printer name to \a name.
 
-    \sa printerName(), isValid()
+    If the \a name is empty then the output format will be set to PdfFormat.
+
+    If the \a name is not a valid printer then no change will be made.
+
+    If the \a name is a valid printer then the output format will be set to NativeFormat.
+
+    \sa printerName(), isValid(), setOutputFormat()
 */
 void QPrinter::setPrinterName(const QString &name)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setPrinterName");
 
-    QList<QPrinterInfo> prnList = QPrinterInfo::availablePrinters();
+    if (printerName() == name)
+        return;
+
     if (name.isEmpty()) {
-        d->validPrinter = d->outputFormat == QPrinter::PdfFormat;
-    } else {
-        d->validPrinter = false;
-        for (int i = 0; i < prnList.size(); ++i) {
-            if (prnList[i].printerName() == name) {
-                d->validPrinter = true;
-                break;
-            }
-        }
+        setOutputFormat(QPrinter::PdfFormat);
+        return;
     }
 
-    d->printEngine->setProperty(QPrintEngine::PPK_PrinterName, name);
-    d->addToManualSetList(QPrintEngine::PPK_PrinterName);
-}
+    QPrinterInfo printerToUse = QPrinterInfo::printerInfo(name);
+    if (printerToUse.isNull())
+        return;
 
+    if (outputFormat() == QPrinter::PdfFormat) {
+        d->changeEngines(QPrinter::NativeFormat, printerToUse);
+    } else {
+        d->setProperty(QPrintEngine::PPK_PrinterName, name);
+    }
+}
 
 /*!
   \since 4.4
 
-  Returns true if the printer currently selected is a valid printer
-  in the system, or a pure PDF printer; otherwise returns false.
+  Returns \c true if the printer currently selected is a valid printer
+  in the system, or a pure PDF printer; otherwise returns \c false.
 
   To detect other failures check the output of QPainter::begin() or QPrinter::newPage().
 
@@ -739,7 +811,7 @@ QString QPrinter::outputFileName() const
 
     QPrinter uses Qt's cross-platform PDF print engines
     respectively. If you can produce this format natively, for example
-    Mac OS X can generate PDF's from its print engine, set the output format
+    \macos can generate PDF's from its print engine, set the output format
     back to NativeFormat.
 
     \sa outputFileName(), setOutputFormat()
@@ -756,8 +828,7 @@ void QPrinter::setOutputFileName(const QString &fileName)
     else if (fileName.isEmpty())
         setOutputFormat(QPrinter::NativeFormat);
 
-    d->printEngine->setProperty(QPrintEngine::PPK_OutputFileName, fileName);
-    d->addToManualSetList(QPrintEngine::PPK_OutputFileName);
+    d->setProperty(QPrintEngine::PPK_OutputFileName, fileName);
 }
 
 
@@ -792,8 +863,7 @@ void QPrinter::setPrintProgram(const QString &printProg)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setPrintProgram");
-    d->printEngine->setProperty(QPrintEngine::PPK_PrinterProgram, printProg);
-    d->addToManualSetList(QPrintEngine::PPK_PrinterProgram);
+    d->setProperty(QPrintEngine::PPK_PrinterProgram, printProg);
 }
 
 
@@ -823,8 +893,7 @@ void QPrinter::setDocName(const QString &name)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setDocName");
-    d->printEngine->setProperty(QPrintEngine::PPK_DocumentName, name);
-    d->addToManualSetList(QPrintEngine::PPK_DocumentName);
+    d->setProperty(QPrintEngine::PPK_DocumentName, name);
 }
 
 
@@ -854,25 +923,121 @@ void QPrinter::setCreator(const QString &creator)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setCreator");
-    d->printEngine->setProperty(QPrintEngine::PPK_Creator, creator);
-    d->addToManualSetList(QPrintEngine::PPK_Creator);
+    d->setProperty(QPrintEngine::PPK_Creator, creator);
 }
 
+// Defined in QPagedPaintDevice but non-virtual, add QPrinter specific doc here
+#ifdef Q_CLANG_QDOC
+/*!
+    \fn bool QPrinter::setPageLayout(const QPageLayout &newLayout)
+    \since 5.3
+
+    Sets the page layout to \a newLayout.
+
+    If the \a newLayout is not valid for the current printer then the page
+    layout will not be changed.  For example, if the page size is not supported
+    by the printer, or if the margins fall outside the printable area.
+
+    Returns true if the page layout was successfully set to \a newLayout.
+
+    \sa pageLayout(), setPageSize(), setPageOrientation(), setPageMargins()
+*/
 
 /*!
+    \fn bool QPrinter::setPageSize(const QPageSize &pageSize)
+    \since 5.3
+
+    Sets the page size to \a pageSize.
+
+    If the \a pageSize is not valid for the current printer then the page
+    size will not be changed.
+
+    Changing the page size may affect the current page margins if they fall
+    outside the printable margins for the new page size on the current printer.
+
+    To obtain the current QPageSize use pageLayout().pageSize().
+
+    Returns true if the page size was successfully set to \a pageSize.
+
+    \sa pageLayout(), setPageLayout()
+*/
+
+/*!
+    \fn bool QPrinter::setPageOrientation(QPageLayout::Orientation orientation)
+    \since 5.3
+
+    Sets the page \a orientation to QPageLayout::Portrait or QPageLayout::Landscape.
+
+    The printer driver reads this setting and prints the page using the
+    specified orientation.
+
+    On Windows and Mac, this option can be changed while printing and will
+    take effect from the next call to newPage().
+
+    To obtain the current QPageLayout::Orientation use pageLayout().pageOrientation().
+
+    Returns true if the page orientation was successfully set to \a orientation.
+
+    \sa pageLayout(), setPageLayout()
+*/
+
+/*!
+    \fn bool QPrinter::setPageMargins(const QMarginsF &margins, QPageLayout::Unit units)
+    \since 5.3
+
+    Set the page margins to \a margins in the given \a units.  If \a units are
+    not provided then the current units are used.
+
+    If in Full Page mode then no check is performed on the \a margins set,
+    otherwise the \a margins must fall within the printable area for the page
+    size on the current printer.
+
+    To obtain the current page margins use pageLayout().pageMargins().
+
+    Returns \c true if the page margins was successfully set to \a margins.
+
+    \sa pageLayout(), setPageLayout()
+*/
+
+/*!
+    \fn bool QPrinter::setPageMargins(const QMarginsF &margins)
+
+    Set the page margins to \a margins using the current units.
+    Returns \c true if the page margins were set successfully.
+
+    \sa pageLayout(), setPageLayout()
+*/
+/*!
+    \fn QPageLayout QPrinter::pageLayout() const
+    \since 5.3
+
+    Returns the current page layout.  Use this method to access the current
+    QPageSize, QPageLayout::Orientation, QMarginsF, fullPageRect() and paintRect().
+
+    Note that you cannot use the setters on the returned object, you must either
+    call the QPrinter methods or setPageLayout().
+
+    \sa setPageLayout(), setPageSize(), setPageOrientation(), setPageMargins()
+*/
+#endif
+
+/*!
+  \obsolete Use pageLayout().pageOrientation() instead.
+
   Returns the orientation setting. This is driver-dependent, but is usually
   QPrinter::Portrait.
 
-  \sa setOrientation()
+  \sa pageLayout()
 */
 QPrinter::Orientation QPrinter::orientation() const
 {
-    Q_D(const QPrinter);
-    return QPrinter::Orientation(d->printEngine->property(QPrintEngine::PPK_Orientation).toInt());
+    return QPrinter::Orientation(pageLayout().orientation());
 }
 
 
 /*!
+  \obsolete Use setPageOrientation() instead.
+
   Sets the print orientation to \a orientation.
 
   The orientation can be either QPrinter::Portrait or
@@ -881,37 +1046,36 @@ QPrinter::Orientation QPrinter::orientation() const
   The printer driver reads this setting and prints using the
   specified orientation.
 
-  On Windows, this option can be changed while printing and will
+  On Windows and Mac, this option can be changed while printing and will
   take effect from the next call to newPage().
 
-  On Mac OS X, changing the orientation during a print job has no effect.
-
-  \sa orientation()
+  \sa setPageOrientation()
 */
 
 void QPrinter::setOrientation(Orientation orientation)
 {
-    Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_Orientation, orientation);
-    d->addToManualSetList(QPrintEngine::PPK_Orientation);
+    setPageOrientation(QPageLayout::Orientation(orientation));
 }
-
 
 /*!
     \since 4.4
+
+    \obsolete Use pageLayout().pageSize().id() instead.
+
     Returns the printer paper size. The default value is driver-dependent.
 
-    \sa setPaperSize(), pageRect(), paperRect()
+    \sa pageLayout()
 */
 
 QPrinter::PaperSize QPrinter::paperSize() const
 {
-    Q_D(const QPrinter);
-    return QPrinter::PaperSize(d->printEngine->property(QPrintEngine::PPK_PaperSize).toInt());
+    return pageSize();
 }
 
 /*!
     \since 4.4
+
+    \obsolete Use setPageSize(QPageSize) instead.
 
     Sets the printer paper size to \a newPaperSize if that size is
     supported. The result is undefined if \a newPaperSize is not
@@ -922,104 +1086,132 @@ QPrinter::PaperSize QPrinter::paperSize() const
     This function is useful mostly for setting a default value that
     the user can override in the print dialog.
 
-    \sa paperSize(), PaperSize, setFullPage(), setResolution(), pageRect(), paperRect()
+    \sa setPageSize()
 */
 void QPrinter::setPaperSize(PaperSize newPaperSize)
 {
-    setPageSize(newPaperSize);
+    setPageSize(QPageSize(QPageSize::PageSizeId(newPaperSize)));
 }
 
 /*!
-    \obsolete
+    \obsolete Use pageLayout().pageSize().id() instead.
 
     Returns the printer page size. The default value is driver-dependent.
 
-    Use paperSize() instead.
+    \sa pageLayout()
 */
 QPrinter::PageSize QPrinter::pageSize() const
 {
-    return paperSize();
+    return QPrinter::PaperSize(pageLayout().pageSize().id());
 }
 
 
 /*!
-    \obsolete
+    \obsolete Use setPageSize(QPageSize) instead.
 
     Sets the printer page size based on \a newPageSize.
 
-    Use setPaperSize() instead.
+    \sa setPageSize()
 */
 
 void QPrinter::setPageSize(PageSize newPageSize)
 {
-    QPagedPaintDevice::setPageSize(newPageSize);
-
-    Q_D(QPrinter);
-    if (d->paintEngine->type() != QPaintEngine::Pdf)
-        ABORT_IF_ACTIVE("QPrinter::setPaperSize");
-    if (newPageSize < 0 || newPageSize >= NPageSize) {
-        qWarning("QPrinter::setPaperSize: Illegal paper size %d", newPageSize);
-        return;
-    }
-    d->printEngine->setProperty(QPrintEngine::PPK_PaperSize, newPageSize);
-    d->addToManualSetList(QPrintEngine::PPK_PaperSize);
-    d->hasUserSetPageSize = true;
+    setPageSize(QPageSize(QPageSize::PageSizeId(newPageSize)));
 }
 
 /*!
     \since 4.4
 
+    \obsolete Use setPageSize(QPageSize) instead.
+
     Sets the paper size based on \a paperSize in \a unit.
 
-    \sa paperSize()
+    Note that the paper size is defined in a portrait layout, regardless of
+    what the current printer orientation is set to.
+
+    \sa setPageSize()
 */
 
 void QPrinter::setPaperSize(const QSizeF &paperSize, QPrinter::Unit unit)
 {
-    Q_D(QPrinter);
-    if (d->paintEngine->type() != QPaintEngine::Pdf)
-        ABORT_IF_ACTIVE("QPrinter::setPaperSize");
-    const qreal multiplier = qt_multiplierForUnit(unit, resolution());
-    QSizeF size(paperSize.width() * multiplier * 25.4/72., paperSize.height() * multiplier * 25.4/72.);
-    setPageSizeMM(size);
+    if (unit == QPrinter::DevicePixel)
+        setPageSize(QPageSize(paperSize * qt_pixelMultiplier(resolution()), QPageSize::Point));
+    else
+        setPageSize(QPageSize(paperSize, QPageSize::Unit(unit)));
 }
 
 /*!
-  \reimp
-  */
+    \reimp
+
+    \obsolete Use setPageSize(QPageSize) instead.
+
+    Use setPageSize(QPageSize) instead.
+
+    Note that the page size is defined in a portrait layout, regardless of
+    what the current printer orientation is set to.
+
+    \sa setPageSize()
+*/
 void QPrinter::setPageSizeMM(const QSizeF &size)
 {
-    Q_D(QPrinter);
-
-    QPagedPaintDevice::setPageSizeMM(size);
-
-    QSizeF s = size * 72./25.4;
-    d->printEngine->setProperty(QPrintEngine::PPK_CustomPaperSize, s);
-    d->addToManualSetList(QPrintEngine::PPK_CustomPaperSize);
-    d->hasUserSetPageSize = true;
+    setPageSize(QPageSize(size, QPageSize::Millimeter));
 }
 
 /*!
     \since 4.4
 
+    \obsolete Use pageLayout().pageSize().size() or
+    pageLayout().fullPageSize() instead.
+
     Returns the paper size in \a unit.
 
-    \sa setPaperSize()
+    Note that the returned size reflects the current paper orientation.
+
+    \sa pageLayout()
 */
 
 QSizeF QPrinter::paperSize(Unit unit) const
 {
+    if (unit == QPrinter::DevicePixel)
+        return pageLayout().fullRectPixels(resolution()).size();
+    else
+        return pageLayout().fullRect(QPageLayout::Unit(unit)).size();
+}
+
+/*!
+    \since 5.1
+
+    \obsolete Use setPageSize(QPageSize) instead.
+
+    Sets the paper used by the printer to \a paperName.
+
+    \sa setPageSize()
+*/
+
+void QPrinter::setPaperName(const QString &paperName)
+{
+    Q_D(QPrinter);
+    if (d->paintEngine->type() != QPaintEngine::Pdf)
+        ABORT_IF_ACTIVE("QPrinter::setPaperName");
+    d->setProperty(QPrintEngine::PPK_PaperName, paperName);
+}
+
+/*!
+    \since 5.1
+
+    \obsolete Use pageLayout().pageSize().name() instead.
+
+    Returns the paper name of the paper set on the printer.
+
+    The default value for this is driver-dependent.
+
+    \sa pageLayout()
+*/
+
+QString QPrinter::paperName() const
+{
     Q_D(const QPrinter);
-    int res = resolution();
-    const qreal multiplier = qt_multiplierForUnit(unit, res);
-    PaperSize paperType = paperSize();
-    if (paperType == Custom) {
-        QSizeF size = d->printEngine->property(QPrintEngine::PPK_CustomPaperSize).toSizeF();
-        return QSizeF(size.width() / multiplier, size.height() / multiplier);
-    }
-    else {
-        return qt_printerPaperSize(orientation(), paperType, unit, res);
-    }
+    return d->printEngine->property(QPrintEngine::PPK_PaperName).toString();
 }
 
 /*!
@@ -1041,8 +1233,7 @@ void QPrinter::setPageOrder(PageOrder pageOrder)
 
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setPageOrder");
-    d->printEngine->setProperty(QPrintEngine::PPK_PageOrder, pageOrder);
-    d->addToManualSetList(QPrintEngine::PPK_PageOrder);
+    d->setProperty(QPrintEngine::PPK_PageOrder, pageOrder);
 }
 
 
@@ -1070,8 +1261,7 @@ void QPrinter::setColorMode(ColorMode newColorMode)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setColorMode");
-    d->printEngine->setProperty(QPrintEngine::PPK_ColorMode, newColorMode);
-    d->addToManualSetList(QPrintEngine::PPK_ColorMode);
+    d->setProperty(QPrintEngine::PPK_ColorMode, newColorMode);
 }
 
 
@@ -1091,7 +1281,7 @@ QPrinter::ColorMode QPrinter::colorMode() const
   \obsolete
   Returns the number of copies to be printed. The default value is 1.
 
-  On Windows, Mac OS X and X11 systems that support CUPS, this will always
+  On Windows, \macos and X11 systems that support CUPS, this will always
   return 1 as these operating systems can internally handle the number
   of copies.
 
@@ -1150,8 +1340,7 @@ void QPrinter::setNumCopies(int numCopies)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setNumCopies");
-    d->printEngine->setProperty(QPrintEngine::PPK_NumberOfCopies, numCopies);
-    d->addToManualSetList(QPrintEngine::PPK_NumberOfCopies);
+    d->setProperty(QPrintEngine::PPK_NumberOfCopies, numCopies);
 }
 
 /*!
@@ -1169,8 +1358,7 @@ void QPrinter::setCopyCount(int count)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setCopyCount;");
-    d->printEngine->setProperty(QPrintEngine::PPK_CopyCount, count);
-    d->addToManualSetList(QPrintEngine::PPK_CopyCount);
+    d->setProperty(QPrintEngine::PPK_CopyCount, count);
 }
 
 /*!
@@ -1190,7 +1378,7 @@ int QPrinter::copyCount() const
 /*!
     \since 4.7
 
-    Returns true if the printer supports printing multiple copies of the same
+    Returns \c true if the printer supports printing multiple copies of the same
     document in one job; otherwise false is returned.
 
     On most systems this function will return true. However, on X11 systems
@@ -1210,8 +1398,8 @@ bool QPrinter::supportsMultipleCopies() const
 /*!
     \since 4.1
 
-    Returns true if collation is turned on when multiple copies is selected.
-    Returns false if it is turned off when multiple copies is selected.
+    Returns \c true if collation is turned on when multiple copies is selected.
+    Returns \c false if it is turned off when multiple copies is selected.
     When collating is turned off the printing of each individual page will be repeated
     the numCopies() amount before the next page is started. With collating turned on
     all pages are printed before the next copy of those pages is started.
@@ -1239,8 +1427,7 @@ void QPrinter::setCollateCopies(bool collate)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setCollateCopies");
-    d->printEngine->setProperty(QPrintEngine::PPK_CollateCopies, collate);
-    d->addToManualSetList(QPrintEngine::PPK_CollateCopies);
+    d->setProperty(QPrintEngine::PPK_CollateCopies, collate);
 }
 
 
@@ -1263,25 +1450,25 @@ void QPrinter::setCollateCopies(bool collate)
   printer's margins, so the application must account for the margins
   itself.
 
-  \sa fullPage(), setPaperSize(), width(), height()
+  \sa fullPage(), pageLayout(), setPageSize(), width(), height()
 */
 
 void QPrinter::setFullPage(bool fp)
 {
     Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_FullPage, fp);
-    d->addToManualSetList(QPrintEngine::PPK_FullPage);
+    // Set the print engine
+    d->setProperty(QPrintEngine::PPK_FullPage, fp);
 }
 
 
 /*!
-  Returns true if the origin of the printer's coordinate system is
+  Returns \c true if the origin of the printer's coordinate system is
   at the corner of the page and false if it is at the edge of the
   printable area.
 
   See setFullPage() for details and caveats.
 
-  \sa setFullPage(), PaperSize
+  \sa setFullPage(), pageLayout()
 */
 
 bool QPrinter::fullPage() const
@@ -1308,8 +1495,7 @@ void QPrinter::setResolution(int dpi)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setResolution");
-    d->printEngine->setProperty(QPrintEngine::PPK_Resolution, dpi);
-    d->addToManualSetList(QPrintEngine::PPK_Resolution);
+    d->setProperty(QPrintEngine::PPK_Resolution, dpi);
 }
 
 
@@ -1338,8 +1524,7 @@ int QPrinter::resolution() const
 void QPrinter::setPaperSource(PaperSource source)
 {
     Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_PaperSource, source);
-    d->addToManualSetList(QPrintEngine::PPK_PaperSource);
+    d->setProperty(QPrintEngine::PPK_PaperSource, source);
 }
 
 /*!
@@ -1358,23 +1543,18 @@ QPrinter::PaperSource QPrinter::paperSource() const
 
   Enabled or disables font embedding depending on \a enable.
 
-  Currently this option is only supported on X11.
-
   \sa fontEmbeddingEnabled()
 */
 void QPrinter::setFontEmbeddingEnabled(bool enable)
 {
     Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_FontEmbedding, enable);
-    d->addToManualSetList(QPrintEngine::PPK_FontEmbedding);
+    d->setProperty(QPrintEngine::PPK_FontEmbedding, enable);
 }
 
 /*!
   \since 4.1
 
-  Returns true if font embedding is enabled.
-
-  Currently this option is only supported on X11.
+  Returns \c true if font embedding is enabled.
 
   \sa setFontEmbeddingEnabled()
 */
@@ -1405,9 +1585,11 @@ bool QPrinter::fontEmbeddingEnabled() const
 /*!
   \since 4.2
 
+  \obsolete Use setDuplex() instead.
+
   Enables double sided printing if \a doubleSided is true; otherwise disables it.
 
-  Currently this option is only supported on X11.
+  \sa setDuplex()
 */
 void QPrinter::setDoubleSidedPrinting(bool doubleSided)
 {
@@ -1418,9 +1600,11 @@ void QPrinter::setDoubleSidedPrinting(bool doubleSided)
 /*!
   \since 4.2
 
-  Returns true if double side printing is enabled.
+  \obsolete Use duplex() instead.
 
-  Currently this option is only supported on X11.
+  Returns \c true if double side printing is enabled.
+
+  \sa duplex()
 */
 bool QPrinter::doubleSidedPrinting() const
 {
@@ -1432,13 +1616,12 @@ bool QPrinter::doubleSidedPrinting() const
 
   Enables double sided printing based on the \a duplex mode.
 
-  Currently this option is only supported on X11.
+  \sa duplex()
 */
 void QPrinter::setDuplex(DuplexMode duplex)
 {
     Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_Duplex, duplex);
-    d->addToManualSetList(QPrintEngine::PPK_Duplex);
+    d->setProperty(QPrintEngine::PPK_Duplex, duplex);
 }
 
 /*!
@@ -1446,7 +1629,7 @@ void QPrinter::setDuplex(DuplexMode duplex)
 
   Returns the current duplex mode.
 
-  Currently this option is only supported on X11.
+  \sa setDuplex()
 */
 QPrinter::DuplexMode QPrinter::duplex() const
 {
@@ -1465,19 +1648,10 @@ QPrinter::DuplexMode QPrinter::duplex() const
 */
 QRectF QPrinter::pageRect(Unit unit) const
 {
-    Q_D(const QPrinter);
-    int res = resolution();
-    const qreal multiplier = qt_multiplierForUnit(unit, res);
-    // the page rect is in device pixels
-    QRect devRect(d->printEngine->property(QPrintEngine::PPK_PageRect).toRect());
-    if (unit == DevicePixel)
-        return devRect;
-    QRectF diRect(devRect.x()*72.0/res,
-                  devRect.y()*72.0/res,
-                  devRect.width()*72.0/res,
-                  devRect.height()*72.0/res);
-    return QRectF(diRect.x()/multiplier, diRect.y()/multiplier,
-                  diRect.width()/multiplier, diRect.height()/multiplier);
+    if (unit == QPrinter::DevicePixel)
+        return pageLayout().paintRectPixels(resolution());
+    else
+        return pageLayout().paintRect(QPageLayout::Unit(unit));
 }
 
 
@@ -1491,29 +1665,22 @@ QRectF QPrinter::pageRect(Unit unit) const
 */
 QRectF QPrinter::paperRect(Unit unit) const
 {
-    Q_D(const QPrinter);
-    int res = resolution();
-    const qreal multiplier = qt_multiplierForUnit(unit, resolution());
-    // the page rect is in device pixels
-    QRect devRect(d->printEngine->property(QPrintEngine::PPK_PaperRect).toRect());
-    if (unit == DevicePixel)
-        return devRect;
-    QRectF diRect(devRect.x()*72.0/res,
-                  devRect.y()*72.0/res,
-                  devRect.width()*72.0/res,
-                  devRect.height()*72.0/res);
-    return QRectF(diRect.x()/multiplier, diRect.y()/multiplier,
-                  diRect.width()/multiplier, diRect.height()/multiplier);
+    if (unit == QPrinter::DevicePixel)
+        return pageLayout().fullRectPixels(resolution());
+    else
+        return pageLayout().fullRect(QPageLayout::Unit(unit));
 }
 
 /*!
+    \obsolete Use pageLayout().paintRectPixels(resolution()) instead.
+
     Returns the page's rectangle; this is usually smaller than the
     paperRect() since the page normally has margins between its
     borders and the paper.
 
     The unit of the returned rectangle is DevicePixel.
 
-    \sa paperSize()
+    \sa pageLayout()
 */
 QRect QPrinter::pageRect() const
 {
@@ -1522,12 +1689,14 @@ QRect QPrinter::pageRect() const
 }
 
 /*!
+    \obsolete Use pageLayout().fullRectPixels(resolution()) instead.
+
     Returns the paper's rectangle; this is usually larger than the
     pageRect().
 
     The unit of the returned rectangle is DevicePixel.
 
-    \sa pageRect()
+    \sa pageLayout()
 */
 QRect QPrinter::paperRect() const
 {
@@ -1535,62 +1704,69 @@ QRect QPrinter::paperRect() const
     return d->printEngine->property(QPrintEngine::PPK_PaperRect).toRect();
 }
 
-
 /*!
     \since 4.4
+
+    \obsolete Use setPageMargins(QMarginsF, QPageLayout::Unit) instead.
 
     This function sets the \a left, \a top, \a right and \a bottom
     page margins for this printer. The unit of the margins are
     specified with the \a unit parameter.
 
-    \sa getPageMargins()
+    \sa setPageMargins()
 */
 void QPrinter::setPageMargins(qreal left, qreal top, qreal right, qreal bottom, QPrinter::Unit unit)
 {
-    const qreal multiplier = qt_multiplierForUnit(unit, resolution()) * 25.4/72.;
-    Margins m = { left*multiplier, right*multiplier, top*multiplier, bottom*multiplier };
-    setMargins(m);
+    if (unit == QPrinter::DevicePixel) {
+        QMarginsF margins = QMarginsF(left, top, right, bottom);
+        margins *= qt_pixelMultiplier(resolution());
+        margins = qt_convertMargins(margins, QPageLayout::Point, pageLayout().units());
+        setPageMargins(margins, pageLayout().units());
+    } else {
+        setPageMargins(QMarginsF(left, top, right, bottom), QPageLayout::Unit(unit));
+    }
 }
 
 /*!
-  \reimp
+    \reimp
+
+    \obsolete Use setPageMargins(QMarginsF, QPageLayout::Unit) instead.
+
+    \sa setPageMargins()
   */
 void QPrinter::setMargins(const Margins &m)
 {
-    Q_D(QPrinter);
-
-    // set margins also to super class
-    QPagedPaintDevice::setMargins(m);
-
-    const qreal multiplier = 72./25.4;
-    QList<QVariant> margins;
-    margins << (m.left * multiplier) << (m.top * multiplier)
-            << (m.right * multiplier) << (m.bottom * multiplier);
-    d->printEngine->setProperty(QPrintEngine::PPK_PageMargins, margins);
-    d->addToManualSetList(QPrintEngine::PPK_PageMargins);
-    d->hasCustomPageMargins = true;
+    setPageMargins(QMarginsF(m.left, m.top, m.right, m.bottom), QPageLayout::Millimeter);
 }
-
 
 /*!
     \since 4.4
+
+    \obsolete Use pageLayout().pageMargins() instead.
 
     Returns the page margins for this printer in \a left, \a top, \a
     right, \a bottom. The unit of the returned margins are specified
     with the \a unit parameter.
 
-    \sa setPageMargins()
+    \sa pageLayout(), setPageMargins()
 */
 void QPrinter::getPageMargins(qreal *left, qreal *top, qreal *right, qreal *bottom, QPrinter::Unit unit) const
 {
-    Q_D(const QPrinter);
-    Q_ASSERT(left && top && right && bottom);
-    const qreal multiplier = qt_multiplierForUnit(unit, resolution());
-    QList<QVariant> margins(d->printEngine->property(QPrintEngine::PPK_PageMargins).toList());
-    *left = margins.at(0).toReal() / multiplier;
-    *top = margins.at(1).toReal() / multiplier;
-    *right = margins.at(2).toReal() / multiplier;
-    *bottom = margins.at(3).toReal() / multiplier;
+    QMarginsF margins;
+    if (unit == QPrinter::DevicePixel) {
+        QMargins tmp = pageLayout().marginsPixels(resolution());
+        margins = QMarginsF(tmp.left(), tmp.top(), tmp.right(), tmp.bottom());
+    } else {
+        margins = pageLayout().margins(QPageLayout::Unit(unit));
+    }
+    if (left)
+        *left = margins.left();
+    if (right)
+        *right = margins.right();
+    if (top)
+        *top = margins.top();
+    if (bottom)
+        *bottom = margins.bottom();
 }
 
 /*!
@@ -1624,38 +1800,33 @@ QPrintEngine *QPrinter::printEngine() const
     return d->printEngine;
 }
 
-#if defined (Q_OS_WIN)
 /*!
+    \obsolete Use QPageSize::id(windowsId) and setPageLayout(QPageSize) instead.
+
     Sets the page size to be used by the printer under Windows to \a
     pageSize.
 
-    \warning This function is not portable so you may prefer to use
-    setPaperSize() instead.
-
-    \sa winPageSize()
+    \sa pageLayout()
 */
 void QPrinter::setWinPageSize(int pageSize)
 {
     Q_D(QPrinter);
     ABORT_IF_ACTIVE("QPrinter::setWinPageSize");
-    d->printEngine->setProperty(QPrintEngine::PPK_WindowsPageSize, pageSize);
-    d->addToManualSetList(QPrintEngine::PPK_WindowsPageSize);
+    d->setProperty(QPrintEngine::PPK_WindowsPageSize, pageSize);
 }
 
 /*!
+    \obsolete Use pageLayout.pageSize().windowsId() instead.
+
     Returns the page size used by the printer under Windows.
 
-    \warning This function is not portable so you may prefer to use
-    paperSize() instead.
-
-    \sa setWinPageSize()
+    \sa pageLayout()
 */
 int QPrinter::winPageSize() const
 {
     Q_D(const QPrinter);
     return d->printEngine->property(QPrintEngine::PPK_WindowsPageSize).toInt();
 }
-#endif // Q_OS_WIN
 
 /*!
     Returns a list of the resolutions (a list of dots-per-inch
@@ -1668,18 +1839,19 @@ int QPrinter::winPageSize() const
 QList<int> QPrinter::supportedResolutions() const
 {
     Q_D(const QPrinter);
-    QList<QVariant> varlist
+    const QList<QVariant> varlist
         = d->printEngine->property(QPrintEngine::PPK_SupportedResolutions).toList();
     QList<int> intlist;
-    for (int i=0; i<varlist.size(); ++i)
-        intlist << varlist.at(i).toInt();
+    intlist.reserve(varlist.size());
+    for (auto var : varlist)
+        intlist << var.toInt();
     return intlist;
 }
 
 /*!
     Tells the printer to eject the current page and to continue
-    printing on a new page. Returns true if this was successful;
-    otherwise returns false.
+    printing on a new page. Returns \c true if this was successful;
+    otherwise returns \c false.
 
     Calling newPage() on an inactive QPrinter object will always
     fail.
@@ -1693,9 +1865,9 @@ bool QPrinter::newPage()
 }
 
 /*!
-    Aborts the current print run. Returns true if the print run was
+    Aborts the current print run. Returns \c true if the print run was
     successfully aborted and printerState() will return QPrinter::Aborted; otherwise
-    returns false.
+    returns \c false.
 
     It is not always possible to abort a print job. For example,
     all the data has gone to the printer but the printer cannot or
@@ -1718,7 +1890,7 @@ QPrinter::PrinterState QPrinter::printerState() const
     return d->printEngine->printerState();
 }
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_CLANG_QDOC)
 /*!
     Returns the supported paper sizes for this printer.
 
@@ -1735,10 +1907,11 @@ QList<QPrinter::PaperSource> QPrinter::supportedPaperSources() const
     Q_D(const QPrinter);
     QVariant v = d->printEngine->property(QPrintEngine::PPK_PaperSources);
 
-    QList<QVariant> variant_list = v.toList();
+    const QList<QVariant> variant_list = v.toList();
     QList<QPrinter::PaperSource> int_list;
-    for (int i=0; i<variant_list.size(); ++i)
-        int_list << (QPrinter::PaperSource) variant_list.at(i).toInt();
+    int_list.reserve(variant_list.size());
+    for (const auto &variant : variant_list)
+        int_list << QPrinter::PaperSource(variant.toInt());
 
     return int_list;
 }
@@ -1756,10 +1929,16 @@ QList<QPrinter::PaperSource> QPrinter::supportedPaperSources() const
 
     Any other value implies that the given value should be used.
 
-    \warning This function is not available on Windows.
+    This function always returns an empty string on Windows and Mac.
 
-    \sa setPrinterSelectionOption()
+    \sa setPrinterSelectionOption(), setPrintProgram()
 */
+
+QString QPrinter::printerSelectionOption() const
+{
+    Q_D(const QPrinter);
+    return d->printEngine->property(QPrintEngine::PPK_SelectionOption).toString();
+}
 
 /*!
     \fn void QPrinter::setPrinterSelectionOption(const QString &option)
@@ -1772,25 +1951,16 @@ QList<QPrinter::PaperSource> QPrinter::supportedPaperSources() const
     If the printer selection option is changed while the printer is
     active, the current print job may or may not be affected.
 
-    \warning This function is not available on Windows.
+    This function has no effect on Windows or Mac.
 
-    \sa printerSelectionOption()
+    \sa printerSelectionOption(), setPrintProgram()
 */
-
-#ifndef Q_OS_WIN
-QString QPrinter::printerSelectionOption() const
-{
-    Q_D(const QPrinter);
-    return d->printEngine->property(QPrintEngine::PPK_SelectionOption).toString();
-}
 
 void QPrinter::setPrinterSelectionOption(const QString &option)
 {
     Q_D(QPrinter);
-    d->printEngine->setProperty(QPrintEngine::PPK_SelectionOption, option);
-    d->addToManualSetList(QPrintEngine::PPK_SelectionOption);
+    d->setProperty(QPrintEngine::PPK_SelectionOption, option);
 }
-#endif
 
 /*!
     \since 4.1
@@ -1858,7 +2028,7 @@ int QPrinter::toPage() const
 void QPrinter::setFromTo(int from, int to)
 {
     if (from > to) {
-        qWarning() << "QPrinter::setFromTo: 'from' must be less than or equal to 'to'";
+        qWarning("QPrinter::setFromTo: 'from' must be less than or equal to 'to'");
         from = to;
     }
     d->fromPage = from;
@@ -1959,6 +2129,8 @@ QPrinter::PrintRange QPrinter::printRange() const
 
     \value PPK_PaperSources Specifies more than one QPrinter::PaperSource value.
 
+    \value PPK_PaperName A string specifying the name of the paper.
+
     \value PPK_PaperSize Specifies a QPrinter::PaperSize value.
 
     \value PPK_PrinterName A string specifying the name of the printer.
@@ -1981,12 +2153,18 @@ QPrinter::PrintRange QPrinter::printRange() const
     in the QPrinter::Point unit.
 
     \value PPK_PageMargins A QList<QVariant> containing the left, top,
-    right and bottom margin values.
+    right and bottom margin values in the QPrinter::Point unit.
 
     \value PPK_CopyCount An integer specifying the number of copies to print.
 
     \value PPK_SupportsMultipleCopies A boolean value indicating whether or not
     the printer supports printing multiple copies in one job.
+
+    \value PPK_QPageSize Set the page size using a QPageSize object.
+
+    \value PPK_QPageMargins Set the page margins using a QPair of QMarginsF and QPageLayout::Unit.
+
+    \value PPK_QPageLayout Set the page layout using a QPageLayout object.
 
     \value PPK_CustomBase Basis for extension.
 */
@@ -2016,15 +2194,15 @@ QPrinter::PrintRange QPrinter::printRange() const
 /*!
     \fn bool QPrintEngine::newPage()
 
-    Instructs the print engine to start a new page. Returns true if
-    the printer was able to create the new page; otherwise returns false.
+    Instructs the print engine to start a new page. Returns \c true if
+    the printer was able to create the new page; otherwise returns \c false.
 */
 
 /*!
     \fn bool QPrintEngine::abort()
 
     Instructs the print engine to abort the printing process. Returns
-    true if successful; otherwise returns false.
+    true if successful; otherwise returns \c false.
 */
 
 /*!
@@ -2039,37 +2217,10 @@ QPrinter::PrintRange QPrinter::printRange() const
     Returns the current state of the printer being used by the print engine.
 */
 
-/*
-    Returns the dimensions for the given paper size, \a size, in millimeters.
-*/
-QSizeF qt_paperSizeToQSizeF(QPrinter::PaperSize size)
-{
-    if (size == QPrinter::Custom) return QSizeF(0, 0);
-    return QSizeF(qt_paperSizes[size][0], qt_paperSizes[size][1]);
-}
-
-/*
-    Returns the PaperSize type that matches \a size, where \a size
-    is in millimeters.
-
-    Because dimensions may not always be completely accurate (for
-    example when converting between units), a particular PaperSize
-    will be returned if it matches within -1/+1 millimeters.
-*/
-QPrinter::PaperSize qSizeFTopaperSize(const QSizeF& size)
-{
-    for (int i = 0; i < static_cast<int>(QPrinter::NPageSize); ++i) {
-        if (qt_paperSizes[i][0] >= size.width() - 1 &&
-                qt_paperSizes[i][0] <= size.width() + 1 &&
-                qt_paperSizes[i][1] >= size.height() - 1 &&
-                qt_paperSizes[i][1] <= size.height() + 1) {
-            return QPrinter::PaperSize(i);
-        }
-    }
-
-    return QPrinter::Custom;
-}
-
 QT_END_NAMESPACE
 
+#elif defined(Q_OS_WINRT)
+QT_BEGIN_NAMESPACE
+bool Q_PRINTSUPPORT_EXPORT qt_winrt_export_lib_creation_variable;
+QT_END_NAMESPACE
 #endif // QT_NO_PRINTER

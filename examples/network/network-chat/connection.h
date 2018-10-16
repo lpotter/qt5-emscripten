@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,10 +51,12 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
+#include <QCborStreamReader>
+#include <QCborStreamWriter>
+#include <QElapsedTimer>
 #include <QHostAddress>
 #include <QString>
 #include <QTcpSocket>
-#include <QTime>
 #include <QTimer>
 
 static const int MaxBufferSize = 1024000;
@@ -68,6 +80,8 @@ public:
     };
 
     Connection(QObject *parent = 0);
+    Connection(qintptr socketDescriptor, QObject *parent = 0);
+    ~Connection();
 
     QString name() const;
     void setGreetingMessage(const QString &message);
@@ -78,7 +92,7 @@ signals:
     void newMessage(const QString &from, const QString &message);
 
 protected:
-    void timerEvent(QTimerEvent *timerEvent);
+    void timerEvent(QTimerEvent *timerEvent) override;
 
 private slots:
     void processReadyRead();
@@ -86,20 +100,19 @@ private slots:
     void sendGreetingMessage();
 
 private:
-    int readDataIntoBuffer(int maxSize = MaxBufferSize);
-    int dataLengthForCurrentDataType();
-    bool readProtocolHeader();
     bool hasEnoughData();
+    void processGreeting();
     void processData();
 
+    QCborStreamReader reader;
+    QCborStreamWriter writer;
     QString greetingMessage;
     QString username;
     QTimer pingTimer;
-    QTime pongTime;
-    QByteArray buffer;
+    QElapsedTimer pongTime;
+    QString buffer;
     ConnectionState state;
     DataType currentDataType;
-    int numBytesForCurrentDataType;
     int transferTimerId;
     bool isGreetingMessageSent;
 };

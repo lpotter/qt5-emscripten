@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,6 @@
 
 #include "qconnmanengine.h"
 #include "qconnmanservice_linux_p.h"
-#include "qofonoservice_linux_p.h"
 #include "../qnetworksession_impl.h"
 
 #include <QtNetwork/private/qnetworkconfiguration_p.h>
@@ -55,16 +52,20 @@
 #include <QtDBus/QDBusInterface>
 #include <QtDBus/QDBusMessage>
 #include <QtDBus/QDBusReply>
-
-#ifndef QT_NO_BEARERMANAGEMENT
 #ifndef QT_NO_DBUS
 
 QT_BEGIN_NAMESPACE
 
 QConnmanEngine::QConnmanEngine(QObject *parent)
 :   QBearerEngineImpl(parent),
-    connmanManager(new QConnmanManagerInterface(this))
+    connmanManager(new QConnmanManagerInterface(this)),
+    ofonoManager(new QOfonoManagerInterface(this)),
+    ofonoNetwork(0),
+    ofonoContextManager(0)
 {
+    qDBusRegisterMetaType<ConnmanMap>();
+    qDBusRegisterMetaType<ConnmanMapList>();
+    qRegisterMetaType<ConnmanMapList>("ConnmanMapList");
 }
 
 QConnmanEngine::~QConnmanEngine()
@@ -79,23 +80,45 @@ bool QConnmanEngine::connmanAvailable() const
 
 void QConnmanEngine::initialize()
 {
-    connect(connmanManager,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-            this,SLOT(propertyChangedContext(QString,QString,QDBusVariant)));
+    QMutexLocker locker(&mutex);
+    connect(ofonoManager,SIGNAL(modemChanged()),this,SLOT(changedModem()));
 
-    foreach (const QString &techPath, connmanManager->getTechnologies()) {
-        QConnmanTechnologyInterface *tech;
-        tech = new QConnmanTechnologyInterface(techPath, this);
+    ofonoNetwork = new QOfonoNetworkRegistrationInterface(ofonoManager->currentModem(),this);
+    ofonoContextManager = new QOfonoDataConnectionManagerInterface(ofonoManager->currentModem(),this);
+    connect(ofonoContextManager,SIGNAL(roamingAllowedChanged(bool)),this,SLOT(reEvaluateCellular()));
 
-        connect(tech,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-                this,SLOT(technologyPropertyChangedContext(QString,QString,QDBusVariant)));
-    }
+    connect(connmanManager,SIGNAL(servicesChanged(ConnmanMapList,QList<QDBusObjectPath>)),
+            this, SLOT(updateServices(ConnmanMapList,QList<QDBusObjectPath>)));
 
-    foreach (const QString &servPath, connmanManager->getServices()) {
+    connect(connmanManager,SIGNAL(servicesReady(QStringList)),this,SLOT(servicesReady(QStringList)));
+    connect(connmanManager,SIGNAL(scanFinished(bool)),this,SLOT(finishedScan(bool)));
+
+    const auto servPaths = connmanManager->getServices();
+    for (const QString &servPath : servPaths)
         addServiceConfiguration(servPath);
-    }
+    Q_EMIT updateCompleted();
+}
 
-    // Get current list of access points.
-    getConfigurations();
+void QConnmanEngine::changedModem()
+{
+    QMutexLocker locker(&mutex);
+    if (ofonoNetwork)
+        delete ofonoNetwork;
+
+    ofonoNetwork = new QOfonoNetworkRegistrationInterface(ofonoManager->currentModem(),this);
+
+    if (ofonoContextManager)
+        delete ofonoContextManager;
+    ofonoContextManager = new QOfonoDataConnectionManagerInterface(ofonoManager->currentModem(),this);
+}
+
+void QConnmanEngine::servicesReady(const QStringList &list)
+{
+    QMutexLocker locker(&mutex);
+    for (const QString &servPath : list)
+        addServiceConfiguration(servPath);
+
+    Q_EMIT updateCompleted();
 }
 
 QList<QNetworkConfigurationPrivate *> QConnmanEngine::getConfigurations()
@@ -103,8 +126,10 @@ QList<QNetworkConfigurationPrivate *> QConnmanEngine::getConfigurations()
     QMutexLocker locker(&mutex);
     QList<QNetworkConfigurationPrivate *> fetchedConfigurations;
     QNetworkConfigurationPrivate* cpPriv = 0;
+    const int numFoundConfigurations = foundConfigurations.count();
+    fetchedConfigurations.reserve(numFoundConfigurations);
 
-    for (int i = 0; i < foundConfigurations.count(); ++i) {
+    for (int i = 0; i < numFoundConfigurations; ++i) {
         QNetworkConfigurationPrivate *config = new QNetworkConfigurationPrivate;
         cpPriv = foundConfigurations.at(i);
 
@@ -123,13 +148,6 @@ QList<QNetworkConfigurationPrivate *> QConnmanEngine::getConfigurations()
     return fetchedConfigurations;
 }
 
-void QConnmanEngine::doRequestUpdate()
-{
-    connmanManager->requestScan("");
-    getConfigurations();
-    emit updateCompleted();
-}
-
 QString QConnmanEngine::getInterfaceFromId(const QString &id)
 {
     QMutexLocker locker(&mutex);
@@ -145,49 +163,34 @@ bool QConnmanEngine::hasIdentifier(const QString &id)
 void QConnmanEngine::connectToId(const QString &id)
 {
     QMutexLocker locker(&mutex);
-    QString servicePath = serviceFromId(id);
-    QConnmanServiceInterface serv(servicePath);
-    if(!serv.isValid()) {
+
+    QConnmanServiceInterface *serv = connmanServiceInterfaces.value(id);
+
+    if (!serv || !serv->isValid()) {
         emit connectionError(id, QBearerEngineImpl::InterfaceLookupError);
     } else {
-        if(serv.getType() != "cellular") {
-
-            serv.connect();
-        } else {
-            QOfonoManagerInterface ofonoManager(0);
-            QString modemPath = ofonoManager.currentModem().path();
-            QOfonoDataConnectionManagerInterface dc(modemPath,0);
-            foreach (const QDBusObjectPath &dcPath,dc.getPrimaryContexts()) {
-                if(dcPath.path().contains(servicePath.section("_",-1))) {
-                    QOfonoPrimaryDataContextInterface primaryContext(dcPath.path(),0);
-                    primaryContext.setActive(true);
+        if (serv->type() == QLatin1String("cellular")) {
+            if (serv->roaming()) {
+                if (!isRoamingAllowed(serv->path())) {
+                    emit connectionError(id, QBearerEngineImpl::OperationNotSupported);
+                    return;
                 }
             }
         }
+        if (serv->autoConnect())
+            serv->connect();
     }
 }
 
 void QConnmanEngine::disconnectFromId(const QString &id)
 {
     QMutexLocker locker(&mutex);
-    QString servicePath = serviceFromId(id);
-    QConnmanServiceInterface serv(servicePath);
-    if(!serv.isValid()) {
+    QConnmanServiceInterface *serv = connmanServiceInterfaces.value(id);
+
+    if (!serv || !serv->isValid()) {
         emit connectionError(id, DisconnectionError);
     } else {
-        if(serv.getType() != "cellular") {
-            serv.disconnect();
-        } else {
-            QOfonoManagerInterface ofonoManager(0);
-            QString modemPath = ofonoManager.currentModem().path();
-            QOfonoDataConnectionManagerInterface dc(modemPath,0);
-            foreach (const QDBusObjectPath &dcPath,dc.getPrimaryContexts()) {
-                if(dcPath.path().contains(servicePath.section("_",-1))) {
-                    QOfonoPrimaryDataContextInterface primaryContext(dcPath.path(),0);
-                    primaryContext.setActive(false);
-                }
-            }
-        }
+        serv->disconnect();
     }
 }
 
@@ -197,15 +200,36 @@ void QConnmanEngine::requestUpdate()
     QTimer::singleShot(0, this, SLOT(doRequestUpdate()));
 }
 
-QString QConnmanEngine::serviceFromId(const QString &id)
+void QConnmanEngine::doRequestUpdate()
+{
+    bool scanned = connmanManager->requestScan("wifi");
+    if (!scanned)
+        Q_EMIT updateCompleted();
+}
+
+void QConnmanEngine::finishedScan(bool error)
+{
+    if (error)
+        Q_EMIT updateCompleted();
+}
+
+void QConnmanEngine::updateServices(const ConnmanMapList &changed, const QList<QDBusObjectPath> &removed)
 {
     QMutexLocker locker(&mutex);
-    foreach (const QString &service, serviceNetworks) {
-        if (id == QString::number(qHash(service)))
-            return service;
+
+    foreach (const QDBusObjectPath &objectPath, removed) {
+        removeConfiguration(objectPath.path());
     }
 
-    return QString();
+    foreach (const ConnmanMap &connmanMap, changed) {
+        const QString id = connmanMap.objectPath.path();
+        if (accessPointConfigurations.contains(id)) {
+            configurationChange(connmanServiceInterfaces.value(id));
+        } else {
+            addServiceConfiguration(connmanMap.objectPath.path());
+        }
+    }
+    Q_EMIT updateCompleted();
 }
 
 QNetworkSession::State QConnmanEngine::sessionStateForId(const QString &id)
@@ -214,25 +238,25 @@ QNetworkSession::State QConnmanEngine::sessionStateForId(const QString &id)
 
     QNetworkConfigurationPrivatePointer ptr = accessPointConfigurations.value(id);
 
-    if (!ptr)
+    if (!ptr || !ptr->isValid)
         return QNetworkSession::Invalid;
 
-    if (!ptr->isValid) {
+    QString service = id;
+    QConnmanServiceInterface *serv = connmanServiceInterfaces.value(service);
+    if (!serv)
         return QNetworkSession::Invalid;
 
-    }
-    QString service = serviceFromId(id);
-    QConnmanServiceInterface serv(service);
-    QString servState = serv.getState();
+    QString servState = serv->state();
 
-    if(serv.isFavorite() && (servState == "idle" || servState == "failure")) {
+    if (serv->favorite() && (servState == QLatin1String("idle") || servState == QLatin1String("failure"))) {
         return QNetworkSession::Disconnected;
     }
 
-    if(servState == "association" || servState == "configuration" || servState == "login") {
+    if (servState == QLatin1String("association") || servState == QLatin1String("configuration")) {
         return QNetworkSession::Connecting;
     }
-    if(servState == "ready" || servState == "online") {
+
+    if (servState == QLatin1String("online") || servState == QLatin1String("ready")) {
         return QNetworkSession::Connected;
     }
 
@@ -292,7 +316,8 @@ QNetworkConfigurationManager::Capabilities QConnmanEngine::capabilities() const
 {
     return QNetworkConfigurationManager::ForcedRoaming |
             QNetworkConfigurationManager::DataStatistics |
-           QNetworkConfigurationManager::CanStartAndStopInterfaces;
+            QNetworkConfigurationManager::CanStartAndStopInterfaces |
+            QNetworkConfigurationManager::NetworkSessionRequired;
 }
 
 QNetworkSessionPrivate *QConnmanEngine::createSessionBackend()
@@ -302,88 +327,39 @@ QNetworkSessionPrivate *QConnmanEngine::createSessionBackend()
 
 QNetworkConfigurationPrivatePointer QConnmanEngine::defaultConfiguration()
 {
+    const QMutexLocker locker(&mutex);
+    const auto servPaths = connmanManager->getServices();
+    for (const QString &servPath : servPaths) {
+        if (connmanServiceInterfaces.contains(servPath)) {
+            if (accessPointConfigurations.contains(servPath))
+                return accessPointConfigurations.value(servPath);
+        }
+    }
     return QNetworkConfigurationPrivatePointer();
 }
 
-void QConnmanEngine::propertyChangedContext(const QString &path,const QString &item, const QDBusVariant &value)
+void QConnmanEngine::serviceStateChanged(const QString &state)
 {
-    Q_UNUSED(path);
+    QConnmanServiceInterface *service = qobject_cast<QConnmanServiceInterface *>(sender());
+    configurationChange(service);
 
-    QMutexLocker locker(&mutex);
-    if(item == "Services") {
-        QDBusArgument arg = qvariant_cast<QDBusArgument>(value.variant());
-        QStringList list = qdbus_cast<QStringList>(arg);
-
-        if(list.count() > accessPointConfigurations.count()) {
-            foreach (const QString &service, list) {
-                addServiceConfiguration(service);
-            }
-        }
-    }
-
-    if(item == "Technologies") {
-        QDBusArgument arg = qvariant_cast<QDBusArgument>(value.variant());
-        QStringList newlist = qdbus_cast<QStringList>(arg);
-        if(newlist.count() > 0) {
-            QMap<QString,QConnmanTechnologyInterface *> oldtech = technologies;
-
-            foreach (const QString &listPath, newlist) {
-                if(!oldtech.contains(listPath)) {
-                    QConnmanTechnologyInterface *tech;
-                    tech = new QConnmanTechnologyInterface(listPath,this);
-                    connect(tech,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-                            this,SLOT(technologyPropertyChangedContext(QString,QString,QDBusVariant)));
-                    technologies.insert(listPath, tech);
-                }
-            }
-        }
-    }
-    if(item == "State") {
-// qDebug() << value.variant();
+    if (state == QLatin1String("failure")) {
+        emit connectionError(service->path(), ConnectError);
     }
 }
 
-void QConnmanEngine::servicePropertyChangedContext(const QString &path,const QString &item, const QDBusVariant &value)
+void QConnmanEngine::configurationChange(QConnmanServiceInterface *serv)
 {
+    if (!serv)
+        return;
     QMutexLocker locker(&mutex);
-    if(item == "State") {
-        configurationChange(QString::number(qHash(path)));
-
-        if(value.variant().toString() == "failure") {
-            QConnmanServiceInterface serv(path);
-            emit connectionError(QString::number(qHash(path)), ConnectError);
-        }
-    }
-}
-
-void QConnmanEngine::technologyPropertyChangedContext(const QString & path, const QString &item, const QDBusVariant &value)
-{
-    if(item == "State") {
-        if(value.variant().toString() == "offline") {
-            QConnmanTechnologyInterface tech(path);
-            disconnect(&tech,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-                       this,SLOT(technologyPropertyChangedContext(QString,QString,QDBusVariant)));
-
-            technologies.remove(path);
-        }
-    }
-}
-
-void QConnmanEngine::configurationChange(const QString &id)
-{
-    QMutexLocker locker(&mutex);
+    QString id = serv->path();
 
     if (accessPointConfigurations.contains(id)) {
-
+        bool changed = false;
         QNetworkConfigurationPrivatePointer ptr = accessPointConfigurations.value(id);
-
-        QString servicePath = serviceFromId(id);
-        QConnmanServiceInterface *serv;
-        serv = new QConnmanServiceInterface(servicePath);
-        QString networkName = serv->getName();
-
-        QNetworkConfiguration::StateFlags curState = getStateForService(servicePath);
-
+        QString networkName = serv->name();
+        QNetworkConfiguration::StateFlags curState = getStateForService(serv->path());
         ptr->mutex.lock();
 
         if (!ptr->isValid) {
@@ -392,17 +368,21 @@ void QConnmanEngine::configurationChange(const QString &id)
 
         if (ptr->name != networkName) {
             ptr->name = networkName;
+            changed = true;
         }
 
         if (ptr->state != curState) {
             ptr->state = curState;
+            changed = true;
         }
 
         ptr->mutex.unlock();
 
-        locker.unlock();
-        emit configurationChanged(ptr);
-        locker.relock();
+        if (changed) {
+            locker.unlock();
+            emit configurationChanged(ptr);
+            locker.relock();
+        }
     }
 
      locker.unlock();
@@ -412,24 +392,32 @@ void QConnmanEngine::configurationChange(const QString &id)
 QNetworkConfiguration::StateFlags QConnmanEngine::getStateForService(const QString &service)
 {
     QMutexLocker locker(&mutex);
-    QConnmanServiceInterface serv(service);
+    QConnmanServiceInterface *serv = connmanServiceInterfaces.value(service);
+    if (!serv)
+        return QNetworkConfiguration::Undefined;
+
+    QString state = serv->state();
     QNetworkConfiguration::StateFlags flag = QNetworkConfiguration::Defined;
-    if( serv.getType() == "cellular") {
-        if(serv.isSetupRequired()) {
-            flag = ( flag | QNetworkConfiguration::Defined);
+
+    if (serv->type() == QLatin1String("cellular")) {
+
+        if (!serv->autoConnect()|| (serv->roaming()
+                    && !isRoamingAllowed(serv->path()))) {
+            flag = (flag | QNetworkConfiguration::Defined);
         } else {
-            flag = ( flag | QNetworkConfiguration::Discovered);
+            flag = (flag | QNetworkConfiguration::Discovered);
         }
     } else {
-        if(serv.isFavorite()) {
-            flag = ( flag | QNetworkConfiguration::Discovered);
+        if (serv->favorite()) {
+            if (serv->autoConnect()) {
+                flag = (flag | QNetworkConfiguration::Discovered);
+            }
         } else {
             flag = QNetworkConfiguration::Undefined;
         }
     }
-
-    if(serv.getState() == "ready" || serv.getState() == "online") {
-        flag = ( flag | QNetworkConfiguration::Active);
+    if (state == QLatin1String("online") || state == QLatin1String("ready")) {
+        flag = (flag | QNetworkConfiguration::Active);
     }
 
     return flag;
@@ -437,51 +425,35 @@ QNetworkConfiguration::StateFlags QConnmanEngine::getStateForService(const QStri
 
 QNetworkConfiguration::BearerType QConnmanEngine::typeToBearer(const QString &type)
 {
-    if (type == "wifi")
+    if (type == QLatin1String("wifi"))
         return QNetworkConfiguration::BearerWLAN;
-    if (type == "ethernet")
+    if (type == QLatin1String("ethernet"))
         return QNetworkConfiguration::BearerEthernet;
-    if (type == "bluetooth")
+    if (type == QLatin1String("bluetooth"))
         return QNetworkConfiguration::BearerBluetooth;
-    if (type == "cellular") {
+    if (type == QLatin1String("cellular")) {
         return ofonoTechToBearerType(type);
     }
-    if (type == "wimax")
+    if (type == QLatin1String("wimax"))
         return QNetworkConfiguration::BearerWiMAX;
-
-//    if(type == "gps")
-//    if(type == "vpn")
 
     return QNetworkConfiguration::BearerUnknown;
 }
 
 QNetworkConfiguration::BearerType QConnmanEngine::ofonoTechToBearerType(const QString &/*type*/)
 {
-    QOfonoManagerInterface ofonoManager(this);
-    QOfonoNetworkRegistrationInterface ofonoNetwork(ofonoManager.currentModem().path(),this);
-
-    if(ofonoNetwork.isValid()) {
-        foreach (const QDBusObjectPath &op,ofonoNetwork.getOperators() ) {
-            QOfonoNetworkOperatorInterface opIface(op.path(),this);
-
-            foreach (const QString &opTech, opIface.getTechnologies()) {
-
-                if(opTech == "gsm") {
-                    return QNetworkConfiguration::Bearer2G;
-                }
-                if(opTech == "edge"){
-                    return QNetworkConfiguration::BearerCDMA2000; //wrong, I know
-                }
-                if(opTech == "umts"){
-                    return QNetworkConfiguration::BearerWCDMA;
-                }
-                if(opTech == "hspa"){
-                    return QNetworkConfiguration::BearerHSPA;
-                }
-                if(opTech == "lte"){
-                    return QNetworkConfiguration::BearerWiMAX; //not exact
-                }
-            }
+    if (ofonoNetwork) {
+        QString currentTechnology = ofonoNetwork->getTechnology();
+        if (currentTechnology == QLatin1String("gsm")) {
+            return QNetworkConfiguration::Bearer2G;
+        } else if (currentTechnology == QLatin1String("edge")) {
+            return QNetworkConfiguration::BearerCDMA2000; //wrong, I know
+        } else if (currentTechnology == QLatin1String("umts")) {
+            return QNetworkConfiguration::BearerWCDMA;
+        } else if (currentTechnology == QLatin1String("hspa")) {
+            return QNetworkConfiguration::BearerHSPA;
+        } else if (currentTechnology == QLatin1String("lte")) {
+            return QNetworkConfiguration::BearerLTE;
         }
     }
     return QNetworkConfiguration::BearerUnknown;
@@ -489,12 +461,10 @@ QNetworkConfiguration::BearerType QConnmanEngine::ofonoTechToBearerType(const QS
 
 bool QConnmanEngine::isRoamingAllowed(const QString &context)
 {
-    QOfonoManagerInterface ofonoManager(this);
-    QString modemPath = ofonoManager.currentModem().path();
-    QOfonoDataConnectionManagerInterface dc(modemPath,this);
-    foreach (const QDBusObjectPath &dcPath,dc.getPrimaryContexts()) {
-        if(dcPath.path().contains(context.section("_",-1))) {
-            return dc.isRoamingAllowed();
+    const auto dcPaths = ofonoContextManager->contexts();
+    for (const QString &dcPath : dcPaths) {
+        if (dcPath.contains(context.section("_",-1))) {
+            return ofonoContextManager->roamingAllowed();
         }
     }
     return false;
@@ -506,15 +476,13 @@ void QConnmanEngine::removeConfiguration(const QString &id)
 
     if (accessPointConfigurations.contains(id)) {
 
-        QString service = serviceFromId(id);
-        QConnmanServiceInterface serv(service);
-
-        disconnect(&serv,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-                   this,SLOT(servicePropertyChangedContext(QString,QString,QDBusVariant)));
-
-        serviceNetworks.removeOne(service);
-
+        disconnect(connmanServiceInterfaces.value(id),SIGNAL(stateChanged(QString)),
+                this,SLOT(serviceStateChanged(QString)));
+        serviceNetworks.removeOne(id);
+        QConnmanServiceInterface *service  = connmanServiceInterfaces.take(id);
+        delete service;
         QNetworkConfigurationPrivatePointer ptr = accessPointConfigurations.take(id);
+        foundConfigurations.removeOne(ptr.data());
         locker.unlock();
         emit configurationRemoved(ptr);
         locker.relock();
@@ -524,35 +492,32 @@ void QConnmanEngine::removeConfiguration(const QString &id)
 void QConnmanEngine::addServiceConfiguration(const QString &servicePath)
 {
     QMutexLocker locker(&mutex);
-    QConnmanServiceInterface *serv;
-    serv = new QConnmanServiceInterface(servicePath);
+    if (!connmanServiceInterfaces.contains(servicePath)) {
+        QConnmanServiceInterface *serv = new QConnmanServiceInterface(servicePath, this);
+        connmanServiceInterfaces.insert(serv->path(),serv);
+    }
 
-    const QString id = QString::number(qHash(servicePath));
+    if (!accessPointConfigurations.contains(servicePath)) {
 
-    if (!accessPointConfigurations.contains(id)) {
         serviceNetworks.append(servicePath);
 
-        connect(serv,SIGNAL(propertyChangedContext(QString,QString,QDBusVariant)),
-                this,SLOT(servicePropertyChangedContext(QString,QString,QDBusVariant)));
+        connect(connmanServiceInterfaces.value(servicePath),SIGNAL(stateChanged(QString)),
+                this,SLOT(serviceStateChanged(QString)));
+
         QNetworkConfigurationPrivate* cpPriv = new QNetworkConfigurationPrivate();
+        QConnmanServiceInterface *service = connmanServiceInterfaces.value(servicePath);
 
-        QString networkName = serv->getName();
+        QString networkName = service->name();
 
-        const QString connectionType = serv->getType();
-        if (connectionType == "ethernet") {
+        const QString connectionType = service->type();
+        if (connectionType == QLatin1String("ethernet")) {
             cpPriv->bearerType = QNetworkConfiguration::BearerEthernet;
-        } else if (connectionType == "wifi") {
+        } else if (connectionType == QLatin1String("wifi")) {
             cpPriv->bearerType = QNetworkConfiguration::BearerWLAN;
-        } else if (connectionType == "cellular") {
-            cpPriv->bearerType = ofonoTechToBearerType("cellular");
-            if(servicePath.isEmpty()) {
-                networkName = serv->getAPN();
-                if(networkName.isEmpty()) {
-                    networkName = serv->getName();
-                }
-            }
-            cpPriv->roamingSupported = isRoamingAllowed(servicePath);
-        } else if (connectionType == "wimax") {
+        } else if (connectionType == QLatin1String("cellular")) {
+            cpPriv->bearerType = ofonoTechToBearerType(QLatin1String("cellular"));
+            cpPriv->roamingSupported = service->roaming() && isRoamingAllowed(servicePath);
+        } else if (connectionType == QLatin1String("wimax")) {
             cpPriv->bearerType = QNetworkConfiguration::BearerWiMAX;
         } else {
             cpPriv->bearerType = QNetworkConfiguration::BearerUnknown;
@@ -560,10 +525,10 @@ void QConnmanEngine::addServiceConfiguration(const QString &servicePath)
 
         cpPriv->name = networkName;
         cpPriv->isValid = true;
-        cpPriv->id = id;
+        cpPriv->id = servicePath;
         cpPriv->type = QNetworkConfiguration::InternetAccessPoint;
 
-        if(serv->getSecurity() == "none") {
+        if (service->security() == QLatin1String("none")) {
             cpPriv->purpose = QNetworkConfiguration::PublicPurpose;
         } else {
             cpPriv->purpose = QNetworkConfiguration::PrivatePurpose;
@@ -573,13 +538,16 @@ void QConnmanEngine::addServiceConfiguration(const QString &servicePath)
 
         QNetworkConfigurationPrivatePointer ptr(cpPriv);
         accessPointConfigurations.insert(ptr->id, ptr);
-        foundConfigurations.append(cpPriv);
-        configInterfaces[cpPriv->id] = serv->getInterface(); 
+        if (connectionType == QLatin1String("cellular")) {
+            foundConfigurations.append(cpPriv);
+        } else {
+            foundConfigurations.prepend(cpPriv);
+        }
+        configInterfaces[cpPriv->id] = service->serviceInterface();
 
         locker.unlock();
-        emit configurationAdded(ptr);
+        Q_EMIT configurationAdded(ptr);
         locker.relock();
-        emit updateCompleted();
     }
 }
 
@@ -588,7 +556,16 @@ bool QConnmanEngine::requiresPolling() const
     return false;
 }
 
+void QConnmanEngine::reEvaluateCellular()
+{
+    const auto servicePaths = connmanManager->getServices();
+    for (const QString &servicePath : servicePaths) {
+        if (servicePath.contains("cellular") && accessPointConfigurations.contains(servicePath)) {
+            configurationChange(connmanServiceInterfaces.value(servicePath));
+        }
+    }
+}
+
 QT_END_NAMESPACE
 
 #endif // QT_NO_DBUS
-#endif // QT_NO_BEARERMANAGEMENT

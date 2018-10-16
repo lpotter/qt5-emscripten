@@ -2,6 +2,4 @@
 # --------------------------------------------------------------------
 
 INCLUDEPATH += ../3rdparty/wintab
-!wince* {
-    LIBS *= -lshell32
-}
+!winrt: LIBS_PRIVATE *= -lshell32 -luxtheme -ldwmapi

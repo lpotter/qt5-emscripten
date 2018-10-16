@@ -16,5 +16,3 @@ HEADERS += tokenizers/basic/basic.h                     \
            tokenizers/withNamespace/withNamespace.h
 
 QT = core testlib
-CONFIG += parallel_test
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

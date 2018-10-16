@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -58,43 +68,43 @@ MainWindow::MainWindow()
 void MainWindow::createMenus()
 {
     fileMenu = menuBar()->addMenu(tr("&File"));
-    
+
     openAct = new QAction(tr("&Open..."), this);
     fileMenu->addAction(openAct);
-    connect(openAct, SIGNAL(triggered()), this, SLOT(openFile()));
+    connect(openAct, &QAction::triggered, this, &MainWindow::openFile);
 //! [1a]
 
     saveAct = new QAction(tr("&Save As..."), this);
     fileMenu->addAction(saveAct);
-    connect(saveAct, SIGNAL(triggered()), this, SLOT(saveFile()));
+    connect(saveAct, &QAction::triggered, this, &MainWindow::saveFile);
 
     fileMenu->addSeparator();
 
     exitAct = new QAction(tr("E&xit"), this);
     fileMenu->addAction(exitAct);
-    connect(exitAct, SIGNAL(triggered()), this, SLOT(close()));
+    connect(exitAct, &QAction::triggered, this, &QWidget::close);
 
     toolMenu = menuBar()->addMenu(tr("&Tools"));
 
     addAct = new QAction(tr("&Add Entry..."), this);
     toolMenu->addAction(addAct);
-    connect(addAct, SIGNAL(triggered()), addressWidget, SLOT(addEntry()));
-    
+    connect(addAct, &QAction::triggered, addressWidget, &AddressWidget::showAddEntryDialog);
+
 //! [1b]
     editAct = new QAction(tr("&Edit Entry..."), this);
     editAct->setEnabled(false);
     toolMenu->addAction(editAct);
-    connect(editAct, SIGNAL(triggered()), addressWidget, SLOT(editEntry()));
+    connect(editAct, &QAction::triggered, addressWidget, &AddressWidget::editEntry);
 
     toolMenu->addSeparator();
 
     removeAct = new QAction(tr("&Remove Entry"), this);
     removeAct->setEnabled(false);
     toolMenu->addAction(removeAct);
-    connect(removeAct, SIGNAL(triggered()), addressWidget, SLOT(removeEntry()));
+    connect(removeAct, &QAction::triggered, addressWidget, &AddressWidget::removeEntry);
 
-    connect(addressWidget, SIGNAL(selectionChanged(QItemSelection)),
-        this, SLOT(updateActions(QItemSelection)));
+    connect(addressWidget, &AddressWidget::selectionChanged,
+        this, &MainWindow::updateActions);
 }
 //! [1b]
 
@@ -120,7 +130,7 @@ void MainWindow::saveFile()
 void MainWindow::updateActions(const QItemSelection &selection)
 {
     QModelIndexList indexes = selection.indexes();
-    
+
     if (!indexes.isEmpty()) {
         removeAct->setEnabled(true);
         editAct->setEnabled(true);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,12 +51,16 @@ class QTimeLinePrivate : public QObjectPrivate
     Q_DECLARE_PUBLIC(QTimeLine)
 public:
     inline QTimeLinePrivate()
-        : startTime(0), duration(1000), startFrame(0), endFrame(0),
+        : easingCurve(QEasingCurve::InOutSine),
+          startTime(0), duration(1000), startFrame(0), endFrame(0),
           updateInterval(1000 / 25),
           totalLoopCount(1), currentLoopCount(0), currentTime(0), timerId(0),
-          direction(QTimeLine::Forward), easingCurve(QEasingCurve::InOutSine),
+          direction(QTimeLine::Forward),
           state(QTimeLine::NotRunning)
     { }
+
+    QElapsedTimer timer;
+    QEasingCurve easingCurve;
 
     int startTime;
     int duration;
@@ -70,10 +72,8 @@ public:
 
     int currentTime;
     int timerId;
-    QElapsedTimer timer;
 
     QTimeLine::Direction direction;
-    QEasingCurve easingCurve;
     QTimeLine::State state;
     inline void setState(QTimeLine::State newState)
     {
@@ -131,7 +131,7 @@ void QTimeLinePrivate::setCurrentTime(int msecs)
         const int transitionframe = (direction == QTimeLine::Forward ? endFrame : startFrame);
         if (looping && !finished && transitionframe != currentFrame) {
 #ifdef QTIMELINE_DEBUG
-            qDebug() << "QTimeLinePrivate::setCurrentTime: transitionframe";
+            qDebug("QTimeLinePrivate::setCurrentTime: transitionframe");
 #endif
             emit q->frameChanged(transitionframe, QTimeLine::QPrivateSignal());
         }
@@ -173,8 +173,8 @@ void QTimeLinePrivate::setCurrentTime(int msecs)
     milliseconds to QTimeLine's constructor. The timeline's duration describes
     for how long the animation will run. Then you set a suitable frame range
     by calling setFrameRange(). Finally connect the frameChanged() signal to a
-    suitable slot in the widget you wish to animate (e.g., setValue() in
-    QProgressBar). When you proceed to calling start(), QTimeLine will enter
+    suitable slot in the widget you wish to animate (for example, \l {QProgressBar::}{setValue()}
+    in QProgressBar). When you proceed to calling start(), QTimeLine will enter
     Running state, and start emitting frameChanged() at regular intervals,
     causing your widget's connected property's value to grow from the lower
     end to the upper and of your frame range, at a steady rate. You can
@@ -269,7 +269,7 @@ void QTimeLinePrivate::setCurrentTime(int msecs)
 */
 
 /*!
-    \fn QTimeLine::valueChanged(qreal value)
+    \fn void QTimeLine::valueChanged(qreal value)
 
     QTimeLine emits this signal at regular intervals when in \l Running state,
     but only if the current value changes. \a value is the current value. \a value is
@@ -279,7 +279,7 @@ void QTimeLinePrivate::setCurrentTime(int msecs)
 */
 
 /*!
-    \fn QTimeLine::frameChanged(int frame)
+    \fn void QTimeLine::frameChanged(int frame)
 
     QTimeLine emits this signal at regular intervals when in \l Running state,
     but only if the current frame changes. \a frame is the current frame number.
@@ -288,14 +288,14 @@ void QTimeLinePrivate::setCurrentTime(int msecs)
 */
 
 /*!
-    \fn QTimeLine::stateChanged(QTimeLine::State newState)
+    \fn void QTimeLine::stateChanged(QTimeLine::State newState)
 
     This signal is emitted whenever QTimeLine's state changes. The new state
     is \a newState.
 */
 
 /*!
-    \fn QTimeLine::finished()
+    \fn void QTimeLine::finished()
 
     This signal is emitted when QTimeLine finishes (i.e., reaches the end of
     its time line), and does not loop.
@@ -744,7 +744,10 @@ void QTimeLine::setPaused(bool paused)
         d->timerId = 0;
         d->setState(Paused);
     } else if (!paused && d->state == Paused) {
+        // Same as resume()
         d->timerId = startTimer(d->updateInterval);
+        d->startTime = d->currentTime;
+        d->timer.start();
         d->setState(Running);
     }
 }
@@ -781,3 +784,5 @@ void QTimeLine::timerEvent(QTimerEvent *event)
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qtimeline.cpp"

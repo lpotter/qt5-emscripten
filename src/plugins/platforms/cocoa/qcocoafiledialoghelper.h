@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +41,12 @@
 #define QCOCOAFILEDIALOGHELPER_H
 
 #include <QObject>
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <qpa/qplatformdialoghelper.h>
+
+QT_REQUIRE_CONFIG(filedialog);
+
+Q_FORWARD_DECLARE_OBJC_CLASS(QT_MANGLE_NAMESPACE(QNSOpenSavePanelDelegate));
 
 QT_BEGIN_NAMESPACE
 
@@ -56,19 +59,19 @@ public:
     QCocoaFileDialogHelper();
     virtual ~QCocoaFileDialogHelper();
 
-    void exec();
+    void exec() override;
 
-    bool defaultNameFilterDisables() const;
+    bool defaultNameFilterDisables() const override;
 
-    bool show(Qt::WindowFlags windowFlags, Qt::WindowModality windowModality, QWindow *parent);
-    void hide();
-    void setDirectory(const QString &directory);
-    QString directory() const;
-    void selectFile(const QString &filename);
-    QStringList selectedFiles() const;
-    void setFilter();
-    void selectNameFilter(const QString &filter);
-    QString selectedNameFilter() const;
+    bool show(Qt::WindowFlags windowFlags, Qt::WindowModality windowModality, QWindow *parent) override;
+    void hide() override;
+    void setDirectory(const QUrl &directory) override;
+    QUrl directory() const override;
+    void selectFile(const QUrl &filename) override;
+    QList<QUrl> selectedFiles() const override;
+    void setFilter() override;
+    void selectNameFilter(const QString &filter) override;
+    QString selectedNameFilter() const override;
 
 public:
     bool showCocoaFilePanel(Qt::WindowModality windowModality, QWindow *parent);
@@ -81,7 +84,8 @@ public:
     void QNSOpenSavePanelDelegate_filterSelected(int menuIndex);
 
 private:
-    void *mDelegate;
+    QT_MANGLE_NAMESPACE(QNSOpenSavePanelDelegate) *mDelegate;
+    QUrl mDir;
 };
 
 QT_END_NAMESPACE

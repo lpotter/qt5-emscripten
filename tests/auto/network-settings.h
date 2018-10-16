@@ -1,47 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include <QString>
+#include <QtTest/QtTest>
 #ifdef QT_NETWORK_LIB
 #include <QtNetwork/QHostInfo>
+#include <QtNetwork/QHostAddress>
+#include <QtNetwork/QAbstractSocket>
+#include <QtNetwork/QTcpSocket>
 #endif
 
 #ifdef Q_OS_UNIX
@@ -61,7 +52,11 @@ public:
     }
     static QString serverDomainName()
     {
+#ifdef QT_TEST_SERVER_DOMAIN
+        return QString(QT_TEST_SERVER_DOMAIN); // Defined in testserver feature
+#else
         return QString("qt-test-net");
+#endif
     }
     static QString serverName()
     {
@@ -79,7 +74,12 @@ public:
 #ifdef QT_NETWORK_LIB
     static QHostAddress serverIP()
     {
-        return QHostInfo::fromName(serverName()).addresses().first();
+        const QHostInfo info = QHostInfo::fromName(serverName());
+        if (info.error()) {
+            QTest::qFail(qPrintable(info.errorString()), __FILE__, __LINE__);
+            return QHostAddress();
+        }
+        return info.addresses().constFirst();
     }
 #endif
 
@@ -103,20 +103,9 @@ public:
 
     static bool compareReplyFtp(QByteArray const& actual)
     {
-        QList<QByteArray> expected;
-
-        // A few different vsFTPd versions.
-        // Feel free to add more as needed
-        expected << QByteArray( "220 (vsFTPd 2.0.5)\r\n221 Goodbye.\r\n" );
-        expected << QByteArray( "220 (vsFTPd 2.2.2)\r\n221 Goodbye.\r\n" );
-
-        Q_FOREACH (QByteArray const& ba, expected) {
-            if (ba == actual) {
-                return true;
-            }
-        }
-
-        return false;
+        // output would be e.g. "220 (vsFTPd 2.3.5)\r\n221 Goodbye.\r\n"
+        QRegExp ftpVersion(QStringLiteral("220 \\(vsFTPd \\d+\\.\\d+.\\d+\\)\\r\\n221 Goodbye.\\r\\n"));
+        return ftpVersion.exactMatch(actual);
     }
 
     static bool hasIPv6()
@@ -135,6 +124,7 @@ public:
                 return false;
             }
         }
+        ::close(s);
 #endif
         return true;
     }
@@ -152,5 +142,76 @@ public:
         }
         return true;
     }
+
+    static bool verifyConnection(QString serverName, quint16 port, quint32 retry = 10)
+    {
+        QTcpSocket socket;
+        for (quint32 i = 1; i < retry; i++) {
+            socket.connectToHost(serverName, port);
+            if (socket.waitForConnected(1000))
+                return true;
+            // Wait for service to start up
+            QTest::qWait(1000);
+        }
+        socket.connectToHost(serverName, port);
+        return socket.waitForConnected(1000);
+    }
+
+    // Helper function for usage with QVERIFY2 on sockets.
+    static QByteArray msgSocketError(const QAbstractSocket &s)
+    {
+        QString result;
+        QDebug debug(&result);
+        debug.nospace();
+        debug.noquote();
+        if (!s.localAddress().isNull())
+            debug << "local=" << s.localAddress().toString() << ':' << s.localPort();
+        if (!s.peerAddress().isNull())
+            debug << ", peer=" << s.peerAddress().toString() << ':' << s.peerPort();
+        debug << ", type=" << s.socketType() << ", state=" << s.state()
+            << ", error=" << s.error() << ": " << s.errorString();
+       return result.toLocal8Bit();
+    }
+#endif // QT_NETWORK_LIB
+
+    static QString ftpServerName()
+    {
+#ifdef QT_TEST_SERVER
+        return QString("vsftpd.") % serverDomainName();
+#else
+        return serverName();
 #endif
+    }
+    static QString ftpProxyServerName()
+    {
+#ifdef QT_TEST_SERVER
+        return QString("ftp-proxy.") % serverDomainName();
+#else
+        return serverName();
+#endif
+    }
+    static QString httpServerName()
+    {
+#ifdef QT_TEST_SERVER
+        return QString("apache2.") % serverDomainName();
+#else
+        return serverName();
+#endif
+    }
+    static QString httpProxyServerName()
+    {
+#ifdef QT_TEST_SERVER
+        return QString("squid.") % serverDomainName();
+#else
+        return serverName();
+#endif
+    }
+    static QString socksProxyServerName()
+    {
+#ifdef QT_TEST_SERVER
+        return QString("danted.") % serverDomainName();
+#else
+        return serverName();
+#endif
+    }
 };

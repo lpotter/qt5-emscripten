@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,25 +51,15 @@
 #include <QtWidgets>
 #include <QtConcurrent>
 
-#ifndef QT_NO_CONCURRENT
+#include <functional>
 
 using namespace QtConcurrent;
-
-const int iterations = 20;
-
-void spin(int &iteration)
-{
-    const int work = 1000 * 1000 * 40;
-    volatile int v = 0;
-    for (int j = 0; j < work; ++j)
-        ++v;
-
-    qDebug() << "iteration" << iteration << "in thread" << QThread::currentThreadId();
-}
 
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+
+    const int iterations = 20;
 
     // Prepare the vector.
     QVector<int> vector;
@@ -69,41 +69,32 @@ int main(int argc, char **argv)
     // Create a progress dialog.
     QProgressDialog dialog;
     dialog.setLabelText(QString("Progressing using %1 thread(s)...").arg(QThread::idealThreadCount()));
- 
+
     // Create a QFutureWatcher and connect signals and slots.
     QFutureWatcher<void> futureWatcher;
-    QObject::connect(&futureWatcher, SIGNAL(finished()), &dialog, SLOT(reset()));
-    QObject::connect(&dialog, SIGNAL(canceled()), &futureWatcher, SLOT(cancel()));
-    QObject::connect(&futureWatcher, SIGNAL(progressRangeChanged(int,int)), &dialog, SLOT(setRange(int,int)));
-    QObject::connect(&futureWatcher, SIGNAL(progressValueChanged(int)), &dialog, SLOT(setValue(int)));
+    QObject::connect(&futureWatcher, &QFutureWatcher<void>::finished, &dialog, &QProgressDialog::reset);
+    QObject::connect(&dialog, &QProgressDialog::canceled, &futureWatcher, &QFutureWatcher<void>::cancel);
+    QObject::connect(&futureWatcher,  &QFutureWatcher<void>::progressRangeChanged, &dialog, &QProgressDialog::setRange);
+    QObject::connect(&futureWatcher, &QFutureWatcher<void>::progressValueChanged,  &dialog, &QProgressDialog::setValue);
+
+    // Our function to compute
+    std::function<void(int&)> spin = [](int &iteration) {
+        const int work = 1000 * 1000 * 40;
+        volatile int v = 0;
+        for (int j = 0; j < work; ++j)
+            ++v;
+
+        qDebug() << "iteration" << iteration << "in thread" << QThread::currentThreadId();
+    };
 
     // Start the computation.
     futureWatcher.setFuture(QtConcurrent::map(vector, spin));
 
     // Display the dialog and start the event loop.
     dialog.exec();
-    
+
     futureWatcher.waitForFinished();
 
     // Query the future to check if was canceled.
     qDebug() << "Canceled?" << futureWatcher.future().isCanceled();
 }
-
-#else
-
-int main(int argc, char *argv[])
-{
-    QApplication app(argc, argv);
-    QString text("Qt Concurrent is not yet supported on this platform");
-
-    QLabel *label = new QLabel(text);
-    label->setWordWrap(true);
-
-    label->show();
-    qDebug() << text;
-
-    app.exec();
-}
-
-#endif
-

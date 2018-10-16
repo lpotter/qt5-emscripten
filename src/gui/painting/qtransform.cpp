@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 
 #include "qdatastream.h"
 #include "qdebug.h"
+#include "qhashfunctions.h"
 #include "qmatrix.h"
 #include "qregion.h"
 #include "qpainterpath.h"
@@ -53,6 +52,14 @@
 #include <private/qbezier_p.h>
 
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_DEBUG
+Q_NEVER_INLINE
+static void nanWarning(const char *func)
+{
+    qWarning("QTransform::%s with NaN called", func);
+}
+#endif // QT_NO_DEBUG
 
 #define Q_NEAR_CLIP (sizeof(qreal) == sizeof(double) ? 0.000001 : 0.0001)
 
@@ -125,9 +132,9 @@ QT_BEGIN_NAMESPACE
     transformed into a \e polygon (mapped to the coordinate system
     defined by \e this matrix), using the mapToPolygon() function.
 
-    QTransform provides the isIdentity() function which returns true if
+    QTransform provides the isIdentity() function which returns \c true if
     the matrix is the identity matrix, and the isInvertible() function
-    which returns true if the matrix is non-singular (i.e. AB = BA =
+    which returns \c true if the matrix is non-singular (i.e. AB = BA =
     I). The inverted() function returns an inverted copy of \e this
     matrix if it is invertible (otherwise it returns the identity
     matrix), and adjoint() returns the matrix's classical adjoint.
@@ -258,6 +265,7 @@ QTransform::QTransform()
     , m_13(0), m_23(0), m_33(1)
     , m_type(TxNone)
     , m_dirty(TxNone)
+    , d(nullptr)
 {
 }
 
@@ -276,6 +284,7 @@ QTransform::QTransform(qreal h11, qreal h12, qreal h13,
     , m_13(h13), m_23(h23), m_33(h33)
     , m_type(TxNone)
     , m_dirty(TxProject)
+    , d(nullptr)
 {
 }
 
@@ -292,6 +301,7 @@ QTransform::QTransform(qreal h11, qreal h12, qreal h21,
     , m_13(0), m_23(0), m_33(1)
     , m_type(TxNone)
     , m_dirty(TxShear)
+    , d(nullptr)
 {
 }
 
@@ -307,6 +317,7 @@ QTransform::QTransform(const QMatrix &mtx)
       m_13(0), m_23(0), m_33(1)
     , m_type(TxNone)
     , m_dirty(TxShear)
+    , d(nullptr)
 {
 }
 
@@ -341,8 +352,6 @@ QTransform QTransform::transposed() const
     QTransform t(affine._m11, affine._m21, affine._dx,
                  affine._m12, affine._m22, affine._dy,
                  m_13, m_23, m_33, true);
-    t.m_type = m_type;
-    t.m_dirty = m_dirty;
     return t;
 }
 
@@ -415,7 +424,7 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
         return *this;
 #ifndef QT_NO_DEBUG
     if (qIsNaN(dx) | qIsNaN(dy)) {
-        qWarning() << "QTransform::translate with NaN called";
+        nanWarning("translate");
         return *this;
     }
 #endif
@@ -435,7 +444,7 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
         break;
     case TxProject:
         m_33 += dx*m_13 + dy*m_23;
-        // Fall through
+        Q_FALLTHROUGH();
     case TxShear:
     case TxRotate:
         affine._dx += dx*affine._m11 + dy*affine._m21;
@@ -458,7 +467,7 @@ QTransform QTransform::fromTranslate(qreal dx, qreal dy)
 {
 #ifndef QT_NO_DEBUG
     if (qIsNaN(dx) | qIsNaN(dy)) {
-        qWarning() << "QTransform::fromTranslate with NaN called";
+        nanWarning("fromTranslate");
         return QTransform();
 }
 #endif
@@ -483,7 +492,7 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
         return *this;
 #ifndef QT_NO_DEBUG
     if (qIsNaN(sx) | qIsNaN(sy)) {
-        qWarning() << "QTransform::scale with NaN called";
+        nanWarning("scale");
         return *this;
     }
 #endif
@@ -497,12 +506,12 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
     case TxProject:
         m_13 *= sx;
         m_23 *= sy;
-        // fall through
+        Q_FALLTHROUGH();
     case TxRotate:
     case TxShear:
         affine._m12 *= sx;
         affine._m21 *= sy;
-        // fall through
+        Q_FALLTHROUGH();
     case TxScale:
         affine._m11 *= sx;
         affine._m22 *= sy;
@@ -524,7 +533,7 @@ QTransform QTransform::fromScale(qreal sx, qreal sy)
 {
 #ifndef QT_NO_DEBUG
     if (qIsNaN(sx) | qIsNaN(sy)) {
-        qWarning() << "QTransform::fromScale with NaN called";
+        nanWarning("fromScale");
         return QTransform();
 }
 #endif
@@ -549,7 +558,7 @@ QTransform & QTransform::shear(qreal sh, qreal sv)
         return *this;
 #ifndef QT_NO_DEBUG
     if (qIsNaN(sh) | qIsNaN(sv)) {
-        qWarning() << "QTransform::shear with NaN called";
+        nanWarning("shear");
         return *this;
     }
 #endif
@@ -570,7 +579,7 @@ QTransform & QTransform::shear(qreal sh, qreal sv)
         m_13 += tm13;
         m_23 += tm23;
     }
-        // fall through
+        Q_FALLTHROUGH();
     case TxRotate:
     case TxShear: {
         qreal tm11 = sv*affine._m21;
@@ -610,7 +619,7 @@ QTransform & QTransform::rotate(qreal a, Qt::Axis axis)
         return *this;
 #ifndef QT_NO_DEBUG
     if (qIsNaN(a)) {
-        qWarning() << "QTransform::rotate with NaN called";
+        nanWarning("rotate");
         return *this;
     }
 #endif
@@ -652,7 +661,7 @@ QTransform & QTransform::rotate(qreal a, Qt::Axis axis)
             qreal tm23 = -sina*m_13 + cosa*m_23;
             m_13 = tm13;
             m_23 = tm23;
-            // fall through
+            Q_FALLTHROUGH();
         }
         case TxRotate:
         case TxShear: {
@@ -701,7 +710,7 @@ QTransform & QTransform::rotateRadians(qreal a, Qt::Axis axis)
 {
 #ifndef QT_NO_DEBUG
     if (qIsNaN(a)) {
-        qWarning() << "QTransform::rotateRadians with NaN called";
+        nanWarning("rotateRadians");
         return *this;
     }
 #endif
@@ -731,7 +740,7 @@ QTransform & QTransform::rotateRadians(qreal a, Qt::Axis axis)
             qreal tm23 = -sina*m_13 + cosa*m_23;
             m_13 = tm13;
             m_23 = tm23;
-            // fall through
+            Q_FALLTHROUGH();
         }
         case TxRotate:
         case TxShear: {
@@ -763,8 +772,8 @@ QTransform & QTransform::rotateRadians(qreal a, Qt::Axis axis)
 
 /*!
     \fn bool QTransform::operator==(const QTransform &matrix) const
-    Returns true if this matrix is equal to the given \a matrix,
-    otherwise returns false.
+    Returns \c true if this matrix is equal to the given \a matrix,
+    otherwise returns \c false.
 */
 bool QTransform::operator==(const QTransform &o) const
 {
@@ -780,9 +789,32 @@ bool QTransform::operator==(const QTransform &o) const
 }
 
 /*!
+    \since 5.6
+    \relates QTransform
+
+    Returns the hash value for \a key, using
+    \a seed to seed the calculation.
+*/
+uint qHash(const QTransform &key, uint seed) Q_DECL_NOTHROW
+{
+    QtPrivate::QHashCombine hash;
+    seed = hash(seed, key.m11());
+    seed = hash(seed, key.m12());
+    seed = hash(seed, key.m21());
+    seed = hash(seed, key.m22());
+    seed = hash(seed, key.dx());
+    seed = hash(seed, key.dy());
+    seed = hash(seed, key.m13());
+    seed = hash(seed, key.m23());
+    seed = hash(seed, key.m33());
+    return seed;
+}
+
+
+/*!
     \fn bool QTransform::operator!=(const QTransform &matrix) const
-    Returns true if this matrix is not equal to the given \a matrix,
-    otherwise returns false.
+    Returns \c true if this matrix is not equal to the given \a matrix,
+    otherwise returns \c false.
 */
 bool QTransform::operator!=(const QTransform &o) const
 {
@@ -985,10 +1017,11 @@ QTransform QTransform::operator*(const QTransform &m) const
     element of this matrix.
 */
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 /*!
     Assigns the given \a matrix's values to this matrix.
 */
-QTransform & QTransform::operator=(const QTransform &matrix)
+QTransform & QTransform::operator=(const QTransform &matrix) Q_DECL_NOTHROW
 {
     affine._m11 = matrix.affine._m11;
     affine._m12 = matrix.affine._m12;
@@ -1004,6 +1037,7 @@ QTransform & QTransform::operator=(const QTransform &matrix)
 
     return *this;
 }
+#endif
 
 /*!
     Resets the matrix to an identity matrix, i.e. all elements are set
@@ -1082,19 +1116,20 @@ QDataStream & operator>>(QDataStream &s, QTransform &t)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QTransform &m)
 {
-    static const char *typeStr[] =
+    static const char typeStr[][12] =
     {
         "TxNone",
         "TxTranslate",
         "TxScale",
-        0,
+        "",
         "TxRotate",
-        0, 0, 0,
+        "", "", "",
         "TxShear",
-        0, 0, 0, 0, 0, 0, 0,
+        "", "", "", "", "", "", "",
         "TxProject"
     };
 
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QTransform(type=" << typeStr[m.type()] << ','
                   << " 11=" << m.m11()
                   << " 12=" << m.m12()
@@ -1107,7 +1142,7 @@ QDebug operator<<(QDebug dbg, const QTransform &m)
                   << " 33=" << m.m33()
                   << ')';
 
-    return dbg.space();
+    return dbg;
 }
 #endif
 
@@ -1360,7 +1395,9 @@ static QPolygonF mapProjective(const QTransform &transform, const QPolygonF &pol
     path = transform.map(path);
 
     QPolygonF result;
-    for (int i = 0; i < path.elementCount(); ++i)
+    const int elementCount = path.elementCount();
+    result.reserve(elementCount);
+    for (int i = 0; i < elementCount; ++i)
         result << path.elementAt(i);
     return result;
 }
@@ -1718,7 +1755,7 @@ QPolygon QTransform::mapToPolygon(const QRect &rect) const
 
 /*!
     Creates a transformation matrix, \a trans, that maps a unit square
-    to a four-sided polygon, \a quad. Returns true if the transformation
+    to a four-sided polygon, \a quad. Returns \c true if the transformation
     is constructed or false if such a transformation does not exist.
 
     \sa quadToSquare(), quadToQuad()
@@ -1783,7 +1820,7 @@ bool QTransform::squareToQuad(const QPolygonF &quad, QTransform &trans)
     \fn bool QTransform::quadToSquare(const QPolygonF &quad, QTransform &trans)
 
     Creates a transformation matrix, \a trans, that maps a four-sided polygon,
-    \a quad, to a unit square. Returns true if the transformation is constructed
+    \a quad, to a unit square. Returns \c true if the transformation is constructed
     or false if such a transformation does not exist.
 
     \sa squareToQuad(), quadToQuad()
@@ -1802,7 +1839,7 @@ bool QTransform::quadToSquare(const QPolygonF &quad, QTransform &trans)
 /*!
     Creates a transformation matrix, \a trans, that maps a four-sided
     polygon, \a one, to another four-sided polygon, \a two.
-    Returns true if the transformation is possible; otherwise returns
+    Returns \c true if the transformation is possible; otherwise returns
     false.
 
     This is a convenience method combining quadToSquare() and
@@ -2055,7 +2092,8 @@ QTransform::TransformationType QTransform::type() const
         if (!qFuzzyIsNull(m_13) || !qFuzzyIsNull(m_23) || !qFuzzyIsNull(m_33 - 1)) {
              m_type = TxProject;
              break;
-         }
+        }
+        Q_FALLTHROUGH();
     case TxShear:
     case TxRotate:
         if (!qFuzzyIsNull(affine._m12) || !qFuzzyIsNull(affine._m21)) {
@@ -2066,16 +2104,19 @@ QTransform::TransformationType QTransform::type() const
                 m_type = TxShear;
             break;
         }
+        Q_FALLTHROUGH();
     case TxScale:
         if (!qFuzzyIsNull(affine._m11 - 1) || !qFuzzyIsNull(affine._m22 - 1)) {
             m_type = TxScale;
             break;
         }
+        Q_FALLTHROUGH();
     case TxTranslate:
         if (!qFuzzyIsNull(affine._dx) || !qFuzzyIsNull(affine._dy)) {
             m_type = TxTranslate;
             break;
         }
+        Q_FALLTHROUGH();
     case TxNone:
         m_type = TxNone;
         break;
@@ -2098,7 +2139,7 @@ QTransform::operator QVariant() const
 /*!
     \fn bool QTransform::isInvertible() const
 
-    Returns true if the matrix is invertible, otherwise returns false.
+    Returns \c true if the matrix is invertible, otherwise returns \c false.
 
     \sa inverted()
 */
@@ -2221,8 +2262,8 @@ QTransform::operator QVariant() const
 /*!
     \fn bool QTransform::isIdentity() const
 
-    Returns true if the matrix is the identity matrix, otherwise
-    returns false.
+    Returns \c true if the matrix is the identity matrix, otherwise
+    returns \c false.
 
     \sa reset()
 */
@@ -2230,15 +2271,15 @@ QTransform::operator QVariant() const
 /*!
     \fn bool QTransform::isAffine() const
 
-    Returns true if the matrix represent an affine transformation,
-    otherwise returns false.
+    Returns \c true if the matrix represent an affine transformation,
+    otherwise returns \c false.
 */
 
 /*!
     \fn bool QTransform::isScaling() const
 
-    Returns true if the matrix represents a scaling
-    transformation, otherwise returns false.
+    Returns \c true if the matrix represents a scaling
+    transformation, otherwise returns \c false.
 
     \sa reset()
 */
@@ -2246,8 +2287,8 @@ QTransform::operator QVariant() const
 /*!
     \fn bool QTransform::isRotating() const
 
-    Returns true if the matrix represents some kind of a
-    rotating transformation, otherwise returns false.
+    Returns \c true if the matrix represents some kind of a
+    rotating transformation, otherwise returns \c false.
 
     \note A rotation transformation of 180 degrees and/or 360 degrees is treated as a scaling transformation.
 
@@ -2257,8 +2298,8 @@ QTransform::operator QVariant() const
 /*!
     \fn bool QTransform::isTranslating() const
 
-    Returns true if the matrix represents a translating
-    transformation, otherwise returns false.
+    Returns \c true if the matrix represents a translating
+    transformation, otherwise returns \c false.
 
     \sa reset()
 */
@@ -2269,7 +2310,7 @@ QTransform::operator QVariant() const
     \relates QTransform
     \since 4.6
 
-    Returns true if \a t1 and \a t2 are equal, allowing for a small
+    Returns \c true if \a t1 and \a t2 are equal, allowing for a small
     fuzziness factor for floating-point comparisons; false otherwise.
 */
 
@@ -2293,13 +2334,30 @@ bool qt_scaleForTransform(const QTransform &transform, qreal *scale)
         return qFuzzyCompare(xScale, yScale);
     }
 
-    const qreal xScale = transform.m11() * transform.m11()
+    // rotate then scale: compare columns
+    const qreal xScale1 = transform.m11() * transform.m11()
                          + transform.m21() * transform.m21();
-    const qreal yScale = transform.m12() * transform.m12()
+    const qreal yScale1 = transform.m12() * transform.m12()
                          + transform.m22() * transform.m22();
-    if (scale)
-        *scale = qSqrt(qMax(xScale, yScale));
-    return type == QTransform::TxRotate && qFuzzyCompare(xScale, yScale);
+
+    // scale then rotate: compare rows
+    const qreal xScale2 = transform.m11() * transform.m11()
+                         + transform.m12() * transform.m12();
+    const qreal yScale2 = transform.m21() * transform.m21()
+                         + transform.m22() * transform.m22();
+
+    // decide the order of rotate and scale operations
+    if (qAbs(xScale1 - yScale1) > qAbs(xScale2 - yScale2)) {
+        if (scale)
+            *scale = qSqrt(qMax(xScale1, yScale1));
+
+        return type == QTransform::TxRotate && qFuzzyCompare(xScale1, yScale1);
+    } else {
+        if (scale)
+            *scale = qSqrt(qMax(xScale2, yScale2));
+
+        return type == QTransform::TxRotate && qFuzzyCompare(xScale2, yScale2);
+    }
 }
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,7 +45,7 @@
 #pragma qt_no_master_include
 #endif
 
-#ifndef QT_NO_ACCESSIBILITY
+#include <QtCore/qglobal.h>
 
 #define QVERIFY_EVENT(event) \
     QVERIFY(QTestAccessibility::verifyEvent(event))
@@ -56,8 +54,10 @@
 #include <QtCore/qdebug.h>
 #include <QtGui/qaccessible.h>
 #include <QtGui/qguiapplication.h>
+#include <QtTest/qttestglobal.h>
+#include <QtTest/qtestsystem.h>
 
-QT_BEGIN_HEADER
+#if QT_CONFIG(accessibility)
 
 QT_BEGIN_NAMESPACE
 
@@ -132,7 +132,7 @@ public:
     static void cleanup()
     {
         delete instance();
-        instance() = 0;
+        instance() = nullptr;
     }
     static void clearEvents() { eventList().clear(); }
     static EventList events() { return eventList(); }
@@ -141,18 +141,17 @@ public:
         for (int i = 0; eventList().isEmpty() && i < 5; ++i)
             QTest::qWait(50);
         if (eventList().isEmpty()) {
-            qWarning("%s: Timeout waiting for accessibility event.", Q_FUNC_INFO);
+            qWarning("Timeout waiting for accessibility event.");
             return false;
         }
         const bool res = *eventList().first() == *ev;
         if (!res)
-            qWarning("%s: %s", Q_FUNC_INFO,
-                     qPrintable(msgAccessibilityEventListMismatch(eventList(), ev)));
+            qWarning("%s", qPrintable(msgAccessibilityEventListMismatch(eventList(), ev)));
         delete eventList().takeFirst();
         return res;
     }
     static bool containsEvent(QAccessibleEvent *event) {
-        Q_FOREACH (const QAccessibleEvent *ev, eventList()) {
+        for (const QAccessibleEvent *ev : qAsConst(eventList())) {
             if (*ev == *event)
                 return true;
         }
@@ -168,8 +167,8 @@ private:
 
     ~QTestAccessibility()
     {
-        QAccessible::installUpdateHandler(0);
-        QAccessible::installRootObjectHandler(0);
+        QAccessible::installUpdateHandler(nullptr);
+        QAccessible::installRootObjectHandler(nullptr);
     }
 
     static void rootObjectHandler(QObject *object)
@@ -178,9 +177,9 @@ private:
         if (object) {
             QGuiApplication* app = qobject_cast<QGuiApplication*>(object);
             if ( !app )
-                qWarning("%s: root Object is not a QGuiApplication!", Q_FUNC_INFO);
+                qWarning("root Object is not a QGuiApplication!");
         } else {
-            qWarning("%s: root Object called with 0 pointer", Q_FUNC_INFO);
+            qWarning("root Object called with 0 pointer");
         }
     }
 
@@ -192,42 +191,75 @@ private:
     {
         QAccessibleEvent *ev;
         if (event->type() == QAccessible::StateChanged) {
-            ev = new QAccessibleStateChangeEvent(event->object(),
+            if (event->object())
+                ev = new QAccessibleStateChangeEvent(event->object(),
+                        static_cast<QAccessibleStateChangeEvent*>(event)->changedStates());
+            else
+                ev = new QAccessibleStateChangeEvent(event->accessibleInterface(),
                         static_cast<QAccessibleStateChangeEvent*>(event)->changedStates());
         } else if (event->type() == QAccessible::TextCaretMoved) {
-            ev =  new QAccessibleTextCursorEvent(event->object(), static_cast<QAccessibleTextCursorEvent*>(event)->cursorPosition());
+            if (event->object())
+                ev = new QAccessibleTextCursorEvent(event->object(), static_cast<QAccessibleTextCursorEvent*>(event)->cursorPosition());
+            else
+                ev = new QAccessibleTextCursorEvent(event->accessibleInterface(), static_cast<QAccessibleTextCursorEvent*>(event)->cursorPosition());
         } else if (event->type() == QAccessible::TextSelectionChanged) {
             const QAccessibleTextSelectionEvent *original = static_cast<QAccessibleTextSelectionEvent*>(event);
-            QAccessibleTextSelectionEvent *sel = new QAccessibleTextSelectionEvent(event->object(), original->selectionStart(), original->selectionEnd());
+            QAccessibleTextSelectionEvent *sel;
+            if (event->object())
+                sel = new QAccessibleTextSelectionEvent(event->object(), original->selectionStart(), original->selectionEnd());
+            else
+                sel = new QAccessibleTextSelectionEvent(event->accessibleInterface(), original->selectionStart(), original->selectionEnd());
             sel->setCursorPosition(original->cursorPosition());
             ev = sel;
         } else if (event->type() == QAccessible::TextInserted) {
             const QAccessibleTextInsertEvent *original = static_cast<QAccessibleTextInsertEvent*>(event);
-            QAccessibleTextInsertEvent *ins = new QAccessibleTextInsertEvent(event->object(), original->changePosition(), original->textInserted());
+            QAccessibleTextInsertEvent *ins;
+            if (original->object())
+                ins = new QAccessibleTextInsertEvent(event->object(), original->changePosition(), original->textInserted());
+            else
+                ins = new QAccessibleTextInsertEvent(event->accessibleInterface(), original->changePosition(), original->textInserted());
             ins->setCursorPosition(original->cursorPosition());
             ev = ins;
         } else if (event->type() == QAccessible::TextRemoved) {
             const QAccessibleTextRemoveEvent *original = static_cast<QAccessibleTextRemoveEvent*>(event);
-            QAccessibleTextRemoveEvent *rem = new QAccessibleTextRemoveEvent(event->object(), original->changePosition(), original->textRemoved());
+            QAccessibleTextRemoveEvent *rem;
+            if (event->object())
+                rem = new QAccessibleTextRemoveEvent(event->object(), original->changePosition(), original->textRemoved());
+            else
+                rem = new QAccessibleTextRemoveEvent(event->accessibleInterface(), original->changePosition(), original->textRemoved());
             rem->setCursorPosition(original->cursorPosition());
             ev = rem;
         } else if (event->type() == QAccessible::TextUpdated) {
             const QAccessibleTextUpdateEvent *original = static_cast<QAccessibleTextUpdateEvent*>(event);
-            QAccessibleTextUpdateEvent *upd = new QAccessibleTextUpdateEvent(event->object(), original->changePosition(), original->textRemoved(), original->textInserted());
+            QAccessibleTextUpdateEvent *upd;
+            if (event->object())
+                upd = new QAccessibleTextUpdateEvent(event->object(), original->changePosition(), original->textRemoved(), original->textInserted());
+            else
+                upd = new QAccessibleTextUpdateEvent(event->accessibleInterface(), original->changePosition(), original->textRemoved(), original->textInserted());
             upd->setCursorPosition(original->cursorPosition());
             ev = upd;
         } else if (event->type() == QAccessible::ValueChanged) {
-            ev = new QAccessibleValueChangeEvent(event->object(), static_cast<QAccessibleValueChangeEvent*>(event)->value());
+            if (event->object())
+                ev = new QAccessibleValueChangeEvent(event->object(), static_cast<QAccessibleValueChangeEvent*>(event)->value());
+            else
+                ev = new QAccessibleValueChangeEvent(event->accessibleInterface(), static_cast<QAccessibleValueChangeEvent*>(event)->value());
         } else if (event->type() == QAccessible::TableModelChanged) {
             QAccessibleTableModelChangeEvent *oldEvent = static_cast<QAccessibleTableModelChangeEvent*>(event);
-            QAccessibleTableModelChangeEvent *newEvent = new QAccessibleTableModelChangeEvent(event->object(), oldEvent->modelChangeType());
+            QAccessibleTableModelChangeEvent *newEvent;
+            if (event->object())
+                newEvent = new QAccessibleTableModelChangeEvent(event->object(), oldEvent->modelChangeType());
+            else
+                newEvent = new QAccessibleTableModelChangeEvent(event->accessibleInterface(), oldEvent->modelChangeType());
             newEvent->setFirstRow(oldEvent->firstRow());
             newEvent->setFirstColumn(oldEvent->firstColumn());
             newEvent->setLastRow(oldEvent->lastRow());
             newEvent->setLastColumn(oldEvent->lastColumn());
             ev = newEvent;
         } else {
-            ev = new QAccessibleEvent(event->object(), event->type());
+            if (event->object())
+                ev = new QAccessibleEvent(event->object(), event->type());
+            else
+                ev = new QAccessibleEvent(event->accessibleInterface(), event->type());
         }
         ev->setChild(event->child());
         return ev;
@@ -241,7 +273,7 @@ private:
 
     static QTestAccessibility *&instance()
     {
-        static QTestAccessibility *ta = 0;
+        static QTestAccessibility *ta = nullptr;
         return ta;
     }
 
@@ -251,12 +283,10 @@ private:
     {
         QString rc;
         QDebug str = QDebug(&rc).nospace();
-        str << "Event " << needle->object() <<  ", type: "
-           << needle->type() << ", child: " << needle->child()
-           <<  " not found at head of event list of size " << haystack.size() << " :";
-        foreach (const QAccessibleEvent *e, haystack)
-            str << ' ' << e->object() << ", type: "
-                << e->type() << ", child: " << e->child();
+        str << "Event " << *needle
+            <<  " not found at head of event list of size " << haystack.size() << " :";
+        for (const QAccessibleEvent *e : haystack)
+            str << ' ' << *e;
         return rc;
     }
 
@@ -264,7 +294,5 @@ private:
 
 QT_END_NAMESPACE
 
-QT_END_HEADER
-
-#endif // QT_NO_ACCESSIBILITY
+#endif // QT_CONFIG(accessibility)
 #endif // QTESTACCESSIBLE_H

@@ -1,19 +1,15 @@
 TARGET     = QtOpenGL
 QT         = core-private gui-private widgets-private
 
-DEFINES   += QT_NO_USING_NAMESPACE
-win32-msvc*|win32-icc:QMAKE_LFLAGS += /BASE:0x63000000
+DEFINES   += QT_NO_USING_NAMESPACE QT_NO_FOREACH
+
+msvc:equals(QT_ARCH, i386): QMAKE_LFLAGS += /BASE:0x63000000
 solaris-cc*:QMAKE_CXXFLAGS_RELEASE -= -O2
-irix-cc*:QMAKE_CXXFLAGS += -no_prelink -ptused
 
 QMAKE_DOCS = $$PWD/doc/qtopengl.qdocconf
 
-load(qt_module)
-
-contains(QT_CONFIG, opengl):CONFIG += opengl
-contains(QT_CONFIG, opengles1):CONFIG += opengles1
-contains(QT_CONFIG, opengles2):CONFIG += opengles2
-contains(QT_CONFIG, egl):CONFIG += egl
+qtConfig(opengl): CONFIG += opengl
+qtConfig(opengles2): CONFIG += opengles2
 
 HEADERS += qgl.h \
            qgl_p.h \
@@ -23,7 +19,6 @@ HEADERS += qgl.h \
            qglpixelbuffer_p.h \
            qglframebufferobject.h  \
            qglframebufferobject_p.h  \
-           qglextensions_p.h \
            qglpaintdevice_p.h \
            qglbuffer.h \
            qtopenglglobal.h
@@ -33,12 +28,10 @@ SOURCES += qgl.cpp \
            qglfunctions.cpp \
            qglpixelbuffer.cpp \
            qglframebufferobject.cpp \
-           qglextensions.cpp \
            qglpaintdevice.cpp \
            qglbuffer.cpp \
 
 HEADERS +=  qglshaderprogram.h \
-            qgraphicsshadereffect_p.h \
             gl2paintengineex/qglgradientcache_p.h \
             gl2paintengineex/qglengineshadermanager_p.h \
             gl2paintengineex/qgl2pexvertexarray_p.h \
@@ -46,11 +39,9 @@ HEADERS +=  qglshaderprogram.h \
             gl2paintengineex/qglengineshadersource_p.h \
             gl2paintengineex/qglcustomshaderstage_p.h \
             gl2paintengineex/qtextureglyphcache_gl_p.h \
-            gl2paintengineex/qglshadercache_p.h \
-            gl2paintengineex/qglshadercache_meego_p.h
+            gl2paintengineex/qglshadercache_p.h
 
 SOURCES +=  qglshaderprogram.cpp \
-            qgraphicsshadereffect.cpp \
             gl2paintengineex/qglgradientcache.cpp \
             gl2paintengineex/qglengineshadermanager.cpp \
             gl2paintengineex/qgl2pexvertexarray.cpp \
@@ -58,6 +49,9 @@ SOURCES +=  qglshaderprogram.cpp \
             gl2paintengineex/qglcustomshaderstage.cpp \
             gl2paintengineex/qtextureglyphcache_gl.cpp
 
-SOURCES +=  qgl_qpa.cpp
+qtConfig(graphicseffect) {
+    HEADERS += qgraphicsshadereffect_p.h
+    SOURCES += qgraphicsshadereffect.cpp
+}
 
-INCLUDEPATH += ../3rdparty/harfbuzz/src
+load(qt_module)

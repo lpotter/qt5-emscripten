@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,7 +37,12 @@
 #  include <sys/types.h>
 #  include <sys/stat.h>
 #  include <unistd.h>
+#  include <utime.h>
+#  include <fcntl.h>
+#  include <errno.h>
 #endif
+
+#define fL1S(s) QString::fromLatin1(s)
 
 QT_BEGIN_NAMESPACE
 
@@ -68,24 +60,34 @@ IoUtils::FileType IoUtils::fileType(const QString &fileName)
     struct ::stat st;
     if (::stat(fileName.toLocal8Bit().constData(), &st))
         return FileNotFound;
-    return S_ISDIR(st.st_mode) ? FileIsDir : FileIsRegular;
+    return S_ISDIR(st.st_mode) ? FileIsDir : S_ISREG(st.st_mode) ? FileIsRegular : FileNotFound;
 #endif
 }
 
 bool IoUtils::isRelativePath(const QString &path)
 {
-    if (path.startsWith(QLatin1Char('/')))
-        return false;
-#ifdef Q_OS_WIN
-    if (path.startsWith(QLatin1Char('\\')))
-        return false;
-    // Unlike QFileInfo, this won't accept a relative path with a drive letter.
-    // Such paths result in a royal mess anyway ...
-    if (path.length() >= 3 && path.at(1) == QLatin1Char(':') && path.at(0).isLetter()
-        && (path.at(2) == QLatin1Char('/') || path.at(2) == QLatin1Char('\\')))
+#ifdef QMAKE_BUILTIN_PRFS
+    if (path.startsWith(QLatin1String(":/")))
         return false;
 #endif
+#ifdef Q_OS_WIN
+    // Unlike QFileInfo, this considers only paths with both a drive prefix and
+    // a subsequent (back-)slash absolute:
+    if (path.length() >= 3 && path.at(1) == QLatin1Char(':') && path.at(0).isLetter()
+        && (path.at(2) == QLatin1Char('/') || path.at(2) == QLatin1Char('\\'))) {
+        return false;
+    }
+    // (... unless, of course, they're UNC, which qmake fails on anyway)
+#else
+    if (path.startsWith(QLatin1Char('/')))
+        return false;
+#endif // Q_OS_WIN
     return true;
+}
+
+QStringRef IoUtils::pathName(const QString &fileName)
+{
+    return fileName.leftRef(fileName.lastIndexOf(QLatin1Char('/')) + 1);
 }
 
 QStringRef IoUtils::fileName(const QString &fileName)
@@ -99,15 +101,28 @@ QString IoUtils::resolvePath(const QString &baseDir, const QString &fileName)
         return QString();
     if (isAbsolutePath(fileName))
         return QDir::cleanPath(fileName);
+#ifdef Q_OS_WIN // Add drive to otherwise-absolute path:
+    if (fileName.at(0).unicode() == '/' || fileName.at(0).unicode() == '\\') {
+        Q_ASSERT_X(isAbsolutePath(baseDir), "IoUtils::resolvePath", qUtf8Printable(baseDir));
+        return QDir::cleanPath(baseDir.left(2) + fileName);
+    }
+#endif // Q_OS_WIN
     return QDir::cleanPath(baseDir + QLatin1Char('/') + fileName);
+}
+
+inline static
+bool isSpecialChar(ushort c, const uchar (&iqm)[16])
+{
+    if ((c < sizeof(iqm) * 8) && (iqm[c / 8] & (1 << (c & 7))))
+        return true;
+    return false;
 }
 
 inline static
 bool hasSpecialChars(const QString &arg, const uchar (&iqm)[16])
 {
     for (int x = arg.length() - 1; x >= 0; --x) {
-        ushort c = arg.unicode()[x].unicode();
-        if ((c < sizeof(iqm) * 8) && (iqm[c / 8] & (1 << (c & 7))))
+        if (isSpecialChar(arg.unicode()[x].unicode(), iqm))
             return true;
     }
     return false;
@@ -122,7 +137,7 @@ QString IoUtils::shellQuoteUnix(const QString &arg)
     }; // 0-32 \'"$`<>|;&(){}*?#!~[]
 
     if (!arg.length())
-        return QString::fromLatin1("\"\"");
+        return QString::fromLatin1("''");
 
     QString ret(arg);
     if (hasSpecialChars(ret, iqm)) {
@@ -143,26 +158,142 @@ QString IoUtils::shellQuoteWin(const QString &arg)
         0xff, 0xff, 0xff, 0xff, 0x45, 0x13, 0x00, 0x78,
         0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x10
     };
+    // Shell meta chars that need escaping.
+    static const uchar ism[] = {
+        0x00, 0x00, 0x00, 0x00, 0x40, 0x03, 0x00, 0x50,
+        0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x10
+    }; // &()<>^|
 
     if (!arg.length())
         return QString::fromLatin1("\"\"");
 
     QString ret(arg);
     if (hasSpecialChars(ret, iqm)) {
-        // Quotes are escaped and their preceding backslashes are doubled.
-        // It's impossible to escape anything inside a quoted string on cmd
-        // level, so the outer quoting must be "suspended".
-        ret.replace(QRegExp(QLatin1String("(\\\\*)\"")), QLatin1String("\"\\1\\1\\^\"\""));
-        // The argument must not end with a \ since this would be interpreted
-        // as escaping the quote -- rather put the \ behind the quote: e.g.
-        // rather use "foo"\ than "foo\"
-        int i = ret.length();
-        while (i > 0 && ret.at(i - 1) == QLatin1Char('\\'))
-            --i;
-        ret.insert(i, QLatin1Char('"'));
+        // The process-level standard quoting allows escaping quotes with backslashes (note
+        // that backslashes don't escape themselves, unless they are followed by a quote).
+        // Consequently, quotes are escaped and their preceding backslashes are doubled.
+        ret.replace(QRegExp(QLatin1String("(\\\\*)\"")), QLatin1String("\\1\\1\\\""));
+        // Trailing backslashes must be doubled as well, as they are followed by a quote.
+        ret.replace(QRegExp(QLatin1String("(\\\\+)$")), QLatin1String("\\1\\1"));
+        // However, the shell also interprets the command, and no backslash-escaping exists
+        // there - a quote always toggles the quoting state, but is nonetheless passed down
+        // to the called process verbatim. In the unquoted state, the circumflex escapes
+        // meta chars (including itself and quotes), and is removed from the command.
+        bool quoted = true;
+        for (int i = 0; i < ret.length(); i++) {
+            QChar c = ret.unicode()[i];
+            if (c.unicode() == '"')
+                quoted = !quoted;
+            else if (!quoted && isSpecialChar(c.unicode(), ism))
+                ret.insert(i++, QLatin1Char('^'));
+        }
+        if (!quoted)
+            ret.append(QLatin1Char('^'));
+        ret.append(QLatin1Char('"'));
         ret.prepend(QLatin1Char('"'));
     }
     return ret;
 }
+
+#if defined(PROEVALUATOR_FULL)
+
+#  if defined(Q_OS_WIN)
+static QString windowsErrorCode()
+{
+    wchar_t *string = nullptr;
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,
+                  NULL,
+                  GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPWSTR)&string,
+                  0,
+                  NULL);
+    QString ret = QString::fromWCharArray(string);
+    LocalFree((HLOCAL)string);
+    return ret.trimmed();
+}
+#  endif
+
+bool IoUtils::touchFile(const QString &targetFileName, const QString &referenceFileName, QString *errorString)
+{
+#  ifdef Q_OS_UNIX
+    struct stat st;
+    if (stat(referenceFileName.toLocal8Bit().constData(), &st)) {
+        *errorString = fL1S("Cannot stat() reference file %1: %2.").arg(referenceFileName, fL1S(strerror(errno)));
+        return false;
+    }
+#    if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809L
+    const struct timespec times[2] = { { 0, UTIME_NOW }, st.st_mtim };
+    const bool utimeError = utimensat(AT_FDCWD, targetFileName.toLocal8Bit().constData(), times, 0) < 0;
+#    else
+    struct utimbuf utb;
+    utb.actime = time(0);
+    utb.modtime = st.st_mtime;
+    const bool utimeError= utime(targetFileName.toLocal8Bit().constData(), &utb) < 0;
+#    endif
+    if (utimeError) {
+        *errorString = fL1S("Cannot touch %1: %2.").arg(targetFileName, fL1S(strerror(errno)));
+        return false;
+    }
+#  else
+    HANDLE rHand = CreateFile((wchar_t*)referenceFileName.utf16(),
+                              GENERIC_READ, FILE_SHARE_READ,
+                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (rHand == INVALID_HANDLE_VALUE) {
+        *errorString = fL1S("Cannot open reference file %1: %2").arg(referenceFileName, windowsErrorCode());
+        return false;
+        }
+    FILETIME ft;
+    GetFileTime(rHand, NULL, NULL, &ft);
+    CloseHandle(rHand);
+    HANDLE wHand = CreateFile((wchar_t*)targetFileName.utf16(),
+                              GENERIC_WRITE, FILE_SHARE_READ,
+                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (wHand == INVALID_HANDLE_VALUE) {
+        *errorString = fL1S("Cannot open %1: %2").arg(targetFileName, windowsErrorCode());
+        return false;
+    }
+    SetFileTime(wHand, NULL, NULL, &ft);
+    CloseHandle(wHand);
+#  endif
+    return true;
+}
+
+#if defined(QT_BUILD_QMAKE) && defined(Q_OS_UNIX)
+bool IoUtils::readLinkTarget(const QString &symlinkPath, QString *target)
+{
+    const QByteArray localSymlinkPath = QFile::encodeName(symlinkPath);
+#  if defined(__GLIBC__) && !defined(PATH_MAX)
+#    define PATH_CHUNK_SIZE 256
+    char *s = 0;
+    int len = -1;
+    int size = PATH_CHUNK_SIZE;
+
+    forever {
+        s = (char *)::realloc(s, size);
+        len = ::readlink(localSymlinkPath.constData(), s, size);
+        if (len < 0) {
+            ::free(s);
+            break;
+        }
+        if (len < size)
+            break;
+        size *= 2;
+    }
+#  else
+    char s[PATH_MAX+1];
+    int len = readlink(localSymlinkPath.constData(), s, PATH_MAX);
+#  endif
+    if (len <= 0)
+        return false;
+    *target = QFile::decodeName(QByteArray(s, len));
+#  if defined(__GLIBC__) && !defined(PATH_MAX)
+    ::free(s);
+#  endif
+    return true;
+}
+#endif
+
+#endif  // PROEVALUATOR_FULL
 
 QT_END_NAMESPACE

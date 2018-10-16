@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,70 +40,48 @@
 #ifndef QNSVIEW_H
 #define QNSVIEW_H
 
-#include <Cocoa/Cocoa.h>
+#include <AppKit/AppKit.h>
+#include <MetalKit/MetalKit.h>
 
-#include <QtCore/QPointer>
-#include <QtGui/QImage>
-#include <QtGui/QAccessible>
+#include "private/qcore_mac_p.h"
 
 QT_BEGIN_NAMESPACE
 class QCocoaWindow;
-class QCocoaBackingStore;
 class QCocoaGLContext;
+class QPointF;
 QT_END_NAMESPACE
 
-@interface QNSView : NSView <NSTextInputClient> {
-    QCocoaBackingStore* m_backingStore;
-    QPoint m_backingStoreOffset;
-    CGImageRef m_maskImage;
-    uchar *m_maskData;
-    QWindow *m_window;
-    QCocoaWindow *m_platformWindow;
-    Qt::MouseButtons m_buttons;
-    QAccessibleInterface *m_accessibleRoot;
-    QString m_composingText;
-    bool m_sendKeyEvent;
-    QStringList *currentCustomDragTypes;
-    Qt::KeyboardModifiers currentWheelModifiers;
-    bool m_subscribesForGlobalFrameNotifications;
-}
+Q_FORWARD_DECLARE_OBJC_CLASS(QT_MANGLE_NAMESPACE(QNSViewMouseMoveHelper));
+Q_FORWARD_DECLARE_OBJC_CLASS(QT_MANGLE_NAMESPACE(QCocoaNSMenuItem));
 
-- (id)init;
-- (id)initWithQWindow:(QWindow *)window platformWindow:(QCocoaWindow *) platformWindow;
-- (void)setQCocoaGLContext:(QCocoaGLContext *)context;
-- (void)flushBackingStore:(QCocoaBackingStore *)backingStore region:(const QRegion &)region offset:(QPoint)offset;
-- (void)setMaskRegion:(const QRegion *)region;
-- (void)drawRect:(NSRect)dirtyRect;
-- (void)updateGeometry;
-- (void)windowNotification : (NSNotification *) windowNotification;
+@interface QT_MANGLE_NAMESPACE(QNSView) : NSView
 
-- (BOOL)isFlipped;
-- (BOOL)acceptsFirstResponder;
+@property (nonatomic, retain) NSCursor *cursor;
 
-- (void)handleMouseEvent:(NSEvent *)theEvent;
-- (void)mouseDown:(NSEvent *)theEvent;
-- (void)mouseDragged:(NSEvent *)theEvent;
-- (void)mouseUp:(NSEvent *)theEvent;
-- (void)mouseMoved:(NSEvent *)theEvent;
-- (void)mouseEntered:(NSEvent *)theEvent;
-- (void)mouseExited:(NSEvent *)theEvent;
-- (void)rightMouseDown:(NSEvent *)theEvent;
-- (void)rightMouseDragged:(NSEvent *)theEvent;
-- (void)rightMouseUp:(NSEvent *)theEvent;
-- (void)otherMouseDown:(NSEvent *)theEvent;
-- (void)otherMouseDragged:(NSEvent *)theEvent;
-- (void)otherMouseUp:(NSEvent *)theEvent;
-- (void)handleFrameStrutMouseEvent:(NSEvent *)theEvent;
+- (instancetype)initWithCocoaWindow:(QCocoaWindow *)platformWindow;
 
-- (int) convertKeyCode : (QChar)keyCode;
-- (Qt::KeyboardModifiers) convertKeyModifiers : (ulong)modifierFlags;
-- (void)handleKeyEvent:(NSEvent *)theEvent eventType:(int)eventType;
-- (void)keyDown:(NSEvent *)theEvent;
-- (void)keyUp:(NSEvent *)theEvent;
-
-- (void)registerDragTypes;
-- (NSDragOperation)handleDrag:(id <NSDraggingInfo>)sender;
+- (void)convertFromScreen:(NSPoint)mouseLocation toWindowPoint:(QPointF *)qtWindowPoint andScreenPoint:(QPointF *)qtScreenPoint;
 
 @end
+
+@interface QT_MANGLE_NAMESPACE(QNSView) (MouseAPI)
+- (void)handleFrameStrutMouseEvent:(NSEvent *)theEvent;
+- (void)resetMouseButtons;
+@end
+
+@interface QT_MANGLE_NAMESPACE(QNSView) (KeysAPI)
++ (Qt::KeyboardModifiers)convertKeyModifiers:(ulong)modifierFlags;
+@end
+
+@interface QT_MANGLE_NAMESPACE(QNSView) (ComplexTextAPI)
+- (void)unmarkText;
+- (void)cancelComposingText;
+@end
+
+@interface QT_MANGLE_NAMESPACE(QNSView) (QtExtras)
+@property (nonatomic, readonly) QCocoaWindow *platformWindow;
+@end
+
+QT_NAMESPACE_ALIAS_OBJC_CLASS(QNSView);
 
 #endif //QNSVIEW_H

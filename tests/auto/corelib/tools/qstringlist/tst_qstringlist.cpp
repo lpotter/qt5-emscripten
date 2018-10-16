@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,9 +32,6 @@
 #include <qstringlist.h>
 
 #include <locale.h>
-#ifdef Q_OS_WINCE
-#include <windows.h> // needed for GetUserDefaultLCID
-#endif
 
 class tst_QStringList : public QObject
 {
@@ -66,6 +50,7 @@ private slots:
     void lastIndexOf_regExp();
 
     void streamingOperator();
+    void assignmentOperator();
     void join() const;
     void join_data() const;
     void joinEmptiness() const;
@@ -217,13 +202,7 @@ void tst_QStringList::sort()
     list2 << "BETA" << "Gamma" << "alpha" << "beta" << "epsilon" << "gAmma" << "gamma";
     QCOMPARE( list1, list2 );
 
-#ifdef Q_OS_WINCE
-    DWORD oldLcid = GetUserDefaultLCID();
-    // Assume c locale to be english
-    SetUserDefaultLCID(MAKELCID(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), SORT_DEFAULT));
-#else
     char *current_locale = setlocale(LC_ALL, "C");
-#endif
     QStringList list3, list4;
     list3 << "alpha" << "beta" << "BETA" << "gamma" << "Gamma" << "gAmma" << "epsilon";
     list3.sort(Qt::CaseInsensitive);
@@ -236,11 +215,7 @@ void tst_QStringList::sort()
     QCOMPARE(list4.at(0), QString("alpha"));
     QVERIFY(list4.indexOf("epsilon") > 0);
     QVERIFY(list4.indexOf("epsilon") < (list4.count() - 1));
-#ifdef Q_OS_WINCE
-    SetUserDefaultLCID(oldLcid);
-#else
     setlocale(LC_ALL, current_locale);
-#endif
 }
 
 void tst_QStringList::replaceInStrings()
@@ -289,6 +264,24 @@ void tst_QStringList::contains()
     QVERIFY(list.contains("ARTHUR", Qt::CaseInsensitive));
     QVERIFY(list.contains("dent", Qt::CaseInsensitive));
     QVERIFY(!list.contains("hans", Qt::CaseInsensitive));
+
+    QVERIFY(list.contains(QLatin1String("arthur")));
+    QVERIFY(!list.contains(QLatin1String("ArthuR")));
+    QVERIFY(!list.contains(QLatin1String("Hans")));
+    QVERIFY(list.contains(QLatin1String("arthur"), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QLatin1String("ArthuR"), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QLatin1String("ARTHUR"), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QLatin1String("dent"), Qt::CaseInsensitive));
+    QVERIFY(!list.contains(QLatin1String("hans"), Qt::CaseInsensitive));
+
+    QVERIFY(list.contains(QStringView(QString("arthur"))));
+    QVERIFY(!list.contains(QStringView(QString("ArthuR"))));
+    QVERIFY(!list.contains(QStringView(QString("Hans"))));
+    QVERIFY(list.contains(QStringView(QString("arthur")), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QStringView(QString("ArthuR")), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QStringView(QString("ARTHUR")), Qt::CaseInsensitive));
+    QVERIFY(list.contains(QStringView(QString("dent")), Qt::CaseInsensitive));
+    QVERIFY(!list.contains(QStringView(QString("hans")), Qt::CaseInsensitive));
 }
 
 void tst_QStringList::removeDuplicates_data()
@@ -296,9 +289,11 @@ void tst_QStringList::removeDuplicates_data()
     QTest::addColumn<QString>("before");
     QTest::addColumn<QString>("after");
     QTest::addColumn<int>("count");
+    QTest::addColumn<bool>("detached");
 
-    QTest::newRow("empty-1") << "Hello,Hello" << "Hello" << 1;
-    QTest::newRow("empty-2") << "Hello,World" << "Hello,World" << 0;
+    QTest::newRow("empty-1") << "Hello,Hello" << "Hello" << 1 << true;
+    QTest::newRow("empty-2") << "Hello,World" << "Hello,World" << 0 << false;
+    QTest::newRow("middle")  << "Hello,World,Hello" << "Hello,World" << 1 << true;
 }
 
 void tst_QStringList::removeDuplicates()
@@ -306,13 +301,16 @@ void tst_QStringList::removeDuplicates()
     QFETCH(QString, before);
     QFETCH(QString, after);
     QFETCH(int, count);
+    QFETCH(bool, detached);
 
     QStringList lbefore = before.split(',');
+    const QStringList oldlbefore = lbefore;
     QStringList lafter = after.split(',');
     int removed = lbefore.removeDuplicates();
 
     QCOMPARE(removed, count);
     QCOMPARE(lbefore, lafter);
+    QCOMPARE(detached, !oldlbefore.isSharedWith(lbefore));
 }
 
 void tst_QStringList::streamingOperator()
@@ -321,7 +319,12 @@ void tst_QStringList::streamingOperator()
     list << "hei";
     list << list << "hopp" << list;
 
+    QList<QString> slist = list;
+    list << slist;
+
     QCOMPARE(list, QStringList()
+            << "hei" << "hei" << "hopp"
+            << "hei" << "hei" << "hopp"
             << "hei" << "hei" << "hopp"
             << "hei" << "hei" << "hopp");
 
@@ -334,6 +337,21 @@ void tst_QStringList::streamingOperator()
     QCOMPARE(list2 << list3, QStringList() << "adam" << "eva");
 }
 
+void tst_QStringList::assignmentOperator()
+{
+    // compile-only test
+
+    QStringList adam;
+    adam << "adam";
+    QList<QString> eva;
+    eva << "eva";
+    QStringList result;
+    QStringList &ref1 = (result = adam);
+    QStringList &ref2 = (result = eva);
+    Q_UNUSED(ref1);
+    Q_UNUSED(ref2);
+}
+
 void tst_QStringList::join() const
 {
     QFETCH(QStringList, input);
@@ -341,6 +359,7 @@ void tst_QStringList::join() const
     QFETCH(QString, expectedResult);
 
     QCOMPARE(input.join(separator), expectedResult);
+    QCOMPARE(input.join(QLatin1String(separator.toLatin1())), expectedResult);
 }
 
 void tst_QStringList::join_data() const

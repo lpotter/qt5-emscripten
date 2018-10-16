@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,18 +51,24 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "private/qabstractscrollarea_p.h"
 #include "QtGui/qtextdocumentfragment.h"
+#if QT_CONFIG(scrollbar)
 #include "QtWidgets/qscrollbar.h"
+#endif
 #include "QtGui/qtextcursor.h"
 #include "QtGui/qtextformat.h"
+#if QT_CONFIG(menu)
 #include "QtWidgets/qmenu.h"
+#endif
 #include "QtGui/qabstracttextdocumentlayout.h"
 #include "QtCore/qbasictimer.h"
-#include "private/qwidgettextcontrol_p.h"
 #include "qplaintextedit.h"
 
-#ifndef QT_NO_TEXTEDIT
+#include "private/qwidgettextcontrol_p.h"
+
+QT_REQUIRE_CONFIG(textedit);
 
 QT_BEGIN_NAMESPACE
 
@@ -80,18 +84,19 @@ public:
     QPlainTextEditControl(QPlainTextEdit *parent);
 
 
-    QMimeData *createMimeDataFromSelection() const;
-    bool canInsertFromMimeData(const QMimeData *source) const;
-    void insertFromMimeData(const QMimeData *source);
-    int hitTest(const QPointF &point, Qt::HitTestAccuracy = Qt::FuzzyHit) const;
-    QRectF blockBoundingRect(const QTextBlock &block) const;
+    QMimeData *createMimeDataFromSelection() const override;
+    bool canInsertFromMimeData(const QMimeData *source) const override;
+    void insertFromMimeData(const QMimeData *source) override;
+    int hitTest(const QPointF &point, Qt::HitTestAccuracy = Qt::FuzzyHit) const override;
+    QRectF blockBoundingRect(const QTextBlock &block) const override;
+    QString anchorAt(const QPointF &pos) const override;
     inline QRectF cursorRect(const QTextCursor &cursor) const {
         QRectF r = QWidgetTextControl::cursorRect(cursor);
         r.setLeft(qMax(r.left(), (qreal) 0.));
         return r;
     }
     inline QRectF cursorRect() { return cursorRect(textCursor()); }
-    void ensureCursorVisible() {
+    void ensureCursorVisible() override {
         textEdit->ensureCursorVisible();
         emit microFocusChanged();
     }
@@ -101,7 +106,7 @@ public:
     int topBlock;
     QTextBlock firstVisibleBlock() const;
 
-    QVariant loadResource(int type, const QUrl &name) {
+    QVariant loadResource(int type, const QUrl &name) override {
         return textEdit->loadResource(type, name);
     }
 
@@ -116,6 +121,7 @@ public:
 
     void init(const QString &txt = QString());
     void _q_repaintContents(const QRectF &contentsRect);
+    void _q_textChanged();
 
     inline QPoint mapToContents(const QPoint &point) const
         { return QPoint(point.x() + horizontalOffset(), point.y() + verticalOffset()); }
@@ -152,6 +158,7 @@ public:
     uint centerOnScroll : 1;
     uint inDrag : 1;
     uint clickCausedFocus : 1;
+    uint placeholderVisible : 1;
 
     int topLine;
     qreal topLineFracture; // for non-int sized fonts
@@ -179,10 +186,9 @@ public:
     void _q_modificationChanged(bool);
 
     int originalOffsetY;
+    QString placeholderText;
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TEXTEDIT
 
 #endif // QPLAINTEXTEDIT_P_H

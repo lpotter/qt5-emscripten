@@ -1,9 +1,17 @@
 TEMPLATE=subdirs
+
+# Run this test first
 SUBDIRS=\
+           qdbusconnection_delayed
+
+SUBDIRS+=\
            qdbusabstractadaptor \
            qdbusabstractinterface \
            qdbusconnection \
+           qdbusconnection_no_app \
            qdbusconnection_no_bus \
+           qdbusconnection_no_libdbus \
+           qdbusconnection_spyhook \
            qdbuscontext \
            qdbusinterface \
            qdbuslocalcalls \
@@ -16,8 +24,16 @@ SUBDIRS=\
            qdbusservicewatcher \
            qdbustype \
            qdbusthreading \
-           qdbusxmlparser \
+           qdbusxmlparser
 
-!contains(QT_CONFIG,private_tests): SUBDIRS -= \
+!qtConfig(private_tests): SUBDIRS -= \
            qdbusmarshall \
 
+!qtConfig(process): SUBDIRS -= \
+           qdbusabstractadaptor \
+           qdbusabstractinterface \
+           qdbusinterface \
+           qdbusmarshall
+
+!qtHaveModule(xml): SUBDIRS -= \
+           qdbusxmlparser

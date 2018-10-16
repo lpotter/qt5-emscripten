@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,6 +28,7 @@
 /*!
     \example mainwindows/dockwidgets
     \title Dock Widgets Example
+    \ingroup examples-mainwindow
 
     \brief The Dock Widgets example shows how to add dock windows to an
     application. It also shows how to use Qt's rich text engine.
@@ -54,9 +55,9 @@
 
     \snippet mainwindows/dockwidgets/mainwindow.cpp 0
 
-    We start by including \c <QtGui>, a header file that contains the
-    definition of all classes in the \l QtCore and \l QtGui
-    libraries. This saves us from having to include
+    We start by including \c <QtWidgets>, a header file that contains the
+    definition of all classes in the Qt Core, Qt GUI and Qt Widgets
+    modules. This saves us from having to include
     every class individually and is especially convenient if we add new
     widgets. We also include \c mainwindow.h.
 
@@ -132,7 +133,7 @@
     that the entire name and address insertion is treated as a single
     operation by the QTextEdit, so a single undo will revert all the
     insertions.
-    
+
     \snippet mainwindows/dockwidgets/mainwindow.cpp 7
 
     This function works in a similar way to \c insertCustomer(). First
@@ -140,7 +141,7 @@
     replace it with the standard paragraph that the user clicked. Again
     we use a \c beginEditBlock() ... \c endEditBlock() pair so that the
     insertion can be undone as a single operation.
-    
+
     \snippet mainwindows/dockwidgets/mainwindow.cpp 3
 
     Qt's QTextDocument class makes printing documents easy. We simply

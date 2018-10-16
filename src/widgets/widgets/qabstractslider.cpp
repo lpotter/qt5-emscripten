@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -213,7 +211,7 @@ QT_BEGIN_NAMESPACE
 
 QAbstractSliderPrivate::QAbstractSliderPrivate()
     : minimum(0), maximum(99), pageStep(10), value(0), position(0), pressValue(-1),
-      singleStep(1), offset_accumulated(0), tracking(true),
+      singleStep(1), singleStepFromItemView(-1), viewMayChangeSingleStep(true), offset_accumulated(0), tracking(true),
       blocktracking(false), pressed(false),
       invertedAppearance(false), invertedControls(false),
       orientation(Qt::Horizontal), repeatAction(QAbstractSlider::SliderNoAction)
@@ -305,9 +303,7 @@ void QAbstractSlider::setOrientation(Qt::Orientation orientation)
 
     d->orientation = orientation;
     if (!testAttribute(Qt::WA_WState_OwnSizePolicy)) {
-        QSizePolicy sp = sizePolicy();
-        sp.transpose();
-        setSizePolicy(sp);
+        setSizePolicy(sizePolicy().transposed());
         setAttribute(Qt::WA_WState_OwnSizePolicy, false);
     }
     update();
@@ -386,6 +382,11 @@ int QAbstractSlider::maximum() const
 void QAbstractSlider::setSingleStep(int step)
 {
     Q_D(QAbstractSlider);
+
+    d->viewMayChangeSingleStep = (step < 0);
+    if (step < 0 && d->singleStepFromItemView > 0)
+        step = d->singleStepFromItemView;
+
     if (step != d->singleStep)
         d->setSteps(step, d->pageStep);
 }
@@ -549,7 +550,7 @@ void QAbstractSlider::setValue(int value)
     \property QAbstractSlider::invertedAppearance
     \brief whether or not a slider shows its values inverted.
 
-    If this property is false (the default), the minimum and maximum will
+    If this property is \c false (the default), the minimum and maximum will
     be shown in its classic position for the inherited widget. If the
     value is true, the minimum and maximum appear at their opposite location.
 
@@ -577,7 +578,7 @@ void QAbstractSlider::setInvertedAppearance(bool invert)
     \property QAbstractSlider::invertedControls
     \brief whether or not the slider inverts its wheel and key events.
 
-    If this property is false, scrolling the mouse wheel "up" and using keys
+    If this property is \c false, scrolling the mouse wheel "up" and using keys
     like page up will increase the slider's value towards its maximum. Otherwise
     pressing page up will move value towards the slider's minimum.
 */
@@ -709,7 +710,7 @@ bool QAbstractSliderPrivate::scrollByDelta(Qt::Orientation orientation, Qt::Keyb
         // offset), we might end up with a fraction (e.g. scroll 1.3 lines). We can
         // only scroll whole lines, so we keep the reminder until next event.
         qreal stepsToScrollF =
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
                 QApplication::wheelScrollLines() *
 #endif
                 offset * effectiveSingleStep();
@@ -718,25 +719,34 @@ bool QAbstractSliderPrivate::scrollByDelta(Qt::Orientation orientation, Qt::Keyb
             offset_accumulated = 0;
 
         offset_accumulated += stepsToScrollF;
-#ifndef Q_WS_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
         // Don't scroll more than one page in any case:
         stepsToScroll = qBound(-pageStep, int(offset_accumulated), pageStep);
 #else
         // Native UI-elements on Mac can scroll hundreds of lines at a time as
         // a result of acceleration. So keep the same behaviour in Qt, and
-        // don't restrict stepsToScroll to certain maximum (pageStep): 
+        // don't restrict stepsToScroll to certain maximum (pageStep):
         stepsToScroll = int(offset_accumulated);
 #endif
         offset_accumulated -= int(offset_accumulated);
-        if (stepsToScroll == 0)
+        if (stepsToScroll == 0) {
+            // We moved less than a line, but might still have accumulated partial scroll,
+            // unless we already are at one of the ends.
+            const float effective_offset = invertedControls ? -offset_accumulated : offset_accumulated;
+            if (effective_offset > 0.f && value < maximum)
+                return true;
+            if (effective_offset < 0.f && value > minimum)
+                return true;
+            offset_accumulated = 0;
             return false;
+        }
     }
 
     if (invertedControls)
         stepsToScroll = -stepsToScroll;
 
     int prevValue = value;
-    position = overflowSafeAdd(stepsToScroll); // value will be updated by triggerAction()
+    position = bound(overflowSafeAdd(stepsToScroll)); // value will be updated by triggerAction()
     q->triggerAction(QAbstractSlider::SliderMove);
 
     if (prevValue == value) {
@@ -749,12 +759,14 @@ bool QAbstractSliderPrivate::scrollByDelta(Qt::Orientation orientation, Qt::Keyb
 /*!
     \reimp
 */
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
 void QAbstractSlider::wheelEvent(QWheelEvent * e)
 {
     Q_D(QAbstractSlider);
     e->ignore();
     int delta = e->delta();
+    if (e->inverted())
+        delta = -delta;
     if (d->scrollByDelta(e->orientation(), e->modifiers(), delta))
         e->accept();
 }
@@ -919,7 +931,7 @@ void QAbstractSlider::changeEvent(QEvent *ev)
             d->repeatActionTimer.stop();
             setSliderDown(false);
         }
-        // fall through...
+        Q_FALLTHROUGH();
     default:
         QWidget::changeEvent(ev);
     }
@@ -944,4 +956,18 @@ bool QAbstractSlider::event(QEvent *e)
     return QWidget::event(e);
 }
 
+// This function is called from itemviews when doing scroll per pixel (on updateGeometries())
+// It will not have any effect if there has been a call to setSingleStep with
+// a 'reasonable' value (since viewMayChangeSingleStep will be set to false).
+// (If setSingleStep is called with -1 it will however allow the views to change singleStep.)
+
+void QAbstractSliderPrivate::itemviewChangeSingleStep(int step)
+{
+    singleStepFromItemView = step;
+    if (viewMayChangeSingleStep && singleStep != step)
+        setSteps(step, pageStep);
+}
+
 QT_END_NAMESPACE
+
+#include "moc_qabstractslider.cpp"

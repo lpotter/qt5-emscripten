@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,16 +42,14 @@
 
 #include <QtConcurrent/qtconcurrent_global.h>
 
-#ifndef QT_NO_CONCURRENT
+#if !defined(QT_NO_CONCURRENT) || defined (Q_CLANG_QDOC)
 
 #include <QtConcurrent/qtconcurrentiteratekernel.h>
 #include <QtConcurrent/qtconcurrentreducekernel.h>
 
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
 
 
-#ifndef qdoc
 namespace QtConcurrent {
 
 // map kernel, works with both parallel-for and parallel-while
@@ -67,21 +63,21 @@ public:
         : IterateKernel<Iterator, void>(begin, end), map(_map)
     { }
 
-    bool runIteration(Iterator it, int, void *)
+    bool runIteration(Iterator it, int, void *) override
     {
         map(*it);
         return false;
     }
 
-    bool runIterations(Iterator sequenceBeginIterator, int beginIndex, int endIndex, void *)
+    bool runIterations(Iterator sequenceBeginIterator, int beginIndex, int endIndex, void *) override
     {
         Iterator it = sequenceBeginIterator;
-        advance(it, beginIndex);
+        std::advance(it, beginIndex);
         for (int i = beginIndex; i < endIndex; ++i) {
             runIteration(it, i, 0);
-            advance(it, 1);
+            std::advance(it, 1);
         }
-       
+
         return false;
     }
 };
@@ -111,7 +107,7 @@ public:
         : reducedResult(initialValue), map(_map), reduce(_reduce)
     { }
 
-    bool runIteration(Iterator it, int index, ReducedResultType *)
+    bool runIteration(Iterator it, int index, ReducedResultType *) override
     {
         IntermediateResults<typename MapFunctor::result_type> results;
         results.begin = index;
@@ -122,7 +118,7 @@ public:
         return false;
     }
 
-    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, ReducedResultType *)
+    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, ReducedResultType *) override
     {
         IntermediateResults<typename MapFunctor::result_type> results;
         results.begin = begin;
@@ -130,33 +126,33 @@ public:
         results.vector.reserve(end - begin);
 
         Iterator it = sequenceBeginIterator;
-        advance(it, begin);
+        std::advance(it, begin);
         for (int i = begin; i < end; ++i) {
             results.vector.append(map(*(it)));
-            advance(it, 1);
+            std::advance(it, 1);
         }
 
         reducer.runReduce(reduce, reducedResult, results);
         return false;
     }
 
-    void finish()
+    void finish() override
     {
         reducer.finish(reduce, reducedResult);
     }
 
-    bool shouldThrottleThread()
+    bool shouldThrottleThread() override
     {
         return IterateKernel<Iterator, ReducedResultType>::shouldThrottleThread() || reducer.shouldThrottle();
     }
 
-    bool shouldStartThread()
+    bool shouldStartThread() override
     {
         return IterateKernel<Iterator, ReducedResultType>::shouldStartThread() && reducer.shouldStartThread();
     }
 
     typedef ReducedResultType ResultType;
-    ReducedResultType *result()
+    ReducedResultType *result() override
     {
         return &reducedResult;
     }
@@ -174,32 +170,34 @@ public:
     MappedEachKernel(Iterator begin, Iterator end, MapFunctor _map)
         : IterateKernel<Iterator, T>(begin, end), map(_map) { }
 
-    bool runIteration(Iterator it, int,  T *result)
+    bool runIteration(Iterator it, int,  T *result) override
     {
         *result = map(*it);
         return true;
     }
 
-    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, T *results)
+    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, T *results) override
     {
 
         Iterator it = sequenceBeginIterator;
-        advance(it, begin);
+        std::advance(it, begin);
         for (int i = begin; i < end; ++i) {
             runIteration(it, i, results + (i - begin));
-            advance(it, 1);
+            std::advance(it, 1);
         }
 
         return true;
     }
 };
 
+//! [qtconcurrentmapkernel-1]
 template <typename Iterator, typename Functor>
 inline ThreadEngineStarter<void> startMap(Iterator begin, Iterator end, Functor functor)
 {
     return startThreadEngine(new MapKernel<Iterator, Functor>(begin, end, functor));
 }
 
+//! [qtconcurrentmapkernel-2]
 template <typename T, typename Iterator, typename Functor>
 inline ThreadEngineStarter<T> startMapped(Iterator begin, Iterator end, Functor functor)
 {
@@ -219,7 +217,7 @@ struct SequenceHolder1 : public Base
 
     Sequence sequence;
 
-    void finish()
+    void finish() override
     {
         Base::finish();
         // Clear the sequence to make sure all temporaries are destroyed
@@ -228,6 +226,7 @@ struct SequenceHolder1 : public Base
     }
 };
 
+//! [qtconcurrentmapkernel-3]
 template <typename T, typename Sequence, typename Functor>
 inline ThreadEngineStarter<T> startMapped(const Sequence &sequence, Functor functor)
 {
@@ -238,6 +237,7 @@ inline ThreadEngineStarter<T> startMapped(const Sequence &sequence, Functor func
     return startThreadEngine(new SequenceHolderType(sequence, functor));
 }
 
+//! [qtconcurrentmapkernel-4]
 template <typename IntermediateType, typename ResultType, typename Sequence, typename MapFunctor, typename ReduceFunctor>
 inline ThreadEngineStarter<ResultType> startMappedReduced(const Sequence & sequence,
                                                            MapFunctor mapFunctor, ReduceFunctor reduceFunctor,
@@ -250,6 +250,7 @@ inline ThreadEngineStarter<ResultType> startMappedReduced(const Sequence & seque
     return startThreadEngine(new SequenceHolderType(sequence, mapFunctor, reduceFunctor, options));
 }
 
+//! [qtconcurrentmapkernel-5]
 template <typename IntermediateType, typename ResultType, typename Iterator, typename MapFunctor, typename ReduceFunctor>
 inline ThreadEngineStarter<ResultType> startMappedReduced(Iterator begin, Iterator end,
                                                            MapFunctor mapFunctor, ReduceFunctor reduceFunctor,
@@ -262,10 +263,8 @@ inline ThreadEngineStarter<ResultType> startMappedReduced(Iterator begin, Iterat
 
 } // namespace QtConcurrent
 
-#endif //qdoc
 
 QT_END_NAMESPACE
-QT_END_HEADER
 
 #endif // QT_NO_CONCURRENT
 

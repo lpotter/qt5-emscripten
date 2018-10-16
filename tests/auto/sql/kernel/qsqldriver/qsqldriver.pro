@@ -1,20 +1,5 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qsqldriver
 SOURCES  += tst_qsqldriver.cpp
 
-QT = core sql testlib
-
-wince*: {
-   plugFiles.files = ../../../plugins/sqldrivers
-   plugFiles.path    = .
-   DEPLOYMENT += plugFiles
-   LIBS += -lws2
-} else {
-   win32-g++* {
-        LIBS += -lws2_32
-   } else:win32 {
-        LIBS += ws2_32.lib
-   }
-}
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+QT = core sql testlib core-private sql-private

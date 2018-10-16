@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,13 +36,6 @@
 
 #include "functions.h"
 
-Q_DECLARE_METATYPE(QVector<int>);
-Q_DECLARE_METATYPE(QVector<double>);
-Q_DECLARE_METATYPE(QVector<QString>);
-Q_DECLARE_METATYPE(QList<int>);
-Q_DECLARE_METATYPE(QList<double>);
-Q_DECLARE_METATYPE(QList<QString>);
-
 class tst_QtConcurrentMap: public QObject
 {
     Q_OBJECT
@@ -68,6 +48,7 @@ private slots:
     void blocking_mappedReduced();
     void assignResult();
     void functionOverloads();
+    void noExceptFunctionOverloads();
 #ifndef QT_NO_EXCEPTIONS
     void exceptions();
 #endif
@@ -2045,6 +2026,16 @@ int fn(int &i)
     return i;
 }
 
+int fnConstNoExcept(const int &i) Q_DECL_NOTHROW
+{
+    return i;
+}
+
+int fnNoExcept(int &i) Q_DECL_NOTHROW
+{
+    return i;
+}
+
 QString changeTypeConst(const int &)
 {
     return QString();
@@ -2055,12 +2046,32 @@ QString changeType(int &)
     return QString();
 }
 
+QString changeTypeConstNoExcept(const int &) Q_DECL_NOTHROW
+{
+    return QString();
+}
+
+QString changeTypeNoExcept(int &) Q_DECL_NOTHROW
+{
+    return QString();
+}
+
 int changeTypeQStringListConst(const QStringList &)
 {
     return 0;
 }
 
 int changeTypeQStringList(QStringList &)
+{
+    return 0;
+}
+
+int changeTypeQStringListConstNoExcept(const QStringList &) Q_DECL_NOTHROW
+{
+    return 0;
+}
+
+int changeTypeQStringListNoExcept(QStringList &) Q_DECL_NOTHROW
 {
     return 0;
 }
@@ -2086,6 +2097,26 @@ public:
     }
 
     QString changeTypeConst() const
+    {
+        return QString();
+    }
+
+    MemFnTester fnNoExcept() Q_DECL_NOTHROW
+    {
+        return MemFnTester();
+    }
+
+    MemFnTester fnConstNoExcept() const Q_DECL_NOTHROW
+    {
+        return MemFnTester();
+    }
+
+    QString changeTypeNoExcept() Q_DECL_NOTHROW
+    {
+        return QString();
+    }
+
+    QString changeTypeConstNoExcept() const Q_DECL_NOTHROW
     {
         return QString();
     }
@@ -2115,6 +2146,29 @@ void tst_QtConcurrentMap::functionOverloads()
     QtConcurrent::blockingMapped<QList<QString> >(constIntList, changeTypeConst);
     QtConcurrent::blockingMapped<QList<QString> >(classList, &MemFnTester::changeTypeConst);
     QtConcurrent::blockingMapped<QList<QString> >(constMemFnTesterList, &MemFnTester::changeTypeConst);
+}
+
+void tst_QtConcurrentMap::noExceptFunctionOverloads()
+{
+    QList<int> intList;
+    const QList<int> constIntList;
+    QList<MemFnTester> classList;
+    const QList<MemFnTester> constMemFnTesterList;
+
+    QtConcurrent::mapped(intList, fnConstNoExcept);
+    QtConcurrent::mapped(constIntList, fnConstNoExcept);
+    QtConcurrent::mapped(classList, &MemFnTester::fnConstNoExcept);
+    QtConcurrent::mapped(constMemFnTesterList, &MemFnTester::fnConstNoExcept);
+
+    QtConcurrent::blockingMapped<QVector<int> >(intList, fnConstNoExcept);
+    QtConcurrent::blockingMapped<QVector<int> >(constIntList, fnConstNoExcept);
+    QtConcurrent::blockingMapped<QVector<MemFnTester> >(classList, &MemFnTester::fnConstNoExcept);
+    QtConcurrent::blockingMapped<QVector<MemFnTester> >(constMemFnTesterList, &MemFnTester::fnConstNoExcept);
+
+    QtConcurrent::blockingMapped<QList<QString> >(intList, changeTypeConstNoExcept);
+    QtConcurrent::blockingMapped<QList<QString> >(constIntList, changeTypeConstNoExcept);
+    QtConcurrent::blockingMapped<QList<QString> >(classList, &MemFnTester::changeTypeConstNoExcept);
+    QtConcurrent::blockingMapped<QList<QString> >(constMemFnTesterList, &MemFnTester::changeTypeConstNoExcept);
 }
 
 QAtomicInt currentInstanceCount;
@@ -2150,13 +2204,13 @@ InstanceCounter slowMap(const InstanceCounter &in)
 
 InstanceCounter fastMap(const InstanceCounter &in)
 {
-    QTest::qSleep(rand() % 2 + 1);
+    QTest::qSleep(QRandomGenerator::global()->bounded(2) + 1);
     return in;
 }
 
 void slowReduce(int &result, const InstanceCounter&)
 {
-    QTest::qSleep(rand() % 4 + 1);
+    QTest::qSleep(QRandomGenerator::global()->bounded(4) + 1);
     ++result;
 }
 
@@ -2233,12 +2287,12 @@ int mapper(const int &i)
 void tst_QtConcurrentMap::incrementalResults()
 {
     const int count = 200;
-    QList<int> ints; 
+    QList<int> ints;
     for (int i=0; i < count; ++i)
         ints << i;
 
     QFuture<int> future = QtConcurrent::mapped(ints, mapper);
-    
+
     QList<int> results;
 
     while (future.isFinished() == false) {
@@ -2265,38 +2319,38 @@ void tst_QtConcurrentMap::noDetach()
         QVERIFY(l.isDetached());
 
         QList<int> ll = l;
-        QVERIFY(l.isDetached() == false);
+        QVERIFY(!l.isDetached());
 
         QtConcurrent::mapped(l, mapper).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::mappedReduced(l, mapper, intSumReduce).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::map(l, multiplyBy2Immutable).waitForFinished();
-        QVERIFY(l.isDetached() == true);
-        QVERIFY(ll.isDetached() == true);
+        QVERIFY(l.isDetached());
+        QVERIFY(ll.isDetached());
     }
     {
         const QList<int> l = QList<int>() << 1;
         QVERIFY(l.isDetached());
 
         const QList<int> ll = l;
-        QVERIFY(l.isDetached() == false);
+        QVERIFY(!l.isDetached());
 
         QtConcurrent::mapped(l, mapper).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::mappedReduced(l, mapper, intSumReduce).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
     }
 
 }
@@ -2318,14 +2372,14 @@ void tst_QtConcurrentMap::stlContainers()
     QCOMPARE(list2.size(), (std::vector<int>::size_type)(2));
 
     QtConcurrent::mapped(list, mapper).waitForFinished();
-    
+
     QtConcurrent::blockingMap(list, multiplyBy2Immutable);
 }
 
 InstanceCounter ic_fn(const InstanceCounter & ic)
 {
     return InstanceCounter(ic);
-};
+}
 
 // Verify that held results are deleted when a future is
 // assigned over with operator ==
@@ -2348,9 +2402,12 @@ void tst_QtConcurrentMap::qFutureAssignmentLeak()
         future.waitForFinished();
     }
 
-    QCOMPARE(currentInstanceCount.load(), 1000);
+    // Use QTRY_COMPARE because QtConcurrent::ThreadEngine::asynchronousFinish()
+    // deletes its internals after signaling finished, so it might still be holding
+    // on to copies of InstanceCounter for a short while.
+    QTRY_COMPARE(currentInstanceCount.load(), 1000);
     future = QFuture<InstanceCounter>();
-    QCOMPARE(currentInstanceCount.load(), 0);
+    QTRY_COMPARE(currentInstanceCount.load(), 0);
 }
 
 inline void increment(int &num)

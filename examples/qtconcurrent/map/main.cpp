@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -45,13 +55,7 @@
 #include <QGuiApplication>
 #include <qtconcurrentmap.h>
 
-#ifndef QT_NO_CONCURRENT
-
-QImage scale(const QImage &image)
-{
-    qDebug() << "Scaling image in thread" << QThread::currentThread();
-    return image.scaled(QSize(100, 100), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-}
+#include <functional>
 
 int main(int argc, char *argv[])
 {
@@ -64,29 +68,15 @@ int main(int argc, char *argv[])
     for (int i = 0; i < imageCount; ++i)
         images.append(QImage(1600, 1200, QImage::Format_ARGB32_Premultiplied));
 
+    std::function<QImage(const QImage&)> scale = [](const QImage &image) -> QImage
+    {
+        qDebug() << "Scaling image in thread" << QThread::currentThread();
+        return image.scaled(QSize(100, 100), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    };
+
     // Use QtConcurrentBlocking::mapped to apply the scale function to all the
     // images in the list.
     QList<QImage> thumbnails = QtConcurrent::blockingMapped(images, scale);
 
     return 0;
 }
-
-#else
-
-#include <QLabel>
-
-int main(int argc, char *argv[])
-{
-    QApplication app(argc, argv);
-    QString text("Qt Concurrent is not yet supported on this platform");
-
-    QLabel *label = new QLabel(text);
-    label->setWordWrap(true);
-
-    label->show();
-    qDebug() << text;
-
-    app.exec();
-}
-
-#endif

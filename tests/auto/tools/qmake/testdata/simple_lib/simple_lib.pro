@@ -1,5 +1,5 @@
 TEMPLATE	= lib
-CONFIG += qt warn_on release staticlib
+CONFIG += release staticlib
 CONFIG -= dll
 
 HEADERS	= simple.h
@@ -9,7 +9,5 @@ VERSION     = 1.0.0
 INCLUDEPATH += . tmp
 MOC_DIR	= tmp
 OBJECTS_DIR = tmp
-TARGET	= simple_lib
-DESTDIR	= ./
-
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+TARGET	= "simple lib"
+DESTDIR	= "dest dir"

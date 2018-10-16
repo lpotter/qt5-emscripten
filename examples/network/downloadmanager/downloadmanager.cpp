@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,23 +50,21 @@
 
 #include "downloadmanager.h"
 
-#include <QFileInfo>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QString>
-#include <QStringList>
-#include <QTimer>
-#include <stdio.h>
+#include <QTextStream>
+
+#include <cstdio>
+
+using namespace std;
 
 DownloadManager::DownloadManager(QObject *parent)
-    : QObject(parent), downloadedCount(0), totalCount(0)
+    : QObject(parent)
 {
 }
 
-void DownloadManager::append(const QStringList &urlList)
+void DownloadManager::append(const QStringList &urls)
 {
-    foreach (QString url, urlList)
-        append(QUrl::fromEncoded(url.toLocal8Bit()));
+    for (const QString &urlAsString : urls)
+        append(QUrl::fromEncoded(urlAsString.toLocal8Bit()));
 
     if (downloadQueue.isEmpty())
         QTimer::singleShot(0, this, SIGNAL(finished()));
@@ -157,9 +165,16 @@ void DownloadManager::downloadFinished()
     if (currentDownload->error()) {
         // download failed
         fprintf(stderr, "Failed: %s\n", qPrintable(currentDownload->errorString()));
+        output.remove();
     } else {
-        printf("Succeeded.\n");
-        ++downloadedCount;
+        // let's check if it was actually a redirect
+        if (isHttpRedirect()) {
+            reportRedirect();
+            output.remove();
+        } else {
+            printf("Succeeded.\n");
+            ++downloadedCount;
+        }
     }
 
     currentDownload->deleteLater();
@@ -169,4 +184,29 @@ void DownloadManager::downloadFinished()
 void DownloadManager::downloadReadyRead()
 {
     output.write(currentDownload->readAll());
+}
+
+bool DownloadManager::isHttpRedirect() const
+{
+    int statusCode = currentDownload->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    return statusCode == 301 || statusCode == 302 || statusCode == 303
+           || statusCode == 305 || statusCode == 307 || statusCode == 308;
+}
+
+void DownloadManager::reportRedirect()
+{
+    int statusCode = currentDownload->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    QUrl requestUrl = currentDownload->request().url();
+    QTextStream(stderr) << "Request: " << requestUrl.toDisplayString()
+                        << " was redirected with code: " << statusCode
+                        << '\n';
+
+    QVariant target = currentDownload->attribute(QNetworkRequest::RedirectionTargetAttribute);
+    if (!target.isValid())
+        return;
+    QUrl redirectUrl = target.toUrl();
+    if (redirectUrl.isRelative())
+        redirectUrl = requestUrl.resolved(redirectUrl);
+    QTextStream(stderr) << "Redirected to: " << redirectUrl.toDisplayString()
+                        << '\n';
 }

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2013 Samuel Gaist <samuel.gaist@edeltech.ch>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,191 +11,91 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qwindowsintegration.h"
-#include "qwindowsbackingstore.h"
 #include "qwindowswindow.h"
 #include "qwindowscontext.h"
-#if defined(QT_OPENGL_ES_2)
-#  include "qwindowseglcontext.h"
-#  include <QtGui/QOpenGLContext>
-#elif !defined(QT_NO_OPENGL)
-#  include "qwindowsglcontext.h"
-#endif
+#include "qwin10helpers.h"
+#include "qwindowsmenu.h"
+#include "qwindowsopenglcontext.h"
+
 #include "qwindowsscreen.h"
 #include "qwindowstheme.h"
 #include "qwindowsservices.h"
 #ifndef QT_NO_FREETYPE
-#  include "qwindowsfontdatabase_ft.h"
+#  include <QtFontDatabaseSupport/private/qwindowsfontdatabase_ft_p.h>
 #endif
-#include "qwindowsfontdatabase.h"
-#include "qwindowsguieventdispatcher.h"
-#ifndef QT_NO_CLIPBOARD
+#if QT_CONFIG(clipboard)
 #  include "qwindowsclipboard.h"
+#  if QT_CONFIG(draganddrop)
+#    include "qwindowsdrag.h"
+#  endif
 #endif
-#include "qwindowsdrag.h"
 #include "qwindowsinputcontext.h"
 #include "qwindowskeymapper.h"
-#  ifndef QT_NO_ACCESSIBILITY
-#include "accessible/qwindowsaccessibility.h"
+#if QT_CONFIG(accessibility)
+#  include "uiautomation/qwindowsuiaaccessibility.h"
 #endif
 
 #include <qpa/qplatformnativeinterface.h>
 #include <qpa/qwindowsysteminterface.h>
-#include <QtGui/QBackingStore>
-#include <QtGui/private/qpixmap_raster_p.h>
+#if QT_CONFIG(sessionmanager)
+#  include "qwindowssessionmanager.h"
+#endif
+#include <QtGui/qtouchdevice.h>
 #include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/private/qhighdpiscaling_p.h>
+#include <QtGui/qpa/qplatforminputcontextfactory_p.h>
+#include <QtGui/qpa/qplatformcursor.h>
 
-#include <QtCore/private/qeventdispatcher_win_p.h>
-#include <QtCore/QDebug>
+#include <QtEventDispatcherSupport/private/qwindowsguieventdispatcher_p.h>
+
+#include <QtCore/qdebug.h>
+#include <QtCore/qvariant.h>
+
+#include <limits.h>
+
+#if defined(QT_OPENGL_ES_2) || defined(QT_OPENGL_DYNAMIC)
+#  include "qwindowseglcontext.h"
+#endif
+#if !defined(QT_NO_OPENGL) && !defined(QT_OPENGL_ES_2)
+#  include "qwindowsglcontext.h"
+#endif
+
+#include "qwindowsopengltester.h"
+
+static inline void initOpenGlBlacklistResources()
+{
+    Q_INIT_RESOURCE(openglblacklists);
+}
 
 QT_BEGIN_NAMESPACE
-
-/*!
-    \class QWindowsNativeInterface
-    \brief Provides access to native handles.
-
-    Currently implemented keys
-    \list
-    \li handle (HWND)
-    \li getDC (DC)
-    \li releaseDC Releases the previously acquired DC and returns 0.
-    \endlist
-
-    \internal
-    \ingroup qt-lighthouse-win
-*/
-
-class QWindowsNativeInterface : public QPlatformNativeInterface
-{
-    Q_OBJECT
-    Q_PROPERTY(bool asyncExpose READ asyncExpose WRITE setAsyncExpose)
-public:
-#ifndef QT_NO_OPENGL
-    virtual void *nativeResourceForContext(const QByteArray &resource, QOpenGLContext *context);
-#endif
-    virtual void *nativeResourceForWindow(const QByteArray &resource, QWindow *window);
-    virtual void *nativeResourceForBackingStore(const QByteArray &resource, QBackingStore *bs);
-
-    Q_INVOKABLE void *createMessageWindow(const QString &classNameTemplate,
-                                          const QString &windowName,
-                                          void *eventProc) const;
-    bool asyncExpose() const;
-    void setAsyncExpose(bool value);
-};
-
-void *QWindowsNativeInterface::nativeResourceForWindow(const QByteArray &resource, QWindow *window)
-{
-    if (!window || !window->handle()) {
-        qWarning("%s: '%s' requested for null window or window without handle.", __FUNCTION__, resource.constData());
-        return 0;
-    }
-    QWindowsWindow *bw = static_cast<QWindowsWindow *>(window->handle());
-    if (resource == "handle")
-        return bw->handle();
-    if (window->surfaceType() == QWindow::RasterSurface) {
-        if (resource == "getDC")
-            return bw->getDC();
-        if (resource == "releaseDC") {
-            bw->releaseDC();
-            return 0;
-        }
-    }
-    qWarning("%s: Invalid key '%s' requested.", __FUNCTION__, resource.constData());
-    return 0;
-}
-
-void *QWindowsNativeInterface::nativeResourceForBackingStore(const QByteArray &resource, QBackingStore *bs)
-{
-    if (!bs || !bs->handle()) {
-        qWarning("%s: '%s' requested for null backingstore or backingstore without handle.", __FUNCTION__, resource.constData());
-        return 0;
-    }
-    QWindowsBackingStore *wbs = static_cast<QWindowsBackingStore *>(bs->handle());
-    if (resource == "getDC")
-        return wbs->getDC();
-    qWarning("%s: Invalid key '%s' requested.", __FUNCTION__, resource.constData());
-    return 0;
-}
-
-#ifndef QT_NO_OPENGL
-void *QWindowsNativeInterface::nativeResourceForContext(const QByteArray &resource, QOpenGLContext *context)
-{
-    if (!context || !context->handle()) {
-        qWarning("%s: '%s' requested for null context or context without handle.", __FUNCTION__, resource.constData());
-        return 0;
-    }
-#ifdef QT_OPENGL_ES_2
-    QWindowsEGLContext *windowsEglContext = static_cast<QWindowsEGLContext *>(context->handle());
-    if (resource == QByteArrayLiteral("eglDisplay"))
-        return windowsEglContext->eglDisplay();
-    if (resource == QByteArrayLiteral("eglContext"))
-        return windowsEglContext->eglContext();
-    if (resource == QByteArrayLiteral("eglConfig"))
-        return windowsEglContext->eglConfig();
-#else // QT_OPENGL_ES_2
-    QWindowsGLContext *windowsContext = static_cast<QWindowsGLContext *>(context->handle());
-    if (resource == QByteArrayLiteral("renderingContext"))
-        return windowsContext->renderingContext();
-#endif // !QT_OPENGL_ES_2
-
-    qWarning("%s: Invalid key '%s' requested.", __FUNCTION__, resource.constData());
-    return 0;
-}
-#endif // !QT_NO_OPENGL
-
-/*!
-    \brief Creates a non-visible window handle for filtering messages.
-*/
-
-void *QWindowsNativeInterface::createMessageWindow(const QString &classNameTemplate,
-                                                   const QString &windowName,
-                                                   void *eventProc) const
-{
-    QWindowsContext *ctx = QWindowsContext::instance();
-    const HWND hwnd = ctx->createDummyWindow(classNameTemplate,
-                                             (wchar_t*)windowName.utf16(),
-                                             (WNDPROC)eventProc);
-    return hwnd;
-}
-
-bool QWindowsNativeInterface::asyncExpose() const
-{
-    return QWindowsContext::instance()->asyncExpose();
-}
-
-void QWindowsNativeInterface::setAsyncExpose(bool value)
-{
-    QWindowsContext::instance()->setAsyncExpose(value);
-}
 
 /*!
     \class QWindowsIntegration
@@ -208,7 +109,7 @@ void QWindowsNativeInterface::setAsyncExpose(bool value)
 
     It should compile with:
     \list
-    \li Microsoft Visual Studio 2008 or later (using the Microsoft Windows SDK,
+    \li Microsoft Visual Studio 2013 or later (using the Microsoft Windows SDK,
         (\c Q_CC_MSVC).
     \li Stock \l{http://mingw.org/}{MinGW} (\c Q_CC_MINGW).
         This version ships with headers that are missing a lot of WinAPI.
@@ -218,14 +119,7 @@ void QWindowsNativeInterface::setAsyncExpose(bool value)
         (\c Q_CC_MINGW and \c __MINGW64_VERSION_MAJOR indicating the version).
         MinGW-w64 provides more complete headers (compared to stock MinGW from mingw.org),
         including a considerable part of the Windows SDK.
-    \li Visual Studio 2008 for Windows Embedded (\c Q_OS_WINCE).
     \endlist
-
-    The file \c qtwindows_additional.h contains defines and declarations that
-    are missing in MinGW. When encountering missing declarations, it should
-    be added there so that \c #ifdefs for MinGW can be avoided. Similarly,
-    \c qplatformfunctions_wince.h contains defines and declarations for
-    Windows Embedded.
 
     When using a function from the WinAPI, the minimum supported Windows version
     and Windows Embedded support should be checked. If the function is not supported
@@ -239,40 +133,59 @@ void QWindowsNativeInterface::setAsyncExpose(bool value)
 
 struct QWindowsIntegrationPrivate
 {
-#if defined(QT_OPENGL_ES_2)
-    typedef QSharedPointer<QWindowsEGLStaticContext> QEGLStaticContextPtr;
-#elif !defined(QT_NO_OPENGL)
-    typedef QSharedPointer<QOpenGLStaticContext> QOpenGLStaticContextPtr;
-#endif
-
+    Q_DISABLE_COPY(QWindowsIntegrationPrivate)
     explicit QWindowsIntegrationPrivate(const QStringList &paramList);
     ~QWindowsIntegrationPrivate();
 
-    const unsigned m_options;
+    unsigned m_options = 0;
     QWindowsContext m_context;
-    QPlatformFontDatabase *m_fontDatabase;
-    QWindowsNativeInterface m_nativeInterface;
-#ifndef QT_NO_CLIPBOARD
+    QPlatformFontDatabase *m_fontDatabase = nullptr;
+#if QT_CONFIG(clipboard)
     QWindowsClipboard m_clipboard;
-#endif
+#  if QT_CONFIG(draganddrop)
     QWindowsDrag m_drag;
-    QWindowsGuiEventDispatcher *m_eventDispatcher;
-#if defined(QT_OPENGL_ES_2)
-    QEGLStaticContextPtr m_staticEGLContext;
-#elif !defined(QT_NO_OPENGL)
-    QOpenGLStaticContextPtr m_staticOpenGLContext;
+#  endif
 #endif
-    QWindowsInputContext m_inputContext;
-#ifndef QT_NO_ACCESSIBILITY
-    QWindowsAccessibility m_accessibility;
+#ifndef QT_NO_OPENGL
+    QMutex m_staticContextLock;
+    QScopedPointer<QWindowsStaticOpenGLContext> m_staticOpenGLContext;
+#endif // QT_NO_OPENGL
+    QScopedPointer<QPlatformInputContext> m_inputContext;
+#if QT_CONFIG(accessibility)
+   QWindowsUiaAccessibility m_accessibility;
 #endif
     QWindowsServices m_services;
 };
 
-static inline unsigned parseOptions(const QStringList &paramList)
+template <typename IntType>
+bool parseIntOption(const QString &parameter,const QLatin1String &option,
+                    IntType minimumValue, IntType maximumValue, IntType *target)
+{
+    const int valueLength = parameter.size() - option.size() - 1;
+    if (valueLength < 1 || !parameter.startsWith(option) || parameter.at(option.size()) != QLatin1Char('='))
+        return false;
+    bool ok;
+    const QStringRef valueRef = parameter.rightRef(valueLength);
+    const int value = valueRef.toInt(&ok);
+    if (ok) {
+        if (value >= minimumValue && value <= maximumValue)
+            *target = static_cast<IntType>(value);
+        else {
+            qWarning() << "Value" << value << "for option" << option << "out of range"
+                << minimumValue << ".." << maximumValue;
+        }
+    } else {
+        qWarning() << "Invalid value" << valueRef << "for option" << option;
+    }
+    return true;
+}
+
+static inline unsigned parseOptions(const QStringList &paramList,
+                                    int *tabletAbsoluteRange,
+                                    QtWindows::ProcessDpiAwareness *dpiAwareness)
 {
     unsigned options = 0;
-    foreach (const QString &param, paramList) {
+    for (const QString &param : paramList) {
         if (param.startsWith(QLatin1String("fontengine="))) {
             if (param.endsWith(QLatin1String("freetype"))) {
                 options |= QWindowsIntegration::FontDatabaseFreeType;
@@ -285,40 +198,94 @@ static inline unsigned parseOptions(const QStringList &paramList)
             } else if (param.endsWith(QLatin1String("none"))) {
                 options |= QWindowsIntegration::NoNativeDialogs;
             }
+        } else if (param == QLatin1String("altgr")) {
+            options |= QWindowsIntegration::DetectAltGrModifier;
         } else if (param == QLatin1String("gl=gdi")) {
             options |= QWindowsIntegration::DisableArb;
+        } else if (param == QLatin1String("nodirectwrite")) {
+            options |= QWindowsIntegration::DontUseDirectWriteFonts;
+        } else if (param == QLatin1String("nocolorfonts")) {
+            options |= QWindowsIntegration::DontUseColorFonts;
+        } else if (param == QLatin1String("nomousefromtouch")) {
+            options |= QWindowsIntegration::DontPassOsMouseEventsSynthesizedFromTouch;
+        } else if (parseIntOption(param, QLatin1String("verbose"), 0, INT_MAX, &QWindowsContext::verbose)
+            || parseIntOption(param, QLatin1String("tabletabsoluterange"), 0, INT_MAX, tabletAbsoluteRange)
+            || parseIntOption(param, QLatin1String("dpiawareness"), QtWindows::ProcessDpiUnaware, QtWindows::ProcessPerMonitorDpiAware, dpiAwareness)) {
+        } else if (param == QLatin1String("menus=native")) {
+            options |= QWindowsIntegration::AlwaysUseNativeMenus;
+        } else if (param == QLatin1String("menus=none")) {
+            options |= QWindowsIntegration::NoNativeMenus;
+        } else if (param == QLatin1String("nowmpointer")) {
+            options |= QWindowsIntegration::DontUseWMPointer;
+        } else {
+            qWarning() << "Unknown option" << param;
         }
     }
     return options;
 }
 
 QWindowsIntegrationPrivate::QWindowsIntegrationPrivate(const QStringList &paramList)
-    : m_options(parseOptions(paramList))
-    , m_fontDatabase(0)
-    , m_eventDispatcher(new QWindowsGuiEventDispatcher)
 {
+    initOpenGlBlacklistResources();
+
+    static bool dpiAwarenessSet = false;
+    int tabletAbsoluteRange = -1;
+    // Default to per-monitor awareness to avoid being scaled when monitors with different DPI
+    // are connected to Windows 8.1
+    QtWindows::ProcessDpiAwareness dpiAwareness = QtWindows::ProcessPerMonitorDpiAware;
+    m_options = parseOptions(paramList, &tabletAbsoluteRange, &dpiAwareness);
+    QWindowsFontDatabase::setFontOptions(m_options);
+
+    if (m_context.initPointer(m_options)) {
+        QCoreApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents);
+    } else {
+        m_context.initTablet(m_options);
+        if (tabletAbsoluteRange >= 0)
+            m_context.setTabletAbsoluteRange(tabletAbsoluteRange);
+    }
+
+    if (!dpiAwarenessSet) { // Set only once in case of repeated instantiations of QGuiApplication.
+        if (!QCoreApplication::testAttribute(Qt::AA_PluginApplication)) {
+            m_context.setProcessDpiAwareness(dpiAwareness);
+            qCDebug(lcQpaWindows)
+                << __FUNCTION__ << "DpiAwareness=" << dpiAwareness
+                << "effective process DPI awareness=" << QWindowsContext::processDpiAwareness();
+        }
+        dpiAwarenessSet = true;
+    }
+
+    m_context.initTouch(m_options);
+    QPlatformCursor::setCapability(QPlatformCursor::OverrideCursor);
 }
 
 QWindowsIntegrationPrivate::~QWindowsIntegrationPrivate()
 {
-    if (m_fontDatabase)
-        delete m_fontDatabase;
+    delete m_fontDatabase;
 }
+
+QWindowsIntegration *QWindowsIntegration::m_instance = nullptr;
 
 QWindowsIntegration::QWindowsIntegration(const QStringList &paramList) :
     d(new QWindowsIntegrationPrivate(paramList))
 {
-    QGuiApplicationPrivate::instance()->setEventDispatcher(d->m_eventDispatcher);
-#ifndef QT_NO_CLIPBOARD
+    m_instance = this;
+#if QT_CONFIG(clipboard)
     d->m_clipboard.registerViewer();
 #endif
     d->m_context.screenManager().handleScreenChanges();
+    d->m_context.setDetectAltGrModifier((d->m_options & DetectAltGrModifier) != 0);
 }
 
 QWindowsIntegration::~QWindowsIntegration()
 {
-    if (QWindowsContext::verboseIntegration)
-        qDebug("%s", __FUNCTION__);
+    m_instance = nullptr;
+}
+
+void QWindowsIntegration::initialize()
+{
+    QString icStr = QPlatformInputContextFactory::requested();
+    icStr.isNull() ? d->m_inputContext.reset(new QWindowsInputContext)
+                   : d->m_inputContext.reset(QPlatformInputContextFactory::create(icStr));
 }
 
 bool QWindowsIntegration::hasCapability(QPlatformIntegration::Capability cap) const
@@ -330,15 +297,21 @@ bool QWindowsIntegration::hasCapability(QPlatformIntegration::Capability cap) co
     case OpenGL:
         return true;
     case ThreadedOpenGL:
-#  ifdef QT_OPENGL_ES_2
-        return QWindowsEGLContext::hasThreadedOpenGLCapability();
-#  else
-        return true;
-#  endif // QT_OPENGL_ES_2
+        if (const QWindowsStaticOpenGLContext *glContext = QWindowsIntegration::staticOpenGLContext())
+            return glContext->supportsThreadedOpenGL();
+        return false;
 #endif // !QT_NO_OPENGL
     case WindowMasks:
         return true;
     case MultipleWindows:
+        return true;
+    case ForeignWindows:
+        return true;
+    case RasterGLSurface:
+        return true;
+    case AllGLFunctionsQueryable:
+        return true;
+    case SwitchableWidgetComposition:
         return true;
     default:
         return QPlatformIntegration::hasCapability(cap);
@@ -346,86 +319,176 @@ bool QWindowsIntegration::hasCapability(QPlatformIntegration::Capability cap) co
     return false;
 }
 
-QPlatformPixmap *QWindowsIntegration::createPlatformPixmap(QPlatformPixmap::PixelType type) const
-{
-    return new QRasterPlatformPixmap(type);
-}
-
 QPlatformWindow *QWindowsIntegration::createPlatformWindow(QWindow *window) const
 {
-    QWindowsWindow::WindowData requested;
+    if (window->type() == Qt::Desktop) {
+        QWindowsDesktopWindow *result = new QWindowsDesktopWindow(window);
+        qCDebug(lcQpaWindows) << "Desktop window:" << window
+            << showbase << hex << result->winId() << noshowbase << dec << result->geometry();
+        return result;
+    }
+
+    QWindowsWindowData requested;
     requested.flags = window->flags();
-    requested.geometry = window->geometry();
-    const QWindowsWindow::WindowData obtained
-            = QWindowsWindow::WindowData::create(window, requested, window->title());
-    if (QWindowsContext::verboseIntegration || QWindowsContext::verboseWindows)
-        qDebug().nospace()
-            << __FUNCTION__ << '<' << window << '\n'
-            << "    Requested: " << requested.geometry << "frame incl.: "
-            << QWindowsGeometryHint::positionIncludesFrame(window)
-            <<   " Flags="
-            << QWindowsWindow::debugWindowFlags(requested.flags) << '\n'
-            << "    Obtained : " << obtained.geometry << " Margins "
-            << obtained.frame  << " Flags="
-            << QWindowsWindow::debugWindowFlags(obtained.flags)
-            << " Handle=" << obtained.hwnd << '\n';
-    if (!obtained.hwnd)
-        return 0;
-    if (requested.flags != obtained.flags)
-        window->setFlags(obtained.flags);
-    return new QWindowsWindow(window, obtained);
+    requested.geometry = QHighDpi::toNativePixels(window->geometry(), window);
+    // Apply custom margins (see  QWindowsWindow::setCustomMargins())).
+    const QVariant customMarginsV = window->property("_q_windowsCustomMargins");
+    if (customMarginsV.isValid())
+        requested.customMargins = qvariant_cast<QMargins>(customMarginsV);
+
+    QWindowsWindowData obtained =
+        QWindowsWindowData::create(window, requested,
+                                   QWindowsWindow::formatWindowTitle(window->title()));
+    qCDebug(lcQpaWindows).nospace()
+        << __FUNCTION__ << ' ' << window
+        << "\n    Requested: " << requested.geometry << " frame incl.="
+        << QWindowsGeometryHint::positionIncludesFrame(window)
+        << ' ' << requested.flags
+        << "\n    Obtained : " << obtained.geometry << " margins=" << obtained.fullFrameMargins
+        << " handle=" << obtained.hwnd << ' ' << obtained.flags << '\n';
+
+    if (Q_UNLIKELY(!obtained.hwnd))
+        return nullptr;
+
+    QWindowsWindow *result = createPlatformWindowHelper(window, obtained);
+    Q_ASSERT(result);
+
+    if (QWindowsMenuBar *menuBarToBeInstalled = QWindowsMenuBar::menuBarOf(window))
+        menuBarToBeInstalled->install(result);
+
+    return result;
 }
 
-QPlatformBackingStore *QWindowsIntegration::createPlatformBackingStore(QWindow *window) const
+QPlatformWindow *QWindowsIntegration::createForeignWindow(QWindow *window, WId nativeHandle) const
 {
-    if (QWindowsContext::verboseIntegration)
-        qDebug() << __FUNCTION__ << window;
-    return new QWindowsBackingStore(window);
+    const HWND hwnd = reinterpret_cast<HWND>(nativeHandle);
+    if (!IsWindow(hwnd)) {
+       qWarning("Windows QPA: Invalid foreign window ID %p.", hwnd);
+       return nullptr;
+    }
+    QWindowsForeignWindow *result = new QWindowsForeignWindow(window, hwnd);
+    const QRect obtainedGeometry = result->geometry();
+    QScreen *screen = nullptr;
+    if (const QPlatformScreen *pScreen = result->screenForGeometry(obtainedGeometry))
+        screen = pScreen->screen();
+    if (screen && screen != window->screen())
+        window->setScreen(screen);
+    qCDebug(lcQpaWindows) << "Foreign window:" << window << showbase << hex
+        << result->winId() << noshowbase << dec << obtainedGeometry << screen;
+    return result;
+}
+
+// Overridden to return a QWindowsDirect2DWindow in Direct2D plugin.
+QWindowsWindow *QWindowsIntegration::createPlatformWindowHelper(QWindow *window, const QWindowsWindowData &data) const
+{
+    return new QWindowsWindow(window, data);
 }
 
 #ifndef QT_NO_OPENGL
-QPlatformOpenGLContext
-    *QWindowsIntegration::createPlatformOpenGLContext(QOpenGLContext *context) const
+
+QWindowsStaticOpenGLContext *QWindowsStaticOpenGLContext::doCreate()
 {
-    if (QWindowsContext::verboseIntegration)
-        qDebug() << __FUNCTION__ << context->format();
-#ifdef QT_OPENGL_ES_2
-    if (d->m_staticEGLContext.isNull()) {
-        QWindowsEGLStaticContext *staticContext = QWindowsEGLStaticContext::create();
-        if (!staticContext)
-            return 0;
-        d->m_staticEGLContext = QSharedPointer<QWindowsEGLStaticContext>(staticContext);
+#if defined(QT_OPENGL_DYNAMIC)
+    QWindowsOpenGLTester::Renderer requestedRenderer = QWindowsOpenGLTester::requestedRenderer();
+    switch (requestedRenderer) {
+    case QWindowsOpenGLTester::DesktopGl:
+        if (QWindowsStaticOpenGLContext *glCtx = QOpenGLStaticContext::create()) {
+            if ((QWindowsOpenGLTester::supportedRenderers(requestedRenderer) & QWindowsOpenGLTester::DisableRotationFlag)
+                && !QWindowsScreen::setOrientationPreference(Qt::LandscapeOrientation)) {
+                qCWarning(lcQpaGl, "Unable to disable rotation.");
+            }
+            return glCtx;
+        }
+        qCWarning(lcQpaGl, "System OpenGL failed. Falling back to Software OpenGL.");
+        return QOpenGLStaticContext::create(true);
+    // If ANGLE is requested, use it, don't try anything else.
+    case QWindowsOpenGLTester::AngleRendererD3d9:
+    case QWindowsOpenGLTester::AngleRendererD3d11:
+    case QWindowsOpenGLTester::AngleRendererD3d11Warp:
+        return QWindowsEGLStaticContext::create(requestedRenderer);
+    case QWindowsOpenGLTester::Gles:
+        return QWindowsEGLStaticContext::create(requestedRenderer);
+    case QWindowsOpenGLTester::SoftwareRasterizer:
+        if (QWindowsStaticOpenGLContext *swCtx = QOpenGLStaticContext::create(true))
+            return swCtx;
+        qCWarning(lcQpaGl, "Software OpenGL failed. Falling back to system OpenGL.");
+        if (QWindowsOpenGLTester::supportedRenderers(requestedRenderer) & QWindowsOpenGLTester::DesktopGl)
+            return QOpenGLStaticContext::create();
+        return nullptr;
+    default:
+        break;
     }
-    return new QWindowsEGLContext(d->m_staticEGLContext, context->format(), context->shareHandle());
-#else  // QT_OPENGL_ES_2
-    if (d->m_staticOpenGLContext.isNull())
-        d->m_staticOpenGLContext =
-            QSharedPointer<QOpenGLStaticContext>(QOpenGLStaticContext::create());
-    QScopedPointer<QWindowsGLContext> result(new QWindowsGLContext(d->m_staticOpenGLContext, context));
-    if (result->isValid())
-        return result.take();
+
+    const QWindowsOpenGLTester::Renderers supportedRenderers = QWindowsOpenGLTester::supportedRenderers(requestedRenderer);
+    if (supportedRenderers.testFlag(QWindowsOpenGLTester::DisableProgramCacheFlag)
+        && !QCoreApplication::testAttribute(Qt::AA_DisableShaderDiskCache)) {
+        QCoreApplication::setAttribute(Qt::AA_DisableShaderDiskCache);
+    }
+    if (supportedRenderers & QWindowsOpenGLTester::DesktopGl) {
+        if (QWindowsStaticOpenGLContext *glCtx = QOpenGLStaticContext::create()) {
+            if ((supportedRenderers & QWindowsOpenGLTester::DisableRotationFlag)
+                && !QWindowsScreen::setOrientationPreference(Qt::LandscapeOrientation)) {
+                qCWarning(lcQpaGl, "Unable to disable rotation.");
+            }
+            return glCtx;
+        }
+    }
+    if (QWindowsOpenGLTester::Renderers glesRenderers = supportedRenderers & QWindowsOpenGLTester::GlesMask) {
+        if (QWindowsEGLStaticContext *eglCtx = QWindowsEGLStaticContext::create(glesRenderers))
+            return eglCtx;
+    }
+    return QOpenGLStaticContext::create(true);
+#elif defined(QT_OPENGL_ES_2)
+    QWindowsOpenGLTester::Renderers glesRenderers = QWindowsOpenGLTester::requestedGlesRenderer();
+    if (glesRenderers == QWindowsOpenGLTester::InvalidRenderer)
+        glesRenderers = QWindowsOpenGLTester::supportedRenderers(QWindowsOpenGLTester::AngleRendererD3d11);
+    return QWindowsEGLStaticContext::create(glesRenderers);
+#elif !defined(QT_NO_OPENGL)
+    return QOpenGLStaticContext::create();
+#endif
+}
+
+QWindowsStaticOpenGLContext *QWindowsStaticOpenGLContext::create()
+{
+    return QWindowsStaticOpenGLContext::doCreate();
+}
+
+QPlatformOpenGLContext *QWindowsIntegration::createPlatformOpenGLContext(QOpenGLContext *context) const
+{
+    qCDebug(lcQpaGl) << __FUNCTION__ << context->format();
+    if (QWindowsStaticOpenGLContext *staticOpenGLContext = QWindowsIntegration::staticOpenGLContext()) {
+        QScopedPointer<QWindowsOpenGLContext> result(staticOpenGLContext->createContext(context));
+        if (result->isValid())
+            return result.take();
+    }
     return 0;
-#endif // !QT_OPENGL_ES_2
+}
+
+QOpenGLContext::OpenGLModuleType QWindowsIntegration::openGLModuleType()
+{
+#if defined(QT_OPENGL_ES_2)
+    return QOpenGLContext::LibGLES;
+#elif !defined(QT_OPENGL_DYNAMIC)
+    return QOpenGLContext::LibGL;
+#else
+    if (const QWindowsStaticOpenGLContext *staticOpenGLContext = QWindowsIntegration::staticOpenGLContext())
+        return staticOpenGLContext->moduleType();
+    return QOpenGLContext::LibGL;
+#endif
+}
+
+QWindowsStaticOpenGLContext *QWindowsIntegration::staticOpenGLContext()
+{
+    QWindowsIntegration *integration = QWindowsIntegration::instance();
+    if (!integration)
+        return 0;
+    QWindowsIntegrationPrivate *d = integration->d.data();
+    QMutexLocker lock(&d->m_staticContextLock);
+    if (d->m_staticOpenGLContext.isNull())
+        d->m_staticOpenGLContext.reset(QWindowsStaticOpenGLContext::create());
+    return d->m_staticOpenGLContext.data();
 }
 #endif // !QT_NO_OPENGL
-
-/* Workaround for QTBUG-24205: In 'Auto', pick the FreeType engine for
- * QML2 applications. */
-
-#ifdef Q_OS_WINCE
-// It's not easy to detect if we are running a QML application
-// Let's try to do so by checking if the QtQuick module is loaded.
-inline bool isQMLApplication()
-{
-    // check if the QtQuick library is loaded
-#ifdef _DEBUG
-    HMODULE handle = GetModuleHandle(L"QtQuick" QT_LIBINFIX L"d5.dll");
-#else
-    HMODULE handle = GetModuleHandle(L"QtQuick" QT_LIBINFIX L"5.dll");
-#endif
-    return (handle != NULL);
-}
-#endif
 
 QPlatformFontDatabase *QWindowsIntegration::fontDatabase() const
 {
@@ -433,24 +496,10 @@ QPlatformFontDatabase *QWindowsIntegration::fontDatabase() const
 #ifdef QT_NO_FREETYPE
         d->m_fontDatabase = new QWindowsFontDatabase();
 #else // QT_NO_FREETYPE
-        if (d->m_options & QWindowsIntegration::FontDatabaseFreeType) {
+        if (d->m_options & QWindowsIntegration::FontDatabaseFreeType)
             d->m_fontDatabase = new QWindowsFontDatabaseFT;
-        } else if (d->m_options & QWindowsIntegration::FontDatabaseNative){
+        else
             d->m_fontDatabase = new QWindowsFontDatabase;
-        } else {
-#ifndef Q_OS_WINCE
-            d->m_fontDatabase = new QWindowsFontDatabase;
-#else
-            if (isQMLApplication()) {
-                if (QWindowsContext::verboseIntegration) {
-                    qDebug() << "QML application detected, using FreeType rendering";
-                }
-                d->m_fontDatabase = new QWindowsFontDatabaseFT;
-            }
-            else
-                d->m_fontDatabase = new QWindowsFontDatabase;
-#endif
-        }
 #endif // QT_NO_FREETYPE
     }
     return d->m_fontDatabase;
@@ -471,28 +520,30 @@ QVariant QWindowsIntegration::styleHint(QPlatformIntegration::StyleHint hint) co
     switch (hint) {
     case QPlatformIntegration::CursorFlashTime:
         if (const unsigned timeMS = GetCaretBlinkTime())
-            return QVariant(int(timeMS));
+            return QVariant(timeMS != INFINITE ? int(timeMS) * 2 : 0);
         break;
 #ifdef SPI_GETKEYBOARDSPEED
     case KeyboardAutoRepeatRate:
         return QVariant(keyBoardAutoRepeatRateMS());
 #endif
+    case QPlatformIntegration::ShowIsMaximized:
     case QPlatformIntegration::StartDragTime:
     case QPlatformIntegration::StartDragDistance:
     case QPlatformIntegration::KeyboardInputInterval:
     case QPlatformIntegration::ShowIsFullScreen:
     case QPlatformIntegration::PasswordMaskDelay:
     case QPlatformIntegration::StartDragVelocity:
-    case QPlatformIntegration::SynthesizeMouseFromTouchEvents:
         break; // Not implemented
     case QPlatformIntegration::FontSmoothingGamma:
         return QVariant(QWindowsFontDatabase::fontSmoothingGamma());
     case QPlatformIntegration::MouseDoubleClickInterval:
-        if (const int ms = GetDoubleClickTime())
-            return QVariant(ms);
+        if (const UINT ms = GetDoubleClickTime())
+            return QVariant(int(ms));
         break;
     case QPlatformIntegration::UseRtlExtensions:
         return QVariant(d->m_context.useRTLExtensions());
+    default:
+        break;
     }
     return QPlatformIntegration::styleHint(hint);
 }
@@ -507,48 +558,46 @@ QList<int> QWindowsIntegration::possibleKeys(const QKeyEvent *e) const
     return d->m_context.possibleKeys(e);
 }
 
-QPlatformNativeInterface *QWindowsIntegration::nativeInterface() const
-{
-    return &d->m_nativeInterface;
-}
-
-#ifndef QT_NO_CLIPBOARD
+#if QT_CONFIG(clipboard)
 QPlatformClipboard * QWindowsIntegration::clipboard() const
 {
     return &d->m_clipboard;
 }
-#endif // !QT_NO_CLIPBOARD
-
+#  if QT_CONFIG(draganddrop)
 QPlatformDrag *QWindowsIntegration::drag() const
 {
     return &d->m_drag;
 }
+#  endif // QT_CONFIG(draganddrop)
+#endif // !QT_NO_CLIPBOARD
 
 QPlatformInputContext * QWindowsIntegration::inputContext() const
 {
-    return &d->m_inputContext;
+    return d->m_inputContext.data();
 }
 
-#ifndef QT_NO_ACCESSIBILITY
+#if QT_CONFIG(accessibility)
 QPlatformAccessibility *QWindowsIntegration::accessibility() const
 {
     return &d->m_accessibility;
 }
 #endif
 
-QWindowsIntegration *QWindowsIntegration::instance()
-{
-    return static_cast<QWindowsIntegration *>(QGuiApplicationPrivate::platformIntegration());
-}
-
 unsigned QWindowsIntegration::options() const
 {
     return d->m_options;
 }
 
-QAbstractEventDispatcher * QWindowsIntegration::guiThreadEventDispatcher() const
+#if QT_CONFIG(sessionmanager)
+QPlatformSessionManager *QWindowsIntegration::createPlatformSessionManager(const QString &id, const QString &key) const
 {
-    return d->m_eventDispatcher;
+    return new QWindowsSessionManager(id, key);
+}
+#endif
+
+QAbstractEventDispatcher * QWindowsIntegration::createEventDispatcher() const
+{
+    return new QWindowsGuiEventDispatcher;
 }
 
 QStringList QWindowsIntegration::themeNames() const
@@ -568,6 +617,16 @@ QPlatformServices *QWindowsIntegration::services() const
     return &d->m_services;
 }
 
-QT_END_NAMESPACE
+void QWindowsIntegration::beep() const
+{
+    MessageBeep(MB_OK);  // For QApplication
+}
 
-#include "qwindowsintegration.moc"
+#if QT_CONFIG(vulkan)
+QPlatformVulkanInstance *QWindowsIntegration::createPlatformVulkanInstance(QVulkanInstance *instance) const
+{
+    return new QWindowsVulkanInstance(instance);
+}
+#endif
+
+QT_END_NAMESPACE

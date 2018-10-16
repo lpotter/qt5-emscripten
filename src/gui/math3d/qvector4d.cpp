@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +48,42 @@
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_VECTOR4D
+
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector4D>::value, "QVector4D is supposed to be standard layout");
+Q_STATIC_ASSERT_X(sizeof(QVector4D) == sizeof(float) * 4, "QVector4D is not supposed to have padding at the end");
+
+// QVector4D used to be defined as class QVector4D { float x, y, z, w; };,
+// now instead it is defined as classs QVector4D { float v[4]; };.
+// Check that binary compatibility is preserved.
+// ### Qt 6: remove all of these checks.
+
+namespace {
+
+struct QVector4DOld
+{
+    float x, y, z, w;
+};
+
+struct QVector4DNew
+{
+    float v[4];
+};
+
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector4DOld>::value, "Binary compatibility break in QVector4D");
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector4DNew>::value, "Binary compatibility break in QVector4D");
+
+Q_STATIC_ASSERT_X(sizeof(QVector4DOld) == sizeof(QVector4DNew), "Binary compatibility break in QVector4D");
+
+// requires a constexpr offsetof
+#if !defined(Q_CC_MSVC) || (_MSC_VER >= 1910)
+Q_STATIC_ASSERT_X(offsetof(QVector4DOld, x) == offsetof(QVector4DNew, v) + sizeof(QVector4DNew::v[0]) * 0, "Binary compatibility break in QVector4D");
+Q_STATIC_ASSERT_X(offsetof(QVector4DOld, y) == offsetof(QVector4DNew, v) + sizeof(QVector4DNew::v[0]) * 1, "Binary compatibility break in QVector4D");
+Q_STATIC_ASSERT_X(offsetof(QVector4DOld, z) == offsetof(QVector4DNew, v) + sizeof(QVector4DNew::v[0]) * 2, "Binary compatibility break in QVector4D");
+Q_STATIC_ASSERT_X(offsetof(QVector4DOld, w) == offsetof(QVector4DNew, v) + sizeof(QVector4DNew::v[0]) * 3, "Binary compatibility break in QVector4D");
+#endif
+
+
+} // anonymous namespace
 
 /*!
     \class QVector4D
@@ -68,6 +102,14 @@ QT_BEGIN_NAMESPACE
     \fn QVector4D::QVector4D()
 
     Constructs a null vector, i.e. with coordinates (0, 0, 0, 0).
+*/
+
+/*!
+    \fn QVector4D::QVector4D(Qt::Initialization)
+    \since 5.5
+    \internal
+
+    Constructs a vector without initializing the contents.
 */
 
 /*!
@@ -100,10 +142,10 @@ QT_BEGIN_NAMESPACE
 */
 QVector4D::QVector4D(const QVector2D& vector)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = 0.0f;
-    wp = 0.0f;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = 0.0f;
+    v[3] = 0.0f;
 }
 
 /*!
@@ -114,10 +156,10 @@ QVector4D::QVector4D(const QVector2D& vector)
 */
 QVector4D::QVector4D(const QVector2D& vector, float zpos, float wpos)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = zpos;
-    wp = wpos;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = zpos;
+    v[3] = wpos;
 }
 
 #endif
@@ -132,10 +174,10 @@ QVector4D::QVector4D(const QVector2D& vector, float zpos, float wpos)
 */
 QVector4D::QVector4D(const QVector3D& vector)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = vector.zp;
-    wp = 0.0f;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = vector.v[2];
+    v[3] = 0.0f;
 }
 
 /*!
@@ -146,10 +188,10 @@ QVector4D::QVector4D(const QVector3D& vector)
 */
 QVector4D::QVector4D(const QVector3D& vector, float wpos)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = vector.zp;
-    wp = wpos;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = vector.v[2];
+    v[3] = wpos;
 }
 
 #endif
@@ -157,8 +199,8 @@ QVector4D::QVector4D(const QVector3D& vector, float wpos)
 /*!
     \fn bool QVector4D::isNull() const
 
-    Returns true if the x, y, z, and w coordinates are set to 0.0,
-    otherwise returns false.
+    Returns \c true if the x, y, z, and w coordinates are set to 0.0,
+    otherwise returns \c false.
 */
 
 /*!
@@ -225,6 +267,25 @@ QVector4D::QVector4D(const QVector3D& vector, float wpos)
     \sa w(), setX(), setY(), setZ()
 */
 
+/*! \fn float &QVector4D::operator[](int i)
+    \since 5.2
+
+    Returns the component of the vector at index position \a i
+    as a modifiable reference.
+
+    \a i must be a valid index position in the vector (i.e., 0 <= \a i
+    < 4).
+*/
+
+/*! \fn float QVector4D::operator[](int i) const
+    \since 5.2
+
+    Returns the component of the vector at index position \a i.
+
+    \a i must be a valid index position in the vector (i.e., 0 <= \a i
+    < 4).
+*/
+
 /*!
     Returns the length of the vector from the origin.
 
@@ -233,11 +294,11 @@ QVector4D::QVector4D(const QVector3D& vector, float wpos)
 float QVector4D::length() const
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp) +
-                 double(wp) * double(wp);
-    return float(sqrt(len));
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]) +
+                 double(v[3]) * double(v[3]);
+    return float(std::sqrt(len));
 }
 
 /*!
@@ -248,7 +309,7 @@ float QVector4D::length() const
 */
 float QVector4D::lengthSquared() const
 {
-    return xp * xp + yp * yp + zp * zp + wp * wp;
+    return v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3];
 }
 
 /*!
@@ -263,18 +324,18 @@ float QVector4D::lengthSquared() const
 QVector4D QVector4D::normalized() const
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp) +
-                 double(wp) * double(wp);
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]) +
+                 double(v[3]) * double(v[3]);
     if (qFuzzyIsNull(len - 1.0f)) {
         return *this;
     } else if (!qFuzzyIsNull(len)) {
-        double sqrtLen = sqrt(len);
-        return QVector4D(float(double(xp) / sqrtLen),
-                         float(double(yp) / sqrtLen),
-                         float(double(zp) / sqrtLen),
-                         float(double(wp) / sqrtLen));
+        double sqrtLen = std::sqrt(len);
+        return QVector4D(float(double(v[0]) / sqrtLen),
+                         float(double(v[1]) / sqrtLen),
+                         float(double(v[2]) / sqrtLen),
+                         float(double(v[3]) / sqrtLen));
     } else {
         return QVector4D();
     }
@@ -289,19 +350,19 @@ QVector4D QVector4D::normalized() const
 void QVector4D::normalize()
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp) +
-                 double(wp) * double(wp);
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]) +
+                 double(v[3]) * double(v[3]);
     if (qFuzzyIsNull(len - 1.0f) || qFuzzyIsNull(len))
         return;
 
-    len = sqrt(len);
+    len = std::sqrt(len);
 
-    xp = float(double(xp) / len);
-    yp = float(double(yp) / len);
-    zp = float(double(zp) / len);
-    wp = float(double(wp) / len);
+    v[0] = float(double(v[0]) / len);
+    v[1] = float(double(v[1]) / len);
+    v[2] = float(double(v[2]) / len);
+    v[3] = float(double(v[3]) / len);
 }
 
 /*!
@@ -348,18 +409,28 @@ void QVector4D::normalize()
 */
 
 /*!
+    \fn QVector4D &QVector4D::operator/=(const QVector4D &vector)
+    \since 5.5
+
+    Divides the components of this vector by the corresponding
+    components in \a vector.
+
+    \sa operator*=()
+*/
+
+/*!
     Returns the dot product of \a v1 and \a v2.
 */
 float QVector4D::dotProduct(const QVector4D& v1, const QVector4D& v2)
 {
-    return v1.xp * v2.xp + v1.yp * v2.yp + v1.zp * v2.zp + v1.wp * v2.wp;
+    return v1.v[0] * v2.v[0] + v1.v[1] * v2.v[1] + v1.v[2] * v2.v[2] + v1.v[3] * v2.v[3];
 }
 
 /*!
     \fn bool operator==(const QVector4D &v1, const QVector4D &v2)
     \relates QVector4D
 
-    Returns true if \a v1 is equal to \a v2; otherwise returns false.
+    Returns \c true if \a v1 is equal to \a v2; otherwise returns \c false.
     This operator uses an exact floating-point comparison.
 */
 
@@ -367,7 +438,7 @@ float QVector4D::dotProduct(const QVector4D& v1, const QVector4D& v2)
     \fn bool operator!=(const QVector4D &v1, const QVector4D &v2)
     \relates QVector4D
 
-    Returns true if \a v1 is not equal to \a v2; otherwise returns false.
+    Returns \c true if \a v1 is not equal to \a v2; otherwise returns \c false.
     This operator uses an exact floating-point comparison.
 */
 
@@ -441,10 +512,21 @@ float QVector4D::dotProduct(const QVector4D& v1, const QVector4D& v2)
 */
 
 /*!
+    \fn const QVector4D operator/(const QVector4D &vector, const QVector4D &divisor)
+    \relates QVector4D
+    \since 5.5
+
+    Returns the QVector4D object formed by dividing components of the given
+    \a vector by a respective components of the given \a divisor.
+
+    \sa QVector4D::operator/=()
+*/
+
+/*!
     \fn bool qFuzzyCompare(const QVector4D& v1, const QVector4D& v2)
     \relates QVector4D
 
-    Returns true if \a v1 and \a v2 are equal, allowing for a small
+    Returns \c true if \a v1 and \a v2 are equal, allowing for a small
     fuzziness factor for floating-point comparisons; false otherwise.
 */
 
@@ -457,7 +539,7 @@ float QVector4D::dotProduct(const QVector4D& v1, const QVector4D& v2)
 */
 QVector2D QVector4D::toVector2D() const
 {
-    return QVector2D(xp, yp);
+    return QVector2D(v[0], v[1]);
 }
 
 /*!
@@ -469,9 +551,9 @@ QVector2D QVector4D::toVector2D() const
 */
 QVector2D QVector4D::toVector2DAffine() const
 {
-    if (qIsNull(wp))
+    if (qIsNull(v[3]))
         return QVector2D();
-    return QVector2D(xp / wp, yp / wp);
+    return QVector2D(v[0] / v[3], v[1] / v[3]);
 }
 
 #endif
@@ -485,7 +567,7 @@ QVector2D QVector4D::toVector2DAffine() const
 */
 QVector3D QVector4D::toVector3D() const
 {
-    return QVector3D(xp, yp, zp);
+    return QVector3D(v[0], v[1], v[2]);
 }
 
 /*!
@@ -496,9 +578,9 @@ QVector3D QVector4D::toVector3D() const
 */
 QVector3D QVector4D::toVector3DAffine() const
 {
-    if (qIsNull(wp))
+    if (qIsNull(v[3]))
         return QVector3D();
-    return QVector3D(xp / wp, yp / wp, zp / wp);
+    return QVector3D(v[0] / v[3], v[1] / v[3], v[2] / v[3]);
 }
 
 #endif
@@ -533,10 +615,11 @@ QVector4D::operator QVariant() const
 
 QDebug operator<<(QDebug dbg, const QVector4D &vector)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QVector4D("
         << vector.x() << ", " << vector.y() << ", "
         << vector.z() << ", " << vector.w() << ')';
-    return dbg.space();
+    return dbg;
 }
 
 #endif

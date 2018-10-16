@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'identifierpage.ui'
 **
-** Created: Fri Sep 4 10:17:13 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,12 +10,9 @@
 #define IDENTIFIERPAGE_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QGridLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QRadioButton>
 #include <QtWidgets/QSpacerItem>
@@ -40,16 +36,16 @@ public:
     void setupUi(QWidget *IdentifierPage)
     {
         if (IdentifierPage->objectName().isEmpty())
-            IdentifierPage->setObjectName(QStringLiteral("IdentifierPage"));
+            IdentifierPage->setObjectName(QString::fromUtf8("IdentifierPage"));
         IdentifierPage->resize(417, 242);
         gridLayout = new QGridLayout(IdentifierPage);
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         spacerItem = new QSpacerItem(20, 20, QSizePolicy::Minimum, QSizePolicy::Fixed);
 
         gridLayout->addItem(spacerItem, 0, 1, 1, 1);
 
         identifierCheckBox = new QCheckBox(IdentifierPage);
-        identifierCheckBox->setObjectName(QStringLiteral("identifierCheckBox"));
+        identifierCheckBox->setObjectName(QString::fromUtf8("identifierCheckBox"));
 
         gridLayout->addWidget(identifierCheckBox, 1, 0, 1, 3);
 
@@ -62,20 +58,20 @@ public:
         gridLayout->addItem(spacerItem2, 2, 0, 1, 1);
 
         globalButton = new QRadioButton(IdentifierPage);
-        globalButton->setObjectName(QStringLiteral("globalButton"));
+        globalButton->setObjectName(QString::fromUtf8("globalButton"));
         globalButton->setEnabled(false);
         globalButton->setChecked(true);
 
         gridLayout->addWidget(globalButton, 2, 1, 1, 1);
 
         prefixLineEdit = new QLineEdit(IdentifierPage);
-        prefixLineEdit->setObjectName(QStringLiteral("prefixLineEdit"));
+        prefixLineEdit->setObjectName(QString::fromUtf8("prefixLineEdit"));
         prefixLineEdit->setEnabled(false);
 
         gridLayout->addWidget(prefixLineEdit, 2, 2, 1, 1);
 
         fileNameButton = new QRadioButton(IdentifierPage);
-        fileNameButton->setObjectName(QStringLiteral("fileNameButton"));
+        fileNameButton->setObjectName(QString::fromUtf8("fileNameButton"));
         fileNameButton->setEnabled(false);
 
         gridLayout->addWidget(fileNameButton, 3, 1, 1, 2);
@@ -93,10 +89,10 @@ public:
 
     void retranslateUi(QWidget *IdentifierPage)
     {
-        IdentifierPage->setWindowTitle(QApplication::translate("IdentifierPage", "Form", 0));
-        identifierCheckBox->setText(QApplication::translate("IdentifierPage", "Create identifiers", 0));
-        globalButton->setText(QApplication::translate("IdentifierPage", "Global prefix:", 0));
-        fileNameButton->setText(QApplication::translate("IdentifierPage", "Inherit prefix from file names", 0));
+        IdentifierPage->setWindowTitle(QApplication::translate("IdentifierPage", "Form", nullptr));
+        identifierCheckBox->setText(QApplication::translate("IdentifierPage", "Create identifiers", nullptr));
+        globalButton->setText(QApplication::translate("IdentifierPage", "Global prefix:", nullptr));
+        fileNameButton->setText(QApplication::translate("IdentifierPage", "Inherit prefix from file names", nullptr));
     } // retranslateUi
 
 };

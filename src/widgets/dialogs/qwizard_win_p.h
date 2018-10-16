@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,8 +51,9 @@
 // We mean it.
 //
 
-#ifndef QT_NO_WIZARD
-#ifndef QT_NO_STYLE_WINDOWSVISTA
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
+
+#if QT_CONFIG(style_windowsvista)
 
 #include <qobject.h>
 #include <qwidget.h>
@@ -63,6 +62,8 @@
 #include <QtWidgets/private/qstylehelper_p.h>
 #include <qt_windows.h>
 
+QT_REQUIRE_CONFIG(wizard);
+
 QT_BEGIN_NAMESPACE
 
 class QVistaBackButton : public QAbstractButton
@@ -70,23 +71,25 @@ class QVistaBackButton : public QAbstractButton
 public:
     QVistaBackButton(QWidget *widget);
 
-    QSize sizeHint() const;
-    inline QSize minimumSizeHint() const
+    QSize sizeHint() const override;
+    inline QSize minimumSizeHint() const override
     { return sizeHint(); }
 
-    void enterEvent(QEvent *event);
-    void leaveEvent(QEvent *event);
-    void paintEvent(QPaintEvent *event);
+    void enterEvent(QEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
 };
 
 class QWizard;
 
 class QVistaHelper : public QObject
 {
+    Q_DISABLE_COPY(QVistaHelper)
 public:
     QVistaHelper(QWizard *wizard);
-    ~QVistaHelper();
+    ~QVistaHelper() override;
     enum TitleBarChangeType { NormalTitleBar, ExtendedTitleBar };
+    void updateCustomMargins(bool vistaMargins);
     bool setDWMTitleBar(TitleBarChangeType type);
     void setTitleBarIconAndCaptionVisible(bool visible);
     void mouseEvent(QEvent *event);
@@ -94,36 +97,36 @@ public:
     void resizeEvent(QResizeEvent *event);
     void paintEvent(QPaintEvent *event);
     QVistaBackButton *backButton() const { return backButton_; }
-    void disconnectBackButton() { if (backButton_) backButton_->disconnect(); }
+    void disconnectBackButton();
     void hideBackButton() { if (backButton_) backButton_->hide(); }
-    void setWindowPosHack();
     QColor basicWindowFrameColor();
     enum VistaState { VistaAero, VistaBasic, Classic, Dirty };
     static VistaState vistaState();
-    static int titleBarSize() { return frameSize() + captionSize(); }
+    static int titleBarSize() { return QVistaHelper::titleBarSizeDp() / QVistaHelper::m_devicePixelRatio; }
+    static int titleBarSizeDp() { return QVistaHelper::frameSizeDp() + QVistaHelper::captionSizeDp(); }
     static int topPadding() { // padding under text
-        return int(QStyleHelper::dpiScaled(
-                QSysInfo::WindowsVersion >= QSysInfo::WV_WINDOWS7 ? 4 : 6));
+        return int(QStyleHelper::dpiScaled(4));
     }
-    static int topOffset() {
-        static int aeroOffset = QSysInfo::WindowsVersion >= QSysInfo::WV_WINDOWS7 ?
-                                QStyleHelper::dpiScaled(4) : QStyleHelper::dpiScaled(13);
-        return (titleBarSize() + (vistaState() == VistaAero ? aeroOffset : 3)); }
+    static int topOffset();
+
+    static HDC backingStoreDC(const QWidget *wizard, QPoint *offset);
+
 private:
-    static HFONT getCaptionFont(HANDLE hTheme);
+    HWND wizardHWND() const;
     bool drawTitleText(QPainter *painter, const QString &text, const QRect &rect, HDC hdc);
     static bool drawBlackRect(const QRect &rect, HDC hdc);
 
-    static int frameSize() { return GetSystemMetrics(SM_CYSIZEFRAME); }
-    static int captionSize() { return GetSystemMetrics(SM_CYCAPTION); }
+    static int frameSize() { return QVistaHelper::frameSizeDp() / QVistaHelper::m_devicePixelRatio; }
+    static int frameSizeDp();
+    static int captionSize() { return QVistaHelper::captionSizeDp() / QVistaHelper::m_devicePixelRatio; }
+    static int captionSizeDp();
 
     static int backButtonSize() { return int(QStyleHelper::dpiScaled(30)); }
-    static int iconSize() { return 16; } // Standard Aero
-    static int glowSize() { return 10; }
+    static int iconSize();
+    static int glowSize();
     int leftMargin() { return backButton_->isVisible() ? backButtonSize() + iconSpacing : 0; }
 
     int titleOffset();
-    bool resolveSymbols();
     void drawTitleBar(QPainter *painter);
     void setMouseCursor(QPoint pos);
     void collapseTopFrameStrut();
@@ -131,10 +134,9 @@ private:
     void mouseMoveEvent(QMouseEvent *event);
     void mousePressEvent(QMouseEvent *event);
     void mouseReleaseEvent(QMouseEvent *event);
-    bool eventFilter(QObject *obj, QEvent *event);
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
     static int instanceCount;
-    static bool is_vista;
     static VistaState cachedVistaState;
     static bool isCompositionEnabled();
     static bool isThemeActive();
@@ -148,12 +150,11 @@ private:
 
     int titleBarOffset;  // Extra spacing above the text
     int iconSpacing;    // Space between button and icon
-    int textSpacing;    // Space between icon and text
+    static int m_devicePixelRatio;
 };
 
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_STYLE_WINDOWSVISTA
-#endif // QT_NO_WIZARD
+#endif // style_windowsvista
 #endif // QWIZARD_WIN_P_H

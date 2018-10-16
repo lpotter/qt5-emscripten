@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,12 @@
 #ifndef QTABBAR_H
 #define QTABBAR_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qwidget.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(tabbar);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_TABBAR
 
 class QIcon;
 class QTabBarPrivate;
@@ -59,7 +55,6 @@ class Q_WIDGETS_EXPORT QTabBar: public QWidget
 {
     Q_OBJECT
 
-    Q_ENUMS(Shape)
     Q_PROPERTY(Shape shape READ shape WRITE setShape)
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentChanged)
     Q_PROPERTY(int count READ count)
@@ -72,14 +67,17 @@ class Q_WIDGETS_EXPORT QTabBar: public QWidget
     Q_PROPERTY(bool expanding READ expanding WRITE setExpanding)
     Q_PROPERTY(bool movable READ isMovable WRITE setMovable)
     Q_PROPERTY(bool documentMode READ documentMode WRITE setDocumentMode)
+    Q_PROPERTY(bool autoHide READ autoHide WRITE setAutoHide)
+    Q_PROPERTY(bool changeCurrentOnDrag READ changeCurrentOnDrag WRITE setChangeCurrentOnDrag)
 
 public:
-    explicit QTabBar(QWidget* parent=0);
+    explicit QTabBar(QWidget *parent = nullptr);
     ~QTabBar();
 
     enum Shape { RoundedNorth, RoundedSouth, RoundedWest, RoundedEast,
                  TriangularNorth, TriangularSouth, TriangularWest, TriangularEast
     };
+    Q_ENUM(Shape)
 
     enum ButtonPosition {
         LeftSide,
@@ -124,7 +122,7 @@ public:
     QString tabToolTip(int index) const;
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     void setTabWhatsThis(int index, const QString &text);
     QString tabWhatsThis(int index) const;
 #endif
@@ -138,8 +136,8 @@ public:
     int currentIndex() const;
     int count() const;
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
     void setDrawBase(bool drawTheBase);
     bool drawBase() const;
@@ -168,6 +166,17 @@ public:
     bool documentMode() const;
     void setDocumentMode(bool set);
 
+    bool autoHide() const;
+    void setAutoHide(bool hide);
+
+    bool changeCurrentOnDrag() const;
+    void setChangeCurrentOnDrag(bool change);
+
+#ifndef QT_NO_ACCESSIBILITY
+    QString accessibleTabName(int index) const;
+    void setAccessibleTabName(int index, const QString &name);
+#endif
+
 public Q_SLOTS:
     void setCurrentIndex(int index);
 
@@ -175,6 +184,8 @@ Q_SIGNALS:
     void currentChanged(int index);
     void tabCloseRequested(int index);
     void tabMoved(int from, int to);
+    void tabBarClicked(int index);
+    void tabBarDoubleClicked(int index);
 
 protected:
     virtual QSize tabSizeHint(int index) const;
@@ -183,19 +194,20 @@ protected:
     virtual void tabRemoved(int index);
     virtual void tabLayoutChange();
 
-    bool event(QEvent *);
-    void resizeEvent(QResizeEvent *);
-    void showEvent(QShowEvent *);
-    void hideEvent(QHideEvent *);
-    void paintEvent(QPaintEvent *);
-    void mousePressEvent (QMouseEvent *);
-    void mouseMoveEvent (QMouseEvent *);
-    void mouseReleaseEvent (QMouseEvent *);
-#ifndef QT_NO_WHEELEVENT
-    void wheelEvent(QWheelEvent *event);
+    bool event(QEvent *) override;
+    void resizeEvent(QResizeEvent *) override;
+    void showEvent(QShowEvent *) override;
+    void hideEvent(QHideEvent *) override;
+    void paintEvent(QPaintEvent *) override;
+    void mousePressEvent (QMouseEvent *) override;
+    void mouseMoveEvent (QMouseEvent *) override;
+    void mouseReleaseEvent (QMouseEvent *) override;
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QWheelEvent *event) override;
 #endif
-    void keyPressEvent(QKeyEvent *);
-    void changeEvent(QEvent *);
+    void keyPressEvent(QKeyEvent *) override;
+    void changeEvent(QEvent *) override;
+    void timerEvent(QTimerEvent *event) override;
     void initStyleOption(QStyleOptionTab *option, int tabIndex) const;
 
 #ifndef QT_NO_ACCESSIBILITY
@@ -208,10 +220,6 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_closeTab())
 };
 
-#endif // QT_NO_TABBAR
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTABBAR_H

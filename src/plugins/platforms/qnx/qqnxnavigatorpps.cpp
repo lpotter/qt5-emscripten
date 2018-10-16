@@ -1,7 +1,7 @@
 /***************************************************************************
 **
 ** Copyright (C) 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,7 +42,7 @@
 #include <QDebug>
 #include <private/qcore_unix_p.h>
 
-#ifdef QQNXNAVIGATOR_DEBUG
+#if defined(QQNXNAVIGATOR_DEBUG)
 #define qNavigatorDebug qDebug
 #else
 #define qNavigatorDebug QT_NO_QDEBUG_MACRO
@@ -81,7 +79,7 @@ bool QQnxNavigatorPps::openPpsConnection()
         return false;
     }
 
-    qNavigatorDebug() << Q_FUNC_INFO << "successfully connected to Navigator. fd=" << m_fd;
+    qNavigatorDebug("successfully connected to Navigator. fd=%d", m_fd);
 
     return true;
 }
@@ -103,12 +101,12 @@ bool QQnxNavigatorPps::sendPpsMessage(const QByteArray &message, const QByteArra
 
     ppsMessage += "\n";
 
-    qNavigatorDebug() << Q_FUNC_INFO << "sending PPS message:\n" << ppsMessage;
+    qNavigatorDebug() << "sending PPS message:\n" << ppsMessage;
 
     // send pps message to navigator
     errno = 0;
     int bytes = qt_safe_write(m_fd, ppsMessage.constData(), ppsMessage.size());
-    if (bytes == -1)
+    if (Q_UNLIKELY(bytes == -1))
         qFatal("QQNX: failed to write navigator pps, errno=%d", errno);
 
     // allocate buffer for pps data
@@ -118,14 +116,14 @@ bool QQnxNavigatorPps::sendPpsMessage(const QByteArray &message, const QByteArra
     do {
         errno = 0;
         bytes = qt_safe_read(m_fd, buffer, ppsBufferSize - 1);
-        if (bytes == -1)
+        if (Q_UNLIKELY(bytes == -1))
             qFatal("QQNX: failed to read navigator pps, errno=%d", errno);
     } while (bytes == 0);
 
     // ensure data is null terminated
     buffer[bytes] = '\0';
 
-    qNavigatorDebug() << Q_FUNC_INFO << "received PPS message:\n" << buffer;
+    qNavigatorDebug() << "received PPS message:\n" << buffer;
 
     // process received message
     QByteArray ppsData(buffer);
@@ -133,7 +131,7 @@ bool QQnxNavigatorPps::sendPpsMessage(const QByteArray &message, const QByteArra
     parsePPS(ppsData, responseFields);
 
     if (responseFields.contains("res") && responseFields.value("res") == message) {
-        if (responseFields.contains("err")) {
+        if (Q_UNLIKELY(responseFields.contains("err"))) {
             qCritical() << "navigator responded with error: " << responseFields.value("err");
             return false;
         }
@@ -144,15 +142,14 @@ bool QQnxNavigatorPps::sendPpsMessage(const QByteArray &message, const QByteArra
 
 void QQnxNavigatorPps::parsePPS(const QByteArray &ppsData, QHash<QByteArray, QByteArray> &messageFields)
 {
-    qNavigatorDebug() << Q_FUNC_INFO << "data=" << ppsData;
+    qNavigatorDebug() << "data=" << ppsData;
 
     // tokenize pps data into lines
     QList<QByteArray> lines = ppsData.split('\n');
 
     // validate pps object
-    if (lines.size() == 0 || lines.at(0) != "@control") {
+    if (Q_UNLIKELY(lines.empty() || lines.at(0) != "@control"))
         qFatal("QQNX: unrecognized pps object, data=%s", ppsData.constData());
-    }
 
     // parse pps object attributes and extract values
     for (int i = 1; i < lines.size(); i++) {
@@ -160,7 +157,7 @@ void QQnxNavigatorPps::parsePPS(const QByteArray &ppsData, QHash<QByteArray, QBy
         // tokenize current attribute
         const QByteArray &attr = lines.at(i);
 
-        qNavigatorDebug() << Q_FUNC_INFO << "attr=" << attr;
+        qNavigatorDebug() << "attr=" << attr;
 
         int firstColon = attr.indexOf(':');
         if (firstColon == -1) {
@@ -177,8 +174,8 @@ void QQnxNavigatorPps::parsePPS(const QByteArray &ppsData, QHash<QByteArray, QBy
         QByteArray key = attr.left(firstColon);
         QByteArray value = attr.mid(secondColon + 1);
 
-        qNavigatorDebug() << Q_FUNC_INFO << "key=" << key;
-        qNavigatorDebug() << Q_FUNC_INFO << "val=" << value;
+        qNavigatorDebug() << "key=" << key;
+        qNavigatorDebug() << "val=" << value;
         messageFields[key] = value;
     }
 }

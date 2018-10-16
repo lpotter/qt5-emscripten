@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2012 Jeremy Lainé <jeremy.laine@m4x.org>
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,13 +51,18 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include "QtCore/qmutex.h"
 #include "QtCore/qrunnable.h"
 #include "QtCore/qsharedpointer.h"
+#if QT_CONFIG(thread)
 #include "QtCore/qthreadpool.h"
+#endif
 #include "QtNetwork/qdnslookup.h"
 #include "QtNetwork/qhostaddress.h"
 #include "private/qobject_p.h"
+
+QT_REQUIRE_CONFIG(dnslookup);
 
 QT_BEGIN_NAMESPACE
 
@@ -97,9 +100,12 @@ public:
 
     void _q_lookupFinished(const QDnsLookupReply &reply);
 
+    static const char *msgNoIpV6NameServerAdresses;
+
     bool isFinished;
     QString name;
     QDnsLookup::Type type;
+    QHostAddress nameserver;
     QDnsLookupReply reply;
     QDnsLookupRunnable *runnable;
 
@@ -111,21 +117,24 @@ class QDnsLookupRunnable : public QObject, public QRunnable
     Q_OBJECT
 
 public:
-    QDnsLookupRunnable(QDnsLookup::Type type, const QByteArray &name)
+    QDnsLookupRunnable(QDnsLookup::Type type, const QByteArray &name, const QHostAddress &nameserver)
         : requestType(type)
         , requestName(name)
+        , nameserver(nameserver)
     { }
-    void run();
+    void run() override;
 
 signals:
     void finished(const QDnsLookupReply &reply);
 
 private:
-    static void query(const int requestType, const QByteArray &requestName, QDnsLookupReply *reply);
+    static void query(const int requestType, const QByteArray &requestName, const QHostAddress &nameserver, QDnsLookupReply *reply);
     QDnsLookup::Type requestType;
     QByteArray requestName;
+    QHostAddress nameserver;
 };
 
+#if QT_CONFIG(thread)
 class QDnsLookupThreadPool : public QThreadPool
 {
     Q_OBJECT
@@ -141,6 +150,7 @@ private:
     QMutex signalsMutex;
     bool signalsConnected;
 };
+#endif // QT_CONFIG(thread)
 
 class QDnsRecordPrivate : public QSharedData
 {

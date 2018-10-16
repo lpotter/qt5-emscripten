@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,16 +40,16 @@
 #ifndef QCOMBOBOX_H
 #define QCOMBOBOX_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qwidget.h>
 #include <QtWidgets/qabstractitemdelegate.h>
 #include <QtCore/qabstractitemmodel.h>
 #include <QtCore/qvariant.h>
+#include <QtGui/qvalidator.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(combobox);
 
 QT_BEGIN_NAMESPACE
-
-#ifndef QT_NO_COMBOBOX
 
 class QAbstractItemView;
 class QLineEdit;
@@ -62,12 +60,11 @@ class Q_WIDGETS_EXPORT QComboBox : public QWidget
 {
     Q_OBJECT
 
-    Q_ENUMS(InsertPolicy)
-    Q_ENUMS(SizeAdjustPolicy)
     Q_PROPERTY(bool editable READ isEditable WRITE setEditable)
     Q_PROPERTY(int count READ count)
     Q_PROPERTY(QString currentText READ currentText WRITE setCurrentText NOTIFY currentTextChanged USER true)
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
+    Q_PROPERTY(QVariant currentData READ currentData)
     Q_PROPERTY(int maxVisibleItems READ maxVisibleItems WRITE setMaxVisibleItems)
     Q_PROPERTY(int maxCount READ maxCount WRITE setMaxCount)
     Q_PROPERTY(InsertPolicy insertPolicy READ insertPolicy WRITE setInsertPolicy)
@@ -75,17 +72,17 @@ class Q_WIDGETS_EXPORT QComboBox : public QWidget
     Q_PROPERTY(int minimumContentsLength READ minimumContentsLength WRITE setMinimumContentsLength)
     Q_PROPERTY(QSize iconSize READ iconSize WRITE setIconSize)
 
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     Q_PROPERTY(bool autoCompletion READ autoCompletion WRITE setAutoCompletion DESIGNABLE false)
     Q_PROPERTY(Qt::CaseSensitivity autoCompletionCaseSensitivity READ autoCompletionCaseSensitivity WRITE setAutoCompletionCaseSensitivity DESIGNABLE false)
-#endif // QT_NO_COMPLETER
+#endif // QT_CONFIG(completer)
 
     Q_PROPERTY(bool duplicatesEnabled READ duplicatesEnabled WRITE setDuplicatesEnabled)
     Q_PROPERTY(bool frame READ hasFrame WRITE setFrame)
     Q_PROPERTY(int modelColumn READ modelColumn WRITE setModelColumn)
 
 public:
-    explicit QComboBox(QWidget *parent = 0);
+    explicit QComboBox(QWidget *parent = nullptr);
     ~QComboBox();
 
     int maxVisibleItems() const;
@@ -95,7 +92,7 @@ public:
     void setMaxCount(int max);
     int maxCount() const;
 
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     bool autoCompletion() const;
     void setAutoCompletion(bool enable);
 
@@ -124,6 +121,7 @@ public:
         InsertBeforeCurrent,
         InsertAlphabetically
     };
+    Q_ENUM(InsertPolicy)
 
     InsertPolicy insertPolicy() const;
     void setInsertPolicy(InsertPolicy policy);
@@ -134,6 +132,7 @@ public:
         AdjustToMinimumContentsLength, // ### Qt 6: remove
         AdjustToMinimumContentsLengthWithIcon
     };
+    Q_ENUM(SizeAdjustPolicy)
 
     SizeAdjustPolicy sizeAdjustPolicy() const;
     void setSizeAdjustPolicy(SizeAdjustPolicy policy);
@@ -151,7 +150,7 @@ public:
     const QValidator *validator() const;
 #endif
 
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     void setCompleter(QCompleter *c);
     QCompleter *completer() const;
 #endif
@@ -169,8 +168,8 @@ public:
     void setModelColumn(int visibleColumn);
 
     int currentIndex() const;
-
     QString currentText() const;
+    QVariant currentData(int role = Qt::UserRole) const;
 
     QString itemText(int index) const;
     QIcon itemIcon(int index) const;
@@ -197,14 +196,15 @@ public:
     QAbstractItemView *view() const;
     void setView(QAbstractItemView *itemView);
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
     virtual void showPopup();
     virtual void hidePopup();
 
-    bool event(QEvent *event);
-    QVariant inputMethodQuery(Qt::InputMethodQuery) const;
+    bool event(QEvent *event) override;
+    QVariant inputMethodQuery(Qt::InputMethodQuery) const override;
+    Q_INVOKABLE QVariant inputMethodQuery(Qt::InputMethodQuery query, const QVariant &argument) const;
 
 public Q_SLOTS:
     void clear();
@@ -224,22 +224,24 @@ Q_SIGNALS:
     void currentTextChanged(const QString &);
 
 protected:
-    void focusInEvent(QFocusEvent *e);
-    void focusOutEvent(QFocusEvent *e);
-    void changeEvent(QEvent *e);
-    void resizeEvent(QResizeEvent *e);
-    void paintEvent(QPaintEvent *e);
-    void showEvent(QShowEvent *e);
-    void hideEvent(QHideEvent *e);
-    void mousePressEvent(QMouseEvent *e);
-    void mouseReleaseEvent(QMouseEvent *e);
-    void keyPressEvent(QKeyEvent *e);
-    void keyReleaseEvent(QKeyEvent *e);
-#ifndef QT_NO_WHEELEVENT
-    void wheelEvent(QWheelEvent *e);
+    void focusInEvent(QFocusEvent *e) override;
+    void focusOutEvent(QFocusEvent *e) override;
+    void changeEvent(QEvent *e) override;
+    void resizeEvent(QResizeEvent *e) override;
+    void paintEvent(QPaintEvent *e) override;
+    void showEvent(QShowEvent *e) override;
+    void hideEvent(QHideEvent *e) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *e) override;
+    void keyPressEvent(QKeyEvent *e) override;
+    void keyReleaseEvent(QKeyEvent *e) override;
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QWheelEvent *e) override;
 #endif
-    void contextMenuEvent(QContextMenuEvent *e);
-    void inputMethodEvent(QInputMethodEvent *);
+#ifndef QT_NO_CONTEXTMENU
+    void contextMenuEvent(QContextMenuEvent *e) override;
+#endif // QT_NO_CONTEXTMENU
+    void inputMethodEvent(QInputMethodEvent *) override;
     void initStyleOption(QStyleOptionComboBox *option) const;
 
 
@@ -261,8 +263,8 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_rowsRemoved(const QModelIndex & parent, int start, int end))
     Q_PRIVATE_SLOT(d_func(), void _q_modelDestroyed())
     Q_PRIVATE_SLOT(d_func(), void _q_modelReset())
-#ifdef QT_KEYPAD_NAVIGATION
-    Q_PRIVATE_SLOT(d_func(), void _q_completerActivated())
+#if QT_CONFIG(completer)
+    Q_PRIVATE_SLOT(d_func(), void _q_completerActivated(const QModelIndex &index))
 #endif
 };
 
@@ -276,10 +278,6 @@ inline void QComboBox::insertItem(int aindex, const QString &atext,
                                   const QVariant &auserData)
 { insertItem(aindex, QIcon(), atext, auserData); }
 
-#endif // QT_NO_COMBOBOX
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QCOMBOBOX_H

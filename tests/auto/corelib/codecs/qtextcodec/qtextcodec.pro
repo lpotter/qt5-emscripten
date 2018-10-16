@@ -1,4 +1,3 @@
 TEMPLATE = subdirs
-SUBDIRS = test
-
-!wince*:SUBDIRS += echo
+SUBDIRS = test.pro
+unix: SUBDIRS += echo

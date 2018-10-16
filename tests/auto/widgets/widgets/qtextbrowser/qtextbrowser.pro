@@ -5,4 +5,5 @@ SOURCES += tst_qtextbrowser.cpp
 QT += widgets testlib
 
 TESTDATA += *.html subdir/*
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+
+builtin_testdata: DEFINES += BUILTIN_TESTDATA

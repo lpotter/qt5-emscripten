@@ -1,23 +1,47 @@
-TARGET     = QtPlatformSupport
-QT         = core-private gui-private
+TEMPLATE = subdirs
+QT_FOR_CONFIG += gui-private
 
-CONFIG += static internal_module
-mac:LIBS += -lz -framework CoreFoundation -framework Carbon
+SUBDIRS = \
+    edid \
+    eventdispatchers \
+    devicediscovery \
+    fbconvenience \
+    themes
 
-load(qt_module)
+qtConfig(freetype)|darwin|win32: \
+    SUBDIRS += fontdatabases
 
-DEFINES += QT_NO_CAST_FROM_ASCII
-PRECOMPILED_HEADER = ../corelib/global/qt_pch.h
+qtConfig(evdev)|qtConfig(tslib)|qtConfig(libinput)|qtConfig(integrityhid) {
+    SUBDIRS += input
+    input.depends += devicediscovery
+}
 
-include(cglconvenience/cglconvenience.pri)
-include(dnd/dnd.pri)
-include(eglconvenience/eglconvenience.pri)
-include(eventdispatchers/eventdispatchers.pri)
-include(fbconvenience/fbconvenience.pri)
-include(fontdatabases/fontdatabases.pri)
-include(glxconvenience/glxconvenience.pri)
-include(input/input.pri)
-include(devicediscovery/devicediscovery.pri)
-include(services/services.pri)
-include(themes/themes.pri)
-include(linuxaccessibility/linuxaccessibility.pri)
+if(unix:!uikit)|qtConfig(xcb): \
+    SUBDIRS += services
+
+qtConfig(opengl): \
+    SUBDIRS += platformcompositor
+qtConfig(egl): \
+    SUBDIRS += eglconvenience
+qtConfig(xlib):qtConfig(opengl):!qtConfig(opengles2): \
+    SUBDIRS += glxconvenience
+qtConfig(kms): \
+    SUBDIRS += kmsconvenience
+
+qtConfig(accessibility) {
+    SUBDIRS += accessibility
+    qtConfig(accessibility-atspi-bridge) {
+        SUBDIRS += linuxaccessibility
+        linuxaccessibility.depends += accessibility
+    }
+    win32:!winrt: SUBDIRS += windowsuiautomation
+}
+
+darwin {
+    SUBDIRS += \
+        clipboard \
+        graphics
+}
+
+qtConfig(vulkan): \
+    SUBDIRS += vkconvenience

@@ -1,46 +1,45 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qprogressbar.h"
-#ifndef QT_NO_PROGRESSBAR
+
+#include <qlocale.h>
 #include <qevent.h>
 #include <qpainter.h>
 #include <qstylepainter.h>
@@ -61,6 +60,7 @@ public:
     QProgressBarPrivate();
 
     void init();
+    void initDefaultFormat();
     inline void resetLayoutItemMargins();
 
     int minimum;
@@ -68,6 +68,7 @@ public:
     int value;
     Qt::Alignment alignment;
     uint textVisible : 1;
+    uint defaultFormat: 1;
     int lastPaintedValue;
     Qt::Orientation orientation;
     bool invertedAppearance;
@@ -79,9 +80,16 @@ public:
 
 QProgressBarPrivate::QProgressBarPrivate()
     : minimum(0), maximum(100), value(-1), alignment(Qt::AlignLeft), textVisible(true),
-      lastPaintedValue(-1), orientation(Qt::Horizontal), invertedAppearance(false),
-      textDirection(QProgressBar::TopToBottom), format(QLatin1String("%p%"))
+      defaultFormat(true), lastPaintedValue(-1), orientation(Qt::Horizontal), invertedAppearance(false),
+      textDirection(QProgressBar::TopToBottom)
 {
+    initDefaultFormat();
+}
+
+void QProgressBarPrivate::initDefaultFormat()
+{
+    if (defaultFormat)
+        format = QLatin1String("%p") + locale.percent();
 }
 
 void QProgressBarPrivate::init()
@@ -105,10 +113,8 @@ void QProgressBarPrivate::resetLayoutItemMargins()
 
 /*!
     Initialize \a option with the values from this QProgressBar. This method is useful
-    for subclasses when they need a QStyleOptionProgressBar or QStyleOptionProgressBarV2,
-    but don't want to fill in all the information themselves. This function will check the version
-    of the QStyleOptionProgressBar and fill in the additional values for a
-    QStyleOptionProgressBarV2.
+    for subclasses when they need a QStyleOptionProgressBar,
+    but don't want to fill in all the information themselves.
 
     \sa QStyleOption::initFrom()
 */
@@ -127,13 +133,9 @@ void QProgressBar::initStyleOption(QStyleOptionProgressBar *option) const
     option->textAlignment = d->alignment;
     option->textVisible = d->textVisible;
     option->text = text();
-
-    if (QStyleOptionProgressBarV2 *optionV2
-            = qstyleoption_cast<QStyleOptionProgressBarV2 *>(option)) {
-        optionV2->orientation = d->orientation;  // ### Qt 5: use State_Horizontal instead
-        optionV2->invertedAppearance = d->invertedAppearance;
-        optionV2->bottomToTop = (d->textDirection == QProgressBar::BottomToTop);
-    }
+    option->orientation = d->orientation;  // ### Qt 6: remove this member from QStyleOptionProgressBar
+    option->invertedAppearance = d->invertedAppearance;
+    option->bottomToTop = d->textDirection == QProgressBar::BottomToTop;
 }
 
 bool QProgressBarPrivate::repaintRequired() const
@@ -142,29 +144,30 @@ bool QProgressBarPrivate::repaintRequired() const
     if (value == lastPaintedValue)
         return false;
 
-    int valueDifference = qAbs(value - lastPaintedValue);
-
+    const auto valueDifference = qAbs(qint64(value) - lastPaintedValue);
     // Check if the text needs to be repainted
     if (value == minimum || value == maximum)
         return true;
+
+    const auto totalSteps = qint64(maximum) - minimum;
     if (textVisible) {
         if ((format.contains(QLatin1String("%v"))))
             return true;
         if ((format.contains(QLatin1String("%p"))
-             && valueDifference >= qAbs((maximum - minimum) / 100)))
+             && valueDifference >= qAbs(totalSteps / 100)))
             return true;
     }
 
     // Check if the bar needs to be repainted
-    QStyleOptionProgressBarV2 opt;
+    QStyleOptionProgressBar opt;
     q->initStyleOption(&opt);
     int cw = q->style()->pixelMetric(QStyle::PM_ProgressBarChunkWidth, &opt, q);
-    QRect groove  = q->style()->subElementRect(QStyle::SE_ProgressBarGroove, &opt, q);
+    QRect groove = q->style()->subElementRect(QStyle::SE_ProgressBarGroove, &opt, q);
     // This expression is basically
     // (valueDifference / (maximum - minimum) > cw / groove.width())
     // transformed to avoid integer division.
     int grooveBlock = (q->orientation() == Qt::Horizontal) ? groove.width() : groove.height();
-    return (valueDifference * grooveBlock > cw * (maximum - minimum));
+    return valueDifference * grooveBlock > cw * totalSteps;
 }
 
 /*!
@@ -173,6 +176,8 @@ bool QProgressBarPrivate::repaintRequired() const
 
     \ingroup basicwidgets
     \inmodule QtWidgets
+
+    \image windows-progressbar.png
 
     A progress bar is used to give the user an indication of the
     progress of an operation and to reassure them that the application
@@ -195,15 +200,6 @@ bool QProgressBarPrivate::repaintRequired() const
     example, when using QNetworkAccessManager to download items when
     they are unable to determine the size of the item being downloaded.
 
-    \table
-    \row \li \inlineimage macintosh-progressbar.png Screenshot of a Macintosh style progress bar
-         \li A progress bar shown in the Macintosh widget style.
-    \row \li \inlineimage windowsxp-progressbar.png Screenshot of a Windows XP style progress bar
-         \li A progress bar shown in the Windows XP widget style.
-    \row \li \inlineimage fusion-progressbar.png Screenshot of a Fusion style progress bar
-         \li A progress bar shown in the Fusion widget style.
-    \endtable
-
     \sa QProgressDialog, {fowler}{GUI Design Handbook: Progress Indicator}
 */
 
@@ -217,7 +213,7 @@ bool QProgressBarPrivate::repaintRequired() const
 
     Note that whether or not the text is drawn is dependent on the style.
     Currently CleanLooks and Plastique draw the text. Mac, Windows
-    and WindowsXP style do not.
+    and WindowsVista style do not.
 
     \sa textDirection
 */
@@ -258,9 +254,10 @@ QProgressBar::~QProgressBar()
 void QProgressBar::reset()
 {
     Q_D(QProgressBar);
-    d->value = d->minimum - 1;
     if (d->minimum == INT_MIN)
         d->value = INT_MIN;
+    else
+        d->value = d->minimum - 1;
     repaint();
 }
 
@@ -345,6 +342,8 @@ int QProgressBar::value() const
     If the current value falls outside the new range, the progress bar is reset
     with reset().
 
+    The QProgressBar can be set to undetermined state by using setRange(0, 0).
+
     \sa minimum, maximum
 */
 void QProgressBar::setRange(int minimum, int maximum)
@@ -354,7 +353,7 @@ void QProgressBar::setRange(int minimum, int maximum)
         d->minimum = minimum;
         d->maximum = qMax(minimum, maximum);
 
-        if (d->value < (d->minimum - 1) || d->value > d->maximum)
+        if (d->value < qint64(d->minimum) - 1 || d->value > d->maximum)
             reset();
         else
             update();
@@ -406,7 +405,7 @@ Qt::Alignment QProgressBar::alignment() const
 void QProgressBar::paintEvent(QPaintEvent *)
 {
     QStylePainter paint(this);
-    QStyleOptionProgressBarV2 opt;
+    QStyleOptionProgressBar opt;
     initStyleOption(&opt);
     paint.drawControl(QStyle::CE_ProgressBar, opt);
     d_func()->lastPaintedValue = d_func()->value;
@@ -419,12 +418,12 @@ QSize QProgressBar::sizeHint() const
 {
     ensurePolished();
     QFontMetrics fm = fontMetrics();
-    QStyleOptionProgressBarV2 opt;
+    QStyleOptionProgressBar opt;
     initStyleOption(&opt);
     int cw = style()->pixelMetric(QStyle::PM_ProgressBarChunkWidth, &opt, this);
-    QSize size = QSize(qMax(9, cw) * 7 + fm.width(QLatin1Char('0')) * 4, fm.height() + 8);
+    QSize size = QSize(qMax(9, cw) * 7 + fm.horizontalAdvance(QLatin1Char('0')) * 4, fm.height() + 8);
     if (opt.orientation == Qt::Vertical)
-        size.transpose();
+        size = size.transposed();
     return style()->sizeFromContents(QStyle::CT_ProgressBar, &opt, size, this);
 }
 
@@ -466,19 +465,21 @@ QString QProgressBar::text() const
     qint64 totalSteps = qint64(d->maximum) - d->minimum;
 
     QString result = d->format;
-    result.replace(QLatin1String("%m"), QString::number(totalSteps));
-    result.replace(QLatin1String("%v"), QString::number(d->value));
+    QLocale locale = d->locale; // Omit group separators for compatibility with previous versions that were non-localized.
+    locale.setNumberOptions(locale.numberOptions() | QLocale::OmitGroupSeparator);
+    result.replace(QLatin1String("%m"), locale.toString(totalSteps));
+    result.replace(QLatin1String("%v"), locale.toString(d->value));
 
     // If max and min are equal and we get this far, it means that the
     // progress bar has one step and that we are on that step. Return
     // 100% here in order to avoid division by zero further down.
     if (totalSteps == 0) {
-        result.replace(QLatin1String("%p"), QString::number(100));
+        result.replace(QLatin1String("%p"), locale.toString(100));
         return result;
     }
 
-    int progress = (qreal(d->value) - d->minimum) * 100.0 / totalSteps;
-    result.replace(QLatin1String("%p"), QString::number(progress));
+    const auto progress = static_cast<int>((qint64(d->value) - d->minimum) * 100.0 / totalSteps);
+    result.replace(QLatin1String("%p"), locale.toString(progress));
     return result;
 }
 
@@ -500,9 +501,7 @@ void QProgressBar::setOrientation(Qt::Orientation orientation)
         return;
     d->orientation = orientation;
     if (!testAttribute(Qt::WA_WState_OwnSizePolicy)) {
-        QSizePolicy sp = sizePolicy();
-        sp.transpose();
-        setSizePolicy(sp);
+        setSizePolicy(sizePolicy().transposed());
         setAttribute(Qt::WA_WState_OwnSizePolicy, false);
     }
     d->resetLayoutItemMargins();
@@ -521,7 +520,7 @@ Qt::Orientation QProgressBar::orientation() const
     \property QProgressBar::invertedAppearance
     \brief whether or not a progress bar shows its progress inverted
 
-    If this property is false, the progress bar grows in the other
+    If this property is \c true, the progress bar grows in the other
     direction (e.g. from right to left). By default, the progress bar
     is not inverted.
 
@@ -568,12 +567,19 @@ QProgressBar::Direction QProgressBar::textDirection() const
 bool QProgressBar::event(QEvent *e)
 {
     Q_D(QProgressBar);
-    if (e->type() == QEvent::StyleChange
+    switch (e->type()) {
+    case QEvent::StyleChange:
 #ifdef Q_OS_MAC
-            || e->type() == QEvent::MacSizeChange
+    case QEvent::MacSizeChange:
 #endif
-            )
         d->resetLayoutItemMargins();
+        break;
+    case QEvent::LocaleChange:
+        d->initDefaultFormat();
+        break;
+    default:
+        break;
+    }
     return QWidget::event(e);
 }
 
@@ -596,6 +602,15 @@ void QProgressBar::setFormat(const QString &format)
     if (d->format == format)
         return;
     d->format = format;
+    d->defaultFormat = false;
+    update();
+}
+
+void QProgressBar::resetFormat()
+{
+    Q_D(QProgressBar);
+    d->defaultFormat = true;
+    d->initDefaultFormat();
     update();
 }
 
@@ -607,4 +622,4 @@ QString QProgressBar::format() const
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_PROGRESSBAR
+#include "moc_qprogressbar.cpp"

@@ -1,7 +1,7 @@
 /***************************************************************************
 **
 ** Copyright (C) 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,7 +47,7 @@
 #include <QtCore/QSocketNotifier>
 #include <QtCore/private/qcore_unix_p.h>
 
-#ifdef QQNXBUTTON_DEBUG
+#if defined(QQNXBUTTON_DEBUG)
 #define qButtonDebug qDebug
 #else
 #define qButtonDebug QT_NO_QDEBUG_MACRO
@@ -69,6 +67,7 @@ QQnxButtonEventNotifier::QQnxButtonEventNotifier(QObject *parent)
     // fetch the new button ids
     int enumeratorIndex = QQnxButtonEventNotifier::staticMetaObject.indexOfEnumerator(QByteArrayLiteral("ButtonId"));
     QMetaEnum enumerator = QQnxButtonEventNotifier::staticMetaObject.enumerator(enumeratorIndex);
+    m_buttonKeys.reserve(ButtonCount - bid_minus);
     for (int buttonId = bid_minus; buttonId < ButtonCount; ++buttonId) {
         m_buttonKeys.append(enumerator.valueToKey(buttonId));
         m_state[buttonId] = ButtonUp;
@@ -82,7 +81,7 @@ QQnxButtonEventNotifier::~QQnxButtonEventNotifier()
 
 void QQnxButtonEventNotifier::start()
 {
-    qButtonDebug() << Q_FUNC_INFO << "starting hardware button event processing";
+    qButtonDebug("starting hardware button event processing");
     if (m_fd != -1)
         return;
 
@@ -90,14 +89,16 @@ void QQnxButtonEventNotifier::start()
     errno = 0;
     m_fd = qt_safe_open(ppsPath, O_RDONLY);
     if (m_fd == -1) {
+#if defined (QQNXBUTTON_DEBUG)
         qWarning("QQNX: failed to open buttons pps, errno=%d", errno);
+#endif
         return;
     }
 
     m_readNotifier = new QSocketNotifier(m_fd, QSocketNotifier::Read);
     QObject::connect(m_readNotifier, SIGNAL(activated(int)), this, SLOT(updateButtonStates()));
 
-    qButtonDebug() << Q_FUNC_INFO << "successfully connected to Navigator. fd =" << m_fd;
+    qButtonDebug("successfully connected to Navigator. fd = %d", m_fd);
 }
 
 void QQnxButtonEventNotifier::updateButtonStates()
@@ -121,7 +122,7 @@ void QQnxButtonEventNotifier::updateButtonStates()
     // Ensure data is null terminated
     buffer[bytes] = '\0';
 
-    qButtonDebug() << Q_FUNC_INFO << "received PPS message:\n" << buffer;
+    qButtonDebug("received PPS message:\n%s", buffer);
 
     // Process received message
     QByteArray ppsData = QByteArray::fromRawData(buffer, bytes);
@@ -133,7 +134,7 @@ void QQnxButtonEventNotifier::updateButtonStates()
     for (int buttonId = bid_minus; buttonId < ButtonCount; ++buttonId) {
         // Extract the new button state
         QByteArray key = m_buttonKeys.at(buttonId);
-        ButtonState newState = (fields.value(key) == QByteArrayLiteral("b_up") ? ButtonUp : ButtonDown);
+        ButtonState newState = (fields.value(key) == "b_up" ? ButtonUp : ButtonDown);
 
         // If state has changed, update our state and inject a keypress event
         if (m_state[buttonId] != newState) {
@@ -162,7 +163,7 @@ void QQnxButtonEventNotifier::updateButtonStates()
                     break;
 
                 default:
-                    qButtonDebug() << "Unknown hardware button";
+                    qButtonDebug("Unknown hardware button");
                     continue;
             }
 
@@ -203,7 +204,7 @@ bool QQnxButtonEventNotifier::parsePPS(const QByteArray &ppsData, QHash<QByteArr
         // tokenize current attribute
         const QByteArray &attr = lines.at(i);
 
-        qButtonDebug() << Q_FUNC_INFO << "attr=" << attr;
+        qButtonDebug() << "attr=" << attr;
 
         int doubleColon = attr.indexOf(QByteArrayLiteral("::"));
         if (doubleColon == -1) {

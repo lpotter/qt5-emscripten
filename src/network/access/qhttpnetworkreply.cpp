@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,10 +39,6 @@
 
 #include "qhttpnetworkreply_p.h"
 #include "qhttpnetworkconnection_p.h"
-
-#include <qbytearraymatcher.h>
-
-#ifndef QT_NO_HTTP
 
 #ifndef QT_NO_SSL
 #    include <QtNetwork/qsslkey.h>
@@ -84,6 +78,23 @@ void QHttpNetworkReply::setUrl(const QUrl &url)
 {
     Q_D(QHttpNetworkReply);
     d->url = url;
+}
+
+QUrl QHttpNetworkReply::redirectUrl() const
+{
+    return d_func()->redirectUrl;
+}
+
+void QHttpNetworkReply::setRedirectUrl(const QUrl &url)
+{
+    Q_D(QHttpNetworkReply);
+    d->redirectUrl = url;
+}
+
+bool QHttpNetworkReply::isHttpRedirect(int statusCode)
+{
+    return (statusCode == 301 || statusCode == 302 || statusCode == 303
+            || statusCode == 305 || statusCode == 307 || statusCode == 308);
 }
 
 qint64 QHttpNetworkReply::contentLength() const
@@ -199,7 +210,7 @@ QByteArray QHttpNetworkReply::readAny()
         return QByteArray();
 
     // we'll take the last buffer, so schedule another read from http
-    if (d->downstreamLimited && d->responseData.bufferCount() == 1)
+    if (d->downstreamLimited && d->responseData.bufferCount() == 1 && !isFinished())
         d->connection->d_func()->readMoreLater(this);
     return d->responseData.read();
 }
@@ -255,6 +266,17 @@ char* QHttpNetworkReply::userProvidedDownloadBuffer()
     return d->userProvidedDownloadBuffer;
 }
 
+void QHttpNetworkReply::abort()
+{
+    Q_D(QHttpNetworkReply);
+    d->state = QHttpNetworkReplyPrivate::Aborted;
+}
+
+bool QHttpNetworkReply::isAborted() const
+{
+    return d_func()->state == QHttpNetworkReplyPrivate::Aborted;
+}
+
 bool QHttpNetworkReply::isFinished() const
 {
     return d_func()->state == QHttpNetworkReplyPrivate::AllDoneState;
@@ -263,6 +285,26 @@ bool QHttpNetworkReply::isFinished() const
 bool QHttpNetworkReply::isPipeliningUsed() const
 {
     return d_func()->pipeliningUsed;
+}
+
+bool QHttpNetworkReply::isSpdyUsed() const
+{
+    return d_func()->spdyUsed;
+}
+
+void QHttpNetworkReply::setSpdyWasUsed(bool spdy)
+{
+    d_func()->spdyUsed = spdy;
+}
+
+qint64 QHttpNetworkReply::removedContentLength() const
+{
+    return d_func()->removedContentLength;
+}
+
+bool QHttpNetworkReply::isRedirecting() const
+{
+    return d_func()->isRedirecting();
 }
 
 QHttpNetworkConnection* QHttpNetworkReply::connection()
@@ -281,15 +323,27 @@ QHttpNetworkReplyPrivate::QHttpNetworkReplyPrivate(const QUrl &newUrl)
       connectionCloseEnabled(true),
       forceConnectionCloseEnabled(false),
       lastChunkRead(false),
-      currentChunkSize(0), currentChunkRead(0), readBufferMaxSize(0), connection(0),
+      currentChunkSize(0), currentChunkRead(0), readBufferMaxSize(0),
+      windowSizeDownload(65536), // 64K initial window size according to SPDY standard
+      windowSizeUpload(65536), // 64K initial window size according to SPDY standard
+      currentlyReceivedDataInWindow(0),
+      currentlyUploadedDataInWindow(0),
+      totallyUploadedData(0),
+      removedContentLength(-1),
+      connection(0),
       autoDecompress(false), responseData(), requestIsPrepared(false)
-      ,pipeliningUsed(false), downstreamLimited(false)
+      ,pipeliningUsed(false), spdyUsed(false), downstreamLimited(false)
       ,userProvidedDownloadBuffer(0)
 #ifndef QT_NO_COMPRESS
       ,inflateStrm(0)
 #endif
 
 {
+    QString scheme = newUrl.scheme();
+    if (scheme == QLatin1String("preconnect-http")
+            || scheme == QLatin1String("preconnect-https"))
+        // make sure we do not close the socket after preconnecting
+        connectionCloseEnabled = false;
 }
 
 QHttpNetworkReplyPrivate::~QHttpNetworkReplyPrivate()
@@ -336,24 +390,25 @@ qint64 QHttpNetworkReplyPrivate::bytesAvailable() const
 bool QHttpNetworkReplyPrivate::isCompressed()
 {
     QByteArray encoding = headerField("content-encoding");
-    return qstricmp(encoding.constData(), "gzip") == 0 || qstricmp(encoding.constData(), "deflate") == 0;
+    return encoding.compare("gzip", Qt::CaseInsensitive) == 0 ||
+            encoding.compare("deflate", Qt::CaseInsensitive) == 0;
 }
 
 void QHttpNetworkReplyPrivate::removeAutoDecompressHeader()
 {
     // The header "Content-Encoding  = gzip" is retained.
-    // Content-Length is removed since the actual one send by the server is for compressed data
+    // Content-Length is removed since the actual one sent by the server is for compressed data
     QByteArray name("content-length");
     QList<QPair<QByteArray, QByteArray> >::Iterator it = fields.begin(),
                                                    end = fields.end();
     while (it != end) {
-        if (qstricmp(name.constData(), it->first.constData()) == 0) {
+        if (name.compare(it->first, Qt::CaseInsensitive) == 0) {
+            removedContentLength = strtoull(it->second.constData(), nullptr, 0);
             fields.erase(it);
             break;
         }
         ++it;
     }
-
 }
 
 bool QHttpNetworkReplyPrivate::findChallenge(bool forProxy, QByteArray &challenge) const
@@ -434,8 +489,7 @@ qint64 QHttpNetworkReplyPrivate::readStatus(QAbstractSocket *socket)
         }
 
         // is this a valid reply?
-        if (fragment.length() >= 5 && !fragment.startsWith("HTTP/"))
-        {
+        if (fragment.length() == 5 && !fragment.startsWith("HTTP/")) {
             fragment.clear();
             return -1;
         }
@@ -508,9 +562,8 @@ qint64 QHttpNetworkReplyPrivate::readHeader(QAbstractSocket *socket)
             if (c == '\n') {
                 // check for possible header endings. As per HTTP rfc,
                 // the header endings will be marked by CRLFCRLF. But
-                // we will allow CRLFCRLF, CRLFLF, LFLF
-                if (fragment.endsWith("\r\n\r\n")
-                    || fragment.endsWith("\r\n\n")
+                // we will allow CRLFCRLF, CRLFLF, LFCRLF, LFLF
+                if (fragment.endsWith("\n\r\n")
                     || fragment.endsWith("\n\n"))
                     allHeaders = true;
 
@@ -545,15 +598,7 @@ qint64 QHttpNetworkReplyPrivate::readHeader(QAbstractSocket *socket)
             // allocate inflate state
             if (!inflateStrm)
                 inflateStrm = new z_stream;
-            inflateStrm->zalloc = Z_NULL;
-            inflateStrm->zfree = Z_NULL;
-            inflateStrm->opaque = Z_NULL;
-            inflateStrm->avail_in = 0;
-            inflateStrm->next_in = Z_NULL;
-            // "windowBits can also be greater than 15 for optional gzip decoding.
-            // Add 32 to windowBits to enable zlib and gzip decoding with automatic header detection"
-            // http://www.zlib.net/manual.html
-            int ret = inflateInit2(inflateStrm, MAX_WBITS+32);
+            int ret = initializeInflateStream();
             if (ret != Z_OK)
                 return -1;
         }
@@ -567,11 +612,9 @@ void QHttpNetworkReplyPrivate::parseHeader(const QByteArray &header)
 {
     // see rfc2616, sec 4 for information about HTTP/1.1 headers.
     // allows relaxed parsing here, accepts both CRLF & LF line endings
-    const QByteArrayMatcher lf("\n");
-    const QByteArrayMatcher colon(":");
     int i = 0;
     while (i < header.count()) {
-        int j = colon.indexIn(header, i); // field-name
+        int j = header.indexOf(':', i); // field-name
         if (j == -1)
             break;
         const QByteArray field = header.mid(i, j - i).trimmed();
@@ -579,7 +622,7 @@ void QHttpNetworkReplyPrivate::parseHeader(const QByteArray &header)
         // any number of LWS is allowed before and after the value
         QByteArray value;
         do {
-            i = lf.indexIn(header, j);
+            i = header.indexOf('\n', j);
             if (i == -1)
                 break;
             if (!value.isEmpty())
@@ -698,8 +741,30 @@ qint64 QHttpNetworkReplyPrivate::readBody(QAbstractSocket *socket, QByteDataBuff
 }
 
 #ifndef QT_NO_COMPRESS
+int QHttpNetworkReplyPrivate::initializeInflateStream()
+{
+    Q_ASSERT(inflateStrm);
+
+    inflateStrm->zalloc = Z_NULL;
+    inflateStrm->zfree = Z_NULL;
+    inflateStrm->opaque = Z_NULL;
+    inflateStrm->avail_in = 0;
+    inflateStrm->next_in = Z_NULL;
+    // "windowBits can also be greater than 15 for optional gzip decoding.
+    // Add 32 to windowBits to enable zlib and gzip decoding with automatic header detection"
+    // http://www.zlib.net/manual.html
+    int ret = inflateInit2(inflateStrm, MAX_WBITS+32);
+    Q_ASSERT(ret == Z_OK);
+    return ret;
+}
+
 qint64 QHttpNetworkReplyPrivate::uncompressBodyData(QByteDataBuffer *in, QByteDataBuffer *out)
 {
+    if (!inflateStrm) { // happens when called from the SPDY protocol handler
+        inflateStrm = new z_stream;
+        initializeInflateStream();
+    }
+
     if (!inflateStrm)
         return -1;
 
@@ -885,10 +950,18 @@ qint64 QHttpNetworkReplyPrivate::getChunkSize(QAbstractSocket *socket, qint64 *c
     return bytes;
 }
 
+bool QHttpNetworkReplyPrivate::isRedirecting() const
+{
+    // We're in the process of redirecting - if the HTTP status code says so and
+    // followRedirect is switched on
+    return (QHttpNetworkReply::isHttpRedirect(statusCode)
+            && request.isFollowRedirects());
+}
+
 bool QHttpNetworkReplyPrivate::shouldEmitSignals()
 {
     // for 401 & 407 don't emit the data signals. Content along with these
-    // responses are send only if the authentication fails.
+    // responses are sent only if the authentication fails.
     return (statusCode != 401 && statusCode != 407);
 }
 
@@ -961,5 +1034,3 @@ void QHttpNetworkReply::ignoreSslErrors(const QList<QSslError> &errors)
 
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_HTTP

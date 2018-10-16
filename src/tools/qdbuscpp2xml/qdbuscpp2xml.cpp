@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,13 +34,14 @@
 #include <qbuffer.h>
 #include <qregexp.h>
 #include <qvector.h>
+#include <qdebug.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "qdbusconnection.h"    // for the Export* flags
-#include "qdbusconnection_p.h"    // for the qDBusCheckAsyncTag
+#include <qdbusconnection.h>    // for the Export* flags
+#include <private/qdbusconnection_p.h>    // for the qDBusCheckAsyncTag
 
 // copied from dbus-protocol.h:
 static const char docTypeHeader[] =
@@ -64,9 +52,9 @@ static const char docTypeHeader[] =
 #define QCLASSINFO_DBUS_INTERFACE       "D-Bus Interface"
 #define QCLASSINFO_DBUS_INTROSPECTION   "D-Bus Introspection"
 
-#include "qdbusmetatype_p.h"
-#include "qdbusmetatype.h"
-#include "qdbusutil_p.h"
+#include <qdbusmetatype.h>
+#include <private/qdbusmetatype_p.h>
+#include <private/qdbusutil_p.h>
 
 #include "moc.h"
 #include "generator.h"
@@ -74,7 +62,7 @@ static const char docTypeHeader[] =
 
 #define PROGRAMNAME     "qdbuscpp2xml"
 #define PROGRAMVERSION  "0.2"
-#define PROGRAMCOPYRIGHT "Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies)."
+#define PROGRAMCOPYRIGHT "Copyright (C) 2018 The Qt Company Ltd."
 
 static QString outputFile;
 static int flags;
@@ -95,14 +83,15 @@ static const char help[] =
     "\n";
 
 
-int qDBusParametersForMethod(const FunctionDef &mm, QVector<int>& metaTypes)
+int qDBusParametersForMethod(const FunctionDef &mm, QVector<int>& metaTypes, QString &errorMsg)
 {
     QList<QByteArray> parameterTypes;
+    parameterTypes.reserve(mm.arguments.size());
 
-    foreach (const ArgumentDef &arg, mm.arguments)
+    for (const ArgumentDef &arg : mm.arguments)
         parameterTypes.append(arg.normalizedType);
 
-    return qDBusParametersForMethod(parameterTypes, metaTypes);
+    return qDBusParametersForMethod(parameterTypes, metaTypes, errorMsg);
 }
 
 
@@ -114,9 +103,8 @@ static inline QString typeNameToXml(const char *typeName)
 
 static QString addFunction(const FunctionDef &mm, bool isSignal = false) {
 
-    QString xml = QString::fromLatin1("    <%1 name=\"%2\">\n")
-                  .arg(isSignal ? QLatin1String("signal") : QLatin1String("method"))
-                  .arg(QLatin1String(mm.name));
+    QString xml = QString::asprintf("    <%s name=\"%s\">\n",
+                                    isSignal ? "signal" : "method", mm.name.constData());
 
     // check the return type first
     int typeId = QMetaType::type(mm.normalizedType.constData());
@@ -138,11 +126,14 @@ static QString addFunction(const FunctionDef &mm, bool isSignal = false) {
             return QString();           // wasn't a valid type
         }
     }
-    QList<ArgumentDef> names = mm.arguments;
+    QVector<ArgumentDef> names = mm.arguments;
     QVector<int> types;
-    int inputCount = qDBusParametersForMethod(mm, types);
-    if (inputCount == -1)
+    QString errorMsg;
+    int inputCount = qDBusParametersForMethod(mm, types, errorMsg);
+    if (inputCount == -1) {
+        qWarning() << qPrintable(errorMsg);
         return QString();           // invalid form
+    }
     if (isSignal && inputCount + 1 != types.count())
         return QString();           // signal with output arguments?
     if (isSignal && types.at(inputCount) == QDBusMetaTypeId::message())
@@ -164,9 +155,9 @@ static QString addFunction(const FunctionDef &mm, bool isSignal = false) {
 
         const char *signature = QDBusMetaType::typeToSignature(types.at(j));
         xml += QString::fromLatin1("      <arg %1type=\"%2\" direction=\"%3\"/>\n")
-                .arg(name)
-                .arg(QLatin1String(signature))
-                .arg(isOutput ? QLatin1String("out") : QLatin1String("in"));
+                .arg(name,
+                     QLatin1String(signature),
+                     isOutput ? QLatin1String("out") : QLatin1String("in"));
 
         // do we need to describe this argument?
         if (QDBusMetaType::signatureToType(signature) == QVariant::Invalid) {
@@ -209,7 +200,7 @@ static QString generateInterfaceXml(const ClassDef *mo)
     if (flags & (QDBusConnection::ExportScriptableProperties |
                  QDBusConnection::ExportNonScriptableProperties)) {
         static const char *accessvalues[] = {0, "read", "write", "readwrite"};
-        foreach (const PropertyDef &mp, mo->propertyList) {
+        for (const PropertyDef &mp : mo->propertyList) {
             if (!((!mp.scriptable.isEmpty() && (flags & QDBusConnection::ExportScriptableProperties)) ||
                   (!mp.scriptable.isEmpty() && (flags & QDBusConnection::ExportNonScriptableProperties))))
                 continue;
@@ -228,9 +219,9 @@ static QString generateInterfaceXml(const ClassDef *mo)
                 continue;
 
             retval += QString::fromLatin1("    <property name=\"%1\" type=\"%2\" access=\"%3\"")
-                      .arg(QLatin1String(mp.name))
-                      .arg(QLatin1String(signature))
-                      .arg(QLatin1String(accessvalues[access]));
+                      .arg(QLatin1String(mp.name),
+                           QLatin1String(signature),
+                           QLatin1String(accessvalues[access]));
 
             if (QDBusMetaType::signatureToType(signature) == QVariant::Invalid) {
                 retval += QString::fromLatin1(">\n      <annotation name=\"org.qtproject.QtDBus.QtTypeName\" value=\"%3\"/>\n    </property>\n")
@@ -244,8 +235,10 @@ static QString generateInterfaceXml(const ClassDef *mo)
     // now add methods:
 
     if (flags & (QDBusConnection::ExportScriptableSignals | QDBusConnection::ExportNonScriptableSignals)) {
-        foreach (const FunctionDef &mm, mo->signalList) {
+        for (const FunctionDef &mm : mo->signalList) {
             if (mm.wasCloned)
+                continue;
+            if (!mm.isScriptable && !(flags & QDBusConnection::ExportNonScriptableSignals))
                 continue;
 
             retval += addFunction(mm, true);
@@ -253,11 +246,15 @@ static QString generateInterfaceXml(const ClassDef *mo)
     }
 
     if (flags & (QDBusConnection::ExportScriptableSlots | QDBusConnection::ExportNonScriptableSlots)) {
-        foreach (const FunctionDef &slot, mo->slotList) {
+        for (const FunctionDef &slot : mo->slotList) {
+            if (!slot.isScriptable && !(flags & QDBusConnection::ExportNonScriptableSlots))
+                continue;
             if (slot.access == FunctionDef::Public)
               retval += addFunction(slot);
         }
-        foreach (const FunctionDef &method, mo->methodList) {
+        for (const FunctionDef &method : mo->methodList) {
+            if (!method.isScriptable && !(flags & QDBusConnection::ExportNonScriptableSlots))
+                continue;
             if (method.access == FunctionDef::Public)
               retval += addFunction(method);
         }
@@ -269,7 +266,7 @@ QString qDBusInterfaceFromClassDef(const ClassDef *mo)
 {
     QString interface;
 
-    foreach (const ClassInfoDef &cid, mo->classInfoList) {
+    for (const ClassInfoDef &cid : mo->classInfoList) {
         if (cid.name == QCLASSINFO_DBUS_INTERFACE)
             return QString::fromUtf8(cid.value);
     }
@@ -292,7 +289,7 @@ QString qDBusInterfaceFromClassDef(const ClassDef *mo)
 
 QString qDBusGenerateClassDefXml(const ClassDef *cdef)
 {
-    foreach (const ClassInfoDef &cid, cdef->classInfoList) {
+    for (const ClassInfoDef &cid : cdef->classInfoList) {
         if (cid.name == QCLASSINFO_DBUS_INTROSPECTION)
             return QString::fromUtf8(cid.value);
     }
@@ -337,28 +334,28 @@ static void parseCmdLine(QStringList &arguments)
         switch (c) {
         case 'P':
             flags |= QDBusConnection::ExportNonScriptableProperties;
-            // fall through
+            Q_FALLTHROUGH();
         case 'p':
             flags |= QDBusConnection::ExportScriptableProperties;
             break;
 
         case 'S':
             flags |= QDBusConnection::ExportNonScriptableSignals;
-            // fall through
+            Q_FALLTHROUGH();
         case 's':
             flags |= QDBusConnection::ExportScriptableSignals;
             break;
 
         case 'M':
             flags |= QDBusConnection::ExportNonScriptableSlots;
-            // fall through
+            Q_FALLTHROUGH();
         case 'm':
             flags |= QDBusConnection::ExportScriptableSlots;
             break;
 
         case 'A':
             flags |= QDBusConnection::ExportNonScriptableContents;
-            // fall through
+            Q_FALLTHROUGH();
         case 'a':
             flags |= QDBusConnection::ExportScriptableContents;
             break;
@@ -394,11 +391,12 @@ static void parseCmdLine(QStringList &arguments)
 int main(int argc, char **argv)
 {
     QStringList args;
+    args.reserve(argc - 1);
     for (int n = 1; n < argc; ++n)
         args.append(QString::fromLocal8Bit(argv[n]));
     parseCmdLine(args);
 
-    QList<ClassDef> classes;
+    QVector<ClassDef> classes;
 
     for (int i = 0; i < args.count(); ++i) {
         const QString arg = args.at(i);
@@ -418,7 +416,7 @@ int main(int argc, char **argv)
         pp.macros["Q_MOC_RUN"];
         pp.macros["__cplusplus"];
 
-        const QByteArray filename = QFile::decodeName(argv[i]).toLatin1();
+        const QByteArray filename = arg.toLocal8Bit();
 
         moc.filename = filename;
         moc.currentFilenames.push(filename);
@@ -447,9 +445,9 @@ int main(int argc, char **argv)
 
     output.write(docTypeHeader);
     output.write("<node>\n");
-    foreach (const ClassDef &cdef, classes) {
+    for (const ClassDef &cdef : qAsConst(classes)) {
         QString xml = qDBusGenerateClassDefXml(&cdef);
-        output.write(xml.toLocal8Bit());
+        output.write(std::move(xml).toLocal8Bit());
     }
     output.write("</node>\n");
 

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,10 +49,17 @@
 ****************************************************************************/
 
 #include <QtWidgets>
+#if defined(QT_PRINTSUPPORT_LIB)
+#include <QtPrintSupport/qtprintsupportglobal.h>
+#if QT_CONFIG(printdialog)
 #include <QPrinter>
 #include <QPrintDialog>
+#endif
+#endif
 
 #include "licensewizard.h"
+
+QString emailRegExp = QStringLiteral(".+@.+");
 
 //! [0] //! [1] //! [2]
 LicenseWizard::LicenseWizard(QWidget *parent)
@@ -70,7 +87,7 @@ LicenseWizard::LicenseWizard(QWidget *parent)
     setPixmap(QWizard::LogoPixmap, QPixmap(":/images/logo.png"));
 
 //! [7]
-    connect(this, SIGNAL(helpRequested()), this, SLOT(showHelp()));
+    connect(this, &QWizard::helpRequested, this, &LicenseWizard::showHelp);
 //! [7]
 
     setWindowTitle(tr("License Wizard"));
@@ -179,7 +196,7 @@ EvaluatePage::EvaluatePage(QWidget *parent)
 
     emailLabel = new QLabel(tr("&Email address:"));
     emailLineEdit = new QLineEdit;
-    emailLineEdit->setValidator(new QRegExpValidator(QRegExp(".*@.*"), this));
+    emailLineEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(emailRegExp), this));
     emailLabel->setBuddy(emailLineEdit);
 
 //! [21]
@@ -254,7 +271,7 @@ DetailsPage::DetailsPage(QWidget *parent)
 
     emailLabel = new QLabel(tr("&Email address:"));
     emailLineEdit = new QLineEdit;
-    emailLineEdit->setValidator(new QRegExpValidator(QRegExp(".*@.*"), this));
+    emailLineEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(emailRegExp), this));
     emailLabel->setBuddy(emailLineEdit);
 
     postalLabel = new QLabel(tr("&Postal address:"));
@@ -339,20 +356,20 @@ void ConclusionPage::setVisible(bool visible)
 //! [29]
         wizard()->setButtonText(QWizard::CustomButton1, tr("&Print"));
         wizard()->setOption(QWizard::HaveCustomButton1, true);
-        connect(wizard(), SIGNAL(customButtonClicked(int)),
-                this, SLOT(printButtonClicked()));
+        connect(wizard(), &QWizard::customButtonClicked,
+                this, &ConclusionPage::printButtonClicked);
 //! [29]
     } else {
         wizard()->setOption(QWizard::HaveCustomButton1, false);
-        disconnect(wizard(), SIGNAL(customButtonClicked(int)),
-                   this, SLOT(printButtonClicked()));
+        disconnect(wizard(), &QWizard::customButtonClicked,
+                   this, &ConclusionPage::printButtonClicked);
     }
 }
 //! [28]
 
 void ConclusionPage::printButtonClicked()
 {
-#ifndef QT_NO_PRINTER
+#if QT_CONFIG(printdialog)
     QPrinter printer;
     QPrintDialog dialog(&printer, this);
     if (dialog.exec())

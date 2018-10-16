@@ -1,8 +1,10 @@
 TEMPLATE=subdirs
 SUBDIRS=\
+   qmakelib \
    qmake \
    uic \
    moc \
    rcc \
 
-contains(QT_CONFIG, dbus):SUBDIRS += qdbuscpp2xml qdbusxml2cpp
+qtHaveModule(dbus): SUBDIRS += qdbuscpp2xml qdbusxml2cpp
+!qtHaveModule(widgets): SUBDIRS -= uic

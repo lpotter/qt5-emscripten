@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -74,6 +72,15 @@ QPainterState *QEmulationPaintEngine::createState(QPainterState *orig) const
     return real_engine->createState(orig);
 }
 
+static inline void combineXForm(QBrush *brush, const QRectF &r)
+{
+    QTransform t(r.width(), 0, 0, r.height(), r.x(), r.y());
+    if (brush->gradient() && brush->gradient()->coordinateMode() != QGradient::ObjectMode)
+        brush->setTransform(t * brush->transform()); // compat mode
+    else
+        brush->setTransform(brush->transform() * t);
+}
+
 void QEmulationPaintEngine::fill(const QVectorPath &path, const QBrush &brush)
 {
     QPainterState *s = state();
@@ -86,26 +93,22 @@ void QEmulationPaintEngine::fill(const QVectorPath &path, const QBrush &brush)
 
     Qt::BrushStyle style = qbrush_style(brush);
     if (style >= Qt::LinearGradientPattern && style <= Qt::ConicalGradientPattern) {
-        const QGradient *g = brush.gradient();
-
-        if (g->coordinateMode() > QGradient::LogicalMode) {
-            if (g->coordinateMode() == QGradient::StretchToDeviceMode) {
-                QBrush copy = brush;
-                QTransform mat = copy.transform();
-                mat.scale(real_engine->painter()->device()->width(), real_engine->painter()->device()->height());
-                copy.setTransform(mat);
-                real_engine->fill(path, copy);
-                return;
-            } else if (g->coordinateMode() == QGradient::ObjectBoundingMode) {
-                QBrush copy = brush;
-                QTransform mat = copy.transform();
-                QRectF r = path.controlPointRect();
-                mat.translate(r.x(), r.y());
-                mat.scale(r.width(), r.height());
-                copy.setTransform(mat);
-                real_engine->fill(path, copy);
-                return;
-            }
+        QGradient::CoordinateMode coMode = brush.gradient()->coordinateMode();
+        if (coMode > QGradient::LogicalMode) {
+            QBrush copy = brush;
+            const QPaintDevice *d = real_engine->painter()->device();
+            QRectF r = (coMode == QGradient::StretchToDeviceMode) ? QRectF(0, 0, d->width(), d->height()) : path.controlPointRect();
+            combineXForm(&copy, r);
+            real_engine->fill(path, copy);
+            return;
+        }
+    } else if (style == Qt::TexturePattern) {
+        qreal dpr = qHasPixmapTexture(brush) ? brush.texture().devicePixelRatioF() : brush.textureImage().devicePixelRatioF();
+        if (!qFuzzyCompare(dpr, 1.0)) {
+            QBrush copy = brush;
+            combineXForm(&copy, QRectF(0, 0, 1.0/dpr, 1.0/dpr));
+            real_engine->fill(path, copy);
+            return;
         }
     }
 
@@ -126,27 +129,15 @@ void QEmulationPaintEngine::stroke(const QVectorPath &path, const QPen &pen)
     QBrush brush = pen.brush();
     QPen copy = pen;
     Qt::BrushStyle style = qbrush_style(brush);
-    if (style >= Qt::LinearGradientPattern && style <= Qt::ConicalGradientPattern) {
-        const QGradient *g = brush.gradient();
-
-        if (g->coordinateMode() > QGradient::LogicalMode) {
-            if (g->coordinateMode() == QGradient::StretchToDeviceMode) {
-                QTransform mat = brush.transform();
-                mat.scale(real_engine->painter()->device()->width(), real_engine->painter()->device()->height());
-                brush.setTransform(mat);
-                copy.setBrush(brush);
-                real_engine->stroke(path, copy);
-                return;
-            } else if (g->coordinateMode() == QGradient::ObjectBoundingMode) {
-                QTransform mat = brush.transform();
-                QRectF r = path.controlPointRect();
-                mat.translate(r.x(), r.y());
-                mat.scale(r.width(), r.height());
-                brush.setTransform(mat);
-                copy.setBrush(brush);
-                real_engine->stroke(path, copy);
-                return;
-            }
+    if (style >= Qt::LinearGradientPattern && style <= Qt::ConicalGradientPattern ) {
+        QGradient::CoordinateMode coMode = brush.gradient()->coordinateMode();
+        if (coMode > QGradient::LogicalMode) {
+            const QPaintDevice *d = real_engine->painter()->device();
+            QRectF r = (coMode == QGradient::StretchToDeviceMode) ? QRectF(0, 0, d->width(), d->height()) : path.controlPointRect();
+            combineXForm(&brush, r);
+            copy.setBrush(brush);
+            real_engine->stroke(path, copy);
+            return;
         }
     }
 
@@ -169,7 +160,7 @@ void QEmulationPaintEngine::drawTextItem(const QPointF &p, const QTextItem &text
 {
     if (state()->bgMode == Qt::OpaqueMode) {
         const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
-        QRectF rect(p.x(), p.y() - ti.ascent.toReal(), ti.width.toReal(), (ti.ascent + ti.descent + 1).toReal());
+        QRectF rect(p.x(), p.y() - ti.ascent.toReal(), ti.width.toReal(), (ti.ascent + ti.descent).toReal());
         fillBGRect(rect);
     }
 
@@ -181,18 +172,16 @@ void QEmulationPaintEngine::drawTextItem(const QPointF &p, const QTextItem &text
         QGradient g = *s->pen.brush().gradient();
 
         if (g.coordinateMode() > QGradient::LogicalMode) {
-            QTransform mat = s->pen.brush().transform();
-            if (g.coordinateMode() == QGradient::StretchToDeviceMode) {
-                mat.scale(real_engine->painter()->device()->width(), real_engine->painter()->device()->height());
-            } else if (g.coordinateMode() == QGradient::ObjectBoundingMode) {
-                const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
-                QRectF r(p.x(), p.y() - ti.ascent.toReal(), ti.width.toReal(), (ti.ascent + ti.descent + 1).toReal());
-                mat.translate(r.x(), r.y());
-                mat.scale(r.width(), r.height());
-            }
+            QBrush copy = s->pen.brush();
+            const QPaintDevice *d = real_engine->painter()->device();
+            const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
+            QRectF r = (g.coordinateMode() == QGradient::StretchToDeviceMode) ?
+                        QRectF(0, 0, d->width(), d->height()) :
+                        QRectF(p.x(), p.y() - ti.ascent.toReal(), ti.width.toReal(), (ti.ascent + ti.descent + 1).toReal());
+            combineXForm(&copy, r);
             g.setCoordinateMode(QGradient::LogicalMode);
             QBrush brush(g);
-            brush.setTransform(mat);
+            brush.setTransform(copy.transform());
             s->pen.setBrush(brush);
             penChanged();
             real_engine->drawTextItem(p, textItem);

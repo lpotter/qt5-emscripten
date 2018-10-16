@@ -13,10 +13,8 @@ SUBDIRS       = \
               simpleanchorlayout \
               weatheranchorlayout
 
-contains(DEFINES, QT_NO_CURSOR)|contains(DEFINES, QT_NO_DRAGANDDROP): SUBDIRS -= dragdroprobot
+contains(DEFINES, QT_NO_CURSOR)|!qtConfig(draganddrop): SUBDIRS -= dragdroprobot
 
-contains(QT_CONFIG, opengl):!contains(QT_CONFIG, opengles1):!contains(QT_CONFIG, opengles2):{
+qtHaveModule(opengl):!qtConfig(opengles.):!qtConfig(dynamicgl) {
     SUBDIRS += boxes
 }
-
-QT += widgets

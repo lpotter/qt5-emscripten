@@ -1,5 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qdebug
-QT = core testlib
+QT = core testlib concurrent
 SOURCES = tst_qdebug.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

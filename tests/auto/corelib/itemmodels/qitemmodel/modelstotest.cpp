@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -67,7 +54,7 @@ public:
     void cleanupTestArea(QAbstractItemModel *model);
 
     enum Read {
-        ReadOnly, // wont perform remove(), insert(), and setData()
+        ReadOnly, // won't perform remove(), insert(), and setData()
         ReadWrite
     };
     enum Contains {
@@ -86,6 +73,9 @@ public:
     QList<test> tests;
 
     static void setupDatabase();
+
+private:
+    QScopedPointer<QTemporaryDir> m_dirModelTempDir;
 };
 
 
@@ -241,7 +231,7 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
 {
     if (QStringListModel *stringListModel = qobject_cast<QStringListModel *>(model)) {
         QString alphabet = "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z";
-        stringListModel->setStringList( alphabet.split(",") );
+        stringListModel->setStringList( alphabet.split(QLatin1Char(',')) );
         return QModelIndex();
     }
 
@@ -249,18 +239,10 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
         // Basic tree StandardItemModel
         QModelIndex parent;
         QVariant blue = QVariant(QColor(Qt::blue));
-#ifndef Q_OS_WINCE
         for (int i = 0; i < 4; ++i) {
-#else
-        for (int i = 0; i < 2; ++i) {
-#endif
             parent = model->index(0, 0, parent);
             model->insertRows(0, 26 + i, parent);
-#ifndef Q_OS_WINCE
-            model->insertColumns(0, 26 + i, parent);
-#else
             model->insertColumns(0, 4 + i, parent);
-#endif
             // Fill in some values to make it easier to debug
             /*
             for (int x = 0; x < 26 + i; ++x) {
@@ -282,18 +264,10 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
         // Basic tree StandardItemModel
         QModelIndex parent;
         QVariant blue = QVariant(QColor(Qt::blue));
-#ifndef Q_OS_WINCE
         for (int i = 0; i < 4; ++i) {
-#else
-        for (int i = 0; i < 2; ++i) {
-#endif
             parent = realModel->index(0, 0, parent);
             realModel->insertRows(0, 26+i, parent);
-#ifndef Q_OS_WINCE
-            realModel->insertColumns(0, 26+i, parent);
-#else
             realModel->insertColumns(0, 4, parent);
-#endif
             // Fill in some values to make it easier to debug
             /*
             for (int x = 0; x < 26+i; ++x) {
@@ -314,29 +288,27 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
     }
 
     if (QDirModel *dirModel = qobject_cast<QDirModel *>(model)) {
-        if (!QDir::current().mkdir("test"))
-            qFatal("%s: cannot create directory %s",
-                   Q_FUNC_INFO,
-                   qPrintable(QDir::toNativeSeparators(QDir::currentPath()+"/test")));
+        m_dirModelTempDir.reset(new QTemporaryDir);
+        if (!m_dirModelTempDir->isValid())
+            qFatal("Cannot create temporary directory \"%s\": %s",
+                   qPrintable(QDir::toNativeSeparators(m_dirModelTempDir->path())),
+                   qPrintable(m_dirModelTempDir->errorString()));
+
+        QDir tempDir(m_dirModelTempDir->path());
         for (int i = 0; i < 26; ++i) {
-            QString subdir = QString("test/foo_%1").arg(i);
-            if (!QDir::current().mkdir(subdir))
-                qFatal("%s: cannot create directory %s",
-                       Q_FUNC_INFO,
-                       qPrintable(QDir::toNativeSeparators(QDir::currentPath()+"/"+subdir)));
+            const QString subdir = QLatin1String("foo_") + QString::number(i);
+            if (!tempDir.mkdir(subdir))
+                qFatal("Cannot create directory %s",
+                       qPrintable(QDir::toNativeSeparators(tempDir.path() + QLatin1Char('/') +subdir)));
         }
-        return dirModel->index(QDir::currentPath()+"/test");
+        return dirModel->index(tempDir.path());
     }
 
     if (QSqlQueryModel *queryModel = qobject_cast<QSqlQueryModel *>(model)) {
         QSqlQuery q;
         q.exec("CREATE TABLE test(id int primary key, name varchar(30))");
         q.prepare("INSERT INTO test(id, name) values (?, ?)");
-#ifndef Q_OS_WINCE
         for (int i = 0; i < 1024; ++i) {
-#else
-        for (int i = 0; i < 512; ++i) {
-#endif
             q.addBindValue(i);
             q.addBindValue("Mr. Smith" + QString::number(i));
             q.exec();
@@ -352,13 +324,9 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
     }
 
     if (QListWidget *listWidget = qobject_cast<QListWidget *>(model->parent())) {
-#ifndef Q_OS_WINCE
-        int items = 100;
-#else
         int items = 50;
-#endif
         while (items--)
-            listWidget->addItem(QString("item %1").arg(items));
+            listWidget->addItem(QLatin1String("item ") + QString::number(items));
         return QModelIndex();
     }
 
@@ -373,9 +341,10 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
         treeWidget->setColumnCount(1);
         QTreeWidgetItem *parent;
         while (topItems--){
-            parent = new QTreeWidgetItem(treeWidget, QStringList(QString("top %1").arg(topItems)));
+            const QString tS = QString::number(topItems);
+            parent = new QTreeWidgetItem(treeWidget, QStringList(QLatin1String("top ") + tS));
             for (int i = 0; i < 20; ++i)
-                new QTreeWidgetItem(parent, QStringList(QString("child %1").arg(topItems)));
+                new QTreeWidgetItem(parent, QStringList(QLatin1String("child ") + tS));
         }
         return QModelIndex();
     }
@@ -390,22 +359,8 @@ QModelIndex ModelsToTest::populateTestArea(QAbstractItemModel *model)
  */
 void ModelsToTest::cleanupTestArea(QAbstractItemModel *model)
 {
-    if (qobject_cast<QDirModel *>(model))
-    {
-        if (QDir(QDir::currentPath()+"/test").exists())
-        {
-            for (int i = 0; i < 26; ++i) {
-                QString subdir(QString("test/foo_%1").arg(i));
-                if (!QDir::current().rmdir(subdir))
-                    qFatal("%s: cannot remove directory %s",
-                           Q_FUNC_INFO,
-                           qPrintable(QDir::toNativeSeparators(QDir::currentPath()+"/"+subdir)));
-            }
-            if (!QDir::current().rmdir("test"))
-                qFatal("%s: cannot remove directory %s",
-                       Q_FUNC_INFO,
-                       qPrintable(QDir::toNativeSeparators(QDir::currentPath()+"/test")));
-        }
+    if (qobject_cast<QDirModel *>(model)) {
+        m_dirModelTempDir.reset();
     } else if (qobject_cast<QSqlQueryModel *>(model)) {
         QSqlQuery q("DROP TABLE test");
     }

@@ -47,61 +47,84 @@ find_package(Qt5Core REQUIRED)
 
 include("${_Qt5CTestMacros}")
 
-if(NOT ${CMAKE_VERSION} VERSION_LESS 2.8.9)
-    # Requires INCLUDE_DIRECTORIES target property in CMake 2.8.8
-    # and POSITION_INDEPENDENT_CODE target property in 2.8.9
-    expect_pass(test_use_modules_function)
-else()
-    message("CMake version older than 2.8.9 (Found ${CMAKE_VERSION}). Not running test \"test_use_modules_function\"")
-endif()
+expect_pass(test_use_modules_function)
+expect_pass(test_umbrella_config)
 expect_pass(test_wrap_cpp_and_resources)
-expect_pass(test_dependent_modules)
+if (NOT NO_WIDGETS)
+    expect_pass(test_dependent_modules)
+    expect_pass("test(needsquoting)dirname")
+endif()
 expect_fail(test_add_resource_options)
 expect_fail(test_wrap_cpp_options)
-expect_pass("test(needsquoting)dirname")
 expect_pass(test_platform_defs_include)
 expect_pass(test_qtmainwin_library)
 
-# If QtDBus has been installed then run the tests for its macros.
-find_package(Qt5DBus QUIET)
-if (Qt5DBus_FOUND AND NOT APPLE)
+if (HAVE_NINJA)
+    make_directory("${CMAKE_CURRENT_SOURCE_DIR}/test_QFINDTESTDATA/build")
+    add_test(test_QFINDTESTDATA ${CMAKE_CTEST_COMMAND}
+      --build-and-test
+      "${CMAKE_CURRENT_SOURCE_DIR}/test_QFINDTESTDATA"
+      # Build in a subdir of the source dir.
+      # This causes Ninja to use relative paths.
+      "${CMAKE_CURRENT_SOURCE_DIR}/test_QFINDTESTDATA/build"
+      --build-generator Ninja
+      --build-options "-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"
+    )
+    add_test(NAME run_test_QFINDTESTDATA COMMAND sh -c "cd \"${CMAKE_SOURCE_DIR}/test_QFINDTESTDATA/build/tests\" && ./test_QFINDTESTDATA -v2")
+
+    set_property(TEST run_test_QFINDTESTDATA
+        PROPERTY DEPENDS test_QFINDTESTDATA
+    )
+endif()
+
+if (NOT NO_DBUS)
     expect_pass(test_dbus_module)
 endif()
 expect_pass(test_multiple_find_package)
-if (NOT WIN32)
-    # Currently broken on windows. Reported upstream:
-    # http://public.kitware.com/Bug/view.php?id=13392
-    expect_pass(test_add_resources_delayed_file)
-endif()
+expect_pass(test_add_resources_delayed_file)
+expect_pass(test_add_binary_resources_delayed_file BINARY test_add_binary_resources_delayed_file)
 expect_pass(test_private_includes)
+expect_pass(test_private_targets)
 expect_pass(test_testlib_definitions)
 expect_pass(test_json_plugin_includes)
 
 expect_fail(test_testlib_no_link_gui)
-expect_fail(test_testlib_no_link_widgets)
-
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy
     "${CMAKE_CURRENT_SOURCE_DIR}/test_testlib_definitions/main.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/failbuild/test_testlib_no_link_gui/test_testlib_no_link_gui/"
 )
-execute_process(COMMAND ${CMAKE_COMMAND} -E copy
-    "${CMAKE_CURRENT_SOURCE_DIR}/test_testlib_definitions/main.cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/failbuild/test_testlib_no_link_widgets/test_testlib_no_link_widgets/"
-)
+
+if (NOT NO_WIDGETS)
+    expect_fail(test_testlib_no_link_widgets)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_testlib_definitions/main.cpp"
+        "${CMAKE_CURRENT_BINARY_DIR}/failbuild/test_testlib_no_link_widgets/test_testlib_no_link_widgets/"
+    )
+endif()
 
 set(qt_module_includes
   Core QObject
-  Gui QImage
-  Widgets QWidget
   Network QHostInfo
-  OpenGL QGLBuffer
   Sql QSqlError
   Test QTestEventList
   Xml QDomDocument
-  PrintSupport QPrintDialog
 )
 
-if (UNIX AND NOT APPLE AND NOT QNXNTO)
+if (NOT NO_GUI)
+  list(APPEND qt_module_includes
+    Gui QImage
+  )
+endif()
+
+if (NOT NO_WIDGETS)
+  list(APPEND qt_module_includes
+    Widgets QWidget
+    OpenGL QGLBuffer
+    PrintSupport QPrinter
+  )
+endif()
+
+if (NOT NO_DBUS)
   list(APPEND qt_module_includes
     DBus QDBusMessage
   )
@@ -111,3 +134,24 @@ test_module_includes(
   ${qt_module_includes}
 )
 expect_pass(test_concurrent_module)
+expect_pass(test_openglextensions_module)
+if (QT_WITH_ANGLE OR (NOT WIN32 AND NOT APPLE AND NOT NO_EGL))
+    expect_pass(test_egl_lib)
+endif()
+expect_pass(test_opengl_lib)
+
+if (NOT NO_WIDGETS)
+    expect_pass(test_interface)
+endif()
+
+expect_pass(test_interface_link_libraries)
+expect_pass(test_moc_macro_target)
+expect_pass(test_add_big_resource)
+
+if (NOT CMAKE_VERSION VERSION_LESS 3.8)
+    # With earlier CMake versions, this test would simply run moc multiple times and lead to:
+    # /usr/bin/ld: error: CMakeFiles/mywidget.dir/mywidget_automoc.cpp.o: multiple definition of 'MyWidget::qt_static_metacall(QObject*, QMetaObject::Call, int, void**)'
+    # /usr/bin/ld: CMakeFiles/mywidget.dir/moc_mywidget.cpp.o: previous definition here
+    # Reason: SKIP_* properties were added in CMake 3.8 only
+    expect_pass(test_QTBUG-63422)
+endif()

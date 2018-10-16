@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,8 +48,6 @@
 #include <QtCore/qvector.h>
 #include <QtTest/qtesteventloop.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -63,11 +59,7 @@ public:
     explicit QSignalSpy(const QObject *obj, const char *aSignal)
         : m_waiting(false)
     {
-#ifdef Q_CC_BOR
-        const int memberOffset = QObject::staticMetaObject.methodCount();
-#else
         static const int memberOffset = QObject::staticMetaObject.methodCount();
-#endif
         if (!obj) {
             qWarning("QSignalSpy: Cannot spy on a null object");
             return;
@@ -92,13 +84,52 @@ public:
         }
 
         if (!QMetaObject::connect(obj, sigIndex, this, memberOffset,
-                    Qt::DirectConnection, 0)) {
+                    Qt::DirectConnection, nullptr)) {
             qWarning("QSignalSpy: QMetaObject::connect returned false. Unable to connect.");
             return;
         }
         sig = ba;
-        initArgs(mo->method(sigIndex));
+        initArgs(mo->method(sigIndex), obj);
     }
+
+#ifdef Q_CLANG_QDOC
+    template <typename PointerToMemberFunction>
+    QSignalSpy(const QObject *object, PointerToMemberFunction signal);
+#else
+    template <typename Func>
+    QSignalSpy(const typename QtPrivate::FunctionPointer<Func>::Object *obj, Func signal0)
+        : m_waiting(false)
+    {
+        static const int memberOffset = QObject::staticMetaObject.methodCount();
+        if (!obj) {
+            qWarning("QSignalSpy: Cannot spy on a null object");
+            return;
+        }
+
+        if (!signal0) {
+            qWarning("QSignalSpy: Null signal name is not valid");
+            return;
+        }
+
+        const QMetaObject * const mo = obj->metaObject();
+        const QMetaMethod signalMetaMethod = QMetaMethod::fromSignal(signal0);
+        const int sigIndex = signalMetaMethod.methodIndex();
+        if (!signalMetaMethod.isValid() ||
+            signalMetaMethod.methodType() != QMetaMethod::Signal) {
+            qWarning("QSignalSpy: Not a valid signal: '%s'",
+                     signalMetaMethod.methodSignature().constData());
+            return;
+        }
+
+        if (!QMetaObject::connect(obj, sigIndex, this, memberOffset,
+                    Qt::DirectConnection, 0)) {
+            qWarning("QSignalSpy: QMetaObject::connect returned false. Unable to connect.");
+            return;
+        }
+        sig = signalMetaMethod.methodSignature();
+        initArgs(mo->method(sigIndex), obj);
+    }
+#endif // Q_CLANG_QDOC
 
     inline bool isValid() const { return !sig.isEmpty(); }
     inline QByteArray signal() const { return sig; }
@@ -113,7 +144,7 @@ public:
         return count() > origCount;
     }
 
-    int qt_metacall(QMetaObject::Call call, int methodId, void **a) Q_DECL_OVERRIDE
+    int qt_metacall(QMetaObject::Call call, int methodId, void **a) override
     {
         methodId = QObject::qt_metacall(call, methodId, a);
         if (methodId < 0)
@@ -129,16 +160,25 @@ public:
     }
 
 private:
-    void initArgs(const QMetaMethod &member)
+    void initArgs(const QMetaMethod &member, const QObject *obj)
     {
-        const QList<QByteArray> params = member.parameterTypes();
-        args.reserve(params.size());
-        for (int i = 0; i < params.count(); ++i) {
-            const int tp = QMetaType::type(params.at(i).constData());
+        args.reserve(member.parameterCount());
+        for (int i = 0; i < member.parameterCount(); ++i) {
+            int tp = member.parameterType(i);
+            if (tp == QMetaType::UnknownType && obj) {
+                void *argv[] = { &tp, &i };
+                QMetaObject::metacall(const_cast<QObject*>(obj),
+                                      QMetaObject::RegisterMethodArgumentMetaType,
+                                      member.methodIndex(), argv);
+                if (tp == -1)
+                    tp = QMetaType::UnknownType;
+            }
             if (tp == QMetaType::UnknownType) {
-                Q_ASSERT(tp != QMetaType::Void); // void parameter => metaobject is corrupt
-                qWarning("Don't know how to handle '%s', use qRegisterMetaType to register it.",
-                         params.at(i).constData());
+                qWarning("QSignalSpy: Unable to handle parameter '%s' of type '%s' of method '%s',"
+                         " use qRegisterMetaType to register it.",
+                         member.parameterNames().at(i).constData(),
+                         member.parameterTypes().at(i).constData(),
+                         member.name().constData());
             }
             args << tp;
         }
@@ -171,7 +211,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

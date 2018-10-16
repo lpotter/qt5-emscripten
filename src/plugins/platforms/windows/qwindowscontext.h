@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,71 +41,112 @@
 #define QWINDOWSCONTEXT_H
 
 #include "qtwindowsglobal.h"
-#include "qtwindows_additional.h"
+#include <QtCore/qt_windows.h>
 
-#include <QtCore/QScopedPointer>
-#include <QtCore/QSharedPointer>
+#include <QtCore/qscopedpointer.h>
+#include <QtCore/qsharedpointer.h>
+#include <QtCore/qloggingcategory.h>
+
+#define STRICT_TYPED_ITEMIDS
+#include <shlobj.h>
+#include <shlwapi.h>
 
 struct IBindCtx;
 struct _SHSTOCKICONINFO;
 
 QT_BEGIN_NAMESPACE
 
+Q_DECLARE_LOGGING_CATEGORY(lcQpaWindows)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaEvents)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaGl)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaMime)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaInputMethods)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaDialogs)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaMenus)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaTablet)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaAccessibility)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaUiAutomation)
+Q_DECLARE_LOGGING_CATEGORY(lcQpaTrayIcon)
+
 class QWindow;
 class QPlatformScreen;
+class QWindowsMenuBar;
 class QWindowsScreenManager;
+class QWindowsTabletSupport;
 class QWindowsWindow;
 class QWindowsMimeConverter;
 struct QWindowCreationContext;
 struct QWindowsContextPrivate;
 class QPoint;
 class QKeyEvent;
+class QTouchDevice;
 
-#ifndef Q_OS_WINCE
 struct QWindowsUser32DLL
 {
-    QWindowsUser32DLL();
     inline void init();
-    inline bool initTouch();
+    inline bool supportsPointerApi();
 
-    typedef BOOL (WINAPI *RegisterTouchWindow)(HWND, ULONG);
-    typedef BOOL (WINAPI *UnregisterTouchWindow)(HWND);
-    typedef BOOL (WINAPI *GetTouchInputInfo)(HANDLE, UINT, PVOID, int);
-    typedef BOOL (WINAPI *CloseTouchInputHandle)(HANDLE);
-    typedef BOOL (WINAPI *SetLayeredWindowAttributes)(HWND, COLORREF, BYTE, DWORD);
-    typedef BOOL (WINAPI *UpdateLayeredWindow)(HWND, HDC , const POINT *,
-                 const SIZE *, HDC, const POINT *, COLORREF,
-                 const BLENDFUNCTION *, DWORD);
-    typedef BOOL (WINAPI *UpdateLayeredWindowIndirect)(HWND, const UPDATELAYEREDWINDOWINFO *);
-    typedef BOOL (WINAPI *IsHungAppWindow)(HWND);
+    typedef BOOL (WINAPI *EnableMouseInPointer)(BOOL);
+    typedef BOOL (WINAPI *GetPointerType)(UINT32, PVOID);
+    typedef BOOL (WINAPI *GetPointerInfo)(UINT32, PVOID);
+    typedef BOOL (WINAPI *GetPointerDeviceRects)(HANDLE, RECT *, RECT *);
+    typedef BOOL (WINAPI *GetPointerTouchInfo)(UINT32, PVOID);
+    typedef BOOL (WINAPI *GetPointerFrameTouchInfo)(UINT32, UINT32 *, PVOID);
+    typedef BOOL (WINAPI *GetPointerFrameTouchInfoHistory)(UINT32, UINT32 *, UINT32 *, PVOID);
+    typedef BOOL (WINAPI *GetPointerPenInfo)(UINT32, PVOID);
+    typedef BOOL (WINAPI *GetPointerPenInfoHistory)(UINT32, UINT32 *, PVOID);
+    typedef BOOL (WINAPI *SkipPointerFrameMessages)(UINT32);
+    typedef BOOL (WINAPI *SetProcessDPIAware)();
+    typedef BOOL (WINAPI *AddClipboardFormatListener)(HWND);
+    typedef BOOL (WINAPI *RemoveClipboardFormatListener)(HWND);
+    typedef BOOL (WINAPI *GetDisplayAutoRotationPreferences)(DWORD *);
+    typedef BOOL (WINAPI *SetDisplayAutoRotationPreferences)(DWORD);
+    typedef BOOL (WINAPI *EnableNonClientDpiScaling)(HWND);
+    typedef int  (WINAPI *GetWindowDpiAwarenessContext)(HWND);
+    typedef int  (WINAPI *GetAwarenessFromDpiAwarenessContext)(int);
 
-    // Functions missing in Q_CC_GNU stub libraries.
-    SetLayeredWindowAttributes setLayeredWindowAttributes;
-    UpdateLayeredWindow updateLayeredWindow;
+    // Windows pointer functions (Windows 8 or later).
+    EnableMouseInPointer enableMouseInPointer = nullptr;
+    GetPointerType getPointerType = nullptr;
+    GetPointerInfo getPointerInfo = nullptr;
+    GetPointerDeviceRects getPointerDeviceRects = nullptr;
+    GetPointerTouchInfo getPointerTouchInfo = nullptr;
+    GetPointerFrameTouchInfo getPointerFrameTouchInfo = nullptr;
+    GetPointerFrameTouchInfoHistory getPointerFrameTouchInfoHistory = nullptr;
+    GetPointerPenInfo getPointerPenInfo = nullptr;
+    GetPointerPenInfoHistory getPointerPenInfoHistory = nullptr;
+    SkipPointerFrameMessages skipPointerFrameMessages = nullptr;
 
-    // Functions missing in older versions of Windows
-    UpdateLayeredWindowIndirect updateLayeredWindowIndirect;
-    IsHungAppWindow isHungAppWindow;
+    // Windows Vista onwards
+    SetProcessDPIAware setProcessDPIAware = nullptr;
 
-    // Touch functions from Windows 7 onwards (also for use with Q_CC_MSVC).
-    RegisterTouchWindow registerTouchWindow;
-    UnregisterTouchWindow unregisterTouchWindow;
-    GetTouchInputInfo getTouchInputInfo;
-    CloseTouchInputHandle closeTouchInputHandle;
+    // Clipboard listeners are present on Windows Vista onwards
+    // but missing in MinGW 4.9 stub libs. Can be removed in MinGW 5.
+    AddClipboardFormatListener addClipboardFormatListener = nullptr;
+    RemoveClipboardFormatListener removeClipboardFormatListener = nullptr;
+
+    // Rotation API
+    GetDisplayAutoRotationPreferences getDisplayAutoRotationPreferences = nullptr;
+    SetDisplayAutoRotationPreferences setDisplayAutoRotationPreferences = nullptr;
+
+    EnableNonClientDpiScaling enableNonClientDpiScaling = nullptr;
+    GetWindowDpiAwarenessContext getWindowDpiAwarenessContext = nullptr;
+    GetAwarenessFromDpiAwarenessContext getAwarenessFromDpiAwarenessContext = nullptr;
 };
 
-struct QWindowsShell32DLL
-{
-    QWindowsShell32DLL();
-    inline void init();
+// Shell scaling library (Windows 8.1 onwards)
+struct QWindowsShcoreDLL {
+    void init();
+    inline bool isValid() const { return getProcessDpiAwareness && setProcessDpiAwareness && getDpiForMonitor; }
 
-    typedef HRESULT (WINAPI *SHCreateItemFromParsingName)(PCWSTR, IBindCtx *, const GUID&, void **);
-    typedef HRESULT (WINAPI *SHGetStockIconInfo)(int , int , _SHSTOCKICONINFO *);
+    typedef HRESULT (WINAPI *GetProcessDpiAwareness)(HANDLE,int *);
+    typedef HRESULT (WINAPI *SetProcessDpiAwareness)(int);
+    typedef HRESULT (WINAPI *GetDpiForMonitor)(HMONITOR,int,UINT *,UINT *);
 
-    SHCreateItemFromParsingName sHCreateItemFromParsingName;
-    SHGetStockIconInfo sHGetStockIconInfo;
+    GetProcessDpiAwareness getProcessDpiAwareness = nullptr;
+    SetProcessDpiAwareness setProcessDpiAwareness = nullptr;
+    GetDpiForMonitor getDpiForMonitor = nullptr;
 };
-#endif // Q_OS_WINCE
 
 class QWindowsContext
 {
@@ -117,27 +156,24 @@ public:
     enum SystemInfoFlags
     {
         SI_RTL_Extensions = 0x1,
-        SI_SupportsTouch = 0x2
+        SI_SupportsTouch = 0x2,
+        SI_SupportsPointer = 0x4,
     };
 
     // Verbose flag set by environment variable QT_QPA_VERBOSE
-    static int verboseIntegration;
-    static int verboseWindows;
-    static int verboseBackingStore;
-    static int verboseEvents;
-    static int verboseFonts;
-    static int verboseGL;
-    static int verboseOLE;
-    static int verboseInputMethods;
-    static int verboseDialogs;
-    static int verboseTheming;
+    static int verbose;
 
     explicit QWindowsContext();
     ~QWindowsContext();
 
+    bool initTouch();
+    bool initTouch(unsigned integrationOptions); // For calls from QWindowsIntegration::QWindowsIntegration() only.
+    bool initTablet(unsigned integrationOptions);
+    bool initPointer(unsigned integrationOptions);
+
     int defaultDPI() const;
 
-    QString registerWindowClass(const QWindow *w, bool isGL);
+    QString registerWindowClass(const QWindow *w);
     QString registerWindowClass(QString cname, WNDPROC proc,
                                 unsigned style = 0, HBRUSH brush = 0,
                                 bool icon = false);
@@ -157,20 +193,30 @@ public:
 
     QWindowsWindow *findClosestPlatformWindow(HWND) const;
     QWindowsWindow *findPlatformWindow(HWND) const;
+    QWindowsWindow *findPlatformWindow(const QWindowsMenuBar *mb) const;
     QWindow *findWindow(HWND) const;
     QWindowsWindow *findPlatformWindowAt(HWND parent, const QPoint &screenPoint,
                                              unsigned cwex_flags) const;
 
     QWindow *windowUnderMouse() const;
+    void clearWindowUnderMouse();
 
     inline bool windowsProc(HWND hwnd, UINT message,
                             QtWindows::WindowsEventType et,
-                            WPARAM wParam, LPARAM lParam, LRESULT *result);
+                            WPARAM wParam, LPARAM lParam, LRESULT *result,
+                            QWindowsWindow **platformWindowPtr);
 
     QWindow *keyGrabber() const;
     void setKeyGrabber(QWindow *hwnd);
 
-    void setWindowCreationContext(const QSharedPointer<QWindowCreationContext> &ctx);
+    QSharedPointer<QWindowCreationContext> setWindowCreationContext(const QSharedPointer<QWindowCreationContext> &ctx);
+    QSharedPointer<QWindowCreationContext> windowCreationContext() const;
+
+    void setTabletAbsoluteRange(int a);
+    void setProcessDpiAwareness(QtWindows::ProcessDpiAwareness dpiAwareness);
+    static int processDpiAwareness();
+
+    void setDetectAltGrModifier(bool a);
 
     // Returns a combination of SystemInfoFlags
     unsigned systemInfo() const;
@@ -178,22 +224,32 @@ public:
     bool useRTLExtensions() const;
     QList<int> possibleKeys(const QKeyEvent *e) const;
 
+    static bool isSessionLocked();
+
     QWindowsMimeConverter &mimeConverter() const;
     QWindowsScreenManager &screenManager();
-#ifndef Q_OS_WINCE
+    QWindowsTabletSupport *tabletSupport() const;
+
     static QWindowsUser32DLL user32dll;
-    static QWindowsShell32DLL shell32dll;
-#endif
+    static QWindowsShcoreDLL shcoredll;
 
     static QByteArray comErrorString(HRESULT hr);
     bool asyncExpose() const;
     void setAsyncExpose(bool value);
 
+    static DWORD readAdvancedExplorerSettings(const wchar_t *subKey, DWORD defaultValue);
+
+    QTouchDevice *touchDevice() const;
+
+    static bool filterNativeEvent(MSG *msg, LRESULT *result);
+    static bool filterNativeEvent(QWindow *window, MSG *msg, LRESULT *result);
+
 private:
     void handleFocusEvent(QtWindows::WindowsEventType et, QWindowsWindow *w);
 #ifndef QT_NO_CONTEXTMENU
-    void handleContextMenuEvent(QWindow *window, const MSG &msg);
+    bool handleContextMenuEvent(QWindow *window, const MSG &msg);
 #endif
+    void handleExitSizeMove(QWindow *window);
     void unregisterWindowClasses();
 
     QScopedPointer<QWindowsContextPrivate> d;

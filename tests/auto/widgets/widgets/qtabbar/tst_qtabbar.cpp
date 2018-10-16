@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -97,6 +84,9 @@ private slots:
     void changeTitleWhileDoubleClickingTab();
 
     void taskQTBUG_10052_widgetLayoutWhenMoving();
+
+    void tabBarClicked();
+    void autoHide();
 };
 
 // Testing get/set functions
@@ -284,42 +274,41 @@ void tst_QTabBar::sizeHints()
 {
     QTabBar tabBar;
     tabBar.setFont(QFont("Arial", 10));
-    tabBar.addTab("tab 01");
-    tabBar.addTab("tab 02");
-    tabBar.addTab("tab 03");
-    tabBar.addTab("tab 04");
-    tabBar.addTab("tab 05");
-    tabBar.addTab("tab 06");
-    tabBar.addTab("This is tab7");
-    tabBar.addTab("This is tab8");
-    tabBar.addTab("This is tab9 with a very long title");
 
     // No eliding and no scrolling -> tabbar becomes very wide
     tabBar.setUsesScrollButtons(false);
     tabBar.setElideMode(Qt::ElideNone);
-//    qDebug() << tabBar.minimumSizeHint() << tabBar.sizeHint();
-#ifdef Q_OS_MAC
-    QEXPECT_FAIL("", "QTBUG-27230", Abort);
-#endif
+    tabBar.addTab("tab 01");
+
+    // Fetch the minimum size hint width and make sure that we create enough
+    // tabs.
+    int minimumSizeHintWidth = tabBar.minimumSizeHint().width();
+    for (int i = 0; i <= 700 / minimumSizeHintWidth; ++i)
+        tabBar.addTab(QString("tab 0%1").arg(i+2));
+
+    //qDebug() << tabBar.minimumSizeHint() << tabBar.sizeHint();
     QVERIFY(tabBar.minimumSizeHint().width() > 700);
     QVERIFY(tabBar.sizeHint().width() > 700);
 
     // Scrolling enabled -> no reason to become very wide
     tabBar.setUsesScrollButtons(true);
- //   qDebug() << tabBar.minimumSizeHint() << tabBar.sizeHint();
     QVERIFY(tabBar.minimumSizeHint().width() < 200);
     QVERIFY(tabBar.sizeHint().width() > 700); // unchanged
 
     // Eliding enabled -> no reason to become very wide
     tabBar.setUsesScrollButtons(false);
     tabBar.setElideMode(Qt::ElideRight);
-//    qDebug() << tabBar.minimumSizeHint() << tabBar.sizeHint();
-    QVERIFY(tabBar.minimumSizeHint().width() < 500);
-    QVERIFY(tabBar.sizeHint().width() > 700); // unchanged
 
-    tabBar.addTab("This is tab10 with a very long title");
-    QVERIFY(tabBar.minimumSizeHint().width() < 600);
-    QVERIFY(tabBar.sizeHint().width() > 700); // unchanged
+    // The sizeHint is very much dependent on the screen DPI value
+    // so we can not really predict it.
+    int tabBarMinSizeHintWidth = tabBar.minimumSizeHint().width();
+    int tabBarSizeHintWidth = tabBar.sizeHint().width();
+    QVERIFY(tabBarMinSizeHintWidth < tabBarSizeHintWidth);
+    QVERIFY(tabBarSizeHintWidth > 700); // unchanged
+
+    tabBar.addTab("This is tab with a very long title");
+    QVERIFY(tabBar.minimumSizeHint().width() > tabBarMinSizeHintWidth);
+    QVERIFY(tabBar.sizeHint().width() > tabBarSizeHintWidth);
 }
 
 void tst_QTabBar::setUsesScrollButtons_data()
@@ -435,7 +424,6 @@ void tst_QTabBar::tabButton()
 
 typedef QList<int> IntList;
 Q_DECLARE_METATYPE(QTabBar::SelectionBehavior)
-Q_DECLARE_METATYPE(IntList)
 #define ONE(x) (IntList() << x)
 void tst_QTabBar::selectionBehaviorOnRemove_data()
 {
@@ -607,7 +595,7 @@ public slots:
     void updateTabText()
     {
         count++;
-        setTabText(0, QString("%1").arg(count));
+        setTabText(0, QString::number(count));
     }
 };
 
@@ -651,6 +639,75 @@ void tst_QTabBar::taskQTBUG_10052_widgetLayoutWhenMoving()
     tabBar.moveTab(0, 1);
     QTRY_VERIFY(w1.moved);
     QVERIFY(w2.moved);
+}
+
+void tst_QTabBar::tabBarClicked()
+{
+    QTabBar tabBar;
+    tabBar.addTab("0");
+    QSignalSpy clickSpy(&tabBar, SIGNAL(tabBarClicked(int)));
+    QSignalSpy doubleClickSpy(&tabBar, SIGNAL(tabBarDoubleClicked(int)));
+
+    QCOMPARE(clickSpy.count(), 0);
+    QCOMPARE(doubleClickSpy.count(), 0);
+
+    Qt::MouseButton button = Qt::LeftButton;
+    while (button <= Qt::MaxMouseButton) {
+        const QPoint tabPos = tabBar.tabRect(0).center();
+
+        QTest::mouseClick(&tabBar, button, 0, tabPos);
+        QCOMPARE(clickSpy.count(), 1);
+        QCOMPARE(clickSpy.takeFirst().takeFirst().toInt(), 0);
+        QCOMPARE(doubleClickSpy.count(), 0);
+
+        QTest::mouseDClick(&tabBar, button, 0, tabPos);
+        QCOMPARE(clickSpy.count(), 1);
+        QCOMPARE(clickSpy.takeFirst().takeFirst().toInt(), 0);
+        QCOMPARE(doubleClickSpy.count(), 1);
+        QCOMPARE(doubleClickSpy.takeFirst().takeFirst().toInt(), 0);
+
+        const QPoint barPos(tabBar.tabRect(0).right() + 5, tabBar.tabRect(0).center().y());
+
+        QTest::mouseClick(&tabBar, button, 0, barPos);
+        QCOMPARE(clickSpy.count(), 1);
+        QCOMPARE(clickSpy.takeFirst().takeFirst().toInt(), -1);
+        QCOMPARE(doubleClickSpy.count(), 0);
+
+        QTest::mouseDClick(&tabBar, button, 0, barPos);
+        QCOMPARE(clickSpy.count(), 1);
+        QCOMPARE(clickSpy.takeFirst().takeFirst().toInt(), -1);
+        QCOMPARE(doubleClickSpy.count(), 1);
+        QCOMPARE(doubleClickSpy.takeFirst().takeFirst().toInt(), -1);
+
+        button = Qt::MouseButton(button << 1);
+    }
+}
+
+void tst_QTabBar::autoHide()
+{
+    QTabBar tabBar;
+    QVERIFY(!tabBar.autoHide());
+    QVERIFY(!tabBar.isVisible());
+    tabBar.show();
+    QVERIFY(tabBar.isVisible());
+    tabBar.addTab("0");
+    QVERIFY(tabBar.isVisible());
+    tabBar.removeTab(0);
+    QVERIFY(tabBar.isVisible());
+
+    tabBar.setAutoHide(true);
+    QVERIFY(!tabBar.isVisible());
+    tabBar.addTab("0");
+    QVERIFY(!tabBar.isVisible());
+    tabBar.addTab("1");
+    QVERIFY(tabBar.isVisible());
+    tabBar.removeTab(0);
+    QVERIFY(!tabBar.isVisible());
+    tabBar.removeTab(0);
+    QVERIFY(!tabBar.isVisible());
+
+    tabBar.setAutoHide(false);
+    QVERIFY(tabBar.isVisible());
 }
 
 QTEST_MAIN(tst_QTabBar)

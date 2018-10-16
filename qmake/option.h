@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,17 +30,17 @@
 #define OPTION_H
 
 #include <qmakeglobals.h>
+#include <qmakevfs.h>
 #include <qmakeparser.h>
 #include <qmakeevaluator.h>
 
 #include <qstring.h>
 #include <qstringlist.h>
 #include <qfile.h>
-#include <qlibraryinfo.h>
 
 QT_BEGIN_NAMESPACE
 
-#define QMAKE_VERSION_STR "3.0"
+#define QMAKE_VERSION_STR "3.1"
 
 QString qmake_getpwd();
 bool qmake_setpwd(const QString &p);
@@ -73,12 +60,12 @@ class QMakeProject;
 
 class EvalHandler : public QMakeHandler {
 public:
-    void message(int type, const QString &msg, const QString &fileName, int lineNo);
+    void message(int type, const QString &msg, const QString &fileName, int lineNo) override;
 
-    void fileMessage(const QString &msg);
+    void fileMessage(int type, const QString &msg) override;
 
-    void aboutToEval(ProFile *, ProFile *, EvalFileType);
-    void doneWithEval(ProFile *);
+    void aboutToEval(ProFile *, ProFile *, EvalFileType) override;
+    void doneWithEval(ProFile *) override;
 };
 
 struct Option
@@ -87,6 +74,7 @@ struct Option
 
     static QMakeGlobals *globals;
     static ProFileCache *proFileCache;
+    static QMakeVfs *vfs;
     static QMakeParser *parser;
 
     //simply global convenience
@@ -98,6 +86,8 @@ struct Option
     static QStringList h_ext;
     static QStringList cpp_ext;
     static QStringList c_ext;
+    static QString objc_ext;
+    static QString objcpp_ext;
     static QString cpp_moc_ext;
     static QString obj_ext;
     static QString lex_ext;
@@ -109,7 +99,6 @@ struct Option
     static QString pro_ext;
     static QString res_ext;
     static char field_sep;
-    static const char *application_argv0;
 
     enum CmdLineFlags {
         QMAKE_CMDLINE_SUCCESS       = 0x00,
@@ -119,7 +108,7 @@ struct Option
     };
 
     //both of these must be called..
-    static int init(int argc=0, char **argv=0); //parse cmdline
+    static int init(int argc = 0, char **argv = nullptr); //parse cmdline
     static void prepareProject(const QString &pfile);
     static bool postProcessProject(QMakeProject *);
 
@@ -164,7 +153,7 @@ struct Option
 
     inline static bool hasFileExtension(const QString &str, const QStringList &extensions)
     {
-        foreach (const QString &ext, extensions)
+        for (const QString &ext : extensions)
             if (str.endsWith(ext))
                 return true;
         return false;
@@ -177,7 +166,6 @@ struct Option
     static QMAKE_MODE qmake_mode;
 
     //all modes
-    static QStringList qmake_args;
     static QFile output;
     static QString output_dir;
     static int debug_level;
@@ -207,7 +195,7 @@ struct Option
     };
 
 private:
-    static int parseCommandLine(QStringList &args);
+    static int parseCommandLine(QStringList &args, QMakeCmdLineParserState &state);
 };
 
 inline QString fixEnvVariables(const QString &x) { return Option::fixString(x, Option::FixEnvVars); }

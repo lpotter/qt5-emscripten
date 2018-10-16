@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -77,7 +87,7 @@ QRegExp mark("\\b"      // word boundary
 QRegExp rx("^\\d\\d?$");    // match integers 0 to 99
 rx.indexIn("123");          // returns -1 (no match)
 rx.indexIn("-6");           // returns -1 (no match)
-rx.indexIn("6");            // returns 0 (matched as position 0)
+rx.indexIn("6");            // returns 0 (matched at position 0)
 //! [4]
 
 
@@ -128,7 +138,7 @@ while (pos >= 0) {
 
 
 //! [10]
-str = "Digia Plc\tqt.digia.com\tFinland";
+str = "The Qt Company Ltd\tqt.io\tFinland";
 QString company, web, country;
 rx.setPattern("^([^\t]+)\t([^\t]+)\t([^\t]+)$");
 if (rx.indexIn(str) != -1) {

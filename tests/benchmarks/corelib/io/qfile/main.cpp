@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +39,10 @@
 
 #ifdef Q_OS_WIN
 # include <windows.h>
+#endif
+
+#if defined(Q_OS_QNX) && defined(open)
+#undef open
 #endif
 
 #define BUFSIZE 1024*512
@@ -184,9 +175,9 @@ void tst_qfile::readBigFile_QFSFileEngine()
     QSKIP("This test requires -developer-build.");
 #endif
 }
-void tst_qfile::readBigFile_posix() 
-{ 
-    readBigFile(); 
+void tst_qfile::readBigFile_posix()
+{
+    readBigFile();
 }
 void tst_qfile::readBigFile_Win32() { readBigFile(); }
 
@@ -306,7 +297,11 @@ void tst_qfile::readBigFile()
             // ensure we don't account string conversion
             wchar_t* cfilename = (wchar_t*)filename.utf16();
 
+#ifndef Q_OS_WINRT
             hndl = CreateFile(cfilename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+#else
+            hndl = CreateFile2(cfilename, GENERIC_READ, 0, OPEN_EXISTING, 0);
+#endif
             Q_ASSERT(hndl);
             wchar_t* nativeBuffer = new wchar_t[BUFSIZE];
             DWORD numberOfBytesRead;
@@ -315,7 +310,12 @@ void tst_qfile::readBigFile()
                 do {
                    ReadFile(hndl, nativeBuffer, blockSize, &numberOfBytesRead, NULL);
                 } while(numberOfBytesRead != 0);
+#ifndef Q_OS_WINRT
                 SetFilePointer(hndl, 0, NULL, FILE_BEGIN);
+#else
+                LARGE_INTEGER offset = { 0 };
+                SetFilePointerEx(hndl, offset, NULL, FILE_BEGIN);
+#endif
             }
             delete[] nativeBuffer;
             CloseHandle(hndl);
@@ -396,11 +396,20 @@ void tst_qfile::seek()
             // ensure we don't account string conversion
             wchar_t* cfilename = (wchar_t*)filename.utf16();
 
+#ifndef Q_OS_WINRT
             hndl = CreateFile(cfilename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+#else
+            hndl = CreateFile2(cfilename, GENERIC_READ, 0, OPEN_EXISTING, 0);
+#endif
             Q_ASSERT(hndl);
             QBENCHMARK {
                 i=(i+1)%sp_size;
+#ifndef Q_OS_WINRT
                 SetFilePointer(hndl, seekpos[i], NULL, 0);
+#else
+                LARGE_INTEGER offset = { seekpos[i] };
+                SetFilePointerEx(hndl, offset, NULL, FILE_BEGIN);
+#endif
             }
             CloseHandle(hndl);
 #else
@@ -485,7 +494,11 @@ void tst_qfile::open()
             wchar_t* cfilename = (wchar_t*)filename.utf16();
 
             QBENCHMARK {
+#ifndef Q_OS_WINRT
                 hndl = CreateFile(cfilename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+#else
+                hndl = CreateFile2(cfilename, GENERIC_READ, 0, OPEN_EXISTING, 0);
+#endif
                 Q_ASSERT(hndl);
                 CloseHandle(hndl);
             }
@@ -509,13 +522,13 @@ void tst_qfile::readSmallFiles_QFSFileEngine()
     QSKIP("This test requires -developer-build.");
 #endif
 }
-void tst_qfile::readSmallFiles_posix() 
+void tst_qfile::readSmallFiles_posix()
 {
-    readSmallFiles(); 
+    readSmallFiles();
 }
-void tst_qfile::readSmallFiles_Win32() 
-{ 
-    readSmallFiles(); 
+void tst_qfile::readSmallFiles_Win32()
+{
+    readSmallFiles();
 }
 
 void tst_qfile::readSmallFiles_QFile_data()
@@ -578,13 +591,8 @@ void tst_qfile::createSmallFiles()
     dir.cd("tst");
     tmpDirName = dir.absolutePath();
 
-#if defined(Q_OS_WINCE)
-    for (int i = 0; i < 100; ++i)
-#else
-    for (int i = 0; i < 1000; ++i)
-#endif
-    {
-        QFile f(tmpDirName+"/"+QString::number(i));
+    for (int i = 0; i < 1000; ++i) {
+        QFile f(tmpDirName + QLatin1Char('/') + QString::number(i));
         f.open(QIODevice::WriteOnly);
         f.seek(511);
         f.putChar('\n');
@@ -623,7 +631,7 @@ void tst_qfile::readSmallFiles()
         case(QFileBenchmark): {
             QList<QFile*> fileList;
             Q_FOREACH(QString file, files) {
-                QFile *f = new QFile(tmpDirName+ "/" + file);
+                QFile *f = new QFile(tmpDirName + QLatin1Char('/') + file);
                 f->open(QIODevice::ReadOnly|textMode|bufferedMode);
                 fileList.append(f);
             }
@@ -646,7 +654,7 @@ void tst_qfile::readSmallFiles()
         case(QFSFileEngineBenchmark): {
             QList<QFSFileEngine*> fileList;
             Q_FOREACH(QString file, files) {
-                QFSFileEngine *fse = new QFSFileEngine(tmpDirName+ "/" + file);
+                QFSFileEngine *fse = new QFSFileEngine(tmpDirName + QLatin1Char('/') + file);
                 fse->open(QIODevice::ReadOnly|textMode|bufferedMode);
                 fileList.append(fse);
             }
@@ -667,7 +675,7 @@ void tst_qfile::readSmallFiles()
         case(PosixBenchmark): {
             QList<FILE*> fileList;
             Q_FOREACH(QString file, files) {
-                fileList.append(::fopen(QFile::encodeName(tmpDirName+ "/" + file).constData(), "rb"));
+                fileList.append(::fopen(QFile::encodeName(tmpDirName + QLatin1Char('/') + file).constData(), "rb"));
             }
 
             QBENCHMARK {
@@ -694,7 +702,11 @@ void tst_qfile::readSmallFiles()
             // ensure we don't account string conversion
             wchar_t* cfilename = (wchar_t*)filename.utf16();
 
+#ifndef Q_OS_WINRT
             hndl = CreateFile(cfilename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+#else
+            hndl = CreateFile2(cfilename, GENERIC_READ, 0, OPEN_EXISTING, 0);
+#endif
             Q_ASSERT(hndl);
             wchar_t* nativeBuffer = new wchar_t[BUFSIZE];
             DWORD numberOfBytesRead;

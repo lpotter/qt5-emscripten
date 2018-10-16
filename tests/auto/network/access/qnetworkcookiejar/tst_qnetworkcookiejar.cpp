@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -67,33 +54,6 @@ private slots:
     void rfc6265_data();
     void rfc6265();
 };
-
-QT_BEGIN_NAMESPACE
-
-namespace QTest {
-    template<>
-    char *toString(const QNetworkCookie &cookie)
-    {
-        return qstrdup(cookie.toRawForm());
-    }
-
-    template<>
-    char *toString(const QList<QNetworkCookie> &list)
-    {
-        QString result = "QList(";
-        bool first = true;
-        foreach (QNetworkCookie cookie, list) {
-            if (!first)
-                result += ", ";
-            first = false;
-            result += QString::fromLatin1("QNetworkCookie(%1)").arg(QLatin1String(cookie.toRawForm()));
-        }
-
-        return qstrdup(result.append(')').toLocal8Bit());
-    }
-}
-
-QT_END_NAMESPACE
 
 class MyCookieJar: public QNetworkCookieJar
 {
@@ -200,17 +160,30 @@ void tst_QNetworkCookieJar::setCookiesFromUrl_data()
     result += cookie;
     QTest::newRow("effective-tld1-accepted") << preset << cookie << "http://something.co.uk" << result << true;
 
-    // 2. anything .ar is an effective TLD ('*.ar'), but 'gobiernoelectronico.ar' is an exception
+    // 2. anything .ck is an effective TLD ('*.ck'), but 'www.ck' is an exception
     result.clear();
     preset.clear();
-    cookie.setDomain(".farmacia.ar");
-    QTest::newRow("effective-tld2-denied") << preset << cookie << "http://farmacia.ar" << result << false;
-    QTest::newRow("effective-tld2-denied2") << preset << cookie << "http://www.farmacia.ar" << result << false;
-    QTest::newRow("effective-tld2-denied3") << preset << cookie << "http://www.anything.farmacia.ar" << result << false;
-    cookie.setDomain(".gobiernoelectronico.ar");
+    cookie.setDomain(".foo.ck");
     result += cookie;
-    QTest::newRow("effective-tld2-accepted") << preset << cookie << "http://www.gobiernoelectronico.ar" << result << true;
+    QTest::newRow("effective-tld2-accepted2") << preset << cookie << "http://foo.ck" << result << true;
+    result.clear();
+    QTest::newRow("effective-tld2-denied2") << preset << cookie << "http://www.foo.ck" << result << false;
+    QTest::newRow("effective-tld2-denied3") << preset << cookie << "http://www.anything.foo.ck" << result << false;
+    cookie.setDomain(".www.ck");
+    result += cookie;
+    QTest::newRow("effective-tld2-accepted") << preset << cookie << "http://www.www.ck" << result << true;
 
+    result.clear();
+    preset.clear();
+    cookie.setDomain("127.0.0.1");
+    result += cookie;
+    QTest::newRow("IPv4-address-as-domain") << preset << cookie << "http://127.0.0.1/" << result << true;
+
+    result.clear();
+    preset.clear();
+    cookie.setDomain("fe80::250:56ff:fec0:1");
+    result += cookie;
+    QTest::newRow("IPv6-address-as-domain") << preset << cookie << "http://[fe80::250:56ff:fec0:1]/" << result << true;
 
     // setting the defaults:
     finalCookie = cookie;
@@ -237,6 +210,22 @@ void tst_QNetworkCookieJar::setCookiesFromUrl_data()
     preset.clear();
     cookie.setDomain(".com.");
     QTest::newRow("rfc2109-4.3.2-ex3-2") << preset << cookie << "http://x.foo.com" << result << false;
+
+    // When using a TLD as a hostname the hostname should still get cookies (QTBUG-52040)
+    // ... and nothing else should get the cookies.
+    result.clear();
+    preset.clear();
+    cookie.setPath("/");
+    cookie.setDomain(".support");
+    result += cookie;
+    QTest::newRow("TLD-as-domain-accepted") << preset << cookie << "http://support" << result << true;
+    result.clear();
+    QTest::newRow("TLD-as-domain-rejected") << preset << cookie << "http://a.support" << result << false;
+    // Now test with no domain in the cookie, use the domain from the url (matching TLD)
+    cookie.setDomain("support");
+    result += cookie;
+    cookie.setDomain("");
+    QTest::newRow("TLD-as-domain-accepted2") << preset << cookie << "http://support" << result << true;
 }
 
 void tst_QNetworkCookieJar::setCookiesFromUrl()
@@ -275,74 +264,74 @@ void tst_QNetworkCookieJar::cookiesForUrl_data()
     QNetworkCookie cookie;
     cookie.setName("a");
     cookie.setPath("/web");
-    cookie.setDomain(".nokia.com");
+    cookie.setDomain(".qt-project.org");
     allCookies += cookie;
 
     QTest::newRow("no-match-1") << allCookies << "http://foo.bar/" << result;
     QTest::newRow("no-match-2") << allCookies << "http://foo.bar/web" << result;
     QTest::newRow("no-match-3") << allCookies << "http://foo.bar/web/wiki" << result;
-    QTest::newRow("no-match-4") << allCookies << "http://nokia.com" << result;
-    QTest::newRow("no-match-5") << allCookies << "http://qt.nokia.com" << result;
-    QTest::newRow("no-match-6") << allCookies << "http://nokia.com/webinar" << result;
-    QTest::newRow("no-match-7") << allCookies << "http://qt.nokia.com/webinar" << result;
-    QTest::newRow("no-match-8") << allCookies << "http://qt.nokia.com./web" << result;
-    QTest::newRow("no-match-9") << allCookies << "http://nokia.com./web" << result;
+    QTest::newRow("no-match-4") << allCookies << "http://qt-project.org" << result;
+    QTest::newRow("no-match-5") << allCookies << "http://qt-project.org" << result;
+    QTest::newRow("no-match-6") << allCookies << "http://qt-project.org/webinar" << result;
+    QTest::newRow("no-match-7") << allCookies << "http://qt-project.org/webinar" << result;
+    QTest::newRow("no-match-8") << allCookies << "http://qt-project.org./web" << result;
+    QTest::newRow("no-match-9") << allCookies << "http://qt-project.org./web" << result;
 
     result = allCookies;
-    QTest::newRow("match-1") << allCookies << "http://nokia.com/web" << result;
-    QTest::newRow("match-2") << allCookies << "http://nokia.com/web/" << result;
-    QTest::newRow("match-3") << allCookies << "http://nokia.com/web/content" << result;
-    QTest::newRow("match-4") << allCookies << "http://qt.nokia.com/web" << result;
-    QTest::newRow("match-5") << allCookies << "http://qt.nokia.com/web/" << result;
-    QTest::newRow("match-6") << allCookies << "http://qt.nokia.com/web/content" << result;
+    QTest::newRow("match-1") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("match-2") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("match-3") << allCookies << "http://qt-project.org/web/content" << result;
+    QTest::newRow("match-4") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("match-5") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("match-6") << allCookies << "http://qt-project.org/web/content" << result;
 
     cookie.setPath("/web/wiki");
     allCookies += cookie;
 
     // exact same results as before:
-    QTest::newRow("one-match-1") << allCookies << "http://nokia.com/web" << result;
-    QTest::newRow("one-match-2") << allCookies << "http://nokia.com/web/" << result;
-    QTest::newRow("one-match-3") << allCookies << "http://nokia.com/web/content" << result;
-    QTest::newRow("one-match-4") << allCookies << "http://qt.nokia.com/web" << result;
-    QTest::newRow("one-match-5") << allCookies << "http://qt.nokia.com/web/" << result;
-    QTest::newRow("one-match-6") << allCookies << "http://qt.nokia.com/web/content" << result;
+    QTest::newRow("one-match-1") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("one-match-2") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("one-match-3") << allCookies << "http://qt-project.org/web/content" << result;
+    QTest::newRow("one-match-4") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("one-match-5") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("one-match-6") << allCookies << "http://qt-project.org/web/content" << result;
 
     result.prepend(cookie);     // longer path, it must match first
-    QTest::newRow("two-matches-1") << allCookies << "http://nokia.com/web/wiki" << result;
-    QTest::newRow("two-matches-2") << allCookies << "http://qt.nokia.com/web/wiki" << result;
+    QTest::newRow("two-matches-1") << allCookies << "http://qt-project.org/web/wiki" << result;
+    QTest::newRow("two-matches-2") << allCookies << "http://qt-project.org/web/wiki" << result;
 
     // invert the order;
     allCookies.clear();
     allCookies << result.at(1) << result.at(0);
-    QTest::newRow("two-matches-3") << allCookies << "http://nokia.com/web/wiki" << result;
-    QTest::newRow("two-matches-4") << allCookies << "http://qt.nokia.com/web/wiki" << result;
+    QTest::newRow("two-matches-3") << allCookies << "http://qt-project.org/web/wiki" << result;
+    QTest::newRow("two-matches-4") << allCookies << "http://qt-project.org/web/wiki" << result;
 
     // expired cookie
     allCookies.clear();
     cookie.setExpirationDate(QDateTime::fromString("09-Nov-1999", "dd-MMM-yyyy"));
     allCookies += cookie;
     result.clear();
-    QTest::newRow("exp-match-1") << allCookies << "http://nokia.com/web" << result;
-    QTest::newRow("exp-match-2") << allCookies << "http://nokia.com/web/" << result;
-    QTest::newRow("exp-match-3") << allCookies << "http://nokia.com/web/content" << result;
-    QTest::newRow("exp-match-4") << allCookies << "http://qt.nokia.com/web" << result;
-    QTest::newRow("exp-match-5") << allCookies << "http://qt.nokia.com/web/" << result;
-    QTest::newRow("exp-match-6") << allCookies << "http://qt.nokia.com/web/content" << result;
+    QTest::newRow("exp-match-1") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("exp-match-2") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("exp-match-3") << allCookies << "http://qt-project.org/web/content" << result;
+    QTest::newRow("exp-match-4") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("exp-match-5") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("exp-match-6") << allCookies << "http://qt-project.org/web/content" << result;
 
     // path matching
     allCookies.clear();
     QNetworkCookie anotherCookie;
     anotherCookie.setName("a");
     anotherCookie.setPath("/web");
-    anotherCookie.setDomain(".nokia.com");
+    anotherCookie.setDomain(".qt-project.org");
     allCookies += anotherCookie;
     result.clear();
-    QTest::newRow("path-unmatch-1") << allCookies << "http://nokia.com/" << result;
-    QTest::newRow("path-unmatch-2") << allCookies << "http://nokia.com/something/else" << result;
+    QTest::newRow("path-unmatch-1") << allCookies << "http://qt-project.org/" << result;
+    QTest::newRow("path-unmatch-2") << allCookies << "http://qt-project.org/something/else" << result;
     result += anotherCookie;
-    QTest::newRow("path-match-1") << allCookies << "http://nokia.com/web" << result;
-    QTest::newRow("path-match-2") << allCookies << "http://nokia.com/web/" << result;
-    QTest::newRow("path-match-3") << allCookies << "http://nokia.com/web/content" << result;
+    QTest::newRow("path-match-1") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("path-match-2") << allCookies << "http://qt-project.org/web/" << result;
+    QTest::newRow("path-match-3") << allCookies << "http://qt-project.org/web/content" << result;
 
     // secure cookies
     allCookies.clear();
@@ -350,14 +339,14 @@ void tst_QNetworkCookieJar::cookiesForUrl_data()
     QNetworkCookie secureCookie;
     secureCookie.setName("a");
     secureCookie.setPath("/web");
-    secureCookie.setDomain(".nokia.com");
+    secureCookie.setDomain(".qt-project.org");
     secureCookie.setSecure(true);
     allCookies += secureCookie;
-    QTest::newRow("no-match-secure-1") << allCookies << "http://nokia.com/web" << result;
-    QTest::newRow("no-match-secure-2") << allCookies << "http://qt.nokia.com/web" << result;
+    QTest::newRow("no-match-secure-1") << allCookies << "http://qt-project.org/web" << result;
+    QTest::newRow("no-match-secure-2") << allCookies << "http://qt-project.org/web" << result;
     result += secureCookie;
-    QTest::newRow("match-secure-1") << allCookies << "https://nokia.com/web" << result;
-    QTest::newRow("match-secure-2") << allCookies << "https://qt.nokia.com/web" << result;
+    QTest::newRow("match-secure-1") << allCookies << "https://qt-project.org/web" << result;
+    QTest::newRow("match-secure-2") << allCookies << "https://qt-project.org/web" << result;
 
     // domain ending in .
     allCookies.clear();
@@ -369,6 +358,30 @@ void tst_QNetworkCookieJar::cookiesForUrl_data()
     QTest::newRow("no-match-domain-dot") << allCookies << "http://example.com" << result;
     result += cookieDot;
     QTest::newRow("match-domain-dot") << allCookies << "http://example.com." << result;
+
+    // Root path in cookie, empty url path
+    allCookies.clear();
+    QNetworkCookie rootCookie;
+    rootCookie.setName("a");
+    rootCookie.setPath("/");
+    rootCookie.setDomain("qt-project.org");
+    allCookies += rootCookie;
+    result.clear();
+    result += rootCookie;
+    QTest::newRow("root-path-match") << allCookies << "http://qt-project.org" << result;
+
+    // Domain in cookie happens to match a TLD
+    allCookies.clear();
+    QNetworkCookie tldCookie;
+    tldCookie.setDomain(".support");
+    tldCookie.setName("a");
+    tldCookie.setValue("b");
+    allCookies += tldCookie;
+    result.clear();
+    result += tldCookie;
+    QTest::newRow("tld-cookie-match") << allCookies << "http://support/" << result;
+    result.clear();
+    QTest::newRow("tld-cookie-no-match") << allCookies << "http://a.support/" << result;
 }
 
 void tst_QNetworkCookieJar::cookiesForUrl()
@@ -400,6 +413,8 @@ void tst_QNetworkCookieJar::effectiveTLDs_data()
     QTest::newRow("yes7") << "org.ws" << true;
     QTest::newRow("yes8") << "co.uk" << true;
     QTest::newRow("yes9") << "wallonie.museum" << true;
+    QTest::newRow("yes10") << "hk.com" << true;
+    QTest::newRow("yes11") << "hk.org" << true;
 
     QTest::newRow("no1") << "anything.com" << false;
     QTest::newRow("no2") << "anything.de" << false;
@@ -411,6 +426,7 @@ void tst_QNetworkCookieJar::effectiveTLDs_data()
     QTest::newRow("no8") << "teatime.co.uk" << false;
     QTest::newRow("no9") << "bla" << false;
     QTest::newRow("no10") << "bla.bla" << false;
+    QTest::newRow("no11") << "mosreg.ru" << false;
 
     const ushort s1[] = {0x74, 0x72, 0x61, 0x6e, 0xf8, 0x79, 0x2e, 0x6e, 0x6f, 0x00}; // xn--trany-yua.no
     const ushort s2[] = {0x5d9, 0x5e8, 0x5d5, 0x5e9, 0x5dc, 0x5d9, 0x5dd, 0x2e, 0x6d, 0x75, 0x73, 0x65, 0x75, 0x6d, 0x00}; // xn--9dbhblg6di.museum
@@ -450,9 +466,10 @@ void tst_QNetworkCookieJar::effectiveTLDs_data()
     QTest::newRow("yes-wildcard1") << "*.jm" << true;
     QTest::newRow("yes-wildcard1.5") << "anything.jm" << true;
     QTest::newRow("yes-wildcard2") << "something.kh" << true;
-    QTest::newRow("yes-wildcard3") << "whatever.uk" << true;
-    QTest::newRow("yes-wildcard4") << "anything.shizuoka.jp" << true;
+    QTest::newRow("no-wildcard3") << "whatever.uk" << false; // was changed at some point
+    QTest::newRow("yes-wildcard4") << "anything.sendai.jp" << true;
     QTest::newRow("yes-wildcard5") << "foo.sch.uk" << true;
+    QTest::newRow("yes-wildcard6") << "something.platform.sh" << true;
 }
 
 void tst_QNetworkCookieJar::effectiveTLDs()

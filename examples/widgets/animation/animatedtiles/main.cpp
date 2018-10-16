@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,7 +48,9 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
+#include <QtWidgets/QtWidgets>
+#include <QtCore/qmath.h>
+#include <QtCore/qrandom.h>
 #include <QtCore/qstate.h>
 
 class Pixmap : public QObject, public QGraphicsPixmapItem
@@ -64,19 +76,19 @@ public:
         setCacheMode(DeviceCoordinateCache);
     }
 
-    QRectF boundingRect() const
+    QRectF boundingRect() const override
     {
         return QRectF(-65, -65, 130, 130);
     }
 
-    QPainterPath shape() const
+    QPainterPath shape() const override
     {
         QPainterPath path;
         path.addEllipse(boundingRect());
         return path;
     }
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *)
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *) override
     {
         bool down = option->state & QStyle::State_Sunken;
         QRectF r = boundingRect();
@@ -101,13 +113,13 @@ signals:
     void pressed();
 
 protected:
-    void mousePressEvent(QGraphicsSceneMouseEvent *)
+    void mousePressEvent(QGraphicsSceneMouseEvent *) override
     {
         emit pressed();
         update();
     }
 
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent *)
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *) override
     {
         update();
     }
@@ -122,7 +134,7 @@ public:
     View(QGraphicsScene *scene) : QGraphicsView(scene) { }
 
 protected:
-    void resizeEvent(QResizeEvent *event)
+    void resizeEvent(QResizeEvent *event) override
     {
         QGraphicsView::resizeEvent(event);
         fitInView(sceneRect(), Qt::KeepAspectRatio);
@@ -181,18 +193,18 @@ int main(int argc, char **argv)
         Pixmap *item = items.at(i);
         // Ellipse
         ellipseState->assignProperty(item, "pos",
-                                         QPointF(cos((i / 63.0) * 6.28) * 250,
-                                                 sin((i / 63.0) * 6.28) * 250));
+                                         QPointF(qCos((i / 63.0) * 6.28) * 250,
+                                                 qSin((i / 63.0) * 6.28) * 250));
 
         // Figure 8
         figure8State->assignProperty(item, "pos",
-                                         QPointF(sin((i / 63.0) * 6.28) * 250,
-                                                 sin(((i * 2)/63.0) * 6.28) * 250));
+                                         QPointF(qSin((i / 63.0) * 6.28) * 250,
+                                                 qSin(((i * 2)/63.0) * 6.28) * 250));
 
         // Random
         randomState->assignProperty(item, "pos",
-                                        QPointF(-250 + qrand() % 500,
-                                                -250 + qrand() % 500));
+                                        QPointF(-250 + QRandomGenerator::global()->bounded(500),
+                                                -250 + QRandomGenerator::global()->bounded(500)));
 
         // Tiled
         tiledState->assignProperty(item, "pos",
@@ -224,25 +236,25 @@ int main(int argc, char **argv)
         anim->setEasingCurve(QEasingCurve::InOutBack);
         group->addAnimation(anim);
     }
-    QAbstractTransition *trans = rootState->addTransition(ellipseButton, SIGNAL(pressed()), ellipseState);
+    QAbstractTransition *trans = rootState->addTransition(ellipseButton, &Button::pressed, ellipseState);
     trans->addAnimation(group);
 
-    trans = rootState->addTransition(figure8Button, SIGNAL(pressed()), figure8State);
+    trans = rootState->addTransition(figure8Button, &Button::pressed, figure8State);
     trans->addAnimation(group);
 
-    trans = rootState->addTransition(randomButton, SIGNAL(pressed()), randomState);
+    trans = rootState->addTransition(randomButton, &Button::pressed, randomState);
     trans->addAnimation(group);
 
-    trans = rootState->addTransition(tiledButton, SIGNAL(pressed()), tiledState);
+    trans = rootState->addTransition(tiledButton, &Button::pressed, tiledState);
     trans->addAnimation(group);
 
-    trans = rootState->addTransition(centeredButton, SIGNAL(pressed()), centeredState);
+    trans = rootState->addTransition(centeredButton, &Button::pressed, centeredState);
     trans->addAnimation(group);
 
     QTimer timer;
     timer.start(125);
     timer.setSingleShot(true);
-    trans = rootState->addTransition(&timer, SIGNAL(timeout()), ellipseState);
+    trans = rootState->addTransition(&timer, &QTimer::timeout, ellipseState);
     trans->addAnimation(group);
 
     states.start();

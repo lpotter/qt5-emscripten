@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -61,7 +71,7 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(MyClass::Options)
 //! [1]
 
 //! [meta-object flags]
-Q_FLAGS(Options)
+Q_FLAG(Options)
 //! [meta-object flags]
 
 //! [2]
@@ -121,26 +131,46 @@ absoluteValue = qAbs(myValue);
 //! [10]
 
 
-//! [11]
-qreal valueA = 2.3;
-qreal valueB = 2.7;
+//! [11A]
+double valueA = 2.3;
+double valueB = 2.7;
 
 int roundedValueA = qRound(valueA);
 // roundedValueA = 2
 int roundedValueB = qRound(valueB);
 // roundedValueB = 3
-//! [11]
+//! [11A]
 
-
-//! [12]
-qreal valueA = 42949672960.3;
-qreal valueB = 42949672960.7;
+//! [11B]
+float valueA = 2.3;
+float valueB = 2.7;
 
 int roundedValueA = qRound(valueA);
-// roundedValueA = 42949672960
+// roundedValueA = 2
 int roundedValueB = qRound(valueB);
+// roundedValueB = 3
+//! [11B]
+
+
+//! [12A]
+double valueA = 42949672960.3;
+double valueB = 42949672960.7;
+
+qint64 roundedValueA = qRound64(valueA);
+// roundedValueA = 42949672960
+qint64 roundedValueB = qRound64(valueB);
 // roundedValueB = 42949672961
-//! [12]
+//! [12A]
+
+//! [12B]
+float valueA = 42949672960.3;
+float valueB = 42949672960.7;
+
+qint64 roundedValueA = qRound64(valueA);
+// roundedValueA = 42949672960
+qint64 roundedValueB = qRound64(valueB);
+// roundedValueB = 42949672961
+//! [12B]
 
 
 //! [13]
@@ -195,7 +225,7 @@ int divide(int a, int b)
 
 
 //! [18]
-ASSERT: "b == 0" in file div.cpp, line 7
+ASSERT: "b != 0" in file div.cpp, line 7
 //! [18]
 
 
@@ -253,6 +283,9 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
     case QtDebugMsg:
         fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), context.file, context.line, context.function);
         break;
+    case QtInfoMsg:
+        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), context.file, context.line, context.function);
+        break;
     case QtWarningMsg:
         fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), context.file, context.line, context.function);
         break;
@@ -261,7 +294,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
         break;
     case QtFatalMsg:
         fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), context.file, context.line, context.function);
-        abort();
+        break;
     }
 }
 
@@ -285,6 +318,14 @@ qDebug() << "Brush:" << myQBrush << "Other value:" << i;
 //! [25]
 
 
+//! [qInfo_printf]
+qInfo("Items in list: %d", myList.size());
+//! [qInfo_printf]
+
+//! [qInfo_stream]
+qInfo() << "Brush:" << myQBrush << "Other value:" << i;
+//! [qInfo_stream]
+
 //! [26]
 void f(int c)
 {
@@ -305,7 +346,7 @@ void load(const QString &fileName)
 {
     QFile file(fileName);
     if (!file.exists())
-        qCritical("File '%s' does not exist!", qPrintable(fileName));
+        qCritical("File '%s' does not exist!", qUtf8Printable(fileName));
 }
 //! [28]
 
@@ -346,11 +387,11 @@ CONFIG += no_keywords
 //! [34]
 QString FriendlyConversation::greeting(int type)
 {
-static const char *greeting_strings[] = {
-    QT_TR_NOOP("Hello"),
-    QT_TR_NOOP("Goodbye")
-};
-return tr(greeting_strings[type]);
+    static const char *greeting_strings[] = {
+        QT_TR_NOOP("Hello"),
+        QT_TR_NOOP("Goodbye")
+    };
+    return tr(greeting_strings[type]);
 }
 //! [34]
 
@@ -369,7 +410,7 @@ QString FriendlyConversation::greeting(int type)
 QString global_greeting(int type)
 {
     return qApp->translate("FriendlyConversation",
-           greeting_strings[type]);
+                           greeting_strings[type]);
 }
 //! [35]
 
@@ -393,10 +434,58 @@ QString FriendlyConversation::greeting(int type)
 QString global_greeting(int type)
 {
     return qApp->translate("FriendlyConversation",
-           greeting_strings[type].source,
-           greeting_strings[type].comment);
+                           greeting_strings[type].source,
+                           greeting_strings[type].comment);
 }
 //! [36]
+
+
+//! [qttrnnoop]
+static const char * const StatusClass::status_strings[] = {
+    QT_TR_N_NOOP("There are %n new message(s)"),
+    QT_TR_N_NOOP("There are %n total message(s)")
+};
+
+QString StatusClass::status(int type, int count)
+{
+    return tr(status_strings[type], nullptr, count);
+}
+//! [qttrnnoop]
+
+//! [qttranslatennoop]
+static const char * const greeting_strings[] = {
+    QT_TRANSLATE_N_NOOP("Welcome Msg", "Hello, you have %n message(s)"),
+    QT_TRANSLATE_N_NOOP("Welcome Msg", "Hi, you have %n message(s)")
+};
+
+QString global_greeting(int type, int msgcnt)
+{
+    return translate("Welcome Msg", greeting_strings[type], nullptr, msgcnt);
+}
+//! [qttranslatennoop]
+
+//! [qttranslatennoop3]
+static { const char * const source; const char * const comment; } status_strings[] = {
+    QT_TRANSLATE_N_NOOP3("Message Status", "Hello, you have %n message(s)",
+                         "A login message status"),
+    QT_TRANSLATE_N_NOOP3("Message status", "You have %n new message(s)",
+                         "A new message query status")
+};
+
+QString FriendlyConversation::greeting(int type, int count)
+{
+    return tr(status_strings[type].source,
+              status_strings[type].comment, count);
+}
+
+QString global_greeting(int type, int count)
+{
+    return qApp->translate("Message Status",
+                           status_strings[type].source,
+                           status_strings[type].comment,
+                           count);
+}
+//! [qttranslatennoop3]
 
 
 //! [qttrid]
@@ -424,8 +513,13 @@ void TheClass::addLabels()
 
 
 //! [37]
-qWarning("%s: %s", qPrintable(key), qPrintable(value));
+qWarning("%s: %s", qUtf8Printable(key), qUtf8Printable(value));
 //! [37]
+
+
+//! [qUtf16Printable]
+qWarning("%ls: %ls", qUtf16Printable(key), qUtf16Printable(value));
+//! [qUtf16Printable]
 
 
 //! [38]
@@ -501,7 +595,7 @@ namespace QT_NAMESPACE {
 //! [43]
 class MyClass : public QObject
 {
-    
+
   private:
     Q_DISABLE_COPY(MyClass)
 };
@@ -511,7 +605,7 @@ class MyClass : public QObject
 //! [44]
 class MyClass : public QObject
 {
-    
+
   private:
      MyClass(const MyClass &);
      MyClass &operator=(const MyClass &);
@@ -523,10 +617,10 @@ class MyClass : public QObject
 //! [45]
 
 //! [46]
-	// Instead of comparing with 0.0
-		qFuzzyCompare(0.0,1.0e-200); // This will return false
-	// Compare adding 1 to both values will fix the problem
-		qFuzzyCompare(1 + 0.0, 1 + 1.0e-200); // This will return true
+        // Instead of comparing with 0.0
+                qFuzzyCompare(0.0,1.0e-200); // This will return false
+        // Compare adding 1 to both values will fix the problem
+                qFuzzyCompare(1 + 0.0, 1 + 1.0e-200); // This will return true
 //! [46]
 
 //! [47]
@@ -535,7 +629,7 @@ CApaApplication *myApplicationFactory();
 
 
 //! [49]
-void myMessageHandler(QtMsgType, const QMessageLogContext &, const char *);
+void myMessageHandler(QtMsgType, const QMessageLogContext &, const QString &);
 //! [49]
 
 //! [50]
@@ -551,6 +645,29 @@ struct A : public B {
 //! [51]
 template<> class QTypeInfo<A> : public QTypeInfoMerger<A, B, C, D> {};
 //! [51]
+
+//! [52]
+    struct Foo {
+        void overloadedFunction();
+        void overloadedFunction(int, QString);
+    };
+    ... qOverload<>(&Foo::overloadedFunction)
+    ... qOverload<int, QString>(&Foo::overloadedFunction)
+//! [52]
+
+//! [53]
+    ... QOverload<>::of(&Foo::overloadedFunction)
+    ... QOverload<int, QString>::of(&Foo::overloadedFunction)
+//! [53]
+
+//! [54]
+    struct Foo {
+        void overloadedFunction(int, QString);
+        void overloadedFunction(int, QString) const;
+    };
+    ... qConstOverload<int, QString>(&Foo::overloadedFunction)
+    ... qNonConstOverload<int, QString>(&Foo::overloadedFunction)
+//! [54]
 
 //! [qlikely]
     // the condition inside the "if" will be successful most of the times
@@ -598,3 +715,13 @@ bool readConfiguration(const QFile &file)
            break;
    }
 //! [qunreachable-switch]
+
+//! [qt-version-check]
+#include <QtGlobal>
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+#include <QtWidgets>
+#else
+#include <QtGui>
+#endif
+//! [qt-version-check]

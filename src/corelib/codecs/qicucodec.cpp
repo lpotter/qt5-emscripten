@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,12 +46,16 @@
 #include "qlatincodec_p.h"
 #include "qtsciicodec_p.h"
 #include "qisciicodec_p.h"
+#include "qsimplecodec_p.h"
 #include "private/qcoreglobaldata_p.h"
 #include "qdebug.h"
 
 #include "unicode/ucnv.h"
 
 QT_BEGIN_NAMESPACE
+
+typedef QList<QTextCodec*>::ConstIterator TextCodecListConstIt;
+typedef QList<QByteArray>::ConstIterator ByteArrayListConstIt;
 
 static void qIcuCodecStateFree(QTextCodec::ConverterState *state)
 {
@@ -125,7 +127,7 @@ struct MibToName {
     short index;
 };
 
-static MibToName mibToName[] = {
+static const MibToName mibToName[] = {
     { 3, 0 },
     { 4, 9 },
     { 5, 20 },
@@ -369,6 +371,8 @@ static QTextCodec *loadQtCodec(const char *name)
         return new QUtf32BECodec;
     if (!strcmp(name, "UTF-32LE"))
         return new QUtf32LECodec;
+    if (!strcmp(name, "ISO-8859-16") || !strcmp(name, "latin10") || !strcmp(name, "iso-ir-226"))
+        return new QSimpleTextCodec(13 /* == 8859-16*/);
 #ifndef QT_NO_CODECS
     if (!strcmp(name, "TSCII"))
         return new QTsciiCodec;
@@ -419,6 +423,7 @@ QList<QByteArray> QIcuCodec::availableCodecs()
 QList<int> QIcuCodec::availableMibs()
 {
     QList<int> mibs;
+    mibs.reserve(mibToNameSize + 1);
     for (int i = 0; i < mibToNameSize; ++i)
         mibs += mibToName[i].mib;
 
@@ -453,8 +458,14 @@ QTextCodec *QIcuCodec::codecForNameUnlocked(const char *name)
     // backwards compatibility with Qt 4.x
     if (!qstrcmp(name, "CP949"))
         name = "windows-949";
-    // this one is broken data in ICU 4.4, and can't be resolved even though it's an alias to tis-620
-    if (!qstrcmp(name, "windows-874-2000"))
+    else if (!qstrcmp(name, "Apple Roman"))
+        name = "macintosh";
+    // these are broken data in ICU 4.4, and can't be resolved even though they are aliases to tis-620
+    if (!qstrcmp(name, "windows-874-2000")
+        || !qstrcmp(name, "windows-874")
+        || !qstrcmp(name, "MS874")
+        || !qstrcmp(name, "x-windows-874")
+        || !qstrcmp(name, "ISO 8859-11"))
         name = "TIS-620";
 
     UErrorCode error = U_ZERO_ERROR;
@@ -489,20 +500,21 @@ QTextCodec *QIcuCodec::codecForNameUnlocked(const char *name)
             return codec;
     }
 
-    for (int i = 0; i < globalData->allCodecs.size(); ++i) {
-        QTextCodec *cursor = globalData->allCodecs.at(i);
+    for (TextCodecListConstIt it = globalData->allCodecs.constBegin(), cend = globalData->allCodecs.constEnd(); it != cend; ++it) {
+        QTextCodec *cursor = *it;
         if (qTextCodecNameMatch(cursor->name(), standardName)) {
             if (cache)
                 cache->insert(standardName, cursor);
             return cursor;
         }
         QList<QByteArray> aliases = cursor->aliases();
-        for (int y = 0; y < aliases.size(); ++y)
-            if (qTextCodecNameMatch(aliases.at(y), standardName)) {
+        for (ByteArrayListConstIt ait = aliases.constBegin(), acend = aliases.constEnd(); ait != acend; ++ait) {
+            if (qTextCodecNameMatch(*ait, standardName)) {
                 if (cache)
                     cache->insert(standardName, cursor);
                 return cursor;
             }
+        }
     }
 
     QTextCodec *c = loadQtCodec(standardName);
@@ -515,7 +527,7 @@ QTextCodec *QIcuCodec::codecForNameUnlocked(const char *name)
     // check whether there is really a converter for the name available.
     UConverter *conv = ucnv_open(standardName, &error);
     if (!conv) {
-        qDebug() << "codecForName: ucnv_open failed" << standardName << u_errorName(error);
+        qDebug("codecForName: ucnv_open failed %s %s", standardName, u_errorName(error));
         return 0;
     }
     //qDebug() << "QIcuCodec: Standard name for " << name << "is" << standardName;
@@ -565,7 +577,7 @@ UConverter *QIcuCodec::getConverter(QTextCodec::ConverterState *state) const
             ucnv_setSubstChars(static_cast<UConverter *>(state->d),
                                state->flags & QTextCodec::ConvertInvalidToNull ? "\0" : "?", 1, &error);
             if (U_FAILURE(error))
-                qDebug() << "getConverter(state) ucnv_open failed" << m_name << u_errorName(error);
+                qDebug("getConverter(state) ucnv_open failed %s %s", m_name, u_errorName(error));
         }
         conv = static_cast<UConverter *>(state->d);
     }
@@ -575,7 +587,7 @@ UConverter *QIcuCodec::getConverter(QTextCodec::ConverterState *state) const
         conv = ucnv_open(m_name, &error);
         ucnv_setSubstChars(conv, "?", 1, &error);
         if (U_FAILURE(error))
-            qDebug() << "getConverter(no state) ucnv_open failed" << m_name << u_errorName(error);
+            qDebug("getConverter(no state) ucnv_open failed %s %s", m_name, u_errorName(error));
     }
     return conv;
 }
@@ -598,7 +610,7 @@ QString QIcuCodec::convertToUnicode(const char *chars, int length, QTextCodec::C
                        &chars, end,
                        0, false, &error);
         if (!U_SUCCESS(error) && error != U_BUFFER_OVERFLOW_ERROR) {
-            qDebug() << "convertToUnicode failed:" << u_errorName(error);
+            qDebug("convertToUnicode failed: %s", u_errorName(error));
             break;
         }
 
@@ -635,7 +647,7 @@ QByteArray QIcuCodec::convertFromUnicode(const QChar *unicode, int length, QText
                          &uc, end,
                          0, false, &error);
         if (!U_SUCCESS(error))
-            qDebug() << "convertFromUnicode failed:" << u_errorName(error);
+            qDebug("convertFromUnicode failed: %s", u_errorName(error));
         convertedChars = ch - string.data();
         if (uc >= end)
             break;

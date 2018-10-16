@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,30 +41,55 @@
 #define QPOINTER_H
 
 #include <QtCore/qsharedpointer.h>
+#include <QtCore/qtypeinfo.h>
 
 #ifndef QT_NO_QOBJECT
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
 class QVariant;
 
-class QPointerBase
+template <class T>
+class QPointer
 {
-    QWeakPointer<QObject> wp;
+    Q_STATIC_ASSERT_X(!std::is_pointer<T>::value, "QPointer's template type must not be a pointer type");
 
-protected:
-    inline QPointerBase() : wp() { }
-    inline QPointerBase(QObject *p) : wp(p, true) { }
-    // compiler-generated copy/move ctor/assignment operators are fine! (even though public)
-    inline ~QPointerBase() { }
+    template<typename U>
+    struct TypeSelector
+    {
+        typedef QObject Type;
+    };
+    template<typename U>
+    struct TypeSelector<const U>
+    {
+        typedef const QObject Type;
+    };
+    typedef typename TypeSelector<T>::Type QObjectType;
+    QWeakPointer<QObjectType> wp;
+public:
+    inline QPointer() { }
+    inline QPointer(T *p) : wp(p, true) { }
+    // compiler-generated copy/move ctor/assignment operators are fine!
+    // compiler-generated dtor is fine!
 
-    inline QObject* data() const
-    { return wp.data(); }
+#ifdef Q_QDOC
+    // Stop qdoc from complaining about missing function
+    ~QPointer();
+#endif
 
-    inline void assign(QObject *p)
-    { wp.assign(p); }
+    inline void swap(QPointer &other) { wp.swap(other.wp); }
+
+    inline QPointer<T> &operator=(T* p)
+    { wp.assign(static_cast<QObjectType*>(p)); return *this; }
+
+    inline T* data() const
+    { return static_cast<T*>( wp.data()); }
+    inline T* operator->() const
+    { return data(); }
+    inline T& operator*() const
+    { return *data(); }
+    inline operator T*() const
+    { return data(); }
 
     inline bool isNull() const
     { return wp.isNull(); }
@@ -74,38 +97,7 @@ protected:
     inline void clear()
     { wp.clear(); }
 };
-
-template <class T>
-class QPointer : private QPointerBase
-{
-public:
-    inline QPointer() { }
-    inline QPointer(T *p) : QPointerBase(p) { }
-    // compiler-generated copy/move ctor/assignment operators are fine!
-    inline ~QPointer() { }
-
-    inline QPointer<T> &operator=(T* p)
-    { QPointerBase::assign(p); return *this; }
-
-    inline T* data() const
-    { return static_cast<T*>(QPointerBase::data()); }
-    inline T* operator->() const
-    { return data(); }
-    inline T& operator*() const
-    { return *data(); }
-    inline operator T*() const
-    { return data(); }
-#ifdef qdoc
-    inline bool isNull() const;
-    inline void clear();
-#else
-    using QPointerBase::isNull;
-    using QPointerBase::clear;
-#endif
-};
 template <class T> Q_DECLARE_TYPEINFO_BODY(QPointer<T>, Q_MOVABLE_TYPE);
-
-#if (!defined(Q_CC_SUN) || (__SUNPRO_CC >= 0x580)) // ambiguity between const T * and T *
 
 template <class T>
 inline bool operator==(const T *o, const QPointer<T> &p)
@@ -114,18 +106,6 @@ inline bool operator==(const T *o, const QPointer<T> &p)
 template<class T>
 inline bool operator==(const QPointer<T> &p, const T *o)
 { return p.operator->() == o; }
-
-#else
-
-template<class T>
-inline bool operator==(const void *o, const QPointer<T> &p)
-{ return o == p.operator->(); }
-
-template<class T>
-inline bool operator==(const QPointer<T> &p, const void *o)
-{ return p.operator->() == o; }
-
-#endif
 
 template <class T>
 inline bool operator==(T *o, const QPointer<T> &p)
@@ -139,9 +119,6 @@ template<class T>
 inline bool operator==(const QPointer<T> &p1, const QPointer<T> &p2)
 { return p1.operator->() == p2.operator->(); }
 
-
-#if (!defined(Q_CC_SUN) || (__SUNPRO_CC >= 0x580)) // ambiguity between const T * and T *
-
 template <class T>
 inline bool operator!=(const T *o, const QPointer<T> &p)
 { return o != p.operator->(); }
@@ -149,18 +126,6 @@ inline bool operator!=(const T *o, const QPointer<T> &p)
 template<class T>
 inline bool operator!= (const QPointer<T> &p, const T *o)
 { return p.operator->() != o; }
-
-#else
-
-template<class T>
-inline bool operator!= (const void *o, const QPointer<T> &p)
-{ return o != p.operator->(); }
-
-template<class T>
-inline bool operator!= (const QPointer<T> &p, const void *o)
-{ return p.operator->() != o; }
-
-#endif
 
 template <class T>
 inline bool operator!=(T *o, const QPointer<T> &p)
@@ -174,17 +139,6 @@ template<class T>
 inline bool operator!= (const QPointer<T> &p1, const QPointer<T> &p2)
 { return p1.operator->() != p2.operator->() ; }
 
-// Make MSVC < 1400 (2005) handle "if (NULL == p)" syntax
-#if defined(Q_CC_MSVC) && (_MSC_VER < 1400)
-template<class T>
-inline bool operator== (int i, const QPointer<T> &p)
-{ Q_ASSERT(i == 0); return !i && p.isNull(); }
-
-template<class T>
-inline bool operator!= (int i, const QPointer<T> &p)
-{ Q_ASSERT(i == 0); return !i && !p.isNull(); }
-#endif
-
 template<typename T>
 QPointer<T>
 qPointerFromVariant(const QVariant &variant)
@@ -193,8 +147,6 @@ qPointerFromVariant(const QVariant &variant)
 }
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QT_NO_QOBJECT
 

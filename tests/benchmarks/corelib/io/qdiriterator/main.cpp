@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +28,7 @@
 #include <QDebug>
 #include <QDirIterator>
 #include <QString>
+#include <qplatformdefs.h>
 
 #ifdef Q_OS_WIN
 #   include <qt_windows.h>
@@ -72,10 +60,6 @@ private slots:
 
 void tst_qdiriterator::data()
 {
-#if defined(Q_OS_WINCE)
-    QByteArray qtdir = qPrintable(QCoreApplication::applicationDirPath());
-    qtdir += "/depot";
-#else
 #if defined(Q_OS_WIN)
     const char *qtdir = "C:\\depot\\qt\\main";
 #else
@@ -85,7 +69,6 @@ void tst_qdiriterator::data()
         fprintf(stderr, "QTDIR not set\n");
         exit(1);
     }
-#endif
 
     QTest::addColumn<QByteArray>("dirpath");
     QByteArray ba = QByteArray(qtdir) + "/src/corelib";
@@ -106,7 +89,12 @@ static int posix_helper(const wchar_t *dirpath)
     wchar_t appendedPath[MAX_PATH];
     wcscpy(appendedPath, dirpath);
     wcscat(appendedPath, L"\\*");
+#ifndef Q_OS_WINRT
     hSearch = FindFirstFile(appendedPath, &fd);
+#else
+    hSearch = FindFirstFileEx(appendedPath, FindExInfoStandard, &fd,
+                              FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
+#endif
     appendedPath[origDirPathLength] = 0;
 
     if (hSearch == INVALID_HANDLE_VALUE) {
@@ -155,8 +143,8 @@ static int posix_helper(const char *dirpath)
         QByteArray ba = dirpath;
         ba += '/';
         ba += entry->d_name;
-        struct stat st;
-        lstat(ba.constData(), &st);
+        QT_STATBUF st;
+        QT_LSTAT(ba.constData(), &st);
         if (S_ISDIR(st.st_mode))
             count += posix_helper(ba.constData());
     }
@@ -226,12 +214,12 @@ void tst_qdiriterator::fsiterator()
         int c = 0;
 
         dump && printf("\n\n\n\n");
-        QFileSystemIterator dir(dirpath,
+        QDirIteratorTest::QFileSystemIterator dir(dirpath,
             //QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot,
             //QDir::AllEntries | QDir::Hidden,
             //QDir::Files | QDir::NoDotAndDotDot,
             QDir::Files,
-            QFileSystemIterator::Subdirectories);
+            QDirIteratorTest::QFileSystemIterator::Subdirectories);
 
         for (; !dir.atEnd(); dir.next()) {
             dump && printf("%d %s\n",

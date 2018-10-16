@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -79,31 +89,31 @@ void ClassWizard::accept()
 
     if (field("comment").toBool()) {
         block += "/*\n";
-        block += "    " + header.toLatin1() + "\n";
+        block += "    " + header.toLatin1() + '\n';
         block += "*/\n";
-        block += "\n";
+        block += '\n';
     }
     if (field("protect").toBool()) {
-        block += "#ifndef " + macroName + "\n";
-        block += "#define " + macroName + "\n";
-        block += "\n";
+        block += "#ifndef " + macroName + '\n';
+        block += "#define " + macroName + '\n';
+        block += '\n';
     }
     if (field("includeBase").toBool()) {
-        block += "#include " + baseInclude + "\n";
-        block += "\n";
+        block += "#include " + baseInclude + '\n';
+        block += '\n';
     }
 
     block += "class " + className;
     if (!baseClass.isEmpty())
         block += " : public " + baseClass;
-    block += "\n";
+    block += '\n';
     block += "{\n";
 
     /* qmake ignore Q_OBJECT */
 
     if (field("qobjectMacro").toBool()) {
         block += "    Q_OBJECT\n";
-        block += "\n";
+        block += '\n';
     }
     block += "public:\n";
 
@@ -115,7 +125,7 @@ void ClassWizard::accept()
         block += "    " + className + "();\n";
         if (field("copyCtor").toBool()) {
             block += "    " + className + "(const " + className + " &other);\n";
-            block += "\n";
+            block += '\n';
             block += "    " + className + " &operator=" + "(const " + className
                      + " &other);\n";
         }
@@ -123,11 +133,11 @@ void ClassWizard::accept()
     block += "};\n";
 
     if (field("protect").toBool()) {
-        block += "\n";
+        block += '\n';
         block += "#endif\n";
     }
 
-    QFile headerFile(outputDir + "/" + header);
+    QFile headerFile(outputDir + '/' + header);
     if (!headerFile.open(QFile::WriteOnly | QFile::Text)) {
         QMessageBox::warning(0, QObject::tr("Simple Wizard"),
                              QObject::tr("Cannot write file %1:\n%2")
@@ -141,12 +151,12 @@ void ClassWizard::accept()
 
     if (field("comment").toBool()) {
         block += "/*\n";
-        block += "    " + implementation.toLatin1() + "\n";
+        block += "    " + implementation.toLatin1() + '\n';
         block += "*/\n";
-        block += "\n";
+        block += '\n';
     }
     block += "#include \"" + header.toLatin1() + "\"\n";
-    block += "\n";
+    block += '\n';
 
     if (field("qobjectCtor").toBool()) {
         block += className + "::" + className + "(QObject *parent)\n";
@@ -171,7 +181,7 @@ void ClassWizard::accept()
             block += "{\n";
             block += "    *this = other;\n";
             block += "}\n";
-            block += "\n";
+            block += '\n';
             block += className + " &" + className + "::operator=(const "
                      + className + " &other)\n";
             block += "{\n";
@@ -183,7 +193,7 @@ void ClassWizard::accept()
         }
     }
 
-    QFile implementationFile(outputDir + "/" + implementation);
+    QFile implementationFile(outputDir + '/' + implementation);
     if (!implementationFile.open(QFile::WriteOnly | QFile::Text)) {
         QMessageBox::warning(0, QObject::tr("Simple Wizard"),
                              QObject::tr("Cannot write file %1:\n%2")
@@ -252,8 +262,8 @@ ClassInfoPage::ClassInfoPage(QWidget *parent)
 
     defaultCtorRadioButton->setChecked(true);
 
-    connect(defaultCtorRadioButton, SIGNAL(toggled(bool)),
-            copyCtorCheckBox, SLOT(setEnabled(bool)));
+    connect(defaultCtorRadioButton, &QAbstractButton::toggled,
+            copyCtorCheckBox, &QWidget::setEnabled);
 
 //! [11] //! [12]
     registerField("className*", classNameLineEdit);
@@ -311,14 +321,14 @@ CodeStylePage::CodeStylePage(QWidget *parent)
     baseIncludeLineEdit = new QLineEdit;
     baseIncludeLabel->setBuddy(baseIncludeLineEdit);
 
-    connect(protectCheckBox, SIGNAL(toggled(bool)),
-            macroNameLabel, SLOT(setEnabled(bool)));
-    connect(protectCheckBox, SIGNAL(toggled(bool)),
-            macroNameLineEdit, SLOT(setEnabled(bool)));
-    connect(includeBaseCheckBox, SIGNAL(toggled(bool)),
-            baseIncludeLabel, SLOT(setEnabled(bool)));
-    connect(includeBaseCheckBox, SIGNAL(toggled(bool)),
-            baseIncludeLineEdit, SLOT(setEnabled(bool)));
+    connect(protectCheckBox, &QAbstractButton::toggled,
+            macroNameLabel, &QWidget::setEnabled);
+    connect(protectCheckBox, &QAbstractButton::toggled,
+            macroNameLineEdit, &QWidget::setEnabled);
+    connect(includeBaseCheckBox, &QAbstractButton::toggled,
+            baseIncludeLabel, &QWidget::setEnabled);
+    connect(includeBaseCheckBox, &QAbstractButton::toggled,
+            baseIncludeLineEdit, &QWidget::setEnabled);
 
     registerField("comment", commentCheckBox);
     registerField("protect", protectCheckBox);
@@ -353,12 +363,13 @@ void CodeStylePage::initializePage()
     baseIncludeLabel->setEnabled(!baseClass.isEmpty());
     baseIncludeLineEdit->setEnabled(!baseClass.isEmpty());
 
+    QRegularExpression rx("Q[A-Z].*");
     if (baseClass.isEmpty()) {
         baseIncludeLineEdit->clear();
-    } else if (QRegExp("Q[A-Z].*").exactMatch(baseClass)) {
-        baseIncludeLineEdit->setText("<" + baseClass + ">");
+    } else if (rx.match(baseClass).hasMatch()) {
+        baseIncludeLineEdit->setText('<' + baseClass + '>');
     } else {
-        baseIncludeLineEdit->setText("\"" + baseClass.toLower() + ".h\"");
+        baseIncludeLineEdit->setText('"' + baseClass.toLower() + ".h\"");
     }
 }
 //! [16]

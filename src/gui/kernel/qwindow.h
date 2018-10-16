@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QWINDOW_H
 #define QWINDOW_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/QObject>
 #include <QtCore/QEvent>
 #include <QtCore/QMargins>
@@ -59,8 +58,6 @@
 #include <QtGui/qcursor.h>
 #endif
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -74,11 +71,11 @@ class QShowEvent;
 class QHideEvent;
 class QKeyEvent;
 class QMouseEvent;
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
 class QWheelEvent;
 #endif
 class QTouchEvent;
-#ifndef QT_NO_TABLETEVENT
+#if QT_CONFIG(tabletevent)
 class QTabletEvent;
 #endif
 
@@ -87,6 +84,13 @@ class QPlatformWindow;
 class QBackingStore;
 class QScreen;
 class QAccessibleInterface;
+class QWindowContainer;
+#ifndef QT_NO_DEBUG_STREAM
+class QDebug;
+#endif
+#if QT_CONFIG(vulkan) || defined(Q_CLANG_QDOC)
+class QVulkanInstance;
+#endif
 
 class Q_GUI_EXPORT QWindow : public QObject, public QSurface
 {
@@ -99,7 +103,11 @@ class Q_GUI_EXPORT QWindow : public QObject, public QSurface
     // For example "state" (meaning windowState) is not a good property to declare, because it has
     // a different meaning in QQuickItem, and users will tend to assume it is the same for Window.
 
-    Q_PROPERTY(QString title READ title WRITE setTitle)
+    // Any new properties which you add here MUST be versioned and MUST be documented both as
+    // C++ properties in qwindow.cpp AND as QML properties in qquickwindow.cpp.
+    // http://qt-project.org/doc/qt-5.0/qtqml/qtqml-cppintegration-definetypes.html#type-revisions-and-versions
+
+    Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY windowTitleChanged)
     Q_PROPERTY(Qt::WindowModality modality READ modality WRITE setModality NOTIFY modalityChanged)
     Q_PROPERTY(Qt::WindowFlags flags READ flags WRITE setFlags)
     Q_PROPERTY(int x READ x WRITE setX NOTIFY xChanged)
@@ -111,53 +119,46 @@ class Q_GUI_EXPORT QWindow : public QObject, public QSurface
     Q_PROPERTY(int maximumWidth READ maximumWidth WRITE setMaximumWidth NOTIFY maximumWidthChanged)
     Q_PROPERTY(int maximumHeight READ maximumHeight WRITE setMaximumHeight NOTIFY maximumHeightChanged)
     Q_PROPERTY(bool visible READ isVisible WRITE setVisible NOTIFY visibleChanged)
+    Q_PROPERTY(bool active READ isActive NOTIFY activeChanged REVISION 1)
+    Q_PROPERTY(Visibility visibility READ visibility WRITE setVisibility NOTIFY visibilityChanged REVISION 1)
     Q_PROPERTY(Qt::ScreenOrientation contentOrientation READ contentOrientation WRITE reportContentOrientationChange NOTIFY contentOrientationChanged)
-
-    // ------------------------------------------------------------------------
-    // Temporary backwards-compatibility properties to be removed ASAP
-    Q_PROPERTY(QString windowTitle READ windowTitle WRITE setWindowTitle)
-    Q_PROPERTY(QString windowFilePath READ windowFilePath WRITE setWindowFilePath)
-    Q_PROPERTY(QIcon windowIcon READ windowIcon WRITE setWindowIcon)
-    Q_PROPERTY(Qt::WindowModality windowModality READ windowModality WRITE setWindowModality NOTIFY windowModalityChanged)
+    Q_PROPERTY(qreal opacity READ opacity WRITE setOpacity NOTIFY opacityChanged REVISION 1)
 
 public:
+    enum Visibility {
+        Hidden = 0,
+        AutomaticVisibility,
+        Windowed,
+        Minimized,
+        Maximized,
+        FullScreen
+    };
+    Q_ENUM(Visibility)
 
-    Qt::WindowModality windowModality() const { return modality(); }
-    void setWindowModality(Qt::WindowModality wm) { setModality(wm); }
-    void setWindowFlags(Qt::WindowFlags f) { setFlags(f); }
-    Qt::WindowFlags windowFlags() const { return flags(); }
-    Qt::WindowType windowType() const { return type(); }
-    QString windowTitle() const { return title(); }
-    void requestActivateWindow() { requestActivate(); }
-    bool requestWindowOrientation(Qt::ScreenOrientation o) { return requestOrientation(o); }
-    Qt::ScreenOrientation windowOrientation() const { return orientation(); }
-    void setWindowFilePath(const QString &fp) { setFilePath(fp); }
-    QString windowFilePath() const { return filePath(); }
-    void setWindowIcon(const QIcon &i) { setIcon(i); }
-    QIcon windowIcon() const { return icon(); }
-    void setWindowTitle(const QString &t) { setTitle(t); }
+    enum AncestorMode {
+        ExcludeTransients,
+        IncludeTransients
+    };
+    Q_ENUM(AncestorMode)
 
-Q_SIGNALS:
-    void windowModalityChanged(Qt::WindowModality windowModality);
-    // End of temporary backwards-compatibility properties
-    // ------------------------------------------------------------------------
-
-public:
-
-    explicit QWindow(QScreen *screen = 0);
+    explicit QWindow(QScreen *screen = nullptr);
     explicit QWindow(QWindow *parent);
     virtual ~QWindow();
 
     void setSurfaceType(SurfaceType surfaceType);
-    SurfaceType surfaceType() const;
+    SurfaceType surfaceType() const override;
 
     bool isVisible() const;
+
+    Visibility visibility() const;
+    void setVisibility(Visibility v);
 
     void create();
 
     WId winId() const;
 
-    QWindow *parent() const;
+    QWindow *parent(AncestorMode mode) const;
+    QWindow *parent() const; // ### Qt6: Merge with above
     void setParent(QWindow *parent);
 
     bool isTopLevel() const;
@@ -167,17 +168,21 @@ public:
     void setModality(Qt::WindowModality modality);
 
     void setFormat(const QSurfaceFormat &format);
-    QSurfaceFormat format() const;
+    QSurfaceFormat format() const override;
     QSurfaceFormat requestedFormat() const;
 
     void setFlags(Qt::WindowFlags flags);
     Qt::WindowFlags flags() const;
+    void setFlag(Qt::WindowType, bool on = true);
     Qt::WindowType type() const;
 
     QString title() const;
 
     void setOpacity(qreal level);
-    void requestActivate();
+    qreal opacity() const;
+
+    void setMask(const QRegion &region);
+    QRegion mask() const;
 
     bool isActive() const;
 
@@ -186,28 +191,22 @@ public:
 
     qreal devicePixelRatio() const;
 
-    bool requestOrientation(Qt::ScreenOrientation orientation);
-    Qt::ScreenOrientation orientation() const;
-
     Qt::WindowState windowState() const;
+    Qt::WindowStates windowStates() const;
     void setWindowState(Qt::WindowState state);
+    void setWindowStates(Qt::WindowStates states);
 
     void setTransientParent(QWindow *parent);
     QWindow *transientParent() const;
-
-    enum AncestorMode {
-        ExcludeTransients,
-        IncludeTransients
-    };
 
     bool isAncestorOf(const QWindow *child, AncestorMode mode = IncludeTransients) const;
 
     bool isExposed() const;
 
-    int minimumWidth() const { return minimumSize().width(); }
-    int minimumHeight() const { return minimumSize().height(); }
-    int maximumWidth() const { return maximumSize().width(); }
-    int maximumHeight() const { return maximumSize().height(); }
+    inline int minimumWidth() const { return minimumSize().width(); }
+    inline int minimumHeight() const { return minimumSize().height(); }
+    inline int maximumWidth() const { return maximumSize().width(); }
+    inline int maximumHeight() const { return maximumSize().height(); }
 
     QSize minimumSize() const;
     QSize maximumSize() const;
@@ -219,8 +218,6 @@ public:
     void setBaseSize(const QSize &size);
     void setSizeIncrement(const QSize &size);
 
-    void setGeometry(int posx, int posy, int w, int h) { setGeometry(QRect(posx, posy, w, h)); }
-    void setGeometry(const QRect &rect);
     QRect geometry() const;
 
     QMargins frameMargins() const;
@@ -234,21 +231,14 @@ public:
     inline int x() const { return geometry().x(); }
     inline int y() const { return geometry().y(); }
 
-    inline QSize size() const { return geometry().size(); }
+    QSize size() const override { return geometry().size(); }
     inline QPoint position() const { return geometry().topLeft(); }
 
-    inline void setPosition(const QPoint &pt) { setGeometry(QRect(pt, size())); }
-    inline void setPosition(int posx, int posy) { setPosition(QPoint(posx, posy)); }
-
-// Temporary backwards-compatible accessors for the benefit of Declarative
-// to be removed ASAP
-    inline void setFramePos(const QPoint &pt) { setFramePosition(pt); }
-    inline void setPos(const QPoint &pt) { setPosition(pt); }
-    inline void setPos(int posx, int posy) { setPosition(posx, posy); }
-// end of temporary accessors
+    void setPosition(const QPoint &pt);
+    void setPosition(int posx, int posy);
 
     void resize(const QSize &newSize);
-    inline void resize(int w, int h) { resize(QSize(w, h)); }
+    void resize(int w, int h);
 
     void setFilePath(const QString &filePath);
     QString filePath() const;
@@ -278,7 +268,16 @@ public:
     void unsetCursor();
 #endif
 
+    static QWindow *fromWinId(WId id);
+
+#if QT_CONFIG(vulkan) || defined(Q_CLANG_QDOC)
+    void setVulkanInstance(QVulkanInstance *instance);
+    QVulkanInstance *vulkanInstance() const;
+#endif
+
 public Q_SLOTS:
+    Q_REVISION(1) void requestActivate();
+
     void setVisible(bool visible);
 
     void show();
@@ -295,39 +294,27 @@ public Q_SLOTS:
 
     void setTitle(const QString &);
 
-    void setX(int arg)
-    {
-        if (x() != arg)
-            setGeometry(QRect(arg, y(), width(), height()));
-    }
-
-    void setY(int arg)
-    {
-        if (y() != arg)
-            setGeometry(QRect(x(), arg, width(), height()));
-    }
-
-    void setWidth(int arg)
-    {
-        if (width() != arg)
-            setGeometry(QRect(x(), y(), arg, height()));
-    }
-
-    void setHeight(int arg)
-    {
-        if (height() != arg)
-            setGeometry(QRect(x(), y(), width(), arg));
-    }
+    void setX(int arg);
+    void setY(int arg);
+    void setWidth(int arg);
+    void setHeight(int arg);
+    void setGeometry(int posx, int posy, int w, int h);
+    void setGeometry(const QRect &rect);
 
     void setMinimumWidth(int w);
     void setMinimumHeight(int h);
     void setMaximumWidth(int w);
     void setMaximumHeight(int h);
 
+    Q_REVISION(1) void alert(int msec);
+
+    Q_REVISION(3) void requestUpdate();
+
 Q_SIGNALS:
     void screenChanged(QScreen *screen);
     void modalityChanged(Qt::WindowModality modality);
     void windowStateChanged(Qt::WindowState windowState);
+    Q_REVISION(2) void windowTitleChanged(const QString &title);
 
     void xChanged(int arg);
     void yChanged(int arg);
@@ -341,12 +328,13 @@ Q_SIGNALS:
     void maximumHeightChanged(int arg);
 
     void visibleChanged(bool arg);
+    Q_REVISION(1) void visibilityChanged(QWindow::Visibility visibility);
+    Q_REVISION(1) void activeChanged();
     void contentOrientationChanged(Qt::ScreenOrientation orientation);
 
     void focusObjectChanged(QObject *object);
 
-private Q_SLOTS:
-    void screenDestroyed(QObject *screen);
+    Q_REVISION(1) void opacityChanged(qreal opacity);
 
 protected:
     virtual void exposeEvent(QExposeEvent *);
@@ -357,19 +345,20 @@ protected:
 
     virtual void showEvent(QShowEvent *);
     virtual void hideEvent(QHideEvent *);
+    // TODO Qt 6 - add closeEvent virtual handler
 
-    virtual bool event(QEvent *);
+    virtual bool event(QEvent *) override;
     virtual void keyPressEvent(QKeyEvent *);
     virtual void keyReleaseEvent(QKeyEvent *);
     virtual void mousePressEvent(QMouseEvent *);
     virtual void mouseReleaseEvent(QMouseEvent *);
     virtual void mouseDoubleClickEvent(QMouseEvent *);
     virtual void mouseMoveEvent(QMouseEvent *);
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
     virtual void wheelEvent(QWheelEvent *);
 #endif
     virtual void touchEvent(QTouchEvent *);
-#ifndef QT_NO_TABLETEVENT
+#if QT_CONFIG(tabletevent)
     virtual void tabletEvent(QTabletEvent *);
 #endif
     virtual bool nativeEvent(const QByteArray &eventType, void *message, long *result);
@@ -377,17 +366,35 @@ protected:
     QWindow(QWindowPrivate &dd, QWindow *parent);
 
 private:
-    QPlatformSurface *surfaceHandle() const;
+    Q_PRIVATE_SLOT(d_func(), void _q_clearAlert())
+    QPlatformSurface *surfaceHandle() const override;
 
     Q_DISABLE_COPY(QWindow)
 
     friend class QGuiApplication;
     friend class QGuiApplicationPrivate;
+    friend class QWindowContainer;
     friend Q_GUI_EXPORT QWindowPrivate *qt_window_private(QWindow *window);
 };
 
-QT_END_NAMESPACE
+#ifndef Q_QDOC
+// should these be seen by clang-qdoc?
+template <> inline QWindow *qobject_cast<QWindow*>(QObject *o)
+{
+    if (!o || !o->isWindowType()) return nullptr;
+    return static_cast<QWindow*>(o);
+}
+template <> inline const QWindow *qobject_cast<const QWindow*>(const QObject *o)
+{
+    if (!o || !o->isWindowType()) return nullptr;
+    return static_cast<const QWindow*>(o);
+}
+#endif // !Q_QDOC
 
-QT_END_HEADER
+#ifndef QT_NO_DEBUG_STREAM
+Q_GUI_EXPORT QDebug operator<<(QDebug, const QWindow *);
+#endif
+
+QT_END_NAMESPACE
 
 #endif // QWINDOW_H

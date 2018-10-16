@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,7 +50,7 @@
     animations in parallel. The animation group finishes when the
     longest lasting animation has finished.
 
-    You can treat QParallelAnimation as any other QAbstractAnimation,
+    You can treat QParallelAnimationGroup as any other QAbstractAnimation,
     e.g., pause, resume, or add it to other animation groups.
 
     \code
@@ -77,6 +75,10 @@
 #ifndef QT_NO_ANIMATION
 
 QT_BEGIN_NAMESPACE
+
+typedef QList<QAbstractAnimation *>::ConstIterator AnimationListConstIt;
+typedef QHash<QAbstractAnimation*, int>::Iterator AnimationTimeHashIt;
+typedef QHash<QAbstractAnimation*, int>::ConstIterator AnimationTimeHashConstIt;
 
 /*!
     Constructs a QParallelAnimationGroup.
@@ -111,9 +113,8 @@ int QParallelAnimationGroup::duration() const
     Q_D(const QParallelAnimationGroup);
     int ret = 0;
 
-    for (int i = 0; i < d->animations.size(); ++i) {
-        QAbstractAnimation *animation = d->animations.at(i);
-        const int currentDuration = animation->totalDuration();
+    for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+        const int currentDuration = (*it)->totalDuration();
         if (currentDuration == -1)
             return -1; // Undetermined length
 
@@ -136,16 +137,16 @@ void QParallelAnimationGroup::updateCurrentTime(int currentTime)
         // simulate completion of the loop
         int dura = duration();
         if (dura > 0) {
-            for (int i = 0; i < d->animations.size(); ++i) {
-                QAbstractAnimation *animation = d->animations.at(i);
+            for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+                QAbstractAnimation *animation = (*it);
                 if (animation->state() != QAbstractAnimation::Stopped)
-                    d->animations.at(i)->setCurrentTime(dura);   // will stop
+                    animation->setCurrentTime(dura);   // will stop
             }
         }
     } else if (d->currentLoop < d->lastLoop) {
         // simulate completion of the loop seeking backwards
-        for (int i = 0; i < d->animations.size(); ++i) {
-            QAbstractAnimation *animation = d->animations.at(i);
+        for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+            QAbstractAnimation *animation = *it;
             //we need to make sure the animation is in the right state
             //and then rewind it
             d->applyGroupState(animation);
@@ -159,8 +160,8 @@ void QParallelAnimationGroup::updateCurrentTime(int currentTime)
         __LINE__, d->currentTime, d->currentLoop, d->lastLoop, timeFwd, d->lastCurrentTime, state());
 #endif
     // finally move into the actual time of the current loop
-    for (int i = 0; i < d->animations.size(); ++i) {
-        QAbstractAnimation *animation = d->animations.at(i);
+    for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+        QAbstractAnimation *animation = *it;
         const int dura = animation->totalDuration();
         //if the loopcount is bigger we should always start all animations
         if (d->currentLoop > d->lastLoop
@@ -191,19 +192,20 @@ void QParallelAnimationGroup::updateState(QAbstractAnimation::State newState,
 
     switch (newState) {
     case Stopped:
-        for (int i = 0; i < d->animations.size(); ++i)
-            d->animations.at(i)->stop();
+        for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it)
+            (*it)->stop();
         d->disconnectUncontrolledAnimations();
         break;
     case Paused:
-        for (int i = 0; i < d->animations.size(); ++i)
-            if (d->animations.at(i)->state() == Running)
-                d->animations.at(i)->pause();
+        for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+            if ((*it)->state() == Running)
+                (*it)->pause();
+        }
         break;
     case Running:
         d->connectUncontrolledAnimations();
-        for (int i = 0; i < d->animations.size(); ++i) {
-            QAbstractAnimation *animation = d->animations.at(i);
+        for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it) {
+            QAbstractAnimation *animation = *it;
             if (oldState == Stopped)
                 animation->stop();
             animation->setDirection(d->direction);
@@ -223,14 +225,12 @@ void QParallelAnimationGroupPrivate::_q_uncontrolledAnimationFinished()
 
     int uncontrolledRunningCount = 0;
     if (animation->duration() == -1 || animation->loopCount() < 0) {
-        QHash<QAbstractAnimation *, int>::iterator it = uncontrolledFinishTime.begin();
-        while (it != uncontrolledFinishTime.end()) {
+        for (AnimationTimeHashIt it = uncontrolledFinishTime.begin(), cend = uncontrolledFinishTime.end(); it != cend; ++it) {
             if (it.key() == animation) {
                 *it = animation->currentTime();
             }
             if (it.value() == -1)
                 ++uncontrolledRunningCount;
-            ++it;
         }
     }
 
@@ -238,8 +238,8 @@ void QParallelAnimationGroupPrivate::_q_uncontrolledAnimationFinished()
         return;
 
     int maxDuration = 0;
-    for (int i = 0; i < animations.size(); ++i)
-        maxDuration = qMax(maxDuration, animations.at(i)->totalDuration());
+    for (AnimationListConstIt it = animations.constBegin(), cend = animations.constEnd(); it != cend; ++it)
+        maxDuration = qMax(maxDuration, (*it)->totalDuration());
 
     if (currentTime >= maxDuration)
         q->stop();
@@ -247,19 +247,16 @@ void QParallelAnimationGroupPrivate::_q_uncontrolledAnimationFinished()
 
 void QParallelAnimationGroupPrivate::disconnectUncontrolledAnimations()
 {
-    QHash<QAbstractAnimation *, int>::iterator it = uncontrolledFinishTime.begin();
-    while (it != uncontrolledFinishTime.end()) {
+    for (AnimationTimeHashConstIt it = uncontrolledFinishTime.constBegin(), cend = uncontrolledFinishTime.constEnd(); it != cend; ++it)
         disconnectUncontrolledAnimation(it.key());
-        ++it;
-    }
 
     uncontrolledFinishTime.clear();
 }
 
 void QParallelAnimationGroupPrivate::connectUncontrolledAnimations()
 {
-    for (int i = 0; i < animations.size(); ++i) {
-        QAbstractAnimation *animation = animations.at(i);
+    for (AnimationListConstIt it = animations.constBegin(), cend = animations.constEnd(); it != cend; ++it) {
+        QAbstractAnimation *animation = *it;
         if (animation->duration() == -1 || animation->loopCount() < 0) {
             uncontrolledFinishTime[animation] = -1;
             connectUncontrolledAnimation(animation);
@@ -317,10 +314,8 @@ void QParallelAnimationGroup::updateDirection(QAbstractAnimation::Direction dire
     Q_D(QParallelAnimationGroup);
     //we need to update the direction of the current animation
     if (state() != Stopped) {
-        for (int i = 0; i < d->animations.size(); ++i) {
-            QAbstractAnimation *animation = d->animations.at(i);
-            animation->setDirection(direction);
-        }
+        for (AnimationListConstIt it = d->animations.constBegin(), cend = d->animations.constEnd(); it != cend; ++it)
+            (*it)->setDirection(direction);
     } else {
         if (direction == Forward) {
             d->lastLoop = 0;

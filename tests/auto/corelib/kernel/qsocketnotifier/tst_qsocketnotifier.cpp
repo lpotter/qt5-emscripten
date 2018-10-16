@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,7 +35,12 @@
 #include <QtCore/QSocketNotifier>
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QUdpSocket>
+#ifndef Q_OS_WINRT
 #include <private/qnativesocketengine_p.h>
+#else
+#include <private/qnativesocketengine_winrt_p.h>
+#endif
 #define NATIVESOCKETENGINE QNativeSocketEngine
 #ifdef Q_OS_UNIX
 #include <private/qnet_unix_p.h>
@@ -70,7 +62,28 @@ private slots:
 #ifdef Q_OS_UNIX
     void posixSockets();
 #endif
+    void asyncMultipleDatagram();
+
+protected slots:
+    void async_readDatagramSlot();
+    void async_writeDatagramSlot();
+
+private:
+    QUdpSocket *m_asyncSender;
+    QUdpSocket *m_asyncReceiver;
 };
+
+static QHostAddress makeNonAny(const QHostAddress &address,
+                               QHostAddress::SpecialAddress preferForAny = QHostAddress::LocalHost)
+{
+    if (address == QHostAddress::Any)
+        return preferForAny;
+    if (address == QHostAddress::AnyIPv4)
+        return QHostAddress::LocalHost;
+    if (address == QHostAddress::AnyIPv6)
+        return QHostAddress::LocalHostIPv6;
+    return address;
+}
 
 class UnexpectedDisconnectTester : public QObject
 {
@@ -113,6 +126,10 @@ signals:
 
 void tst_QSocketNotifier::unexpectedDisconnection()
 {
+#ifdef Q_OS_WINRT
+    // WinRT does not allow a connection to the localhost
+    QSKIP("Local connection not allowed", SkipAll);
+#else
     /*
       Given two sockets and two QSocketNotifiers registered on each
       their socket. If both sockets receive data, and the first slot
@@ -133,7 +150,7 @@ void tst_QSocketNotifier::unexpectedDisconnection()
     readEnd1.initialize(QAbstractSocket::TcpSocket);
     readEnd1.connectToHost(server.serverAddress(), server.serverPort());
     QVERIFY(readEnd1.waitForWrite());
-    QVERIFY(readEnd1.state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(readEnd1.state(), QAbstractSocket::ConnectedState);
     QVERIFY(server.waitForNewConnection());
     QTcpSocket *writeEnd1 = server.nextPendingConnection();
     QVERIFY(writeEnd1 != 0);
@@ -142,7 +159,7 @@ void tst_QSocketNotifier::unexpectedDisconnection()
     readEnd2.initialize(QAbstractSocket::TcpSocket);
     readEnd2.connectToHost(server.serverAddress(), server.serverPort());
     QVERIFY(readEnd2.waitForWrite());
-    QVERIFY(readEnd2.state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(readEnd2.state(), QAbstractSocket::ConnectedState);
     QVERIFY(server.waitForNewConnection());
     QTcpSocket *writeEnd2 = server.nextPendingConnection();
     QVERIFY(writeEnd2 != 0);
@@ -168,8 +185,8 @@ void tst_QSocketNotifier::unexpectedDisconnection()
         QVERIFY(timer.isActive()); //escape if test would hang
     }  while(tester.sequence <= 0);
 
-    QVERIFY(readEnd1.state() == QAbstractSocket::ConnectedState);
-    QVERIFY(readEnd2.state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(readEnd1.state(), QAbstractSocket::ConnectedState);
+    QCOMPARE(readEnd2.state(), QAbstractSocket::ConnectedState);
 
     QCOMPARE(tester.sequence, 2);
 
@@ -178,6 +195,7 @@ void tst_QSocketNotifier::unexpectedDisconnection()
     writeEnd1->close();
     writeEnd2->close();
     server.close();
+#endif // !Q_OS_WINRT
 }
 
 class MixingWithTimersHelper : public QObject
@@ -216,6 +234,9 @@ void MixingWithTimersHelper::socketFired()
 
 void tst_QSocketNotifier::mixingWithTimers()
 {
+#ifdef Q_OS_WINRT
+    QSKIP("WinRT does not allow connection to localhost", SkipAll);
+#else
     QTimer timer;
     timer.setInterval(0);
     timer.start();
@@ -240,6 +261,7 @@ void tst_QSocketNotifier::mixingWithTimers()
 
     QCOMPARE(helper.timerActivated, true);
     QTRY_COMPARE(helper.socketActivated, true);
+#endif // !Q_OS_WINRT
 }
 
 #ifdef Q_OS_UNIX
@@ -263,12 +285,12 @@ void tst_QSocketNotifier::posixSockets()
     {
         QSocketNotifier rn(posixSocket, QSocketNotifier::Read);
         connect(&rn, SIGNAL(activated(int)), &QTestEventLoop::instance(), SLOT(exitLoop()));
-        QSignalSpy readSpy(&rn, SIGNAL(activated(int)));
+        QSignalSpy readSpy(&rn, &QSocketNotifier::activated);
         QVERIFY(readSpy.isValid());
         // No write notifier, some systems trigger write notification on socket creation, but not all
         QSocketNotifier en(posixSocket, QSocketNotifier::Exception);
         connect(&en, SIGNAL(activated(int)), &QTestEventLoop::instance(), SLOT(exitLoop()));
-        QSignalSpy errorSpy(&en, SIGNAL(activated(int)));
+        QSignalSpy errorSpy(&en, &QSocketNotifier::activated);
         QVERIFY(errorSpy.isValid());
 
         passive->write("hello",6);
@@ -285,7 +307,7 @@ void tst_QSocketNotifier::posixSockets()
 
         QSocketNotifier wn(posixSocket, QSocketNotifier::Write);
         connect(&wn, SIGNAL(activated(int)), &QTestEventLoop::instance(), SLOT(exitLoop()));
-        QSignalSpy writeSpy(&wn, SIGNAL(activated(int)));
+        QSignalSpy writeSpy(&wn, &QSocketNotifier::activated);
         QVERIFY(writeSpy.isValid());
         qt_safe_write(posixSocket, "goodbye", 8);
 
@@ -302,6 +324,66 @@ void tst_QSocketNotifier::posixSockets()
     qt_safe_close(posixSocket);
 }
 #endif
+
+void tst_QSocketNotifier::async_readDatagramSlot()
+{
+    char buf[1];
+    QVERIFY(m_asyncReceiver->hasPendingDatagrams());
+    do {
+        QCOMPARE(m_asyncReceiver->pendingDatagramSize(), qint64(1));
+        QCOMPARE(m_asyncReceiver->readDatagram(buf, sizeof(buf)), qint64(1));
+        if (buf[0] == '1') {
+            // wait for the second datagram message.
+            QTest::qSleep(100);
+        }
+    } while (m_asyncReceiver->hasPendingDatagrams());
+
+    if (buf[0] == '3')
+        QTestEventLoop::instance().exitLoop();
+}
+
+void tst_QSocketNotifier::async_writeDatagramSlot()
+{
+    m_asyncSender->writeDatagram("3", makeNonAny(m_asyncReceiver->localAddress()),
+                                                 m_asyncReceiver->localPort());
+}
+
+void tst_QSocketNotifier::asyncMultipleDatagram()
+{
+#ifdef Q_OS_WINRT
+    QSKIP("WinRT does not allow connection to localhost", SkipAll);
+#else
+    m_asyncSender = new QUdpSocket;
+    m_asyncReceiver = new QUdpSocket;
+
+    QVERIFY(m_asyncReceiver->bind(QHostAddress(QHostAddress::AnyIPv4), 0));
+    quint16 port = m_asyncReceiver->localPort();
+    QVERIFY(port != 0);
+
+    QSignalSpy spy(m_asyncReceiver, &QIODevice::readyRead);
+    connect(m_asyncReceiver, &QIODevice::readyRead, this,
+            &tst_QSocketNotifier::async_readDatagramSlot);
+
+    // activate socket notifiers
+    QTestEventLoop::instance().enterLoopMSecs(100);
+
+    m_asyncSender->writeDatagram("1", makeNonAny(m_asyncReceiver->localAddress()), port);
+    m_asyncSender->writeDatagram("2", makeNonAny(m_asyncReceiver->localAddress()), port);
+    // wait a little to ensure that the datagrams we've just sent
+    // will be delivered on receiver side.
+    QTest::qSleep(100);
+    QVERIFY(m_asyncReceiver->hasPendingDatagrams());
+
+    QTimer::singleShot(500, this, &tst_QSocketNotifier::async_writeDatagramSlot);
+
+    QTestEventLoop::instance().enterLoop(1);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+    QCOMPARE(spy.count(), 2);
+
+    delete m_asyncSender;
+    delete m_asyncReceiver;
+    #endif // !Q_OS_WINRT
+}
 
 QTEST_MAIN(tst_QSocketNotifier)
 #include <tst_qsocketnotifier.moc>

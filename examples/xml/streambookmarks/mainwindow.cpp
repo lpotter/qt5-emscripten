@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -53,17 +63,40 @@ MainWindow::MainWindow()
     treeWidget = new QTreeWidget;
     treeWidget->header()->setSectionResizeMode(QHeaderView::Stretch);
     treeWidget->setHeaderLabels(labels);
+#if !defined(QT_NO_CONTEXTMENU) && !defined(QT_NO_CLIPBOARD)
+    treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(treeWidget, &QWidget::customContextMenuRequested,
+            this, &MainWindow::onCustomContextMenuRequested);
+#endif
     setCentralWidget(treeWidget);
 
-    createActions();
     createMenus();
 
     statusBar()->showMessage(tr("Ready"));
 
     setWindowTitle(tr("QXmlStream Bookmarks"));
-    resize(480, 320);
+    const QSize availableSize = QApplication::desktop()->availableGeometry(this).size();
+    resize(availableSize.width() / 2, availableSize.height() / 3);
 }
 //! [0]
+
+#if !defined(QT_NO_CONTEXTMENU) && !defined(QT_NO_CLIPBOARD)
+void MainWindow::onCustomContextMenuRequested(const QPoint &pos)
+{
+    const QTreeWidgetItem *item = treeWidget->itemAt(pos);
+    if (!item)
+        return;
+    const QString url = item->text(1);
+    QMenu contextMenu;
+    QAction *copyAction = contextMenu.addAction(tr("Copy Link to Clipboard"));
+    QAction *openAction = contextMenu.addAction(tr("Open"));
+    QAction *action = contextMenu.exec(treeWidget->viewport()->mapToGlobal(pos));
+    if (action == copyAction)
+        QGuiApplication::clipboard()->setText(url);
+    else if (action == openAction)
+        QDesktopServices::openUrl(QUrl(url));
+}
+#endif // !QT_NO_CONTEXTMENU && !QT_NO_CLIPBOARD
 
 //! [1]
 void MainWindow::open()
@@ -82,8 +115,8 @@ void MainWindow::open()
     if (!file.open(QFile::ReadOnly | QFile::Text)) {
         QMessageBox::warning(this, tr("QXmlStream Bookmarks"),
                              tr("Cannot read file %1:\n%2.")
-                             .arg(fileName)
-                             .arg(file.errorString()));
+                             .arg(QDir::toNativeSeparators(fileName),
+                                  file.errorString()));
         return;
     }
 
@@ -91,8 +124,8 @@ void MainWindow::open()
     if (!reader.read(&file)) {
         QMessageBox::warning(this, tr("QXmlStream Bookmarks"),
                              tr("Parse error in file %1:\n\n%2")
-                             .arg(fileName)
-                             .arg(reader.errorString()));
+                             .arg(QDir::toNativeSeparators(fileName),
+                                  reader.errorString()));
     } else {
         statusBar()->showMessage(tr("File loaded"), 2000);
     }
@@ -114,8 +147,8 @@ void MainWindow::saveAs()
     if (!file.open(QFile::WriteOnly | QFile::Text)) {
         QMessageBox::warning(this, tr("QXmlStream Bookmarks"),
                              tr("Cannot write file %1:\n%2.")
-                             .arg(fileName)
-                             .arg(file.errorString()));
+                             .arg(QDir::toNativeSeparators(fileName),
+                                  file.errorString()));
         return;
     }
 
@@ -134,41 +167,23 @@ void MainWindow::about()
 }
 //! [3]
 
-//! [4]
-void MainWindow::createActions()
-{
-    openAct = new QAction(tr("&Open..."), this);
-    openAct->setShortcuts(QKeySequence::Open);
-    connect(openAct, SIGNAL(triggered()), this, SLOT(open()));
-
-    saveAsAct = new QAction(tr("&Save As..."), this);
-    saveAsAct->setShortcuts(QKeySequence::SaveAs);
-    connect(saveAsAct, SIGNAL(triggered()), this, SLOT(saveAs()));
-
-    exitAct = new QAction(tr("E&xit"), this);
-    exitAct->setShortcuts(QKeySequence::Quit);
-    connect(exitAct, SIGNAL(triggered()), this, SLOT(close()));
-
-    aboutAct = new QAction(tr("&About"), this);
-    connect(aboutAct, SIGNAL(triggered()), this, SLOT(about()));
-
-    aboutQtAct = new QAction(tr("About &Qt"), this);
-    connect(aboutQtAct, SIGNAL(triggered()), qApp, SLOT(aboutQt()));
-}
-//! [4]
-
 //! [5]
 void MainWindow::createMenus()
 {
-    fileMenu = menuBar()->addMenu(tr("&File"));
-    fileMenu->addAction(openAct);
-    fileMenu->addAction(saveAsAct);
-    fileMenu->addAction(exitAct);
+    QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
+    QAction *openAct = fileMenu->addAction(tr("&Open..."), this, &MainWindow::open);
+    openAct->setShortcuts(QKeySequence::Open);
+
+    QAction *saveAsAct = fileMenu->addAction(tr("&Save As..."), this, &MainWindow::saveAs);
+    saveAsAct->setShortcuts(QKeySequence::SaveAs);
+
+    QAction *exitAct = fileMenu->addAction(tr("E&xit"), this, &QWidget::close);
+    exitAct->setShortcuts(QKeySequence::Quit);
 
     menuBar()->addSeparator();
 
-    helpMenu = menuBar()->addMenu(tr("&Help"));
-    helpMenu->addAction(aboutAct);
-    helpMenu->addAction(aboutQtAct);
+    QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
+    helpMenu->addAction(tr("&About"), this, &MainWindow::about);
+    helpMenu->addAction(tr("About &Qt"), qApp, &QCoreApplication::quit);
 }
 //! [5]

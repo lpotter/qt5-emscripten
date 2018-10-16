@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -55,6 +64,7 @@
 #include <QtCore/QStateMachine>
 #include <QtWidgets/QKeyEventTransition>
 #include <QtCore/QFinalState>
+#include <QtCore/QRandomGenerator>
 
 PlayState::PlayState(GraphicsScene *scene, QState *parent)
     : QState(parent),
@@ -123,7 +133,7 @@ void PlayState::onEntry(QEvent *)
     levelState->addTransition(winTransition);
 
     //This state is an animation when the score changed
-    UpdateScoreState *scoreState = new UpdateScoreState(this, levelState);
+    UpdateScoreState *scoreState = new UpdateScoreState(levelState);
 
     //This transition update the score when a submarine die
     UpdateScoreTransition *scoreTransition = new UpdateScoreTransition(scene, this, levelState);
@@ -184,12 +194,12 @@ void LevelState::initializeLevel()
         for (int j = 0; j < subContent.second; ++j ) {
             SubMarine *sub = new SubMarine(submarineDesc.type, submarineDesc.name, submarineDesc.points);
             scene->addItem(sub);
-            int random = (qrand() % 15 + 1);
+            int random = QRandomGenerator::global()->bounded(15) + 1;
             qreal x = random == 13 || random == 5 ? 0 : scene->width() - sub->size().width();
-            qreal y = scene->height() -(qrand() % 150 + 1) - sub->size().height();
+            qreal y = scene->height() -(QRandomGenerator::global()->bounded(150) + 1) - sub->size().height();
             sub->setPos(x,y);
             sub->setCurrentDirection(x == 0 ? SubMarine::Right : SubMarine::Left);
-            sub->setCurrentSpeed(qrand() % 3 + 1);
+            sub->setCurrentSpeed(QRandomGenerator::global()->bounded(3) + 1);
         }
     }
 }
@@ -275,7 +285,7 @@ void WinState::onExit(QEvent *)
 }
 
 /** UpdateScore State */
-UpdateScoreState::UpdateScoreState(PlayState *g, QState *parent) : QState(parent), game(g)
+UpdateScoreState::UpdateScoreState(QState *parent) : QState(parent)
 {
 }
 

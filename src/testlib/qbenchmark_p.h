@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,17 +55,26 @@
 
 #include <QtCore/qglobal.h>
 
-#if (defined(Q_OS_LINUX) || defined Q_OS_MAC) && !defined(QT_NO_PROCESS)
+#if (defined(Q_OS_LINUX) || defined Q_OS_MACOS) && QT_CONFIG(process)
 #define QTESTLIB_USE_VALGRIND
 #else
 #undef QTESTLIB_USE_VALGRIND
 #endif
 
+#if defined(Q_OS_LINUX) && !defined(QT_LINUXBASE) && !defined(Q_OS_ANDROID)
+#define QTESTLIB_USE_PERF_EVENTS
+#else
+#undef QTESTLIB_USE_PERF_EVENTS
+#endif
+
 #include <QtTest/private/qbenchmarkmeasurement_p.h>
 #include <QtCore/QMap>
-#include <QtTest/qtest_global.h>
+#include <QtTest/qttestglobal.h>
 #ifdef QTESTLIB_USE_VALGRIND
 #include <QtTest/private/qbenchmarkvalgrind_p.h>
+#endif
+#ifdef QTESTLIB_USE_PERF_EVENTS
+#include <QtTest/private/qbenchmarkperfevents_p.h>
 #endif
 #include <QtTest/private/qbenchmarkevent_p.h>
 #include <QtTest/private/qbenchmarkmetric_p.h>
@@ -84,12 +91,13 @@ struct QBenchmarkContext
 
     QString toString() const
     {
-        QString s = QString::fromLatin1("%1,%2,%3").arg(slotName).arg(tag).arg(checkpointIndex);
-        return s;
+        return QString::fromLatin1("%1,%2,%3")
+               .arg(slotName, tag, QString::number(checkpointIndex));
     }
 
     QBenchmarkContext() : checkpointIndex(-1) {}
 };
+Q_DECLARE_TYPEINFO(QBenchmarkContext, Q_MOVABLE_TYPE);
 
 class QBenchmarkResult
 {
@@ -104,6 +112,7 @@ public:
     QBenchmarkResult()
     : value(-1)
     , iterations(-1)
+    , metric(QTest::FramesPerSecond)
     , setByMacro(true)
     , valid(false)
     { }
@@ -124,6 +133,7 @@ public:
         return (value / iterations) < (other.value / other.iterations);
     }
 };
+Q_DECLARE_TYPEINFO(QBenchmarkResult, Q_MOVABLE_TYPE);
 
 /*
     The QBenchmarkGlobalData class stores global benchmark-related data.
@@ -137,7 +147,7 @@ public:
 
     QBenchmarkGlobalData();
     ~QBenchmarkGlobalData();
-    enum Mode { WallTime, CallgrindParentProcess, CallgrindChildProcess, TickCounter, EventCounter };
+    enum Mode { WallTime, CallgrindParentProcess, CallgrindChildProcess, PerfCounter, TickCounter, EventCounter };
     void setMode(Mode mode);
     Mode mode() const { return mode_; }
     QBenchmarkMeasurerBase *createMeasurer();
@@ -151,6 +161,7 @@ public:
     bool createChart;
     bool verboseOutput;
     QString callgrindOutFileBase;
+    int minimumTotal;
 private:
     Mode mode_;
 };

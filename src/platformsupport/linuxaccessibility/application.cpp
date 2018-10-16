@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,7 +44,9 @@
 #include <QtDBus/qdbuspendingreply.h>
 #include <qdebug.h>
 
+#ifndef QT_NO_ACCESSIBILITY
 #include "deviceeventcontroller_adaptor.h"
+#include "atspi/atspi-constants.h"
 
 //#define KEYBOARD_DEBUG
 
@@ -62,7 +62,7 @@ QT_BEGIN_NAMESPACE
 */
 
 QSpiApplicationAdaptor::QSpiApplicationAdaptor(const QDBusConnection &connection, QObject *parent)
-    : QObject(parent), dbusConnection(connection)
+    : QObject(parent), dbusConnection(connection), inCapsLock(false)
 {
 }
 
@@ -107,13 +107,14 @@ bool QSpiApplicationAdaptor::eventFilter(QObject *target, QEvent *event)
         de.id = keyEvent->nativeVirtualKey();
         de.hardwareCode = keyEvent->nativeScanCode();
 
-        de.modifiers = keyEvent->nativeModifiers();
         de.timestamp = QDateTime::currentMSecsSinceEpoch();
 
         if (keyEvent->key() == Qt::Key_Tab)
             de.text = QStringLiteral("Tab");
         else if (keyEvent->key() == Qt::Key_Backtab)
             de.text = QStringLiteral("Backtab");
+        else if (keyEvent->key() == Qt::Key_Control)
+            de.text = QStringLiteral("Control_L");
         else if (keyEvent->key() == Qt::Key_Left)
             de.text = (keyEvent->modifiers() & Qt::KeypadModifier) ? QStringLiteral("KP_Left") : QStringLiteral("Left");
         else if (keyEvent->key() == Qt::Key_Right)
@@ -142,9 +143,13 @@ bool QSpiApplicationAdaptor::eventFilter(QObject *target, QEvent *event)
             de.text = QStringLiteral("Escape");
         else if (keyEvent->key() == Qt::Key_Space)
             de.text = QStringLiteral("space");
-        else if (keyEvent->key() == Qt::Key_CapsLock)
+        else if (keyEvent->key() == Qt::Key_CapsLock) {
             de.text = QStringLiteral("Caps_Lock");
-        else if (keyEvent->key() == Qt::Key_NumLock)
+            if (event->type() == QEvent::KeyPress)
+                inCapsLock = true;
+            else
+                inCapsLock = false;
+        } else if (keyEvent->key() == Qt::Key_NumLock)
             de.text = QStringLiteral("Num_Lock");
         else if (keyEvent->key() == Qt::Key_Insert)
             de.text = QStringLiteral("Insert");
@@ -155,29 +160,38 @@ bool QSpiApplicationAdaptor::eventFilter(QObject *target, QEvent *event)
         // Long term the spec will hopefully change to just use keycodes.
         de.isText = !de.text.isEmpty();
 
+        de.modifiers = 0;
+        if (!inCapsLock && keyEvent->modifiers() & Qt::ShiftModifier)
+            de.modifiers |= 1 << ATSPI_MODIFIER_SHIFT;
+        if (inCapsLock && (keyEvent->key() != Qt::Key_CapsLock))
+            de.modifiers |= 1 << ATSPI_MODIFIER_SHIFTLOCK;
+        if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->key() != Qt::Key_Control))
+            de.modifiers |= 1 << ATSPI_MODIFIER_CONTROL;
+        if ((keyEvent->modifiers() & Qt::AltModifier) && (keyEvent->key() != Qt::Key_Alt))
+            de.modifiers |= 1 << ATSPI_MODIFIER_ALT;
+        if ((keyEvent->modifiers() & Qt::MetaModifier) && (keyEvent->key() != Qt::Key_Meta))
+            de.modifiers |= 1 << ATSPI_MODIFIER_META;
+
 #ifdef KEYBOARD_DEBUG
-        qDebug() << QStringLiteral("Key event text: ") << event->type() << de.isText << QStringLiteral(" ") << de.text
-                 << QStringLiteral(" hardware code: ") << de.hardwareCode
-                 << QStringLiteral(" native sc: ") << keyEvent->nativeScanCode()
-                 << QStringLiteral(" native mod: ") << keyEvent->nativeModifiers()
-                 << QStringLiteral("native virt: ") << keyEvent->nativeVirtualKey();
+        qDebug() << "Key event text:" << event->type() << de.text
+                 << "native virtual key:" << de.id
+                 << "hardware code/scancode:" << de.hardwareCode
+                 << "modifiers:" << de.modifiers
+                 << "text:" << de.text;
 #endif
 
         QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.a11y.atspi.Registry"),
                                                         QStringLiteral("/org/a11y/atspi/registry/deviceeventcontroller"),
                                                         QStringLiteral("org.a11y.atspi.DeviceEventController"), QStringLiteral("NotifyListenersSync"));
-        m.setArguments(QVariantList() <<QVariant::fromValue(de));
+        m.setArguments(QVariantList() << QVariant::fromValue(de));
 
         // FIXME: this is critical, the timeout should probably be pretty low to allow normal processing
         int timeout = 100;
         bool sent = dbusConnection.callWithCallback(m, this, SLOT(notifyKeyboardListenerCallback(QDBusMessage)),
-                        SLOT(notifyKeyboardListenerError(QDBusError, QDBusMessage)), timeout);
+                        SLOT(notifyKeyboardListenerError(QDBusError,QDBusMessage)), timeout);
         if (sent) {
             //queue the event and send it after callback
-            keyEvents.enqueue(QPair<QObject*, QKeyEvent*> (target, copyKeyEvent(keyEvent)));
-#ifdef KEYBOARD_DEBUG
-            qDebug() << QStringLiteral("Sent key: ") << de.text;
-#endif
+            keyEvents.enqueue(QPair<QPointer<QObject>, QKeyEvent*> (QPointer<QObject>(target), copyKeyEvent(keyEvent)));
             return true;
         }
     }
@@ -189,32 +203,38 @@ bool QSpiApplicationAdaptor::eventFilter(QObject *target, QEvent *event)
 
 QKeyEvent* QSpiApplicationAdaptor::copyKeyEvent(QKeyEvent* old)
 {
-    return new QKeyEvent(old->type(), old->key(), old->modifiers(), old->text(), old->isAutoRepeat(), old->count());
+    return new QKeyEvent(old->type(), old->key(), old->modifiers(),
+                         old->nativeScanCode(), old->nativeVirtualKey(), old->nativeModifiers(),
+                         old->text(), old->isAutoRepeat(), old->count());
 }
 
 void QSpiApplicationAdaptor::notifyKeyboardListenerCallback(const QDBusMessage& message)
 {
     if (!keyEvents.length()) {
-        qWarning() << QStringLiteral("QSpiApplication::notifyKeyboardListenerCallback with no queued key called");
+        qWarning("QSpiApplication::notifyKeyboardListenerCallback with no queued key called");
         return;
     }
     Q_ASSERT(message.arguments().length() == 1);
     if (message.arguments().at(0).toBool() == true) {
-        QPair<QObject*, QKeyEvent*> event = keyEvents.dequeue();
+        QPair<QPointer<QObject>, QKeyEvent*> event = keyEvents.dequeue();
         delete event.second;
     } else {
-        QPair<QObject*, QKeyEvent*> event = keyEvents.dequeue();
-        QCoreApplication::postEvent(event.first, event.second);
+        QPair<QPointer<QObject>, QKeyEvent*> event = keyEvents.dequeue();
+        if (event.first)
+            QCoreApplication::postEvent(event.first.data(), event.second);
     }
 }
 
 void QSpiApplicationAdaptor::notifyKeyboardListenerError(const QDBusError& error, const QDBusMessage& /*message*/)
 {
-    qWarning() << QStringLiteral("QSpiApplication::keyEventError ") << error.name() << error.message();
+    qWarning() << "QSpiApplication::keyEventError " << error.name() << error.message();
     while (!keyEvents.isEmpty()) {
-        QPair<QObject*, QKeyEvent*> event = keyEvents.dequeue();
-        QCoreApplication::postEvent(event.first, event.second);
+        QPair<QPointer<QObject>, QKeyEvent*> event = keyEvents.dequeue();
+        if (event.first)
+            QCoreApplication::postEvent(event.first.data(), event.second);
     }
 }
 
 QT_END_NAMESPACE
+
+#endif //QT_NO_ACCESSIBILITY

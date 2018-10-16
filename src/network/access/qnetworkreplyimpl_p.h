@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include "qnetworkreply.h"
 #include "qnetworkreply_p.h"
 #include "qnetworkaccessmanager.h"
@@ -77,16 +76,15 @@ class QNetworkReplyImpl: public QNetworkReply
 public:
     QNetworkReplyImpl(QObject *parent = 0);
     ~QNetworkReplyImpl();
-    virtual void abort();
+    virtual void abort() override;
 
     // reimplemented from QNetworkReply / QIODevice
-    virtual void close();
-    virtual qint64 bytesAvailable() const;
-    virtual void setReadBufferSize(qint64 size);
-    virtual bool canReadLine () const;
+    virtual void close() override;
+    virtual qint64 bytesAvailable() const override;
+    virtual void setReadBufferSize(qint64 size) override;
 
-    virtual qint64 readData(char *data, qint64 maxlen);
-    virtual bool event(QEvent *);
+    virtual qint64 readData(char *data, qint64 maxlen) override;
+    virtual bool event(QEvent *) override;
 
     Q_DECLARE_PRIVATE(QNetworkReplyImpl)
     Q_PRIVATE_SLOT(d_func(), void _q_startOperation())
@@ -97,15 +95,16 @@ public:
 #ifndef QT_NO_BEARERMANAGEMENT
     Q_PRIVATE_SLOT(d_func(), void _q_networkSessionConnected())
     Q_PRIVATE_SLOT(d_func(), void _q_networkSessionFailed())
+    Q_PRIVATE_SLOT(d_func(), void _q_networkSessionStateChanged(QNetworkSession::State))
     Q_PRIVATE_SLOT(d_func(), void _q_networkSessionUsagePoliciesChanged(QNetworkSession::UsagePolicies))
 #endif
 
 #ifndef QT_NO_SSL
 protected:
-    void sslConfigurationImplementation(QSslConfiguration &configuration) const;
-    void setSslConfigurationImplementation(const QSslConfiguration &configuration);
-    virtual void ignoreSslErrors();
-    virtual void ignoreSslErrorsImplementation(const QList<QSslError> &errors);
+    void sslConfigurationImplementation(QSslConfiguration &configuration) const override;
+    void setSslConfigurationImplementation(const QSslConfiguration &configuration) override;
+    virtual void ignoreSslErrors() override;
+    virtual void ignoreSslErrorsImplementation(const QList<QSslError> &errors) override;
 #endif
 };
 
@@ -118,23 +117,11 @@ public:
         NotifyCopyFinished
     };
 
-    enum State {
-        Idle,               // The reply is idle.
-        Buffering,          // The reply is buffering outgoing data.
-        Working,            // The reply is uploading/downloading data.
-        Finished,           // The reply has finished.
-        Aborted,            // The reply has been aborted.
-        WaitingForSession,  // The reply is waiting for the session to open before connecting.
-        Reconnecting        // The reply will reconnect to once roaming has completed.
-    };
-
     typedef QQueue<InternalNotifications> NotificationQueue;
 
     QNetworkReplyImplPrivate();
 
     void _q_startOperation();
-    void _q_sourceReadyRead();
-    void _q_sourceReadChannelFinished();
     void _q_copyReadyRead();
     void _q_copyReadChannelFinished();
     void _q_bufferOutgoingData();
@@ -142,6 +129,7 @@ public:
 #ifndef QT_NO_BEARERMANAGEMENT
     void _q_networkSessionConnected();
     void _q_networkSessionFailed();
+    void _q_networkSessionStateChanged(QNetworkSession::State);
     void _q_networkSessionUsagePoliciesChanged(QNetworkSession::UsagePolicies);
 #endif
 
@@ -176,6 +164,7 @@ public:
     void error(QNetworkReply::NetworkError code, const QString &errorString);
     void metaDataChanged();
     void redirectionRequested(const QUrl &target);
+    void encrypted();
     void sslErrors(const QList<QSslError> &errors);
 
     QNetworkAccessBackend *backend;
@@ -198,8 +187,6 @@ public:
     QList<QNetworkProxy> proxyList;
 #endif
 
-    // Used for normal downloading. For "zero copy" the downloadBuffer is used
-    QByteDataBuffer readBuffer;
     qint64 bytesDownloaded;
     qint64 lastBytesDownloaded;
     qint64 bytesUploaded;
@@ -210,7 +197,7 @@ public:
 
     State state;
 
-    // only used when the "zero copy" style is used. Else readBuffer is used.
+    // Only used when the "zero copy" style is used.
     // Please note that the whole "zero copy" download buffer API is private right now. Do not use it.
     qint64 downloadBufferReadPosition;
     qint64 downloadBufferCurrentSize;
@@ -220,6 +207,7 @@ public:
 
     Q_DECLARE_PUBLIC(QNetworkReplyImpl)
 };
+Q_DECLARE_TYPEINFO(QNetworkReplyImplPrivate::InternalNotifications, Q_PRIMITIVE_TYPE);
 
 #ifndef QT_NO_BEARERMANAGEMENT
 class QDisabledNetworkReply : public QNetworkReply
@@ -231,9 +219,9 @@ public:
                           QNetworkAccessManager::Operation op);
     ~QDisabledNetworkReply();
 
-    void abort() { }
+    void abort() override { }
 protected:
-    qint64 readData(char *, qint64) { return -1; }
+    qint64 readData(char *, qint64) override { return -1; }
 };
 #endif
 

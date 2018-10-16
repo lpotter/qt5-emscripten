@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -78,7 +65,7 @@ void tst_QMimeData::clear() const
     mimeData.setData("text/plain", "pirates");
     QVERIFY(mimeData.hasText());
     mimeData.clear();
-    QVERIFY(mimeData.hasText() == false);
+    QVERIFY(!mimeData.hasText());
 
     // repopulate, verify not empty
     mimeData.setData("text/plain", "pirates");
@@ -109,7 +96,7 @@ void tst_QMimeData::data() const
     // set text, verify
     mimeData.setData("text/plain", "pirates");
     QCOMPARE(mimeData.data("text/plain"), QByteArray("pirates"));
-    QVERIFY(mimeData.data("text/html").length() == 0);
+    QCOMPARE(mimeData.data("text/html").length(), 0);
 
     // html time
     mimeData.setData("text/html", "ninjas");
@@ -144,7 +131,7 @@ void tst_QMimeData::hasColor() const
     QMimeData mimeData;
 
     // initial state
-    QVERIFY(mimeData.hasColor() == false);
+    QVERIFY(!mimeData.hasColor());
 
     // set, verify
     mimeData.setColorData(QColor(Qt::red));
@@ -152,11 +139,11 @@ void tst_QMimeData::hasColor() const
 
     // clear, verify
     mimeData.clear();
-    QVERIFY(mimeData.hasColor() == false);
+    QVERIFY(!mimeData.hasColor());
 
     // set something else, verify
     mimeData.setData("text/plain", "pirates");
-    QVERIFY(mimeData.hasColor() == false);
+    QVERIFY(!mimeData.hasColor());
 }
 
 void tst_QMimeData::hasFormat() const
@@ -164,17 +151,17 @@ void tst_QMimeData::hasFormat() const
     QMimeData mimeData;
 
     // initial state
-    QVERIFY(mimeData.hasFormat("text/plain") == false);
+    QVERIFY(!mimeData.hasFormat("text/plain"));
 
     // add, verify
     mimeData.setData("text/plain", "pirates");
     QVERIFY(mimeData.hasFormat("text/plain"));
-    QVERIFY(mimeData.hasFormat("text/html") == false);
+    QVERIFY(!mimeData.hasFormat("text/html"));
 
     // clear, verify
     mimeData.clear();
-    QVERIFY(mimeData.hasFormat("text/plain") == false);
-    QVERIFY(mimeData.hasFormat("text/html") == false);
+    QVERIFY(!mimeData.hasFormat("text/plain"));
+    QVERIFY(!mimeData.hasFormat("text/html"));
 }
 
 void tst_QMimeData::hasHtml() const
@@ -182,11 +169,11 @@ void tst_QMimeData::hasHtml() const
     QMimeData mimeData;
 
     // initial state
-    QVERIFY(mimeData.hasHtml() == false);
+    QVERIFY(!mimeData.hasHtml());
 
     // add plain, verify false
     mimeData.setData("text/plain", "pirates");
-    QVERIFY(mimeData.hasHtml() == false);
+    QVERIFY(!mimeData.hasHtml());
 
     // add html, verify
     mimeData.setData("text/html", "ninjas");
@@ -194,7 +181,7 @@ void tst_QMimeData::hasHtml() const
 
     // clear, verify
     mimeData.clear();
-    QVERIFY(mimeData.hasHtml() == false);
+    QVERIFY(!mimeData.hasHtml());
 
     // readd, verify
     mimeData.setData("text/html", "ninjas");
@@ -206,11 +193,11 @@ void tst_QMimeData::hasImage() const
     QMimeData mimeData;
 
     // initial state
-    QVERIFY(mimeData.hasImage() == false);
+    QVERIFY(!mimeData.hasImage());
 
     // add text, verify false
     mimeData.setData("text/plain", "pirates");
-    QVERIFY(mimeData.hasImage() == false);
+    QVERIFY(!mimeData.hasImage());
 
     // add image
     mimeData.setImageData(QImage());
@@ -218,7 +205,7 @@ void tst_QMimeData::hasImage() const
 
     // clear, verify
     mimeData.clear();
-    QVERIFY(mimeData.hasImage() == false);
+    QVERIFY(!mimeData.hasImage());
 }
 
 void tst_QMimeData::imageData() const
@@ -252,13 +239,13 @@ void tst_QMimeData::removeFormat() const
 
     // remove, verify
     mimeData.removeFormat("text/plain");
-    QVERIFY(mimeData.hasFormat("text/plain") == false);
+    QVERIFY(!mimeData.hasFormat("text/plain"));
     QVERIFY(mimeData.hasFormat("text/html"));
 
     // remove, verify
     mimeData.removeFormat("text/html");
-    QVERIFY(mimeData.hasFormat("text/plain") == false);
-    QVERIFY(mimeData.hasFormat("text/html") == false);
+    QVERIFY(!mimeData.hasFormat("text/plain"));
+    QVERIFY(!mimeData.hasFormat("text/html"));
 }
 
 void tst_QMimeData::setHtml() const
@@ -266,7 +253,7 @@ void tst_QMimeData::setHtml() const
     QMimeData mimeData;
 
     // initial state
-    QVERIFY(mimeData.hasHtml() == false);
+    QVERIFY(!mimeData.hasHtml());
 
     // add html, verify
     mimeData.setHtml("ninjas");
@@ -285,7 +272,7 @@ void tst_QMimeData::setText() const
 
     // verify initial state
     QCOMPARE(mimeData.text(), QLatin1String(""));
-    QVERIFY(mimeData.hasText() == false);
+    QVERIFY(!mimeData.hasText());
 
     // set, verify
     mimeData.setText("pirates");
@@ -302,17 +289,24 @@ void tst_QMimeData::setText() const
     // clear, verify
     mimeData.clear();
     QCOMPARE(mimeData.text(), QLatin1String(""));
-    QVERIFY(mimeData.hasText() == false);
+    QVERIFY(!mimeData.hasText());
 }
+
+// Publish retrieveData for verifying content validity
+class TstMetaData : public QMimeData
+{
+public:
+    using QMimeData::retrieveData;
+};
 
 void tst_QMimeData::setUrls() const
 {
-    QMimeData mimeData;
+    TstMetaData mimeData;
     QList<QUrl> shortUrlList;
     QList<QUrl> longUrlList;
 
     // set up
-    shortUrlList += QUrl("http://qt.nokia.com");
+    shortUrlList += QUrl("http://qt-project.org");
     longUrlList = shortUrlList;
     longUrlList += QUrl("http://www.google.com");
 
@@ -322,12 +316,20 @@ void tst_QMimeData::setUrls() const
     // set a few, verify
     mimeData.setUrls(shortUrlList);
     QCOMPARE(mimeData.urls(), shortUrlList);
-    QCOMPARE(mimeData.text(), QString("http://qt.nokia.com"));
+    QCOMPARE(mimeData.text(), QString("http://qt-project.org"));
 
     // change them, verify
     mimeData.setUrls(longUrlList);
     QCOMPARE(mimeData.urls(), longUrlList);
-    QCOMPARE(mimeData.text(), QString("http://qt.nokia.com\nhttp://www.google.com\n"));
+    QCOMPARE(mimeData.text(), QString("http://qt-project.org\nhttp://www.google.com\n"));
+
+    // test and verify that setData doesn't corrupt url content
+    foreach (const QString &format, mimeData.formats()) {
+         QVariant before = mimeData.retrieveData(format, QVariant::ByteArray);
+         mimeData.setData(format, mimeData.data(format));
+         QVariant after = mimeData.retrieveData(format, QVariant::ByteArray);
+         QCOMPARE(after, before);
+     }
 
     // clear, verify
     mimeData.clear();
@@ -335,5 +337,5 @@ void tst_QMimeData::setUrls() const
     QCOMPARE(mimeData.hasText(), false);
 }
 
-QTEST_MAIN(tst_QMimeData)
+QTEST_APPLESS_MAIN(tst_QMimeData)
 #include "tst_qmimedata.moc"

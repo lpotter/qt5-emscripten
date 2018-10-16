@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,6 +62,7 @@ private slots:
     void allowedAreas();
     void orientation();
     void addAction();
+    void addActionConnect();
     void insertAction();
     void addSeparator();
     void insertSeparator();
@@ -99,7 +87,6 @@ QAction *triggered = 0;
 
 tst_QToolBar::tst_QToolBar()
 {
-    qRegisterMetaType<QSize>("QSize");
     qRegisterMetaType<Qt::Orientation>("Qt::Orientation");
     qRegisterMetaType<Qt::ToolBarAreas>("Qt::ToolBarAreas");
     qRegisterMetaType<Qt::ToolButtonStyle>("Qt::ToolButtonStyle");
@@ -370,6 +357,23 @@ void tst_QToolBar::addAction()
     }
 }
 
+static void testFunction() { }
+
+void tst_QToolBar::addActionConnect()
+{
+    QToolBar tb;
+    const QString text = QLatin1String("bla");
+    const QIcon icon;
+    tb.addAction(text, &tb, SLOT(deleteLater()));
+    tb.addAction(text, &tb, &QMenu::deleteLater);
+    tb.addAction(text, testFunction);
+    tb.addAction(text, &tb, testFunction);
+    tb.addAction(icon, text, &tb, SLOT(deleteLater()));
+    tb.addAction(icon, text, &tb, &QMenu::deleteLater);
+    tb.addAction(icon, text, testFunction);
+    tb.addAction(icon, text, &tb, testFunction);
+}
+
 void tst_QToolBar::insertAction()
 {
     QToolBar tb;
@@ -504,13 +508,13 @@ void tst_QToolBar::insertWidget()
         QToolBar tb;
         QPointer<QWidget> widget = new QWidget;
         QAction *action = tb.addWidget(widget);
-        QVERIFY(action->parent() == &tb);
+        QCOMPARE(action->parent(), &tb);
 
         QToolBar tb2;
         tb.removeAction(action);
         tb2.addAction(action);
         QVERIFY(widget && widget->parent() == &tb2);
-        QVERIFY(action->parent() == &tb2);
+        QCOMPARE(action->parent(), &tb2);
     }
 }
 
@@ -969,10 +973,10 @@ void tst_QToolBar::actionOwnership()
         QToolBar *tb2 = new QToolBar;
 
         QPointer<QAction> action = tb1->addAction("test");
-        QVERIFY(action->parent() == tb1);
+        QCOMPARE(action->parent(), tb1);
 
         tb2->addAction(action);
-        QVERIFY(action->parent() == tb1);
+        QCOMPARE(action->parent(), tb1);
 
         delete tb1;
         QVERIFY(!action);
@@ -983,13 +987,13 @@ void tst_QToolBar::actionOwnership()
         QToolBar *tb2 = new QToolBar;
 
         QPointer<QAction> action = tb1->addAction("test");
-        QVERIFY(action->parent() == tb1);
+        QCOMPARE(action->parent(), tb1);
 
         tb1->removeAction(action);
-        QVERIFY(action->parent() == tb1);
+        QCOMPARE(action->parent(), tb1);
 
         tb2->addAction(action);
-        QVERIFY(action->parent() == tb1);
+        QCOMPARE(action->parent(), tb1);
 
         delete tb1;
         QVERIFY(!action);
@@ -1034,11 +1038,9 @@ void tst_QToolBar::accel()
 
     mw.show();
     QApplication::setActiveWindow(&mw);
-    QTest::qWait(100);
-    QTRY_COMPARE(QApplication::activeWindow(), static_cast<QWidget *>(&mw));
+    QVERIFY(QTest::qWaitForWindowActive(&mw));
 
     QTest::keyClick(&mw, Qt::Key_T, Qt::AltModifier);
-    QTest::qWait(300);
 
     QTRY_COMPARE(spy.count(), 1);
 #ifdef Q_OS_MAC
@@ -1081,19 +1083,19 @@ void tst_QToolBar::task197996_visibility()
     pAction->setVisible(true);
 
     mw.show();
+    QVERIFY(QTest::qWaitForWindowActive(&mw));
 
     QVERIFY(toolBar->widgetForAction(pAction)->isVisible());
 
     toolBar->setVisible(false);
     pAction->setVisible(false);
 
+    QVERIFY(!toolBar->widgetForAction(pAction)->isVisible());
+
     toolBar->setVisible(true);
     pAction->setVisible(true);
 
-    QTest::qWait(100);
-
-    QVERIFY(toolBar->widgetForAction(pAction)->isVisible());
-
+    QTRY_VERIFY(toolBar->widgetForAction(pAction)->isVisible());
 }
 
 QTEST_MAIN(tst_QToolBar)

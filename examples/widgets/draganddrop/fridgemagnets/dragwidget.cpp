@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -43,11 +53,13 @@
 
 #include <QtWidgets>
 
+static inline QString fridgetMagnetsMimeType() { return QStringLiteral("application/x-fridgemagnet"); }
+
 //! [0]
 DragWidget::DragWidget(QWidget *parent)
     : QWidget(parent)
 {
-    QFile dictionaryFile(":/dictionary/words.txt");
+    QFile dictionaryFile(QStringLiteral(":/dictionary/words.txt"));
     dictionaryFile.open(QFile::ReadOnly);
     QTextStream inputStream(&dictionaryFile);
 //! [0]
@@ -74,7 +86,6 @@ DragWidget::DragWidget(QWidget *parent)
 //! [1]
 
 //! [2]
-    //Fridge magnets is used for demoing Qt on S60 and themed backgrounds look better than white
     QPalette newPalette = palette();
     newPalette.setColor(QPalette::Window, Qt::white);
     setPalette(newPalette);
@@ -90,7 +101,7 @@ DragWidget::DragWidget(QWidget *parent)
 void DragWidget::dragEnterEvent(QDragEnterEvent *event)
 {
 //! [4] //! [5]
-    if (event->mimeData()->hasFormat("application/x-fridgemagnet")) {
+    if (event->mimeData()->hasFormat(fridgetMagnetsMimeType())) {
         if (children().contains(event->source())) {
             event->setDropAction(Qt::MoveAction);
             event->accept();
@@ -110,7 +121,7 @@ void DragWidget::dragEnterEvent(QDragEnterEvent *event)
 //! [8]
 void DragWidget::dragMoveEvent(QDragMoveEvent *event)
 {
-    if (event->mimeData()->hasFormat("application/x-fridgemagnet")) {
+    if (event->mimeData()->hasFormat(fridgetMagnetsMimeType())) {
         if (children().contains(event->source())) {
             event->setDropAction(Qt::MoveAction);
             event->accept();
@@ -128,10 +139,10 @@ void DragWidget::dragMoveEvent(QDragMoveEvent *event)
 //! [9]
 void DragWidget::dropEvent(QDropEvent *event)
 {
-    if (event->mimeData()->hasFormat("application/x-fridgemagnet")) {
+    if (event->mimeData()->hasFormat(fridgetMagnetsMimeType())) {
         const QMimeData *mime = event->mimeData();
 //! [9] //! [10]
-        QByteArray itemData = mime->data("application/x-fridgemagnet");
+        QByteArray itemData = mime->data(fridgetMagnetsMimeType());
         QDataStream dataStream(&itemData, QIODevice::ReadOnly);
 
         QString text;
@@ -152,11 +163,11 @@ void DragWidget::dropEvent(QDropEvent *event)
         }
 //! [11] //! [12]
     } else if (event->mimeData()->hasText()) {
-        QStringList pieces = event->mimeData()->text().split(QRegExp("\\s+"),
+        QStringList pieces = event->mimeData()->text().split(QRegularExpression(QStringLiteral("\\s+")),
                              QString::SkipEmptyParts);
         QPoint position = event->pos();
 
-        foreach (QString piece, pieces) {
+        for (const QString &piece : pieces) {
             DragLabel *newLabel = new DragLabel(piece, this);
             newLabel->move(position);
             newLabel->show();
@@ -190,7 +201,7 @@ void DragWidget::mousePressEvent(QMouseEvent *event)
 
 //! [15]
     QMimeData *mimeData = new QMimeData;
-    mimeData->setData("application/x-fridgemagnet", itemData);
+    mimeData->setData(fridgetMagnetsMimeType(), itemData);
     mimeData->setText(child->labelText());
 //! [15]
 

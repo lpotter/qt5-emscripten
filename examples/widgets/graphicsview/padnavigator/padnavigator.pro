@@ -17,7 +17,8 @@ FORMS += \
     form.ui
 
 QT += widgets
-contains(QT_CONFIG, opengl):QT += opengl
+requires(qtConfig(treewidget))
+qtHaveModule(opengl): QT += opengl
 
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/graphicsview/padnavigator

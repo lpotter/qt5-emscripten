@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,20 +47,24 @@
 #include <private/qfont_p.h>
 
 #include <qwindow.h>
-#include <qlibrary.h>
 #include <qimage.h>
+#include <QtCore/qbytearray.h>
 
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_DEBUG
 #define QT_RESET_GLERROR()                                \
 {                                                         \
-    while (glGetError() != GL_NO_ERROR) {}                \
+    while (true) {\
+        GLenum error = QOpenGLContext::currentContext()->functions()->glGetError(); \
+        if (error == GL_NO_ERROR || error == GL_CONTEXT_LOST) \
+            break; \
+    } \
 }
 #define QT_CHECK_GLERROR()                                \
 {                                                         \
-    GLenum err = glGetError();                            \
-    if (err != GL_NO_ERROR) {                             \
+    GLenum err = QOpenGLContext::currentContext()->functions()->glGetError(); \
+    if (err != GL_NO_ERROR && err != GL_CONTEXT_LOST) {                             \
         qDebug("[%s line %d] OpenGL Error: %d",           \
                __FILE__, __LINE__, (int)err);             \
     }                                                     \
@@ -72,8 +74,6 @@ QT_BEGIN_NAMESPACE
 #define QT_CHECK_GLERROR() {}
 #endif
 
-// ####TODO Properly #ifdef this class to use #define symbols actually defined
-// by OpenGL/ES includes
 #ifndef GL_MAX_SAMPLES
 #define GL_MAX_SAMPLES 0x8D57
 #endif
@@ -90,6 +90,10 @@ QT_BEGIN_NAMESPACE
 #define GL_DEPTH_COMPONENT24 0x81A6
 #endif
 
+#ifndef GL_DEPTH_COMPONENT24_OES
+#define GL_DEPTH_COMPONENT24_OES 0x81A6
+#endif
+
 #ifndef GL_READ_FRAMEBUFFER
 #define GL_READ_FRAMEBUFFER 0x8CA8
 #endif
@@ -97,6 +101,56 @@ QT_BEGIN_NAMESPACE
 #ifndef GL_DRAW_FRAMEBUFFER
 #define GL_DRAW_FRAMEBUFFER 0x8CA9
 #endif
+
+#ifndef GL_RGB8
+#define GL_RGB8                           0x8051
+#endif
+
+#ifndef GL_RGB10
+#define GL_RGB10                          0x8052
+#endif
+
+#ifndef GL_RGB16
+#define GL_RGB16                          0x8054
+#endif
+
+#ifndef GL_RGBA8
+#define GL_RGBA8                          0x8058
+#endif
+
+#ifndef GL_RGB10_A2
+#define GL_RGB10_A2                       0x8059
+#endif
+
+#ifndef GL_RGBA16
+#define GL_RGBA16                         0x805B
+#endif
+
+#ifndef GL_BGRA
+#define GL_BGRA                           0x80E1
+#endif
+
+#ifndef GL_UNSIGNED_INT_8_8_8_8_REV
+#define GL_UNSIGNED_INT_8_8_8_8_REV       0x8367
+#endif
+
+#ifndef GL_UNSIGNED_INT_2_10_10_10_REV
+#define GL_UNSIGNED_INT_2_10_10_10_REV    0x8368
+#endif
+
+#ifndef GL_CONTEXT_LOST
+#define GL_CONTEXT_LOST                   0x0507
+#endif
+
+#ifndef GL_DEPTH_STENCIL_ATTACHMENT
+#define GL_DEPTH_STENCIL_ATTACHMENT       0x821A
+#endif
+
+#ifndef GL_DEPTH_STENCIL
+#define GL_DEPTH_STENCIL                  0x84F9
+#endif
+
+
 
 /*!
     \class QOpenGLFramebufferObjectFormat
@@ -143,7 +197,7 @@ void QOpenGLFramebufferObjectFormat::detach()
     the format of an OpenGL framebuffer object.
 
     By default the format specifies a non-multisample framebuffer object with no
-    attachments, texture target \c GL_TEXTURE_2D, and internal format \c GL_RGBA8.
+    depth/stencil attachments, texture target \c GL_TEXTURE_2D, and internal format \c GL_RGBA8.
     On OpenGL/ES systems, the default internal format is \c GL_RGBA.
 
     \sa samples(), attachment(), internalTextureFormat()
@@ -238,7 +292,7 @@ void QOpenGLFramebufferObjectFormat::setMipmap(bool enabled)
 }
 
 /*!
-    Returns true if mipmapping is enabled.
+    Returns \c true if mipmapping is enabled.
 
     \sa setMipmap()
 */
@@ -320,8 +374,8 @@ GLenum QOpenGLFramebufferObjectFormat::internalTextureFormat() const
 }
 
 /*!
-    Returns true if all the options of this framebuffer object format
-    are the same as \a other; otherwise returns false.
+    Returns \c true if all the options of this framebuffer object format
+    are the same as \a other; otherwise returns \c false.
 */
 bool QOpenGLFramebufferObjectFormat::operator==(const QOpenGLFramebufferObjectFormat& other) const
 {
@@ -332,8 +386,8 @@ bool QOpenGLFramebufferObjectFormat::operator==(const QOpenGLFramebufferObjectFo
 }
 
 /*!
-    Returns false if all the options of this framebuffer object format
-    are the same as \a other; otherwise returns true.
+    Returns \c false if all the options of this framebuffer object format
+    are the same as \a other; otherwise returns \c true.
 */
 bool QOpenGLFramebufferObjectFormat::operator!=(const QOpenGLFramebufferObjectFormat& other) const
 {
@@ -407,16 +461,16 @@ namespace
         funcs->glDeleteRenderbuffers(1, &id);
     }
 
-    void freeTextureFunc(QOpenGLFunctions *, GLuint id)
+    void freeTextureFunc(QOpenGLFunctions *funcs, GLuint id)
     {
-        glDeleteTextures(1, &id);
+        funcs->glDeleteTextures(1, &id);
     }
 }
 
-void QOpenGLFramebufferObjectPrivate::init(QOpenGLFramebufferObject *, const QSize &sz,
-                                       QOpenGLFramebufferObject::Attachment attachment,
-                                       GLenum texture_target, GLenum internal_format,
-                                       GLint samples, bool mipmap)
+void QOpenGLFramebufferObjectPrivate::init(QOpenGLFramebufferObject *, const QSize &size,
+                                           QOpenGLFramebufferObject::Attachment attachment,
+                                           GLenum texture_target, GLenum internal_format,
+                                           GLint samples, bool mipmap)
 {
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
 
@@ -425,9 +479,24 @@ void QOpenGLFramebufferObjectPrivate::init(QOpenGLFramebufferObject *, const QSi
     if (!funcs.hasOpenGLFeature(QOpenGLFunctions::Framebuffers))
         return;
 
-    size = sz;
+    // Fall back to using a normal non-msaa FBO if we don't have support for MSAA
+    if (!funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample)
+            || !funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferBlit)) {
+        samples = 0;
+    } else if (!ctx->isOpenGLES() || ctx->format().majorVersion() >= 3) {
+        GLint maxSamples;
+        funcs.glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+        samples = qBound(0, int(samples), int(maxSamples));
+    }
+
+    colorAttachments.append(ColorAttachment(size, internal_format));
+
+    dsSize = size;
+
+    samples = qMax(0, samples);
+    requestedSamples = samples;
+
     target = texture_target;
-    // texture dimensions
 
     QT_RESET_GLERROR(); // reset error state
     GLuint fbo = 0;
@@ -435,101 +504,134 @@ void QOpenGLFramebufferObjectPrivate::init(QOpenGLFramebufferObject *, const QSi
     funcs.glGenFramebuffers(1, &fbo);
     funcs.glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-    GLuint texture = 0;
-    GLuint color_buffer = 0;
+    QOpenGLContextPrivate::get(ctx)->qgl_current_fbo_invalid = true;
 
     QT_CHECK_GLERROR();
-    // init texture
-    if (samples == 0) {
-        glGenTextures(1, &texture);
-        glBindTexture(target, texture);
-
-        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        glTexImage2D(target, 0, internal_format, size.width(), size.height(), 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        if (mipmap) {
-            int width = size.width();
-            int height = size.height();
-            int level = 0;
-            while (width > 1 || height > 1) {
-                width = qMax(1, width >> 1);
-                height = qMax(1, height >> 1);
-                ++level;
-                glTexImage2D(target, level, internal_format, width, height, 0,
-                        GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-            }
-        }
-        funcs.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                target, texture, 0);
-
-        QT_CHECK_GLERROR();
-        valid = checkFramebufferStatus(ctx);
-        glBindTexture(target, 0);
-
-        color_buffer = 0;
-    } else {
-        mipmap = false;
-        GLint maxSamples;
-        glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
-
-        samples = qBound(0, int(samples), int(maxSamples));
-
-        funcs.glGenRenderbuffers(1, &color_buffer);
-        funcs.glBindRenderbuffer(GL_RENDERBUFFER, color_buffer);
-        if (funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample) && samples > 0) {
-            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                internal_format, size.width(), size.height());
-        } else {
-            samples = 0;
-            funcs.glRenderbufferStorage(GL_RENDERBUFFER, internal_format,
-                size.width(), size.height());
-        }
-
-        funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                             GL_RENDERBUFFER, color_buffer);
-
-        QT_CHECK_GLERROR();
-        valid = checkFramebufferStatus(ctx);
-
-        if (valid)
-            funcs.glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_SAMPLES, &samples);
-    }
 
     format.setTextureTarget(target);
-    format.setSamples(int(samples));
     format.setInternalTextureFormat(internal_format);
     format.setMipmap(mipmap);
 
-    initAttachments(ctx, attachment);
+    if (samples == 0)
+        initTexture(0);
+    else
+        initColorBuffer(0, &samples);
 
-    funcs.glBindFramebuffer(GL_FRAMEBUFFER, ctx->d_func()->current_fbo);
-    if (valid) {
+    format.setSamples(int(samples));
+
+    initDepthStencilAttachments(ctx, attachment);
+
+    if (valid)
         fbo_guard = new QOpenGLSharedResourceGuard(ctx, fbo, freeFramebufferFunc);
-        if (color_buffer)
-            color_buffer_guard = new QOpenGLSharedResourceGuard(ctx, color_buffer, freeRenderbufferFunc);
-        else
-            texture_guard = new QOpenGLSharedResourceGuard(ctx, texture, freeTextureFunc);
-    } else {
-        if (color_buffer)
-            funcs.glDeleteRenderbuffers(1, &color_buffer);
-        else
-            glDeleteTextures(1, &texture);
+    else
         funcs.glDeleteFramebuffers(1, &fbo);
-    }
+
     QT_CHECK_GLERROR();
 }
 
-void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpenGLFramebufferObject::Attachment attachment)
+void QOpenGLFramebufferObjectPrivate::initTexture(int idx)
 {
-    int samples = format.samples();
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    GLuint texture = 0;
+
+    funcs.glGenTextures(1, &texture);
+    funcs.glBindTexture(target, texture);
+
+    funcs.glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    funcs.glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    funcs.glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    funcs.glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    ColorAttachment &color(colorAttachments[idx]);
+
+    GLuint pixelType = GL_UNSIGNED_BYTE;
+    if (color.internalFormat == GL_RGB10_A2 || color.internalFormat == GL_RGB10)
+        pixelType = GL_UNSIGNED_INT_2_10_10_10_REV;
+    else if (color.internalFormat == GL_RGB16  || color.internalFormat == GL_RGBA16)
+        pixelType = GL_UNSIGNED_SHORT;
+
+    funcs.glTexImage2D(target, 0, color.internalFormat, color.size.width(), color.size.height(), 0,
+                       GL_RGBA, pixelType, NULL);
+    if (format.mipmap()) {
+        int width = color.size.width();
+        int height = color.size.height();
+        int level = 0;
+        while (width > 1 || height > 1) {
+            width = qMax(1, width >> 1);
+            height = qMax(1, height >> 1);
+            ++level;
+            funcs.glTexImage2D(target, level, color.internalFormat, width, height, 0,
+                               GL_RGBA, pixelType, NULL);
+        }
+    }
+    funcs.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + idx,
+                                 target, texture, 0);
+
+    QT_CHECK_GLERROR();
+    funcs.glBindTexture(target, 0);
+    valid = checkFramebufferStatus(ctx);
+    if (valid) {
+        color.guard = new QOpenGLSharedResourceGuard(ctx, texture, freeTextureFunc);
+    } else {
+        funcs.glDeleteTextures(1, &texture);
+    }
+}
+
+void QOpenGLFramebufferObjectPrivate::initColorBuffer(int idx, GLint *samples)
+{
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    GLuint color_buffer = 0;
+
+    ColorAttachment &color(colorAttachments[idx]);
+
+    GLenum storageFormat = color.internalFormat;
+    // ES requires a sized format. The older desktop extension does not. Correct the format on ES.
+    if (ctx->isOpenGLES()) {
+        if (color.internalFormat == GL_RGBA) {
+            if (funcs.hasOpenGLExtension(QOpenGLExtensions::Sized8Formats))
+                storageFormat = GL_RGBA8;
+            else
+                storageFormat = GL_RGBA4;
+        } else if (color.internalFormat == GL_RGB10) {
+            // GL_RGB10 is not allowed in ES for glRenderbufferStorage.
+            storageFormat = GL_RGB10_A2;
+        }
+    }
+
+    funcs.glGenRenderbuffers(1, &color_buffer);
+    funcs.glBindRenderbuffer(GL_RENDERBUFFER, color_buffer);
+    funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, *samples, storageFormat, color.size.width(), color.size.height());
+    funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + idx,
+                                    GL_RENDERBUFFER, color_buffer);
+
+    QT_CHECK_GLERROR();
+    valid = checkFramebufferStatus(ctx);
+    if (valid) {
+        // Query the actual number of samples. This can be greater than the requested
+        // value since the typically supported values are 0, 4, 8, ..., and the
+        // requests are mapped to the next supported value.
+        funcs.glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_SAMPLES, samples);
+        color.guard = new QOpenGLSharedResourceGuard(ctx, color_buffer, freeRenderbufferFunc);
+    } else {
+        funcs.glDeleteRenderbuffers(1, &color_buffer);
+    }
+}
+
+void QOpenGLFramebufferObjectPrivate::initDepthStencilAttachments(QOpenGLContext *ctx,
+                                                                  QOpenGLFramebufferObject::Attachment attachment)
+{
+    // Use the same sample count for all attachments. format.samples() already contains
+    // the actual number of samples for the color attachment and is not suitable. Use
+    // requestedSamples instead.
+    const int samples = requestedSamples;
 
     // free existing attachments
     if (depth_buffer_guard) {
+#ifdef Q_OS_WASM
+        funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0);
+#else
         funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
+#endif
         depth_buffer_guard->free();
     }
     if (stencil_buffer_guard) {
@@ -547,7 +649,35 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
     // In practice, a combined depth-stencil buffer is supported by all desktop platforms, while a
     // separate stencil buffer is not. On embedded devices however, a combined depth-stencil buffer
     // might not be supported while separate buffers are, according to QTBUG-12861.
+#ifdef Q_OS_WASM
+    // WebGL doesn't allow separately attach buffers to
+    // STENCIL_ATTACHMENT and DEPTH_ATTACHMENT
+    // QTBUG-69913
+    if (attachment == QOpenGLFramebufferObject::CombinedDepthStencil) {
+        funcs.glGenRenderbuffers(1, &depth_buffer);
+        funcs.glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
+        Q_ASSERT(funcs.glIsRenderbuffer(depth_buffer));
 
+        GLenum storageFormat = GL_DEPTH_STENCIL;
+
+        if (samples != 0 ) {
+            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
+                                                   storageFormat, dsSize.width(), dsSize.height());
+        } else {
+            funcs.glRenderbufferStorage(GL_RENDERBUFFER, storageFormat,
+                                        dsSize.width(), dsSize.height());
+        }
+
+        funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                                        GL_RENDERBUFFER, depth_buffer);
+
+        valid = checkFramebufferStatus(ctx);
+        if (!valid) {
+            funcs.glDeleteRenderbuffers(1, &depth_buffer);
+            depth_buffer = 0;
+        }
+    }
+#else
     if (attachment == QOpenGLFramebufferObject::CombinedDepthStencil
         && funcs.hasOpenGLExtension(QOpenGLExtensions::PackedDepthStencil))
     {
@@ -557,10 +687,10 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
         Q_ASSERT(funcs.glIsRenderbuffer(depth_buffer));
         if (samples != 0 && funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample))
             funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                GL_DEPTH24_STENCIL8, size.width(), size.height());
+                GL_DEPTH24_STENCIL8, dsSize.width(), dsSize.height());
         else
             funcs.glRenderbufferStorage(GL_RENDERBUFFER,
-                GL_DEPTH24_STENCIL8, size.width(), size.height());
+                GL_DEPTH24_STENCIL8, dsSize.width(), dsSize.height());
 
         stencil_buffer = depth_buffer;
         funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
@@ -582,30 +712,29 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
         funcs.glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
         Q_ASSERT(funcs.glIsRenderbuffer(depth_buffer));
         if (samples != 0 && funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample)) {
-#ifdef QT_OPENGL_ES
-            if (funcs.hasOpenGLExtension(QOpenGLExtensions::Depth24)) {
-                funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                    GL_DEPTH_COMPONENT24, size.width(), size.height());
+            if (ctx->isOpenGLES()) {
+                if (funcs.hasOpenGLExtension(QOpenGLExtensions::Depth24))
+                    funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
+                                                           GL_DEPTH_COMPONENT24, dsSize.width(), dsSize.height());
+                else
+                    funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
+                                                           GL_DEPTH_COMPONENT16, dsSize.width(), dsSize.height());
             } else {
                 funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                    GL_DEPTH_COMPONENT16, size.width(), size.height());
+                                                       GL_DEPTH_COMPONENT, dsSize.width(), dsSize.height());
             }
-#else
-            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                GL_DEPTH_COMPONENT, size.width(), size.height());
-#endif
         } else {
-#ifdef QT_OPENGL_ES
-            if (funcs.hasOpenGLExtension(QOpenGLExtensions::Depth24)) {
-                funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24,
-                                        size.width(), size.height());
+            if (ctx->isOpenGLES()) {
+                if (funcs.hasOpenGLExtension(QOpenGLExtensions::Depth24)) {
+                    funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24,
+                                                dsSize.width(), dsSize.height());
+                } else {
+                    funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                                                dsSize.width(), dsSize.height());
+                }
             } else {
-                funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
-                                        size.width(), size.height());
+                funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, dsSize.width(), dsSize.height());
             }
-#else
-            funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, size.width(), size.height());
-#endif
         }
         funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                      GL_RENDERBUFFER, depth_buffer);
@@ -620,23 +749,18 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
         funcs.glGenRenderbuffers(1, &stencil_buffer);
         funcs.glBindRenderbuffer(GL_RENDERBUFFER, stencil_buffer);
         Q_ASSERT(funcs.glIsRenderbuffer(stencil_buffer));
-        if (samples != 0 && funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample)) {
+
 #ifdef QT_OPENGL_ES
-            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                GL_STENCIL_INDEX8, size.width(), size.height());
+        GLenum storage = GL_STENCIL_INDEX8;
 #else
-            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples,
-                GL_STENCIL_INDEX, size.width(), size.height());
+        GLenum storage = ctx->isOpenGLES() ? GL_STENCIL_INDEX8 : GL_STENCIL_INDEX;
 #endif
-        } else {
-#ifdef QT_OPENGL_ES
-            funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8,
-                                  size.width(), size.height());
-#else
-            funcs.glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX,
-                                  size.width(), size.height());
-#endif
-        }
+
+        if (samples != 0 && funcs.hasOpenGLExtension(QOpenGLExtensions::FramebufferMultisample))
+            funcs.glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, storage, dsSize.width(), dsSize.height());
+        else
+            funcs.glRenderbufferStorage(GL_RENDERBUFFER, storage, dsSize.width(), dsSize.height());
+
         funcs.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
                                   GL_RENDERBUFFER, stencil_buffer);
         valid = checkFramebufferStatus(ctx);
@@ -645,11 +769,16 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
             stencil_buffer = 0;
         }
     }
+#endif //Q_OS_WASM
 
     // The FBO might have become valid after removing the depth or stencil buffer.
     valid = checkFramebufferStatus(ctx);
 
+#ifdef Q_OS_WASM
+    if (depth_buffer) {
+#else
     if (depth_buffer && stencil_buffer) {
+#endif
         fbo_attachment = QOpenGLFramebufferObject::CombinedDepthStencil;
     } else if (depth_buffer) {
         fbo_attachment = QOpenGLFramebufferObject::Depth;
@@ -686,25 +815,24 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
     \ingroup painting-3D
 
     The QOpenGLFramebufferObject class encapsulates an OpenGL framebuffer
-    object, defined by the \c{GL_EXT_framebuffer_object} extension. In
-    addition it provides a rendering surface that can be painted on
-    with a QPainter, rendered to using native OpenGL calls, or both. This
-    surface can be bound and used as a regular texture in your own OpenGL
-    drawing code.  By default, the QOpenGLFramebufferObject class
-    generates a 2D OpenGL texture (using the \c{GL_TEXTURE_2D} target),
-    which is used as the internal rendering target.
+    object, defined by the \c{GL_EXT_framebuffer_object} extension. It provides
+    a rendering surface that can be painted on with a QPainter with the help of
+    QOpenGLPaintDevice, or rendered to using native OpenGL calls. This surface
+    can be bound and used as a regular texture in your own OpenGL drawing code.
+    By default, the QOpenGLFramebufferObject class generates a 2D OpenGL
+    texture (using the \c{GL_TEXTURE_2D} target), which is used as the internal
+    rendering target.
 
     \b{It is important to have a current OpenGL context when creating a
     QOpenGLFramebufferObject, otherwise initialization will fail.}
 
-    When using a QPainter to paint to a QOpenGLFramebufferObject you should take
-    care that the QOpenGLFramebufferObject is created with the CombinedDepthStencil
-    attachment for QPainter to be able to render correctly.
-    Note that you need to create a QOpenGLFramebufferObject with more than one
-    sample per pixel for primitives to be antialiased when drawing using a
-    QPainter. To create a multisample framebuffer object you should use one of
-    the constructors that take a QOpenGLFramebufferObject parameter, and set the
-    QOpenGLFramebufferObject::samples() property to a non-zero value.
+    Create the QOpenGLFrameBufferObject instance with the CombinedDepthStencil
+    attachment if you want QPainter to render correctly. Note that you need to
+    create a QOpenGLFramebufferObject with more than one sample per pixel for
+    primitives to be antialiased when drawing using a QPainter. To create a
+    multisample framebuffer object you should use one of the constructors that
+    take a QOpenGLFramebufferObjectFormat parameter, and set the
+    QOpenGLFramebufferObjectFormat::samples() property to a non-zero value.
 
     For multisample framebuffer objects a color render buffer is created,
     otherwise a texture with the specified texture target is created.
@@ -712,15 +840,17 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
     format, and will be bound to the \c GL_COLOR_ATTACHMENT0
     attachment in the framebuffer object.
 
+    Multiple render targets are also supported, in case the OpenGL
+    implementation supports this. Here there will be multiple textures (or, in
+    case of multisampling, renderbuffers) present and each of them will get
+    attached to \c GL_COLOR_ATTACHMENT0, \c 1, \c 2, ...
+
     If you want to use a framebuffer object with multisampling enabled
     as a texture, you first need to copy from it to a regular framebuffer
     object using QOpenGLContext::blitFramebuffer().
 
-    \section1 Threading
-
-    As of Qt 4.8, it's possible to draw into a QOpenGLFramebufferObject
-    using a QPainter in a separate thread. Note that OpenGL 2.0 or
-    OpenGL ES 2.0 is required for this to work.
+    It is possible to draw into a QOpenGLFramebufferObject using QPainter and
+    QOpenGLPaintDevice in a separate thread.
 */
 
 
@@ -744,8 +874,18 @@ void QOpenGLFramebufferObjectPrivate::initAttachments(QOpenGLContext *ctx, QOpen
     \sa attachment()
 */
 
+static inline GLenum effectiveInternalFormat(GLenum internalFormat)
+{
+    if (!internalFormat)
+#ifdef QT_OPENGL_ES_2
+        internalFormat = GL_RGBA;
+#else
+        internalFormat = QOpenGLContext::currentContext()->isOpenGLES() ? GL_RGBA : GL_RGBA8;
+#endif
+    return internalFormat;
+}
 
-/*! \fn QOpenGLFramebufferObject::QOpenGLFramebufferObject(const QSize &size, GLenum target)
+/*!
 
     Constructs an OpenGL framebuffer object and binds a 2D OpenGL texture
     to the buffer of the size \a size. The texture is bound to the
@@ -773,10 +913,10 @@ QOpenGLFramebufferObject::QOpenGLFramebufferObject(const QSize &size, GLenum tar
     : d_ptr(new QOpenGLFramebufferObjectPrivate)
 {
     Q_D(QOpenGLFramebufferObject);
-    d->init(this, size, NoAttachment, target, DEFAULT_FORMAT);
+    d->init(this, size, NoAttachment, target, effectiveInternalFormat(0));
 }
 
-/*! \overload
+/*!
 
     Constructs an OpenGL framebuffer object and binds a 2D OpenGL texture
     to the buffer of the given \a width and \a height.
@@ -784,13 +924,11 @@ QOpenGLFramebufferObject::QOpenGLFramebufferObject(const QSize &size, GLenum tar
     \sa size(), texture()
 */
 QOpenGLFramebufferObject::QOpenGLFramebufferObject(int width, int height, GLenum target)
-    : d_ptr(new QOpenGLFramebufferObjectPrivate)
+    : QOpenGLFramebufferObject(QSize(width, height), target)
 {
-    Q_D(QOpenGLFramebufferObject);
-    d->init(this, QSize(width, height), NoAttachment, target, DEFAULT_FORMAT);
 }
 
-/*! \overload
+/*!
 
     Constructs an OpenGL framebuffer object of the given \a size based on the
     supplied \a format.
@@ -804,27 +942,24 @@ QOpenGLFramebufferObject::QOpenGLFramebufferObject(const QSize &size, const QOpe
             format.samples(), format.mipmap());
 }
 
-/*! \overload
+/*!
 
     Constructs an OpenGL framebuffer object of the given \a width and \a height
     based on the supplied \a format.
 */
 
 QOpenGLFramebufferObject::QOpenGLFramebufferObject(int width, int height, const QOpenGLFramebufferObjectFormat &format)
-    : d_ptr(new QOpenGLFramebufferObjectPrivate)
+    : QOpenGLFramebufferObject(QSize(width, height), format)
 {
-    Q_D(QOpenGLFramebufferObject);
-    d->init(this, QSize(width, height), format.attachment(), format.textureTarget(),
-            format.internalTextureFormat(), format.samples(), format.mipmap());
 }
 
-/*! \overload
+/*!
 
     Constructs an OpenGL framebuffer object and binds a texture to the
     buffer of the given \a width and \a height.
 
     The \a attachment parameter describes the depth/stencil buffer
-    configuration, \a target the texture target and \a internal_format
+    configuration, \a target the texture target and \a internalFormat
     the internal texture format. The default texture target is \c
     GL_TEXTURE_2D, while the default internal format is \c GL_RGBA8
     for desktop OpenGL and \c GL_RGBA for OpenGL/ES.
@@ -832,20 +967,20 @@ QOpenGLFramebufferObject::QOpenGLFramebufferObject(int width, int height, const 
     \sa size(), texture(), attachment()
 */
 QOpenGLFramebufferObject::QOpenGLFramebufferObject(int width, int height, Attachment attachment,
-                                           GLenum target, GLenum internal_format)
+                                           GLenum target, GLenum internalFormat)
     : d_ptr(new QOpenGLFramebufferObjectPrivate)
 {
     Q_D(QOpenGLFramebufferObject);
-    d->init(this, QSize(width, height), attachment, target, internal_format);
+    d->init(this, QSize(width, height), attachment, target, effectiveInternalFormat(internalFormat));
 }
 
-/*! \overload
+/*!
 
     Constructs an OpenGL framebuffer object and binds a texture to the
     buffer of the given \a size.
 
     The \a attachment parameter describes the depth/stencil buffer
-    configuration, \a target the texture target and \a internal_format
+    configuration, \a target the texture target and \a internalFormat
     the internal texture format. The default texture target is \c
     GL_TEXTURE_2D, while the default internal format is \c GL_RGBA8
     for desktop OpenGL and \c GL_RGBA for OpenGL/ES.
@@ -853,38 +988,111 @@ QOpenGLFramebufferObject::QOpenGLFramebufferObject(int width, int height, Attach
     \sa size(), texture(), attachment()
 */
 QOpenGLFramebufferObject::QOpenGLFramebufferObject(const QSize &size, Attachment attachment,
-                                           GLenum target, GLenum internal_format)
+                                           GLenum target, GLenum internalFormat)
     : d_ptr(new QOpenGLFramebufferObjectPrivate)
 {
     Q_D(QOpenGLFramebufferObject);
-    d->init(this, size, attachment, target, internal_format);
+    d->init(this, size, attachment, target, effectiveInternalFormat(internalFormat));
 }
 
 /*!
-    \fn QOpenGLFramebufferObject::~QOpenGLFramebufferObject()
 
     Destroys the framebuffer object and frees any allocated resources.
 */
 QOpenGLFramebufferObject::~QOpenGLFramebufferObject()
 {
     Q_D(QOpenGLFramebufferObject);
+    if (isBound())
+        release();
 
-    if (d->texture_guard)
-        d->texture_guard->free();
-    if (d->color_buffer_guard)
-        d->color_buffer_guard->free();
+    for (const auto &color : qAsConst(d->colorAttachments)) {
+        if (color.guard)
+            color.guard->free();
+    }
+    d->colorAttachments.clear();
+
     if (d->depth_buffer_guard)
         d->depth_buffer_guard->free();
     if (d->stencil_buffer_guard && d->stencil_buffer_guard != d->depth_buffer_guard)
         d->stencil_buffer_guard->free();
     if (d->fbo_guard)
         d->fbo_guard->free();
+
+    QOpenGLContextPrivate *contextPrv = QOpenGLContextPrivate::get(QOpenGLContext::currentContext());
+    if (contextPrv && contextPrv->qgl_current_fbo == this) {
+        contextPrv->qgl_current_fbo_invalid = true;
+        contextPrv->qgl_current_fbo = nullptr;
+    }
+}
+
+/*!
+    Creates and attaches an additional texture or renderbuffer of \a size width
+    and height.
+
+    There is always an attachment at GL_COLOR_ATTACHMENT0. Call this function
+    to set up additional attachments at GL_COLOR_ATTACHMENT1,
+    GL_COLOR_ATTACHMENT2, ...
+
+    When \a internalFormat is not \c 0, it specifies the internal format of the
+    texture or renderbuffer. Otherwise a default of GL_RGBA or GL_RGBA8 is
+    used.
+
+    \note This is only functional when multiple render targets are supported by
+    the OpenGL implementation. When that is not the case, the function will not
+    add any additional color attachments. Call
+    QOpenGLFunctions::hasOpenGLFeature() with
+    QOpenGLFunctions::MultipleRenderTargets at runtime to check if MRT is
+    supported.
+
+    \note The internal format of the color attachments may differ but there may
+    be limitations on the supported combinations, depending on the drivers.
+
+    \note The size of the color attachments may differ but rendering is limited
+    to the area that fits all the attachments, according to the OpenGL
+    specification. Some drivers may not be fully conformant in this respect,
+    however.
+
+    \since 5.6
+ */
+void QOpenGLFramebufferObject::addColorAttachment(const QSize &size, GLenum internalFormat)
+{
+    Q_D(QOpenGLFramebufferObject);
+
+    if (!QOpenGLContext::currentContext()->functions()->hasOpenGLFeature(QOpenGLFunctions::MultipleRenderTargets)) {
+        qWarning("Multiple render targets not supported, ignoring extra color attachment request");
+        return;
+    }
+
+    QOpenGLFramebufferObjectPrivate::ColorAttachment color(size, effectiveInternalFormat(internalFormat));
+    d->colorAttachments.append(color);
+    const int idx = d->colorAttachments.count() - 1;
+
+    if (d->requestedSamples == 0) {
+        d->initTexture(idx);
+    } else {
+        GLint samples = d->requestedSamples;
+        d->initColorBuffer(idx, &samples);
+    }
+}
+
+/*! \overload
+
+    Creates and attaches an additional texture or renderbuffer of size \a width and \a height.
+
+    When \a internalFormat is not \c 0, it specifies the internal format of the texture or
+    renderbuffer. Otherwise a default of GL_RGBA or GL_RGBA8 is used.
+
+    \since 5.6
+ */
+void QOpenGLFramebufferObject::addColorAttachment(int width, int height, GLenum internalFormat)
+{
+    addColorAttachment(QSize(width, height), internalFormat);
 }
 
 /*!
     \fn bool QOpenGLFramebufferObject::isValid() const
 
-    Returns true if the framebuffer object is valid.
+    Returns \c true if the framebuffer object is valid.
 
     The framebuffer can become invalid if the initialization process
     fails, the user attaches an invalid buffer to the framebuffer
@@ -910,14 +1118,18 @@ bool QOpenGLFramebufferObject::isValid() const
 
     Switches rendering from the default, windowing system provided
     framebuffer to this framebuffer object.
-    Returns true upon success, false otherwise.
+    Returns \c true upon success, false otherwise.
+
+    \note If takeTexture() was called, a new texture is created and associated
+    with the framebuffer object. This is potentially expensive and changes the
+    context state (the currently bound texture).
 
     \sa release()
 */
 bool QOpenGLFramebufferObject::bind()
 {
     if (!isValid())
-	return false;
+        return false;
     Q_D(QOpenGLFramebufferObject);
     QOpenGLContext *current = QOpenGLContext::currentContext();
     if (!current)
@@ -926,10 +1138,20 @@ bool QOpenGLFramebufferObject::bind()
     if (current->shareGroup() != d->fbo_guard->group())
         qWarning("QOpenGLFramebufferObject::bind() called from incompatible context");
 #endif
+
     d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, d->fbo());
-    d->valid = d->checkFramebufferStatus(current);
-    if (d->valid && current)
-        current->d_func()->current_fbo = d->fbo();
+
+    QOpenGLContextPrivate::get(current)->qgl_current_fbo_invalid = true;
+    QOpenGLContextPrivate::get(current)->qgl_current_fbo = this;
+
+    if (d->format.samples() == 0) {
+        // Create new textures to replace the ones stolen via takeTexture().
+        for (int i = 0; i < d->colorAttachments.count(); ++i) {
+            if (!d->colorAttachments.at(i).guard)
+                d->initTexture(i);
+        }
+    }
+
     return d->valid;
 }
 
@@ -938,14 +1160,14 @@ bool QOpenGLFramebufferObject::bind()
 
     Switches rendering back to the default, windowing system provided
     framebuffer.
-    Returns true upon success, false otherwise.
+    Returns \c true upon success, false otherwise.
 
     \sa bind()
 */
 bool QOpenGLFramebufferObject::release()
 {
     if (!isValid())
-	return false;
+        return false;
 
     QOpenGLContext *current = QOpenGLContext::currentContext();
     if (!current)
@@ -958,8 +1180,11 @@ bool QOpenGLFramebufferObject::release()
 #endif
 
     if (current) {
-        current->d_func()->current_fbo = current->defaultFramebufferObject();
-        d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, current->d_func()->current_fbo);
+        d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, current->defaultFramebufferObject());
+
+        QOpenGLContextPrivate *contextPrv = QOpenGLContextPrivate::get(current);
+        contextPrv->qgl_current_fbo_invalid = true;
+        contextPrv->qgl_current_fbo = nullptr;
     }
 
     return true;
@@ -974,23 +1199,122 @@ bool QOpenGLFramebufferObject::release()
 
     If a multisample framebuffer object is used then the value returned
     from this function will be invalid.
+
+    When multiple textures are attached, the return value is the ID of
+    the first one.
+
+    \sa takeTexture(), textures()
 */
 GLuint QOpenGLFramebufferObject::texture() const
 {
     Q_D(const QOpenGLFramebufferObject);
-    return d->texture_guard ? d->texture_guard->id() : 0;
+    return d->colorAttachments[0].guard ? d->colorAttachments[0].guard->id() : 0;
 }
 
 /*!
-    \fn QSize QOpenGLFramebufferObject::size() const
+    Returns the texture id for all attached textures.
 
-    Returns the size of the texture attached to this framebuffer
-    object.
+    If a multisample framebuffer object is used, then an empty vector is returned.
+
+    \since 5.6
+
+    \sa takeTexture(), texture()
+*/
+QVector<GLuint> QOpenGLFramebufferObject::textures() const
+{
+    Q_D(const QOpenGLFramebufferObject);
+    QVector<GLuint> ids;
+    if (d->format.samples() != 0)
+        return ids;
+    ids.reserve(d->colorAttachments.count());
+    for (const auto &color : d->colorAttachments)
+        ids.append(color.guard ? color.guard->id() : 0);
+    return ids;
+}
+
+/*!
+   \fn GLuint QOpenGLFramebufferObject::takeTexture()
+
+   Returns the texture id for the texture attached to this framebuffer
+   object. The ownership of the texture is transferred to the caller.
+
+   If the framebuffer object is currently bound, an implicit release()
+   will be done. During the next call to bind() a new texture will be
+   created.
+
+   If a multisample framebuffer object is used, then there is no
+   texture and the return value from this function will be invalid.
+   Similarly, incomplete framebuffer objects will also return 0.
+
+   \since 5.3
+
+   \sa texture(), bind(), release()
+ */
+GLuint QOpenGLFramebufferObject::takeTexture()
+{
+    return takeTexture(0);
+}
+
+/*! \overload
+
+   Returns the texture id for the texture attached to the color attachment of
+   index \a colorAttachmentIndex of this framebuffer object. The ownership of
+   the texture is transferred to the caller.
+
+   When \a colorAttachmentIndex is \c 0, the behavior is identical to the
+   parameter-less variant of this function.
+
+   If the framebuffer object is currently bound, an implicit release()
+   will be done. During the next call to bind() a new texture will be
+   created.
+
+   If a multisample framebuffer object is used, then there is no
+   texture and the return value from this function will be invalid.
+   Similarly, incomplete framebuffer objects will also return 0.
+
+   \since 5.6
+ */
+GLuint QOpenGLFramebufferObject::takeTexture(int colorAttachmentIndex)
+{
+    Q_D(QOpenGLFramebufferObject);
+    GLuint id = 0;
+    if (isValid() && d->format.samples() == 0 && d->colorAttachments.count() > colorAttachmentIndex) {
+        QOpenGLContext *current = QOpenGLContext::currentContext();
+        if (current && current->shareGroup() == d->fbo_guard->group() && isBound())
+            release();
+        auto &guard = d->colorAttachments[colorAttachmentIndex].guard;
+        id = guard ? guard->id() : 0;
+        // Do not call free() on texture_guard, just null it out.
+        // This way the texture will not be deleted when the guard is destroyed.
+        guard = 0;
+    }
+    return id;
+}
+
+/*!
+    \return the size of the color and depth/stencil attachments attached to
+    this framebuffer object.
 */
 QSize QOpenGLFramebufferObject::size() const
 {
     Q_D(const QOpenGLFramebufferObject);
-    return d->size;
+    return d->dsSize;
+}
+
+/*!
+    \return the sizes of all color attachments attached to this framebuffer
+    object.
+
+    \since 5.6
+*/
+QVector<QSize> QOpenGLFramebufferObject::sizes() const
+{
+    Q_D(const QOpenGLFramebufferObject);
+    QVector<QSize> sz;
+    sz.reserve(d->colorAttachments.size());
+    for (const auto &color : d->colorAttachments)
+        sz.append(color.size);
+    return sz;
 }
 
 /*!
@@ -1014,81 +1338,233 @@ QOpenGLFramebufferObjectFormat QOpenGLFramebufferObject::format() const
     return d->format;
 }
 
+static inline QImage qt_gl_read_framebuffer_rgba8(const QSize &size, bool include_alpha, QOpenGLContext *context)
+{
+    QOpenGLFunctions *funcs = context->functions();
+    const int w = size.width();
+    const int h = size.height();
+    bool isOpenGL12orBetter = !context->isOpenGLES() && (context->format().majorVersion() >= 2 || context->format().minorVersion() >= 2);
+    if (isOpenGL12orBetter) {
+        QImage img(size, include_alpha ? QImage::Format_ARGB32_Premultiplied : QImage::Format_RGB32);
+        funcs->glReadPixels(0, 0, w, h, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, img.bits());
+        return img;
+    }
+
+    // For OpenGL ES stick with the byte ordered format / RGBA readback format
+    // since that is the only spec mandated way. (also, skip the
+    // GL_IMPLEMENTATION_COLOR_READ_FORMAT mess since there is nothing saying a
+    // BGRA capable impl would return BGRA from there)
+
+    QImage rgbaImage(size, include_alpha ? QImage::Format_RGBA8888_Premultiplied : QImage::Format_RGBX8888);
+    funcs->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgbaImage.bits());
+    return rgbaImage;
+}
+
+static inline QImage qt_gl_read_framebuffer_rgb10a2(const QSize &size, bool include_alpha, QOpenGLContext *context)
+{
+    // We assume OpenGL 1.2+ or ES 3.0+ here.
+    QImage img(size, include_alpha ? QImage::Format_A2BGR30_Premultiplied : QImage::Format_BGR30);
+    context->functions()->glReadPixels(0, 0, size.width(), size.height(), GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, img.bits());
+    return img;
+}
+
+static inline QImage qt_gl_read_framebuffer_rgba16(const QSize &size, bool include_alpha, QOpenGLContext *context)
+{
+    // We assume OpenGL 1.2+ or ES 3.0+ here.
+    QImage img(size, include_alpha ? QImage::Format_RGBA64_Premultiplied : QImage::Format_RGBX64);
+    context->functions()->glReadPixels(0, 0, size.width(), size.height(), GL_RGBA, GL_UNSIGNED_SHORT, img.bits());
+    return img;
+}
+
+static QImage qt_gl_read_framebuffer(const QSize &size, GLenum internal_format, bool include_alpha, bool flip)
+{
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    QOpenGLFunctions *funcs = ctx->functions();
+    while (true) {
+        GLenum error = funcs->glGetError();
+        if (error == GL_NO_ERROR || error == GL_CONTEXT_LOST)
+            break;
+    }
+    switch (internal_format) {
+    case GL_RGB:
+    case GL_RGB8:
+        return qt_gl_read_framebuffer_rgba8(size, false, ctx).mirrored(false, flip);
+    case GL_RGB10:
+        return qt_gl_read_framebuffer_rgb10a2(size, false, ctx).mirrored(false, flip);
+    case GL_RGB10_A2:
+        return qt_gl_read_framebuffer_rgb10a2(size, include_alpha, ctx).mirrored(false, flip);
+    case GL_RGB16:
+        return qt_gl_read_framebuffer_rgba16(size, false, ctx).mirrored(false, flip);
+    case GL_RGBA16:
+        return qt_gl_read_framebuffer_rgba16(size, include_alpha, ctx).mirrored(false, flip);
+    case GL_RGBA:
+    case GL_RGBA8:
+    default:
+        return qt_gl_read_framebuffer_rgba8(size, include_alpha, ctx).mirrored(false, flip);
+    }
+
+    Q_UNREACHABLE();
+    return QImage();
+}
+
 Q_GUI_EXPORT QImage qt_gl_read_framebuffer(const QSize &size, bool alpha_format, bool include_alpha)
 {
-    QImage img(size, (alpha_format && include_alpha) ? QImage::Format_ARGB32_Premultiplied
-                                                     : QImage::Format_RGB32);
-    int w = size.width();
-    int h = size.height();
+    return qt_gl_read_framebuffer(size, alpha_format ? GL_RGBA : GL_RGB, include_alpha, true);
+}
 
-#ifdef QT_OPENGL_ES
-    GLint fmt = GL_BGRA_EXT;
-#else
-    GLint fmt = GL_BGRA;
-#endif
-    while (glGetError());
-    glReadPixels(0, 0, w, h, fmt, GL_UNSIGNED_BYTE, img.bits());
-    if (glGetError()) {
-        glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
-        img = img.rgbSwapped();
-    }
-    return img.mirrored();
+/*!
+    \fn QImage QOpenGLFramebufferObject::toImage(bool flipped) const
+
+    Returns the contents of this framebuffer object as a QImage.
+
+    If \a flipped is true the image is flipped from OpenGL coordinates to raster coordinates.
+    If used together with QOpenGLPaintDevice, \a flipped should be the opposite of the value
+    of QOpenGLPaintDevice::paintFlipped().
+
+    The returned image has a format of premultiplied ARGB32 or RGB32. The latter
+    is used only when internalTextureFormat() is set to \c GL_RGB. Since Qt 5.2
+    the function will fall back to premultiplied RGBA8888 or RGBx8888 when
+    reading to (A)RGB32 is not supported, and this includes OpenGL ES. Since Qt
+    5.4 an A2BGR30 image is returned if the internal format is RGB10_A2, and since
+    Qt 5.12 a RGBA64 image is return if the internal format is RGBA16.
+
+    If the rendering in the framebuffer was not done with premultiplied alpha in mind,
+    create a wrapper QImage with a non-premultiplied format. This is necessary before
+    performing operations like QImage::save() because otherwise the image data would get
+    unpremultiplied, even though it was not premultiplied in the first place. To create
+    such a wrapper without performing a copy of the pixel data, do the following:
+
+    \code
+    QImage fboImage(fbo.toImage());
+    QImage image(fboImage.constBits(), fboImage.width(), fboImage.height(), QImage::Format_ARGB32);
+    \endcode
+
+    For multisampled framebuffer objects the samples are resolved using the
+    \c{GL_EXT_framebuffer_blit} extension. If the extension is not available, the contents
+    of the returned image is undefined.
+
+    For singlesampled framebuffers the contents is retrieved via \c glReadPixels. This is
+    a potentially expensive and inefficient operation. Therefore it is recommended that
+    this function is used as seldom as possible.
+
+    \sa QOpenGLPaintDevice::paintFlipped()
+*/
+
+QImage QOpenGLFramebufferObject::toImage(bool flipped) const
+{
+    return toImage(flipped, 0);
 }
 
 /*!
     \fn QImage QOpenGLFramebufferObject::toImage() const
+    \overload
 
-    Returns the contents of this framebuffer object as a QImage.
+    Returns the contents of this framebuffer object as a QImage. This method flips
+    the image from OpenGL coordinates to raster coordinates.
 */
+// ### Qt 6: Remove this method and make it a default argument instead.
 QImage QOpenGLFramebufferObject::toImage() const
+{
+    return toImage(true, 0);
+}
+
+/*! \overload
+
+    Returns the contents of the color attachment of index \a
+    colorAttachmentIndex of this framebuffer object as a QImage. This method
+    flips the image from OpenGL coordinates to raster coordinates when \a
+    flipped is set to \c true.
+
+    \note This overload is only fully functional when multiple render targets are
+    supported by the OpenGL implementation. When that is not the case, only one
+    color attachment will be set up.
+
+    \since 5.6
+*/
+QImage QOpenGLFramebufferObject::toImage(bool flipped, int colorAttachmentIndex) const
 {
     Q_D(const QOpenGLFramebufferObject);
     if (!d->valid)
         return QImage();
 
-    // qt_gl_read_framebuffer doesn't work on a multisample FBO
-    if (format().samples() != 0) {
-        QOpenGLFramebufferObject temp(size(), QOpenGLFramebufferObjectFormat());
-
-        QRect rect(QPoint(0, 0), size());
-        blitFramebuffer(&temp, rect, const_cast<QOpenGLFramebufferObject *>(this), rect);
-
-        return temp.toImage();
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx) {
+        qWarning("QOpenGLFramebufferObject::toImage() called without a current context");
+        return QImage();
     }
 
-    bool wasBound = isBound();
-    if (!wasBound)
+    if (d->colorAttachments.count() <= colorAttachmentIndex) {
+        qWarning("QOpenGLFramebufferObject::toImage() called for missing color attachment");
+        return QImage();
+    }
+
+    GLuint prevFbo = 0;
+    ctx->functions()->glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint *) &prevFbo);
+
+    if (prevFbo != d->fbo())
         const_cast<QOpenGLFramebufferObject *>(this)->bind();
-    QImage image = qt_gl_read_framebuffer(d->size, format().internalTextureFormat() != GL_RGB, true);
-    if (!wasBound)
-        const_cast<QOpenGLFramebufferObject *>(this)->release();
+
+    QImage image;
+    QOpenGLExtraFunctions *extraFuncs = ctx->extraFunctions();
+    // qt_gl_read_framebuffer doesn't work on a multisample FBO
+    if (format().samples() != 0) {
+        QRect rect(QPoint(0, 0), size());
+        QOpenGLFramebufferObjectFormat fmt;
+        if (extraFuncs->hasOpenGLFeature(QOpenGLFunctions::MultipleRenderTargets)) {
+            fmt.setInternalTextureFormat(d->colorAttachments[colorAttachmentIndex].internalFormat);
+            QOpenGLFramebufferObject temp(d->colorAttachments[colorAttachmentIndex].size, fmt);
+            blitFramebuffer(&temp, rect, const_cast<QOpenGLFramebufferObject *>(this), rect,
+                            GL_COLOR_BUFFER_BIT, GL_NEAREST,
+                            colorAttachmentIndex, 0);
+            image = temp.toImage(flipped);
+        } else {
+            fmt.setInternalTextureFormat(d->colorAttachments[0].internalFormat);
+            QOpenGLFramebufferObject temp(size(), fmt);
+            blitFramebuffer(&temp, rect, const_cast<QOpenGLFramebufferObject *>(this), rect);
+            image = temp.toImage(flipped);
+        }
+    } else {
+        if (extraFuncs->hasOpenGLFeature(QOpenGLFunctions::MultipleRenderTargets)) {
+            extraFuncs->glReadBuffer(GL_COLOR_ATTACHMENT0 + colorAttachmentIndex);
+            image = qt_gl_read_framebuffer(d->colorAttachments[colorAttachmentIndex].size,
+                                           d->colorAttachments[colorAttachmentIndex].internalFormat,
+                                           true, flipped);
+            extraFuncs->glReadBuffer(GL_COLOR_ATTACHMENT0);
+        } else {
+            image = qt_gl_read_framebuffer(d->colorAttachments[0].size,
+                                           d->colorAttachments[0].internalFormat,
+                                           true, flipped);
+        }
+    }
+
+    if (prevFbo != d->fbo())
+        ctx->functions()->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
 
     return image;
 }
 
 /*!
     \fn bool QOpenGLFramebufferObject::bindDefault()
-    \internal
 
     Switches rendering back to the default, windowing system provided
     framebuffer.
-    Returns true upon success, false otherwise.
+    Returns \c true upon success, false otherwise.
 
     \sa bind(), release()
 */
 bool QOpenGLFramebufferObject::bindDefault()
 {
     QOpenGLContext *ctx = const_cast<QOpenGLContext *>(QOpenGLContext::currentContext());
-    QOpenGLFunctions functions(ctx);
 
     if (ctx) {
-        ctx->d_func()->current_fbo = ctx->defaultFramebufferObject();
-        functions.glBindFramebuffer(GL_FRAMEBUFFER, ctx->d_func()->current_fbo);
+        ctx->functions()->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject());
+        QOpenGLContextPrivate::get(ctx)->qgl_current_fbo_invalid = true;
+        QOpenGLContextPrivate::get(ctx)->qgl_current_fbo = nullptr;
+    }
 #ifdef QT_DEBUG
-    } else {
+    else
         qWarning("QOpenGLFramebufferObject::bindDefault() called without current context.");
 #endif
-    }
 
     return ctx != 0;
 }
@@ -1096,12 +1572,12 @@ bool QOpenGLFramebufferObject::bindDefault()
 /*!
     \fn bool QOpenGLFramebufferObject::hasOpenGLFramebufferObjects()
 
-    Returns true if the OpenGL \c{GL_EXT_framebuffer_object} extension
-    is present on this system; otherwise returns false.
+    Returns \c true if the OpenGL \c{GL_EXT_framebuffer_object} extension
+    is present on this system; otherwise returns \c false.
 */
 bool QOpenGLFramebufferObject::hasOpenGLFramebufferObjects()
 {
-    return QOpenGLFunctions(QOpenGLContext::currentContext()).hasOpenGLFeature(QOpenGLFunctions::Framebuffers);
+    return QOpenGLContext::currentContext()->functions()->hasOpenGLFeature(QOpenGLFunctions::Framebuffers);
 }
 
 /*!
@@ -1137,6 +1613,8 @@ QOpenGLFramebufferObject::Attachment QOpenGLFramebufferObject::attachment() cons
 
     This can be used to free or reattach the depth and stencil buffer
     attachments as needed.
+
+    \note This function alters the current framebuffer binding.
  */
 void QOpenGLFramebufferObject::setAttachment(QOpenGLFramebufferObject::Attachment attachment)
 {
@@ -1151,28 +1629,30 @@ void QOpenGLFramebufferObject::setAttachment(QOpenGLFramebufferObject::Attachmen
         qWarning("QOpenGLFramebufferObject::setAttachment() called from incompatible context");
 #endif
     d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, d->fbo());
-    d->initAttachments(current, attachment);
-    if (current->d_func()->current_fbo != d->fbo())
-        d->funcs.glBindFramebuffer(GL_FRAMEBUFFER, current->d_func()->current_fbo);
+    QOpenGLContextPrivate::get(current)->qgl_current_fbo_invalid = true;
+    d->initDepthStencilAttachments(current, attachment);
 }
 
 /*!
-    Returns true if the framebuffer object is currently bound to a context,
+    Returns \c true if the framebuffer object is currently bound to the current context,
     otherwise false is returned.
 */
-
 bool QOpenGLFramebufferObject::isBound() const
 {
     Q_D(const QOpenGLFramebufferObject);
-    QOpenGLContext *current = QOpenGLContext::currentContext();
-    return current ? current->d_func()->current_fbo == d->fbo() : false;
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx)
+        return false;
+    GLint fbo = 0;
+    ctx->functions()->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+    return GLuint(fbo) == d->fbo();
 }
 
 /*!
     \fn bool QOpenGLFramebufferObject::hasOpenGLFramebufferBlit()
 
-    Returns true if the OpenGL \c{GL_EXT_framebuffer_blit} extension
-    is present on this system; otherwise returns false.
+    Returns \c true if the OpenGL \c{GL_EXT_framebuffer_blit} extension
+    is present on this system; otherwise returns \c false.
 
     \sa blitFramebuffer()
 */
@@ -1212,12 +1692,50 @@ void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target,
                     buffers, filter);
 }
 
+/*! \overload
+ *
+    Convenience overload to blit between two framebuffer objects.
+*/
+void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target, const QRect &targetRect,
+                                               QOpenGLFramebufferObject *source, const QRect &sourceRect,
+                                               GLbitfield buffers,
+                                               GLenum filter)
+{
+    blitFramebuffer(target, targetRect, source, sourceRect, buffers, filter, 0, 0);
+}
+
 /*!
+    \enum QOpenGLFramebufferObject::FramebufferRestorePolicy
+    \since 5.7
+
+    This enum type is used to configure the behavior related to restoring
+    framebuffer bindings when calling blitFramebuffer().
+
+    \value DontRestoreFramebufferBinding        Do not restore the previous framebuffer binding.
+                                                The caller is responsible for tracking and setting
+                                                the framebuffer binding as needed.
+
+    \value RestoreFramebufferBindingToDefault   After the blit operation, bind the default
+                                                framebuffer.
+
+    \value RestoreFrameBufferBinding            Restore the previously bound framebuffer. This is
+                                                potentially expensive because of the need to
+                                                query the currently bound framebuffer.
+
+    \sa blitFramebuffer()
+*/
+
+/*!
+    \since 5.7
+
     Blits from the \a sourceRect rectangle in the \a source framebuffer
     object to the \a targetRect rectangle in the \a target framebuffer object.
 
     If \a source or \a target is 0, the default framebuffer will be used
     instead of a framebuffer object as source or target respectively.
+
+    This function will have no effect unless hasOpenGLFramebufferBlit() returns
+    true.
 
     The \a buffers parameter should be a mask consisting of any combination of
     \c GL_COLOR_BUFFER_BIT, \c GL_DEPTH_BUFFER_BIT, and
@@ -1235,17 +1753,28 @@ void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target,
     have different sizes. The sizes must also be the same if any of the
     framebuffer objects are multisample framebuffers.
 
-    Note that the scissor test will restrict the blit area if enabled.
+    \note The scissor test will restrict the blit area if enabled.
 
-    This function will have no effect unless hasOpenGLFramebufferBlit() returns
-    true.
+    When multiple render targets are in use, \a readColorAttachmentIndex and \a
+    drawColorAttachmentIndex specify the index of the color attachments in the
+    source and destination framebuffers.
+
+    The \a restorePolicy determines if the framebuffer that was bound prior to
+    calling this function should be restored, or if the default framebuffer
+    should be bound before returning, of if the caller is responsible for
+    tracking and setting the bound framebuffer. Restoring the previous
+    framebuffer can be relatively expensive due to the call to \c{glGetIntegerv}
+    which on some OpenGL drivers may imply a pipeline stall.
 
     \sa hasOpenGLFramebufferBlit()
 */
 void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target, const QRect &targetRect,
-                                           QOpenGLFramebufferObject *source, const QRect &sourceRect,
-                                           GLbitfield buffers,
-                                           GLenum filter)
+                                               QOpenGLFramebufferObject *source, const QRect &sourceRect,
+                                               GLbitfield buffers,
+                                               GLenum filter,
+                                               int readColorAttachmentIndex,
+                                               int drawColorAttachmentIndex,
+                                               QOpenGLFramebufferObject::FramebufferRestorePolicy restorePolicy)
 {
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
     if (!ctx)
@@ -1254,6 +1783,10 @@ void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target,
     QOpenGLExtensions extensions(ctx);
     if (!extensions.hasOpenGLExtension(QOpenGLExtensions::FramebufferBlit))
         return;
+
+    GLuint prevFbo = 0;
+    if (restorePolicy == RestoreFrameBufferBinding)
+        ctx->functions()->glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint *) &prevFbo);
 
     const int sx0 = sourceRect.left();
     const int sx1 = sourceRect.left() + sourceRect.width();
@@ -1265,14 +1798,62 @@ void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target,
     const int ty0 = targetRect.top();
     const int ty1 = targetRect.top() + targetRect.height();
 
-    extensions.glBindFramebuffer(GL_READ_FRAMEBUFFER, source ? source->handle() : 0);
-    extensions.glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target ? target->handle() : 0);
+    const GLuint defaultFboId = ctx->defaultFramebufferObject();
+
+    extensions.glBindFramebuffer(GL_READ_FRAMEBUFFER, source ? source->handle() : defaultFboId);
+    extensions.glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target ? target->handle() : defaultFboId);
+
+    const bool supportsMRT = extensions.hasOpenGLFeature(QOpenGLFunctions::MultipleRenderTargets);
+    if (supportsMRT) {
+        extensions.glReadBuffer(GL_COLOR_ATTACHMENT0 + readColorAttachmentIndex);
+        if (target) {
+            GLenum drawBuf = GL_COLOR_ATTACHMENT0 + drawColorAttachmentIndex;
+            extensions.glDrawBuffers(1, &drawBuf);
+        }
+    }
 
     extensions.glBlitFramebuffer(sx0, sy0, sx1, sy1,
                                  tx0, ty0, tx1, ty1,
                                  buffers, filter);
 
-    extensions.glBindFramebuffer(GL_FRAMEBUFFER, ctx->d_func()->current_fbo);
+    if (supportsMRT)
+        extensions.glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+    switch (restorePolicy) {
+    case RestoreFrameBufferBinding:
+        ctx->functions()->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo); // sets both READ and DRAW
+        break;
+
+    case RestoreFramebufferBindingToDefault:
+        ctx->functions()->glBindFramebuffer(GL_FRAMEBUFFER, ctx->defaultFramebufferObject()); // sets both READ and DRAW
+        break;
+
+    case DontRestoreFramebufferBinding:
+        break;
+    }
+}
+
+/*!
+   \overload
+
+    Convenience overload to blit between two framebuffer objects and
+    to restore the previous framebuffer binding. Equivalent to calling
+    blitFramebuffer(target, targetRect, source, sourceRect, buffers, filter,
+    readColorAttachmentIndex, drawColorAttachmentIndex,
+    RestoreFrameBufferBinding).
+*/
+void QOpenGLFramebufferObject::blitFramebuffer(QOpenGLFramebufferObject *target, const QRect &targetRect,
+                                               QOpenGLFramebufferObject *source, const QRect &sourceRect,
+                                               GLbitfield buffers,
+                                               GLenum filter,
+                                               int readColorAttachmentIndex,
+                                               int drawColorAttachmentIndex)
+{
+    blitFramebuffer(target, targetRect, source, sourceRect,
+                    buffers, filter,
+                    readColorAttachmentIndex,
+                    drawColorAttachmentIndex,
+                    RestoreFrameBufferBinding);
 }
 
 QT_END_NAMESPACE

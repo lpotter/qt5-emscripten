@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'qtgradientview.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,11 +10,8 @@
 #define QTGRADIENTVIEW_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QToolButton>
@@ -39,15 +35,15 @@ public:
     void setupUi(QWidget *QtGradientView)
     {
         if (QtGradientView->objectName().isEmpty())
-            QtGradientView->setObjectName(QStringLiteral("QtGradientView"));
+            QtGradientView->setObjectName(QString::fromUtf8("QtGradientView"));
         QtGradientView->resize(484, 228);
         vboxLayout = new QVBoxLayout(QtGradientView);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         vboxLayout->setContentsMargins(0, 0, 0, 0);
         hboxLayout = new QHBoxLayout();
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         newButton = new QToolButton(QtGradientView);
-        newButton->setObjectName(QStringLiteral("newButton"));
+        newButton->setObjectName(QString::fromUtf8("newButton"));
         QSizePolicy sizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -59,7 +55,7 @@ public:
         hboxLayout->addWidget(newButton);
 
         editButton = new QToolButton(QtGradientView);
-        editButton->setObjectName(QStringLiteral("editButton"));
+        editButton->setObjectName(QString::fromUtf8("editButton"));
         sizePolicy.setHeightForWidth(editButton->sizePolicy().hasHeightForWidth());
         editButton->setSizePolicy(sizePolicy);
         editButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -68,7 +64,7 @@ public:
         hboxLayout->addWidget(editButton);
 
         renameButton = new QToolButton(QtGradientView);
-        renameButton->setObjectName(QStringLiteral("renameButton"));
+        renameButton->setObjectName(QString::fromUtf8("renameButton"));
         sizePolicy.setHeightForWidth(renameButton->sizePolicy().hasHeightForWidth());
         renameButton->setSizePolicy(sizePolicy);
         renameButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -77,7 +73,7 @@ public:
         hboxLayout->addWidget(renameButton);
 
         removeButton = new QToolButton(QtGradientView);
-        removeButton->setObjectName(QStringLiteral("removeButton"));
+        removeButton->setObjectName(QString::fromUtf8("removeButton"));
         sizePolicy.setHeightForWidth(removeButton->sizePolicy().hasHeightForWidth());
         removeButton->setSizePolicy(sizePolicy);
         removeButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -93,7 +89,7 @@ public:
         vboxLayout->addLayout(hboxLayout);
 
         listWidget = new QListWidget(QtGradientView);
-        listWidget->setObjectName(QStringLiteral("listWidget"));
+        listWidget->setObjectName(QString::fromUtf8("listWidget"));
 
         vboxLayout->addWidget(listWidget);
 
@@ -109,11 +105,11 @@ public:
 
     void retranslateUi(QWidget *QtGradientView)
     {
-        QtGradientView->setWindowTitle(QApplication::translate("QtGradientView", "Gradient View", 0));
-        newButton->setText(QApplication::translate("QtGradientView", "New...", 0));
-        editButton->setText(QApplication::translate("QtGradientView", "Edit...", 0));
-        renameButton->setText(QApplication::translate("QtGradientView", "Rename", 0));
-        removeButton->setText(QApplication::translate("QtGradientView", "Remove", 0));
+        QtGradientView->setWindowTitle(QApplication::translate("QtGradientView", "Gradient View", nullptr));
+        newButton->setText(QApplication::translate("QtGradientView", "New...", nullptr));
+        editButton->setText(QApplication::translate("QtGradientView", "Edit...", nullptr));
+        renameButton->setText(QApplication::translate("QtGradientView", "Rename", nullptr));
+        removeButton->setText(QApplication::translate("QtGradientView", "Remove", nullptr));
     } // retranslateUi
 
 };

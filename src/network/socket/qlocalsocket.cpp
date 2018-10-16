@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,6 @@
 
 #include "qlocalsocket.h"
 #include "qlocalsocket_p.h"
-
-#ifndef QT_NO_LOCALSOCKET
 
 QT_BEGIN_NAMESPACE
 
@@ -64,25 +60,37 @@ QT_BEGIN_NAMESPACE
     waitForReadyRead(), waitForBytesWritten(), and waitForDisconnected()
     which blocks until the operation is complete or the timeout expires.
 
-    Note that this feature is not supported on versions of Windows earlier than
-    Windows XP.
-
     \sa QLocalServer
 */
 
 /*!
-    \fn void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
+    \fn void QLocalSocket::connectToServer(OpenMode openMode)
+    \since 5.1
 
-    Attempts to make a connection to \a name.
+    Attempts to make a connection to serverName().
+    setServerName() must be called before you open the connection.
+    Alternatively you can use connectToServer(const QString &name, OpenMode openMode);
 
     The socket is opened in the given \a openMode and first enters ConnectingState.
-    It then attempts to connect to the address or addresses returned by the lookup.
-    Finally, if a connection is established, QLocalSocket enters ConnectedState
-    and emits connected().
+    If a connection is established, QLocalSocket enters ConnectedState and emits connected().
 
-    At any point, the socket can emit error() to signal that an error occurred.
+    After calling this function, the socket can emit error() to signal that an error occurred.
 
-    See also state(), serverName(), and waitForConnected().
+    \sa state(), serverName(), waitForConnected()
+*/
+
+/*!
+    \fn void QLocalSocket::open(OpenMode openMode)
+
+    Equivalent to connectToServer(OpenMode mode).
+    The socket is opened in the given \a openMode to the server defined by setServerName().
+
+    Note that unlike in most other QIODevice subclasses, open() may not open the device directly.
+    The function return false if the socket was already connected or if the server to connect
+    to was not defined and true in any other case. The connected() or error() signals will be
+    emitted once the device is actualy open (or the connection failed).
+
+    See connectToServer() for more details.
 */
 
 /*!
@@ -99,8 +107,8 @@ QT_BEGIN_NAMESPACE
         LocalSocketState socketState, OpenMode openMode)
 
     Initializes QLocalSocket with the native socket descriptor
-    \a socketDescriptor. Returns true if socketDescriptor is accepted
-    as a valid socket descriptor; otherwise returns false. The socket is
+    \a socketDescriptor. Returns \c true if socketDescriptor is accepted
+    as a valid socket descriptor; otherwise returns \c false. The socket is
     opened in the mode specified by \a openMode, and enters the socket state
     specified by \a socketState.
 
@@ -118,6 +126,20 @@ QT_BEGIN_NAMESPACE
 
     The socket descriptor is not available when QLocalSocket
     is in UnconnectedState.
+    The type of the descriptor depends on the platform:
+
+    \list
+        \li On Windows, the returned value is a
+        \l{https://msdn.microsoft.com/en-us/library/windows/desktop/ms740522(v=vs.85).aspx}
+        {Winsock 2 Socket Handle}.
+
+        \li With WinRT and on INTEGRITY, the returned value is the
+        QTcpSocket socket descriptor and the type is defined by
+        \l{QTcpSocket::socketDescriptor}{socketDescriptor}.
+
+        \li On all other UNIX-like operating systems, the type is
+        a file descriptor representing a socket.
+    \endlist
 
     \sa setSocketDescriptor()
 */
@@ -172,7 +194,7 @@ QT_BEGIN_NAMESPACE
 
     This function writes as much as possible from the internal write buffer
     to the socket, without blocking.  If any data was written, this function
-    returns true; otherwise false is returned.
+    returns \c true; otherwise false is returned.
 
     Call this function if you need QLocalSocket to start sending buffered data
     immediately. The number of bytes successfully written depends on the
@@ -206,8 +228,8 @@ QT_BEGIN_NAMESPACE
 /*!
     \fn bool QLocalSocket::isValid() const
 
-    Returns true if the socket is valid and ready for use; otherwise
-    returns false.
+    Returns \c true if the socket is valid and ready for use; otherwise
+    returns \c false.
 
     \note The socket's state must be ConnectedState before reading
     and writing can occur.
@@ -248,8 +270,8 @@ QT_BEGIN_NAMESPACE
     \fn bool QLocalSocket::waitForConnected(int msecs)
 
     Waits until the socket is connected, up to \a msecs milliseconds. If the
-    connection has been established, this function returns true; otherwise
-    it returns false. In the case where it returns false, you can call
+    connection has been established, this function returns \c true; otherwise
+    it returns \c false. In the case where it returns \c false, you can call
     error() to determine the cause of the error.
 
     The following example waits up to one second for a connection
@@ -267,8 +289,8 @@ QT_BEGIN_NAMESPACE
 
     Waits until the socket has disconnected, up to \a msecs
     milliseconds. If the connection has been disconnected, this
-    function returns true; otherwise it returns false. In the case
-    where it returns false, you can call error() to determine
+    function returns \c true; otherwise it returns \c false. In the case
+    where it returns \c false, you can call error() to determine
     the cause of the error.
 
     The following example waits up to one second for a connection
@@ -289,8 +311,8 @@ QT_BEGIN_NAMESPACE
     will timeout after \a msecs milliseconds; the default timeout is
     30000 milliseconds.
 
-    The function returns true if data is available for reading;
-    otherwise it returns false (if an error occurred or the
+    The function returns \c true if data is available for reading;
+    otherwise it returns \c false (if an error occurred or the
     operation timed out).
 
     \sa waitForBytesWritten()
@@ -346,16 +368,57 @@ QLocalSocket::QLocalSocket(QObject * parent)
  */
 QLocalSocket::~QLocalSocket()
 {
-    close();
+    QLocalSocket::close();
 #if !defined(Q_OS_WIN) && !defined(QT_LOCALSOCKET_TCP)
     Q_D(QLocalSocket);
     d->unixSocket.setParent(0);
 #endif
 }
 
+bool QLocalSocket::open(OpenMode openMode)
+{
+    connectToServer(openMode);
+    return isOpen();
+}
+
+/*! \overload
+
+    Set the server \a name and attempts to make a connection to it.
+
+    The socket is opened in the given \a openMode and first enters ConnectingState.
+    If a connection is established, QLocalSocket enters ConnectedState and emits connected().
+
+    After calling this function, the socket can emit error() to signal that an error occurred.
+
+    \sa state(), serverName(), waitForConnected()
+*/
+void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
+{
+    setServerName(name);
+    connectToServer(openMode);
+}
+
 /*!
-    Returns the name of the peer as specified by connectToServer(), or an
-    empty QString if connectToServer() has not been called or it failed.
+    \since 5.1
+
+    Set the \a name of the peer to connect to.
+    On Windows name is the name of a named pipe; on Unix name is the name of a local domain socket.
+
+    This function must be called when the socket is not connected.
+*/
+void QLocalSocket::setServerName(const QString & name)
+{
+    Q_D(QLocalSocket);
+    if (d->state != UnconnectedState) {
+        qWarning("QLocalSocket::setServerName() called while not in unconnected state");
+        return;
+    }
+    d->serverName = name;
+}
+
+/*!
+    Returns the name of the peer as specified by setServerName(), or an
+    empty QString if setServerName() has not been called or connectToServer() failed.
 
     \sa connectToServer(), fullServerName()
 
@@ -442,6 +505,8 @@ bool QLocalSocket::isSequential() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug debug, QLocalSocket::LocalSocketError error)
 {
+    QDebugStateSaver saver(debug);
+    debug.resetFormat().nospace();
     switch (error) {
     case QLocalSocket::ConnectionRefusedError:
         debug << "QLocalSocket::ConnectionRefusedError";
@@ -482,6 +547,8 @@ QDebug operator<<(QDebug debug, QLocalSocket::LocalSocketError error)
 
 QDebug operator<<(QDebug debug, QLocalSocket::LocalSocketState state)
 {
+    QDebugStateSaver saver(debug);
+    debug.resetFormat().nospace();
     switch (state) {
     case QLocalSocket::UnconnectedState:
         debug << "QLocalSocket::UnconnectedState";
@@ -504,7 +571,5 @@ QDebug operator<<(QDebug debug, QLocalSocket::LocalSocketState state)
 #endif
 
 QT_END_NAMESPACE
-
-#endif
 
 #include "moc_qlocalsocket.cpp"

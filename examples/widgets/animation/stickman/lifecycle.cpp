@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -60,12 +70,12 @@ public:
         setTargetState(target);
     }
 
-    virtual bool eventTest(QEvent *e)
+    bool eventTest(QEvent *e) override
     {
         if (QSignalTransition::eventTest(e)) {
             QVariant key = static_cast<QStateMachine::SignalEvent*>(e)->arguments().at(0);
             return (key.toInt() == int(m_key));
-        } 
+        }
 
         return false;
     }
@@ -81,13 +91,12 @@ public:
         : QEventTransition(this, QEvent::Timer)
     {
         setTargetState(target);
-        qsrand((uint)QDateTime::currentDateTime().toTime_t());
         startTimer(1000);
     }
 
-    virtual bool eventTest(QEvent *e)
+    bool eventTest(QEvent *e) override
     {
-        return QEventTransition::eventTest(e) && ((qrand() % 50) == 0);
+        return QEventTransition::eventTest(e) && QRandomGenerator::global()->bounded(50) == 0;
     }
 };
 //! [4]
@@ -100,7 +109,7 @@ LifeCycle::LifeCycle(StickMan *stickMan, GraphicsView *keyReceiver)
     const int stickManNodeCount = m_stickMan->nodeCount();
     for (int i=0; i<stickManNodeCount; ++i) {
         QPropertyAnimation *pa = new QPropertyAnimation(m_stickMan->node(i), "pos");
-        m_animationGroup->addAnimation(pa);    
+        m_animationGroup->addAnimation(pa);
     }
 
     // Set up initial state graph
@@ -111,14 +120,14 @@ LifeCycle::LifeCycle(StickMan *stickMan, GraphicsView *keyReceiver)
 
     m_alive = new QState(m_machine);
     m_alive->setObjectName("alive");
-    
+
     // Make it blink when lightning strikes before entering dead animation
-    QState *lightningBlink = new QState(m_machine);    
+    QState *lightningBlink = new QState(m_machine);
     lightningBlink->assignProperty(m_stickMan->scene(), "backgroundBrush", QColor(Qt::white));
     lightningBlink->assignProperty(m_stickMan, "penColor", QColor(Qt::black));
     lightningBlink->assignProperty(m_stickMan, "fillColor", QColor(Qt::white));
     lightningBlink->assignProperty(m_stickMan, "isDead", true);
-    
+
 //! [5]
     QTimer *timer = new QTimer(lightningBlink);
     timer->setSingleShot(true);
@@ -126,13 +135,13 @@ LifeCycle::LifeCycle(StickMan *stickMan, GraphicsView *keyReceiver)
     QObject::connect(lightningBlink, SIGNAL(entered()), timer, SLOT(start()));
     QObject::connect(lightningBlink, SIGNAL(exited()), timer, SLOT(stop()));
 //! [5]
-  
+
     m_dead = new QState(m_machine);
     m_dead->assignProperty(m_stickMan->scene(), "backgroundBrush", QColor(Qt::black));
     m_dead->assignProperty(m_stickMan, "penColor", QColor(Qt::white));
     m_dead->assignProperty(m_stickMan, "fillColor", QColor(Qt::black));
     m_dead->setObjectName("dead");
-           
+
     // Idle state (sets no properties)
     m_idle = new QState(m_alive);
     m_idle->setObjectName("idle");
@@ -172,7 +181,7 @@ void LifeCycle::addActivity(const QString &fileName, Qt::Key key, QObject *sende
 QState *LifeCycle::makeState(QState *parentState, const QString &animationFileName)
 {
     QState *topLevel = new QState(parentState);
-    
+
     Animation animation;
     {
         QFile file(animationFileName);
@@ -186,7 +195,7 @@ QState *LifeCycle::makeState(QState *parentState, const QString &animationFileNa
         animation.setCurrentFrame(i);
 
 //! [1]
-        QState *frameState = new QState(topLevel);                       
+        QState *frameState = new QState(topLevel);
         const int nodeCount = animation.nodeCount();
         for (int j=0; j<nodeCount; ++j)
             frameState->assignProperty(m_stickMan->node(j), "pos", animation.nodePos(j));
@@ -199,7 +208,7 @@ QState *LifeCycle::makeState(QState *parentState, const QString &animationFileNa
 //! [2]
             previousState->addTransition(previousState, SIGNAL(propertiesAssigned()), frameState);
 //! [2]
-        
+
         previousState = frameState;
     }
 

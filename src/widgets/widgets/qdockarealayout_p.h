@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,13 +51,14 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtCore/qrect.h"
 #include "QtCore/qpair.h"
 #include "QtCore/qlist.h"
 #include "QtCore/qvector.h"
 #include "QtWidgets/qlayout.h"
 
-#ifndef QT_NO_DOCKWIDGET
+QT_REQUIRE_CONFIG(dockwidget);
 
 QT_BEGIN_NAMESPACE
 
@@ -90,9 +89,9 @@ struct QDockAreaLayoutItem
 {
     enum ItemFlags { NoFlags = 0, GapItem = 1, KeepSize = 2 };
 
-    QDockAreaLayoutItem(QLayoutItem *_widgetItem = 0);
-    QDockAreaLayoutItem(QDockAreaLayoutInfo *_subinfo);
-    QDockAreaLayoutItem(QPlaceHolderItem *_placeHolderItem);
+    explicit QDockAreaLayoutItem(QLayoutItem *_widgetItem = 0);
+    explicit QDockAreaLayoutItem(QDockAreaLayoutInfo *_subinfo);
+    explicit QDockAreaLayoutItem(QPlaceHolderItem *_placeHolderItem);
     QDockAreaLayoutItem(const QDockAreaLayoutItem &other);
     ~QDockAreaLayoutItem();
 
@@ -117,7 +116,7 @@ class Q_AUTOTEST_EXPORT QPlaceHolderItem
 {
 public:
     QPlaceHolderItem() : hidden(false), window(false) {}
-    QPlaceHolderItem(QWidget *w);
+    explicit QPlaceHolderItem(QWidget *w);
 
     QString objectName;
     bool hidden, window;
@@ -161,13 +160,14 @@ public:
     void fitItems();
     bool expansive(Qt::Orientation o) const;
     int changeSize(int index, int size, bool below);
-    QRect itemRect(int index) const;
+    QRect itemRect(int index, bool isGap = false) const;
     QRect itemRect(const QList<int> &path) const;
     QRect separatorRect(int index) const;
     QRect separatorRect(const QList<int> &path) const;
 
     void clear();
     bool isEmpty() const;
+    bool onlyHasPlaceholders() const;
     bool hasFixedSize() const;
     QList<int> findSeparator(const QPoint &pos) const;
     int next(int idx) const;
@@ -176,12 +176,13 @@ public:
     QList<int> indexOf(QWidget *widget) const;
     QList<int> indexOfPlaceHolder(const QString &objectName) const;
 
-    void apply(bool animate);
+    QDockWidget *apply(bool animate);
 
     void paintSeparators(QPainter *p, QWidget *widget, const QRegion &clip,
                             const QPoint &mouse) const;
     QRegion separatorRegion() const;
     int separatorMove(int index, int delta);
+    int separatorMove(const QList<int> &separator, const QPoint &origin, const QPoint &dest);
 
     QLayoutItem *itemAt(int *x, int index) const;
     QLayoutItem *takeAt(int *x, int index);
@@ -196,12 +197,10 @@ public:
     QRect rect;
     QMainWindow *mainWindow;
     QList<QDockAreaLayoutItem> item_list;
-#ifndef QT_NO_TABBAR
+#if QT_CONFIG(tabbar)
     void updateSeparatorWidgets() const;
     QSet<QWidget*> usedSeparatorWidgets() const;
-#endif //QT_NO_TABBAR
 
-#ifndef QT_NO_TABBAR
     quintptr currentTabId() const;
     void setCurrentTab(QWidget *widget);
     void setCurrentTabId(quintptr id);
@@ -210,13 +209,17 @@ public:
     QTabBar *tabBar;
     int tabBarShape;
 
+    void reparentWidgets(QWidget *p);
     bool updateTabBar() const;
     void setTabBarShape(int shape);
     QSize tabBarMinimumSize() const;
     QSize tabBarSizeHint() const;
 
     QSet<QTabBar*> usedTabBars() const;
-#endif // QT_NO_TABBAR
+
+    int tabIndexToListIndex(int) const;
+    void moveTab(int from, int to);
+#endif // QT_CONFIG(tabbar)
 };
 
 class Q_AUTOTEST_EXPORT QDockAreaLayout
@@ -237,13 +240,14 @@ public:
 
     bool isValid() const;
 
-    enum { DockWidgetStateMarker = 0xfd };
+    enum { DockWidgetStateMarker = 0xfd, FloatingDockWidgetTabMarker = 0xf9 };
+    static QRect constrainedRect(QRect rect, QWidget *widget);
     void saveState(QDataStream &stream) const;
     bool restoreState(QDataStream &stream, const QList<QDockWidget*> &widgets, bool testing = false);
 
     QList<int> indexOfPlaceHolder(const QString &objectName) const;
     QList<int> indexOf(QWidget *dockWidget) const;
-    QList<int> gapIndex(const QPoint &pos) const;
+    QList<int> gapIndex(const QPoint &pos, bool disallowTabs) const;
     QList<int> findSeparator(const QPoint &pos) const;
 
     QDockAreaLayoutItem &item(const QList<int> &path);
@@ -258,6 +262,7 @@ public:
     QLayoutItem *plug(const QList<int> &path);
     QLayoutItem *unplug(const QList<int> &path);
     void remove(const QList<int> &path);
+    void removePlaceHolder(const QString &name);
 
     void fitLayout();
 
@@ -271,6 +276,7 @@ public:
     void splitDockWidget(QDockWidget *after, QDockWidget *dockWidget,
                          Qt::Orientation orientation);
     void tabifyDockWidget(QDockWidget *first, QDockWidget *second);
+    void resizeDocks(const QList<QDockWidget *> &docks, const QList<int> &sizes, Qt::Orientation o);
 
     void apply(bool animate);
 
@@ -278,9 +284,9 @@ public:
                             const QPoint &mouse) const;
     QRegion separatorRegion() const;
     int separatorMove(const QList<int> &separator, const QPoint &origin, const QPoint &dest);
-#ifndef QT_NO_TABBAR
+#if QT_CONFIG(tabbar)
     void updateSeparatorWidgets() const;
-#endif //QT_NO_TABBAR
+#endif // QT_CONFIG(tabbar)
 
     QLayoutItem *itemAt(int *x, int index) const;
     QLayoutItem *takeAt(int *x, int index);
@@ -294,15 +300,13 @@ public:
     QRect gapRect(const QList<int> &path) const;
 
     void keepSize(QDockWidget *w);
-#ifndef QT_NO_TABBAR
+#if QT_CONFIG(tabbar)
     QSet<QTabBar*> usedTabBars() const;
     QSet<QWidget*> usedSeparatorWidgets() const;
-#endif //QT_NO_TABBAR
+#endif // QT_CONFIG(tabbar)
     void styleChangedEvent();
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_QDOCKWIDGET
 
 #endif // QDOCKAREALAYOUT_P_H

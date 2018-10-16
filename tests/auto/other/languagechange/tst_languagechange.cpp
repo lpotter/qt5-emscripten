@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -188,11 +175,11 @@ void tst_languageChange::retranslatability_data()
     //next we fill it with data
     QTest::newRow( "QInputDialog" )
         << int(InputDialog) << (QSet<QByteArray>()
-                    << "QDialogButtonBox::Cancel");
+                    << "QPlatformTheme::Cancel");
 
     QTest::newRow( "QColorDialog" )
         << int(ColorDialog) << (QSet<QByteArray>()
-                    << "QDialogButtonBox::Cancel"
+                    << "QPlatformTheme::Cancel"
                     << "QColorDialog::&Sat:"
                     << "QColorDialog::&Add to Custom Colors"
                     << "QColorDialog::&Green:"
@@ -210,7 +197,7 @@ void tst_languageChange::retranslatability_data()
                     << "QFileDialog::Back"
                     << "QFileDialog::Create New Folder"
                     << "QFileDialog::Detail View"
-#ifndef Q_OS_MAC
+#if !defined(Q_OS_MAC) && !defined(Q_OS_WINRT)
                     << "QFileDialog::File"
 #endif
                     << "QFileDialog::Files of type:"
@@ -237,8 +224,8 @@ void tst_languageChange::retranslatability_data()
                     << "QFileSystemModel::Type::All other platforms"
 #endif
 //                    << "QFileSystemModel::%1 KB"
-                    << "QDialogButtonBox::Cancel"
-                    << "QDialogButtonBox::Open"
+                    << "QPlatformTheme::Cancel"
+                    << "QPlatformTheme::Open"
                     << "QFileDialog::File &name:");
 }
 
@@ -251,7 +238,7 @@ void tst_languageChange::retranslatability()
         QSKIP("The input data are not suitable for this layout (QDialogButtonBox::GnomeLayout)");
 
     // This will always be queried for when a language changes
-    expected.insert("QCoreApplication::QT_LAYOUT_DIRECTION::Translate this string to the string 'LTR' in left-to-right "
+    expected.insert("QGuiApplication::QT_LAYOUT_DIRECTION::Translate this string to the string 'LTR' in left-to-right "
                     "languages or to 'RTL' in right-to-left languages (such as Hebrew and Arabic) to "
                     "get proper widget layout.");
 
@@ -261,7 +248,7 @@ void tst_languageChange::retranslatability()
     switch (dialogType) {
     case InputDialog:
         stateMachine.start();
-        QInputDialog::getInteger(0, QLatin1String("title"), QLatin1String("label"));
+        QInputDialog::getInt(0, QLatin1String("title"), QLatin1String("label"));
         break;
 
     case ColorDialog:
@@ -284,7 +271,7 @@ void tst_languageChange::retranslatability()
         tempDirPattern += QStringLiteral("languagechangetestdirXXXXXX");
         QTemporaryDir temporaryDir(tempDirPattern);
         temporaryDir.setAutoRemove(true);
-        QVERIFY(temporaryDir.isValid());
+        QVERIFY2(temporaryDir.isValid(), qPrintable(temporaryDir.errorString()));
         const QString finalDir = temporaryDir.path() + QStringLiteral("/finaldir");
         const QString fooName = temporaryDir.path() + QStringLiteral("/foo");
         QDir dir;
@@ -294,9 +281,6 @@ void tst_languageChange::retranslatability()
         fooFile.write("test");
         fooFile.close();
         dlg.setDirectory(temporaryDir.path());
-#ifdef Q_OS_WINCE
-        dlg.setDirectory("\\Windows");
-#endif
         dlg.setFileMode(QFileDialog::ExistingFiles);
         dlg.setViewMode(QFileDialog::Detail);
         stateMachine.start();
@@ -308,13 +292,8 @@ void tst_languageChange::retranslatability()
     // In case we use a Color dialog, we do not want to test for
     // strings non existing in the dialog and which do not get
     // translated.
-    if ((dialogType == ColorDialog) &&
-#ifndef Q_OS_WINCE
-        (qApp->desktop()->width() < 480 || qApp->desktop()->height() < 350)
-#else
-        true // On Qt/WinCE we always use compact mode
-#endif
-        ) {
+    const QSize desktopSize = QApplication::desktop()->size();
+    if (dialogType == ColorDialog && (desktopSize.width() < 480 || desktopSize.height() < 350)) {
         expected.remove("QColorDialog::&Basic colors");
         expected.remove("QColorDialog::&Custom colors");
         expected.remove("QColorDialog::&Define Custom Colors >>");

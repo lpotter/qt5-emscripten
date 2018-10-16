@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,35 +29,28 @@
 
 #include <QtTest/QtTest>
 #include "qtransform.h"
-#include <math.h>
 #include <qpolygon.h>
 #include <qdebug.h>
 
-Q_DECLARE_METATYPE(QRect)
 
 class tst_QTransform : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QTransform();
-    virtual ~tst_QTransform();
-
-
-public slots:
-    void init();
-    void cleanup();
 private slots:
     void mapRect_data();
     void mapToPolygon_data();
     void mapRect();
     void assignments();
     void mapToPolygon();
+    void qhash();
     void translate();
     void scale();
     void matrix();
     void testOffset();
     void types();
+    void types2_data();
+    void types2();
     void scalarOps();
     void transform();
     void mapEmptyPath();
@@ -87,29 +67,7 @@ private:
 };
 
 Q_DECLARE_METATYPE(QTransform)
-Q_DECLARE_METATYPE(QPolygon)
-
-tst_QTransform::tst_QTransform()
-{
-}
-
-tst_QTransform::~tst_QTransform()
-{
-}
-
-void tst_QTransform::init()
-{
-    // No initialisation is required
-}
-
-void tst_QTransform::cleanup()
-{
-    // No cleanup is required.
-}
-
-#if defined(Q_OS_WIN) && !defined(M_PI)
-#define M_PI 3.14159265897932384626433832795f
-#endif
+Q_DECLARE_METATYPE(QTransform::TransformationType)
 
 void tst_QTransform::mapRect_data()
 {
@@ -371,6 +329,22 @@ void tst_QTransform::mapToPolygon()
     QVERIFY(equal);
 }
 
+void tst_QTransform::qhash()
+{
+    QMatrix m1;
+    m1.shear(3.0, 2.0);
+    m1.rotate(44);
+
+    QMatrix m2 = m1;
+
+    QTransform t1(m1);
+    QTransform t2(m2);
+
+    // not really much to test here, so just the bare minimum:
+    QCOMPARE(qHash(m1), qHash(m2));
+    QCOMPARE(qHash(t1), qHash(t2));
+}
+
 
 void tst_QTransform::translate()
 {
@@ -421,14 +395,14 @@ void tst_QTransform::matrix()
                     mat1.m21(), mat1.m22(), 0,
                     mat1.dx(), mat1.dy(), 1);
 
-    QVERIFY(tran1 == dummy);
-    QVERIFY(tran1.inverted() == dummy.inverted());
-    QVERIFY(tran1.inverted() == QTransform(mat1.inverted()));
-    QVERIFY(tran2.inverted() == QTransform(mat2.inverted()));
+    QCOMPARE(tran1, dummy);
+    QCOMPARE(tran1.inverted(), dummy.inverted());
+    QCOMPARE(tran1.inverted(), QTransform(mat1.inverted()));
+    QCOMPARE(tran2.inverted(), QTransform(mat2.inverted()));
 
     QMatrix mat3 = mat1 * mat2;
     QTransform tran3 = tran1 * tran2;
-    QVERIFY(QTransform(mat3) == tran3);
+    QCOMPARE(QTransform(mat3), tran3);
 
     /* QMatrix::operator==() doesn't use qFuzzyCompare(), which
      * on win32-g++ results in a failure. So we work around it by
@@ -440,15 +414,15 @@ void tst_QTransform::matrix()
 
     QRect rect(43, 70, 200, 200);
     QPoint pt(43, 66);
-    QVERIFY(tranInv.map(pt) == matInv.map(pt));
-    QVERIFY(tranInv.map(pt) == matInv.map(pt));
+    QCOMPARE(tranInv.map(pt), matInv.map(pt));
+    QCOMPARE(tranInv.map(pt), matInv.map(pt));
 
     QPainterPath path;
     path.moveTo(55, 60);
     path.lineTo(110, 110);
     path.quadTo(220, 50, 10, 20);
     path.closeSubpath();
-    QVERIFY(tranInv.map(path) == matInv.map(path));
+    QCOMPARE(tranInv.map(path), matInv.map(path));
 }
 
 void tst_QTransform::testOffset()
@@ -597,6 +571,38 @@ void tst_QTransform::types()
     QCOMPARE(m5.type(), QTransform::TxScale);
 }
 
+void tst_QTransform::types2_data()
+{
+    QTest::addColumn<QTransform>("t1");
+    QTest::addColumn<QTransform::TransformationType>("type");
+
+    QTest::newRow( "identity" ) << QTransform() << QTransform::TxNone;
+    QTest::newRow( "translate" ) << QTransform().translate(10, -0.1) << QTransform::TxTranslate;
+    QTest::newRow( "scale" ) << QTransform().scale(10, -0.1) << QTransform::TxScale;
+    QTest::newRow( "rotate" ) << QTransform().rotate(10) << QTransform::TxRotate;
+    QTest::newRow( "shear" ) << QTransform().shear(10, -0.1) << QTransform::TxShear;
+    QTest::newRow( "project" ) << QTransform().rotate(10, Qt::XAxis) << QTransform::TxProject;
+    QTest::newRow( "combined" ) << QTransform().translate(10, -0.1).scale(10, -0.1).rotate(10, Qt::YAxis) << QTransform::TxProject;
+}
+
+void tst_QTransform::types2()
+{
+#define CHECKTXTYPE(func) { QTransform t2(func); \
+                            QTransform t3(t2.m11(), t2.m12(), t2.m13(), t2.m21(), t2.m22(), t2.m23(), t2.m31(), t2.m32(), t2.m33()); \
+                            QVERIFY2(t3.type() == t2.type(), #func); \
+                          }
+
+    QFETCH( QTransform, t1 );
+    QFETCH( QTransform::TransformationType, type );
+
+    Q_ASSERT(t1.type() == type);
+
+    CHECKTXTYPE(t1.adjoint());
+    CHECKTXTYPE(t1.inverted());
+    CHECKTXTYPE(t1.transposed());
+
+#undef CHECKTXTYPE
+}
 
 void tst_QTransform::scalarOps()
 {
@@ -734,8 +740,8 @@ void tst_QTransform::inverted()
 
     const QTransform inverted = matrix.inverted();
 
-    QVERIFY(matrix.isIdentity() == inverted.isIdentity());
-    QVERIFY(matrix.type() == inverted.type());
+    QCOMPARE(matrix.isIdentity(), inverted.isIdentity());
+    QCOMPARE(matrix.type(), inverted.type());
 
     QVERIFY((matrix * inverted).isIdentity());
     QVERIFY((inverted * matrix).isIdentity());

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -34,7 +34,8 @@
     addition, the example demonstrates how to use QFontMetrics to
     determine the size of text on screen.
 
-    \image wiggly-example.png Screenshot of the Wiggly example
+    \borderedimage wiggly-example.png
+    \caption Screenshot of the Wiggly example
 
     QBasicTimer is a low-level class for timers. Unlike QTimer,
     QBasicTimer doesn't inherit from QObject; instead of emitting a
@@ -42,8 +43,8 @@
     time has passed, it sends a QTimerEvent to a QObject of our
     choice. This makes QBasicTimer a more lightweight alternative to
     QTimer. Qt's built-in widgets use it internally, and it is
-    provided in Qt's API for highly-optimized applications (e.g.,
-    \l{Qt for Embedded Linux} applications).
+    provided in Qt's API for highly-optimized applications (such as
+    embedded applications).
 
     The example consists of two classes:
 
@@ -142,10 +143,10 @@
     position on the wiggly line based on \c step. In addition, \c x
     is incremented by the character's width.
 
-    For simplicity, we assume that QFontMetrics::width(\c text)
-    returns the sum of the individual character widths
-    (QFontMetrics::width(\c text[i])). In practice, this is not
-    always the case because QFontMetrics::width(\c text) also takes
+    For simplicity, we assume that QFontMetrics::horizontalAdvance(\c text)
+    returns the sum of the individual character advances
+    (QFontMetrics::horizontalAdvance(\c text[i])). In practice, this is not
+    always the case because QFontMetrics::horizontalAdvance(\c text) also takes
     into account the kerning between certain letters (e.g., 'A' and
     'V'). The result is that the text isn't perfectly centered. You
     can verify this by typing "AVAVAVAVAVAV" in the line edit.

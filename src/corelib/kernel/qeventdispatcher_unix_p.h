@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,44 +55,46 @@
 #include "QtCore/qlist.h"
 #include "private/qabstracteventdispatcher_p.h"
 #include "private/qcore_unix_p.h"
-#include "private/qpodlist_p.h"
 #include "QtCore/qvarlengtharray.h"
 #include "private/qtimerinfo_unix_p.h"
 
-#if defined(Q_OS_VXWORKS)
-#  include <sys/times.h>
-#else
-#  include <sys/time.h>
-#  if (!defined(Q_OS_HPUX) || defined(__ia64)) && !defined(Q_OS_NACL)
-#    include <sys/select.h>
-#  endif
-#endif
-
 QT_BEGIN_NAMESPACE
 
-struct QSockNot
-{
-    QSocketNotifier *obj;
-    int fd;
-    fd_set *queue;
-};
-
-class QSockNotType
-{
-public:
-    QSockNotType();
-    ~QSockNotType();
-
-    typedef QPodList<QSockNot*, 32> List;
-
-    List list;
-    fd_set select_fds;
-    fd_set enabled_fds;
-    fd_set pending_fds;
-
-};
-
 class QEventDispatcherUNIXPrivate;
+
+struct Q_CORE_EXPORT QSocketNotifierSetUNIX final
+{
+    inline QSocketNotifierSetUNIX() Q_DECL_NOTHROW;
+
+    inline bool isEmpty() const Q_DECL_NOTHROW;
+    inline short events() const Q_DECL_NOTHROW;
+
+    QSocketNotifier *notifiers[3];
+};
+
+Q_DECLARE_TYPEINFO(QSocketNotifierSetUNIX, Q_PRIMITIVE_TYPE);
+
+struct QThreadPipe
+{
+    QThreadPipe();
+    ~QThreadPipe();
+
+    bool init();
+    pollfd prepare() const;
+
+    void wakeUp();
+    int check(const pollfd &pfd);
+
+    // note for eventfd(7) support:
+    // if fds[1] is -1, then eventfd(7) is in use and is stored in fds[0]
+    int fds[2];
+    QAtomicInt wakeUps;
+
+#if defined(Q_OS_VXWORKS)
+    static const int len_name = 20;
+    char name[len_name];
+#endif
+};
 
 class Q_CORE_EXPORT QEventDispatcherUNIX : public QAbstractEventDispatcher
 {
@@ -105,34 +105,25 @@ public:
     explicit QEventDispatcherUNIX(QObject *parent = 0);
     ~QEventDispatcherUNIX();
 
-    bool processEvents(QEventLoop::ProcessEventsFlags flags);
-    bool hasPendingEvents();
+    bool processEvents(QEventLoop::ProcessEventsFlags flags) override;
+    bool hasPendingEvents() override;
 
-    void registerSocketNotifier(QSocketNotifier *notifier);
-    void unregisterSocketNotifier(QSocketNotifier *notifier);
+    void registerSocketNotifier(QSocketNotifier *notifier) final;
+    void unregisterSocketNotifier(QSocketNotifier *notifier) final;
 
-    void registerTimer(int timerId, int interval, Qt::TimerType timerType, QObject *object);
-    bool unregisterTimer(int timerId);
-    bool unregisterTimers(QObject *object);
-    QList<TimerInfo> registeredTimers(QObject *object) const;
+    void registerTimer(int timerId, int interval, Qt::TimerType timerType, QObject *object) final;
+    bool unregisterTimer(int timerId) final;
+    bool unregisterTimers(QObject *object) final;
+    QList<TimerInfo> registeredTimers(QObject *object) const final;
 
-    int remainingTime(int timerId);
+    int remainingTime(int timerId) final;
 
-    void wakeUp();
-    void interrupt();
-    void flush();
+    void wakeUp() final;
+    void interrupt() final;
+    void flush() override;
 
 protected:
     QEventDispatcherUNIX(QEventDispatcherUNIXPrivate &dd, QObject *parent = 0);
-
-    void setSocketNotifierPending(QSocketNotifier *notifier);
-
-    int activateTimers();
-    int activateSocketNotifiers();
-
-    virtual int select(int nfds,
-                       fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
-                       timeval *timeout);
 };
 
 class Q_CORE_EXPORT QEventDispatcherUNIXPrivate : public QAbstractEventDispatcherPrivate
@@ -143,26 +134,49 @@ public:
     QEventDispatcherUNIXPrivate();
     ~QEventDispatcherUNIXPrivate();
 
-    int doSelect(QEventLoop::ProcessEventsFlags flags, timeval *timeout);
-    virtual int initThreadWakeUp();
-    virtual int processThreadWakeUp(int nsel);
+    int activateTimers();
 
-    bool mainThread;
-    int thread_pipe[2];
+    void markPendingSocketNotifiers();
+    int activateSocketNotifiers();
+    void setSocketNotifierPending(QSocketNotifier *notifier);
 
-    // highest fd for all socket notifiers
-    int sn_highest;
-    // 3 socket notifier types - read, write and exception
-    QSockNotType sn_vec[3];
+    QThreadPipe threadPipe;
+    QVector<pollfd> pollfds;
+
+    QHash<int, QSocketNotifierSetUNIX> socketNotifiers;
+    QVector<QSocketNotifier *> pendingNotifiers;
 
     QTimerInfoList timerList;
-
-    // pending socket notifiers list
-    QSockNotType::List sn_pending_list;
-
-    QAtomicInt wakeUps;
-    bool interrupt;
+    QAtomicInt interrupt; // bool
 };
+
+inline QSocketNotifierSetUNIX::QSocketNotifierSetUNIX() Q_DECL_NOTHROW
+{
+    notifiers[0] = 0;
+    notifiers[1] = 0;
+    notifiers[2] = 0;
+}
+
+inline bool QSocketNotifierSetUNIX::isEmpty() const Q_DECL_NOTHROW
+{
+    return !notifiers[0] && !notifiers[1] && !notifiers[2];
+}
+
+inline short QSocketNotifierSetUNIX::events() const Q_DECL_NOTHROW
+{
+    short result = 0;
+
+    if (notifiers[0])
+        result |= POLLIN;
+
+    if (notifiers[1])
+        result |= POLLOUT;
+
+    if (notifiers[2])
+        result |= POLLPRI;
+
+    return result;
+}
 
 QT_END_NAMESPACE
 

@@ -15,5 +15,4 @@ CONFIG(debug_and_release) {
   DESTDIR = ..
 }
 
-TEST_HELPER_INSTALLS = ../lackey/lackey
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+!android:!winrt: TEST_HELPER_INSTALLS = ../lackey/lackey

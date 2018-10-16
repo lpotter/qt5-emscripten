@@ -1,67 +1,68 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include <QtTest/QtTest>
+#include <QAtomicInt>
+#include <QThread>
+#include <QSemaphore>
 #include <qvector.h>
 
 struct Movable {
     Movable(char input = 'j')
         : i(input)
+        , that(this)
         , state(Constructed)
     {
-        ++counter;
+        counter.fetchAndAddRelaxed(1);
     }
     Movable(const Movable &other)
         : i(other.i)
+        , that(this)
         , state(Constructed)
     {
         check(other.state, Constructed);
-        ++counter;
+        counter.fetchAndAddRelaxed(1);
+    }
+    Movable(Movable &&other)
+        : i(other.i)
+        , that(other.that)
+        , state(Constructed)
+    {
+        check(other.state, Constructed);
+        counter.fetchAndAddRelaxed(1);
+        other.that = nullptr;
     }
 
     ~Movable()
     {
         check(state, Constructed);
         i = 0;
-        --counter;
+        counter.fetchAndAddRelaxed(-1);
         state = Destructed;
     }
 
@@ -77,11 +78,27 @@ struct Movable {
         check(state, Constructed);
         check(other.state, Constructed);
         i = other.i;
+        that = this;
         return *this;
     }
+    Movable &operator=(Movable &&other)
+    {
+        check(state, Constructed);
+        check(other.state, Constructed);
+        i = other.i;
+        that = other.that;
+        other.that = nullptr;
+        return *this;
+    }
+    bool wasConstructedAt(const Movable *other) const
+    {
+        return that == other;
+    }
     char i;
-    static int counter;
+    static QAtomicInt counter;
 private:
+    Movable *that;       // used to check if an instance was moved
+
     enum State { Constructed = 106, Destructed = 110 };
     State state;
 
@@ -91,7 +108,9 @@ private:
     }
 };
 
-int Movable::counter = 0;
+inline uint qHash(const Movable &key, uint seed = 0) { return qHash(key.i, seed); }
+
+QAtomicInt Movable::counter = 0;
 QT_BEGIN_NAMESPACE
 Q_DECLARE_TYPEINFO(Movable, Q_MOVABLE_TYPE);
 QT_END_NAMESPACE
@@ -103,21 +122,21 @@ struct Custom {
         , that(this)
         , state(Constructed)
     {
-        ++counter;
+        counter.fetchAndAddRelaxed(1);
     }
     Custom(const Custom &other)
         : that(this)
         , state(Constructed)
     {
         check(&other);
-        ++counter;
+        counter.fetchAndAddRelaxed(1);
         this->i = other.i;
     }
     ~Custom()
     {
         check(this);
         i = 0;
-        --counter;
+        counter.fetchAndAddRelaxed(-1);
         state = Destructed;
     }
 
@@ -128,6 +147,13 @@ struct Custom {
         return i == other.i;
     }
 
+    bool operator<(const Custom &other) const
+    {
+        check(&other);
+        check(this);
+        return i < other.i;
+    }
+
     Custom &operator=(const Custom &other)
     {
         check(&other);
@@ -135,7 +161,7 @@ struct Custom {
         i = other.i;
         return *this;
     }
-    static int counter;
+    static QAtomicInt counter;
 
     char i;             // used to identify orgin of an instance
 private:
@@ -151,7 +177,9 @@ private:
         QCOMPARE(c->state, Constructed);
     }
 };
-int Custom::counter = 0;
+QAtomicInt Custom::counter = 0;
+
+inline uint qHash(const Custom &key, uint seed = 0) { return qHash(key.i, seed); }
 
 Q_DECLARE_METATYPE(Custom);
 
@@ -175,12 +203,16 @@ private slots:
     void copyConstructorInt() const;
     void copyConstructorMovable() const;
     void copyConstructorCustom() const;
+    void assignmentInt() const;
+    void assignmentMovable() const;
+    void assignmentCustom() const;
     void addInt() const;
     void addMovable() const;
     void addCustom() const;
     void appendInt() const;
     void appendMovable() const;
     void appendCustom() const;
+    void appendRvalue() const;
     void at() const;
     void capacityInt() const;
     void capacityMovable() const;
@@ -189,6 +221,8 @@ private slots:
     void clearMovable() const;
     void clearCustom() const;
     void constData() const;
+    void constFirst() const;
+    void constLast() const;
     void contains() const;
     void countInt() const;
     void countMovable() const;
@@ -222,17 +256,27 @@ private slots:
     void fromListCustom() const;
     void fromStdVector() const;
     void indexOf() const;
-    void insert() const;
+    void insertInt() const;
+    void insertMovable() const;
+    void insertCustom() const;
     void isEmpty() const;
     void last() const;
     void lastIndexOf() const;
     void mid() const;
+    void moveInt() const;
+    void moveMovable() const;
+    void moveCustom() const;
     void prependInt() const;
     void prependMovable() const;
     void prependCustom() const;
+    void qhashInt() const { qhash<int>(); }
+    void qhashMovable() const { qhash<Movable>(); }
+    void qhashCustom() const { qhash<Custom>(); }
+    void removeAllWithAlias() const;
     void removeInt() const;
     void removeMovable() const;
     void removeCustom() const;
+    void removeFirstLast() const;
     void resizePOD_data() const;
     void resizePOD() const;
     void resizeComplexMovable_data() const;
@@ -240,6 +284,7 @@ private slots:
     void resizeComplex_data() const;
     void resizeComplex() const;
     void resizeCtorAndDtor() const;
+    void reverseIterators() const;
     void sizeInt() const;
     void sizeMovable() const;
     void sizeCustom() const;
@@ -254,6 +299,7 @@ private slots:
     void testOperators() const;
 
     void reserve();
+    void reserveZero();
     void reallocAfterCopy_data();
     void reallocAfterCopy();
     void initializeListInt();
@@ -261,16 +307,24 @@ private slots:
     void initializeListCustom();
 
     void const_shared_null();
+#if 1
+    // ### Qt6 remove this section
     void setSharableInt_data();
     void setSharableInt();
     void setSharableMovable_data();
     void setSharableMovable();
     void setSharableCustom_data();
     void setSharableCustom();
+#endif
 
     void detachInt() const;
     void detachMovable() const;
     void detachCustom() const;
+    void detachThreadSafetyInt() const;
+    void detachThreadSafetyMovable() const;
+    void detachThreadSafetyCustom() const;
+
+    void insertMove() const;
 
 private:
     template<typename T> void copyConstructor() const;
@@ -286,6 +340,9 @@ private:
     template<typename T> void eraseReserved() const;
     template<typename T> void fill() const;
     template<typename T> void fromList() const;
+    template<typename T> void insert() const;
+    template<typename T> void qhash() const;
+    template<typename T> void move() const;
     template<typename T> void prepend() const;
     template<typename T> void remove() const;
     template<typename T> void size() const;
@@ -294,9 +351,9 @@ private:
     template<typename T> void setSharable_data() const;
     template<typename T> void setSharable() const;
     template<typename T> void detach() const;
+    template<typename T> void detachThreadSafety() const;
 };
 
-Q_DECLARE_METATYPE(QVector<int>);
 
 template<typename T> struct SimpleValue
 {
@@ -323,6 +380,14 @@ template<>
 const Movable SimpleValue<Movable>::Values[] = { 110, 105, 101, 114, 111, 98 };
 template<>
 const Custom SimpleValue<Custom>::Values[] = { 110, 105, 101, 114, 111, 98 };
+
+// Make some macros for the tests to use in order to be slightly more readable...
+#define T_FOO SimpleValue<T>::at(0)
+#define T_BAR SimpleValue<T>::at(1)
+#define T_BAZ SimpleValue<T>::at(2)
+#define T_CAT SimpleValue<T>::at(3)
+#define T_DOG SimpleValue<T>::at(4)
+#define T_BLAH SimpleValue<T>::at(5)
 
 void tst_QVector::constructors_empty() const
 {
@@ -388,6 +453,14 @@ void tst_QVector::copyConstructor() const
     }
     {
         QVector<T> v1;
+        v1 << value1 << value2 << value3 << value4;
+        QVector<T> v2(v1);
+        QCOMPARE(v1, v2);
+    }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
+    {
+        QVector<T> v1;
         v1.setSharable(false);
         QVector<T> v2(v1);
         QVERIFY(!v1.isSharedWith(v2));
@@ -396,17 +469,12 @@ void tst_QVector::copyConstructor() const
     {
         QVector<T> v1;
         v1 << value1 << value2 << value3 << value4;
-        QVector<T> v2(v1);
-        QCOMPARE(v1, v2);
-    }
-    {
-        QVector<T> v1;
-        v1 << value1 << value2 << value3 << value4;
         v1.setSharable(false);
         QVector<T> v2(v1);
         QVERIFY(!v1.isSharedWith(v2));
         QCOMPARE(v1, v2);
     }
+#endif
 }
 
 void tst_QVector::copyConstructorInt() const
@@ -416,16 +484,62 @@ void tst_QVector::copyConstructorInt() const
 
 void tst_QVector::copyConstructorMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     copyConstructor<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::copyConstructorCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     copyConstructor<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
+}
+
+template <class T>
+static inline void testAssignment()
+{
+    QVector<T> v1(5);
+    QCOMPARE(v1.size(), 5);
+    QVERIFY(v1.isDetached());
+
+    QVector<T> v2(7);
+    QCOMPARE(v2.size(), 7);
+    QVERIFY(v2.isDetached());
+
+    QVERIFY(!v1.isSharedWith(v2));
+
+    v1 = v2;
+
+    QVERIFY(!v1.isDetached());
+    QVERIFY(!v2.isDetached());
+    QVERIFY(v1.isSharedWith(v2));
+
+    const void *const data1 = v1.constData();
+    const void *const data2 = v2.constData();
+
+    QCOMPARE(data1, data2);
+
+    v1.clear();
+
+    QVERIFY(v2.isDetached());
+    QVERIFY(!v1.isSharedWith(v2));
+    QCOMPARE((void *)v2.constData(), data2);
+}
+
+void tst_QVector::assignmentInt() const
+{
+    testAssignment<int>();
+}
+
+void tst_QVector::assignmentMovable() const
+{
+    testAssignment<Movable>();
+}
+
+void tst_QVector::assignmentCustom() const
+{
+    testAssignment<Custom>();
 }
 
 template<typename T>
@@ -466,16 +580,16 @@ void tst_QVector::addInt() const
 
 void tst_QVector::addMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     add<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::addCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     add<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -507,6 +621,8 @@ void tst_QVector::append() const
         QVERIFY(v.size() == 3);
         QCOMPARE(v.at(v.size() - 1), SimpleValue<T>::at(0));
     }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     {
         QVector<T> v(2);
         v.reserve(12);
@@ -514,6 +630,19 @@ void tst_QVector::append() const
         v.append(SimpleValue<T>::at(0));
         QVERIFY(v.size() == 3);
         QCOMPARE(v.last(), SimpleValue<T>::at(0));
+    }
+#endif
+    {
+        QVector<int> v;
+        v << 1 << 2 << 3;
+        QVector<int> x;
+        x << 4 << 5 << 6;
+        v.append(x);
+
+        QVector<int> combined;
+        combined << 1 << 2 << 3 << 4 << 5 << 6;
+
+        QCOMPARE(v, combined);
     }
 }
 
@@ -524,16 +653,31 @@ void tst_QVector::appendInt() const
 
 void tst_QVector::appendMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     append<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::appendCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     append<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
+}
+
+void tst_QVector::appendRvalue() const
+{
+#ifdef Q_COMPILER_RVALUE_REFS
+    QVector<QString> v;
+    v.append("hello");
+    QString world = "world";
+    v.append(std::move(world));
+    QVERIFY(world.isEmpty());
+    QCOMPARE(v.front(), QString("hello"));
+    QCOMPARE(v.back(),  QString("world"));
+#else
+    QSKIP("This test requires that C++11 move semantics support is enabled in the compiler");
+#endif
 }
 
 void tst_QVector::at() const
@@ -603,16 +747,16 @@ void tst_QVector::capacityInt() const
 
 void tst_QVector::capacityMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     capacity<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::capacityCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     capacity<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -621,10 +765,11 @@ void tst_QVector::clear() const
     QVector<T> myvec;
     myvec << SimpleValue<T>::at(0) << SimpleValue<T>::at(1) << SimpleValue<T>::at(2);
 
-    QVERIFY(myvec.size() == 3);
+    const auto oldCapacity = myvec.capacity();
+    QCOMPARE(myvec.size(), 3);
     myvec.clear();
-    QVERIFY(myvec.size() == 0);
-    QVERIFY(myvec.capacity() == 0);
+    QCOMPARE(myvec.size(), 0);
+    QCOMPARE(myvec.capacity(), oldCapacity);
 }
 
 void tst_QVector::clearInt() const
@@ -634,16 +779,16 @@ void tst_QVector::clearInt() const
 
 void tst_QVector::clearMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     clear<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::clearCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     clear<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::constData() const
@@ -718,16 +863,16 @@ void tst_QVector::countInt() const
 
 void tst_QVector::countMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     count<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::countCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     count<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::data() const
@@ -772,16 +917,16 @@ void tst_QVector::emptyInt() const
 
 void tst_QVector::emptyMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     empty<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::emptyCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     empty<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::endsWith() const
@@ -812,12 +957,15 @@ void tst_QVector::eraseEmpty() const
         v.erase(v.begin(), v.end());
         QCOMPARE(v.size(), 0);
     }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     {
         QVector<T> v;
         v.setSharable(false);
         v.erase(v.begin(), v.end());
         QCOMPARE(v.size(), 0);
     }
+#endif
 }
 
 void tst_QVector::eraseEmptyInt() const
@@ -827,16 +975,16 @@ void tst_QVector::eraseEmptyInt() const
 
 void tst_QVector::eraseEmptyMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     eraseEmpty<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::eraseEmptyCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     eraseEmpty<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -848,6 +996,8 @@ void tst_QVector::eraseEmptyReserved() const
         v.erase(v.begin(), v.end());
         QCOMPARE(v.size(), 0);
     }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     {
         QVector<T> v;
         v.reserve(10);
@@ -855,6 +1005,7 @@ void tst_QVector::eraseEmptyReserved() const
         v.erase(v.begin(), v.end());
         QCOMPARE(v.size(), 0);
     }
+#endif
 }
 
 void tst_QVector::eraseEmptyReservedInt() const
@@ -864,16 +1015,16 @@ void tst_QVector::eraseEmptyReservedInt() const
 
 void tst_QVector::eraseEmptyReservedMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     eraseEmptyReserved<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::eraseEmptyReservedCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     eraseEmptyReserved<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -961,6 +1112,8 @@ void tst_QVector::erase(bool shared) const
         if (shared)
             QCOMPARE(SimpleValue<T>::vector(12), *svc.copy);
     }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     {
         QVector<T> v = SimpleValue<T>::vector(10);
         SharedVectorChecker<T> svc(v, shared);
@@ -973,6 +1126,7 @@ void tst_QVector::erase(bool shared) const
         if (shared)
             QCOMPARE(SimpleValue<T>::vector(10), *svc.copy);
     }
+#endif
 }
 
 void tst_QVector::eraseInt() const
@@ -987,30 +1141,30 @@ void tst_QVector::eraseIntShared() const
 
 void tst_QVector::eraseMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     erase<Movable>(false);
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::eraseMovableShared() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     erase<Movable>(true);
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::eraseCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     erase<Custom>(false);
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::eraseCustomShared() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     erase<Custom>(true);
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T> void tst_QVector::eraseReserved() const
@@ -1045,6 +1199,8 @@ template<typename T> void tst_QVector::eraseReserved() const
         v.erase(v.begin() + 1, v.end() - 1);
         QCOMPARE(v.size(), 2);
     }
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     {
         QVector<T> v(10);
         v.reserve(16);
@@ -1054,6 +1210,7 @@ template<typename T> void tst_QVector::eraseReserved() const
         v.erase(v.begin(), v.end() - 1);
         QCOMPARE(v.size(), 1);
     }
+#endif
 }
 
 void tst_QVector::eraseReservedInt() const
@@ -1063,16 +1220,16 @@ void tst_QVector::eraseReservedInt() const
 
 void tst_QVector::eraseReservedMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     eraseReserved<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::eraseReservedCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     eraseReserved<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -1103,16 +1260,16 @@ void tst_QVector::fillInt() const
 
 void tst_QVector::fillMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     fill<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::fillCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     fill<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::first() const
@@ -1122,15 +1279,85 @@ void tst_QVector::first() const
 
     // test it starts ok
     QCOMPARE(myvec.first(), 69);
+    QCOMPARE(myvec.constFirst(), 69);
 
     // test removal changes
     myvec.remove(0);
     QCOMPARE(myvec.first(), 42);
+    QCOMPARE(myvec.constFirst(), 42);
 
     // test prepend changes
     myvec.prepend(23);
     QCOMPARE(myvec.first(), 23);
+    QCOMPARE(myvec.constFirst(), 23);
 }
+
+void tst_QVector::constFirst() const
+{
+    QVector<int> myvec;
+    myvec << 69 << 42 << 3;
+
+    // test it starts ok
+    QCOMPARE(myvec.constFirst(), 69);
+    QVERIFY(myvec.isDetached());
+
+    QVector<int> myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constFirst(), 69);
+    QCOMPARE(myvecCopy.constFirst(), 69);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    // test removal changes
+    myvec.remove(0);
+    QVERIFY(myvec.isDetached());
+    QVERIFY(!myvec.isSharedWith(myvecCopy));
+    QCOMPARE(myvec.constFirst(), 42);
+    QCOMPARE(myvecCopy.constFirst(), 69);
+
+    myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constFirst(), 42);
+    QCOMPARE(myvecCopy.constFirst(), 42);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    // test prepend changes
+    myvec.prepend(23);
+    QVERIFY(myvec.isDetached());
+    QVERIFY(!myvec.isSharedWith(myvecCopy));
+    QCOMPARE(myvec.constFirst(), 23);
+    QCOMPARE(myvecCopy.constFirst(), 42);
+
+    myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constFirst(), 23);
+    QCOMPARE(myvecCopy.constFirst(), 23);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+}
+
 
 template<typename T>
 void tst_QVector::fromList() const
@@ -1153,16 +1380,16 @@ void tst_QVector::fromListInt() const
 
 void tst_QVector::fromListMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     fromList<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::fromListCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     fromList<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::fromStdVector() const
@@ -1203,32 +1430,87 @@ void tst_QVector::indexOf() const
     QVERIFY(myvec.indexOf("A", 4) == -1);
 }
 
+template <typename T>
 void tst_QVector::insert() const
 {
-    QVector<QString> myvec;
-    myvec << "A" << "B" << "C";
+    QVector<T> myvec;
+    const T
+        tA = SimpleValue<T>::at(0),
+        tB = SimpleValue<T>::at(1),
+        tC = SimpleValue<T>::at(2),
+        tX = SimpleValue<T>::at(3),
+        tZ = SimpleValue<T>::at(4),
+        tT = SimpleValue<T>::at(5),
+        ti = SimpleValue<T>::at(6);
+    myvec << tA << tB << tC;
+    QVector<T> myvec2 = myvec;
 
     // first position
-    QCOMPARE(myvec.at(0), QLatin1String("A"));
-    myvec.insert(0, QLatin1String("X"));
-    QCOMPARE(myvec.at(0), QLatin1String("X"));
-    QCOMPARE(myvec.at(1), QLatin1String("A"));
+    QCOMPARE(myvec.at(0), tA);
+    myvec.insert(0, tX);
+    QCOMPARE(myvec.at(0), tX);
+    QCOMPARE(myvec.at(1), tA);
+
+    QCOMPARE(myvec2.at(0), tA);
+    myvec2.insert(myvec2.begin(), tX);
+    QCOMPARE(myvec2.at(0), tX);
+    QCOMPARE(myvec2.at(1), tA);
 
     // middle
-    myvec.insert(1, QLatin1String("Z"));
-    QCOMPARE(myvec.at(0), QLatin1String("X"));
-    QCOMPARE(myvec.at(1), QLatin1String("Z"));
-    QCOMPARE(myvec.at(2), QLatin1String("A"));
+    myvec.insert(1, tZ);
+    QCOMPARE(myvec.at(0), tX);
+    QCOMPARE(myvec.at(1), tZ);
+    QCOMPARE(myvec.at(2), tA);
+
+    myvec2.insert(myvec2.begin() + 1, tZ);
+    QCOMPARE(myvec2.at(0), tX);
+    QCOMPARE(myvec2.at(1), tZ);
+    QCOMPARE(myvec2.at(2), tA);
 
     // end
-    myvec.insert(5, QLatin1String("T"));
-    QCOMPARE(myvec.at(5), QLatin1String("T"));
-    QCOMPARE(myvec.at(4), QLatin1String("C"));
+    myvec.insert(5, tT);
+    QCOMPARE(myvec.at(5), tT);
+    QCOMPARE(myvec.at(4), tC);
+
+    myvec2.insert(myvec2.end(), tT);
+    QCOMPARE(myvec2.at(5), tT);
+    QCOMPARE(myvec2.at(4), tC);
 
     // insert a lot of garbage in the middle
-    myvec.insert(2, 2, QLatin1String("infinity"));
-    QCOMPARE(myvec, QVector<QString>() << "X" << "Z" << "infinity" << "infinity"
-             << "A" << "B" << "C" << "T");
+    myvec.insert(2, 2, ti);
+    QCOMPARE(myvec, QVector<T>() << tX << tZ << ti << ti
+             << tA << tB << tC << tT);
+
+    myvec2.insert(myvec2.begin() + 2, 2, ti);
+    QCOMPARE(myvec2, myvec);
+
+    // insert from references to the same container:
+    myvec.insert(0, 1, myvec[5]);   // inserts tB
+    myvec2.insert(0, 1, myvec2[5]); // inserts tB
+    QCOMPARE(myvec, QVector<T>() << tB << tX << tZ << ti << ti
+             << tA << tB << tC << tT);
+    QCOMPARE(myvec2, myvec);
+
+    myvec.insert(0, 1, const_cast<const QVector<T>&>(myvec)[0]);   // inserts tB
+    myvec2.insert(0, 1, const_cast<const QVector<T>&>(myvec2)[0]); // inserts tB
+    QCOMPARE(myvec, QVector<T>() << tB << tB << tX << tZ << ti << ti
+             << tA << tB << tC << tT);
+    QCOMPARE(myvec2, myvec);
+}
+
+void tst_QVector::insertInt() const
+{
+    insert<int>();
+}
+
+void tst_QVector::insertMovable() const
+{
+    insert<Movable>();
+}
+
+void tst_QVector::insertCustom() const
+{
+    insert<Custom>();
 }
 
 void tst_QVector::isEmpty() const
@@ -1254,14 +1536,83 @@ void tst_QVector::last() const
 
     // test starts ok
     QCOMPARE(myvec.last(), QLatin1String("C"));
+    QCOMPARE(myvec.constLast(), QLatin1String("C"));
 
     // test it changes ok
     myvec.append(QLatin1String("X"));
     QCOMPARE(myvec.last(), QLatin1String("X"));
+    QCOMPARE(myvec.constLast(), QLatin1String("X"));
 
     // and remove again
     myvec.remove(3);
     QCOMPARE(myvec.last(), QLatin1String("C"));
+    QCOMPARE(myvec.constLast(), QLatin1String("C"));
+}
+
+void tst_QVector::constLast() const
+{
+    QVector<int> myvec;
+    myvec << 69 << 42 << 3;
+
+    // test it starts ok
+    QCOMPARE(myvec.constLast(), 3);
+    QVERIFY(myvec.isDetached());
+
+    QVector<int> myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constLast(), 3);
+    QCOMPARE(myvecCopy.constLast(), 3);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    // test removal changes
+    myvec.removeLast();
+    QVERIFY(myvec.isDetached());
+    QVERIFY(!myvec.isSharedWith(myvecCopy));
+    QCOMPARE(myvec.constLast(), 42);
+    QCOMPARE(myvecCopy.constLast(), 3);
+
+    myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constLast(), 42);
+    QCOMPARE(myvecCopy.constLast(), 42);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    // test prepend changes
+    myvec.append(23);
+    QVERIFY(myvec.isDetached());
+    QVERIFY(!myvec.isSharedWith(myvecCopy));
+    QCOMPARE(myvec.constLast(), 23);
+    QCOMPARE(myvecCopy.constLast(), 42);
+
+    myvecCopy = myvec;
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+
+    QCOMPARE(myvec.constLast(), 23);
+    QCOMPARE(myvecCopy.constLast(), 23);
+
+    QVERIFY(!myvec.isDetached());
+    QVERIFY(!myvecCopy.isDetached());
+    QVERIFY(myvec.isSharedWith(myvecCopy));
+    QVERIFY(myvecCopy.isSharedWith(myvec));
 }
 
 void tst_QVector::lastIndexOf() const
@@ -1293,7 +1644,57 @@ void tst_QVector::mid() const
     list << "foo" << "bar" << "baz" << "bak" << "buck" << "hello" << "kitty";
 
     QCOMPARE(list.mid(3, 3), QVector<QString>() << "bak" << "buck" << "hello");
+    QCOMPARE(list.mid(6, 10), QVector<QString>() << "kitty");
+    QCOMPARE(list.mid(-1, 20), list);
     QCOMPARE(list.mid(4), QVector<QString>() << "buck" << "hello" << "kitty");
+}
+
+template <typename T>
+void tst_QVector::qhash() const
+{
+    QVector<T> l1, l2;
+    QCOMPARE(qHash(l1), qHash(l2));
+    l1 << SimpleValue<T>::at(0);
+    l2 << SimpleValue<T>::at(0);
+    QCOMPARE(qHash(l1), qHash(l2));
+}
+
+template <typename T>
+void tst_QVector::move() const
+{
+    QVector<T> list;
+    list << T_FOO << T_BAR << T_BAZ;
+
+    // move an item
+    list.move(0, list.count() - 1);
+    QCOMPARE(list, QVector<T>() << T_BAR << T_BAZ << T_FOO);
+
+    // move it back
+    list.move(list.count() - 1, 0);
+    QCOMPARE(list, QVector<T>() << T_FOO << T_BAR << T_BAZ);
+
+    // move an item in the middle
+    list.move(1, 0);
+    QCOMPARE(list, QVector<T>() << T_BAR << T_FOO << T_BAZ);
+}
+
+void tst_QVector::moveInt() const
+{
+    move<int>();
+}
+
+void tst_QVector::moveMovable() const
+{
+    const int instancesCount = Movable::counter.loadAcquire();
+    move<Movable>();
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
+}
+
+void tst_QVector::moveCustom() const
+{
+    const int instancesCount = Custom::counter.loadAcquire();
+    move<Custom>();
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -1339,16 +1740,23 @@ void tst_QVector::prependInt() const
 
 void tst_QVector::prependMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     prepend<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::prependCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     prepend<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
+}
+
+void tst_QVector::removeAllWithAlias() const
+{
+    QVector<QString> strings;
+    strings << "One" << "Two" << "Three" << "One" /* must be distinct, but equal */;
+    QCOMPARE(strings.removeAll(strings.front()), 2); // will trigger asan/ubsan
 }
 
 template<typename T>
@@ -1358,13 +1766,35 @@ void tst_QVector::remove() const
     T val1 = SimpleValue<T>::at(1);
     T val2 = SimpleValue<T>::at(2);
     T val3 = SimpleValue<T>::at(3);
+    T val4 = SimpleValue<T>::at(4);
+    myvec << val1 << val2 << val3;
+    myvec << val1 << val2 << val3;
     myvec << val1 << val2 << val3;
     // remove middle
     myvec.remove(1);
-    QCOMPARE(myvec, QVector<T>() << val1 << val3);
+    QCOMPARE(myvec, QVector<T>() << val1 << val3  << val1 << val2 << val3  << val1 << val2 << val3);
+
+    // removeOne()
+    QVERIFY(!myvec.removeOne(val4));
+    QVERIFY(myvec.removeOne(val2));
+    QCOMPARE(myvec, QVector<T>() << val1 << val3  << val1 << val3  << val1 << val2 << val3);
+
+    QVector<T> myvecCopy = myvec;
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+    // removeAll()
+    QCOMPARE(myvec.removeAll(val4), 0);
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+    QCOMPARE(myvec.removeAll(val1), 3);
+    QVERIFY(!myvecCopy.isSharedWith(myvec));
+    QCOMPARE(myvec, QVector<T>() << val3  << val3  << val2 << val3);
+    myvecCopy = myvec;
+    QVERIFY(myvecCopy.isSharedWith(myvec));
+    QCOMPARE(myvec.removeAll(val2), 1);
+    QVERIFY(!myvecCopy.isSharedWith(myvec));
+    QCOMPARE(myvec, QVector<T>() << val3  << val3  << val3);
 
     // remove rest
-    myvec.remove(0, 2);
+    myvec.remove(0, 3);
     QCOMPARE(myvec, QVector<T>());
 }
 
@@ -1375,17 +1805,114 @@ void tst_QVector::removeInt() const
 
 void tst_QVector::removeMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     remove<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::removeCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     remove<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
+
+struct RemoveLastTestClass
+{
+    RemoveLastTestClass() { other = 0; deleted = false; }
+    RemoveLastTestClass *other;
+    bool deleted;
+    ~RemoveLastTestClass()
+    {
+        deleted = true;
+        if (other)
+            other->other = 0;
+    }
+};
+
+void tst_QVector::removeFirstLast() const
+{
+    // pop_pack - pop_front
+    QVector<int> t, t2;
+    t.append(1);
+    t.append(2);
+    t.append(3);
+    t.append(4);
+    t2 = t;
+    t.pop_front();
+    QCOMPARE(t.size(), 3);
+    QCOMPARE(t.at(0), 2);
+    t.pop_back();
+    QCOMPARE(t.size(), 2);
+    QCOMPARE(t.at(0), 2);
+    QCOMPARE(t.at(1), 3);
+
+    // takefirst - takeLast
+    int n1 = t2.takeLast();
+    QCOMPARE(t2.size(), 3);
+    QCOMPARE(n1, 4);
+    QCOMPARE(t2.at(0), 1);
+    QCOMPARE(t2.at(2), 3);
+    n1 = t2.takeFirst();
+    QCOMPARE(t2.size(), 2);
+    QCOMPARE(n1, 1);
+    QCOMPARE(t2.at(0), 2);
+    QCOMPARE(t2.at(1), 3);
+
+    // remove first
+    QVector<int> x, y;
+    x.append(1);
+    x.append(2);
+    y = x;
+    x.removeFirst();
+    QCOMPARE(x.size(), 1);
+    QCOMPARE(y.size(), 2);
+    QCOMPARE(x.at(0), 2);
+
+    // remove Last
+    QVector<RemoveLastTestClass> v;
+    v.resize(2);
+    v[0].other = &(v[1]);
+    v[1].other = &(v[0]);
+    // Check dtor - complex type
+    QVERIFY(v.at(0).other != 0);
+    v.removeLast();
+    QVERIFY(v.at(0).other == 0);
+    QCOMPARE(v.at(0).deleted, false);
+    // check iterator
+    int count = 0;
+    for (QVector<RemoveLastTestClass>::const_iterator i = v.constBegin(); i != v.constEnd(); ++i) {
+        ++count;
+        QVERIFY(i->other == 0);
+        QCOMPARE(i->deleted, false);
+    }
+    // Check size
+    QCOMPARE(count, 1);
+    QCOMPARE(v.size(), 1);
+    v.removeLast();
+    QCOMPARE(v.size(), 0);
+    // Check if we do correct realloc
+    QVector<int> v2, v3;
+    v2.append(1);
+    v2.append(2);
+    v3 = v2; // shared
+    v2.removeLast();
+    QCOMPARE(v2.size(), 1);
+    QCOMPARE(v3.size(), 2);
+    QCOMPARE(v2.at(0), 1);
+    QCOMPARE(v3.at(0), 1);
+    QCOMPARE(v3.at(1), 2);
+
+    // Remove last with shared
+    QVector<int> z1, z2;
+    z1.append(9);
+    z2 = z1;
+    z1.removeLast();
+    QCOMPARE(z1.size(), 0);
+    QCOMPARE(z2.size(), 1);
+    QCOMPARE(z2.at(0), 9);
+}
+
 
 void tst_QVector::resizePOD_data() const
 {
@@ -1408,6 +1935,14 @@ void tst_QVector::resizePOD_data() const
     QVERIFY(emptyReserved.capacity() >= 10);
     QVERIFY(nonEmptyReserved.capacity() >= 15);
 
+    QTest::newRow("null") << null << 10;
+    QTest::newRow("empty") << empty << 10;
+    QTest::newRow("emptyReserved") << emptyReserved << 10;
+    QTest::newRow("nonEmpty") << nonEmpty << 10;
+    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
+
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     QVector<int> nullNotShared;
     QVector<int> emptyNotShared(0, 5);
     QVector<int> emptyReservedNotShared;
@@ -1426,16 +1961,12 @@ void tst_QVector::resizePOD_data() const
     nonEmptyNotShared.setSharable(false);
     nonEmptyReservedNotShared.setSharable(false);
 
-    QTest::newRow("null") << null << 10;
-    QTest::newRow("empty") << empty << 10;
-    QTest::newRow("emptyReserved") << emptyReserved << 10;
-    QTest::newRow("nonEmpty") << nonEmpty << 10;
-    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
     QTest::newRow("nullNotShared") << nullNotShared << 10;
     QTest::newRow("emptyNotShared") << emptyNotShared << 10;
     QTest::newRow("emptyReservedNotShared") << emptyReservedNotShared << 10;
     QTest::newRow("nonEmptyNotShared") << nonEmptyNotShared << 10;
     QTest::newRow("nonEmptyReservedNotShared") << nonEmptyReservedNotShared << 10;
+#endif
 }
 
 void tst_QVector::resizePOD() const
@@ -1453,7 +1984,7 @@ void tst_QVector::resizePOD() const
 
     const int capacity = vector.capacity();
 
-    vector.resize(0);
+    vector.clear();
     QCOMPARE(vector.size(), 0);
     QVERIFY(vector.capacity() <= capacity);
 }
@@ -1479,6 +2010,14 @@ void tst_QVector::resizeComplexMovable_data() const
     QVERIFY(emptyReserved.capacity() >= 10);
     QVERIFY(nonEmptyReserved.capacity() >= 15);
 
+    QTest::newRow("null") << null << 10;
+    QTest::newRow("empty") << empty << 10;
+    QTest::newRow("emptyReserved") << emptyReserved << 10;
+    QTest::newRow("nonEmpty") << nonEmpty << 10;
+    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
+
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     QVector<Movable> nullNotShared;
     QVector<Movable> emptyNotShared(0, 'Q');
     QVector<Movable> emptyReservedNotShared;
@@ -1497,21 +2036,17 @@ void tst_QVector::resizeComplexMovable_data() const
     nonEmptyNotShared.setSharable(false);
     nonEmptyReservedNotShared.setSharable(false);
 
-    QTest::newRow("null") << null << 10;
-    QTest::newRow("empty") << empty << 10;
-    QTest::newRow("emptyReserved") << emptyReserved << 10;
-    QTest::newRow("nonEmpty") << nonEmpty << 10;
-    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
     QTest::newRow("nullNotShared") << nullNotShared << 10;
     QTest::newRow("emptyNotShared") << emptyNotShared << 10;
     QTest::newRow("emptyReservedNotShared") << emptyReservedNotShared << 10;
     QTest::newRow("nonEmptyNotShared") << nonEmptyNotShared << 10;
     QTest::newRow("nonEmptyReservedNotShared") << nonEmptyReservedNotShared << 10;
+#endif
 }
 
 void tst_QVector::resizeComplexMovable() const
 {
-    const int items = Movable::counter;
+    const int items = Movable::counter.loadAcquire();
     {
         QFETCH(QVector<Movable>, vector);
         QFETCH(int, size);
@@ -1530,7 +2065,7 @@ void tst_QVector::resizeComplexMovable() const
         QCOMPARE(vector.size(), 0);
         QVERIFY(vector.capacity() <= capacity);
     }
-    QCOMPARE(items, Movable::counter);
+    QCOMPARE(items, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::resizeComplex_data() const
@@ -1554,6 +2089,14 @@ void tst_QVector::resizeComplex_data() const
     QVERIFY(emptyReserved.capacity() >= 10);
     QVERIFY(nonEmptyReserved.capacity() >= 15);
 
+    QTest::newRow("null") << null << 10;
+    QTest::newRow("empty") << empty << 10;
+    QTest::newRow("emptyReserved") << emptyReserved << 10;
+    QTest::newRow("nonEmpty") << nonEmpty << 10;
+    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
+
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     QVector<Custom> nullNotShared;
     QVector<Custom> emptyNotShared(0, '0');
     QVector<Custom> emptyReservedNotShared;
@@ -1572,21 +2115,17 @@ void tst_QVector::resizeComplex_data() const
     nonEmptyNotShared.setSharable(false);
     nonEmptyReservedNotShared.setSharable(false);
 
-    QTest::newRow("null") << null << 10;
-    QTest::newRow("empty") << empty << 10;
-    QTest::newRow("emptyReserved") << emptyReserved << 10;
-    QTest::newRow("nonEmpty") << nonEmpty << 10;
-    QTest::newRow("nonEmptyReserved") << nonEmptyReserved << 10;
     QTest::newRow("nullNotShared") << nullNotShared << 10;
     QTest::newRow("emptyNotShared") << emptyNotShared << 10;
     QTest::newRow("emptyReservedNotShared") << emptyReservedNotShared << 10;
     QTest::newRow("nonEmptyNotShared") << nonEmptyNotShared << 10;
     QTest::newRow("nonEmptyReservedNotShared") << nonEmptyReservedNotShared << 10;
+#endif
 }
 
 void tst_QVector::resizeComplex() const
 {
-    const int items = Custom::counter;
+    const int items = Custom::counter.loadAcquire();
     {
         QFETCH(QVector<Custom>, vector);
         QFETCH(int, size);
@@ -1605,12 +2144,12 @@ void tst_QVector::resizeComplex() const
         QVERIFY(vector.isEmpty());
         QVERIFY(vector.capacity() <= capacity);
     }
-    QCOMPARE(Custom::counter, items);
+    QCOMPARE(Custom::counter.loadAcquire(), items);
 }
 
 void tst_QVector::resizeCtorAndDtor() const
 {
-    const int items = Custom::counter;
+    const int items = Custom::counter.loadAcquire();
     {
         QVector<Custom> null;
         QVector<Custom> empty(0, '0');
@@ -1632,7 +2171,22 @@ void tst_QVector::resizeCtorAndDtor() const
         nonEmpty.resize(0);
         nonEmptyReserved.resize(2);
     }
-    QCOMPARE(Custom::counter, items);
+    QCOMPARE(Custom::counter.loadAcquire(), items);
+}
+
+void tst_QVector::reverseIterators() const
+{
+    QVector<int> v;
+    v << 1 << 2 << 3 << 4;
+    QVector<int> vr = v;
+    std::reverse(vr.begin(), vr.end());
+    const QVector<int> &cvr = vr;
+    QVERIFY(std::equal(v.begin(), v.end(), vr.rbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), vr.crbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), cvr.rbegin()));
+    QVERIFY(std::equal(vr.rbegin(), vr.rend(), v.begin()));
+    QVERIFY(std::equal(vr.crbegin(), vr.crend(), v.begin()));
+    QVERIFY(std::equal(cvr.rbegin(), cvr.rend(), v.begin()));
 }
 
 template<typename T>
@@ -1662,16 +2216,16 @@ void tst_QVector::sizeInt() const
 
 void tst_QVector::sizeMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     size<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::sizeCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     size<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 // ::squeeze() is tested in ::capacity().
@@ -1721,16 +2275,16 @@ void tst_QVector::swapInt() const
 
 void tst_QVector::swapMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     swap<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::swapCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     swap<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::toList() const
@@ -1804,6 +2358,19 @@ void tst_QVector::testOperators() const
     // ==
     QVERIFY(myvec == combined);
 
+    // <, >, <=, >=
+    QVERIFY(!(myvec <  combined));
+    QVERIFY(!(myvec >  combined));
+    QVERIFY(  myvec <= combined);
+    QVERIFY(  myvec >= combined);
+    combined.push_back("G");
+    QVERIFY(  myvec <  combined);
+    QVERIFY(!(myvec >  combined));
+    QVERIFY(  myvec <= combined);
+    QVERIFY(!(myvec >= combined));
+    QVERIFY(combined >  myvec);
+    QVERIFY(combined >= myvec);
+
     // []
     QCOMPARE(myvec[0], QLatin1String("A"));
     QCOMPARE(myvec[1], QLatin1String("B"));
@@ -1836,10 +2403,32 @@ void tst_QVector::reserve()
     {
         QVector<Foo> a;
         a.resize(2);
+        QCOMPARE(fooCtor, 2);
         QVector<Foo> b(a);
         b.reserve(1);
+        QCOMPARE(b.size(), a.size());
+        QCOMPARE(fooDtor, 0);
     }
     QCOMPARE(fooCtor, fooDtor);
+}
+
+// This is a regression test for QTBUG-51758
+void tst_QVector::reserveZero()
+{
+    QVector<int> vec;
+    vec.detach();
+    vec.reserve(0); // should not crash
+    QCOMPARE(vec.size(), 0);
+    QCOMPARE(vec.capacity(), 0);
+    vec.squeeze();
+    QCOMPARE(vec.size(), 0);
+    QCOMPARE(vec.capacity(), 0);
+    vec.reserve(-1);
+    QCOMPARE(vec.size(), 0);
+    QCOMPARE(vec.capacity(), 0);
+    vec.append(42);
+    QCOMPARE(vec.size(), 1);
+    QVERIFY(vec.capacity() >= 1);
 }
 
 // This is a regression test for QTBUG-11763, where memory would be reallocated
@@ -1857,6 +2446,7 @@ void tst_QVector::reallocAfterCopy_data()
     int result1, result2, result3, result4;
     int fill_size;
     for (int i = 70; i <= 100; i += 10) {
+        const QByteArray prefix = "reallocAfterCopy:" + QByteArray::number(i) + ',';
         fill_size = i - 20;
         for (int j = 0; j <= 3; j++) {
             if (j == 0) { // append
@@ -1880,7 +2470,8 @@ void tst_QVector::reallocAfterCopy_data()
                 result3 = i - 10;
                 result4 = i - 20;
             }
-            QTest::newRow(qPrintable(QString("reallocAfterCopy:%1,%2").arg(i).arg(j))) << i << fill_size << j << result1 << result2 << result3 << result4;
+            QTest::newRow((prefix + QByteArray::number(j)).constData())
+                    << i << fill_size << j << result1 << result2 << result3 << result4;
         }
     }
 }
@@ -1938,6 +2529,9 @@ void tst_QVector::initializeList()
     QVector<QVector<T>> v3;
     v3 << v1 << (QVector<T>() << val4) << QVector<T>() << v1;
     QCOMPARE(v3, v2);
+
+    QVector<T> v4({});
+    QCOMPARE(v4.size(), 0);
 #endif
 }
 
@@ -1948,29 +2542,34 @@ void tst_QVector::initializeListInt()
 
 void tst_QVector::initializeListMovable()
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     initializeList<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::initializeListCustom()
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     initializeList<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 void tst_QVector::const_shared_null()
 {
+    QVector<int> v2;
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+    // ### Qt6 remove this section
     QVector<int> v1;
     v1.setSharable(false);
     QVERIFY(v1.isDetached());
 
-    QVector<int> v2;
     v2.setSharable(true);
+#endif
     QVERIFY(!v2.isDetached());
 }
 
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
+// ### Qt6 remove this section
 template<typename T>
 void tst_QVector::setSharable_data() const
 {
@@ -1999,21 +2598,6 @@ void tst_QVector::setSharable_data() const
     QTest::newRow("empty, Reserved") << emptyReserved << 0 << 10 << true;
     QTest::newRow("non-empty") << nonEmpty << 5 << 0 << false;
     QTest::newRow("non-empty, Reserved") << nonEmptyReserved << 7 << 15 << true;
-}
-
-void tst_QVector::setSharableInt_data()
-{
-    setSharable_data<int>();
-}
-
-void tst_QVector::setSharableMovable_data()
-{
-    setSharable_data<Movable>();
-}
-
-void tst_QVector::setSharableCustom_data()
-{
-    setSharable_data<Custom>();
 }
 
 template<typename T>
@@ -2053,7 +2637,7 @@ void tst_QVector::setSharable() const
         if (isCapacityReserved)
             QVERIFY2(copy.capacity() >= capacity,
                     qPrintable(QString("Capacity is %1, expected at least %2.")
-                        .arg(vector.capacity())
+                        .arg(copy.capacity())
                         .arg(capacity)));
         QCOMPARE(copy, vector);
     }
@@ -2077,6 +2661,30 @@ void tst_QVector::setSharable() const
                     .arg(vector.capacity())
                     .arg(capacity)));
 }
+#else
+template<typename T> void tst_QVector::setSharable_data() const
+{
+}
+
+template<typename T> void tst_QVector::setSharable() const
+{
+}
+#endif
+
+void tst_QVector::setSharableInt_data()
+{
+    setSharable_data<int>();
+}
+
+void tst_QVector::setSharableMovable_data()
+{
+    setSharable_data<Movable>();
+}
+
+void tst_QVector::setSharableCustom_data()
+{
+    setSharable_data<Custom>();
+}
 
 void tst_QVector::setSharableInt()
 {
@@ -2085,16 +2693,16 @@ void tst_QVector::setSharableInt()
 
 void tst_QVector::setSharableMovable()
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     setSharable<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::setSharableCustom()
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     setSharable<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
 template<typename T>
@@ -2201,17 +2809,148 @@ void tst_QVector::detachInt() const
 
 void tst_QVector::detachMovable() const
 {
-    const int instancesCount = Movable::counter;
+    const int instancesCount = Movable::counter.loadAcquire();
     detach<Movable>();
-    QCOMPARE(instancesCount, Movable::counter);
+    QCOMPARE(instancesCount, Movable::counter.loadAcquire());
 }
 
 void tst_QVector::detachCustom() const
 {
-    const int instancesCount = Custom::counter;
+    const int instancesCount = Custom::counter.loadAcquire();
     detach<Custom>();
-    QCOMPARE(instancesCount, Custom::counter);
+    QCOMPARE(instancesCount, Custom::counter.loadAcquire());
 }
 
-QTEST_APPLESS_MAIN(tst_QVector)
+static QAtomicPointer<QVector<int> > detachThreadSafetyDataInt;
+static QAtomicPointer<QVector<Movable> > detachThreadSafetyDataMovable;
+static QAtomicPointer<QVector<Custom> > detachThreadSafetyDataCustom;
+
+template<typename T> QAtomicPointer<QVector<T> > *detachThreadSafetyData();
+template<> QAtomicPointer<QVector<int> > *detachThreadSafetyData() { return &detachThreadSafetyDataInt; }
+template<> QAtomicPointer<QVector<Movable> > *detachThreadSafetyData() { return &detachThreadSafetyDataMovable; }
+template<> QAtomicPointer<QVector<Custom> > *detachThreadSafetyData() { return &detachThreadSafetyDataCustom; }
+
+static QSemaphore detachThreadSafetyLock;
+
+template<typename T>
+void tst_QVector::detachThreadSafety() const
+{
+    delete detachThreadSafetyData<T>()->fetchAndStoreOrdered(new QVector<T>(SimpleValue<T>::vector(400)));
+
+    static const uint threadsCount = 5;
+
+    struct : QThread {
+        void run() override
+        {
+            QVector<T> copy(*detachThreadSafetyData<T>()->load());
+            QVERIFY(!copy.isDetached());
+            detachThreadSafetyLock.release();
+            detachThreadSafetyLock.acquire(100);
+            copy.detach();
+        }
+    } threads[threadsCount];
+
+    for (uint i = 0; i < threadsCount; ++i)
+        threads[i].start();
+    QThread::yieldCurrentThread();
+    detachThreadSafetyLock.acquire(threadsCount);
+
+    // destroy static original data
+    delete detachThreadSafetyData<T>()->fetchAndStoreOrdered(0);
+
+    QVERIFY(threadsCount < 100);
+    detachThreadSafetyLock.release(threadsCount * 100);
+    QThread::yieldCurrentThread();
+
+    for (uint i = 0; i < threadsCount; ++i)
+        threads[i].wait();
+}
+
+void tst_QVector::detachThreadSafetyInt() const
+{
+    for (uint i = 0; i < 128; ++i)
+        detachThreadSafety<int>();
+}
+
+void tst_QVector::detachThreadSafetyMovable() const
+{
+    const int instancesCount = Movable::counter.loadAcquire();
+    for (uint i = 0; i < 128; ++i) {
+        detachThreadSafety<Movable>();
+        QCOMPARE(Movable::counter.loadAcquire(), instancesCount);
+    }
+}
+
+void tst_QVector::detachThreadSafetyCustom() const
+{
+    const int instancesCount = Custom::counter.loadAcquire();
+    for (uint i = 0; i < 128; ++i) {
+        detachThreadSafety<Custom>();
+        QCOMPARE(Custom::counter.loadAcquire(), instancesCount);
+    }
+}
+
+void tst_QVector::insertMove() const
+{
+    const int instancesCount = Movable::counter.loadAcquire();
+    {
+        QVector<Movable> vec;
+        vec.reserve(7);
+        Movable m0;
+        Movable m1;
+        Movable m2;
+        Movable m3;
+        Movable m4;
+        Movable m5;
+        Movable m6;
+
+        vec.append(std::move(m3));
+        QVERIFY(m3.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m3));
+        vec.push_back(std::move(m4));
+        QVERIFY(m4.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m3));
+        QVERIFY(vec.at(1).wasConstructedAt(&m4));
+        vec.prepend(std::move(m1));
+        QVERIFY(m1.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m1));
+        QVERIFY(vec.at(1).wasConstructedAt(&m3));
+        QVERIFY(vec.at(2).wasConstructedAt(&m4));
+        vec.insert(1, std::move(m2));
+        QVERIFY(m2.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m1));
+        QVERIFY(vec.at(1).wasConstructedAt(&m2));
+        QVERIFY(vec.at(2).wasConstructedAt(&m3));
+        QVERIFY(vec.at(3).wasConstructedAt(&m4));
+        vec += std::move(m5);
+        QVERIFY(m5.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m1));
+        QVERIFY(vec.at(1).wasConstructedAt(&m2));
+        QVERIFY(vec.at(2).wasConstructedAt(&m3));
+        QVERIFY(vec.at(3).wasConstructedAt(&m4));
+        QVERIFY(vec.at(4).wasConstructedAt(&m5));
+        vec << std::move(m6);
+        QVERIFY(m6.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m1));
+        QVERIFY(vec.at(1).wasConstructedAt(&m2));
+        QVERIFY(vec.at(2).wasConstructedAt(&m3));
+        QVERIFY(vec.at(3).wasConstructedAt(&m4));
+        QVERIFY(vec.at(4).wasConstructedAt(&m5));
+        QVERIFY(vec.at(5).wasConstructedAt(&m6));
+        vec.push_front(std::move(m0));
+        QVERIFY(m0.wasConstructedAt(nullptr));
+        QVERIFY(vec.at(0).wasConstructedAt(&m0));
+        QVERIFY(vec.at(1).wasConstructedAt(&m1));
+        QVERIFY(vec.at(2).wasConstructedAt(&m2));
+        QVERIFY(vec.at(3).wasConstructedAt(&m3));
+        QVERIFY(vec.at(4).wasConstructedAt(&m4));
+        QVERIFY(vec.at(5).wasConstructedAt(&m5));
+        QVERIFY(vec.at(6).wasConstructedAt(&m6));
+
+        QCOMPARE(Movable::counter.loadAcquire(), instancesCount + 14);
+    }
+    QCOMPARE(Movable::counter.loadAcquire(), instancesCount);
+}
+
+QTEST_MAIN(tst_QVector)
 #include "tst_qvector.moc"

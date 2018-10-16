@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,7 +28,7 @@
 /*!
     \example itemviews/coloreditorfactory
     \title Color Editor Factory Example
-
+    \ingroup examples-itemviews
     \brief This example shows how to create an editor that can be used by
     a QItemDelegate.
 
@@ -78,7 +78,7 @@
 
     After the new factory has been set, all standard item delegates
     will use it (i.e, also delegates that were created before the new
-    default factory was set). 
+    default factory was set).
 
     The \c createGUI() function sets up the table and fills it
     with data.
@@ -135,17 +135,17 @@
 
     \list
     \li If the editor widget has no user property defined, the delegate
-	   asks the factory for the property name, which it in turn
-	   asks the item editor creator for. In this case, you can use 
-	   the QItemEditorCreator class, which takes the property 
-	   name to use for editing as a constructor argument.
+        asks the factory for the property name, which it in turn
+        asks the item editor creator for. In this case, you can use
+        the QItemEditorCreator class, which takes the property
+        name to use for editing as a constructor argument.
     \li If the editor requires other constructors or other
-	   initialization than provided by QItemEditorCreatorBase, you
-	   must reimplement
-	   QItemEditorCreatorBase::createWidget().
+        initialization than provided by QItemEditorCreatorBase, you
+        must reimplement
+        QItemEditorCreatorBase::createWidget().
     \li You could also subclass QItemEditorFactory if you only want
-	   to provide editors for certain kinds of data or use another
-	   method of creating the editors than using creator bases.
+        to provide editors for certain kinds of data or use another
+        method of creating the editors than using creator bases.
     \endlist
 
     In this example, we use a standard QVariant data type. You can

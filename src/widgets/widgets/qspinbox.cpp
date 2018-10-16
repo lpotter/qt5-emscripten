@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,13 @@
 #include <private/qabstractspinbox_p.h>
 #include <qspinbox.h>
 
-#ifndef QT_NO_SPINBOX
-
 #include <qlineedit.h>
 #include <qlocale.h>
 #include <qvalidator.h>
 #include <qdebug.h>
 
-#include <math.h>
+#include <algorithm>
+#include <cmath>
 #include <float.h>
 
 QT_BEGIN_NAMESPACE
@@ -66,10 +63,10 @@ class QSpinBoxPrivate : public QAbstractSpinBoxPrivate
     Q_DECLARE_PUBLIC(QSpinBox)
 public:
     QSpinBoxPrivate();
-    void emitSignals(EmitPolicy ep, const QVariant &);
+    void emitSignals(EmitPolicy ep, const QVariant &) override;
 
-    virtual QVariant valueFromText(const QString &n) const;
-    virtual QString textFromValue(const QVariant &n) const;
+    virtual QVariant valueFromText(const QString &n) const override;
+    virtual QString textFromValue(const QVariant &n) const override;
     QVariant validateAndInterpret(QString &input, int &pos,
                                   QValidator::State &state) const;
 
@@ -78,6 +75,10 @@ public:
         q->setInputMethodHints(Qt::ImhDigitsOnly);
         setLayoutItemMargins(QStyle::SE_SpinBoxLayoutItem);
     }
+
+    int displayIntegerBase;
+
+    QVariant calculateAdaptiveDecimalStep(int steps) const override;
 };
 
 class QDoubleSpinBoxPrivate : public QAbstractSpinBoxPrivate
@@ -85,10 +86,10 @@ class QDoubleSpinBoxPrivate : public QAbstractSpinBoxPrivate
     Q_DECLARE_PUBLIC(QDoubleSpinBox)
 public:
     QDoubleSpinBoxPrivate();
-    void emitSignals(EmitPolicy ep, const QVariant &);
+    void emitSignals(EmitPolicy ep, const QVariant &) override;
 
-    virtual QVariant valueFromText(const QString &n) const;
-    virtual QString textFromValue(const QVariant &n) const;
+    virtual QVariant valueFromText(const QString &n) const override;
+    virtual QString textFromValue(const QVariant &n) const override;
     QVariant validateAndInterpret(QString &input, int &pos,
                                   QValidator::State &state) const;
     double round(double input) const;
@@ -103,6 +104,8 @@ public:
     // When fiddling with the decimals property, we may lose precision in these properties.
     double actualMin;
     double actualMax;
+
+    QVariant calculateAdaptiveDecimalStep(int steps) const override;
 };
 
 
@@ -112,6 +115,8 @@ public:
 
     \ingroup basicwidgets
     \inmodule QtWidgets
+
+    \image windows-spinbox.png
 
     QSpinBox is designed to handle integers and discrete sets of
     values (e.g., month names); use QDoubleSpinBox for floating point
@@ -151,15 +156,6 @@ public:
     It is often desirable to give the user a special (often default)
     choice in addition to the range of numeric values. See
     setSpecialValueText() for how to do this with QSpinBox.
-
-    \table 100%
-    \row \li \inlineimage windowsxp-spinbox.png Screenshot of a Windows XP spin box
-         \li A spin box shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
-    \row \li \inlineimage fusion-spinbox.png Screenshot of a Fusion spin box
-         \li A spin box shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \row \li \inlineimage macintosh-spinbox.png Screenshot of a Macintosh spin box
-         \li A spin box shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-    \endtable
 
     \section1 Subclassing QSpinBox
 
@@ -268,6 +264,7 @@ void QSpinBox::setPrefix(const QString &prefix)
     d->updateEdit();
 
     d->cachedSizeHint = QSize();
+    d->cachedMinimumSizeHint = QSize(); // minimumSizeHint cares about the prefix
     updateGeometry();
 }
 
@@ -424,12 +421,85 @@ void QSpinBox::setRange(int minimum, int maximum)
 }
 
 /*!
+    Sets the step type for the spin box to \a stepType, which is single
+    step or adaptive decimal step.
+
+    Adaptive decimal step means that the step size will continuously be
+    adjusted to one power of ten below the current \l value. So when
+    the value is 1100, the step is set to 100, so stepping up once
+    increases it to 1200. For 1200 stepping up takes it to 1300. For
+    negative values, stepping down from -1100 goes to -1200.
+
+    Step direction is taken into account to handle edges cases, so
+    that stepping down from 100 takes the value to 99 instead of 90.
+    Thus a step up followed by a step down -- or vice versa -- always
+    lands on the starting value; 99 -> 100 -> 99.
+
+    Setting this will cause the spin box to disregard the value of
+    \l singleStep, although it is preserved so that \l singleStep
+    comes into effect if adaptive decimal step is later turned off.
+
+    \since 5.12
+*/
+
+void QSpinBox::setStepType(QAbstractSpinBox::StepType stepType)
+{
+    Q_D(QSpinBox);
+    d->stepType = stepType;
+}
+
+/*!
+    \property QSpinBox::stepType
+    \brief The step type.
+
+    The step type can be single step or adaptive decimal step.
+*/
+
+QAbstractSpinBox::StepType QSpinBox::stepType() const
+{
+    Q_D(const QSpinBox);
+    return d->stepType;
+}
+
+/*!
+    \property QSpinBox::displayIntegerBase
+
+    \brief the base used to display the value of the spin box
+
+    The default displayIntegerBase value is 10.
+
+    \sa textFromValue(), valueFromText()
+    \since 5.2
+*/
+
+int QSpinBox::displayIntegerBase() const
+{
+    Q_D(const QSpinBox);
+    return d->displayIntegerBase;
+}
+
+void QSpinBox::setDisplayIntegerBase(int base)
+{
+    Q_D(QSpinBox);
+    // Falls back to base 10 on invalid bases (like QString)
+    if (Q_UNLIKELY(base < 2 || base > 36)) {
+        qWarning("QSpinBox::setDisplayIntegerBase: Invalid base (%d)", base);
+        base = 10;
+    }
+
+    if (base != d->displayIntegerBase) {
+        d->displayIntegerBase = base;
+        d->updateEdit();
+    }
+}
+
+/*!
     This virtual function is used by the spin box whenever it needs to
     display the given \a value. The default implementation returns a
     string containing \a value printed in the standard way using
     QWidget::locale().toString(), but with the thousand separator
-    removed. Reimplementations may return anything. (See the example
-    in the detailed description.)
+    removed unless setGroupSeparatorShown() is set. Reimplementations may
+    return anything. (See the example in the detailed description.)
 
     Note: QSpinBox does not call this function for specialValueText()
     and that neither prefix() nor suffix() should be included in the
@@ -443,9 +513,17 @@ void QSpinBox::setRange(int minimum, int maximum)
 
 QString QSpinBox::textFromValue(int value) const
 {
-    QString str = locale().toString(value);
-    if (qAbs(value) >= 1000 || value == INT_MIN) {
-        str.remove(locale().groupSeparator());
+    Q_D(const QSpinBox);
+    QString str;
+
+    if (d->displayIntegerBase != 10) {
+        const QLatin1String prefix = value < 0 ? QLatin1String("-") : QLatin1String();
+        str = prefix + QString::number(qAbs(value), d->displayIntegerBase);
+    } else {
+        str = locale().toString(value);
+        if (!d->showGroupSeparator && (qAbs(value) >= 1000 || value == INT_MIN)) {
+            str.remove(locale().groupSeparator());
+        }
     }
 
     return str;
@@ -494,7 +572,8 @@ QValidator::State QSpinBox::validate(QString &text, int &pos) const
 */
 void QSpinBox::fixup(QString &input) const
 {
-    input.remove(locale().groupSeparator());
+    if (!isGroupSeparatorShown())
+        input.remove(locale().groupSeparator());
 }
 
 
@@ -551,6 +630,9 @@ void QSpinBox::fixup(QString &input) const
     choice in addition to the range of numeric values. See
     setSpecialValueText() for how to do this with QDoubleSpinBox.
 
+    \note The displayed value of the QDoubleSpinBox is limited to 18 characters
+    in addition to eventual prefix and suffix content. This limitation is used
+    to keep the double spin box usable even with extremely large values.
     \sa QSpinBox, QDateTimeEdit, QSlider, {Spin Boxes Example}
 */
 
@@ -812,6 +894,50 @@ void QDoubleSpinBox::setRange(double minimum, double maximum)
 }
 
 /*!
+    Sets the step type for the spin box to \a stepType, which is single
+    step or adaptive decimal step.
+
+    Adaptive decimal step means that the step size will continuously be
+    adjusted to one power of ten below the current \l value. So when
+    the value is 1100, the step is set to 100, so stepping up once
+    increases it to 1200. For 1200 stepping up takes it to 1300. For
+    negative values, stepping down from -1100 goes to -1200.
+
+    It also works for any decimal values, 0.041 is increased to 0.042
+    by stepping once.
+
+    Step direction is taken into account to handle edges cases, so
+    that stepping down from 100 takes the value to 99 instead of 90.
+    Thus a step up followed by a step down -- or vice versa -- always
+    lands on the starting value; 99 -> 100 -> 99.
+
+    Setting this will cause the spin box to disregard the value of
+    \l singleStep, although it is preserved so that \l singleStep
+    comes into effect if adaptive decimal step is later turned off.
+
+    \since 5.12
+*/
+
+void QDoubleSpinBox::setStepType(StepType stepType)
+{
+    Q_D(QDoubleSpinBox);
+    d->stepType = stepType;
+}
+
+/*!
+    \property QDoubleSpinBox::stepType
+    \brief The step type.
+
+    The step type can be single step or adaptive decimal step.
+*/
+
+QAbstractSpinBox::StepType QDoubleSpinBox::stepType() const
+{
+    Q_D(const QDoubleSpinBox);
+    return d->stepType;
+}
+
+/*!
      \property QDoubleSpinBox::decimals
 
      \brief the precision of the spin box, in decimals
@@ -847,7 +973,8 @@ void QDoubleSpinBox::setDecimals(int decimals)
     display the given \a value. The default implementation returns a string
     containing \a value printed using QWidget::locale().toString(\a value,
     QLatin1Char('f'), decimals()) and will remove the thousand
-    separator. Reimplementations may return anything.
+    separator unless setGroupSeparatorShown() is set. Reimplementations may
+    return anything.
 
     Note: QDoubleSpinBox does not call this function for
     specialValueText() and that neither prefix() nor suffix() should
@@ -864,9 +991,9 @@ QString QDoubleSpinBox::textFromValue(double value) const
 {
     Q_D(const QDoubleSpinBox);
     QString str = locale().toString(value, 'f', d->decimals);
-    if (qAbs(value) >= 1000.0) {
+    if (!d->showGroupSeparator && qAbs(value) >= 1000.0)
         str.remove(locale().groupSeparator());
-    }
+
     return str;
 }
 
@@ -925,6 +1052,7 @@ QSpinBoxPrivate::QSpinBoxPrivate()
     minimum = QVariant((int)0);
     maximum = QVariant((int)99);
     value = minimum;
+    displayIntegerBase = 10;
     singleStep = QVariant((int)1);
     type = QVariant::Int;
 }
@@ -995,18 +1123,22 @@ QVariant QSpinBoxPrivate::validateAndInterpret(QString &input, int &pos,
 
     if (max != min && (copy.isEmpty()
                        || (min < 0 && copy == QLatin1String("-"))
-                       || (min >= 0 && copy == QLatin1String("+")))) {
+                       || (max >= 0 && copy == QLatin1String("+")))) {
         state = QValidator::Intermediate;
         QSBDEBUG() << __FILE__ << __LINE__<< "num is set to" << num;
     } else if (copy.startsWith(QLatin1Char('-')) && min >= 0) {
         state = QValidator::Invalid; // special-case -0 will be interpreted as 0 and thus not be invalid with a range from 0-100
     } else {
         bool ok = false;
-        num = locale.toInt(copy, &ok);
-        if (!ok && copy.contains(locale.groupSeparator()) && (max >= 1000 || min <= -1000)) {
-            QString copy2 = copy;
-            copy2.remove(locale.groupSeparator());
-            num = locale.toInt(copy2, &ok);
+        if (displayIntegerBase != 10) {
+            num = copy.toInt(&ok, displayIntegerBase);
+        } else {
+            num = locale.toInt(copy, &ok);
+            if (!ok && copy.contains(locale.groupSeparator()) && (max >= 1000 || min <= -1000)) {
+                QString copy2 = copy;
+                copy2.remove(locale.groupSeparator());
+                num = locale.toInt(copy2, &ok);
+            }
         }
         QSBDEBUG() << __FILE__ << __LINE__<< "num is set to" << num;
         if (!ok) {
@@ -1035,6 +1167,22 @@ QVariant QSpinBoxPrivate::validateAndInterpret(QString &input, int &pos,
     QSBDEBUG() << "cachedText is set to '" << cachedText << "' state is set to "
                << state << " and value is set to " << cachedValue;
     return cachedValue;
+}
+
+QVariant QSpinBoxPrivate::calculateAdaptiveDecimalStep(int steps) const
+{
+    const int intValue = value.toInt();
+    const int absValue = qAbs(intValue);
+
+    if (absValue < 100)
+        return 1;
+
+    const bool valueNegative = intValue < 0;
+    const bool stepsNegative = steps < 0;
+    const int signCompensation = (valueNegative == stepsNegative) ? 0 : 1;
+
+    const int log = static_cast<int>(std::log10(absValue - signCompensation)) - 1;
+    return static_cast<int>(std::pow(10, log));
 }
 
 // --- QDoubleSpinBoxPrivate ---
@@ -1262,6 +1410,27 @@ QString QDoubleSpinBoxPrivate::textFromValue(const QVariant &f) const
     return q->textFromValue(f.toDouble());
 }
 
+QVariant QDoubleSpinBoxPrivate::calculateAdaptiveDecimalStep(int steps) const
+{
+    const double doubleValue = value.toDouble();
+    const double minStep = std::pow(10, -decimals);
+    double absValue = qAbs(doubleValue);
+
+    if (absValue < minStep)
+        return minStep;
+
+    const bool valueNegative = doubleValue < 0;
+    const bool stepsNegative = steps < 0;
+    if (valueNegative != stepsNegative)
+        absValue /= 1.01;
+
+    const double shift = std::pow(10, 1 - std::floor(std::log10(absValue)));
+    const double absRounded = round(absValue * shift) / shift;
+    const double log = floorf(std::log10(absRounded)) - 1;
+
+    return std::max(minStep, std::pow(10, log));
+}
+
 /*! \reimp */
 bool QSpinBox::event(QEvent *event)
 {
@@ -1277,4 +1446,4 @@ bool QSpinBox::event(QEvent *event)
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_SPINBOX
+#include "moc_qspinbox.cpp"

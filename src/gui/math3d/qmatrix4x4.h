@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,13 +40,12 @@
 #ifndef QMATRIX4X4_H
 #define QMATRIX4X4_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtGui/qvector3d.h>
 #include <QtGui/qvector4d.h>
 #include <QtGui/qquaternion.h>
 #include <QtGui/qgenericmatrix.h>
 #include <QtCore/qrect.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -63,6 +60,7 @@ class Q_GUI_EXPORT QMatrix4x4
 {
 public:
     inline QMatrix4x4() { setToIdentity(); }
+    explicit QMatrix4x4(Qt::Initialization) : flagBits(General) {}
     explicit QMatrix4x4(const float *values);
     inline QMatrix4x4(float m11, float m12, float m13, float m14,
                       float m21, float m22, float m23, float m24,
@@ -87,13 +85,15 @@ public:
     inline void setRow(int index, const QVector4D& value);
 #endif
 
+    inline bool isAffine() const;
+
     inline bool isIdentity() const;
     inline void setToIdentity();
 
     inline void fill(float value);
 
     double determinant() const;
-    QMatrix4x4 inverted(bool *invertible = 0) const;
+    QMatrix4x4 inverted(bool *invertible = nullptr) const;
     QMatrix4x4 transposed() const;
     QMatrix3x3 normalMatrix() const;
 
@@ -146,10 +146,12 @@ public:
     void ortho(const QRectF& rect);
     void ortho(float left, float right, float bottom, float top, float nearPlane, float farPlane);
     void frustum(float left, float right, float bottom, float top, float nearPlane, float farPlane);
-    void perspective(float angle, float aspect, float nearPlane, float farPlane);
+    void perspective(float verticalAngle, float aspectRatio, float nearPlane, float farPlane);
 #ifndef QT_NO_VECTOR3D
     void lookAt(const QVector3D& eye, const QVector3D& center, const QVector3D& up);
 #endif
+    void viewport(const QRectF &rect);
+    void viewport(float left, float bottom, float width, float height, float nearPlane = 0.0f, float farPlane = 1.0f);
     void flipCoordinates();
 
     void copyDataTo(float *values) const;
@@ -210,6 +212,9 @@ private:
     friend class QGraphicsRotation;
 };
 
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_CLANG("-Wfloat-equal")
+QT_WARNING_DISABLE_GCC("-Wfloat-equal")
 Q_DECLARE_TYPEINFO(QMatrix4x4, Q_MOVABLE_TYPE);
 
 inline QMatrix4x4::QMatrix4x4
@@ -309,6 +314,11 @@ inline void QMatrix4x4::setRow(int index, const QVector4D& value)
 #endif
 
 Q_GUI_EXPORT QMatrix4x4 operator/(const QMatrix4x4& matrix, float divisor);
+
+inline bool QMatrix4x4::isAffine() const
+{
+    return m[0][3] == 0.0f && m[1][3] == 0.0f && m[2][3] == 0.0f && m[3][3] == 1.0f;
+}
 
 inline bool QMatrix4x4::isIdentity() const
 {
@@ -413,8 +423,9 @@ inline QMatrix4x4& QMatrix4x4::operator-=(const QMatrix4x4& other)
     return *this;
 }
 
-inline QMatrix4x4& QMatrix4x4::operator*=(const QMatrix4x4& other)
+inline QMatrix4x4& QMatrix4x4::operator*=(const QMatrix4x4& o)
 {
+    const QMatrix4x4 other = o; // prevent aliasing when &o == this ### Qt 6: take o by value
     flagBits |= other.flagBits;
 
     if (flagBits < Rotation2D) {
@@ -848,8 +859,8 @@ inline QPointF operator*(const QPointF& point, const QMatrix4x4& matrix)
 {
     float xin, yin;
     float x, y, w;
-    xin = point.x();
-    yin = point.y();
+    xin = float(point.x());
+    yin = float(point.y());
     x = xin * matrix.m[0][0] +
         yin * matrix.m[0][1] +
         matrix.m[0][3];
@@ -860,9 +871,9 @@ inline QPointF operator*(const QPointF& point, const QMatrix4x4& matrix)
         yin * matrix.m[3][1] +
         matrix.m[3][3];
     if (w == 1.0f) {
-        return QPointF(float(x), float(y));
+        return QPointF(qreal(x), qreal(y));
     } else {
-        return QPointF(float(x / w), float(y / w));
+        return QPointF(qreal(x / w), qreal(y / w));
     }
 }
 
@@ -900,33 +911,35 @@ inline QPoint operator*(const QMatrix4x4& matrix, const QPoint& point)
 
 inline QPointF operator*(const QMatrix4x4& matrix, const QPointF& point)
 {
-    float xin, yin;
-    float x, y, w;
+    qreal xin, yin;
+    qreal x, y, w;
     xin = point.x();
     yin = point.y();
     if (matrix.flagBits == QMatrix4x4::Identity) {
         return point;
     } else if (matrix.flagBits < QMatrix4x4::Rotation2D) {
         // Translation | Scale
-        return QPointF(xin * matrix.m[0][0] + matrix.m[3][0],
-                       yin * matrix.m[1][1] + matrix.m[3][1]);
+        return QPointF(xin * qreal(matrix.m[0][0]) + qreal(matrix.m[3][0]),
+                       yin * qreal(matrix.m[1][1]) + qreal(matrix.m[3][1]));
     } else if (matrix.flagBits < QMatrix4x4::Perspective) {
-        return QPointF(xin * matrix.m[0][0] + yin * matrix.m[1][0] + matrix.m[3][0],
-                       xin * matrix.m[0][1] + yin * matrix.m[1][1] + matrix.m[3][1]);
+        return QPointF(xin * qreal(matrix.m[0][0]) + yin * qreal(matrix.m[1][0]) +
+                       qreal(matrix.m[3][0]),
+                       xin * qreal(matrix.m[0][1]) + yin * qreal(matrix.m[1][1]) +
+                       qreal(matrix.m[3][1]));
     } else {
-        x = xin * matrix.m[0][0] +
-            yin * matrix.m[1][0] +
-            matrix.m[3][0];
-        y = xin * matrix.m[0][1] +
-            yin * matrix.m[1][1] +
-            matrix.m[3][1];
-        w = xin * matrix.m[0][3] +
-            yin * matrix.m[1][3] +
-            matrix.m[3][3];
-        if (w == 1.0f) {
-            return QPointF(float(x), float(y));
+        x = xin * qreal(matrix.m[0][0]) +
+            yin * qreal(matrix.m[1][0]) +
+            qreal(matrix.m[3][0]);
+        y = xin * qreal(matrix.m[0][1]) +
+            yin * qreal(matrix.m[1][1]) +
+            qreal(matrix.m[3][1]);
+        w = xin * qreal(matrix.m[0][3]) +
+            yin * qreal(matrix.m[1][3]) +
+            qreal(matrix.m[3][3]);
+        if (w == 1.0) {
+            return QPointF(qreal(x), qreal(y));
         } else {
-            return QPointF(float(x / w), float(y / w));
+            return QPointF(qreal(x / w), qreal(y / w));
         }
     }
 }
@@ -1079,6 +1092,13 @@ inline float *QMatrix4x4::data()
     return *m;
 }
 
+inline void QMatrix4x4::viewport(const QRectF &rect)
+{
+    viewport(float(rect.x()), float(rect.y()), float(rect.width()), float(rect.height()));
+}
+
+QT_WARNING_POP
+
 #ifndef QT_NO_DEBUG_STREAM
 Q_GUI_EXPORT QDebug operator<<(QDebug dbg, const QMatrix4x4 &m);
 #endif
@@ -1118,7 +1138,5 @@ QT_DEPRECATED QGenericMatrix<N, M, float> qGenericMatrixFromMatrix4x4(const QMat
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

@@ -8,7 +8,7 @@
     </property>
     <signal name="voidSignal"/>
     <signal name="stringSignal">
-       <arg type="s"/>
+       <arg type="s" name="string-data"/>
     </signal>
     <signal name="complexSignal">
        <arg name="" type="(s)"/>
@@ -23,6 +23,8 @@
        <arg type="s" direction="out"/>
     </method>
     <method name="complexMethod">
+       <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QHash&lt;QString,QVariant&gt;"/>
+       <arg type='a{sv}' name='platform_data' direction='in'/>
        <arg type="(s)" direction="out"/>
        <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="RegisteredType"/>
     </method>

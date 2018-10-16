@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QWIDGET_H
 #define QWIDGET_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtGui/qwindowdefs.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qmargins.h>
@@ -59,8 +58,6 @@
 #ifdef QT_INCLUDE_COMPAT
 #include <QtGui/qevent.h>
 #endif
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -99,6 +96,9 @@ class QGraphicsEffect;
 class QRasterWindowSurface;
 class QUnifiedToolbarSurface;
 class QPixmap;
+#ifndef QT_NO_DEBUG_STREAM
+class QDebug;
+#endif
 
 class QWidgetData
 {
@@ -161,6 +161,7 @@ class Q_WIDGETS_EXPORT QWidget : public QObject, public QPaintDevice
     Q_PROPERTY(QCursor cursor READ cursor WRITE setCursor RESET unsetCursor)
 #endif
     Q_PROPERTY(bool mouseTracking READ hasMouseTracking WRITE setMouseTracking)
+    Q_PROPERTY(bool tabletTracking READ hasTabletTracking WRITE setTabletTracking)
     Q_PROPERTY(bool isActiveWindow READ isActiveWindow)
     Q_PROPERTY(Qt::FocusPolicy focusPolicy READ focusPolicy WRITE setFocusPolicy)
     Q_PROPERTY(bool focus READ hasFocus)
@@ -173,18 +174,19 @@ class Q_WIDGETS_EXPORT QWidget : public QObject, public QPaintDevice
     Q_PROPERTY(QSize sizeHint READ sizeHint)
     Q_PROPERTY(QSize minimumSizeHint READ minimumSizeHint)
     Q_PROPERTY(bool acceptDrops READ acceptDrops WRITE setAcceptDrops)
-    Q_PROPERTY(QString windowTitle READ windowTitle WRITE setWindowTitle DESIGNABLE isWindow)
-    Q_PROPERTY(QIcon windowIcon READ windowIcon WRITE setWindowIcon DESIGNABLE isWindow)
-    Q_PROPERTY(QString windowIconText READ windowIconText WRITE setWindowIconText DESIGNABLE isWindow)
+    Q_PROPERTY(QString windowTitle READ windowTitle WRITE setWindowTitle NOTIFY windowTitleChanged DESIGNABLE isWindow)
+    Q_PROPERTY(QIcon windowIcon READ windowIcon WRITE setWindowIcon NOTIFY windowIconChanged DESIGNABLE isWindow)
+    Q_PROPERTY(QString windowIconText READ windowIconText WRITE setWindowIconText NOTIFY windowIconTextChanged DESIGNABLE isWindow) // deprecated
     Q_PROPERTY(double windowOpacity READ windowOpacity WRITE setWindowOpacity DESIGNABLE isWindow)
     Q_PROPERTY(bool windowModified READ isWindowModified WRITE setWindowModified DESIGNABLE isWindow)
 #ifndef QT_NO_TOOLTIP
     Q_PROPERTY(QString toolTip READ toolTip WRITE setToolTip)
+    Q_PROPERTY(int toolTipDuration READ toolTipDuration WRITE setToolTipDuration)
 #endif
-#ifndef QT_NO_STATUSTIP
+#if QT_CONFIG(statustip)
     Q_PROPERTY(QString statusTip READ statusTip WRITE setStatusTip)
 #endif
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     Q_PROPERTY(QString whatsThis READ whatsThis WRITE setWhatsThis)
 #endif
 #ifndef QT_NO_ACCESSIBILITY
@@ -209,10 +211,10 @@ public:
     };
     Q_DECLARE_FLAGS(RenderFlags, RenderFlag)
 
-    explicit QWidget(QWidget* parent = 0, Qt::WindowFlags f = 0);
+    explicit QWidget(QWidget* parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~QWidget();
 
-    int devType() const;
+    int devType() const override;
 
     WId winId() const;
     void createWinId(); // internal, going away
@@ -327,6 +329,9 @@ public:
     bool hasMouseTracking() const;
     bool underMouse() const;
 
+    void setTabletTracking(bool enable);
+    bool hasTabletTracking() const;
+
     void setMask(const QBitmap &);
     void setMask(const QRegion &);
     QRegion mask() const;
@@ -342,10 +347,10 @@ public:
 
     Q_INVOKABLE QPixmap grab(const QRect &rectangle = QRect(QPoint(0, 0), QSize(-1, -1)));
 
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
     QGraphicsEffect *graphicsEffect() const;
     void setGraphicsEffect(QGraphicsEffect *effect);
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
 
 #ifndef QT_NO_GESTURES
     void grabGesture(Qt::GestureType type, Qt::GestureFlags flags = Qt::GestureFlags());
@@ -378,12 +383,14 @@ public:
 #ifndef QT_NO_TOOLTIP
     void setToolTip(const QString &);
     QString toolTip() const;
+    void setToolTipDuration(int msec);
+    int toolTipDuration() const;
 #endif
-#ifndef QT_NO_STATUSTIP
+#if QT_CONFIG(statustip)
     void setStatusTip(const QString &);
     QString statusTip() const;
 #endif
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     void setWhatsThis(const QString &);
     QString whatsThis() const;
 #endif
@@ -444,7 +451,7 @@ public:
     inline bool updatesEnabled() const;
     void setUpdatesEnabled(bool enable);
 
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
     QGraphicsProxyWidget *graphicsProxyWidget() const;
 #endif
 
@@ -543,9 +550,14 @@ public:
 #ifndef QT_NO_ACTION
     //actions
     void addAction(QAction *action);
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    void addActions(const QList<QAction*> &actions);
+    void insertActions(const QAction *before, const QList<QAction*> &actions);
+#else
     void addActions(QList<QAction*> actions);
-    void insertAction(QAction *before, QAction *action);
     void insertActions(QAction *before, QList<QAction*> actions);
+#endif
+    void insertAction(QAction *before, QAction *action);
     void removeAction(QAction *action);
     QList<QAction*> actions() const;
 #endif
@@ -554,6 +566,7 @@ public:
 
     void setWindowFlags(Qt::WindowFlags type);
     inline Qt::WindowFlags windowFlags() const;
+    void setWindowFlag(Qt::WindowType, bool on = true);
     void overrideWindowFlags(Qt::WindowFlags type);
 
     inline Qt::WindowType windowType() const;
@@ -562,20 +575,10 @@ public:
     inline QWidget *childAt(int x, int y) const;
     QWidget *childAt(const QPoint &p) const;
 
-#if defined(Q_WS_X11)
-    const QX11Info &x11Info() const;
-    Qt::HANDLE x11PictureHandle() const;
-#endif
-
-#if defined(Q_WS_MAC)
-    Qt::HANDLE macQDHandle() const;
-    Qt::HANDLE macCGHandle() const;
-#endif
-
     void setAttribute(Qt::WidgetAttribute, bool on = true);
     inline bool testAttribute(Qt::WidgetAttribute) const;
 
-    QPaintEngine *paintEngine() const;
+    QPaintEngine *paintEngine() const override;
 
     void ensurePolished() const;
 
@@ -593,59 +596,64 @@ public:
 
     QWindow *windowHandle() const;
 
+    static QWidget *createWindowContainer(QWindow *window, QWidget *parent=nullptr, Qt::WindowFlags flags=Qt::WindowFlags());
+
     friend class QDesktopScreenWidget;
 
 Q_SIGNALS:
+    void windowTitleChanged(const QString &title);
+    void windowIconChanged(const QIcon &icon);
+    void windowIconTextChanged(const QString &iconText);
     void customContextMenuRequested(const QPoint &pos);
 
 protected:
     // Event handlers
-    bool event(QEvent *);
-    virtual void mousePressEvent(QMouseEvent *);
-    virtual void mouseReleaseEvent(QMouseEvent *);
-    virtual void mouseDoubleClickEvent(QMouseEvent *);
-    virtual void mouseMoveEvent(QMouseEvent *);
-#ifndef QT_NO_WHEELEVENT
-    virtual void wheelEvent(QWheelEvent *);
+    bool event(QEvent *event) override;
+    virtual void mousePressEvent(QMouseEvent *event);
+    virtual void mouseReleaseEvent(QMouseEvent *event);
+    virtual void mouseDoubleClickEvent(QMouseEvent *event);
+    virtual void mouseMoveEvent(QMouseEvent *event);
+#if QT_CONFIG(wheelevent)
+    virtual void wheelEvent(QWheelEvent *event);
 #endif
-    virtual void keyPressEvent(QKeyEvent *);
-    virtual void keyReleaseEvent(QKeyEvent *);
-    virtual void focusInEvent(QFocusEvent *);
-    virtual void focusOutEvent(QFocusEvent *);
-    virtual void enterEvent(QEvent *);
-    virtual void leaveEvent(QEvent *);
-    virtual void paintEvent(QPaintEvent *);
-    virtual void moveEvent(QMoveEvent *);
-    virtual void resizeEvent(QResizeEvent *);
-    virtual void closeEvent(QCloseEvent *);
+    virtual void keyPressEvent(QKeyEvent *event);
+    virtual void keyReleaseEvent(QKeyEvent *event);
+    virtual void focusInEvent(QFocusEvent *event);
+    virtual void focusOutEvent(QFocusEvent *event);
+    virtual void enterEvent(QEvent *event);
+    virtual void leaveEvent(QEvent *event);
+    virtual void paintEvent(QPaintEvent *event);
+    virtual void moveEvent(QMoveEvent *event);
+    virtual void resizeEvent(QResizeEvent *event);
+    virtual void closeEvent(QCloseEvent *event);
 #ifndef QT_NO_CONTEXTMENU
-    virtual void contextMenuEvent(QContextMenuEvent *);
+    virtual void contextMenuEvent(QContextMenuEvent *event);
 #endif
-#ifndef QT_NO_TABLETEVENT
-    virtual void tabletEvent(QTabletEvent *);
+#if QT_CONFIG(tabletevent)
+    virtual void tabletEvent(QTabletEvent *event);
 #endif
 #ifndef QT_NO_ACTION
-    virtual void actionEvent(QActionEvent *);
+    virtual void actionEvent(QActionEvent *event);
 #endif
 
-#ifndef QT_NO_DRAGANDDROP
-    virtual void dragEnterEvent(QDragEnterEvent *);
-    virtual void dragMoveEvent(QDragMoveEvent *);
-    virtual void dragLeaveEvent(QDragLeaveEvent *);
-    virtual void dropEvent(QDropEvent *);
+#if QT_CONFIG(draganddrop)
+    virtual void dragEnterEvent(QDragEnterEvent *event);
+    virtual void dragMoveEvent(QDragMoveEvent *event);
+    virtual void dragLeaveEvent(QDragLeaveEvent *event);
+    virtual void dropEvent(QDropEvent *event);
 #endif
 
-    virtual void showEvent(QShowEvent *);
-    virtual void hideEvent(QHideEvent *);
+    virtual void showEvent(QShowEvent *event);
+    virtual void hideEvent(QHideEvent *event);
     virtual bool nativeEvent(const QByteArray &eventType, void *message, long *result);
 
     // Misc. protected functions
     virtual void changeEvent(QEvent *);
 
-    int metric(PaintDeviceMetric) const;
-    void initPainter(QPainter *painter) const;
-    QPaintDevice *redirected(QPoint *offset) const;
-    QPainter *sharedPainter() const;
+    int metric(PaintDeviceMetric) const override;
+    void initPainter(QPainter *painter) const override;
+    QPaintDevice *redirected(QPoint *offset) const override;
+    QPainter *sharedPainter() const override;
 
     virtual void inputMethodEvent(QInputMethodEvent *);
 public:
@@ -663,6 +671,7 @@ protected:
     void destroy(bool destroyWindow = true,
                  bool destroySubWindows = true);
 
+    friend class QDataWidgetMapperPrivate; // for access to focusNextPrevChild
     virtual bool focusNextPrevChild(bool next);
     inline bool focusNextChild() { return focusNextPrevChild(true); }
     inline bool focusPreviousChild() { return focusNextPrevChild(false); }
@@ -688,7 +697,6 @@ private:
     friend class QPixmap; // for QPixmap::fill()
     friend class QFontMetrics;
     friend class QFontInfo;
-    friend class QETWidget;
     friend class QLayout;
     friend class QWidgetItem;
     friend class QWidgetItemV2;
@@ -704,6 +712,9 @@ private:
     friend class QStyleSheetStyle;
     friend struct QWidgetExceptionCleaner;
     friend class QWidgetWindow;
+    friend class QAccessibleWidget;
+    friend class QAccessibleTable;
+    friend class QAccessibleTabButton;
 #ifndef QT_NO_GESTURES
     friend class QGestureManager;
     friend class QWinNativePanGestureRecognizer;
@@ -725,16 +736,18 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QWidget::RenderFlags)
 
+#ifndef Q_QDOC
 template <> inline QWidget *qobject_cast<QWidget*>(QObject *o)
 {
-    if (!o || !o->isWidgetType()) return 0;
+    if (!o || !o->isWidgetType()) return nullptr;
     return static_cast<QWidget*>(o);
 }
 template <> inline const QWidget *qobject_cast<const QWidget*>(const QObject *o)
 {
-    if (!o || !o->isWidgetType()) return 0;
+    if (!o || !o->isWidgetType()) return nullptr;
     return static_cast<const QWidget*>(o);
 }
+#endif // !Q_QDOC
 
 inline QWidget *QWidget::childAt(int ax, int ay) const
 { return childAt(QPoint(ax, ay)); }
@@ -801,6 +814,12 @@ inline bool QWidget::hasMouseTracking() const
 inline bool QWidget::underMouse() const
 { return testAttribute(Qt::WA_UnderMouse); }
 
+inline void QWidget::setTabletTracking(bool enable)
+{ setAttribute(Qt::WA_TabletTracking, enable); }
+
+inline bool QWidget::hasTabletTracking() const
+{ return testAttribute(Qt::WA_TabletTracking); }
+
 inline bool QWidget::updatesEnabled() const
 { return !testAttribute(Qt::WA_UpdatesDisabled); }
 
@@ -853,8 +872,10 @@ inline bool QWidget::testAttribute(Qt::WidgetAttribute attribute) const
 
 #define QWIDGETSIZE_MAX ((1<<24)-1)
 
-QT_END_NAMESPACE
+#ifndef QT_NO_DEBUG_STREAM
+Q_WIDGETS_EXPORT QDebug operator<<(QDebug, const QWidget *);
+#endif
 
-QT_END_HEADER
+QT_END_NAMESPACE
 
 #endif // QWIDGET_H

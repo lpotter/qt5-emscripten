@@ -1,46 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qstatusbar.h"
-#ifndef QT_NO_STATUSBAR
 
 #include "qlist.h"
 #include "qdebug.h"
@@ -50,8 +47,12 @@
 #include "qtimer.h"
 #include "qstyle.h"
 #include "qstyleoption.h"
+#if QT_CONFIG(sizegrip)
 #include "qsizegrip.h"
+#endif
+#if QT_CONFIG(mainwindow)
 #include "qmainwindow.h"
+#endif
 
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
@@ -82,14 +83,14 @@ public:
     QBoxLayout * box;
     QTimer * timer;
 
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     QSizeGrip * resizer;
     bool showSizeGrip;
 #endif
 
     int savedStrut;
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     QPoint dragStart;
 #endif
 
@@ -104,7 +105,7 @@ public:
         return i;
     }
 
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     void tryToShowSizeGrip()
     {
         if (!showSizeGrip)
@@ -130,7 +131,7 @@ QRect QStatusBarPrivate::messageRect() const
     int left = 6;
     int right = q->width() - 12;
 
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     if (resizer && resizer->isVisible()) {
         if (rtl)
             left = resizer->x() + resizer->width();
@@ -235,7 +236,7 @@ QStatusBar::QStatusBar(QWidget * parent)
     d->box = 0;
     d->timer = 0;
 
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     d->resizer = 0;
     setSizeGripEnabled(true); // causes reformat()
 #else
@@ -304,7 +305,7 @@ int QStatusBar::insertWidget(int index, QWidget *widget, int stretch)
     QStatusBarPrivate::SBItem* item = new QStatusBarPrivate::SBItem(widget, stretch, false);
 
     int idx = d->indexToLastNonPermanentWidget();
-    if (index < 0 || index > d->items.size() || (idx >= 0 && index > idx + 1)) {
+    if (Q_UNLIKELY(index < 0 || index > d->items.size() || (idx >= 0 && index > idx + 1))) {
         qWarning("QStatusBar::insertWidget: Index out of range (%d), appending widget", index);
         index = idx + 1;
     }
@@ -369,7 +370,7 @@ int QStatusBar::insertPermanentWidget(int index, QWidget *widget, int stretch)
     QStatusBarPrivate::SBItem* item = new QStatusBarPrivate::SBItem(widget, stretch, true);
 
     int idx = d->indexToLastNonPermanentWidget();
-    if (index < 0 || index > d->items.size() || (idx >= 0 && index <= idx)) {
+    if (Q_UNLIKELY(index < 0 || index > d->items.size() || (idx >= 0 && index <= idx))) {
         qWarning("QStatusBar::insertPermanentWidget: Index out of range (%d), appending widget", index);
         index = d->items.size();
     }
@@ -432,7 +433,7 @@ void QStatusBar::removeWidget(QWidget *widget)
 
 bool QStatusBar::isSizeGripEnabled() const
 {
-#ifdef QT_NO_SIZEGRIP
+#if !QT_CONFIG(sizegrip)
     return false;
 #else
     Q_D(const QStatusBar);
@@ -442,7 +443,7 @@ bool QStatusBar::isSizeGripEnabled() const
 
 void QStatusBar::setSizeGripEnabled(bool enabled)
 {
-#ifdef QT_NO_SIZEGRIP
+#if !QT_CONFIG(sizegrip)
     Q_UNUSED(enabled);
 #else
     Q_D(QStatusBar);
@@ -478,7 +479,7 @@ void QStatusBar::reformat()
         delete d->box;
 
     QBoxLayout *vbox;
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     if (d->resizer) {
         d->box = new QHBoxLayout(this);
         d->box->setMargin(0);
@@ -519,7 +520,7 @@ void QStatusBar::reformat()
         int itemH = qMin(qSmartMinSize(item->w).height(), item->w->maximumHeight());
         maxH = qMax(maxH, itemH);
     }
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     if (d->resizer) {
         maxH = qMax(maxH, d->resizer->sizeHint().height());
         d->box->addSpacing(1);
@@ -534,7 +535,7 @@ void QStatusBar::reformat()
 }
 
 /*!
-  
+
   Hides the normal status indications and displays the given \a
   message for the specified number of milli-seconds (\a{timeout}). If
   \a{timeout} is 0 (default), the \a {message} remains displayed until
@@ -551,8 +552,6 @@ void QStatusBar::showMessage(const QString &message, int timeout)
 {
     Q_D(QStatusBar);
 
-    d->tempItem = message;
-
     if (timeout > 0) {
         if (!d->timer) {
             d->timer = new QTimer(this);
@@ -563,6 +562,9 @@ void QStatusBar::showMessage(const QString &message, int timeout)
         delete d->timer;
         d->timer = 0;
     }
+    if (d->tempItem == message)
+        return;
+    d->tempItem = message;
 
     hideOrShow();
 }
@@ -599,7 +601,7 @@ QString QStatusBar::currentMessage() const
 }
 
 /*!
-    \fn QStatusBar::messageChanged(const QString &message)
+    \fn void QStatusBar::messageChanged(const QString &message)
 
     This signal is emitted whenever the temporary status message
     changes. The new temporary message is passed in the \a message
@@ -641,7 +643,7 @@ void QStatusBar::hideOrShow()
     }
 #endif
 
-    repaint(d->messageRect());
+    update(d->messageRect());
 }
 
 /*!
@@ -649,7 +651,7 @@ void QStatusBar::hideOrShow()
  */
 void QStatusBar::showEvent(QShowEvent *)
 {
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
     Q_D(QStatusBar);
     if (d->resizer && d->showSizeGrip)
         d->tryToShowSizeGrip();
@@ -722,7 +724,7 @@ bool QStatusBar::event(QEvent *e)
             maxH = qMax(maxH, itemH);
         }
 
-#ifndef QT_NO_SIZEGRIP
+#if QT_CONFIG(sizegrip)
         if (d->resizer)
             maxH = qMax(maxH, d->resizer->sizeHint().height());
 #endif
@@ -744,18 +746,15 @@ bool QStatusBar::event(QEvent *e)
             }
         }
     }
-    
+
 // On Mac OS X Leopard it is possible to drag the window by clicking
 // on the tool bar on most applications.
-#ifndef Q_WS_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
     return QWidget::event(e);
 #else
-    if (QSysInfo::MacintoshVersion <= QSysInfo::MV_10_4)
-        return QWidget::event(e);
-
     // Enable drag-click only if the status bar is the status bar for a
     // QMainWindow with a unifed toolbar.
-    if (parent() == 0 || qobject_cast<QMainWindow *>(parent()) == 0 || 
+    if (parent() == 0 || qobject_cast<QMainWindow *>(parent()) == 0 ||
         qobject_cast<QMainWindow *>(parent())->unifiedTitleAndToolBarOnMac() == false )
         return QWidget::event(e);
 
@@ -790,4 +789,4 @@ bool QStatusBar::event(QEvent *e)
 
 QT_END_NAMESPACE
 
-#endif
+#include "moc_qstatusbar.cpp"

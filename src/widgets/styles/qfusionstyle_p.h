@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,27 @@
 #ifndef QFUSIONSTYLE_P_H
 #define QFUSIONSTYLE_P_H
 
-#include <QtWidgets/qcommonstyle.h>
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
 
-QT_BEGIN_HEADER
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
+#include <QtWidgets/qcommonstyle.h>
 
 QT_BEGIN_NAMESPACE
 
 
-#if !defined(QT_NO_STYLE_FUSION)
+#if QT_CONFIG(style_fusion)
 
 class QFusionStylePrivate;
-class QFusionStyle : public QCommonStyle
+class Q_WIDGETS_EXPORT QFusionStyle : public QCommonStyle
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QFusionStyle)
@@ -61,51 +69,49 @@ public:
     QFusionStyle();
     ~QFusionStyle();
 
-    QPalette standardPalette () const;
+    QPalette standardPalette () const override;
     void drawPrimitive(PrimitiveElement elem,
                        const QStyleOption *option,
-                       QPainter *painter, const QWidget *widget = 0) const;
+                       QPainter *painter, const QWidget *widget = 0) const override;
     void drawControl(ControlElement ce, const QStyleOption *option, QPainter *painter,
-                     const QWidget *widget) const;
-    int pixelMetric(PixelMetric metric, const QStyleOption *option = 0, const QWidget *widget = 0) const;
+                     const QWidget *widget) const override;
+    int pixelMetric(PixelMetric metric, const QStyleOption *option = 0, const QWidget *widget = 0) const override;
     void drawComplexControl(ComplexControl control, const QStyleOptionComplex *option,
-                            QPainter *painter, const QWidget *widget) const;
-    QRect subElementRect(SubElement r, const QStyleOption *opt, const QWidget *widget = 0) const;
+                            QPainter *painter, const QWidget *widget) const override;
+    QRect subElementRect(SubElement r, const QStyleOption *opt, const QWidget *widget = 0) const override;
     QSize sizeFromContents(ContentsType type, const QStyleOption *option,
-                           const QSize &size, const QWidget *widget) const;
+                           const QSize &size, const QWidget *widget) const override;
     SubControl hitTestComplexControl(ComplexControl cc, const QStyleOptionComplex *opt,
-                                     const QPoint &pt, const QWidget *w = 0) const;
+                                     const QPoint &pt, const QWidget *w = 0) const override;
     QRect subControlRect(ComplexControl cc, const QStyleOptionComplex *opt,
-                         SubControl sc, const QWidget *widget) const;
+                         SubControl sc, const QWidget *widget) const override;
     QPixmap generatedIconPixmap(QIcon::Mode iconMode, const QPixmap &pixmap,
-                                const QStyleOption *opt) const;
+                                const QStyleOption *opt) const override;
     int styleHint(StyleHint hint, const QStyleOption *option = 0, const QWidget *widget = 0,
-                  QStyleHintReturn *returnData = 0) const;
-    QRect itemPixmapRect(const QRect &r, int flags, const QPixmap &pixmap) const;
+                  QStyleHintReturn *returnData = 0) const override;
+    QRect itemPixmapRect(const QRect &r, int flags, const QPixmap &pixmap) const override;
     QIcon standardIcon(StandardPixmap standardIcon, const QStyleOption *option = 0,
-                       const QWidget *widget = 0) const;
+                       const QWidget *widget = 0) const override;
     QPixmap standardPixmap(StandardPixmap standardPixmap, const QStyleOption *opt,
-                           const QWidget *widget = 0) const;
+                           const QWidget *widget = 0) const override;
     void drawItemPixmap(QPainter *painter, const QRect &rect,
-                        int alignment, const QPixmap &pixmap) const;
+                        int alignment, const QPixmap &pixmap) const override;
     void drawItemText(QPainter *painter, const QRect &rect,
                       int flags, const QPalette &pal, bool enabled,
-                      const QString &text, QPalette::ColorRole textRole = QPalette::NoRole) const;
-    void polish(QWidget *widget);
-    void polish(QApplication *app);
-    void polish(QPalette &pal);
-    void unpolish(QWidget *widget);
-    void unpolish(QApplication *app);
+                      const QString &text, QPalette::ColorRole textRole = QPalette::NoRole) const override;
+    void polish(QWidget *widget) override;
+    void polish(QApplication *app) override;
+    void polish(QPalette &pal) override;
+    void unpolish(QWidget *widget) override;
+    void unpolish(QApplication *app) override;
 
 protected:
     QFusionStyle(QFusionStylePrivate &dd);
 
 };
 
-#endif // QT_NO_STYLE_FUSION
+#endif // style_fusion
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif //QFUSIONSTYLE_P_H

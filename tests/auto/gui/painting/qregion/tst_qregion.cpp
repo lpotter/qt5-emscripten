@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,7 +33,7 @@
 #include <qbitmap.h>
 #include <qpainter.h>
 #include <qpolygon.h>
-#ifdef Q_WS_X11
+#if 0 // Used to be included in Qt4 for Q_WS_X11
 #include <private/qt_x11_p.h>
 #endif
 
@@ -58,7 +45,9 @@ public:
     tst_QRegion();
 
 private slots:
+    void moveSemantics();
     void boundingRect();
+    void rangeFor();
     void rects();
     void swap();
     void setRects();
@@ -90,7 +79,7 @@ private slots:
 
     void isEmpty_data();
     void isEmpty();
-#if defined(Q_WS_X11) && defined(QT_BUILD_INTERNAL)
+#if 0 /* Used to be included in Qt4 for Q_WS_X11 */ && defined(QT_BUILD_INTERNAL)
     void clipRectangles();
 #endif
 
@@ -102,106 +91,156 @@ private slots:
 #endif
 };
 
-Q_DECLARE_METATYPE(QPolygon)
-Q_DECLARE_METATYPE(QVector<QRect>)
-Q_DECLARE_METATYPE(QRegion)
-
 tst_QRegion::tst_QRegion()
 {
+}
+
+void tst_QRegion::moveSemantics()
+{
+    const QRegion rect(QRect(0, 0, 100, 100));
+
+    // move assignment
+    {
+        QRegion r1 = rect;
+        QRegion r2;
+        r2 = std::move(r1);
+        QVERIFY(r1.isNull());
+        QCOMPARE(r2, rect);
+    }
+
+    // move construction
+    {
+        QRegion r1 = rect;
+        QRegion r2 = std::move(r1);
+        QVERIFY(r1.isNull());
+        QCOMPARE(r2, rect);
+    }
 }
 
 void tst_QRegion::boundingRect()
 {
     {
-	QRect rect;
-	QRegion region( rect );
-	QCOMPARE( region.boundingRect(), rect );
+        QRect rect;
+        QRegion region(rect);
+        QCOMPARE(region.boundingRect(), rect);
     }
     {
-	QRect rect( 10, -20, 30, 40 );
-	QRegion region( rect );
-	QCOMPARE( region.boundingRect(), rect );
+        QRect rect(10, -20, 30, 40);
+        QRegion region(rect);
+        QCOMPARE(region.boundingRect(), rect);
     }
     {
-	QRect rect(15,25,10,10);
-	QRegion region( rect );
-	QCOMPARE( region.boundingRect(), rect );
+        QRect rect(15,25,10,10);
+        QRegion region(rect);
+        QCOMPARE(region.boundingRect(), rect);
     }
 
+}
+
+void tst_QRegion::rangeFor()
+{
+    // compile-only test for range-for over QRegion, so really useless
+    // content otherwise:
+    QRect rect(10, -20, 30, 40);
+    QRegion region(rect);
+    int equal = 0;
+    for (const QRect &r : region) // check this compiles
+        equal += int(r == rect); // can't use QCOMPARE here b/c of the
+                                 // MSVC 201272013 parse bug re:
+                                 // do-while in range-for loops
+    QCOMPARE(equal, 1);
 }
 
 void tst_QRegion::rects()
 {
     {
-	QRect rect;
-	QRegion region( rect );
-	QVERIFY( region.isEmpty() );
-	QVERIFY( region.rects().isEmpty() );
+        QRect rect;
+        QRegion region(rect);
+        QVERIFY(region.isEmpty());
+        QCOMPARE(region.begin(), region.end());
+#if QT_DEPRECATED_SINCE(5, 11)
+        QVERIFY(region.rects().isEmpty());
+#endif
     }
     {
-	QRect rect( 10, -20, 30, 40 );
-	QRegion region( rect );
-	QCOMPARE( region.rects().count(), 1 );
-	QCOMPARE( region.rects()[0], rect );
+        QRect rect(10, -20, 30, 40);
+        QRegion region(rect);
+        QCOMPARE(region.end(), region.begin() + 1);
+        QCOMPARE(*region.begin(), rect);
+#if QT_DEPRECATED_SINCE(5, 11)
+        QCOMPARE(region.rects().count(), 1);
+        QCOMPARE(region.rects()[0], rect);
+#endif
     }
     {
-	QRect r( QPoint(10, 10), QPoint(40, 40) );
-	QRegion region( r );
-	QVERIFY( region.contains( QPoint(10,10) ) );
-	QVERIFY( region.contains( QPoint(20,40) ) );
-	QVERIFY( region.contains( QPoint(40,20) ) );
-	QVERIFY( !region.contains( QPoint(20,41) ) );
-	QVERIFY( !region.contains( QPoint(41,20) ) );
+        QRect r(QPoint(10, 10), QPoint(40, 40));
+        QRegion region(r);
+        QVERIFY(region.contains(QPoint(10,10)));
+        QVERIFY(region.contains(QPoint(20,40)));
+        QVERIFY(region.contains(QPoint(40,20)));
+        QVERIFY(!region.contains(QPoint(20,41)));
+        QVERIFY(!region.contains(QPoint(41,20)));
     }
     {
-	QRect r( 10, 10, 30, 30 );
-	QRegion region( r );
-	QVERIFY( region.contains( QPoint(10,10) ) );
-	QVERIFY( region.contains( QPoint(20,39) ) );
-	QVERIFY( region.contains( QPoint(39,20) ) );
-	QVERIFY( !region.contains( QPoint(20,40) ) );
-	QVERIFY( !region.contains( QPoint(40,20) ) );
+        QRect r(10, 10, 30, 30);
+        QRegion region(r);
+        QVERIFY(region.contains(QPoint(10,10)));
+        QVERIFY(region.contains(QPoint(20,39)));
+        QVERIFY(region.contains(QPoint(39,20)));
+        QVERIFY(!region.contains(QPoint(20,40)));
+        QVERIFY(!region.contains(QPoint(40,20)));
     }
 }
 
 void tst_QRegion::swap()
 {
-    QRegion r1(QRect( 0, 0,10,10));
+    QRegion r1(QRect(0, 0,10,10));
     QRegion r2(QRect(10,10,10,10));
     r1.swap(r2);
-    QCOMPARE(r1.rects().front(), QRect(10,10,10,10));
-    QCOMPARE(r2.rects().front(), QRect( 0, 0,10,10));
+    QCOMPARE(*r1.begin(), QRect(10,10,10,10));
+    QCOMPARE(*r2.begin(), QRect(0, 0,10,10));
 }
 
 void tst_QRegion::setRects()
 {
     {
-	QRegion region;
-	region.setRects( 0, 0 );
-	QVERIFY( region.rects().isEmpty() );
-    }
-    {
-	QRegion region;
-	QRect rect;
-	region.setRects( &rect, 0 );
+        QRegion region;
+        region.setRects(0, 0);
         QVERIFY(region.isEmpty());
-        QVERIFY(region == QRegion());
-	QVERIFY(!region.boundingRect().isValid());
-	QVERIFY(region.rects().isEmpty());
+        QCOMPARE(region.begin(), region.end());
     }
     {
-	QRegion region;
-	QRect rect;
-	region.setRects( &rect, 1 );
-	QVERIFY( !region.boundingRect().isValid() );
-	QVERIFY( region.rects().isEmpty() );
+        QRegion region;
+        QRect rect;
+        region.setRects(&rect, 0);
+        QVERIFY(region.isEmpty());
+        QCOMPARE(region, QRegion());
+        QCOMPARE(region.begin(), region.end());
+        QVERIFY(!region.boundingRect().isValid());
+#if QT_DEPRECATED_SINCE(5, 11)
+        QVERIFY(region.rects().isEmpty());
+#endif
     }
     {
-	QRegion region;
-	QRect rect( 10, -20, 30, 40 );
-	region.setRects( &rect, 1 );
-	QCOMPARE( region.rects().count(), 1 );
-	QCOMPARE( region.rects()[0], rect );
+        QRegion region;
+        QRect rect;
+        region.setRects(&rect, 1);
+        QCOMPARE(region.begin(), region.end());
+        QVERIFY(!region.boundingRect().isValid());
+#if QT_DEPRECATED_SINCE(5, 11)
+        QVERIFY(region.rects().isEmpty());
+#endif
+    }
+    {
+        QRegion region;
+        QRect rect(10, -20, 30, 40);
+        region.setRects(&rect, 1);
+        QCOMPARE(region.end(), region.begin() + 1);
+#if QT_DEPRECATED_SINCE(5, 11)
+        QCOMPARE(region.rects().count(), 1);
+        QCOMPARE(region.rects()[0], rect);
+#endif
+        QCOMPARE(*region.begin(), rect);
     }
 }
 
@@ -246,30 +285,30 @@ void tst_QRegion::polygonRegion()
 {
     QPolygon pa;
     {
-	QRegion region ( pa );
-	QVERIFY( region.isEmpty() );
+        QRegion region (pa);
+        QVERIFY(region.isEmpty());
     }
     {
-	pa.setPoints( 8, 10, 10, //  a____________b
-			 40, 10, //  |            |
-			 40, 20, //  |___      ___|
-			 30, 20, //      |    |
-			 30, 40, //      |    |
-			 20, 40, //      |    |
-			 20, 20, //      |____c
-			 10, 20 );
+        pa.setPoints(8, 10, 10, //  a____________b
+                        40, 10, //  |            |
+                        40, 20, //  |___      ___|
+                        30, 20, //      |    |
+                        30, 40, //      |    |
+                        20, 40, //      |    |
+                        20, 20, //      |____c
+                        10, 20);
 
-	QRegion region ( pa );
-	QVERIFY( !region.isEmpty() );
+        QRegion region (pa);
+        QVERIFY(!region.isEmpty());
 
-	// These should not be inside the circle
-	QVERIFY( !region.contains( QPoint(  9,  9 ) ) );
-	QVERIFY( !region.contains( QPoint( 30, 41 ) ) );
-	QVERIFY( !region.contains( QPoint( 41, 10 ) ) );
-	QVERIFY( !region.contains( QPoint( 31, 21 ) ) );
+        // These should not be inside the circle
+        QVERIFY(!region.contains(QPoint( 9,  9)));
+        QVERIFY(!region.contains(QPoint(30, 41)));
+        QVERIFY(!region.contains(QPoint(41, 10)));
+        QVERIFY(!region.contains(QPoint(31, 21)));
 
-	// These should be inside
-	QVERIFY( region.contains( QPoint( 10, 10 ) ) ); // Upper-left  (a)
+        // These should be inside
+        QVERIFY(region.contains(QPoint(10, 10))); // Upper-left  (a)
 
     }
 }
@@ -314,15 +353,21 @@ void tst_QRegion::emptyPolygonRegion()
 
     QRegion r(pa);
     QTEST(r.isEmpty(), "isEmpty");
-    QTEST(r.rects().count(), "numRects");
-    QTEST(r.rects(), "rects");
+    QTEST(int(std::distance(r.begin(), r.end())), "numRects");
+    QVector<QRect> rects;
+    std::copy(r.begin(), r.end(), std::back_inserter(rects));
+    QTEST(rects.size(), "numRects");
+    QTEST(rects, "rects");
+#if QT_DEPRECATED_SINCE(5, 11)
+    QCOMPARE(r.rects(), rects);
+#endif
 }
 
 
 static const char *circle_xpm[] = {
     "20 20 2 1",
-    "	c #FFFFFF",
-    ".	c #000000",
+    "  c #FFFFFF",
+    ". c #000000",
     "       ......       ",
     "     ..........     ",
     "   ..............   ",
@@ -349,29 +394,29 @@ void tst_QRegion::bitmapRegion()
 {
     QBitmap circle;
     {
-	QRegion region( circle );
-	QVERIFY( region.isEmpty() );
+        QRegion region(circle);
+        QVERIFY(region.isEmpty());
     }
     {
-	circle = QPixmap( circle_xpm );
-	QRegion region( circle );
+        circle = QPixmap(circle_xpm);
+        QRegion region(circle);
 
-	//// These should not be inside the circe
-	QVERIFY( !region.contains( QPoint( 2,   2 ) ) );
-	QVERIFY( !region.contains( QPoint( 2,  17 ) ) );
-	QVERIFY( !region.contains( QPoint( 17,  2 ) ) );
-	QVERIFY( !region.contains( QPoint( 17, 17 ) ) );
+        //// These should not be inside the circe
+        QVERIFY(!region.contains(QPoint(2,   2)));
+        QVERIFY(!region.contains(QPoint(2,  17)));
+        QVERIFY(!region.contains(QPoint(17,  2)));
+        QVERIFY(!region.contains(QPoint(17, 17)));
 
-	//// These should be inside
-	QVERIFY( region.contains( QPoint( 3,   3 ) ) );
-	QVERIFY( region.contains( QPoint( 3,  16 ) ) );
-	QVERIFY( region.contains( QPoint( 16,  3 ) ) );
-	QVERIFY( region.contains( QPoint( 16, 16 ) ) );
+        //// These should be inside
+        QVERIFY(region.contains(QPoint(3,   3)));
+        QVERIFY(region.contains(QPoint(3,  16)));
+        QVERIFY(region.contains(QPoint(16,  3)));
+        QVERIFY(region.contains(QPoint(16, 16)));
 
-	QVERIFY( region.contains( QPoint( 0, 10 ) ) );  // Mid-left
-	QVERIFY( region.contains( QPoint( 10, 0 ) ) );  // Mid-top
-	QVERIFY( region.contains( QPoint( 19, 10 ) ) ); // Mid-right
-	QVERIFY( region.contains( QPoint( 10, 19 ) ) ); // Mid-bottom
+        QVERIFY(region.contains(QPoint(0, 10)));  // Mid-left
+        QVERIFY(region.contains(QPoint(10, 0)));  // Mid-top
+        QVERIFY(region.contains(QPoint(19, 10))); // Mid-right
+        QVERIFY(region.contains(QPoint(10, 19))); // Mid-bottom
     }
 }
 
@@ -854,13 +899,16 @@ void tst_QRegion::isEmpty()
     QFETCH(QRegion, region);
 
     QVERIFY(region.isEmpty());
+    QCOMPARE(region.begin(), region.end());
     QCOMPARE(region, QRegion());
     QCOMPARE(region.rectCount(), 0);
     QCOMPARE(region.boundingRect(), QRect());
+#if QT_DEPRECATED_SINCE(5, 11)
     QVERIFY(region.rects().isEmpty());
+#endif
 }
 
-#if defined(Q_WS_X11) && defined(QT_BUILD_INTERNAL)
+#if 0 /* Used to be included in Qt4 for Q_WS_X11 */ && defined(QT_BUILD_INTERNAL)
 void tst_QRegion::clipRectangles()
 {
     QRegion region(30, 30, 30, 30);
@@ -886,9 +934,16 @@ void tst_QRegion::regionFromPath()
         path.addRect(0, 100, 100, 1000);
 
         QRegion rgn(path.toFillPolygon().toPolygon());
+
+        QCOMPARE(rgn.end(), rgn.begin() + 2);
+        QCOMPARE(rgn.begin()[0], QRect(0, 0, 10, 10));
+        QCOMPARE(rgn.begin()[1], QRect(0, 100, 100, 1000));
+
+#if QT_DEPRECATED_SINCE(5, 11)
         QCOMPARE(rgn.rects().size(), 2);
         QCOMPARE(rgn.rects().at(0), QRect(0, 0, 10, 10));
         QCOMPARE(rgn.rects().at(1), QRect(0, 100, 100, 1000));
+#endif
 
         QCOMPARE(rgn.boundingRect(), QRect(0, 0, 100, 1100));
     }
@@ -899,12 +954,20 @@ void tst_QRegion::regionFromPath()
         path.addRect(10, 10, 80, 80);
 
         QRegion rgn(path.toFillPolygon().toPolygon());
-        QCOMPARE(rgn.rects().size(), 4);
 
+        QCOMPARE(rgn.end(), rgn.begin() + 4);
+        QCOMPARE(rgn.begin()[0], QRect(0, 0, 100, 10));
+        QCOMPARE(rgn.begin()[1], QRect(0, 10, 10, 80));
+        QCOMPARE(rgn.begin()[2], QRect(90, 10, 10, 80));
+        QCOMPARE(rgn.begin()[3], QRect(0, 90, 100, 10));
+
+#if QT_DEPRECATED_SINCE(5, 11)
+        QCOMPARE(rgn.rects().size(), 4);
         QCOMPARE(rgn.rects().at(0), QRect(0, 0, 100, 10));
         QCOMPARE(rgn.rects().at(1), QRect(0, 10, 10, 80));
         QCOMPARE(rgn.rects().at(2), QRect(90, 10, 10, 80));
         QCOMPARE(rgn.rects().at(3), QRect(0, 90, 100, 10));
+#endif
 
         QCOMPARE(rgn.boundingRect(), QRect(0, 0, 100, 100));
     }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -82,7 +80,8 @@ QTextCursorPrivate::QTextCursorPrivate(const QTextCursorPrivate &rhs)
     visualNavigation = rhs.visualNavigation;
     keepPositionOnInsert = rhs.keepPositionOnInsert;
     changed = rhs.changed;
-    priv->addCursor(this);
+    if (priv != nullptr)
+        priv->addCursor(this);
 }
 
 QTextCursorPrivate::~QTextCursorPrivate()
@@ -132,7 +131,7 @@ QTextCursorPrivate::AdjustResult QTextCursorPrivate::adjustPosition(int position
 
 void QTextCursorPrivate::setX()
 {
-    if (priv->isInEditBlock()) {
+    if (priv->isInEditBlock() || priv->inContentsChange) {
         x = -1; // mark dirty
         return;
     }
@@ -174,7 +173,6 @@ void QTextCursorPrivate::remove()
     } else {
         priv->remove(pos1, pos2-pos1, op);
         adjusted_anchor = anchor = position;
-        priv->finishEdit();
     }
 
 }
@@ -433,15 +431,15 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
 
         // skip if already at word start
         QTextEngine *engine = layout->engine();
-        engine->attributes();
+        const QCharAttributes *attributes = engine->attributes();
         if ((relativePos == blockIt.length() - 1)
-            && (engine->atSpace(relativePos - 1) || engine->atWordSeparator(relativePos - 1)))
+            && (attributes[relativePos - 1].whiteSpace || engine->atWordSeparator(relativePos - 1)))
             return false;
 
         if (relativePos < blockIt.length()-1)
             ++position;
 
-        // FALL THROUGH!
+        Q_FALLTHROUGH();
     }
     case QTextCursor::PreviousWord:
     case QTextCursor::WordLeft:
@@ -508,7 +506,7 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
     }
     case QTextCursor::EndOfWord: {
         QTextEngine *engine = layout->engine();
-        engine->attributes();
+        const QCharAttributes *attributes = engine->attributes();
         const int len = blockIt.length() - 1;
         if (relativePos >= len)
             return false;
@@ -517,7 +515,7 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
             while (relativePos < len && engine->atWordSeparator(relativePos))
                 ++relativePos;
         } else {
-            while (relativePos < len && !engine->atSpace(relativePos) && !engine->atWordSeparator(relativePos))
+            while (relativePos < len && !attributes[relativePos].whiteSpace && !engine->atWordSeparator(relativePos))
                 ++relativePos;
         }
         newPosition = blockIt.position() + relativePos;
@@ -593,9 +591,9 @@ bool QTextCursorPrivate::movePosition(QTextCursor::MoveOperation op, QTextCursor
         adjustX = false;
         break;
     }
-    case QTextCursor::NextCell: // fall through
-    case QTextCursor::PreviousCell: // fall through
-    case QTextCursor::NextRow: // fall through
+    case QTextCursor::NextCell:
+    case QTextCursor::PreviousCell:
+    case QTextCursor::NextRow:
     case QTextCursor::PreviousRow: {
         QTextTable *table = qobject_cast<QTextTable *>(priv->frameAt(position));
         if (!table)
@@ -919,8 +917,8 @@ QTextLayout *QTextCursorPrivate::blockLayout(QTextBlock &block) const{
     select text. For selections see selectionStart(), selectionEnd(),
     hasSelection(), clearSelection(), and removeSelectedText().
 
-    If the position() is at the start of a block atBlockStart()
-    returns true; and if it is at the end of a block atBlockEnd() returns
+    If the position() is at the start of a block, atBlockStart()
+    returns \c true; and if it is at the end of a block, atBlockEnd() returns
     true. The format of the current character is returned by
     charFormat(), and the format of the current block is returned by
     blockFormat().
@@ -930,9 +928,9 @@ QTextLayout *QTextCursorPrivate::blockLayout(QTextBlock &block) const{
     mergeBlockFormat() functions. The 'set' functions will replace the
     cursor's current character or block format, while the 'merge'
     functions add the given format properties to the cursor's current
-    format. If the cursor has a selection the given format is applied
-    to the current selection. Note that when only parts of a block is
-    selected the block format is applied to the entire block. The text
+    format. If the cursor has a selection, the given format is applied
+    to the current selection. Note that when only a part of a block is
+    selected, the block format is applied to the entire block. The text
     at the current character position can be turned into a list using
     createList().
 
@@ -1134,7 +1132,7 @@ QTextCursor::~QTextCursor()
 }
 
 /*!
-    Returns true if the cursor is null; otherwise returns false. A null
+    Returns \c true if the cursor is null; otherwise returns \c false. A null
     cursor is created by the default constructor.
  */
 bool QTextCursor::isNull() const
@@ -1222,8 +1220,8 @@ int QTextCursor::anchor() const
     \fn bool QTextCursor::movePosition(MoveOperation operation, MoveMode mode, int n)
 
     Moves the cursor by performing the given \a operation \a n times, using the specified
-    \a mode, and returns true if all operations were completed successfully; otherwise
-    returns false.
+    \a mode, and returns \c true if all operations were completed successfully; otherwise
+    returns \c false.
 
     For example, if this function is repeatedly used to seek to the end of the next
     word, it will eventually fail when the end of the document is reached.
@@ -1280,10 +1278,10 @@ bool QTextCursor::movePosition(MoveOperation op, MoveMode mode, int n)
 /*!
   \since 4.4
 
-  Returns true if the cursor does visual navigation; otherwise
-  returns false.
+  Returns \c true if the cursor does visual navigation; otherwise
+  returns \c false.
 
-  Visual navigation means skipping over hidden text pragraphs. The
+  Visual navigation means skipping over hidden text paragraphs. The
   default is false.
 
   \sa setVisualNavigation(), movePosition()
@@ -1298,7 +1296,7 @@ bool QTextCursor::visualNavigation() const
 
   Sets visual navigation to \a b.
 
-  Visual navigation means skipping over hidden text pragraphs. The
+  Visual navigation means skipping over hidden text paragraphs. The
   default is false.
 
   \sa visualNavigation(), movePosition()
@@ -1582,7 +1580,7 @@ void QTextCursor::select(SelectionType selection)
 }
 
 /*!
-    Returns true if the cursor contains a selection; otherwise returns false.
+    Returns \c true if the cursor contains a selection; otherwise returns \c false.
 */
 bool QTextCursor::hasSelection() const
 {
@@ -1591,8 +1589,8 @@ bool QTextCursor::hasSelection() const
 
 
 /*!
-    Returns true if the cursor contains a selection that is not simply a
-    range from selectionStart() to selectionEnd(); otherwise returns false.
+    Returns \c true if the cursor contains a selection that is not simply a
+    range from selectionStart() to selectionEnd(); otherwise returns \c false.
 
     Complex selections are ones that span at least two cells in a table;
     their extent is specified by selectedTableCells().
@@ -1946,8 +1944,8 @@ void QTextCursor::mergeCharFormat(const QTextCharFormat &modifier)
 }
 
 /*!
-    Returns true if the cursor is at the start of a block; otherwise
-    returns false.
+    Returns \c true if the cursor is at the start of a block; otherwise
+    returns \c false.
 
     \sa atBlockEnd(), atStart()
 */
@@ -1960,8 +1958,8 @@ bool QTextCursor::atBlockStart() const
 }
 
 /*!
-    Returns true if the cursor is at the end of a block; otherwise
-    returns false.
+    Returns \c true if the cursor is at the end of a block; otherwise
+    returns \c false.
 
     \sa atBlockStart(), atEnd()
 */
@@ -1974,8 +1972,8 @@ bool QTextCursor::atBlockEnd() const
 }
 
 /*!
-    Returns true if the cursor is at the start of the document;
-    otherwise returns false.
+    Returns \c true if the cursor is at the start of the document;
+    otherwise returns \c false.
 
     \sa atBlockStart(), atEnd()
 */
@@ -1990,8 +1988,8 @@ bool QTextCursor::atStart() const
 /*!
     \since 4.6
 
-    Returns true if the cursor is at the end of the document;
-    otherwise returns false.
+    Returns \c true if the cursor is at the end of the document;
+    otherwise returns \c false.
 
     \sa atStart(), atBlockEnd()
 */
@@ -2344,8 +2342,8 @@ void QTextCursor::insertImage(const QImage &image, const QString &name)
 /*!
     \fn bool QTextCursor::operator!=(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is at a different position in
-    the document as this cursor; otherwise returns false.
+    Returns \c true if the \a other cursor is at a different position in
+    the document as this cursor; otherwise returns \c false.
 */
 bool QTextCursor::operator!=(const QTextCursor &rhs) const
 {
@@ -2355,8 +2353,8 @@ bool QTextCursor::operator!=(const QTextCursor &rhs) const
 /*!
     \fn bool QTextCursor::operator<(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is positioned later in the
-    document than this cursor; otherwise returns false.
+    Returns \c true if the \a other cursor is positioned later in the
+    document than this cursor; otherwise returns \c false.
 */
 bool QTextCursor::operator<(const QTextCursor &rhs) const
 {
@@ -2374,7 +2372,7 @@ bool QTextCursor::operator<(const QTextCursor &rhs) const
 /*!
     \fn bool QTextCursor::operator<=(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is positioned later or at the
+    Returns \c true if the \a other cursor is positioned later or at the
     same position in the document as this cursor; otherwise returns
     false.
 */
@@ -2394,8 +2392,8 @@ bool QTextCursor::operator<=(const QTextCursor &rhs) const
 /*!
     \fn bool QTextCursor::operator==(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is at the same position in the
-    document as this cursor; otherwise returns false.
+    Returns \c true if the \a other cursor is at the same position in the
+    document as this cursor; otherwise returns \c false.
 */
 bool QTextCursor::operator==(const QTextCursor &rhs) const
 {
@@ -2411,7 +2409,7 @@ bool QTextCursor::operator==(const QTextCursor &rhs) const
 /*!
     \fn bool QTextCursor::operator>=(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is positioned earlier or at the
+    Returns \c true if the \a other cursor is positioned earlier or at the
     same position in the document as this cursor; otherwise returns
     false.
 */
@@ -2431,8 +2429,8 @@ bool QTextCursor::operator>=(const QTextCursor &rhs) const
 /*!
     \fn bool QTextCursor::operator>(const QTextCursor &other) const
 
-    Returns true if the \a other cursor is positioned earlier in the
-    document than this cursor; otherwise returns false.
+    Returns \c true if the \a other cursor is positioned earlier in the
+    document than this cursor; otherwise returns \c false.
 */
 bool QTextCursor::operator>(const QTextCursor &rhs) const
 {
@@ -2514,7 +2512,7 @@ void QTextCursor::endEditBlock()
 }
 
 /*!
-    Returns true if this cursor and \a other are copies of each other, i.e.
+    Returns \c true if this cursor and \a other are copies of each other, i.e.
     one of them was created as a copy of the other and neither has moved since.
     This is much stricter than equality.
 

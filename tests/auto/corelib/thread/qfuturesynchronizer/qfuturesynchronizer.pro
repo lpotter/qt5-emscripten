@@ -1,5 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qfuturesynchronizer
-QT = core testlib concurrent
+QT = core testlib
 SOURCES = tst_qfuturesynchronizer.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

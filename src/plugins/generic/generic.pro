@@ -1,7 +1,24 @@
 TEMPLATE = subdirs
+QT_FOR_CONFIG += gui-private
 
-*-maemo*: SUBDIRS += meego
+qtConfig(evdev) {
+    SUBDIRS += evdevmouse evdevtouch evdevkeyboard
+    qtConfig(tabletevent): \
+        SUBDIRS += evdevtablet
+}
 
-contains(QT_CONFIG, evdev) {
-    SUBDIRS += evdevmouse evdevtouch evdevkeyboard evdevtablet
+qtConfig(tslib) {
+    SUBDIRS += tslib
+}
+
+qtConfig(tuiotouch) {
+    SUBDIRS += tuiotouch
+}
+
+qtConfig(libinput) {
+    SUBDIRS += libinput
+}
+
+freebsd {
+    SUBDIRS += bsdkeyboard bsdmouse
 }

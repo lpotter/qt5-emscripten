@@ -1,46 +1,44 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#ifndef QWidgetLineControl_P_H
-#define QWidgetLineControl_P_H
+#ifndef QWIDGETLINECONTROL_P_H
+#define QWIDGETLINECONTROL_P_H
 
 //
 //  W A R N I N G
@@ -53,9 +51,8 @@
 // We mean it.
 //
 
-#include "QtCore/qglobal.h"
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 
-#ifndef QT_NO_LINEEDIT
 #include "private/qwidget_p.h"
 #include "QtWidgets/qlineedit.h"
 #include "QtGui/qtextlayout.h"
@@ -64,35 +61,41 @@
 #include "QtGui/qclipboard.h"
 #include "QtGui/qinputmethod.h"
 #include "QtCore/qpoint.h"
+#if QT_CONFIG(completer)
 #include "QtWidgets/qcompleter.h"
+#endif
 #include "QtCore/qthread.h"
+#include "QtGui/private/qinputcontrol_p.h"
 
 #include "qplatformdefs.h"
 
-QT_BEGIN_HEADER
+#include <vector>
 
 #ifdef DrawText
 #  undef DrawText
 #endif
 
+QT_REQUIRE_CONFIG(lineedit);
+
 QT_BEGIN_NAMESPACE
 
-
-class Q_WIDGETS_EXPORT QWidgetLineControl : public QObject
+class Q_WIDGETS_EXPORT QWidgetLineControl : public QInputControl
 {
     Q_OBJECT
 
 public:
     QWidgetLineControl(const QString &txt = QString())
-        : m_cursor(0), m_preeditCursor(0), m_cursorWidth(0), m_layoutDirection(Qt::LayoutDirectionAuto),
+        : QInputControl(LineEdit)
+        , m_cursor(0), m_preeditCursor(0), m_cursorWidth(0), m_layoutDirection(Qt::LayoutDirectionAuto),
         m_hideCursor(false), m_separator(0), m_readOnly(0),
         m_dragEnabled(0), m_echoMode(0), m_textDirty(0), m_selDirty(0),
-        m_validInput(1), m_blinkStatus(0), m_blinkPeriod(0), m_blinkTimer(0), m_deleteAllTimer(0),
+        m_validInput(1), m_blinkStatus(0), m_blinkEnabled(false), m_blinkTimer(0), m_deleteAllTimer(0),
         m_ascent(0), m_maxLength(32767), m_lastCursorPos(-1),
         m_tripleClickTimer(0), m_maskData(0), m_modifiedState(0), m_undoState(0),
         m_selstart(0), m_selend(0), m_passwordEchoEditing(false)
         , m_passwordEchoTimer(0)
-#if defined(Q_WS_MAC)
+        , m_passwordMaskDelay(-1)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         , m_threadChecks(false)
         , m_textLayoutThread(0)
  #endif
@@ -100,6 +103,7 @@ public:
         , m_passwordMaskDelayOverride(-1)
 #endif
         , m_keyboardScheme(0)
+        , m_accessibleObject(0)
     {
         init(txt);
     }
@@ -107,6 +111,19 @@ public:
     ~QWidgetLineControl()
     {
         delete [] m_maskData;
+    }
+
+    void setAccessibleObject(QObject *object)
+    {
+        Q_ASSERT(object);
+        m_accessibleObject = object;
+    }
+
+    QObject *accessibleObject()
+    {
+        if (m_accessibleObject)
+            return m_accessibleObject;
+        return parent();
     }
 
     int nextMaskBlank(int pos)
@@ -201,7 +218,9 @@ public:
     void end(bool mark) { moveCursor(text().length(), mark); }
 
     int xToPos(int x, QTextLine::CursorPosition = QTextLine::CursorBetweenCharacters) const;
+    QRect rectForPos(int pos) const;
     QRect cursorRect() const;
+    QRect anchorRect() const;
 
     qreal cursorToX(int cursor) const { return m_textLayout.lineAt(0).cursorToX(cursor); }
     qreal cursorToX() const
@@ -223,13 +242,20 @@ public:
     }
     void setText(const QString &txt)
     {
+#ifndef QT_NO_IM
         if (composeMode())
-            qApp->inputMethod()->reset();
+            QGuiApplication::inputMethod()->reset();
+#endif
         internalSetText(txt, -1, false);
     }
     void commitPreedit();
 
     QString displayText() const { return m_textLayout.text(); }
+
+    QString surroundingText() const
+    {
+        return m_text.isNull() ? QString::fromLatin1("") : m_text;
+    }
 
     void backspace();
     void del();
@@ -238,7 +264,7 @@ public:
 
     void insert(const QString &);
     void clear();
-    void undo() { internalUndo(); finishChange(-1, true); }
+    void undo();
     void redo() { internalRedo(); finishChange(); }
     void selectWordAtPos(int);
 
@@ -265,7 +291,7 @@ public:
     void setValidator(const QValidator *v) { m_validator = const_cast<QValidator*>(v); }
 #endif
 
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     QCompleter *completer() const { return m_completer; }
     /* Note that you must set the widget for the completer separately */
     void setCompleter(const QCompleter *c) { m_completer = const_cast<QCompleter*>(c); }
@@ -315,10 +341,13 @@ public:
     QChar passwordCharacter() const { return m_passwordCharacter; }
     void setPasswordCharacter(QChar character) { m_passwordCharacter = character; updateDisplayText(); }
 
+    int passwordMaskDelay() const { return m_passwordMaskDelay; }
+    void setPasswordMaskDelay(int delay) { m_passwordMaskDelay = delay; }
+
     Qt::LayoutDirection layoutDirection() const {
         if (m_layoutDirection == Qt::LayoutDirectionAuto) {
             if (m_text.isEmpty())
-                return qApp->inputMethod()->inputDirection();
+                return QGuiApplication::inputMethod()->inputDirection();
             return m_text.isRightToLeft() ? Qt::RightToLeft : Qt::LeftToRight;
         }
         return m_layoutDirection;
@@ -336,8 +365,8 @@ public:
     void processInputMethodEvent(QInputMethodEvent *event);
     void processKeyEvent(QKeyEvent* ev);
 
-    int cursorBlinkPeriod() const { return m_blinkPeriod; }
-    void setCursorBlinkPeriod(int msec);
+    void setBlinkingCursorEnabled(bool enable);
+    void updateCursorBlinking();
     void resetCursorBlinkTimer();
 
     bool cursorBlinkStatus() const { return m_blinkStatus; }
@@ -362,14 +391,14 @@ public:
 
     QTextLayout *textLayout() const
     {
-#if defined(Q_WS_MAC)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         if (m_threadChecks && QThread::currentThread() != m_textLayoutThread)
             redoTextLayout();
 #endif
         return &m_textLayout;
     }
 
-#if defined(Q_WS_MAC)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     void setThreadChecks(bool threadChecks)
     {
         m_threadChecks = threadChecks;
@@ -415,7 +444,7 @@ private:
     uint m_selDirty : 1;
     uint m_validInput : 1;
     uint m_blinkStatus : 1;
-    int m_blinkPeriod; // 0 for non-blinking cursor
+    uint m_blinkEnabled : 1;
     int m_blinkTimer;
     int m_deleteAllTimer;
     int m_ascent;
@@ -434,7 +463,7 @@ private:
     QPointer<QValidator> m_validator;
 #endif
     QPointer<QCompleter> m_completer;
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     bool advanceToEnabledItem(int dir);
 #endif
 
@@ -451,7 +480,6 @@ private:
     // undo/redo handling
     enum CommandType { Separator, Insert, Remove, Delete, RemoveSelection, DeleteSelection, SetSelection };
     struct Command {
-        inline Command() {}
         inline Command(CommandType t, int p, QChar c, int ss, int se) : type(t),uc(c),pos(p),selStart(ss),selEnd(se) {}
         uint type : 4;
         QChar uc;
@@ -459,7 +487,7 @@ private:
     };
     int m_modifiedState;
     int m_undoState;
-    QVector<Command> m_history;
+    std::vector<Command> m_history;
     void addCommand(const Command& cmd);
 
     inline void separate() { m_separator = true; }
@@ -472,8 +500,8 @@ private:
     void parseInputMask(const QString &maskFields);
     bool isValidInput(QChar key, QChar mask) const;
     bool hasAcceptableInput(const QString &text) const;
-    QString maskString(uint pos, const QString &str, bool clear = false) const;
-    QString clearString(uint pos, uint len) const;
+    QString maskString(int pos, const QString &str, bool clear = false) const;
+    QString clearString(int pos, int len) const;
     QString stripString(const QString &str) const;
     int findInMask(int pos, bool forward, bool findSeparator, QChar searchChar = QChar()) const;
 
@@ -483,6 +511,7 @@ private:
     bool m_passwordEchoEditing;
     QChar m_passwordCharacter;
     int m_passwordEchoTimer;
+    int m_passwordMaskDelay;
     void cancelPasswordEchoTimer()
     {
         if (m_passwordEchoTimer != 0) {
@@ -492,7 +521,7 @@ private:
     }
 
     int redoTextLayout() const;
-#if defined(Q_WS_MAC)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     bool m_threadChecks;
     mutable QThread *m_textLayoutThread;
 #endif
@@ -516,25 +545,24 @@ Q_SIGNALS:
     void accepted();
     void editingFinished();
     void updateNeeded(const QRect &);
+    void inputRejected();
 
 #ifdef QT_KEYPAD_NAVIGATION
     void editFocusChange(bool);
 #endif
 protected:
-    virtual void timerEvent(QTimerEvent *event);
+    virtual void timerEvent(QTimerEvent *event) override;
 
 private Q_SLOTS:
-    void _q_clipboardChanged();
     void _q_deleteSelected();
 
 private:
     int m_keyboardScheme;
+
+    // accessibility events are sent for this object
+    QObject *m_accessibleObject;
 };
 
 QT_END_NAMESPACE
 
-QT_END_HEADER
-
-#endif // QT_NO_LINEEDIT
-
-#endif // QWidgetLineControl_P_H
+#endif // QWIDGETLINECONTROL_P_H

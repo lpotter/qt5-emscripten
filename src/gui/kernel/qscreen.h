@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QSCREEN_H
 #define QSCREEN_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/QList>
 #include <QtCore/QObject>
 #include <QtCore/QRect>
@@ -52,8 +51,6 @@
 
 #include <QtCore/qnamespace.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -62,6 +59,9 @@ class QScreenPrivate;
 class QWindow;
 class QRect;
 class QPixmap;
+#ifndef QT_NO_DEBUG_STREAM
+class QDebug;
+#endif
 
 class Q_GUI_EXPORT QScreen : public QObject
 {
@@ -69,13 +69,16 @@ class Q_GUI_EXPORT QScreen : public QObject
     Q_DECLARE_PRIVATE(QScreen)
 
     Q_PROPERTY(QString name READ name CONSTANT)
+    Q_PROPERTY(QString manufacturer READ manufacturer CONSTANT)
+    Q_PROPERTY(QString model READ model CONSTANT)
+    Q_PROPERTY(QString serialNumber READ serialNumber CONSTANT)
     Q_PROPERTY(int depth READ depth CONSTANT)
     Q_PROPERTY(QSize size READ size NOTIFY geometryChanged)
-    Q_PROPERTY(QSize availableSize READ availableSize NOTIFY virtualGeometryChanged)
+    Q_PROPERTY(QSize availableSize READ availableSize NOTIFY availableGeometryChanged)
     Q_PROPERTY(QSize virtualSize READ virtualSize NOTIFY virtualGeometryChanged)
     Q_PROPERTY(QSize availableVirtualSize READ availableVirtualSize NOTIFY virtualGeometryChanged)
     Q_PROPERTY(QRect geometry READ geometry NOTIFY geometryChanged)
-    Q_PROPERTY(QRect availableGeometry READ availableGeometry NOTIFY virtualGeometryChanged)
+    Q_PROPERTY(QRect availableGeometry READ availableGeometry NOTIFY availableGeometryChanged)
     Q_PROPERTY(QRect virtualGeometry READ virtualGeometry NOTIFY virtualGeometryChanged)
     Q_PROPERTY(QRect availableVirtualGeometry READ availableVirtualGeometry NOTIFY virtualGeometryChanged)
     Q_PROPERTY(QSizeF physicalSize READ physicalSize NOTIFY physicalSizeChanged)
@@ -85,14 +88,21 @@ class Q_GUI_EXPORT QScreen : public QObject
     Q_PROPERTY(qreal logicalDotsPerInchX READ logicalDotsPerInchX NOTIFY logicalDotsPerInchChanged)
     Q_PROPERTY(qreal logicalDotsPerInchY READ logicalDotsPerInchY NOTIFY logicalDotsPerInchChanged)
     Q_PROPERTY(qreal logicalDotsPerInch READ logicalDotsPerInch NOTIFY logicalDotsPerInchChanged)
+    Q_PROPERTY(qreal devicePixelRatio READ devicePixelRatio NOTIFY physicalDotsPerInchChanged)
     Q_PROPERTY(Qt::ScreenOrientation primaryOrientation READ primaryOrientation NOTIFY primaryOrientationChanged)
     Q_PROPERTY(Qt::ScreenOrientation orientation READ orientation NOTIFY orientationChanged)
+    Q_PROPERTY(Qt::ScreenOrientation nativeOrientation READ nativeOrientation)
     Q_PROPERTY(qreal refreshRate READ refreshRate NOTIFY refreshRateChanged)
 
 public:
+    ~QScreen();
     QPlatformScreen *handle() const;
 
     QString name() const;
+
+    QString manufacturer() const;
+    QString model() const;
+    QString serialNumber() const;
 
     int depth() const;
 
@@ -124,6 +134,7 @@ public:
 
     Qt::ScreenOrientation primaryOrientation() const;
     Qt::ScreenOrientation orientation() const;
+    Qt::ScreenOrientation nativeOrientation() const;
 
     Qt::ScreenOrientations orientationUpdateMask() const;
     void setOrientationUpdateMask(Qt::ScreenOrientations mask);
@@ -141,6 +152,7 @@ public:
 
 Q_SIGNALS:
     void geometryChanged(const QRect &geometry);
+    void availableGeometryChanged(const QRect &geometry);
     void physicalSizeChanged(const QSizeF &size);
     void physicalDotsPerInchChanged(qreal dpi);
     void logicalDotsPerInchChanged(qreal dpi);
@@ -156,11 +168,14 @@ private:
     friend class QGuiApplicationPrivate;
     friend class QPlatformIntegration;
     friend class QPlatformScreen;
+    friend class QHighDpiScaling;
 };
 
-QT_END_NAMESPACE
+#ifndef QT_NO_DEBUG_STREAM
+Q_GUI_EXPORT QDebug operator<<(QDebug, const QScreen *);
+#endif
 
-QT_END_HEADER
+QT_END_NAMESPACE
 
 #endif // QSCREEN_H
 

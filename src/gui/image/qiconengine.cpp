@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -85,6 +83,21 @@ QSize QIconEngine::actualSize(const QSize &size, QIcon::Mode /*mode*/, QIcon::St
     return size;
 }
 
+/*!
+    \since 5.6
+    Constructs the icon engine.
+ */
+QIconEngine::QIconEngine()
+{
+}
+
+/*!
+    \since 5.8
+    \internal
+ */
+QIconEngine::QIconEngine(const QIconEngine &)
+{
+}
 
 /*!
   Destroys the icon engine.
@@ -151,6 +164,17 @@ void QIconEngine::addFile(const QString &/*fileName*/, const QSize &/*size*/, QI
     icon, for example when instantiating an icon using
     QIcon::fromTheme().
 
+    \value IsNullHook Allow to query if this engine represents a null
+    icon. The \a data argument of the virtual_hook() is a pointer to a
+    bool that can be set to true if the icon is null. This enum value
+    was added in Qt 5.7.
+
+    \value ScaledPixmapHook Provides a way to get a pixmap that is scaled
+    according to the given scale (typically equal to the \l {Glossary Of High
+    DPI Terms}{device pixel ratio}). The \a data argument of the virtual_hook()
+    function is a \l ScaledPixmapArgument pointer that contains both the input and
+    output arguments. This enum value was added in Qt 5.9.
+
     \sa virtual_hook()
  */
 
@@ -189,6 +213,60 @@ void QIconEngine::addFile(const QString &/*fileName*/, const QSize &/*size*/, QI
     vectorial format normally return an empty list.
 */
 
+/*!
+    \class QIconEngine::ScaledPixmapArgument
+    \since 5.9
+
+    \inmodule QtGui
+
+    This struct represents arguments to the virtual_hook() function when
+    the \a id parameter is QIconEngine::ScaledPixmapHook.
+
+    The struct provides a way for icons created via \l QIcon::fromTheme()
+    to return pixmaps that are designed for the current \l {Glossary Of High
+    DPI Terms}{device pixel ratio}. The scale for such an icon is specified
+    using the \l {Icon Theme Specification - Directory Layout}{Scale directory key}
+    in the appropriate \c index.theme file.
+
+    Icons created via other approaches will return the same result as a call to
+    \l pixmap() would, and continue to benefit from Qt's \l {High Resolution
+    Versions of Images}{"@nx" high DPI syntax}.
+
+    \sa virtual_hook(), QIconEngine::IconEngineHook, {High DPI Icons}
+ */
+
+/*!
+    \variable QIconEngine::ScaledPixmapArgument::size
+    \brief The requested size of the pixmap.
+*/
+
+/*!
+    \variable QIconEngine::ScaledPixmapArgument::mode
+    \brief The requested mode of the pixmap.
+
+    \sa QIcon::Mode
+*/
+
+/*!
+    \variable QIconEngine::ScaledPixmapArgument::state
+    \brief The requested state of the pixmap.
+
+    \sa QIcon::State
+*/
+
+/*!
+    \variable QIconEngine::ScaledPixmapArgument::scale
+    \brief The requested scale of the pixmap.
+*/
+
+/*!
+    \variable QIconEngine::ScaledPixmapArgument::pixmap
+
+    \brief The pixmap that is the best match for the given \l size, \l mode, \l
+    state, and \l scale. This is an output parameter that is set after calling
+    \l virtual_hook().
+*/
+
 
 /*!
     Returns a key that identifies this icon engine.
@@ -205,7 +283,7 @@ QString QIconEngine::key() const
 
 /*!
     Reads icon engine contents from the QDataStream \a in. Returns
-    true if the contents were read; otherwise returns false.
+    true if the contents were read; otherwise returns \c false.
 
     QIconEngine's default implementation always return false.
  */
@@ -216,7 +294,7 @@ bool QIconEngine::read(QDataStream &)
 
 /*!
     Writes the contents of this engine to the QDataStream \a out.
-    Returns true if the contents were written; otherwise returns false.
+    Returns \c true if the contents were written; otherwise returns \c false.
 
     QIconEngine's default implementation always return false.
  */
@@ -244,6 +322,13 @@ void QIconEngine::virtual_hook(int id, void *data)
         arg.sizes.clear();
         break;
     }
+    case QIconEngine::ScaledPixmapHook: {
+        // We don't have any notion of scale besides "@nx", so just call pixmap() here.
+        QIconEngine::ScaledPixmapArgument &arg =
+            *reinterpret_cast<QIconEngine::ScaledPixmapArgument*>(data);
+        arg.pixmap = pixmap(arg.size, arg.mode, arg.state);
+        break;
+    }
     default:
         break;
     }
@@ -255,9 +340,7 @@ void QIconEngine::virtual_hook(int id, void *data)
     Returns sizes of all images that are contained in the engine for the
     specific \a mode and \a state.
 
-    \note This is a helper method and the actual work is done by
-    virtual_hook() method, hence this method depends on icon engine support
-    and may not work with all icon engines.
+    \include qiconengine-virtualhookhelper.qdocinc
  */
 QList<QSize> QIconEngine::availableSizes(QIcon::Mode mode, QIcon::State state) const
 {
@@ -273,15 +356,52 @@ QList<QSize> QIconEngine::availableSizes(QIcon::Mode mode, QIcon::State state) c
 
     Returns the name used to create the engine, if available.
 
-    \note This is a helper method and the actual work is done by
-    virtual_hook() method, hence this method depends on icon engine support
-    and may not work with all icon engines.
+    \include qiconengine-virtualhookhelper.qdocinc
  */
 QString QIconEngine::iconName() const
 {
     QString name;
     const_cast<QIconEngine *>(this)->virtual_hook(QIconEngine::IconNameHook, reinterpret_cast<void*>(&name));
     return name;
+}
+
+/*!
+    \since 5.7
+
+    Returns true if this icon engine represent a null QIcon.
+
+    \include qiconengine-virtualhookhelper.qdocinc
+ */
+bool QIconEngine::isNull() const
+{
+    bool isNull = false;
+    const_cast<QIconEngine *>(this)->virtual_hook(QIconEngine::IsNullHook, &isNull);
+    return isNull;
+}
+
+/*!
+    \since 5.9
+
+    Returns a pixmap for the given \a size, \a mode, \a state and \a scale.
+
+    The \a scale argument is typically equal to the \l {Glossary Of High DPI
+    Terms}{device pixel ratio} of the display.
+
+    \include qiconengine-virtualhookhelper.qdocinc
+
+    \note Some engines may cast \a scale to an integer.
+
+    \sa ScaledPixmapArgument
+*/
+QPixmap QIconEngine::scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state, qreal scale)
+{
+    ScaledPixmapArgument arg;
+    arg.size = size;
+    arg.mode = mode;
+    arg.state = state;
+    arg.scale = scale;
+    const_cast<QIconEngine *>(this)->virtual_hook(QIconEngine::ScaledPixmapHook, reinterpret_cast<void*>(&arg));
+    return arg.pixmap;
 }
 
 QT_END_NAMESPACE

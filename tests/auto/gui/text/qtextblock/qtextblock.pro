@@ -1,5 +1,4 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qtextblock
 
 QT += testlib
@@ -9,4 +8,3 @@ SOURCES  += tst_qtextblock.cpp
 
 
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

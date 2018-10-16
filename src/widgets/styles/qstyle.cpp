@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 #endif
 
 #include <limits.h>
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -90,7 +89,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     Qt provides a set of QStyle subclasses that emulate the native
     look of the different platforms supported by Qt (QWindowsStyle,
     QMacStyle, etc.). These styles are built into the
-    QtGui library, other styles can be made available using Qt's
+    Qt GUI module, other styles can be made available using Qt's
     plugin mechansim.
 
     Most functions for drawing style elements take four arguments:
@@ -105,7 +104,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     The style gets all the information it needs to render the
     graphical element from the QStyleOption class. The widget is
     passed as the last argument in case the style needs it to perform
-    special effects (such as animated default buttons on Mac OS X),
+    special effects (such as animated default buttons on \macos),
     but it isn't mandatory. In fact, QStyle can be used to draw on any
     paint device (not just widgets), in which case the widget argument
     is a zero pointer.
@@ -137,7 +136,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     state.
 
     \endtable
-    
+
     For more information about widget styling and appearance, see the
     \l{Styles and Style Aware Widgets}.
 */
@@ -153,15 +152,15 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     Qt contains a set of QStyle subclasses that emulate the styles of
     the different platforms supported by Qt (QWindowsStyle,
     QMacStyle etc.). By default, these styles are built
-    into the QtGui library. Styles can also be made available as
+    into the Qt GUI module. Styles can also be made available as
     plugins.
 
     Qt's built-in widgets use QStyle to perform nearly all of their
     drawing, ensuring that they look exactly like the equivalent
-    native widgets. The diagram below shows a QComboBox in eight
+    native widgets. The diagram below shows a QComboBox in nine
     different styles.
 
-    \image qstyle-comboboxes.png Eight combo boxes
+    \image qstyle-comboboxes.png Nine combo boxes
 
     Topics:
 
@@ -204,7 +203,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     QStyle gets all the information it needs to render the graphical
     element from QStyleOption. The widget is passed as the last
     argument in case the style needs it to perform special effects
-    (such as animated default buttons on Mac OS X), but it isn't
+    (such as animated default buttons on \macos), but it isn't
     mandatory. In fact, you can use QStyle to draw on any paint
     device, not just widgets, by setting the QPainter properly.
 
@@ -309,8 +308,9 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     applications, which may not be yours and hence not available for
     you to recompile. The Qt Plugin system makes it possible to create
     styles as plugins. Styles created as plugins are loaded as shared
-    objects at runtime by Qt itself. Please refer to the \l{plugins-howto.html}{Qt Plugin} documentation for more
-    information on how to go about creating a style plugin.
+    objects at runtime by Qt itself. Please refer to the \l{How to Create Qt Plugins}{Qt Plugin}
+    documentation for more information on how to go about creating a style
+    plugin.
 
     Compile your plugin and put it into Qt's \c plugins/styles
     directory. We now have a pluggable style that Qt can load
@@ -351,7 +351,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     \section1 Styles in Item Views
 
     The painting of items in views is performed by a delegate. Qt's
-    default delegate, QStyledItemDelegate, is also used for for calculating bounding
+    default delegate, QStyledItemDelegate, is also used for calculating bounding
     rectangles of items, and their sub-elements for the various kind
     of item \l{Qt::ItemDataRole}{data roles}
     QStyledItemDelegate supports. See the QStyledItemDelegate class
@@ -547,17 +547,21 @@ QRect QStyle::itemPixmapRect(const QRect &rect, int alignment, const QPixmap &pi
     QRect result;
     int x, y, w, h;
     rect.getRect(&x, &y, &w, &h);
+
+    const int pixmapWidth = pixmap.width()/pixmap.devicePixelRatio();
+    const int pixmapHeight = pixmap.height()/pixmap.devicePixelRatio();
+
     if ((alignment & Qt::AlignVCenter) == Qt::AlignVCenter)
-        y += h/2 - pixmap.height()/2;
+        y += h/2 - pixmapHeight/2;
     else if ((alignment & Qt::AlignBottom) == Qt::AlignBottom)
-        y += h - pixmap.height();
+        y += h - pixmapHeight;
     if ((alignment & Qt::AlignRight) == Qt::AlignRight)
-        x += w - pixmap.width();
+        x += w - pixmapWidth;
     else if ((alignment & Qt::AlignHCenter) == Qt::AlignHCenter)
-        x += w/2 - pixmap.width()/2;
+        x += w/2 - pixmapWidth/2;
     else if ((alignment & Qt::AlignLeft) != Qt::AlignLeft && QApplication::isRightToLeft())
-        x += w - pixmap.width();
-    result = QRect(x, y, pixmap.width(), pixmap.height());
+        x += w - pixmapWidth;
+    result = QRect(x, y, pixmapWidth, pixmapHeight);
     return result;
 }
 
@@ -618,7 +622,7 @@ void QStyle::drawItemText(QPainter *painter, const QRect &rect, int alignment, c
 void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
                             const QPixmap &pixmap) const
 {
-    int scale = pixmap.devicePixelRatio();
+    qreal scale = pixmap.devicePixelRatio();
     QRect aligned = alignedRect(QApplication::layoutDirection(), QFlag(alignment), pixmap.size() / scale, rect);
     QRect inter = aligned.intersected(rect);
 
@@ -633,7 +637,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     indicator or button bevel.
 
     \omitvalue PE_IndicatorViewItemCheck
-    \value PE_FrameStatusBar Frame
+    \value PE_FrameStatusBar  Obsolete. Use PE_FrameStatusBarItem instead.
 
     \value PE_PanelButtonCommand  Button used to initiate an action, for
         example, a QPushButton.
@@ -693,7 +697,9 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value PE_PanelToolBar  The panel for a toolbar.
     \value PE_PanelTipLabel The panel for a tip label.
     \value PE_FrameTabBarBase The frame that is drawn for a tab bar, ususally drawn for a tab bar that isn't part of a tab widget.
-    \value PE_IndicatorTabTear An indicator that a tab is partially scrolled out of the visible tab bar when there are many tabs.
+    \value PE_IndicatorTabTear Deprecated. Use \l{PE_IndicatorTabTearLeft} instead.
+    \value PE_IndicatorTabTearLeft An indicator that a tab is partially scrolled out on the left side of the visible tab bar when there are many tabs.
+    \value PE_IndicatorTabTearRight An indicator that a tab is partially scrolled out on the right side of the visible tab bar when there are many tabs.
     \value PE_IndicatorColumnViewArrow An arrow in a QColumnView.
 
     \value PE_Widget  A plain QWidget.
@@ -727,7 +733,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value State_None Indicates that the widget does not have a state.
     \value State_Active Indicates that the widget is active.
-    \value State_AutoRaise Used to indicate if auto-raise appearance should be usd on a tool button.
+    \value State_AutoRaise Used to indicate if auto-raise appearance should be used on a tool button.
     \value State_Children Used to indicate if an item view branch has children.
     \value State_DownArrow Used to indicate if a down arrow should be visible on the widget.
     \value State_Editing Used to indicate if an editor is opened on the widget.
@@ -759,8 +765,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 */
 
 /*!
-    \fn void QStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option, \
-                                   QPainter *painter, const QWidget *widget) const
+    \fn void QStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget) const
 
     Draws the given primitive \a element with the provided \a painter using the style
     options specified by \a option.
@@ -898,7 +903,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value CE_ToolBoxTabLabel  The toolbox's tab label.
     \value CE_HeaderEmptyArea  The area of a header view where there are no header sections.
 
-    \value CE_ShapedFrame The frame with the shape specified in the QStyleOptionFrameV3; see QFrame.
+    \value CE_ShapedFrame The frame with the shape specified in the QStyleOptionFrame; see QFrame.
 
     \omitvalue CE_ColumnViewGrip
 
@@ -1036,7 +1041,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \omitvalue SE_ViewItemCheckIndicator
 
     \value SE_FrameContents  Area for a frame's contents.
-    \value SE_ShapedFrameContents Area for a frame's contents using the shape in QStyleOptionFrameV3; see QFrame
+    \value SE_ShapedFrameContents Area for a frame's contents using the shape in QStyleOptionFrame; see QFrame
     \value SE_FrameLayoutItem  Area that counts for the parent layout.
 
     \value SE_HeaderArrow Area for the sort indicator for a header.
@@ -1059,7 +1064,12 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value SE_ItemViewItemCheckIndicator Area for a view item's check mark.
 
-    \value SE_TabBarTearIndicator Area for the tear indicator on a tab bar with scroll arrows.
+    \value SE_TabBarTearIndicator Deprecated. Use SE_TabBarTearIndicatorLeft instead.
+    \value SE_TabBarTearIndicatorLeft Area for the tear indicator on the left side of a tab bar with scroll arrows.
+    \value SE_TabBarTearIndicatorRight Area for the tear indicator on the right side of a tab bar with scroll arrows.
+
+    \value SE_TabBarScrollLeftButton Area for the scroll left button on a tab bar with scroll buttons.
+    \value SE_TabBarScrollRightButton Area for the scroll right button on a tab bar with scroll buttons.
 
     \value SE_TreeViewDisclosureItem Area for the actual disclosure item in a tree branch.
 
@@ -1469,6 +1479,25 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value PM_TabCloseIndicatorWidth The default width of a close button on a tab in a tab bar.
     \value PM_TabCloseIndicatorHeight The default height of a close button on a tab in a tab bar.
 
+    \value PM_ScrollView_ScrollBarSpacing  Distance between frame and scrollbar
+                                                with SH_ScrollView_FrameOnlyAroundContents set.
+    \value PM_ScrollView_ScrollBarOverlap  Overlap between scroll bars and scroll content
+
+    \value PM_SubMenuOverlap The horizontal overlap between a submenu and its parent.
+
+    \value PM_TreeViewIndentation The indentation of items in a tree view.
+           This enum value has been introduced in Qt 5.4.
+
+    \value PM_HeaderDefaultSectionSizeHorizontal The default size of sections
+           in a horizontal header. This enum value has been introduced in Qt 5.5.
+    \value PM_HeaderDefaultSectionSizeVertical The default size of sections
+           in a vertical header. This enum value has been introduced in Qt 5.5.
+
+    \value PM_TitleBarButtonIconSize The size of button icons on a title bar.
+           This enum value has been introduced in Qt 5.8.
+    \value PM_TitleBarButtonSize The size of buttons on a title bar.
+           This enum value has been introduced in Qt 5.8.
+
     \value PM_CustomBase Base value for custom pixel metrics.  Custom
     values must be greater than this value.
 
@@ -1485,12 +1514,6 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value PM_DefaultLayoutSpacing  Use PM_LayoutHorizontalSpacing
                                     and PM_LayoutVerticalSpacing
                                     instead.
-
-    \value PM_ScrollView_ScrollBarSpacing  Distance between frame and scrollbar
-                                                with SH_ScrollView_FrameOnlyAroundContents set.
-    \value PM_ScrollView_ScrollBarOverlap  Overlap between scroll bars and scroll content
-
-    \value PM_SubMenuOverlap The horizontal overlap between a submenu and its parent.
 
 
     \sa pixelMetric()
@@ -1568,8 +1591,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 */
 
 /*!
-    \fn QSize QStyle::sizeFromContents(ContentsType type, const QStyleOption *option, \
-                                       const QSize &contentsSize, const QWidget *widget) const
+    \fn QSize QStyle::sizeFromContents(ContentsType type, const QStyleOption *option, const QSize &contentsSize, const QWidget *widget) const
 
     Returns the size of the element described by the specified
     \a option and \a type, based on the provided \a contentsSize.
@@ -1584,14 +1606,28 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \table
     \header \li Contents Type    \li QStyleOption Subclass
-    \row \li \l CT_PushButton   \li \l QStyleOptionButton
-    \row \li \l CT_CheckBox     \li \l QStyleOptionButton
-    \row \li \l CT_RadioButton  \li \l QStyleOptionButton
-    \row \li \l CT_ToolButton   \li \l QStyleOptionToolButton
-    \row \li \l CT_ComboBox     \li \l QStyleOptionComboBox
-    \row \li \l CT_Splitter     \li \l QStyleOption
-    \row \li \l CT_ProgressBar  \li \l QStyleOptionProgressBar
-    \row \li \l CT_MenuItem     \li \l QStyleOptionMenuItem
+    \row \li \l CT_CheckBox      \li \l QStyleOptionButton
+    \row \li \l CT_ComboBox      \li \l QStyleOptionComboBox
+    \row \li \l CT_GroupBox      \li \l QStyleOptionGroupBox
+    \row \li \l CT_HeaderSection \li \l QStyleOptionHeader
+    \row \li \l CT_ItemViewItem  \li \l QStyleOptionViewItem
+    \row \li \l CT_LineEdit      \li \l QStyleOptionFrame
+    \row \li \l CT_MdiControls   \li \l QStyleOptionComplex
+    \row \li \l CT_Menu          \li \l QStyleOption
+    \row \li \l CT_MenuItem      \li \l QStyleOptionMenuItem
+    \row \li \l CT_MenuBar       \li \l QStyleOptionMenuItem
+    \row \li \l CT_MenuBarItem   \li \l QStyleOptionMenuItem
+    \row \li \l CT_ProgressBar   \li \l QStyleOptionProgressBar
+    \row \li \l CT_PushButton    \li \l QStyleOptionButton
+    \row \li \l CT_RadioButton   \li \l QStyleOptionButton
+    \row \li \l CT_ScrollBar     \li \l QStyleOptionSlider
+    \row \li \l CT_SizeGrip      \li \l QStyleOption
+    \row \li \l CT_Slider        \li \l QStyleOptionSlider
+    \row \li \l CT_SpinBox       \li \l QStyleOptionSpinBox
+    \row \li \l CT_Splitter      \li \l QStyleOption
+    \row \li \l CT_TabBarTab     \li \l QStyleOptionTab
+    \row \li \l CT_TabWidget     \li \l QStyleOptionTabWidgetFrame
+    \row \li \l CT_ToolButton    \li \l QStyleOptionToolButton
     \endtable
 
     \sa ContentsType, QStyleOption
@@ -1652,7 +1688,8 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value SH_Header_ArrowAlignment The placement of the sorting
         indicator may appear in list or table headers. Possible values
-        are Qt::Left or Qt::Right.
+        are Qt::Alignment values (that is, an OR combination of
+        Qt::AlignmentFlag flags).
 
     \value SH_Slider_SnapToValue  Sliders snap to values while moving,
         as they do on Windows.
@@ -1691,8 +1728,36 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 
     \value SH_Menu_Scrollable Whether popup menus must support scrolling.
 
-    \value SH_Menu_SloppySubMenus Whether popupmenu's must support
-        sloppy submenu; as implemented on Mac OS.
+    \value SH_Menu_SloppySubMenus  Whether popup menus must support
+        the user moving the mouse cursor to a submenu while crossing
+        other items of the menu. This is supported on most modern
+        desktop platforms.
+
+    \value SH_Menu_SubMenuUniDirection Since Qt 5.5. If the cursor has
+        to move towards the submenu (like it is on \macos), or if the
+        cursor can move in any direction as long as it reaches the
+        submenu before the sloppy timeout.
+
+    \value SH_Menu_SubMenuUniDirectionFailCount Since Qt 5.5.  When
+        SH_Menu_SubMenuUniDirection is defined this enum defines the
+        number of failed mouse moves before the sloppy submenu is
+        discarded.  This can be used to control the "strictness" of the
+        uni direction algorithm.
+
+    \value SH_Menu_SubMenuSloppySelectOtherActions Since Qt 5.5. Should
+        other action items be selected when the mouse moves towards a
+        sloppy submenu.
+
+    \value SH_Menu_SubMenuSloppyCloseTimeout Since Qt 5.5. The timeout
+        used to close sloppy submenus.
+
+    \value SH_Menu_SubMenuResetWhenReenteringParent Since Qt 5.5. When
+        entering parent from child submenu, should the sloppy state be
+        reset, effectively closing the child and making the current
+        submenu active.
+
+    \value SH_Menu_SubMenuDontStartSloppyOnLeave Since Qt 5.5. Do not
+        start sloppy timers when the mouse leaves a sub-menu.
 
     \value SH_ScrollView_FrameOnlyAroundContents  Whether scrollviews
         draw their frame only around contents (like Motif), or around
@@ -1733,6 +1798,8 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SH_ComboBox_Popup  Allows popups as a combobox drop-down
         menu.
 
+    \omitvalue SH_ComboBox_UseNativePopup
+
     \value SH_Workspace_FillSpaceOnMaximize  The workspace should
         maximize the client area.
 
@@ -1764,13 +1831,15 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SH_LineEdit_PasswordCharacter  The Unicode character to be
     used for passwords.
 
+    \value SH_LineEdit_PasswordMaskDelay  Determines the delay before visible character is masked
+    with password character, in milliseconds. This enum value was added in Qt 5.4.
+
     \value SH_Table_GridLineColor The RGB value of the grid for a table.
 
     \value SH_UnderlineShortcut  Whether shortcuts are underlined.
 
-    \value SH_SpellCheckUnderlineStyle  A
-        QTextCharFormat::UnderlineStyle value that specifies the way
-        misspelled words should be underlined.
+    \value SH_SpellCheckUnderlineStyle  Obsolete. Use SpellCheckUnderlineStyle
+    hint in QPlatformTheme instead.
 
     \value SH_SpinBox_AnimateButton  Animate a click when up or down is
     pressed in a spin box.
@@ -1891,12 +1960,59 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SH_ScrollBar_Transient Determines if the style supports transient scroll bars. Transient
            scroll bars appear when the content is scrolled and disappear when they are no longer needed.
 
+    \value SH_Menu_SupportsSections Determines if the style displays sections in menus or treat them as
+           plain separators. Sections are separators with a text and icon hint.
+
+    \value SH_ToolTip_WakeUpDelay Determines the delay before a tooltip is shown, in milliseconds.
+
+    \value SH_ToolTip_FallAsleepDelay Determines the delay (in milliseconds) before a new wake time is needed when
+           a tooltip is shown (notice: shown, not hidden). When a new wake isn't needed, a user-requested tooltip
+           will be shown nearly instantly.
+
+    \value SH_Widget_Animate Deprecated. Use \l{SH_Widget_Animation_Duration} instead.
+
+    \value SH_Splitter_OpaqueResize Determines if resizing is opaque
+           This enum value has been introduced in Qt 5.2
+
+    \value SH_TabBar_ChangeCurrentDelay Determines the delay before the current
+           tab is changed while dragging over the tabbar, in milliseconds. This
+           enum value has been introduced in Qt 5.4
+
+    \value SH_ItemView_ScrollMode The default vertical and horizontal scroll mode as specified
+           by the style. Can be overridden with QAbstractItemView::setVerticalScrollMode() and
+           QAbstractItemView::setHorizontalScrollMode(). This enum value has been introduced in Qt 5.7.
+
+    \value SH_TitleBar_ShowToolTipsOnButtons
+           Determines if tool tips are shown on window title bar buttons.
+           The Mac style, for example, sets this to false.
+           This enum value has been introduced in Qt 5.10.
+
+    \value SH_Widget_Animation_Duration
+           Determines how much an animation should last (in ms).
+           A value equal to zero means that the animations will be disabled.
+           This enum value has been introduced in Qt 5.10.
+
+    \value SH_ComboBox_AllowWheelScrolling
+           Determines if the mouse wheel can be used to scroll inside a QComboBox.
+           This is on by default in all styles except the Mac style.
+           This enum value has been introduced in Qt 5.10.
+
+    \value SH_SpinBox_ButtonsInsideFrame
+           Determnines if the spin box buttons are inside the line edit frame.
+           This enum value has been introduced in Qt 5.11.
+
+    \value SH_SpinBox_StepModifier
+           Determines which Qt::KeyboardModifier increases the step rate of
+           QAbstractSpinBox. Possible values are Qt::NoModifier,
+           Qt::ControlModifier (default) or Qt::ShiftModifier. Qt::NoModifier
+           disables this feature.
+           This enum value has been introduced in Qt 5.12.
+
     \sa styleHint()
 */
 
 /*!
-    \fn int QStyle::styleHint(StyleHint hint, const QStyleOption *option, \
-                              const QWidget *widget, QStyleHintReturn *returnData) const
+    \fn int QStyle::styleHint(StyleHint hint, const QStyleOption *option, const QWidget *widget, QStyleHintReturn *returnData) const
 
     Returns an integer representing the specified style \a hint for
     the given \a widget described by the provided style \a option.
@@ -1983,6 +2099,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value SP_MediaSeekBackward Icon indicating that media should seek backward.
     \value SP_MediaVolume Icon indicating a volume control.
     \value SP_MediaVolumeMuted Icon indicating a muted volume control.
+    \value SP_LineEditClearButton Icon for a standard clear button in a QLineEdit. This enum value was added in Qt 5.2.
     \value SP_CustomBase  Base value for custom standard pixmaps;
     custom values must be greater than this value.
 
@@ -2007,8 +2124,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
 */
 
 /*!
-    \fn QPixmap QStyle::standardPixmap(StandardPixmap standardPixmap, const QStyleOption *option, \
-                                       const QWidget *widget) const
+    \fn QPixmap QStyle::standardPixmap(StandardPixmap standardPixmap, const QStyleOption *option, const QWidget *widget) const
 
     \obsolete
     Returns a pixmap for the given \a standardPixmap.
@@ -2189,11 +2305,12 @@ int QStyle::sliderValueFromPosition(int min, int max, int pos, int span, bool up
      Returns the style's standard palette.
 
     Note that on systems that support system colors, the style's
-    standard palette is not used. In particular, the Windows XP,
-    Vista, and Mac styles do not use the standard palette, but make
+    standard palette is not used. In particular, the Windows
+    Vista and Mac styles do not use the standard palette, but make
     use of native theme engines. With these styles, you should not set
-    the palette with QApplication::setStandardPalette().
+    the palette with QApplication::setPalette().
 
+    \sa QApplication::setPalette()
  */
 QPalette QStyle::standardPalette() const
 {
@@ -2284,51 +2401,24 @@ int QStyle::combinedLayoutSpacing(QSizePolicy::ControlTypes controls1,
     return result;
 }
 
+// ### Qt 6: Remove in favor of template<class T> QDebug operator<<(QDebug, const QFlags<T> &).
+#if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 QT_BEGIN_INCLUDE_NAMESPACE
-#include <QDebug>
+#  include <QDebug>
 QT_END_INCLUDE_NAMESPACE
 
-#if !defined(QT_NO_DEBUG_STREAM)
+#  if !defined(QT_NO_DEBUG_STREAM)
 QDebug operator<<(QDebug debug, QStyle::State state)
 {
-#if !defined(QT_NO_DEBUG)
-    debug << "QStyle::State(";
-
-    QStringList states;
-    if (state & QStyle::State_Active) states << QLatin1String("Active");
-    if (state & QStyle::State_AutoRaise) states << QLatin1String("AutoRaise");
-    if (state & QStyle::State_Bottom) states << QLatin1String("Bottom");
-    if (state & QStyle::State_Children) states << QLatin1String("Children");
-    if (state & QStyle::State_DownArrow) states << QLatin1String("DownArrow");
-    if (state & QStyle::State_Editing) states << QLatin1String("Editing");
-    if (state & QStyle::State_Enabled) states << QLatin1String("Enabled");
-    if (state & QStyle::State_FocusAtBorder) states << QLatin1String("FocusAtBorder");
-    if (state & QStyle::State_HasFocus) states << QLatin1String("HasFocus");
-    if (state & QStyle::State_Horizontal) states << QLatin1String("Horizontal");
-    if (state & QStyle::State_Item) states << QLatin1String("Item");
-    if (state & QStyle::State_KeyboardFocusChange) states << QLatin1String("KeyboardFocusChange");
-    if (state & QStyle::State_MouseOver) states << QLatin1String("MouseOver");
-    if (state & QStyle::State_NoChange) states << QLatin1String("NoChange");
-    if (state & QStyle::State_Off) states << QLatin1String("Off");
-    if (state & QStyle::State_On) states << QLatin1String("On");
-    if (state & QStyle::State_Open) states << QLatin1String("Open");
-    if (state & QStyle::State_Raised) states << QLatin1String("Raised");
-    if (state & QStyle::State_ReadOnly) states << QLatin1String("ReadOnly");
-    if (state & QStyle::State_Selected) states << QLatin1String("Selected");
-    if (state & QStyle::State_Sibling) states << QLatin1String("Sibling");
-    if (state & QStyle::State_Sunken) states << QLatin1String("Sunken");
-    if (state & QStyle::State_Top) states << QLatin1String("Top");
-    if (state & QStyle::State_UpArrow) states << QLatin1String("UpArrow");
-
-    qSort(states);
-    debug << states.join(QLatin1String(" | "));
-    debug << ')';
-#else
+#    if !defined(QT_NO_DEBUG)
+    return operator<< <QStyle::StateFlag>(debug, state);
+#    else
     Q_UNUSED(state);
-#endif
     return debug;
+#    endif
 }
-#endif
+#  endif // !QT_NO_DEBUG_STREAM
+#endif // QT_VERSION < QT_VERSION_CHECK(6,0,0)
 
 /*!
     \since 4.6
@@ -2358,3 +2448,5 @@ void QStyle::setProxy(QStyle *style)
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qstyle.cpp"

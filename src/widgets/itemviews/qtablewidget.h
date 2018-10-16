@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,14 @@
 #ifndef QTABLEWIDGET_H
 #define QTABLEWIDGET_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qtableview.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qvector.h>
-//#include <QtWidgets/qitemselectionmodel.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(tablewidget);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_TABLEWIDGET
 
 class Q_WIDGETS_EXPORT QTableWidgetSelectionRange
 {
@@ -121,7 +116,7 @@ public:
     inline void setToolTip(const QString &toolTip);
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     inline QString whatsThis() const
         { return data(Qt::WhatsThisRole).toString(); }
     inline void setWhatsThis(const QString &whatsThis);
@@ -201,7 +196,7 @@ inline void QTableWidgetItem::setToolTip(const QString &atoolTip)
 { setData(Qt::ToolTipRole, atoolTip); }
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
 inline void QTableWidgetItem::setWhatsThis(const QString &awhatsThis)
 { setData(Qt::WhatsThisRole, awhatsThis); }
 #endif
@@ -224,8 +219,8 @@ class Q_WIDGETS_EXPORT QTableWidget : public QTableView
 
     friend class QTableModel;
 public:
-    explicit QTableWidget(QWidget *parent = 0);
-    QTableWidget(int rows, int columns, QWidget *parent = 0);
+    explicit QTableWidget(QWidget *parent = nullptr);
+    QTableWidget(int rows, int columns, QWidget *parent = nullptr);
     ~QTableWidget();
 
     void setRowCount(int rows);
@@ -266,6 +261,8 @@ public:
     void editItem(QTableWidgetItem *item);
     void openPersistentEditor(QTableWidgetItem *item);
     void closePersistentEditor(QTableWidgetItem *item);
+    using QAbstractItemView::isPersistentEditorOpen;
+    bool isPersistentEditorOpen(QTableWidgetItem *item) const;
 
     QWidget *cellWidget(int row, int column) const;
     void setCellWidget(int row, int column, QWidget *widget);
@@ -305,6 +302,7 @@ Q_SIGNALS:
 
     void itemActivated(QTableWidgetItem *item);
     void itemEntered(QTableWidgetItem *item);
+    // ### Qt 6: add changed roles
     void itemChanged(QTableWidgetItem *item);
 
     void currentItemChanged(QTableWidgetItem *current, QTableWidgetItem *previous);
@@ -321,19 +319,35 @@ Q_SIGNALS:
     void currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn);
 
 protected:
-    bool event(QEvent *e);
+    bool event(QEvent *e) override;
     virtual QStringList mimeTypes() const;
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    virtual QMimeData *mimeData(const QList<QTableWidgetItem *> &items) const;
+#else
     virtual QMimeData *mimeData(const QList<QTableWidgetItem*> items) const;
+#endif
     virtual bool dropMimeData(int row, int column, const QMimeData *data, Qt::DropAction action);
     virtual Qt::DropActions supportedDropActions() const;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+public:
+#else
+protected:
+#endif
     QList<QTableWidgetItem*> items(const QMimeData *data) const;
 
-    QModelIndex indexFromItem(QTableWidgetItem *item) const;
+    QModelIndex indexFromItem(const QTableWidgetItem *item) const;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    QModelIndex indexFromItem(QTableWidgetItem *item) const; // ### Qt 6: remove
+#endif
     QTableWidgetItem *itemFromIndex(const QModelIndex &index) const;
-    void dropEvent(QDropEvent *event);
 
+protected:
+#if QT_CONFIG(draganddrop)
+    void dropEvent(QDropEvent *event) override;
+#endif
 private:
-    void setModel(QAbstractItemModel *model);
+    void setModel(QAbstractItemModel *model) override;
 
     Q_DECLARE_PRIVATE(QTableWidget)
     Q_DISABLE_COPY(QTableWidget)
@@ -350,7 +364,7 @@ private:
 };
 
 inline void QTableWidget::removeCellWidget(int arow, int acolumn)
-{ setCellWidget(arow, acolumn, 0); }
+{ setCellWidget(arow, acolumn, nullptr); }
 
 inline QTableWidgetItem *QTableWidget::itemAt(int ax, int ay) const
 { return itemAt(QPoint(ax, ay)); }
@@ -367,10 +381,6 @@ inline void QTableWidgetItem::setSelected(bool aselect)
 inline bool QTableWidgetItem::isSelected() const
 { return (view ? view->isItemSelected(this) : false); }
 
-#endif // QT_NO_TABLEWIDGET
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTABLEWIDGET_H

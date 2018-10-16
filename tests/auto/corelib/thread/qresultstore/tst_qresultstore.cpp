@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +31,11 @@
 #include <qresultstore.h>
 
 using namespace QtPrivate;
+
+struct ResultStoreInt : ResultStoreBase
+{
+    ~ResultStoreInt() { clear<int>(); }
+};
 
 class tst_QtConcurrentResultStore : public QObject
 {
@@ -80,25 +72,25 @@ void tst_QtConcurrentResultStore::init()
 
 void tst_QtConcurrentResultStore::construction()
 {
-    ResultStore<int> store;
+    ResultStoreBase store;
     QCOMPARE(store.count(), 0);
 }
 
 void tst_QtConcurrentResultStore::iterators()
 {
     {
-        ResultStore<int> store;
-        QVERIFY(store.begin() == store.end());
-        QVERIFY(store.resultAt(0) == store.end());
-        QVERIFY(store.resultAt(1) == store.end());
+        ResultStoreBase store;
+        QCOMPARE(store.begin(), store.end());
+        QCOMPARE(store.resultAt(0), store.end());
+        QCOMPARE(store.resultAt(1), store.end());
     }
     {
-        ResultStoreBase storebase;
+        ResultStoreInt storebase;
         storebase.addResult(-1, &int0); // note to self: adding a pointer to the stack here is ok since
         storebase.addResult(1, &int1);  // ResultStoreBase does not take ownership, only ResultStore<> does.
         ResultIteratorBase it = storebase.begin();
         QCOMPARE(it.resultIndex(), 0);
-        QVERIFY(it == storebase.begin());
+        QCOMPARE(it, storebase.begin());
         QVERIFY(it != storebase.end());
 
         ++it;
@@ -108,7 +100,7 @@ void tst_QtConcurrentResultStore::iterators()
 
         ++it;
         QVERIFY(it != storebase.begin());
-        QVERIFY(it == storebase.end());
+        QCOMPARE(it, storebase.end());
     }
 }
 
@@ -116,7 +108,7 @@ void tst_QtConcurrentResultStore::addResult()
 {
     {
         // test addResult return value
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
 
         QCOMPARE(store.addResult(0, &int0), 0);
@@ -162,13 +154,12 @@ void tst_QtConcurrentResultStore::addResult()
 
 void tst_QtConcurrentResultStore::addResults()
 {
-
-    ResultStoreBase store;
-    store.addResults(-1, &vec0, 2, 2);
-    store.addResults(-1, &vec1, 2, 2);
+    ResultStoreInt store;
+    store.addResults(-1, &vec0);
+    store.addResults(-1, &vec1);
     ResultIteratorBase it = store.begin();
     QCOMPARE(it.resultIndex(), 0);
-    QVERIFY(it == store.begin());
+    QCOMPARE(it, store.begin());
     QVERIFY(it != store.end());
 
     ++it;
@@ -183,12 +174,12 @@ void tst_QtConcurrentResultStore::addResults()
     QCOMPARE(it.resultIndex(), 3);
 
     ++it;
-    QVERIFY(it == store.end());
+    QCOMPARE(it, store.end());
 }
 
 void tst_QtConcurrentResultStore::resultIndex()
 {
-    ResultStore<int> store;
+    ResultStoreInt store;
     store.addResult(-1, &int0);
     store.addResults(-1, &vec0);
     store.addResult(-1, &int1);
@@ -212,41 +203,41 @@ void tst_QtConcurrentResultStore::resultIndex()
     ++it;
     QVERIFY(it == store.end());
 
-    QCOMPARE(store.resultAt(0).value(), int0);
-    QCOMPARE(store.resultAt(1).value(), vec0[0]);
-    QCOMPARE(store.resultAt(2).value(), vec0[1]);
-    QCOMPARE(store.resultAt(3).value(), int1);
+    QCOMPARE(store.resultAt(0).value<int>(), int0);
+    QCOMPARE(store.resultAt(1).value<int>(), vec0[0]);
+    QCOMPARE(store.resultAt(2).value<int>(), vec0[1]);
+    QCOMPARE(store.resultAt(3).value<int>(), int1);
 }
 
 void tst_QtConcurrentResultStore::resultAt()
 {
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(-1, &int0);
         store.addResults(-1, &vec0);
         store.addResult(200, &int1);
 
-        QCOMPARE(store.resultAt(0).value(), int0);
-        QCOMPARE(store.resultAt(1).value(), vec0[0]);
-        QCOMPARE(store.resultAt(2).value(), vec0[1]);
-        QCOMPARE(store.resultAt(200).value(), int1);
+        QCOMPARE(store.resultAt(0).value<int>(), int0);
+        QCOMPARE(store.resultAt(1).value<int>(), vec0[0]);
+        QCOMPARE(store.resultAt(2).value<int>(), vec0[1]);
+        QCOMPARE(store.resultAt(200).value<int>(), int1);
     }
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(1, &int1);
         store.addResult(0, &int0);
         store.addResult(-1, &int2);
 
-        QCOMPARE(store.resultAt(0).value(), int0);
-        QCOMPARE(store.resultAt(1).value(), int1);
-        QCOMPARE(store.resultAt(2).value(), int2);
+        QCOMPARE(store.resultAt(0).value<int>(), int0);
+        QCOMPARE(store.resultAt(1).value<int>(), int1);
+        QCOMPARE(store.resultAt(2).value<int>(), int2);
     }
 }
 
 void tst_QtConcurrentResultStore::contains()
 {
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         QCOMPARE(store.contains(0), false);
         QCOMPARE(store.contains(1), false);
         QCOMPARE(store.contains(INT_MAX), false);
@@ -258,7 +249,7 @@ void tst_QtConcurrentResultStore::contains()
         QVERIFY(store.contains(int2));
     }
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(1, &int0);
         store.addResult(3, &int0);
         store.addResults(6, &vec0);
@@ -273,7 +264,7 @@ void tst_QtConcurrentResultStore::contains()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResult(1, &int0);
         store.addResult(3, &int0);
@@ -289,7 +280,7 @@ void tst_QtConcurrentResultStore::contains()
 
         store.addCanceledResult(0);
         store.addCanceledResult(2);
-        store.addCanceledResults(4, 2);
+        store.addCanceledResults<int>(4, 2);
 
         QCOMPARE(store.contains(0), true);
         QCOMPARE(store.contains(1), true);
@@ -301,7 +292,7 @@ void tst_QtConcurrentResultStore::contains()
         QCOMPARE(store.contains(7), false);
     }
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addCanceledResult(0);
         QCOMPARE(store.contains(0), false);
@@ -315,7 +306,7 @@ void tst_QtConcurrentResultStore::contains()
 void tst_QtConcurrentResultStore::filterMode()
 {
     // Test filter mode, where "gaps" in the result array aren't allowed.
-    ResultStore<int> store;
+    ResultStoreInt store;
     QCOMPARE(store.filterMode(), false);
     store.setFilterMode(true);
     QVERIFY(store.filterMode());
@@ -352,7 +343,7 @@ void tst_QtConcurrentResultStore::filterMode()
 void tst_QtConcurrentResultStore::addCanceledResult()
 {
     // test canceled results
-    ResultStore<int> store;
+    ResultStoreInt store;
     store.setFilterMode(true);
 
     store.addResult(0, &int0);
@@ -392,7 +383,7 @@ void tst_QtConcurrentResultStore::count()
     {
         // test resultCount in non-filtered mode. It should always be possible
         // to iterate through the results 0 to resultCount.
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(0, &int0);
 
         QCOMPARE(store.count(), 1);
@@ -406,7 +397,7 @@ void tst_QtConcurrentResultStore::count()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(2, &int0);
         QCOMPARE(store.count(), 0);
 
@@ -418,7 +409,7 @@ void tst_QtConcurrentResultStore::count()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(2, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -430,7 +421,7 @@ void tst_QtConcurrentResultStore::count()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(2, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -438,7 +429,7 @@ void tst_QtConcurrentResultStore::count()
         QCOMPARE(store.count(), 4);
     }
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -450,7 +441,7 @@ void tst_QtConcurrentResultStore::count()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
@@ -463,22 +454,22 @@ void tst_QtConcurrentResultStore::count()
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
-        store.addCanceledResults(0, 3);
+        store.addCanceledResults<int>(0, 3);
         QCOMPARE(store.count(), 2);
     }
 
     {
-        ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
-        store.addCanceledResults(0, 3);
+        store.addCanceledResults<int>(0, 3);
         QCOMPARE(store.count(), 2);  // results at 3 and 4 become available at index 0, 1
 
         store.addResult(5, &int0);

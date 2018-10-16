@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,92 +50,137 @@
 //
 // We mean it.
 //
+
+#include <QtPrintSupport/private/qtprintsupportglobal_p.h>
+#include <QtPrintSupport/private/qprint_p.h>
 #include "QtCore/qstring.h"
 #include "QtCore/qstringlist.h"
-#include "QtCore/qpair.h"
 #include "QtPrintSupport/qprinter.h"
+#include "QtCore/qdatetime.h"
 
-#ifndef QT_NO_CUPS
-#include <QtCore/qlibrary.h>
-#include <cups/cups.h>
-#include <cups/ppd.h>
-#include "qprintengine.h"
+QT_REQUIRE_CONFIG(cups);
 
 QT_BEGIN_NAMESPACE
+
+class QPrintDevice;
 
 // HACK! Define these here temporarily so they can be used in the dialogs
 // without a circular reference to QCupsPrintEngine in the plugin.
 // Move back to qcupsprintengine_p.h in the plugin once all usage
 // removed from the dialogs.
 #define PPK_CupsOptions QPrintEngine::PrintEnginePropertyKey(0xfe00)
-#define PPK_CupsPageRect QPrintEngine::PrintEnginePropertyKey(0xfe01)
-#define PPK_CupsPaperRect QPrintEngine::PrintEnginePropertyKey(0xfe02)
-#define PPK_CupsStringPageSize QPrintEngine::PrintEnginePropertyKey(0xfe03)
 
-Q_DECLARE_TYPEINFO(cups_option_t, Q_MOVABLE_TYPE | Q_PRIMITIVE_TYPE);
+#define PDPK_PpdFile          QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase)
+#define PDPK_PpdOption        QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 1)
+#define PDPK_CupsJobPriority  QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 2)
+#define PDPK_CupsJobSheets    QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 3)
+#define PDPK_CupsJobBilling   QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 4)
+#define PDPK_CupsJobHoldUntil QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 5)
+#define PDPK_PpdChoiceIsInstallableConflict QPrintDevice::PrintDevicePropertyKey(QPrintDevice::PDPK_CustomBase + 6)
 
 class Q_PRINTSUPPORT_EXPORT QCUPSSupport
 {
 public:
-    struct Printer
-    {
-        Printer(const QString &name = QString());
-
-        QString name;
-        bool isDefault;
-        int cupsPrinterIndex;
+    // Enum for values of job-hold-until option
+    enum JobHoldUntil {
+        NoHold = 0,  //CUPS Default
+        Indefinite,
+        DayTime,
+        Night,
+        SecondShift,
+        ThirdShift,
+        Weekend,
+        SpecificTime
     };
-    QCUPSSupport();
-    ~QCUPSSupport();
 
-    static bool isAvailable();
-    static int cupsVersion() { return isAvailable() ? CUPS_VERSION_MAJOR*10000+CUPS_VERSION_MINOR*100+CUPS_VERSION_PATCH : 0; }
-    int availablePrintersCount() const;
-    const cups_dest_t* availablePrinters() const;
-    int currentPrinterIndex() const;
-    const ppd_file_t* setCurrentPrinter(int index);
+    // Enum for valid banner pages
+    enum BannerPage {
+        NoBanner = 0,  //CUPS Default 'none'
+        Standard,
+        Unclassified,
+        Confidential,
+        Classified,
+        Secret,
+        TopSecret
+    };
 
-    const ppd_file_t* currentPPD() const;
-    const ppd_option_t* ppdOption(const char *key) const;
+    // Enum for valid page set
+    enum PageSet {
+        AllPages = 0,  //CUPS Default
+        OddPages,
+        EvenPages
+    };
 
-    const cups_option_t* printerOption(const QString &key) const;
-    const ppd_option_t* pageSizes() const;
+    // Enum for valid number of pages per sheet
+    enum PagesPerSheet {
+        OnePagePerSheet = 0,
+        TwoPagesPerSheet,
+        FourPagesPerSheet,
+        SixPagesPerSheet,
+        NinePagesPerSheet,
+        SixteenPagesPerSheet
+    };
 
-    int markOption(const char* name, const char* value);
-    void saveOptions(QList<const ppd_option_t*> options, QList<const char*> markedOptions);
+    // Enum for valid layouts of pages per sheet
+    enum PagesPerSheetLayout {
+        LeftToRightTopToBottom = 0,
+        LeftToRightBottomToTop,
+        RightToLeftTopToBottom,
+        RightToLeftBottomToTop,
+        BottomToTopLeftToRight,
+        BottomToTopRightToLeft,
+        TopToBottomLeftToRight,
+        TopToBottomRightToLeft
+    };
 
-    QRect paperRect(const char *choice) const;
-    QRect pageRect(const char *choice) const;
+    static void setCupsOption(QPrinter *printer, const QString &option, const QString &value);
+    static void clearCupsOption(QPrinter *printer, const QString &option);
+    static void clearCupsOptions(QPrinter *printer);
 
-    QStringList options() const;
+    static void setJobHold(QPrinter *printer, const JobHoldUntil jobHold = NoHold, const QTime &holdUntilTime = QTime());
+    static void setJobBilling(QPrinter *printer, const QString &jobBilling = QString());
+    static void setJobPriority(QPrinter *printer, int priority = 50);
+    static void setBannerPages(QPrinter *printer, const BannerPage startBannerPage, const BannerPage endBannerPage);
+    static void setPageSet(QPrinter *printer, const PageSet pageSet);
+    static void setPagesPerSheetLayout(QPrinter *printer, const PagesPerSheet pagesPerSheet,
+                                       const PagesPerSheetLayout pagesPerSheetLayout);
+    static void setPageRange(QPrinter *printer, int pageFrom, int pageTo);
+    static void setPageRange(QPrinter *printer, const QString &pageRange);
 
-    static bool printerHasPPD(const char *printerName);
+    struct JobSheets
+    {
+        JobSheets(BannerPage s = NoBanner, BannerPage e = NoBanner)
+         : startBannerPage(s), endBannerPage(e) {}
 
-    QString unicodeString(const char *s);
+        BannerPage startBannerPage;
+        BannerPage endBannerPage;
+    };
+    static JobSheets parseJobSheets(const QString &jobSheets);
 
-    QPair<int, QString> tempFd();
-    int printFile(const char * printerName, const char * filename, const char * title,
-                  int num_options, cups_option_t * options);
+    struct JobHoldUntilWithTime
+    {
+        JobHoldUntilWithTime(JobHoldUntil jh = NoHold, const QTime &t = QTime())
+            : jobHold(jh), time(t) {}
 
-    static QList<Printer> availableUnixPrinters();
-    static QList<QPrinter::PaperSize> getCupsPrinterPaperSizes(int cupsPrinterIndex);
+        JobHoldUntil jobHold;
+        QTime time;
+    };
+    static JobHoldUntilWithTime parseJobHoldUntil(const QString &jobHoldUntil);
 
-private:
-    void collectMarkedOptions(QStringList& list, const ppd_group_t* group = 0) const;
-    void collectMarkedOptionsHelper(QStringList& list, const ppd_group_t* group) const;
-
-    int prnCount;
-    cups_dest_t *printers;
-    const ppd_option_t* page_sizes;
-    int currPrinterIndex;
-    ppd_file_t *currPPD;
-#ifndef QT_NO_TEXTCODEC
-    QTextCodec *codec;
-#endif
+    static ppd_option_t *findPpdOption(const char *optionName, QPrintDevice *printDevice);
 };
+Q_DECLARE_TYPEINFO(QCUPSSupport::JobHoldUntil,        Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(QCUPSSupport::BannerPage,          Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(QCUPSSupport::PageSet,             Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(QCUPSSupport::PagesPerSheetLayout, Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(QCUPSSupport::PagesPerSheet,       Q_PRIMITIVE_TYPE);
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_CUPS
+Q_DECLARE_METATYPE(QCUPSSupport::JobHoldUntil)
+Q_DECLARE_METATYPE(QCUPSSupport::BannerPage)
+Q_DECLARE_METATYPE(QCUPSSupport::PageSet)
+Q_DECLARE_METATYPE(QCUPSSupport::PagesPerSheetLayout)
+Q_DECLARE_METATYPE(QCUPSSupport::PagesPerSheet)
 
 #endif

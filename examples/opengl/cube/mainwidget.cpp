@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,39 +50,32 @@
 
 #include "mainwidget.h"
 
-#include "geometryengine.h"
-
-#include <QtOpenGL/QGLShaderProgram>
-
-#include <QBasicTimer>
 #include <QMouseEvent>
-#include <QDebug>
 
 #include <math.h>
-#include <locale.h>
 
 MainWidget::MainWidget(QWidget *parent) :
-    QGLWidget(parent),
-    timer(new QBasicTimer),
-    program(new QGLShaderProgram),
-    geometries(new GeometryEngine),
+    QOpenGLWidget(parent),
+    geometries(0),
+    texture(0),
     angularSpeed(0)
 {
 }
 
 MainWidget::~MainWidget()
 {
-    delete timer; timer = 0;
-    delete program; program = 0;
-    delete geometries; geometries = 0;
-
-    deleteTexture(texture);
+    // Make sure the context is current when deleting the texture
+    // and the buffers.
+    makeCurrent();
+    delete texture;
+    delete geometries;
+    doneCurrent();
 }
 
 //! [0]
 void MainWidget::mousePressEvent(QMouseEvent *e)
 {
-    // Saving mouse press position
+    // Save mouse press position
     mousePressPosition = QVector2D(e->localPos());
 }
 
@@ -81,7 +84,7 @@ void MainWidget::mouseReleaseEvent(QMouseEvent *e)
     // Mouse release position - mouse press position
     QVector2D diff = QVector2D(e->localPos()) - mousePressPosition;
 
-    // Rotation axis is perpendicular to the mouse position difference 
+    // Rotation axis is perpendicular to the mouse position difference
     // vector
     QVector3D n = QVector3D(diff.y(), diff.x(), 0.0).normalized();
 
@@ -97,36 +100,31 @@ void MainWidget::mouseReleaseEvent(QMouseEvent *e)
 //! [0]
 
 //! [1]
-void MainWidget::timerEvent(QTimerEvent *e)
+void MainWidget::timerEvent(QTimerEvent *)
 {
-    Q_UNUSED(e);
-
     // Decrease angular speed (friction)
     angularSpeed *= 0.99;
 
     // Stop rotation when speed goes below threshold
-    if (angularSpeed < 0.01)
+    if (angularSpeed < 0.01) {
         angularSpeed = 0.0;
-    else {
+    } else {
         // Update rotation
         rotation = QQuaternion::fromAxisAndAngle(rotationAxis, angularSpeed) * rotation;
 
-        // Update scene
-        updateGL();
+        // Request an update
+        update();
     }
 }
 //! [1]
 
 void MainWidget::initializeGL()
 {
-    initializeGLFunctions();
+    initializeOpenGLFunctions();
 
-    qglClearColor(Qt::black);
+    glClearColor(0, 0, 0, 1);
 
-    qDebug() << "Initializing shaders...";
     initShaders();
-
-    qDebug() << "Initializing textures...";
     initTextures();
 
 //! [2]
@@ -137,68 +135,56 @@ void MainWidget::initializeGL()
     glEnable(GL_CULL_FACE);
 //! [2]
 
-    qDebug() << "Initializing geometries...";
-    geometries->init();
+    geometries = new GeometryEngine;
 
-    // using QBasicTimer because its faster that QTimer
-    timer->start(12, this);
+    // Use QBasicTimer because its faster than QTimer
+    timer.start(12, this);
 }
 
 //! [3]
 void MainWidget::initShaders()
 {
-    // Overriding system locale until shaders are compiled
-    setlocale(LC_NUMERIC, "C");
-
-    // Compiling vertex shader
-    if (!program->addShaderFromSourceFile(QGLShader::Vertex, ":/vshader.glsl"))
+    // Compile vertex shader
+    if (!program.addShaderFromSourceFile(QOpenGLShader::Vertex, ":/vshader.glsl"))
         close();
 
-    // Compiling fragment shader
-    if (!program->addShaderFromSourceFile(QGLShader::Fragment, ":/fshader.glsl"))
+    // Compile fragment shader
+    if (!program.addShaderFromSourceFile(QOpenGLShader::Fragment, ":/fshader.glsl"))
         close();
 
-    // Linking shader pipeline
-    if (!program->link())
+    // Link shader pipeline
+    if (!program.link())
         close();
 
-    // Binding shader pipeline for use
-    if (!program->bind())
+    // Bind shader pipeline for use
+    if (!program.bind())
         close();
-
-    // Restore system locale
-    setlocale(LC_ALL, "");
 }
 //! [3]
 
 //! [4]
 void MainWidget::initTextures()
 {
-    // Loading cube.png
-    glEnable(GL_TEXTURE_2D);
-    texture = bindTexture(QImage(":/cube.png"));
+    // Load cube.png image
+    texture = new QOpenGLTexture(QImage(":/cube.png").mirrored());
 
     // Set nearest filtering mode for texture minification
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    texture->setMinificationFilter(QOpenGLTexture::Nearest);
 
     // Set bilinear filtering mode for texture magnification
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    texture->setMagnificationFilter(QOpenGLTexture::Linear);
 
     // Wrap texture coordinates by repeating
     // f.ex. texture coordinate (1.1, 1.2) is same as (0.1, 0.2)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    texture->setWrapMode(QOpenGLTexture::Repeat);
 }
 //! [4]
 
 //! [5]
 void MainWidget::resizeGL(int w, int h)
 {
-    // Set OpenGL viewport to cover whole widget
-    glViewport(0, 0, w, h);
-
     // Calculate aspect ratio
-    qreal aspect = (qreal)w / ((qreal)h?h:1);
+    qreal aspect = qreal(w) / qreal(h ? h : 1);
 
     // Set near plane to 3.0, far plane to 7.0, field of view 45 degrees
     const qreal zNear = 3.0, zFar = 7.0, fov = 45.0;
@@ -216,6 +202,8 @@ void MainWidget::paintGL()
     // Clear color and depth buffer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    texture->bind();
+
 //! [6]
     // Calculate model view transformation
     QMatrix4x4 matrix;
@@ -223,12 +211,12 @@ void MainWidget::paintGL()
     matrix.rotate(rotation);
 
     // Set modelview-projection matrix
-    program->setUniformValue("mvp_matrix", projection * matrix);
+    program.setUniformValue("mvp_matrix", projection * matrix);
 //! [6]
 
-    // Using texture unit 0 which contains cube.png
-    program->setUniformValue("texture", 0);
+    // Use texture unit 0 which contains cube.png
+    program.setUniformValue("texture", 0);
 
     // Draw cube geometry
-    geometries->drawCubeGeometry(program);
+    geometries->drawCubeGeometry(&program);
 }

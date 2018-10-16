@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,11 +41,13 @@
 #ifndef QOBJECTDEFS_H
 #define QOBJECTDEFS_H
 
+#if defined(__OBJC__) && !defined(__cplusplus)
+#  warning "File built in Objective-C mode (.m), but using Qt requires Objective-C++ (.mm)"
+#endif
+
 #include <QtCore/qnamespace.h>
 
 #include <QtCore/qobjectdefs_impl.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -56,9 +57,27 @@ struct QArrayData;
 typedef QArrayData QByteArrayData;
 
 class QString;
-
 #ifndef Q_MOC_OUTPUT_REVISION
 #define Q_MOC_OUTPUT_REVISION 67
+#endif
+
+// The following macros can be defined by tools that understand Qt
+// to have the information from the macro.
+#ifndef QT_ANNOTATE_CLASS
+# ifndef Q_COMPILER_VARIADIC_MACROS
+#  define QT_ANNOTATE_CLASS(type, x)
+# else
+#  define QT_ANNOTATE_CLASS(type, ...)
+# endif
+#endif
+#ifndef QT_ANNOTATE_CLASS2
+# define QT_ANNOTATE_CLASS2(type, a1, a2)
+#endif
+#ifndef QT_ANNOTATE_FUNCTION
+# define QT_ANNOTATE_FUNCTION(x)
+#endif
+#ifndef QT_ANNOTATE_ACCESS_SPECIFIER
+# define QT_ANNOTATE_ACCESS_SPECIFIER(x)
 #endif
 
 // The following macros are our "extensions" to C++
@@ -70,72 +89,65 @@ class QString;
 #  define QT_NO_EMIT
 # else
 #   ifndef QT_NO_SIGNALS_SLOTS_KEYWORDS
-#     define slots
-#     define signals public
+#     define slots Q_SLOTS
+#     define signals Q_SIGNALS
 #   endif
 # endif
-# define Q_SLOTS
-# define Q_SIGNALS public
-# define Q_PRIVATE_SLOT(d, signature)
+# define Q_SLOTS QT_ANNOTATE_ACCESS_SPECIFIER(qt_slot)
+# define Q_SIGNALS public QT_ANNOTATE_ACCESS_SPECIFIER(qt_signal)
+# define Q_PRIVATE_SLOT(d, signature) QT_ANNOTATE_CLASS2(qt_private_slot, d, signature)
 # define Q_EMIT
 #ifndef QT_NO_EMIT
 # define emit
 #endif
-#define Q_CLASSINFO(name, value)
-#define Q_PLUGIN_METADATA(x)
-#define Q_INTERFACES(x)
-#define Q_PROPERTY(text)
-#define Q_PRIVATE_PROPERTY(d, text)
-#define Q_REVISION(v)
-#define Q_OVERRIDE(text)
-#define Q_ENUMS(x)
-#define Q_FLAGS(x)
-#define Q_SCRIPTABLE
-#define Q_INVOKABLE
-#define Q_SIGNAL
-#define Q_SLOT
+#ifndef Q_CLASSINFO
+# define Q_CLASSINFO(name, value)
+#endif
+#define Q_PLUGIN_METADATA(x) QT_ANNOTATE_CLASS(qt_plugin_metadata, x)
+#define Q_INTERFACES(x) QT_ANNOTATE_CLASS(qt_interfaces, x)
+#ifdef Q_COMPILER_VARIADIC_MACROS
+# define Q_PROPERTY(...) QT_ANNOTATE_CLASS(qt_property, __VA_ARGS__)
+#else
+# define Q_PROPERTY(text) QT_ANNOTATE_CLASS(qt_property, text)
+#endif
+#define Q_PRIVATE_PROPERTY(d, text) QT_ANNOTATE_CLASS2(qt_private_property, d, text)
+#ifndef Q_REVISION
+# define Q_REVISION(v)
+#endif
+#define Q_OVERRIDE(text) QT_ANNOTATE_CLASS(qt_override, text)
+#define QDOC_PROPERTY(text) QT_ANNOTATE_CLASS(qt_qdoc_property, text)
+#define Q_ENUMS(x) QT_ANNOTATE_CLASS(qt_enums, x)
+#define Q_FLAGS(x) QT_ANNOTATE_CLASS(qt_enums, x)
+#define Q_ENUM_IMPL(ENUM) \
+    friend Q_DECL_CONSTEXPR const QMetaObject *qt_getEnumMetaObject(ENUM) Q_DECL_NOEXCEPT { return &staticMetaObject; } \
+    friend Q_DECL_CONSTEXPR const char *qt_getEnumName(ENUM) Q_DECL_NOEXCEPT { return #ENUM; }
+#define Q_ENUM(x) Q_ENUMS(x) Q_ENUM_IMPL(x)
+#define Q_FLAG(x) Q_FLAGS(x) Q_ENUM_IMPL(x)
+#define Q_ENUM_NS_IMPL(ENUM) \
+    inline Q_DECL_CONSTEXPR const QMetaObject *qt_getEnumMetaObject(ENUM) Q_DECL_NOEXCEPT { return &staticMetaObject; } \
+    inline Q_DECL_CONSTEXPR const char *qt_getEnumName(ENUM) Q_DECL_NOEXCEPT { return #ENUM; }
+#define Q_ENUM_NS(x) Q_ENUMS(x) Q_ENUM_NS_IMPL(x)
+#define Q_FLAG_NS(x) Q_FLAGS(x) Q_ENUM_NS_IMPL(x)
+#define Q_SCRIPTABLE QT_ANNOTATE_FUNCTION(qt_scriptable)
+#define Q_INVOKABLE  QT_ANNOTATE_FUNCTION(qt_invokable)
+#define Q_SIGNAL QT_ANNOTATE_FUNCTION(qt_signal)
+#define Q_SLOT QT_ANNOTATE_FUNCTION(qt_slot)
 #endif // QT_NO_META_MACROS
 
 #ifndef QT_NO_TRANSLATION
 // full set of tr functions
 #  define QT_TR_FUNCTIONS \
-    static inline QString tr(const char *s, const char *c = 0, int n = -1) \
+    static inline QString tr(const char *s, const char *c = nullptr, int n = -1) \
         { return staticMetaObject.tr(s, c, n); } \
-    QT_DEPRECATED static inline QString trUtf8(const char *s, const char *c = 0, int n = -1) \
+    QT_DEPRECATED static inline QString trUtf8(const char *s, const char *c = nullptr, int n = -1) \
         { return staticMetaObject.tr(s, c, n); }
 #else
 // inherit the ones from QObject
 # define QT_TR_FUNCTIONS
 #endif
 
-#if defined(QT_NO_QOBJECT_CHECK)
-/* qmake ignore Q_OBJECT */
-#define Q_OBJECT_CHECK
-#else
-
-/* This is a compile time check that ensures that any class cast with qobject_cast
-   actually contains a Q_OBJECT macro. Note: qobject_cast will fail if a QObject
-   subclass doesn't contain Q_OBJECT.
-
-   In qt_check_for_QOBJECT_macro, we call a dummy templated function with two
-   parameters, the first being "this" and the other the target of the qobject
-   cast. If the types are not identical, we know that a Q_OBJECT macro is missing.
-
-   If you get a compiler error here, make sure that the class you are casting
-   to contains a Q_OBJECT macro.
-*/
-
-/* qmake ignore Q_OBJECT */
-#define Q_OBJECT_CHECK \
-    template <typename T> inline void qt_check_for_QOBJECT_macro(const T &_q_argument) const \
-    { int i = qYouForgotTheQ_OBJECT_Macro(this, &_q_argument); i = i + 1; }
-
-template <typename T>
-inline int qYouForgotTheQ_OBJECT_Macro(T, T) { return 0; }
-
-template <typename T1, typename T2>
-inline void qYouForgotTheQ_OBJECT_Macro(T1, T2) {}
-#endif // QT_NO_QOBJECT_CHECK
+// ### Qt6: remove
+#define Q_OBJECT_CHECK  /* empty, unused since Qt 5.2 */
 
 #if defined(Q_CC_INTEL)
 // Cannot redefine the visibility of a method in an exported class
@@ -144,28 +156,61 @@ inline void qYouForgotTheQ_OBJECT_Macro(T1, T2) {}
 # define Q_DECL_HIDDEN_STATIC_METACALL Q_DECL_HIDDEN
 #endif
 
+#if defined(Q_CC_CLANG) && Q_CC_CLANG >= 306
+#  define Q_OBJECT_NO_OVERRIDE_WARNING      QT_WARNING_DISABLE_CLANG("-Winconsistent-missing-override")
+#elif defined(Q_CC_GNU) && !defined(Q_CC_INTEL) && Q_CC_GNU >= 501
+#  define Q_OBJECT_NO_OVERRIDE_WARNING      QT_WARNING_DISABLE_GCC("-Wsuggest-override")
+#else
+#  define Q_OBJECT_NO_OVERRIDE_WARNING
+#endif
+
+#if defined(Q_CC_GNU) && !defined(Q_CC_INTEL) && Q_CC_GNU >= 600
+#  define Q_OBJECT_NO_ATTRIBUTES_WARNING    QT_WARNING_DISABLE_GCC("-Wattributes")
+#else
+#  define Q_OBJECT_NO_ATTRIBUTES_WARNING
+#endif
+
 /* qmake ignore Q_OBJECT */
 #define Q_OBJECT \
 public: \
-    Q_OBJECT_CHECK \
+    QT_WARNING_PUSH \
+    Q_OBJECT_NO_OVERRIDE_WARNING \
     static const QMetaObject staticMetaObject; \
     virtual const QMetaObject *metaObject() const; \
     virtual void *qt_metacast(const char *); \
-    QT_TR_FUNCTIONS \
     virtual int qt_metacall(QMetaObject::Call, int, void **); \
+    QT_TR_FUNCTIONS \
 private: \
+    Q_OBJECT_NO_ATTRIBUTES_WARNING \
     Q_DECL_HIDDEN_STATIC_METACALL static void qt_static_metacall(QObject *, QMetaObject::Call, int, void **); \
-    struct QPrivateSignal {};
+    QT_WARNING_POP \
+    struct QPrivateSignal {}; \
+    QT_ANNOTATE_CLASS(qt_qobject, "")
 
 /* qmake ignore Q_OBJECT */
-#define Q_OBJECT_FAKE Q_OBJECT
+#define Q_OBJECT_FAKE Q_OBJECT QT_ANNOTATE_CLASS(qt_fake, "")
 
 #ifndef QT_NO_META_MACROS
 /* qmake ignore Q_GADGET */
 #define Q_GADGET \
 public: \
     static const QMetaObject staticMetaObject; \
-private:
+    void qt_check_for_QGADGET_macro(); \
+    typedef void QtGadgetHelper; \
+private: \
+    QT_WARNING_PUSH \
+    Q_OBJECT_NO_ATTRIBUTES_WARNING \
+    Q_DECL_HIDDEN_STATIC_METACALL static void qt_static_metacall(QObject *, QMetaObject::Call, int, void **); \
+    QT_WARNING_POP \
+    QT_ANNOTATE_CLASS(qt_qgadget, "") \
+    /*end*/
+
+/* qmake ignore Q_NAMESPACE */
+#define Q_NAMESPACE \
+    extern const QMetaObject staticMetaObject; \
+    QT_ANNOTATE_CLASS(qt_qnamespace, "") \
+    /*end*/
+
 #endif // QT_NO_META_MACROS
 
 #else // Q_MOC_RUN
@@ -180,6 +225,8 @@ private:
 #define Q_REVISION(v) Q_REVISION(v)
 #define Q_OVERRIDE(text) Q_OVERRIDE(text)
 #define Q_ENUMS(x) Q_ENUMS(x)
+#define Q_FLAGS(x) Q_FLAGS(x)
+#define Q_ENUM(x) Q_ENUM(x)
 #define Q_FLAGS(x) Q_FLAGS(x)
  /* qmake ignore Q_OBJECT */
 #define Q_OBJECT Q_OBJECT
@@ -242,7 +289,7 @@ class QMetaClassInfo;
 class Q_CORE_EXPORT QGenericArgument
 {
 public:
-    inline QGenericArgument(const char *aName = 0, const void *aData = 0)
+    inline QGenericArgument(const char *aName = nullptr, const void *aData = nullptr)
         : _data(aData), _name(aName) {}
     inline void *data() const { return const_cast<void *>(_data); }
     inline const char *name() const { return _name; }
@@ -255,7 +302,7 @@ private:
 class Q_CORE_EXPORT QGenericReturnArgument: public QGenericArgument
 {
 public:
-    inline QGenericReturnArgument(const char *aName = 0, void *aData = 0)
+    inline QGenericReturnArgument(const char *aName = nullptr, void *aData = nullptr)
         : QGenericArgument(aName, aData)
         {}
 };
@@ -293,10 +340,11 @@ struct Q_CORE_EXPORT QMetaObject
     const char *className() const;
     const QMetaObject *superClass() const;
 
+    bool inherits(const QMetaObject *metaObject) const Q_DECL_NOEXCEPT;
     QObject *cast(QObject *obj) const;
     const QObject *cast(const QObject *obj) const;
 
-#ifndef QT_NO_TRANSLATION
+#if !defined(QT_NO_TRANSLATION) || defined(Q_CLANG_QDOC)
     QString tr(const char *s, const char *c, int n = -1) const;
 #endif // QT_NO_TRANSLATION
 
@@ -335,7 +383,7 @@ struct Q_CORE_EXPORT QMetaObject
     // internal index-based connect
     static Connection connect(const QObject *sender, int signal_index,
                         const QObject *receiver, int method_index,
-                        int type = 0, int *types = 0);
+                        int type = 0, int *types = nullptr);
     // internal index-based disconnect
     static bool disconnect(const QObject *sender, int signal_index,
                            const QObject *receiver, int method_index);
@@ -352,7 +400,7 @@ struct Q_CORE_EXPORT QMetaObject
     static bool invokeMethod(QObject *obj, const char *member,
                              Qt::ConnectionType,
                              QGenericReturnArgument ret,
-                             QGenericArgument val0 = QGenericArgument(0),
+                             QGenericArgument val0 = QGenericArgument(nullptr),
                              QGenericArgument val1 = QGenericArgument(),
                              QGenericArgument val2 = QGenericArgument(),
                              QGenericArgument val3 = QGenericArgument(),
@@ -365,7 +413,7 @@ struct Q_CORE_EXPORT QMetaObject
 
     static inline bool invokeMethod(QObject *obj, const char *member,
                              QGenericReturnArgument ret,
-                             QGenericArgument val0 = QGenericArgument(0),
+                             QGenericArgument val0 = QGenericArgument(nullptr),
                              QGenericArgument val1 = QGenericArgument(),
                              QGenericArgument val2 = QGenericArgument(),
                              QGenericArgument val3 = QGenericArgument(),
@@ -382,7 +430,7 @@ struct Q_CORE_EXPORT QMetaObject
 
     static inline bool invokeMethod(QObject *obj, const char *member,
                              Qt::ConnectionType type,
-                             QGenericArgument val0 = QGenericArgument(0),
+                             QGenericArgument val0 = QGenericArgument(nullptr),
                              QGenericArgument val1 = QGenericArgument(),
                              QGenericArgument val2 = QGenericArgument(),
                              QGenericArgument val3 = QGenericArgument(),
@@ -398,7 +446,7 @@ struct Q_CORE_EXPORT QMetaObject
     }
 
     static inline bool invokeMethod(QObject *obj, const char *member,
-                             QGenericArgument val0 = QGenericArgument(0),
+                             QGenericArgument val0 = QGenericArgument(nullptr),
                              QGenericArgument val1 = QGenericArgument(),
                              QGenericArgument val2 = QGenericArgument(),
                              QGenericArgument val3 = QGenericArgument(),
@@ -413,7 +461,88 @@ struct Q_CORE_EXPORT QMetaObject
                 val1, val2, val3, val4, val5, val6, val7, val8, val9);
     }
 
-    QObject *newInstance(QGenericArgument val0 = QGenericArgument(0),
+#ifdef Q_CLANG_QDOC
+    template<typename Functor, typename FunctorReturnType>
+    static bool invokeMethod(QObject *context, Functor function, Qt::ConnectionType type = Qt::AutoConnection, FunctorReturnType *ret = nullptr);
+    template<typename Functor, typename FunctorReturnType>
+    static bool invokeMethod(QObject *context, Functor function, FunctorReturnType *ret);
+#else
+
+    // invokeMethod() for member function pointer
+    template <typename Func>
+    static typename std::enable_if<QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && !std::is_convertible<Func, const char*>::value
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == 0, bool>::type
+    invokeMethod(typename QtPrivate::FunctionPointer<Func>::Object *object,
+                 Func function,
+                 Qt::ConnectionType type = Qt::AutoConnection,
+                 typename QtPrivate::FunctionPointer<Func>::ReturnType *ret = nullptr)
+    {
+        return invokeMethodImpl(object, new QtPrivate::QSlotObjectWithNoArgs<Func>(function), type, ret);
+    }
+
+    template <typename Func>
+    static typename std::enable_if<QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && !std::is_convertible<Func, const char*>::value
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == 0, bool>::type
+    invokeMethod(typename QtPrivate::FunctionPointer<Func>::Object *object,
+                 Func function,
+                 typename QtPrivate::FunctionPointer<Func>::ReturnType *ret)
+    {
+        return invokeMethodImpl(object, new QtPrivate::QSlotObjectWithNoArgs<Func>(function), Qt::AutoConnection, ret);
+    }
+
+    // invokeMethod() for function pointer (not member)
+    template <typename Func>
+    static typename std::enable_if<!QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && !std::is_convertible<Func, const char*>::value
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == 0, bool>::type
+    invokeMethod(QObject *context, Func function,
+                 Qt::ConnectionType type = Qt::AutoConnection,
+                 typename QtPrivate::FunctionPointer<Func>::ReturnType *ret = nullptr)
+    {
+        return invokeMethodImpl(context, new QtPrivate::QFunctorSlotObjectWithNoArgsImplicitReturn<Func>(function), type, ret);
+    }
+
+    template <typename Func>
+    static typename std::enable_if<!QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && !std::is_convertible<Func, const char*>::value
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == 0, bool>::type
+    invokeMethod(QObject *context, Func function,
+                 typename QtPrivate::FunctionPointer<Func>::ReturnType *ret)
+    {
+        return invokeMethodImpl(context, new QtPrivate::QFunctorSlotObjectWithNoArgsImplicitReturn<Func>(function), Qt::AutoConnection, ret);
+    }
+
+    // invokeMethod() for Functor
+    template <typename Func>
+    static typename std::enable_if<!QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == -1
+                                   && !std::is_convertible<Func, const char*>::value, bool>::type
+    invokeMethod(QObject *context, Func function,
+                 Qt::ConnectionType type = Qt::AutoConnection, decltype(function()) *ret = nullptr)
+    {
+        return invokeMethodImpl(context,
+                                new QtPrivate::QFunctorSlotObjectWithNoArgs<Func, decltype(function())>(function),
+                                type,
+                                ret);
+    }
+
+    template <typename Func>
+    static typename std::enable_if<!QtPrivate::FunctionPointer<Func>::IsPointerToMemberFunction
+                                   && QtPrivate::FunctionPointer<Func>::ArgumentCount == -1
+                                   && !std::is_convertible<Func, const char*>::value, bool>::type
+    invokeMethod(QObject *context, Func function, typename std::result_of<Func()>::type *ret)
+    {
+        return invokeMethodImpl(context,
+                                new QtPrivate::QFunctorSlotObjectWithNoArgs<Func, decltype(function())>(function),
+                                Qt::AutoConnection,
+                                ret);
+    }
+
+#endif
+
+    QObject *newInstance(QGenericArgument val0 = QGenericArgument(nullptr),
                          QGenericArgument val1 = QGenericArgument(),
                          QGenericArgument val2 = QGenericArgument(),
                          QGenericArgument val3 = QGenericArgument(),
@@ -449,16 +578,21 @@ struct Q_CORE_EXPORT QMetaObject
         const uint *data;
         typedef void (*StaticMetacallFunction)(QObject *, QMetaObject::Call, int, void **);
         StaticMetacallFunction static_metacall;
-        const QMetaObject **relatedMetaObjects;
+        const QMetaObject * const *relatedMetaObjects;
         void *extradata; //reserved for future use
     } d;
+
+private:
+    static bool invokeMethodImpl(QObject *object, QtPrivate::QSlotObjectBase *slot, Qt::ConnectionType type, void *ret);
 };
 
 class Q_CORE_EXPORT QMetaObject::Connection {
     void *d_ptr; //QObjectPrivate::Connection*
     explicit Connection(void *data) : d_ptr(data) {  }
     friend class QObject;
+    friend class QObjectPrivate;
     friend struct QMetaObject;
+    bool isConnected_helper() const;
 public:
     ~Connection();
     Connection();
@@ -468,21 +602,27 @@ public:
     operator bool() const;
 #else
     typedef void *Connection::*RestrictedBool;
-    operator RestrictedBool() const { return d_ptr ? &Connection::d_ptr : 0; }
+    operator RestrictedBool() const { return d_ptr && isConnected_helper() ? &Connection::d_ptr : nullptr; }
 #endif
 
-#ifdef Q_COMPILER_RVALUE_REFS
-    inline Connection(Connection &&o) : d_ptr(o.d_ptr) { o.d_ptr = 0; }
-    inline Connection &operator=(Connection &&other)
+    Connection(Connection &&o) Q_DECL_NOTHROW : d_ptr(o.d_ptr) { o.d_ptr = nullptr; }
+    Connection &operator=(Connection &&other) Q_DECL_NOTHROW
     { qSwap(d_ptr, other.d_ptr); return *this; }
-#endif
 };
 
 inline const QMetaObject *QMetaObject::superClass() const
 { return d.superdata; }
 
-QT_END_NAMESPACE
+namespace QtPrivate {
+    /* Trait that tells is a the Object has a Q_OBJECT macro */
+    template <typename Object> struct HasQ_OBJECT_Macro {
+        template <typename T>
+        static char test(int (T::*)(QMetaObject::Call, int, void **));
+        static int test(int (Object::*)(QMetaObject::Call, int, void **));
+        enum { Value =  sizeof(test(&Object::qt_metacall)) == sizeof(int) };
+    };
+}
 
-QT_END_HEADER
+QT_END_NAMESPACE
 
 #endif // QOBJECTDEFS_H

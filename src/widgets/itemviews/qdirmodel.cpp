@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,6 @@
 
 #include "qdirmodel.h"
 
-#ifndef QT_NO_DIRMODEL
-#include <qstack.h>
 #include <qfile.h>
 #include <qfilesystemmodel.h>
 #include <qurl.h>
@@ -55,7 +51,11 @@
 #include <qstyle.h>
 #include <qapplication.h>
 #include <private/qabstractitemmodel_p.h>
+#include <private/qfilesystementry_p.h>
 #include <qdebug.h>
+
+#include <stack>
+#include <vector>
 
 /*!
     \enum QDirModel::Roles
@@ -74,7 +74,6 @@ public:
     struct QDirNode
     {
         QDirNode() : parent(0), populated(false), stat(false) {}
-        ~QDirNode() { children.clear(); }
         QDirNode *parent;
         QFileInfo info;
         QIcon icon; // cache the icon
@@ -137,11 +136,12 @@ public:
         QPersistentModelIndexData *data;
         QPersistentModelIndex index;
     };
-    QList<SavedPersistent> savedPersistent;
+    QVector<SavedPersistent> savedPersistent;
     QPersistentModelIndex toBeRefreshed;
 
     bool shouldStat; // use the "carefull not to stat directories" mode
 };
+Q_DECLARE_TYPEINFO(QDirModelPrivate::SavedPersistent, Q_MOVABLE_TYPE);
 
 void qt_setDirModelShouldNotStat(QDirModelPrivate *modelPrivate)
 {
@@ -172,14 +172,15 @@ void QDirModelPrivate::clear(QDirNode *parent) const
 
 void QDirModelPrivate::invalidate()
 {
-    QStack<const QDirNode*> nodes;
+    std::stack<const QDirNode*, std::vector<const QDirNode*> > nodes;
     nodes.push(&root);
     while (!nodes.empty()) {
-        const QDirNode *current = nodes.pop();
+        const QDirNode *current = nodes.top();
+        nodes.pop();
         current->stat = false;
-        const QVector<QDirNode> children = current->children;
-        for (int i = 0; i < children.count(); ++i)
-            nodes.push(&children.at(i));
+        const QVector<QDirNode> &children = current->children;
+        for (const auto &child : children)
+            nodes.push(&child);
     }
 }
 
@@ -211,7 +212,7 @@ void QDirModelPrivate::invalidate()
     Directories can be created and removed using mkdir(), rmdir(), and the
     model will be automatically updated to take the changes into account.
 
-    \note QDirModel requires an instance of a GUI application.
+    \note QDirModel requires an instance of \l QApplication.
 
     \sa nameFilters(), setFilter(), filter(), QListView, QTreeView, QFileSystemModel,
     {Dir View Example}, {Model Classes}
@@ -395,8 +396,8 @@ QVariant QDirModel::data(const QModelIndex &index, int role) const
 
 /*!
   Sets the data for the model item \a index with the given \a role to
-  the data referenced by the \a value. Returns true if successful;
-  otherwise returns false.
+  the data referenced by the \a value. Returns \c true if successful;
+  otherwise returns \c false.
 
   \sa Qt::ItemDataRole
 */
@@ -456,8 +457,8 @@ QVariant QDirModel::headerData(int section, Qt::Orientation orientation, int rol
 }
 
 /*!
-  Returns true if the \a parent model item has children; otherwise
-  returns false.
+  Returns \c true if the \a parent model item has children; otherwise
+  returns \c false.
 */
 
 bool QDirModel::hasChildren(const QModelIndex &parent) const
@@ -566,7 +567,7 @@ QMimeData *QDirModel::mimeData(const QModelIndexList &indexes) const
     the given \a action over the row in the model specified by the \a row and
     \a column and by the \a parent index.
 
-    Returns true if the drop was successful, and false otherwise.
+    Returns \c true if the drop was successful, and false otherwise.
 
     \sa supportedDropActions()
 */
@@ -771,7 +772,7 @@ bool QDirModel::resolveSymlinks() const
   If this property is set to false, the directory model will allow renaming, copying
   and deleting of files and directories.
 
-  This property is true by default
+  This property is \c true by default
 */
 
 void QDirModel::setReadOnly(bool enable)
@@ -796,7 +797,7 @@ bool QDirModel::isReadOnly() const
   Otherwise the directory model will report that an item has children if the item
   is a directory.
 
-  This property is false by default
+  This property is \c false by default
 */
 
 void QDirModel::setLazyChildCount(bool enable)
@@ -857,7 +858,7 @@ QModelIndex QDirModel::index(const QString &path, int column) const
         return QModelIndex();
 
     QString absolutePath = QDir(path).absolutePath();
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     absolutePath = absolutePath.toLower();
     // On Windows, "filename......." and "filename" are equivalent
     if (absolutePath.endsWith(QLatin1Char('.'))) {
@@ -871,8 +872,8 @@ QModelIndex QDirModel::index(const QString &path, int column) const
 #endif
 
     QStringList pathElements = absolutePath.split(QLatin1Char('/'), QString::SkipEmptyParts);
-    if ((pathElements.isEmpty() || !QFileInfo(path).exists())
-#if !defined(Q_OS_WIN) || defined(Q_OS_WINCE)
+    if ((pathElements.isEmpty() || !QFileInfo::exists(path))
+#if !defined(Q_OS_WIN)
         && path != QLatin1String("/")
 #endif
         )
@@ -882,9 +883,9 @@ QModelIndex QDirModel::index(const QString &path, int column) const
     if (!d->root.populated) // make sure the root is populated
         d->populate(&d->root);
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     if (absolutePath.startsWith(QLatin1String("//"))) { // UNC path
-        QString host = pathElements.first();
+        QString host = pathElements.constFirst();
         int r = 0;
         for (; r < d->root.children.count(); ++r)
             if (d->root.children.at(r).info.fileName() == host)
@@ -900,7 +901,7 @@ QModelIndex QDirModel::index(const QString &path, int column) const
             emit const_cast<QDirModel*>(this)->layoutChanged();
     } else
 #endif
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     if (pathElements.at(0).endsWith(QLatin1Char(':'))) {
         pathElements[0] += QLatin1Char('/');
     }
@@ -924,7 +925,7 @@ QModelIndex QDirModel::index(const QString &path, int column) const
             const QFileInfo& fi = parent->children.at(j).info;
             QString childFileName;
             childFileName = idx.isValid() ? fi.fileName() : fi.absoluteFilePath();
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
             childFileName = childFileName.toLower();
 #endif
             if (childFileName == element) {
@@ -937,15 +938,7 @@ QModelIndex QDirModel::index(const QString &path, int column) const
 
         // we couldn't find the path element, we create a new node since we _know_ that the path is valid
         if (row == -1) {
-#if defined(Q_OS_WINCE)
-            QString newPath;
-            if (parent->info.isRoot())
-                newPath = parent->info.absoluteFilePath() + element;
-            else
-                newPath = parent->info.absoluteFilePath() + QLatin1Char('/') + element;
-#else
             QString newPath = parent->info.absoluteFilePath() + QLatin1Char('/') + element;
-#endif
             if (!d->allowAppendChild || !QFileInfo(newPath).isDir())
                 return QModelIndex();
             d->appendChild(parent, newPath);
@@ -966,8 +959,8 @@ QModelIndex QDirModel::index(const QString &path, int column) const
 }
 
 /*!
-  Returns true if the model item \a index represents a directory;
-  otherwise returns false.
+  Returns \c true if the model item \a index represents a directory;
+  otherwise returns \c false.
 */
 
 bool QDirModel::isDir(const QModelIndex &index) const
@@ -1031,7 +1024,7 @@ bool QDirModel::rmdir(const QModelIndex &index)
         return false;
 
     QDirModelPrivate::QDirNode *n = d_func()->node(index);
-    if (!n->info.isDir()) {
+    if (Q_UNLIKELY(!n->info.isDir())) {
         qWarning("rmdir: the node is not a directory");
         return false;
     }
@@ -1111,8 +1104,9 @@ QString QDirModel::fileName(const QModelIndex &index) const
     if (!d->indexValid(index))
         return QString();
     QFileInfo info = fileInfo(index);
-    if (info.isRoot())
-        return info.absoluteFilePath();
+    const QString &path = info.absoluteFilePath();
+    if (QFileSystemEntry::isRootPath(path))
+        return path;
     if (d->resolveSymlinks && info.isSymLink())
         info = d->resolvedInfo(info);
     return info.fileName();
@@ -1154,11 +1148,6 @@ QFileInfo QDirModel::fileInfo(const QModelIndex &index) const
     return node->info;
 }
 
-/*!
-  \fn QObject *QDirModel::parent() const
-  \internal
-*/
-
 /*
   The root node is never seen outside the model.
 */
@@ -1186,7 +1175,7 @@ QDirModelPrivate::QDirNode *QDirModelPrivate::node(int row, QDirNode *parent) co
     if (isDir && !p->populated)
         populate(p); // will also resolve symlinks
 
-    if (row >= p->children.count()) {
+    if (Q_UNLIKELY(row >= p->children.count())) {
         qWarning("node: the row does not exist");
         return 0;
     }
@@ -1242,14 +1231,16 @@ void QDirModelPrivate::savePersistentIndexes()
 {
     Q_Q(QDirModel);
     savedPersistent.clear();
+    savedPersistent.reserve(persistent.indexes.size());
     foreach (QPersistentModelIndexData *data, persistent.indexes) {
-        SavedPersistent saved;
         QModelIndex index = data->index;
-        saved.path = q->filePath(index);
-        saved.column = index.column();
-        saved.data = data;
-        saved.index = index;
-        savedPersistent.append(saved);
+        SavedPersistent saved = {
+            q->filePath(index),
+            index.column(),
+            data,
+            index,
+        };
+        savedPersistent.push_back(std::move(saved));
     }
 }
 
@@ -1258,11 +1249,9 @@ void QDirModelPrivate::restorePersistentIndexes()
     Q_Q(QDirModel);
     bool allow = allowAppendChild;
     allowAppendChild = false;
-    for (int i = 0; i < savedPersistent.count(); ++i) {
-        QPersistentModelIndexData *data = savedPersistent.at(i).data;
-        QString path = savedPersistent.at(i).path;
-        int column = savedPersistent.at(i).column;
-        QModelIndex idx = q->index(path, column);
+    for (const SavedPersistent &sp : qAsConst(savedPersistent)) {
+        QPersistentModelIndexData *data = sp.data;
+        QModelIndex idx = q->index(sp.path, sp.column);
         if (idx != data->index || data->model == 0) {
             //data->model may be equal to 0 if the model is getting destroyed
             persistent.indexes.remove(data->index);
@@ -1292,9 +1281,9 @@ QString QDirModelPrivate::name(const QModelIndex &index) const
 {
     const QDirNode *n = node(index);
     const QFileInfo info = n->info;
-    if (info.isRoot()) {
-        QString name = info.absoluteFilePath();
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+    QString name = info.absoluteFilePath();
+    if (QFileSystemEntry::isRootPath(name)) {
+#if defined(Q_OS_WIN)
         if (name.startsWith(QLatin1Char('/'))) // UNC host
             return info.fileName();
         if (name.endsWith(QLatin1Char('/')))
@@ -1320,22 +1309,7 @@ QString QDirModelPrivate::size(const QModelIndex &index) const
     // Nautilus  - "9 items" (the number of children)
     }
 
-    // According to the Si standard KB is 1000 bytes, KiB is 1024
-    // but on windows sizes are calulated by dividing by 1024 so we do what they do.
-    const quint64 kb = 1024;
-    const quint64 mb = 1024 * kb;
-    const quint64 gb = 1024 * mb;
-    const quint64 tb = 1024 * gb;
-    quint64 bytes = n->info.size();
-    if (bytes >= tb)
-        return QFileSystemModel::tr("%1 TB").arg(QLocale().toString(qreal(bytes) / tb, 'f', 3));
-    if (bytes >= gb)
-        return QFileSystemModel::tr("%1 GB").arg(QLocale().toString(qreal(bytes) / gb, 'f', 2));
-    if (bytes >= mb)
-        return QFileSystemModel::tr("%1 MB").arg(QLocale().toString(qreal(bytes) / mb, 'f', 1));
-    if (bytes >= kb)
-        return QFileSystemModel::tr("%1 KB").arg(QLocale().toString(bytes / kb));
-    return QFileSystemModel::tr("%1 byte(s)").arg(QLocale().toString(bytes));
+    return QLocale::system().formattedDataSize(n->info.size());
 }
 
 QString QDirModelPrivate::type(const QModelIndex &index) const
@@ -1345,7 +1319,7 @@ QString QDirModelPrivate::type(const QModelIndex &index) const
 
 QString QDirModelPrivate::time(const QModelIndex &index) const
 {
-#ifndef QT_NO_DATESTRING
+#if QT_CONFIG(datestring)
     return node(index)->info.lastModified().toString(Qt::LocalDate);
 #else
     Q_UNUSED(index);
@@ -1399,5 +1373,3 @@ QFileInfo QDirModelPrivate::resolvedInfo(QFileInfo info)
 QT_END_NAMESPACE
 
 #include "moc_qdirmodel.cpp"
-
-#endif // QT_NO_DIRMODEL

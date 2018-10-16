@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QtGui/qpaintengine.h>
 
 #include <private/qpaintengine_p.h>
@@ -60,8 +59,6 @@
 #include <private/qpainter_p.h>
 #include <private/qvectorpath_p.h>
 
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -74,8 +71,6 @@ struct StrokeHandler;
 #ifndef QT_NO_DEBUG_STREAM
 QDebug Q_GUI_EXPORT &operator<<(QDebug &, const QVectorPath &path);
 #endif
-
-class QPixmapFilter;
 
 class Q_GUI_EXPORT QPaintEngineEx : public QPaintEngine
 {
@@ -108,36 +103,36 @@ public:
 
     virtual void drawRoundedRect(const QRectF &rect, qreal xrad, qreal yrad, Qt::SizeMode mode);
 
-    virtual void drawRects(const QRect *rects, int rectCount);
-    virtual void drawRects(const QRectF *rects, int rectCount);
+    virtual void drawRects(const QRect *rects, int rectCount) override;
+    virtual void drawRects(const QRectF *rects, int rectCount) override;
 
-    virtual void drawLines(const QLine *lines, int lineCount);
-    virtual void drawLines(const QLineF *lines, int lineCount);
+    virtual void drawLines(const QLine *lines, int lineCount) override;
+    virtual void drawLines(const QLineF *lines, int lineCount) override;
 
-    virtual void drawEllipse(const QRectF &r);
-    virtual void drawEllipse(const QRect &r);
+    virtual void drawEllipse(const QRectF &r) override;
+    virtual void drawEllipse(const QRect &r) override;
 
-    virtual void drawPath(const QPainterPath &path);
+    virtual void drawPath(const QPainterPath &path) override;
 
-    virtual void drawPoints(const QPointF *points, int pointCount);
-    virtual void drawPoints(const QPoint *points, int pointCount);
+    virtual void drawPoints(const QPointF *points, int pointCount) override;
+    virtual void drawPoints(const QPoint *points, int pointCount) override;
 
-    virtual void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
-    virtual void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode);
+    virtual void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode) override;
+    virtual void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode) override;
 
-    virtual void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr) = 0;
+    virtual void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr) override = 0;
     virtual void drawPixmap(const QPointF &pos, const QPixmap &pm);
 
     virtual void drawImage(const QRectF &r, const QImage &pm, const QRectF &sr,
-                           Qt::ImageConversionFlags flags = Qt::AutoColor) = 0;
+                           Qt::ImageConversionFlags flags = Qt::AutoColor) override = 0;
     virtual void drawImage(const QPointF &pos, const QImage &image);
 
-    virtual void drawTiledPixmap(const QRectF &r, const QPixmap &pixmap, const QPointF &s);
+    virtual void drawTiledPixmap(const QRectF &r, const QPixmap &pixmap, const QPointF &s) override;
 
     virtual void drawPixmapFragments(const QPainter::PixmapFragment *fragments, int fragmentCount, const QPixmap &pixmap,
                                      QFlags<QPainter::PixmapFragmentHint> hints);
 
-    virtual void updateState(const QPaintEngineState &state);
+    virtual void updateState(const QPaintEngineState &state) override;
 
     virtual void drawStaticTextItem(QStaticTextItem *);
 
@@ -150,13 +145,6 @@ public:
     virtual void beginNativePainting() {}
     virtual void endNativePainting() {}
 
-    // Return a pixmap filter of "type" that can render the parameters
-    // in "prototype".  The returned filter is owned by the engine and
-    // will be destroyed when the engine is destroyed.  The "prototype"
-    // allows the engine to pick different filters based on the parameters
-    // that will be requested, and not just the "type".
-    virtual QPixmapFilter *pixmapFilter(int /*type*/, const QPixmapFilter * /*prototype*/) { return 0; }
-
     // These flags are needed in the implementation of paint buffers.
     enum Flags
     {
@@ -164,7 +152,7 @@ public:
         IsEmulationEngine = 0x02    // If set, this object is a QEmulationEngine.
     };
     virtual uint flags() const {return 0;}
-    virtual bool supportsTransformations(QFontEngine *fontEngine, const QTransform &m) const;
+    virtual bool requiresPretransformedGlyphPositions(QFontEngine *fontEngine, const QTransform &m) const;
     virtual bool shouldDrawCachedGlyphs(QFontEngine *fontEngine, const QTransform &m) const;
 
 protected:
@@ -191,7 +179,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

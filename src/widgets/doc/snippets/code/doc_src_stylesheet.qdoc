@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -360,7 +370,8 @@ QSpinBox::down-button { height: 10px }
 
 
 //! [59]
-/* implicitly sets the size of down-button to the size of spindown.png */
+// implicitly sets the size of down-button to the
+// size of spindown.png
 QSpinBox::down-button { image: url(:/images/spindown.png) }
 //! [59]
 
@@ -489,7 +500,8 @@ QDialog { etch-disabled-text: 1 }
 QLabel { border-color: red }   /* red red red red */
 QLabel { border-color: red blue } /* red blue red blue */
 QLabel { border-color: red blue green } /* red blue green blue */
-QLabel { border-color: red blue green yellow }  /* red blue green yellow */
+QLabel { border-color: red blue green yellow }
+/* red blue green yellow */
 //! [82]
 
 
@@ -522,7 +534,8 @@ QTextEdit {
 /* linear gradient from white to green */
 QTextEdit {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                stop:0 white, stop: 0.4 rgba(10, 20, 30, 40), stop:1 rgb(0, 200, 230, 200))
+                stop:0 white, stop: 0.4 rgba(10, 20, 30, 40),
+                stop:1 rgb(0, 200, 230, 200))
 }
 
 
@@ -549,7 +562,8 @@ QTextEdit {
 QMessageBox {
     dialogbuttonbox-buttons-have-icons: true;
     dialog-ok-icon: url(ok.svg);
-    dialog-cancel-icon: url(cancel.png), url(grayed_cancel.png) disabled;
+    dialog-cancel-icon: url(cancel.png),
+                        url(grayed_cancel.png) disabled;
 }
 //! [86]
 
@@ -874,7 +888,7 @@ QGroupBox::title {
     subcontrol-position: top center; /* position at the top center */
     padding: 0 3px;
     background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                      stop: 0 #FFOECE, stop: 1 #FFFFFF);
+                                      stop: 0 #FF0ECE, stop: 1 #FFFFFF);
 }
 //! [114]
 
@@ -1864,3 +1878,18 @@ QTabBar::close-button:hover {
 }
 
 //! [159]
+
+//! [160]
+* { lineedit-password-mask-delay: 1000 }
+//! [160]
+
+//! [161]
+QTableView::indicator:unchecked {
+    background-color: #d7d6d5
+}
+//! [161]
+
+//! [162]
+* { widget-animation-duration: 100 }
+//! [162]
+

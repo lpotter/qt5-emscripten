@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +47,11 @@
 #include <QThread>
 
 #include "qnetworkconfigmanager_p.h"
+
+// for QNetworkSession::interface
+#ifdef interface
+#  undef interface
+#endif
 
 #ifndef QT_NO_BEARERMANAGEMENT
 
@@ -66,37 +69,37 @@ QT_BEGIN_NAMESPACE
     \ingroup network
 
     A QNetworkSession enables control over the system's network interfaces. The session's configuration
-    parameter are determined via the QNetworkConfiguration object to which it is bound. Depending on the 
+    parameter are determined via the QNetworkConfiguration object to which it is bound. Depending on the
     type of the session (single access point or service network) a session may be linked to one or more
-    network interfaces. By means of \l{open()}{opening} and \l{close()}{closing} of network sessions 
-    a developer can start and stop the systems network interfaces. If the configuration represents 
+    network interfaces. By means of \l{open()}{opening} and \l{close()}{closing} of network sessions
+    a developer can start and stop the systems network interfaces. If the configuration represents
     multiple access points (see \l QNetworkConfiguration::ServiceNetwork) more advanced features such as roaming may be supported.
 
-    QNetworkSession supports session management within the same process and depending on the platform's 
-    capabilities may support out-of-process sessions. If the same 
+    QNetworkSession supports session management within the same process and depending on the platform's
+    capabilities may support out-of-process sessions. If the same
     network configuration is used by multiple open sessions the underlying network interface is only terminated once
     the last session has been closed.
 
     \section1 Roaming
 
-    Applications may connect to the preferredConfigurationChanged() signal in order to 
-    receive notifications when a more suitable access point becomes available. 
+    Applications may connect to the preferredConfigurationChanged() signal in order to
+    receive notifications when a more suitable access point becomes available.
     In response to this signal the application must either initiate the roaming via migrate()
-    or ignore() the new access point. Once the session has roamed the 
-    newConfigurationActivated() signal is emitted. The application may now test the 
+    or ignore() the new access point. Once the session has roamed the
+    newConfigurationActivated() signal is emitted. The application may now test the
     carrier and must either accept() or reject() it. The session will return to the previous
     access point if the roaming was rejected. The subsequent state diagram depicts the required
     state transitions.
-    
+
     \image roaming-states.png
 
-    Some platforms may distinguish forced roaming and application level roaming (ALR). 
-    ALR implies that the application controls (via migrate(), ignore(), accept() and reject()) 
+    Some platforms may distinguish forced roaming and application level roaming (ALR).
+    ALR implies that the application controls (via migrate(), ignore(), accept() and reject())
     whether a network session can roam from one access point to the next. Such control is useful
     if the application maintains stateful socket connections and wants to control the transition from
-    one interface to the next. Forced roaming implies that the system automatically roams to the next network without 
+    one interface to the next. Forced roaming implies that the system automatically roams to the next network without
     consulting the application. This has the advantage that the application can make use of roaming features
-    without actually being aware of it. It is expected that the application detects that the underlying 
+    without actually being aware of it. It is expected that the application detects that the underlying
     socket is broken and automatically reconnects via the new network link.
 
     If the platform supports both modes of roaming, an application indicates its preference
@@ -105,7 +108,7 @@ QT_BEGIN_NAMESPACE
     level roaming. If the client does not connect to the preferredConfigurationChanged(), forced roaming
     is used. If forced roaming is not supported the network session will not roam by default.
 
-    Some applications may want to suppress any form of roaming altogether. Possible use cases may be 
+    Some applications may want to suppress any form of roaming altogether. Possible use cases may be
     high priority downloads or remote services which cannot handle a roaming enabled client. Clients
     can suppress roaming by connecting to the preferredConfigurationChanged() signal and answer each
     signal emission with ignore().
@@ -120,19 +123,19 @@ QT_BEGIN_NAMESPACE
     single access point configuration the state of the session is the same as the state of the
     associated network interface.
 
-    \value Invalid          The session is invalid due to an invalid configuration. This may 
-                            happen due to a removed access point or a configuration that was 
+    \value Invalid          The session is invalid due to an invalid configuration. This may
+                            happen due to a removed access point or a configuration that was
                             invalid to begin with.
     \value NotAvailable     The session is based on a defined but not yet discovered QNetworkConfiguration
                             (see \l QNetworkConfiguration::StateFlag).
     \value Connecting       The network session is being established.
     \value Connected        The network session is connected. If the current process wishes to use this session
-                            it has to register its interest by calling open(). A network session 
+                            it has to register its interest by calling open(). A network session
                             is considered to be ready for socket operations if it isOpen() and connected.
     \value Closing          The network session is in the process of being shut down.
     \value Disconnected     The network session is not connected. The associated QNetworkConfiguration
                             has the state QNetworkConfiguration::Discovered.
-    \value Roaming          The network session is roaming from one access point to another 
+    \value Roaming          The network session is roaming from one access point to another
                             access point.
 */
 
@@ -194,16 +197,16 @@ QT_BEGIN_NAMESPACE
     If the roaming process is non-seamless the IP address will change which means that
     a socket becomes invalid. However seamless mobility can ensure that the local IP address
     does not change. This is achieved by using a virtual IP address which is bound to the actual
-    link address. During the roaming process the virtual address is attached to the new link 
+    link address. During the roaming process the virtual address is attached to the new link
     address.
 
-    Some platforms may support the concept of Forced Roaming and Application Level Roaming (ALR). 
-    Forced roaming implies that the platform may simply roam to a new configuration without 
+    Some platforms may support the concept of Forced Roaming and Application Level Roaming (ALR).
+    Forced roaming implies that the platform may simply roam to a new configuration without
     consulting applications. It is up to the application to detect the link layer loss and reestablish
-    its sockets. In contrast ALR provides the opportunity to prevent the system from roaming. 
+    its sockets. In contrast ALR provides the opportunity to prevent the system from roaming.
     If this session is based on a configuration that supports roaming the application can choose
-    whether it wants to be consulted (ALR use case) by connecting to this signal. For as long as this signal 
-    connection remains the session remains registered as a roaming stakeholder; otherwise roaming will 
+    whether it wants to be consulted (ALR use case) by connecting to this signal. For as long as this signal
+    connection remains the session remains registered as a roaming stakeholder; otherwise roaming will
     be enforced by the platform.
 
     \sa migrate(), ignore(), QNetworkConfiguration::isRoamingAvailable()
@@ -214,7 +217,7 @@ QT_BEGIN_NAMESPACE
 
     This signal is emitted once the session has roamed to the new access point.
     The application may reopen its socket and test the suitability of the new network link.
-    Subsequently it must either accept() or reject() the new access point. 
+    Subsequently it must either accept() or reject() the new access point.
 
     \sa accept(), reject()
 */
@@ -222,8 +225,8 @@ QT_BEGIN_NAMESPACE
 /*!
     \fn void QNetworkSession::opened()
 
-    This signal is emitted when the network session has been opened. 
-    
+    This signal is emitted when the network session has been opened.
+
     The underlying network interface will not be shut down as long as the session remains open.
     Note that this feature is dependent on \l{QNetworkConfigurationManager::SystemSessionSupport}{system wide session support}.
 */
@@ -249,9 +252,14 @@ QT_BEGIN_NAMESPACE
 QNetworkSession::QNetworkSession(const QNetworkConfiguration &connectionConfig, QObject *parent)
     : QObject(parent), d(0)
 {
+    qRegisterMetaType<QNetworkSession::State>();
+    qRegisterMetaType<QNetworkSession::SessionError>();
+    qRegisterMetaType<QNetworkSession::UsagePolicies>();
+
     // invalid configuration
     if (!connectionConfig.identifier().isEmpty()) {
-        foreach (QBearerEngine *engine, qNetworkConfigurationManagerPrivate()->engines()) {
+        const auto engines = qNetworkConfigurationManagerPrivate()->engines();
+        for (QBearerEngine *engine : engines) {
             if (engine->hasIdentifier(connectionConfig.identifier())) {
                 d = engine->createSessionBackend();
                 d->q = this;
@@ -273,10 +281,6 @@ QNetworkSession::QNetworkSession(const QNetworkConfiguration &connectionConfig, 
             }
         }
     }
-
-    qRegisterMetaType<QNetworkSession::State>();
-    qRegisterMetaType<QNetworkSession::SessionError>();
-    qRegisterMetaType<QNetworkSession::UsagePolicies>();
 }
 
 /*!
@@ -292,12 +296,12 @@ QNetworkSession::~QNetworkSession()
     The system will not terminate a network interface until the session reference counter reaches zero.
     Therefore an open session allows an application to register its use of the interface.
 
-    As a result of calling open() the interface will be started if it is not connected/up yet. 
+    As a result of calling open() the interface will be started if it is not connected/up yet.
     Some platforms may not provide support for out-of-process sessions. On such platforms the session
-    counter ignores any sessions held by another process. The platform capabilities can be 
+    counter ignores any sessions held by another process. The platform capabilities can be
     detected via QNetworkConfigurationManager::capabilities().
 
-    Note that this call is asynchronous. Depending on the outcome of this call the results can be enquired 
+    Note that this call is asynchronous. Depending on the outcome of this call the results can be enquired
     by connecting to the stateChanged(), opened() or error() signals.
 
     It is not a requirement to open a session in order to monitor the underlying network interface.
@@ -314,7 +318,7 @@ void QNetworkSession::open()
 
 /*!
     Waits until the session has been opened, up to \a msecs milliseconds. If the session has been opened, this
-    function returns true; otherwise it returns false. In the case where it returns false, you can call error()
+    function returns \c true; otherwise it returns \c false. In the case where it returns \c false, you can call error()
     to determine the cause of the error.
 
     The following example waits up to one second for the session to be opened:
@@ -361,10 +365,10 @@ bool QNetworkSession::waitForOpened(int msecs)
     \l Disconnected if the current session was the last open session.
 
     If the platform does not support out-of-process sessions calling this function does not stop the
-    interface. In this case \l{stop()} has to be used to force a shut down. 
+    interface. In this case \l{stop()} has to be used to force a shut down.
     The platform capabilities can be detected via QNetworkConfigurationManager::capabilities().
 
-    Note that this call is asynchronous. Depending on the outcome of this call the results can be enquired 
+    Note that this call is asynchronous. Depending on the outcome of this call the results can be enquired
     by connecting to the stateChanged(), opened() or error() signals.
 
     \sa open(), stop(), isOpen()
@@ -376,7 +380,7 @@ void QNetworkSession::close()
 }
 
 /*!
-    Invalidates all open sessions against the network interface and therefore stops the 
+    Invalidates all open sessions against the network interface and therefore stops the
     underlying network interface. This function always changes the session's state() flag to
     \l Disconnected.
 
@@ -415,7 +419,7 @@ QNetworkInterface QNetworkSession::interface() const
 #endif
 
 /*!
-    Returns true if this session is open. If the number of all open sessions is greater than
+    Returns \c true if this session is open. If the number of all open sessions is greater than
     zero the underlying network interface will remain connected/up.
 
     The session can be controlled via open() and close().
@@ -426,15 +430,15 @@ bool QNetworkSession::isOpen() const
 }
 
 /*!
-    Returns the state of the session. 
-    
-    If the session is based on a single access point configuration the state of the 
+    Returns the state of the session.
+
+    If the session is based on a single access point configuration the state of the
     session is the same as the state of the associated network interface. Therefore
-    a network session object can be used to monitor network interfaces. 
+    a network session object can be used to monitor network interfaces.
 
     A \l QNetworkConfiguration::ServiceNetwork based session summarizes the state of all its children
-    and therefore returns the \l Connected state if at least one of the service network's 
-    \l {QNetworkConfiguration::children()}{children()} configurations is active. 
+    and therefore returns the \l Connected state if at least one of the service network's
+    \l {QNetworkConfiguration::children()}{children()} configurations is active.
 
     Note that it is not required to hold an open session in order to obtain the network interface state.
     A connected but closed session may be used to monitor network interfaces whereas an open and connected
@@ -458,7 +462,7 @@ QNetworkSession::SessionError QNetworkSession::error() const
 }
 
 /*!
-    Returns a human-readable description of the last device error that 
+    Returns a human-readable description of the last device error that
     occurred.
 
     \sa error()
@@ -476,7 +480,7 @@ QString QNetworkSession::errorString() const
 
     The following property keys are guaranteed to be specified on all platforms:
 
-    \table
+    \table 80%
         \header
             \li Key \li Description
         \row
@@ -485,7 +489,7 @@ QString QNetworkSession::errorString() const
             QNetworkConfiguration that is used by this session; otherwise an empty string.
 
             The main purpose of this key is to determine which Internet access point is used
-            if the session is based on a \l{QNetworkConfiguration::ServiceNetwork}{ServiceNetwork}. 
+            if the session is based on a \l{QNetworkConfiguration::ServiceNetwork}{ServiceNetwork}.
             The following code snippet highlights the difference:
             \code
                     QNetworkConfigurationManager mgr;
@@ -512,7 +516,7 @@ QString QNetworkSession::errorString() const
             this key may return an identifier for either a
             \l {QNetworkConfiguration::ServiceNetwork}{service network} or a
             \l {QNetworkConfiguration::InternetAccessPoint}{Internet access points} configurations,
-            whereas \e ActiveConfiguration always returns identifiers to 
+            whereas \e ActiveConfiguration always returns identifiers to
             \l {QNetworkConfiguration::InternetAccessPoint}{Internet access points} configurations.
         \row
             \li ConnectInBackground
@@ -558,7 +562,7 @@ QVariant QNetworkSession::sessionProperty(const QString &key) const
 
 /*!
     Sets the property \a value on the session. The property is identified using
-    \a key. Removing an already set  property can be achieved by passing an 
+    \a key. Removing an already set  property can be achieved by passing an
     invalid QVariant.
 
     Note that the \e UserChoiceConfiguration and \e ActiveConfiguration
@@ -578,7 +582,7 @@ void QNetworkSession::setSessionProperty(const QString &key, const QVariant &val
 }
 
 /*!
-    Instructs the session to roam to the new access point. The old access point remains active 
+    Instructs the session to roam to the new access point. The old access point remains active
     until the application calls accept().
 
    The newConfigurationActivated() signal is emitted once roaming has been completed.
@@ -603,11 +607,11 @@ void QNetworkSession::ignore()
 }
 
 /*!
-    Instructs the session to permanently accept the new access point. Once this function 
+    Instructs the session to permanently accept the new access point. Once this function
     has been called the session may not return to the old access point.
 
     The old access point may be closed in the process if there are no other network sessions for it.
-    Therefore any open socket that still uses the old access point 
+    Therefore any open socket that still uses the old access point
     may become unusable and should be closed before completing the migration.
 */
 void QNetworkSession::accept()
@@ -617,7 +621,7 @@ void QNetworkSession::accept()
 }
 
 /*!
-    The new access point is not suitable for the application. By calling this function the 
+    The new access point is not suitable for the application. By calling this function the
     session returns to the previous access point/configuration. This action may invalidate
     any socket that has been created via the not desired access point.
 
@@ -633,10 +637,10 @@ void QNetworkSession::reject()
 /*!
     Returns the amount of data sent in bytes; otherwise 0.
 
-    This field value includes the usage across all open network 
+    This field value includes the usage across all open network
     sessions which use the same network interface.
 
-    If the session is based on a service network configuration the number of 
+    If the session is based on a service network configuration the number of
     sent bytes across all active member configurations are returned.
 
     This function may not always be supported on all platforms and returns 0.
@@ -652,10 +656,10 @@ quint64 QNetworkSession::bytesWritten() const
 /*!
     Returns the amount of data received in bytes; otherwise 0.
 
-    This field value includes the usage across all open network 
+    This field value includes the usage across all open network
     sessions which use the same network interface.
 
-    If the session is based on a service network configuration the number of 
+    If the session is based on a service network configuration the number of
     sent bytes across all active member configurations are returned.
 
     This function may not always be supported on all platforms and returns 0.
@@ -699,12 +703,12 @@ void QNetworkSessionPrivate::setUsagePolicies(QNetworkSession &session, QNetwork
 /*!
     \internal
 
-    This function is required to detect whether the client wants to control 
+    This function is required to detect whether the client wants to control
     the roaming process. If he connects to preferredConfigurationChanged() signal
     he intends to influence it. Otherwise QNetworkSession always roams
     without registering this session as a stakeholder in the roaming process.
 
-    For more details check the Forced vs ALR roaming section in the QNetworkSession 
+    For more details check the Forced vs ALR roaming section in the QNetworkSession
     class description.
 */
 void QNetworkSession::connectNotify(const QMetaMethod &signal)
@@ -745,8 +749,8 @@ void QNetworkSession::disconnectNotify(const QMetaMethod &signal)
         d->setALREnabled(false);
 }
 
-#include "moc_qnetworksession.cpp"
-
 QT_END_NAMESPACE
+
+#include "moc_qnetworksession.cpp"
 
 #endif // QT_NO_BEARERMANAGEMENT

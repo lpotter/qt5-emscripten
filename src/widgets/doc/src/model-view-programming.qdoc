@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -189,7 +189,7 @@
     to the QTableView::sortByColumn() slot or the
     QTreeView::sortByColumn() slot, respectively.
 
-    The alternative approach, if your model do not have the required
+    The alternative approach, if your model does not have the required
     interface or if you want to use a list view to present your data,
     is to use a proxy model to transform the structure of your model
     before presenting the data in the view. This is covered in detail
@@ -214,10 +214,10 @@
     classes, such as QListView, QTableView, and QTreeView with
     QStandardItemModel.
 
-    \section1 Using models and views
+    \section1 Using Models and Views
 
     The following sections explain how to use the model/view pattern
-    in Qt. Each section includes an an example and is followed by a
+    in Qt. Each section includes an example and is followed by a
     section showing how to create new components.
 
     \section2 Two models included in Qt
@@ -253,7 +253,7 @@
     \snippet shareddirmodel/main.cpp 0
 
     The model is set up to use data from a certain file system. The call to
-    \l{QFileSystemModel::}{setRootPath()} tell the model which drive on the
+    \l{QFileSystemModel::}{setRootPath()} tells the model which drive on the
     file system to expose to the views.
 
     We create two views so that we can examine the items held in the model in two
@@ -280,9 +280,9 @@
 
     In the above example, we neglected to mention how to handle selections
     of items. This subject is covered in more detail in the section about
-    \l{Handling Selections in Item Views}. 
+    \l{Handling Selections in Item Views}.
 
-    \section1 Model classes
+    \section1 Model Classes
 
     Before examining how selections are handled, you may find it
     useful to examine the concepts used in the model/view framework.
@@ -304,7 +304,7 @@
     signals and slots mechanism.
 
     This section describes some basic concepts that are central to the way
-    item of data are accessed by other components via a model class. More
+    items of data are accessed by other components via a model class. More
     advanced concepts are discussed in later sections.
 
     \section3 Model indexes
@@ -354,7 +354,7 @@
     the above code indicates, we need to supply more information when obtaining
     a model index.
 
-    \table
+    \table 70%
     \row \li \inlineimage modelview-tablemodel.png
     \li \b{Rows and columns}
 
@@ -386,7 +386,7 @@
 
     \snippet code/doc_src_model-view-programming.cpp 3
 
-    \table
+    \table 70%
     \row \li \inlineimage modelview-treemodel.png
     \li \b{Parents, rows, and columns}
 
@@ -417,7 +417,7 @@
 
     \snippet code/doc_src_model-view-programming.cpp 6
 
-    \table
+    \table 70%
     \row \li \inlineimage modelview-roles.png
     \li \b{Item roles}
 
@@ -518,7 +518,7 @@
     section, we demonstrate this by creating a convenient ready-to-use
     model for holding lists of strings.
 
-    \section1 View classes
+    \section1 View Classes
 
     \section2 Concepts
 
@@ -678,7 +678,7 @@
     each view; for example, a contiguous selection in a table view can be
     represented as a fragmented set of highlighted items in a tree view.
 
-    \section1 Delegate classes
+    \section1 Delegate Classes
 
     \section2 Concepts
 
@@ -737,7 +737,7 @@
 
     \image spinboxdelegate-example.png
 
-    We subclass the delegate from \l QItemDelegate because we do not want
+    We subclass the delegate from \l QStyledItemDelegate because we do not want
     to write custom display functions. However, we must still provide
     functions to manage the editor widget:
 
@@ -863,7 +863,7 @@
     be less integrated into applications, and will be less usable than
     those that emit hints to support common editing actions.
 
-    \section1 Handling selections in item views
+    \section1 Handling Selections in Item Views
 
     \section2 Concepts
 
@@ -902,7 +902,7 @@
     The table below highlights the differences between current item and
     selected items.
 
-    \table
+    \table 70%
     \header
         \li  Current Item
         \li  Selected Items
@@ -1139,7 +1139,7 @@
     determine whether any given item is the parent of another level of
     items.
 
-    \section1 Creating new models
+    \section1 Creating New Models
 
     The separation of functionality between the model/view components allows
     models to be created that can take advantage of existing views. This
@@ -1405,7 +1405,7 @@
     virtual functions that must be implemented to enable various features in
     different types of models.
 
-    \section1 Item view convenience classes
+    \section1 Item View Convenience Classes
 
     The item-based widgets have names which reflect their uses:
     \c QListWidget provides a list of items, \c QTreeWidget displays a
@@ -1557,7 +1557,7 @@
     of items. The selection mode works in the same way for all of the
     above widgets.
 
-    \table
+    \table 70%
     \row
     \li \image selection-single.png
     \li \b{Single item selections:}
@@ -1769,6 +1769,9 @@
     dropped onto existing items separately to data dropped into the top level
     of the model (i.e., onto an invalid item).
 
+    Models can forbid dropping on certain items, or depending on the dropped data,
+    by reimplementing QAbstractItemModel::canDropMimeData().
+
     The model first has to make sure that the operation should be acted on,
     the data supplied is in a format that can be used, and that its destination
     within the model is valid:
@@ -1832,7 +1835,7 @@
 
     \sa {itemviews/puzzle}{Item Views Puzzle Example}
 
-    \section1 Proxy models
+    \section1 Proxy Models
 
     In the model/view framework, items of data supplied by a single model can be shared
     by any number of views, and each of these can possibly represent the same information
@@ -1866,7 +1869,7 @@
     \codeline
     \snippet qsortfilterproxymodel/main.cpp 1
 
-    Since proxy models are inherit from QAbstractItemModel, they can be connected to
+    Since proxy models inherit from QAbstractItemModel, they can be connected to
     any kind of view, and can be shared between views. They can also be used to
     process the information obtained from other proxy models in a pipeline arrangement.
 
@@ -1917,7 +1920,7 @@
     \l{QSortFilterProxyModel::lessThan()}{lessThan()} function to perform custom
     comparisons.
 
-    \section1 Model subclassing reference
+    \section1 Model Subclassing Reference
 
     Model subclasses need to provide implementations of many of the virtual functions
     defined in the QAbstractItemModel base class. The number of these functions that need
@@ -1943,9 +1946,6 @@
        other components and applications can understand.
     \endlist
 
-    For more information, see the \l
-    {"Item View Classes" Chapter of C++ GUI Programming with Qt 4}.
-
     \section2 Item data handling
 
     Models can provide varying levels of access to the data they provide: They can be
@@ -1957,7 +1957,7 @@
     To provide read-only access to data provided by a model, the following functions
     \e{must} be implemented in the model's subclass:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::flags()}{flags()}
          \li Used by other components to obtain information about each item provided by
             the model. In many models, the combination of flags should include
@@ -1982,7 +1982,7 @@
     Additionally, the following functions \e{must} be implemented in direct subclasses
     of QAbstractTableModel and QAbstractItemModel:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::columnCount()}{columnCount()}
          \li Provides the number of columns of data exposed by the model. List models do not
             provide this function because it is already implemented in QAbstractListModel.
@@ -1994,7 +1994,7 @@
     functions to allow rows and columns to be inserted and removed. To enable
     editing, the following functions must be implemented correctly:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::flags()}{flags()}
          \li Must return an appropriate combination of flags for each item. In particular,
             the value returned by this function must include \l{Qt::ItemIsEditable} in
@@ -2024,7 +2024,7 @@
     ensure that the appropriate functions are called to notify attached views and
     delegates:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::insertRows()}{insertRows()}
          \li Used to add new rows and items of data to all types of model.
             Implementations must call
@@ -2036,14 +2036,14 @@
          \li Used to remove rows and the items of data they contain from all types of model.
             Implementations must call
             \l{QAbstractItemModel::beginRemoveRows()}{beginRemoveRows()}
-            \e before inserting new columns into any underlying data structures, and call
+            \e before rows are removed from any underlying data structures, and call
             \l{QAbstractItemModel::endRemoveRows()}{endRemoveRows()}
             \e{immediately afterwards}.
     \row \li \l{QAbstractItemModel::insertColumns()}{insertColumns()}
          \li Used to add new columns and items of data to table models and hierarchical models.
             Implementations must call
             \l{QAbstractItemModel::beginInsertColumns()}{beginInsertColumns()} \e before
-            rows are removed from any underlying data structures, and call
+            inserting new columns into any underlying data structures, and call
             \l{QAbstractItemModel::endInsertColumns()}{endInsertColumns()}
             \e{immediately afterwards}.
     \row \li \l{QAbstractItemModel::removeColumns()}{removeColumns()}
@@ -2070,9 +2070,24 @@
 
     Normally, the begin and end functions are capable of informing other components
     about changes to the model's underlying structure. For more complex changes to the
-    model's structure, perhaps involving internal reorganization or sorting of data,
-    it is necessary to emit the \l{QAbstractItemModel::layoutChanged()}{layoutChanged()}
-    signal to cause any attached views to be updated.
+    model's structure, perhaps involving internal reorganization, sorting of data or
+    any other structural change, it is necessary to perform the following sequence:
+
+    \list
+    \li Emit the \l{QAbstractItemModel::layoutAboutToBeChanged()}{layoutAboutToBeChanged()} signal
+    \li Update internal data which represents the structure of the model.
+    \li Update persistent indexes using \l{QAbstractItemModel::changePersistentIndexList()}{changePersistentIndexList()}
+    \li Emit the \l{QAbstractItemModel::layoutChanged()}{layoutChanged()} signal.
+    \endlist
+
+    This sequence can be used for any structural update in lieu of the more
+    high-level and convenient protected methods. For example, if a model of
+    two million rows needs to have all odd numbered rows removed, that
+    is 1 million discountiguous ranges of 1 element each. It would be
+    possible to use beginRemoveRows and endRemoveRows 1 million times, but
+    that would obviously be inefficient. Instead, this can be signalled as a
+    single layout change which updates all necessary persistent indexes at
+    once.
 
     \section3 Lazy population of model data
 
@@ -2119,7 +2134,7 @@
     structure, it is up to each model subclass to create its own model indexes
     by providing implementations of the following functions:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::index()}{index()}
          \li Given a model index for a parent item, this function allows views and delegates
             to access children of that item. If no valid child item - corresponding to the
@@ -2164,7 +2179,7 @@
     The following types are used to store information about
     each item as it is streamed into a QByteArray and stored in a QMimeData object:
 
-    \table 90%
+    \table 70%
     \header \li Description \li Type
     \row \li Row \li int
     \row \li Column \li int
@@ -2180,7 +2195,7 @@
     export items of data in specialized formats by reimplementing the following
     function:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::mimeData()}{mimeData()}
          \li This function can be reimplemented to return data in formats other
             than the default \c{application/x-qabstractitemmodeldatalist} internal
@@ -2215,7 +2230,7 @@
     To take advantage of QAbstractItemModel's default implementation for the built-in
     MIME type, new models must provide reimplementations of the following functions:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::insertRows()}{insertRows()}
          \li {1, 2} These functions enable the model to automatically insert new data using
             the existing implementation provided by QAbstractItemModel::dropMimeData().
@@ -2228,7 +2243,7 @@
 
     To accept other forms of data, these functions must be reimplemented:
 
-    \table 90%
+    \table 70%
     \row \li \l{QAbstractItemModel::supportedDropActions()}{supportedDropActions()}
          \li Used to return a combination of \l{Qt::DropActions}{drop actions},
             indicating the types of drag and drop operations that the model accepts.
@@ -2282,7 +2297,7 @@
     \section2 Performance optimization for large amounts of data
 
     The \l{QAbstractItemModel::}{canFetchMore()} function checks if the parent
-    has more data available and returns true or false accordingly. The
+    has more data available and returns \c true or false accordingly. The
     \l{QAbstractItemModel::}{fetchMore()} function fetches data based on the
     parent specified. Both these functions can be combined, for example, in a
     database query involving incremental data to populate a QAbstractItemModel.
@@ -2301,8 +2316,8 @@
     {fetchMore()} must be reimplemented as their default implementation returns
     false and does nothing.
 
-    \keyword Model/View Classes
-    \section1 The model/view classes
+    \target Model/View Classes
+    \section1 The Model/View Classes
 
     These classes use the model/view design pattern in which the
     underlying data (in the model) is kept separate from the way the
@@ -2310,7 +2325,7 @@
 
     \annotatedlist model-view
 
-    \section1 Related examples
+    \section1 Related Examples
 
     \list
     \li \l{itemviews/dirview}{Dir View}

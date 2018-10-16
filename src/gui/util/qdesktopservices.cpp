@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -143,12 +141,19 @@ void QOpenUrlHandlerRegistry::handlerDestroyed(QObject *handler)
     same argument, and it will try to open the URL using the
     appropriate mechanism for the user's desktop environment.
 
-    \sa QSystemTrayIcon, QProcess
+    Combined with platform specific settings, the schemes registered by the
+    openUrl() function can also be exposed to other applications, opening up
+    for application deep linking or a very basic URL-based IPC mechanism.
+
+    \note Since Qt 5, storageLocation() and displayName() are replaced by functionality
+    provided by the QStandardPaths class.
+
+    \sa QSystemTrayIcon, QProcess, QStandardPaths
 */
 
 /*!
     Opens the given \a url in the appropriate Web browser for the user's desktop
-    environment, and returns true if successful; otherwise returns false.
+    environment, and returns \c true if successful; otherwise returns \c false.
 
     If the URL is a reference to a local file (i.e., the URL scheme is "file") then
     it will be opened with a suitable application instead of a Web browser.
@@ -171,6 +176,24 @@ void QOpenUrlHandlerRegistry::handlerDestroyed(QObject *handler)
     Unicode-aware, the user may have configured their client without these features.
     Also, certain e-mail clients (e.g., Lotus Notes) have problems with long URLs.
 
+    \warning A return value of \c true indicates that the application has successfully requested
+    the operating system to open the URL in an external application. The external application may
+    still fail to launch or fail to open the requested URL. This result will not be reported back
+    to the application.
+
+    \warning URLs passed to this function on iOS will not load unless their schemes are
+    listed in the \c LSApplicationQueriesSchemes key of the application's Info.plist file.
+    For more information, see the Apple Developer Documentation for
+    \l{https://developer.apple.com/documentation/uikit/uiapplication/1622952-canopenurl}{canOpenURL(_:)}.
+    For example, the following lines enable URLs with the HTTPS scheme:
+
+    \code
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>https</string>
+    </array>
+    \endcode
+
     \sa setUrlHandler()
 */
 bool QDesktopServices::openUrl(const QUrl &url)
@@ -190,13 +213,28 @@ bool QDesktopServices::openUrl(const QUrl &url)
     }
     if (!url.isValid())
         return false;
-    QPlatformServices *platformServices = QGuiApplicationPrivate::platformIntegration()->services();
-    if (!platformServices) {
-        qWarning("%s: The platform plugin does not support services.", Q_FUNC_INFO);
+
+    QPlatformIntegration *platformIntegration = QGuiApplicationPrivate::platformIntegration();
+    if (Q_UNLIKELY(!platformIntegration)) {
+        QCoreApplication *application = QCoreApplication::instance();
+        if (Q_UNLIKELY(!application))
+            qWarning("QDesktopServices::openUrl: Please instantiate the QGuiApplication object "
+                     "first");
+        else if (Q_UNLIKELY(!qobject_cast<QGuiApplication *>(application)))
+            qWarning("QDesktopServices::openUrl: Application is not a GUI application");
         return false;
     }
-    return url.scheme() == QStringLiteral("file") ?
-           platformServices->openDocument(url) : platformServices->openUrl(url);
+
+    QPlatformServices *platformServices = platformIntegration->services();
+    if (!platformServices) {
+        qWarning("The platform plugin does not support services.");
+        return false;
+    }
+    // We only use openDocument if there is no fragment for the URL to
+    // avoid it being lost when using openDocument
+    if (url.isLocalFile() && !url.hasFragment())
+        return platformServices->openDocument(url);
+    return platformServices->openUrl(url);
 }
 
 /*!
@@ -210,6 +248,24 @@ bool QDesktopServices::openUrl(const QUrl &url)
 
     The provided method must be implemented as a slot that only accepts a single QUrl
     argument.
+
+    To use this function for receiving data from other apps on iOS you also need to
+    add the custom scheme to the \c CFBundleURLSchemes list in your Info.plist file:
+
+    \code
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>myapp</string>
+            </array>
+        </dict>
+    </array>
+    \endcode
+
+    For more information, see the Apple Developer Documentation for
+    \l{https://developer.apple.com/documentation/uikit/core_app/allowing_apps_and_websites_to_link_to_your_content/communicating_with_other_apps_using_custom_urls?language=objc}{Communicating with Other Apps Using Custom URLs}.
 
     If setUrlHandler() is used to set a new handler for a scheme which already
     has a handler, the existing handler is simply replaced with the new one.
@@ -226,13 +282,13 @@ void QDesktopServices::setUrlHandler(const QString &scheme, QObject *receiver, c
     QOpenUrlHandlerRegistry *registry = handlerRegistry();
     QMutexLocker locker(&registry->mutex);
     if (!receiver) {
-        registry->handlers.remove(scheme);
+        registry->handlers.remove(scheme.toLower());
         return;
     }
     QOpenUrlHandlerRegistry::Handler h;
     h.receiver = receiver;
     h.name = method;
-    registry->handlers.insert(scheme, h);
+    registry->handlers.insert(scheme.toLower(), h);
     QObject::connect(receiver, SIGNAL(destroyed(QObject*)),
                      registry, SLOT(handlerDestroyed(QObject*)));
 }
@@ -250,6 +306,8 @@ void QDesktopServices::unsetUrlHandler(const QString &scheme)
 /*!
     \enum QDesktopServices::StandardLocation
     \since 4.4
+    \obsolete
+    Use QStandardPaths::StandardLocation (see storageLocation() for porting notes)
 
     This enum describes the different locations that can be queried by
     QDesktopServices::storageLocation and QDesktopServices::displayName.
@@ -277,6 +335,26 @@ void QDesktopServices::unsetUrlHandler(const QString &scheme)
     \fn QString QDesktopServices::storageLocation(StandardLocation type)
     \obsolete
     Use QStandardPaths::writableLocation()
+
+    \note when porting QDesktopServices::DataLocation to QStandardPaths::DataLocation,
+    a different path will be returned.
+
+    \c{QDesktopServices::DataLocation} was \c{GenericDataLocation + "/data/organization/application"},
+    while QStandardPaths::DataLocation is \c{GenericDataLocation + "/organization/application"}.
+
+    Also note that \c{application} could be empty in Qt 4, if QCoreApplication::setApplicationName()
+    wasn't called, while in Qt 5 it defaults to the name of the executable.
+
+    Therefore, if you still need to access the Qt 4 path (for example for data migration to Qt 5), replace
+    \code
+    QDesktopServices::storageLocation(QDesktopServices::DataLocation)
+    \endcode
+    with
+    \code
+    QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+    "/data/organization/application"
+    \endcode
+    (assuming an organization name and an application name were set).
 */
 
 /*!
@@ -289,23 +367,23 @@ extern Q_CORE_EXPORT QString qt_applicationName_noFallback();
 
 QString QDesktopServices::storageLocationImpl(QStandardPaths::StandardLocation type)
 {
-    if (type == QStandardPaths::DataLocation) {
+    if (type == QStandardPaths::AppLocalDataLocation) {
         // Preserve Qt 4 compatibility:
         // * QCoreApplication::applicationName() must default to empty
         // * Unix data location is under the "data/" subdirectory
         const QString compatAppName = qt_applicationName_noFallback();
         const QString baseDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        const QString organizationName = QCoreApplication::organizationName();
 #if defined(Q_OS_WIN) || defined(Q_OS_MAC)
         QString result = baseDir;
-        if (!QCoreApplication::organizationName().isEmpty())
-            result += QLatin1Char('/') + QCoreApplication::organizationName();
+        if (!organizationName.isEmpty())
+            result += QLatin1Char('/') + organizationName;
         if (!compatAppName.isEmpty())
             result += QLatin1Char('/') + compatAppName;
         return result;
 #elif defined(Q_OS_UNIX)
         return baseDir + QLatin1String("/data/")
-            + QCoreApplication::organizationName() + QLatin1Char('/')
-            + compatAppName;
+            + organizationName + QLatin1Char('/') + compatAppName;
 #endif
     }
     return QStandardPaths::writableLocation(type);

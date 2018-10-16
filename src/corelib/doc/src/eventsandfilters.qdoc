@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -80,7 +80,7 @@
 
     \section1 Event Types
 
-    Most events types have special classes, notably QResizeEvent,
+    Most event types have special classes, notably QResizeEvent,
     QPaintEvent, QMouseEvent, QKeyEvent, and QCloseEvent. Each class
     subclasses QEvent and adds event-specific functions. For example,
     QResizeEvent adds \l{QResizeEvent::}{size()} and
@@ -100,7 +100,7 @@
     event delivery mechanisms are flexible. The documentation for
     QCoreApplication::notify() concisely tells the whole story; the
     \e{Qt Quarterly} article
-    \l{http://doc.qt.nokia.com/qq/qq11-events.html}{Another Look at Events}
+    \l{http://doc.qt.io/archives/qq/qq11-events.html}{Another Look at Events}
     rehashes it less concisely. Here we will explain enough for 95%
     of applications.
 
@@ -194,7 +194,7 @@
     \l{QCoreApplication::}{sendEvent()} processes the event immediately.
     When it returns, the event filters and/or the object itself have
     already processed the event. For many event classes there is a function
-    called isAccepted() that tells you whether the event was accepted
+    called \l{QEvent::}{isAccepted()} that tells you whether the event was accepted
     or rejected by the last handler that was called.
 
     \l{QCoreApplication::}{postEvent()} posts the event on a queue for
@@ -208,7 +208,7 @@
     \l{QCoreApplication::}{postEvent()} is also used during object
     initialization, since the posted event will typically be dispatched
     very soon after the initialization of the object is complete.
-    When implementing a widget, it is important to realise that events
+    When implementing a widget, it is important to realize that events
     can be delivered very early in its lifetime so, in its constructor,
     be sure to initialize member variables early on, before there's any
     chance that it might receive an event.

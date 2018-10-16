@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -96,7 +94,7 @@ void QDBusMetaTypeId::init()
     // reentrancy is not a problem since everything else is locked on their own
     // set the guard variable at the end
     if (!initialized.load()) {
-        // register our types with QtCore (calling qMetaTypeId<T>() does this implicitly)
+        // register our types with Qt Core (calling qMetaTypeId<T>() does this implicitly)
         (void)message();
         (void)argument();
         (void)variant();
@@ -106,7 +104,7 @@ void QDBusMetaTypeId::init()
         (void)unixfd();
 
 #ifndef QDBUS_NO_SPECIALTYPES
-        // and register QtCore's with us
+        // and register Qt Core's with us
         registerHelper<QDate>();
         registerHelper<QTime>();
         registerHelper<QDateTime>();
@@ -133,6 +131,18 @@ void QDBusMetaTypeId::init()
         qDBusRegisterMetaType<QList<QDBusObjectPath> >();
         qDBusRegisterMetaType<QList<QDBusSignature> >();
         qDBusRegisterMetaType<QList<QDBusUnixFileDescriptor> >();
+
+        qDBusRegisterMetaType<QVector<bool> >();
+        qDBusRegisterMetaType<QVector<short> >();
+        qDBusRegisterMetaType<QVector<ushort> >();
+        qDBusRegisterMetaType<QVector<int> >();
+        qDBusRegisterMetaType<QVector<uint> >();
+        qDBusRegisterMetaType<QVector<qlonglong> >();
+        qDBusRegisterMetaType<QVector<qulonglong> >();
+        qDBusRegisterMetaType<QVector<double> >();
+        qDBusRegisterMetaType<QVector<QDBusObjectPath> >();
+        qDBusRegisterMetaType<QVector<QDBusSignature> >();
+        qDBusRegisterMetaType<QVector<QDBusUnixFileDescriptor> >();
 #endif
 
         initialized.store(true);
@@ -145,21 +155,21 @@ Q_GLOBAL_STATIC(QReadWriteLock, customTypesLock)
 /*!
     \class QDBusMetaType
     \inmodule QtDBus
-    \brief Meta-type registration system for the QtDBus module.
+    \brief Meta-type registration system for the Qt D-Bus module.
     \internal
 
     The QDBusMetaType class allows you to register class types for
     marshalling and demarshalling over D-Bus. D-Bus supports a very
     limited set of primitive types, but allows one to extend the type
     system by creating compound types, such as arrays (lists) and
-    structs. In order to use them with QtDBus, those types must be
+    structs. In order to use them with Qt D-Bus, those types must be
     registered.
 
-    See \l {qdbustypesystem.html}{QtDBus type system} for more
+    See \l {qdbustypesystem.html}{Qt D-Bus Type System} for more
     information on the type system and how to register additional
     types.
 
-    \sa {qdbustypesystem.html}{QtDBus type system},
+    \sa {qdbustypesystem.html}{Qt D-Bus Type System},
     qDBusRegisterMetaType(), QMetaType, QVariant, QDBusArgument
 */
 
@@ -170,7 +180,7 @@ Q_GLOBAL_STATIC(QReadWriteLock, customTypesLock)
     \since 4.2
 
     Registers \c{T} with the
-    \l {qdbustypesystem.html}{QtDBus type system} and the Qt \l
+    \l {qdbustypesystem.html}{Qt D-Bus Type System} and the Qt \l
     {QMetaType}{meta-type system}, if it's not already registered.
 
     To register a type, it must be declared as a meta-type with the
@@ -179,17 +189,25 @@ Q_GLOBAL_STATIC(QReadWriteLock, customTypesLock)
 
     \snippet code/src_qdbus_qdbusmetatype.cpp 0
 
-    If \c{T} isn't a type derived from one of
+    If \c{T} isn't one of
     Qt's \l{container classes}, the \c{operator<<} and
     \c{operator>>} streaming operators between \c{T} and QDBusArgument
-    must be already declared. See the \l {qdbustypesystem.html}{QtDBus
-    type system} page for more information on how to declare such
+    must be already declared. See the \l {qdbustypesystem.html}{Qt D-Bus
+    Type System} page for more information on how to declare such
     types.
 
     This function returns the Qt meta type id for the type (the same
     value that is returned from qRegisterMetaType()).
 
-    \sa {qdbustypesystem.html}{QtDBus type system}, qRegisterMetaType(), QMetaType
+    \note The feature that a \c{T} inheriting a streamable type (including
+    the containers QList, QHash or QMap) can be streamed without providing
+    custom \c{operator<<} and \c{operator>>} is deprecated as of Qt 5.7,
+    because it ignores everything in \c{T} except the base class. There is
+    no diagnostic. You should always provide these operators for all types
+    you wish to stream and not rely on Qt-provided stream operators for
+    base classes.
+
+    \sa {qdbustypesystem.html}{Qt D-Bus Type System}, qRegisterMetaType(), QMetaType
 */
 
 /*!
@@ -210,7 +228,6 @@ Q_GLOBAL_STATIC(QReadWriteLock, customTypesLock)
 void QDBusMetaType::registerMarshallOperators(int id, MarshallFunction mf,
                                               DemarshallFunction df)
 {
-    QByteArray var;
     QVector<QDBusCustomTypeInfo> *ct = customTypes();
     if (id < 0 || !mf || !df || !ct)
         return;                 // error!
@@ -226,7 +243,7 @@ void QDBusMetaType::registerMarshallOperators(int id, MarshallFunction mf,
 /*!
     \internal
     Executes the marshalling of type \a id (whose data is contained in
-    \a data) to the D-Bus marshalling argument \a arg. Returns true if
+    \a data) to the D-Bus marshalling argument \a arg. Returns \c true if
     the marshalling succeeded, or false if an error occurred.
 */
 bool QDBusMetaType::marshall(QDBusArgument &arg, int id, const void *data)
@@ -255,7 +272,7 @@ bool QDBusMetaType::marshall(QDBusArgument &arg, int id, const void *data)
 /*!
     \internal
     Executes the demarshalling of type \a id (whose data will be placed in
-    \a data) from the D-Bus marshalling argument \a arg. Returns true if
+    \a data) from the D-Bus marshalling argument \a arg. Returns \c true if
     the demarshalling succeeded, or false if an error occurred.
 */
 bool QDBusMetaType::demarshall(const QDBusArgument &arg, int id, void *data)
@@ -318,10 +335,10 @@ int QDBusMetaType::signatureToType(const char *signature)
 
     case DBUS_TYPE_UINT16:
         return QMetaType::UShort;
-        
+
     case DBUS_TYPE_INT32:
         return QVariant::Int;
-        
+
     case DBUS_TYPE_UINT32:
         return QVariant::UInt;
 
@@ -367,7 +384,7 @@ int QDBusMetaType::signatureToType(const char *signature)
             return qMetaTypeId<QList<QDBusSignature> >();
 
         }
-        // fall through
+        Q_FALLTHROUGH();
     default:
         return QMetaType::UnknownType;
     }
@@ -375,7 +392,7 @@ int QDBusMetaType::signatureToType(const char *signature)
 
 /*!
     \fn QDBusMetaType::typeToSignature(int type)
-    \internal 
+    \internal
 
     Returns the D-Bus signature equivalent to the supplied meta type id \a type.
 

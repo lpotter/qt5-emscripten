@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -49,26 +49,35 @@
     applications:
 
     \list
+    \li \l {Concurrent Map and Map-Reduce}
+        \list
+            \li \l {QtConcurrent::map}{QtConcurrent::map()} applies a function
+                to every item in a container, modifying the items in-place.
+            \li \l {QtConcurrent::mapped}{QtConcurrent::mapped()} is like
+                map(), except that it returns a new container with the
+                modifications.
+            \li \l {QtConcurrent::mappedReduced}{QtConcurrent::mappedReduced()}
+                is like mapped(), except that the modified results are reduced
+                or folded into a single result.
+        \endlist
 
-    \li QtConcurrent::map() applies a function to every item in a container,
-    modifying the items in-place.
+    \li \l {Concurrent Filter and Filter-Reduce}
+    \list
+        \li \l {QtConcurrent::filter}{QtConcurrent::filter()} removes all items
+            from a container based on the result of a filter function.
+        \li \l {QtConcurrent::filtered}{QtConcurrent::filtered()} is like
+            filter(), except that it returns a new container with the filtered
+            results.
+        \li \l {QtConcurrent::filteredReduced}{QtConcurrent::filteredReduced()}
+            is like filtered(), except that the filtered results are reduced or
+            folded into a single result.
+    \endlist
 
-    \li QtConcurrent::mapped() is like map(), except that it returns a new
-    container with the modifications.
-
-    \li QtConcurrent::mappedReduced() is like mapped(), except that the
-    modified results are reduced or folded into a single result.
-
-    \li QtConcurrent::filter() removes all items from a container based on the
-    result of a filter function.
-
-    \li QtConcurrent::filtered() is like filter(), except that it returns a new
-    container with the filtered results.
-
-    \li QtConcurrent::filteredReduced() is like filtered(), except that the
-    filtered results are reduced or folded into a single result.
-
-    \li QtConcurrent::run() runs a function in another thread.
+    \li \l {Concurrent Run}
+    \list
+        \li \l {QtConcurrent::run}{QtConcurrent::run()} runs a function in
+            another thread.
+    \endlist
 
     \li QFuture represents the result of an asynchronous computation.
 
@@ -117,11 +126,20 @@
     Random access iterators can be faster in cases where Qt Concurrent is iterating
     over a large number of lightweight items, since they allow skipping to any point
     in the container. In addition, using random access iterators allows Qt Concurrent
-    to provide progress information trough QFuture::progressValue() and QFutureWatcher::
-    progressValueChanged().
+    to provide progress information trough QFuture::progressValue() and
+    QFutureWatcher::progressValueChanged().
 
     The non in-place modifying functions such as mapped() and filtered() makes a
     copy of the container when called. If you are using STL containers this copy operation
     might take some time, in this case we recommend specifying the begin and end iterators
     for the container instead.
+
+    \section1 Licenses
+
+    The Qt Concurrent module is available under commercial licenses from \l{The Qt Company}.
+    In addition, it is available under free software licenses. Since Qt 5.4,
+    these free software licenses are
+    \l{GNU Lesser General Public License, version 3}, or
+    the \l{GNU General Public License, version 2}.
+    See \l{Qt Licensing} for further details.
 */

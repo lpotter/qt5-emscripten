@@ -2,22 +2,21 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtSql
 description             = Qt SQL Reference Documentation
-url                     = http://qt-project.org/doc/qtsql
-version                 = 5.0.0
+version                 = $QT_VERSION
 
 examplesinstallpath     = sql
 
 qhp.projects            = QtSql
 
 qhp.QtSql.file            = qtsql.qhp
-qhp.QtSql.namespace           = org.qt-project.qtsql.500
+qhp.QtSql.namespace           = org.qt-project.qtsql.$QT_VERSION_TAG
 qhp.QtSql.virtualFolder       = qtsql
 qhp.QtSql.indexTitle          = Qt SQL
 qhp.QtSql.indexRoot           =
 
-qhp.QtSql.filterAttributes    = qtsql 5.0.0 qtrefdoc
-qhp.QtSql.customFilters.Qt.name = QtSql 5.0.0
-qhp.QtSql.customFilters.Qt.filterAttributes = qtsql 5.0.0
+qhp.QtSql.filterAttributes    = qtsql $QT_VERSION qtrefdoc
+qhp.QtSql.customFilters.Qt.name = QtSql $QT_VERSION
+qhp.QtSql.customFilters.Qt.filterAttributes = qtsql $QT_VERSION
 
 qhp.QtSql.subprojects         = classes
 qhp.QtSql.subprojects.classes.title = C++ Classes
@@ -26,7 +25,7 @@ qhp.QtSql.subprojects.classes.selectors = class fake:headerfile
 qhp.QtSql.subprojects.classes.sortPages = true
 tagfile                 = ../../../doc/qtsql/qtsql.tags
 
-depends                 += qtcore qtwidgets qtdoc
+depends                 += qtcore qtwidgets qtdoc qmake
 
 headerdirs  += ..
 
@@ -39,3 +38,6 @@ exampledirs += ../../../examples/sql \
 
 imagedirs   += images \
                ../../../examples/sql/doc/images
+
+navigation.landingpage = "Qt SQL"
+navigation.cppclassespage = "Qt SQL C++ Classes"

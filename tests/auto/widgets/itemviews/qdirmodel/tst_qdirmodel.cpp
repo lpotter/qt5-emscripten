@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,11 +32,13 @@
 #include <qtreeview.h>
 #include <qdir.h>
 #include <qdebug.h>
+#include "emulationdetector.h"
 
 class tst_QDirModel : public QObject
 {
     Q_OBJECT
 public slots:
+    void initTestCase();
     void cleanupTestCase();
     void init();
 private slots:
@@ -121,9 +110,28 @@ void tst_QDirModel::getSetCheck()
     QCOMPARE(true, obj1.lazyChildCount());
 }
 
+void tst_QDirModel::initTestCase()
+{
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QString dataPath = SRCDIR;
+    QString resourceSourcePath = QStringLiteral(":/android_testdata");
+    QDirIterator it(resourceSourcePath, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
 
-Q_DECLARE_METATYPE(QModelIndex)
-Q_DECLARE_METATYPE(QModelIndexList)
+        QFileInfo fileInfo = it.fileInfo();
+        if (!fileInfo.isDir()) {
+            QString destination = dataPath + QLatin1Char('/') + fileInfo.filePath().mid(resourceSourcePath.length());
+            QFileInfo destinationFileInfo(destination);
+            if (!destinationFileInfo.exists()) {
+                QDir().mkpath(destinationFileInfo.path());
+                if (!QFile::copy(fileInfo.filePath(), destination))
+                    qWarning("Failed to copy %s", qPrintable(fileInfo.filePath()));
+            }
+        }
+    }
+#endif
+}
 
 void tst_QDirModel::cleanupTestCase()
 {
@@ -306,6 +314,9 @@ void tst_QDirModel::mkdir()
     model.setReadOnly(false);
 
     QModelIndex parent = model.index(SRCDIR "dirtest");
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Sandboxed applications cannot access SRCDIR - QTBUG-68297", Abort);
+#endif
     QVERIFY(parent.isValid());
     QCOMPARE(model.rowCount(parent), 1); // start out with only 'test1' - in's in the depot
 
@@ -343,6 +354,9 @@ void tst_QDirModel::rmdir()
     model.setReadOnly(false);
 
     QModelIndex parent = model.index(SRCDIR  "/dirtest");
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Sandboxed applications cannot access SRCDIR - QTBUG-68297", Abort);
+#endif
     QVERIFY(parent.isValid());
     QCOMPARE(model.rowCount(parent), 1); // start out with only 'test1' - in's in the depot
 
@@ -404,14 +418,14 @@ void tst_QDirModel::rowsAboutToBeRemoved_data()
 
 bool tst_QDirModel::rowsAboutToBeRemoved_init(const QString &test_path, const QStringList &initial_files)
 {
-    QString path = QDir::currentPath() + "/" + test_path;
+    QString path = QDir::currentPath() + QLatin1Char('/') + test_path;
     if (!QDir::current().mkdir(test_path) && false) { // FIXME
         qDebug() << "failed to create dir" << path;
         return false;
     }
 
     for (int i = 0; i < initial_files.count(); ++i) {
-        QFile file(path + "/" + initial_files.at(i));
+        QFile file(path + QLatin1Char('/') + initial_files.at(i));
         if (!file.open(QIODevice::WriteOnly)) {
             qDebug() << "failed to open file" << initial_files.at(i);
             return false;
@@ -431,7 +445,7 @@ bool tst_QDirModel::rowsAboutToBeRemoved_init(const QString &test_path, const QS
 
 bool tst_QDirModel::rowsAboutToBeRemoved_cleanup(const QString &test_path)
 {
-    QString path = QDir::currentPath() + "/" + test_path;
+    QString path = QDir::currentPath() + QLatin1Char('/') + test_path;
     QDir dir(path, "*", QDir::SortFlags(QDir::Name|QDir::IgnoreCase), QDir::Files);
     QStringList files = dir.entryList();
 
@@ -452,6 +466,9 @@ bool tst_QDirModel::rowsAboutToBeRemoved_cleanup(const QString &test_path)
 
 void tst_QDirModel::rowsAboutToBeRemoved()
 {
+#ifdef Q_OS_WINRT
+    QSKIP("Test fails on WinRT - QTBUG-68297");
+#endif
     QFETCH(QString, test_path);
     QFETCH(QStringList, initial_files);
     QFETCH(int, remove_row);
@@ -464,7 +481,6 @@ void tst_QDirModel::rowsAboutToBeRemoved()
     QDirModel model;
     model.setReadOnly(false);
 
-    qRegisterMetaType<QModelIndex>("QModelIndex");
 
     // NOTE: QDirModel will call refresh() when a file is removed. refresh() will reread the entire directory,
     // and emit layoutAboutToBeChanged and layoutChange. So, instead of checking for
@@ -564,15 +580,20 @@ void tst_QDirModel::unreadable()
 void tst_QDirModel::filePath()
 {
     QFile::remove(SRCDIR "test.lnk");
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Sandboxed applications cannot access SRCDIR - QTBUG-68297", Abort);
+#endif
     QVERIFY(QFile(SRCDIR "tst_qdirmodel.cpp").link(SRCDIR "test.lnk"));
     QDirModel model;
     model.setResolveSymlinks(false);
     QModelIndex index = model.index(SRCDIR "test.lnk");
     QVERIFY(index.isValid());
-#ifndef Q_OS_WINCE
+#if !defined(Q_OS_ANDROID)
     QString path = SRCDIR;
 #else
-    QString path = QFileInfo(SRCDIR).absoluteFilePath() + "/";
+    QString path = QFileInfo(SRCDIR).absoluteFilePath();
+    if (!path.endsWith(QLatin1Char('/')))
+        path += QLatin1Char('/');
 #endif
     QCOMPARE(model.filePath(index), path + QString( "test.lnk"));
     model.setResolveSymlinks(true);
@@ -605,6 +626,13 @@ void tst_QDirModel::task196768_sorting()
     view.setSortingEnabled(true);
     index2 = model.index(path);
 
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QEXPECT_FAIL("", "QTBUG-43818", Continue);
+#else
+    if (EmulationDetector::isRunningArmOnX86())
+        QEXPECT_FAIL("", "QTBUG-43818", Continue);
+#endif
+
     QCOMPARE(index.data(), index2.data());
 }
 
@@ -613,6 +641,9 @@ void tst_QDirModel::filter()
     QDirModel model;
     model.setNameFilters(QStringList() << "*.nada");
     QModelIndex index = model.index(SRCDIR "test");
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Sandboxed applications cannot access SRCDIR - QTBUG-68297", Abort);
+#endif
     QCOMPARE(model.rowCount(index), 0);
     QModelIndex index2 = model.index(SRCDIR "test/file01.tst");
     QVERIFY(!index2.isValid());
@@ -622,6 +653,9 @@ void tst_QDirModel::filter()
 void tst_QDirModel::task244669_remove()
 {
     QFile f1(SRCDIR "dirtest/f1.txt");
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Sandboxed applications cannot access SRCDIR - QTBUG-68297", Abort);
+#endif
     QVERIFY(f1.open(QIODevice::WriteOnly));
     f1.close();
     QFile f2(SRCDIR "dirtest/f2.txt");

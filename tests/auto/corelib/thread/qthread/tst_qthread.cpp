@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,12 +40,18 @@
 #ifdef Q_OS_UNIX
 #include <pthread.h>
 #endif
-#if defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
 #include <windows.h>
-#elif defined(Q_OS_WIN)
+#if defined(Q_OS_WIN32)
 #include <process.h>
-#include <windows.h>
 #endif
+#endif
+
+#ifndef QT_NO_EXCEPTIONS
+#include <exception>
+#endif
+
+#include "emulationdetector.h"
 
 class tst_QThread : public QObject
 {
@@ -106,11 +99,13 @@ private slots:
 
     void customEventDispatcher();
 
-#ifndef Q_OS_WINCE
+    void requestTermination();
+
     void stressTest();
-#endif
 
     void quitLock();
+
+    void create();
 };
 
 enum { one_minute = 60 * 1000, five_minutes = 5 * one_minute };
@@ -470,6 +465,9 @@ void tst_QThread::start()
 
 void tst_QThread::terminate()
 {
+#if defined(Q_OS_WINRT) || defined(Q_OS_ANDROID)
+    QSKIP("Thread termination is not supported on WinRT or Android.");
+#endif
     Terminate_Thread thread;
     {
         QMutexLocker locker(&thread.mutex);
@@ -533,6 +531,9 @@ void tst_QThread::finished()
 
 void tst_QThread::terminated()
 {
+#if defined(Q_OS_WINRT) || defined(Q_OS_ANDROID)
+    QSKIP("Thread termination is not supported on WinRT or Android.");
+#endif
     SignalRecorder recorder;
     Terminate_Thread thread;
     connect(&thread, SIGNAL(finished()), &recorder, SLOT(slot()), Qt::DirectConnection);
@@ -669,7 +670,7 @@ void NativeThreadWrapper::start(FunctionPointer functionPointer, void *data)
 #if defined Q_OS_UNIX
     const int state = pthread_create(&nativeThreadHandle, 0, NativeThreadWrapper::runUnix, this);
     Q_UNUSED(state);
-#elif defined(Q_OS_WINCE)
+#elif defined(Q_OS_WINRT)
         nativeThreadHandle = CreateThread(NULL, 0 , (LPTHREAD_START_ROUTINE)NativeThreadWrapper::runWin , this, 0, NULL);
 #elif defined Q_OS_WIN
     unsigned thrdid = 0;
@@ -689,7 +690,7 @@ void NativeThreadWrapper::join()
 #if defined Q_OS_UNIX
     pthread_join(nativeThreadHandle, 0);
 #elif defined Q_OS_WIN
-    WaitForSingleObject(nativeThreadHandle, INFINITE);
+    WaitForSingleObjectEx(nativeThreadHandle, INFINITE, FALSE);
     CloseHandle(nativeThreadHandle);
 #endif
 }
@@ -778,7 +779,6 @@ void tst_QThread::adoptedThreadAffinity()
 
 void tst_QThread::adoptedThreadSetPriority()
 {
-
     NativeThreadWrapper nativeThread;
     nativeThread.setWaitForStop();
     nativeThread.startAndWait();
@@ -876,13 +876,8 @@ void tst_QThread::adoptedThreadExecFinished()
 void tst_QThread::adoptMultipleThreads()
 {
 #if defined(Q_OS_WIN)
-    // Windows CE is not capable of handling that many threads. On the emulator it is dead with 26 threads already.
-#  if defined(Q_OS_WINCE)
-    const int numThreads = 20;
-#  else
     // need to test lots of threads, so that we exceed MAXIMUM_WAIT_OBJECTS in qt_adopted_thread_watcher()
     const int numThreads = 200;
-#  endif
 #else
     const int numThreads = 5;
 #endif
@@ -913,13 +908,8 @@ void tst_QThread::adoptMultipleThreads()
 void tst_QThread::adoptMultipleThreadsOverlap()
 {
 #if defined(Q_OS_WIN)
-    // Windows CE is not capable of handling that many threads. On the emulator it is dead with 26 threads already.
-#  if defined(Q_OS_WINCE)
-    const int numThreads = 20;
-#  else
     // need to test lots of threads, so that we exceed MAXIMUM_WAIT_OBJECTS in qt_adopted_thread_watcher()
     const int numThreads = 200;
-#  endif
 #else
     const int numThreads = 5;
 #endif
@@ -952,10 +942,12 @@ void tst_QThread::adoptMultipleThreadsOverlap()
     QCOMPARE(recorder.activationCount.load(), numThreads);
 }
 
-#ifndef Q_OS_WINCE
 // Disconnects on WinCE
 void tst_QThread::stressTest()
 {
+    if (EmulationDetector::isRunningArmOnX86())
+        QSKIP("Qemu uses too much memory for each thread. Test would run out of memory.");
+
     QTime t;
     t.start();
     while (t.elapsed() < one_minute) {
@@ -964,7 +956,6 @@ void tst_QThread::stressTest()
         t.wait(one_minute);
     }
 }
-#endif
 
 class Syncronizer : public QObject
 { Q_OBJECT
@@ -997,9 +988,7 @@ void tst_QThread::exitAndStart()
     connect(&sync2, SIGNAL(propChanged(int)), &sync1, SLOT(setProp(int)), Qt::QueuedConnection);
     connect(&sync1, SIGNAL(propChanged(int)), &thread, SLOT(quit()), Qt::QueuedConnection);
     QMetaObject::invokeMethod(&sync2, "setProp", Qt::QueuedConnection , Q_ARG(int, 89));
-    QTest::qWait(50);
-    while(!thread.wait(10))
-        QTest::qWait(10);
+    QTRY_VERIFY(thread.wait(10));
     QCOMPARE(sync2.m_prop, 89);
     QCOMPARE(sync1.m_prop, 89);
 }
@@ -1026,7 +1015,7 @@ void tst_QThread::exitAndExec()
     thread.sem2.acquire();
     int v = thread.value;
     QCOMPARE(v, 556);
-    
+
     //test that the thread is running by executing queued connected signal there
     Syncronizer sync1;
     sync1.moveToThread(&thread);
@@ -1035,9 +1024,7 @@ void tst_QThread::exitAndExec()
     connect(&sync2, SIGNAL(propChanged(int)), &sync1, SLOT(setProp(int)), Qt::QueuedConnection);
     connect(&sync1, SIGNAL(propChanged(int)), &thread, SLOT(quit()), Qt::QueuedConnection);
     QMetaObject::invokeMethod(&sync2, "setProp", Qt::QueuedConnection , Q_ARG(int, 89));
-    QTest::qWait(50);
-    while(!thread.wait(10))
-        QTest::qWait(10);
+    QTRY_VERIFY(thread.wait(10));
     QCOMPARE(sync2.m_prop, 89);
     QCOMPARE(sync1.m_prop, 89);
 }
@@ -1079,8 +1066,8 @@ void tst_QThread::wait2()
     thread.start();
     timer.start();
     QVERIFY(!thread.wait(Waiting_Thread::WaitTime));
-    qint64 elapsed = timer.elapsed(); // On Windows, we sometimes get (WaitTime - 1).
-    QVERIFY2(elapsed >= Waiting_Thread::WaitTime - 1, qPrintable(QString::fromLatin1("elapsed: %1").arg(elapsed)));
+    qint64 elapsed = timer.elapsed(); // On Windows, we sometimes get (WaitTime - 9).
+    QVERIFY2(elapsed >= Waiting_Thread::WaitTime - 10, qPrintable(QString::fromLatin1("elapsed: %1").arg(elapsed)));
 
     timer.start();
     thread.cond1.wakeOne();
@@ -1221,9 +1208,9 @@ QT_END_NAMESPACE
 
 class DummyEventDispatcher : public QAbstractEventDispatcher {
 public:
-    DummyEventDispatcher() : QAbstractEventDispatcher(), visited(false) {}
+    DummyEventDispatcher() : QAbstractEventDispatcher() {}
     bool processEvents(QEventLoop::ProcessEventsFlags) {
-        visited = true;
+        visited.store(true);
         emit awake();
         QCoreApplication::sendPostedEvents();
         return false;
@@ -1247,7 +1234,7 @@ public:
     void unregisterEventNotifier(QWinEventNotifier *) { }
 #endif
 
-    bool visited;
+    QBasicAtomicInt visited; // bool
 };
 
 class ThreadObj : public QObject
@@ -1285,7 +1272,7 @@ void tst_QThread::customEventDispatcher()
     QMetaObject::invokeMethod(&obj, "visit", Qt::QueuedConnection);
     loop.exec();
     // test that the ED has really been used
-    QVERIFY(ed->visited);
+    QVERIFY(ed->visited.load());
 
     QPointer<DummyEventDispatcher> weak_ed(ed);
     QVERIFY(!weak_ed.isNull());
@@ -1300,9 +1287,10 @@ class Job : public QObject
 {
     Q_OBJECT
 public:
-    Job(QThread *thread, int deleteDelay, QObject *parent = 0)
-      : QObject(parent), quitLocker(thread), exitThreadCalled(false)
+    Job(QThread *thread, int deleteDelay, bool *flag, QObject *parent = 0)
+      : QObject(parent), quitLocker(thread), exitThreadCalled(*flag)
     {
+        exitThreadCalled = false;
         moveToThread(thread);
         QTimer::singleShot(deleteDelay, this, SLOT(deleteLater()));
         QTimer::singleShot(1000, this, SLOT(exitThread()));
@@ -1318,12 +1306,13 @@ private slots:
 private:
     QEventLoopLocker quitLocker;
 public:
-    bool exitThreadCalled;
+    bool &exitThreadCalled;
 };
 
 void tst_QThread::quitLock()
 {
     QThread thread;
+    bool exitThreadCalled;
 
     QEventLoop loop;
     connect(&thread, SIGNAL(finished()), &loop, SLOT(quit()));
@@ -1331,16 +1320,307 @@ void tst_QThread::quitLock()
     Job *job;
 
     thread.start();
-    job = new Job(&thread, 500);
+    job = new Job(&thread, 500, &exitThreadCalled);
     QCOMPARE(job->thread(), &thread);
     loop.exec();
-    QVERIFY(!job->exitThreadCalled);
+    QVERIFY(!exitThreadCalled);
 
     thread.start();
-    job = new Job(&thread, 2500);
+    job = new Job(&thread, 2500, &exitThreadCalled);
     QCOMPARE(job->thread(), &thread);
     loop.exec();
-    QVERIFY(job->exitThreadCalled);
+    QVERIFY(exitThreadCalled);
+}
+
+void tst_QThread::create()
+{
+#if !QT_CONFIG(cxx11_future)
+    QSKIP("This test requires QThread::create");
+#else
+    {
+        const auto &function = [](){};
+        QScopedPointer<QThread> thread(QThread::create(function));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+    }
+
+    {
+        // no side effects before starting
+        int i = 0;
+        const auto &function = [&i]() { i = 42; };
+        QScopedPointer<QThread> thread(QThread::create(function));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        QCOMPARE(i, 0);
+        thread->start();
+        QVERIFY(thread->wait());
+        QCOMPARE(i, 42);
+    }
+
+    {
+        // control thread progress
+        QSemaphore semaphore1;
+        QSemaphore semaphore2;
+
+        const auto &function = [&semaphore1, &semaphore2]() -> void
+        {
+            semaphore1.acquire();
+            semaphore2.release();
+        };
+
+        QScopedPointer<QThread> thread(QThread::create(function));
+
+        QVERIFY(thread);
+        thread->start();
+        QTRY_VERIFY(thread->isRunning());
+        semaphore1.release();
+        semaphore2.acquire();
+        QVERIFY(thread->wait());
+        QVERIFY(!thread->isRunning());
+    }
+
+    {
+        // ignore return values
+        const auto &function = []() { return 42; };
+        QScopedPointer<QThread> thread(QThread::create(function));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+    }
+
+    {
+        // return value of create
+        QScopedPointer<QThread> thread;
+        QSemaphore s;
+        const auto &function = [&thread, &s]() -> void
+        {
+            s.acquire();
+            QCOMPARE(thread.data(), QThread::currentThread());
+        };
+
+        thread.reset(QThread::create(function));
+        QVERIFY(thread);
+        thread->start();
+        QTRY_VERIFY(thread->isRunning());
+        s.release();
+        QVERIFY(thread->wait());
+    }
+
+    {
+        // move-only parameters
+        struct MoveOnlyValue {
+            explicit MoveOnlyValue(int v) : v(v) {}
+            ~MoveOnlyValue() = default;
+            MoveOnlyValue(const MoveOnlyValue &) = delete;
+            MoveOnlyValue(MoveOnlyValue &&) = default;
+            MoveOnlyValue &operator=(const MoveOnlyValue &) = delete;
+            MoveOnlyValue &operator=(MoveOnlyValue &&) = default;
+            int v;
+        };
+
+        struct MoveOnlyFunctor {
+            explicit MoveOnlyFunctor(int *i) : i(i) {}
+            ~MoveOnlyFunctor() = default;
+            MoveOnlyFunctor(const MoveOnlyFunctor &) = delete;
+            MoveOnlyFunctor(MoveOnlyFunctor &&) = default;
+            MoveOnlyFunctor &operator=(const MoveOnlyFunctor &) = delete;
+            MoveOnlyFunctor &operator=(MoveOnlyFunctor &&) = default;
+            int operator()() { return (*i = 42); }
+            int *i;
+        };
+
+        {
+            int i = 0;
+            MoveOnlyFunctor f(&i);
+            QScopedPointer<QThread> thread(QThread::create(std::move(f)));
+            QVERIFY(thread);
+            QVERIFY(!thread->isRunning());
+            thread->start();
+            QVERIFY(thread->wait());
+            QCOMPARE(i, 42);
+        }
+
+#if defined(__cpp_init_captures) && __cpp_init_captures >= 201304
+        {
+            int i = 0;
+            MoveOnlyValue mo(123);
+            auto moveOnlyFunction = [&i, mo = std::move(mo)]() { i = mo.v; };
+            QScopedPointer<QThread> thread(QThread::create(std::move(moveOnlyFunction)));
+            QVERIFY(thread);
+            QVERIFY(!thread->isRunning());
+            thread->start();
+            QVERIFY(thread->wait());
+            QCOMPARE(i, 123);
+        }
+#endif // __cpp_init_captures
+
+#ifdef QTHREAD_HAS_VARIADIC_CREATE
+        {
+            int i = 0;
+            const auto &function = [&i](MoveOnlyValue &&mo) { i = mo.v; };
+            QScopedPointer<QThread> thread(QThread::create(function, MoveOnlyValue(123)));
+            QVERIFY(thread);
+            QVERIFY(!thread->isRunning());
+            thread->start();
+            QVERIFY(thread->wait());
+            QCOMPARE(i, 123);
+        }
+
+        {
+            int i = 0;
+            const auto &function = [&i](MoveOnlyValue &&mo) { i = mo.v; };
+            MoveOnlyValue mo(-1);
+            QScopedPointer<QThread> thread(QThread::create(function, std::move(mo)));
+            QVERIFY(thread);
+            QVERIFY(!thread->isRunning());
+            thread->start();
+            QVERIFY(thread->wait());
+            QCOMPARE(i, -1);
+        }
+#endif // QTHREAD_HAS_VARIADIC_CREATE
+    }
+
+#ifdef QTHREAD_HAS_VARIADIC_CREATE
+    {
+        // simple parameter passing
+        int i = 0;
+        const auto &function = [&i](int j, int k) { i = j * k; };
+        QScopedPointer<QThread> thread(QThread::create(function, 3, 4));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        QCOMPARE(i, 0);
+        thread->start();
+        QVERIFY(thread->wait());
+        QCOMPARE(i, 12);
+    }
+
+    {
+        // ignore return values (with parameters)
+        const auto &function = [](double d) { return d * 2.0; };
+        QScopedPointer<QThread> thread(QThread::create(function, 3.14));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+    }
+
+    {
+        // handling of pointers to member functions, std::ref, etc.
+        struct S {
+            S() : v(0) {}
+            void doSomething() { ++v; }
+            int v;
+        };
+
+        S object;
+
+        QCOMPARE(object.v, 0);
+
+        QScopedPointer<QThread> thread;
+        thread.reset(QThread::create(&S::doSomething, object));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+
+        QCOMPARE(object.v, 0); // a copy was passed, this should still be 0
+
+        thread.reset(QThread::create(&S::doSomething, std::ref(object)));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+
+        QCOMPARE(object.v, 1);
+
+        thread.reset(QThread::create(&S::doSomething, &object));
+        QVERIFY(thread);
+        QVERIFY(!thread->isRunning());
+        thread->start();
+        QVERIFY(thread->wait());
+
+        QCOMPARE(object.v, 2);
+    }
+
+    {
+        // std::ref into ordinary reference
+        int i = 42;
+        const auto &function = [](int &i) { i *= 2; };
+        QScopedPointer<QThread> thread(QThread::create(function, std::ref(i)));
+        QVERIFY(thread);
+        thread->start();
+        QVERIFY(thread->wait());
+        QCOMPARE(i, 84);
+    }
+
+#ifndef QT_NO_EXCEPTIONS
+    {
+        // exceptions when copying/decaying the arguments are thrown at build side and won't terminate
+        class ThreadException : public std::exception
+        {
+        };
+
+        struct ThrowWhenCopying
+        {
+            ThrowWhenCopying() = default;
+            ThrowWhenCopying(const ThrowWhenCopying &)
+            {
+                throw ThreadException();
+            }
+            ~ThrowWhenCopying() = default;
+            ThrowWhenCopying &operator=(const ThrowWhenCopying &) = default;
+        };
+
+        const auto &function = [](const ThrowWhenCopying &){};
+        QScopedPointer<QThread> thread;
+        ThrowWhenCopying t;
+        QVERIFY_EXCEPTION_THROWN(thread.reset(QThread::create(function, t)), ThreadException);
+        QVERIFY(!thread);
+    }
+#endif // QT_NO_EXCEPTIONS
+#endif // QTHREAD_HAS_VARIADIC_CREATE
+#endif // QT_CONFIG(cxx11_future)
+}
+
+class StopableJob : public QObject
+{
+    Q_OBJECT
+public:
+    StopableJob (QSemaphore &sem) : sem(sem) {}
+    QSemaphore &sem;
+public Q_SLOTS:
+    void run() {
+        sem.release();
+        while (!thread()->isInterruptionRequested())
+            QTest::qSleep(10);
+        sem.release();
+        Q_EMIT finished();
+    }
+Q_SIGNALS:
+    void finished();
+};
+
+void tst_QThread::requestTermination()
+{
+    QThread thread;
+    QVERIFY(!thread.isInterruptionRequested());
+    QSemaphore sem;
+    StopableJob *j  = new StopableJob(sem);
+    j->moveToThread(&thread);
+    connect(&thread, &QThread::started, j, &StopableJob::run);
+    connect(j, &StopableJob::finished, &thread, &QThread::quit, Qt::DirectConnection);
+    connect(&thread, &QThread::finished, j, &QObject::deleteLater);
+    thread.start();
+    QVERIFY(!thread.isInterruptionRequested());
+    sem.acquire();
+    QVERIFY(!thread.wait(1000));
+    thread.requestInterruption();
+    sem.acquire();
+    QVERIFY(thread.wait(1000));
+    QVERIFY(!thread.isInterruptionRequested());
 }
 
 QTEST_MAIN(tst_QThread)

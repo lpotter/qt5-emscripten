@@ -1,7 +1,7 @@
 /***************************************************************************
 **
 ** Copyright (C) 2011 - 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,34 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
+#include "qqnxglobal.h"
 
 #include "qqnxbuffer.h"
 
@@ -46,7 +46,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-#ifdef QQNXBUFFER_DEBUG
+#if defined(QQNXBUFFER_DEBUG)
 #define qBufferDebug qDebug
 #else
 #define qBufferDebug QT_NO_QDEBUG_MACRO
@@ -57,48 +57,39 @@ QT_BEGIN_NAMESPACE
 QQnxBuffer::QQnxBuffer()
     : m_buffer(0)
 {
-    qBufferDebug() << Q_FUNC_INFO << "empty";
+    qBufferDebug("empty");
 }
 
 QQnxBuffer::QQnxBuffer(screen_buffer_t buffer)
     : m_buffer(buffer)
 {
-    qBufferDebug() << Q_FUNC_INFO << "normal";
+    qBufferDebug("normal");
 
     // Get size of buffer
-    errno = 0;
     int size[2];
-    int result = screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_BUFFER_SIZE, size);
-    if (result != 0) {
-        qFatal("QQNX: failed to query buffer size, errno=%d", errno);
-    }
+    Q_SCREEN_CRITICALERROR(screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_BUFFER_SIZE, size),
+                        "Failed to query buffer size");
 
     // Get stride of buffer
-    errno = 0;
     int stride;
-    result = screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_STRIDE, &stride);
-    if (result != 0) {
-        qFatal("QQNX: failed to query buffer stride, errno=%d", errno);
-    }
+    Q_SCREEN_CHECKERROR(screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_STRIDE, &stride),
+                        "Failed to query buffer stride");
 
     // Get access to buffer's data
     errno = 0;
     uchar *dataPtr = 0;
-    result = screen_get_buffer_property_pv(buffer, SCREEN_PROPERTY_POINTER, (void **)&dataPtr);
-    if (result != 0) {
-        qFatal("QQNX: failed to query buffer pointer, errno=%d", errno);
-    }
-    if (dataPtr == 0) {
+    Q_SCREEN_CRITICALERROR(
+            screen_get_buffer_property_pv(buffer, SCREEN_PROPERTY_POINTER, (void **)&dataPtr),
+            "Failed to query buffer pointer");
+
+    if (Q_UNLIKELY(!dataPtr))
         qFatal("QQNX: buffer pointer is NULL, errno=%d", errno);
-    }
 
     // Get format of buffer
-    errno = 0;
     int screenFormat;
-    result = screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_FORMAT, &screenFormat);
-    if (result != 0) {
-        qFatal("QQNX: failed to query buffer format, errno=%d", errno);
-    }
+    Q_SCREEN_CHECKERROR(
+            screen_get_buffer_property_iv(buffer, SCREEN_PROPERTY_FORMAT, &screenFormat),
+            "Failed to query buffer format");
 
     // Convert screen format to QImage format
     QImage::Format imageFormat = QImage::Format_Invalid;
@@ -133,29 +124,27 @@ QQnxBuffer::QQnxBuffer(const QQnxBuffer &other)
     : m_buffer(other.m_buffer),
       m_image(other.m_image)
 {
-    qBufferDebug() << Q_FUNC_INFO << "copy";
+    qBufferDebug("copy");
 }
 
 QQnxBuffer::~QQnxBuffer()
 {
-    qBufferDebug() << Q_FUNC_INFO;
+    qBufferDebug();
 }
 
 void QQnxBuffer::invalidateInCache()
 {
-    qBufferDebug() << Q_FUNC_INFO;
+    qBufferDebug();
 
     // Verify native buffer exists
-    if (m_buffer == 0) {
+    if (Q_UNLIKELY(!m_buffer))
         qFatal("QQNX: can't invalidate cache for null buffer");
-    }
 
     // Evict buffer's data from cache
     errno = 0;
     int result = msync(m_image.bits(), m_image.height() * m_image.bytesPerLine(), MS_INVALIDATE | MS_CACHE_ONLY);
-    if (result != 0) {
+    if (Q_UNLIKELY(result != 0))
         qFatal("QQNX: failed to invalidate cache, errno=%d", errno);
-    }
 }
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,8 +61,8 @@
 #include <QtDBus/QDBusPendingCallWatcher>
 #include <QtDBus/QDBusObjectPath>
 #include <QtDBus/QDBusContext>
+#include <QtDBus/QDBusAbstractInterface>
 #include <QMap>
-#include "qnmdbushelper.h"
 
 #ifndef QT_NO_DBUS
 
@@ -72,55 +70,57 @@
 typedef enum NMDeviceType
 {
     DEVICE_TYPE_UNKNOWN = 0,
-    DEVICE_TYPE_802_3_ETHERNET,
-    DEVICE_TYPE_802_11_WIRELESS,
-    DEVICE_TYPE_GSM,
-    DEVICE_TYPE_CDMA
+    DEVICE_TYPE_ETHERNET,
+    DEVICE_TYPE_WIFI,
+    DEVICE_TYPE_MODEM = 8
 } NMDeviceType;
 
 typedef enum
 {
     NM_DEVICE_STATE_UNKNOWN = 0,
-    NM_DEVICE_STATE_UNMANAGED,
-    NM_DEVICE_STATE_UNAVAILABLE,
-    NM_DEVICE_STATE_DISCONNECTED,
-    NM_DEVICE_STATE_PREPARE,
-    NM_DEVICE_STATE_CONFIG,
-    NM_DEVICE_STATE_NEED_AUTH,
-    NM_DEVICE_STATE_IP_CONFIG,
-    NM_DEVICE_STATE_ACTIVATED,
-    NM_DEVICE_STATE_FAILED
+    NM_DEVICE_STATE_UNMANAGED = 10,
+    NM_DEVICE_STATE_UNAVAILABLE = 20,
+    NM_DEVICE_STATE_DISCONNECTED = 30,
+    NM_DEVICE_STATE_PREPARE = 40,
+    NM_DEVICE_STATE_CONFIG = 50,
+    NM_DEVICE_STATE_NEED_AUTH = 60,
+    NM_DEVICE_STATE_IP_CONFIG = 70,
+    NM_DEVICE_STATE_ACTIVATED = 100,
+    NM_DEVICE_STATE_DEACTIVATING = 110,
+    NM_DEVICE_STATE_FAILED = 120
 } NMDeviceState;
 
 typedef enum
 {
     NM_ACTIVE_CONNECTION_STATE_UNKNOWN = 0,
     NM_ACTIVE_CONNECTION_STATE_ACTIVATING,
-    NM_ACTIVE_CONNECTION_STATE_ACTIVATED
+    NM_ACTIVE_CONNECTION_STATE_ACTIVATED,
+    NM_ACTIVE_CONNECTION_STATE_DEACTIVATED = 4
 } NMActiveConnectionState;
 
-#define	NM_DBUS_SERVICE			"org.freedesktop.NetworkManager"
+#define NM_DBUS_SERVICE                     "org.freedesktop.NetworkManager"
 
-#define	NM_DBUS_PATH				        "/org/freedesktop/NetworkManager"
-#define	NM_DBUS_INTERFACE			        "org.freedesktop.NetworkManager"
-#define	NM_DBUS_INTERFACE_DEVICE	        NM_DBUS_INTERFACE ".Device"
+#define NM_DBUS_PATH                        "/org/freedesktop/NetworkManager"
+#define NM_DBUS_INTERFACE                   "org.freedesktop.NetworkManager"
+#define NM_DBUS_INTERFACE_DEVICE            NM_DBUS_INTERFACE ".Device"
 #define NM_DBUS_INTERFACE_DEVICE_WIRED      NM_DBUS_INTERFACE_DEVICE ".Wired"
 #define NM_DBUS_INTERFACE_DEVICE_WIRELESS   NM_DBUS_INTERFACE_DEVICE ".Wireless"
+#define NM_DBUS_INTERFACE_DEVICE_MODEM      NM_DBUS_INTERFACE_DEVICE ".Modem"
 #define NM_DBUS_PATH_ACCESS_POINT           NM_DBUS_PATH "/AccessPoint"
 #define NM_DBUS_INTERFACE_ACCESS_POINT      NM_DBUS_INTERFACE ".AccessPoint"
 
-#define NM_DBUS_PATH_SETTINGS             "/org/freedesktop/NetworkManagerSettings"
+#define NM_DBUS_PATH_SETTINGS               "/org/freedesktop/NetworkManager/Settings"
 
-#define NM_DBUS_IFACE_SETTINGS_CONNECTION "org.freedesktop.NetworkManagerSettings.Connection"
-#define NM_DBUS_IFACE_SETTINGS            "org.freedesktop.NetworkManagerSettings"
+#define NM_DBUS_IFACE_SETTINGS_CONNECTION   "org.freedesktop.NetworkManager.Settings.Connection"
+#define NM_DBUS_IFACE_SETTINGS              "org.freedesktop.NetworkManager.Settings"
 #define NM_DBUS_INTERFACE_ACTIVE_CONNECTION NM_DBUS_INTERFACE ".Connection.Active"
 #define NM_DBUS_INTERFACE_IP4_CONFIG        NM_DBUS_INTERFACE ".IP4Config"
 
-#define NM_DBUS_SERVICE_USER_SETTINGS     "org.freedesktop.NetworkManagerUserSettings"
-#define NM_DBUS_SERVICE_SYSTEM_SETTINGS   "org.freedesktop.NetworkManagerSystemSettings"
+#define NM_DBUS_SERVICE_USER_SETTINGS       "org.freedesktop.NetworkManagerUserSettings"
+#define NM_DBUS_SERVICE_SYSTEM_SETTINGS     "org.freedesktop.NetworkManagerSystemSettings"
 
-#define NM_802_11_AP_FLAGS_NONE				0x00000000
-#define NM_802_11_AP_FLAGS_PRIVACY			0x00000001
+#define NM_802_11_AP_FLAGS_NONE             0x00000000
+#define NM_802_11_AP_FLAGS_PRIVACY          0x00000001
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -135,50 +135,63 @@ Q_DECLARE_METATYPE(QT_PREPEND_NAMESPACE(ServerThing))
 
 QT_BEGIN_NAMESPACE
 
-class QNetworkManagerInterfacePrivate;
-class QNetworkManagerInterface : public QObject
+class QNetworkManagerInterface : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+    typedef enum
+    {
+        NM_STATE_UNKNOWN = 0,
+        NM_STATE_ASLEEP = 10,
+        NM_STATE_DISCONNECTED = 20,
+        NM_STATE_DISCONNECTING = 30,
+        NM_STATE_CONNECTING = 40,
+        NM_STATE_CONNECTED_LOCAL = 50,
+        NM_STATE_CONNECTED_SITE = 60,
+        NM_STATE_CONNECTED_GLOBAL = 70
+    } NMState;
+
     QNetworkManagerInterface(QObject *parent = 0);
     ~QNetworkManagerInterface();
-    
-    QList <QDBusObjectPath> getDevices() const;
-    void activateConnection(const QString &serviceName, QDBusObjectPath connection, QDBusObjectPath device, QDBusObjectPath specificObject);
-    void deactivateConnection(QDBusObjectPath connectionPath) const;
-    
+
+    QList <QDBusObjectPath> getDevices();
+    void activateConnection(QDBusObjectPath connection,QDBusObjectPath device, QDBusObjectPath specificObject);
+    void deactivateConnection(QDBusObjectPath connectionPath);
+
     QDBusObjectPath path() const;
-    QDBusInterface *connectionInterface() const;
-    
+
     bool wirelessEnabled() const;
     bool wirelessHardwareEnabled() const;
     QList <QDBusObjectPath> activeConnections() const;
-    quint32 state();
+    NMState state();
+    QString version() const;
     bool setConnections();
-    bool isValid();
-    
+
 Q_SIGNALS:
     void deviceAdded(QDBusObjectPath);
     void deviceRemoved(QDBusObjectPath);
-    void propertiesChanged( const QString &, QMap<QString,QVariant>);
-    void stateChanged(const QString&, quint32);
+    void propertiesChanged(QMap<QString,QVariant>);
+    void stateChanged(quint32);
     void activationFinished(QDBusPendingCallWatcher*);
+    void propertiesReady();
+    void devicesListReady();
 
 private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
 private:
-    QNetworkManagerInterfacePrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    QVariantMap propertyMap;
+    QList<QDBusObjectPath> devicesPathList;
+
 };
 
-class QNetworkManagerInterfaceAccessPointPrivate;
-class QNetworkManagerInterfaceAccessPoint : public QObject
+class QNetworkManagerInterfaceAccessPoint : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     enum DeviceState {
         Unknown = 0,
         Unmanaged,
@@ -191,14 +204,14 @@ public:
         Activated,
         Failed
     };
-    
+
     enum ApFlag {
         ApNone = 0x0,
         Privacy = 0x1
     };
-    
-    Q_DECLARE_FLAGS(ApFlags, ApFlag);
-    
+
+    Q_DECLARE_FLAGS(ApFlags, ApFlag)
+
     enum ApSecurityFlag {
         ApSecurityNone = 0x0,
         PairWep40 = 0x1,
@@ -212,13 +225,11 @@ public:
         KeyPsk = 0x100,
         Key8021x = 0x200
     };
-    
-    Q_DECLARE_FLAGS(ApSecurityFlags, ApSecurityFlag);
-    
+
+    Q_DECLARE_FLAGS(ApSecurityFlags, ApSecurityFlag)
+
     explicit QNetworkManagerInterfaceAccessPoint(const QString &dbusPathName, QObject *parent = 0);
     ~QNetworkManagerInterfaceAccessPoint();
-
-    QDBusInterface *connectionInterface() const;
 
     quint32 flags() const;
     quint32 wpaFlags() const;
@@ -229,79 +240,80 @@ public:
     quint32 mode() const;
     quint32 maxBitrate() const;
     quint32 strength() const;
-    bool setConnections();
-    bool isValid();
-    
+  //  bool setConnections();
+
 Q_SIGNALS:
     void propertiesChanged(QMap <QString,QVariant>);
-    void propertiesChanged( const QString &, QMap<QString,QVariant>);
-private:
-    QNetworkManagerInterfaceAccessPointPrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    void propertiesReady();
 
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
+private:
+    QVariantMap propertyMap;
 };
 
-class QNetworkManagerInterfaceDevicePrivate;
-class QNetworkManagerInterfaceDevice : public QObject
+class QNetworkManagerInterfaceDevice : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     explicit QNetworkManagerInterfaceDevice(const QString &deviceObjectPath, QObject *parent = 0);
     ~QNetworkManagerInterfaceDevice();
-    
+
     QString udi() const;
     QString networkInterface() const;
-    QDBusInterface *connectionInterface() const;
     quint32 ip4Address() const;
     quint32 state() const;
     quint32 deviceType() const;
-    
+
     QDBusObjectPath ip4config() const;
-    bool setConnections();
-    bool isValid();
-    
+
 Q_SIGNALS:
     void stateChanged(const QString &, quint32);
-
+    void propertiesChanged(QMap<QString,QVariant>);
+    void connectionsChanged(QStringList);
+    void propertiesReady();
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
 private:
-    QNetworkManagerInterfaceDevicePrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    QVariantMap propertyMap;
 };
 
-class QNetworkManagerInterfaceDeviceWiredPrivate;
-class QNetworkManagerInterfaceDeviceWired : public QObject
+class QNetworkManagerInterfaceDeviceWired : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     explicit QNetworkManagerInterfaceDeviceWired(const QString &ifaceDevicePath,
                                                  QObject *parent = 0);
     ~QNetworkManagerInterfaceDeviceWired();
-    
-    QDBusInterface  *connectionInterface() const;
+
     QString hwAddress() const;
     quint32 speed() const;
     bool carrier() const;
-    bool setConnections();
-    bool isValid();
-    
+    QStringList availableConnections();
+
 Q_SIGNALS:
-    void propertiesChanged( const QString &, QMap<QString,QVariant>);
+    void propertiesChanged(QMap<QString,QVariant>);
+    void propertiesReady();
+    void carrierChanged(bool);
+
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
 private:
-    QNetworkManagerInterfaceDeviceWiredPrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    QVariantMap propertyMap;
 };
 
-class QNetworkManagerInterfaceDeviceWirelessPrivate;
-class QNetworkManagerInterfaceDeviceWireless : public QObject
+class QNetworkManagerInterfaceDeviceWireless : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     enum DeviceCapability {
         None = 0x0,
         Wep40 = 0x1,
@@ -311,14 +323,12 @@ public:
         Wpa = 0x10,
         Rsn = 0x20
        };
-    
+
     explicit QNetworkManagerInterfaceDeviceWireless(const QString &ifaceDevicePath,
                                                     QObject *parent = 0);
     ~QNetworkManagerInterfaceDeviceWireless();
-    
-    QDBusObjectPath path() const;
+
     QList <QDBusObjectPath> getAccessPoints();
-    QDBusInterface *connectionInterface() const;
 
     QString hwAddress() const;
     quint32 mode() const;
@@ -326,49 +336,86 @@ public:
     QDBusObjectPath activeAccessPoint() const;
     quint32 wirelessCapabilities() const;
     bool setConnections();
-    bool isValid();
-    
+
+    void requestScan();
 Q_SIGNALS:
-    void propertiesChanged( const QString &, QMap<QString,QVariant>);
-    void accessPointAdded(const QString &,QDBusObjectPath);
-    void accessPointRemoved(const QString &,QDBusObjectPath);
+    void propertiesChanged(QMap<QString,QVariant>);
+    void propertiesReady();
+
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
 private:
-    QNetworkManagerInterfaceDeviceWirelessPrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    QVariantMap propertyMap;
+    QList <QDBusObjectPath> accessPointsList;
+    QString interfacePath;
 };
 
-class QNetworkManagerSettingsPrivate;
-class QNetworkManagerSettings : public QObject
+class QNetworkManagerInterfaceDeviceModem : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
+    enum ModemCapability {
+        None = 0x0,
+        Pots = 0x1,
+        Cmda_Edvo = 0x2,
+        Gsm_Umts = 0x4,
+        Lte = 0x08
+       };
+    Q_DECLARE_FLAGS(ModemCapabilities, ModemCapability)
+
+    explicit QNetworkManagerInterfaceDeviceModem(const QString &ifaceDevicePath,
+                                                    QObject *parent = 0);
+    ~QNetworkManagerInterfaceDeviceModem();
+
+    ModemCapabilities modemCapabilities() const;
+    ModemCapabilities currentCapabilities() const;
+
+Q_SIGNALS:
+    void propertiesChanged(QMap<QString,QVariant>);
+    void propertiesReady();
+
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
+private:
+    QVariantMap propertyMap;
+};
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(QNetworkManagerInterfaceDeviceModem::ModemCapabilities)
+
+class QNetworkManagerSettings : public QDBusAbstractInterface
+{
+    Q_OBJECT
+
+public:
+
     explicit QNetworkManagerSettings(const QString &settingsService, QObject *parent = 0);
     ~QNetworkManagerSettings();
-    
-    QDBusInterface  *connectionInterface() const;
+
     QList <QDBusObjectPath> listConnections();
+    QString getConnectionByUuid(const QString &uuid);
     bool setConnections();
-    bool isValid();
 
 Q_SIGNALS:
     void newConnection(QDBusObjectPath);
+    void connectionsListReady();
 private:
-    QNetworkManagerSettingsPrivate *d;
+    QList <QDBusObjectPath> connectionsList;
+    QString interfacePath;
 };
 
-class QNetworkManagerSettingsConnectionPrivate;
-class QNetworkManagerSettingsConnection : public QObject
+class QNetworkManagerSettingsConnection : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     QNetworkManagerSettingsConnection(const QString &settingsService, const QString &connectionObjectPath, QObject *parent = 0);
     ~QNetworkManagerSettingsConnection();
-    
-    QDBusInterface  *connectionInterface() const;
+
     QNmSettingsMap getSettings();
     bool setConnections();
     NMDeviceType getType();
@@ -379,67 +426,72 @@ public:
     QString getSsid();
     QString getMacAddress();
     QStringList getSeenBssids();
-    bool isValid();
 
 Q_SIGNALS:
-    
-    void updated(const QNmSettingsMap &settings);
+    void updated();
     void removed(const QString &path);
+    void settingsReady();
 
+private Q_SLOTS:
+    void slotSettingsRemoved();
 private:
-    QNmDBusHelper *nmDBusHelper;
-    QNetworkManagerSettingsConnectionPrivate *d;
+    QNmSettingsMap settingsMap;
+    QString interfacepath;
 };
 
-class QNetworkManagerConnectionActivePrivate;
-class QNetworkManagerConnectionActive : public QObject
+class QNetworkManagerConnectionActive : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
-    
+
     enum ActiveConnectionState {
         Unknown = 0,
         Activating = 1,
         Activated = 2
        };
-    
+
     explicit QNetworkManagerConnectionActive(const QString &dbusPathName, QObject *parent = 0);
     ~ QNetworkManagerConnectionActive();
-    
-    QDBusInterface  *connectionInterface() const;
-    QString serviceName() const;
+
     QDBusObjectPath connection() const;
     QDBusObjectPath specificObject() const;
-    QList<QDBusObjectPath> devices() const;
+    QStringList devices() const;
     quint32 state() const;
     bool defaultRoute() const;
-    bool setConnections();
-    bool isValid();
+    bool default6Route() const;
 
-    
+
 Q_SIGNALS:
-    void propertiesChanged(QList<QDBusObjectPath>);
-    void propertiesChanged( const QString &, QMap<QString,QVariant>);
+    void propertiesChanged(QMap<QString,QVariant>);
+    void propertiesReady();
+
+private Q_SLOTS:
+    void propertiesSwap(QMap<QString,QVariant>);
+
 private:
-    QNetworkManagerConnectionActivePrivate *d;
-    QNmDBusHelper *nmDBusHelper;
+    QVariantMap propertyMap;
 };
 
-class QNetworkManagerIp4ConfigPrivate;
-class QNetworkManagerIp4Config : public QObject
+class QNetworkManagerIp4Config : public QDBusAbstractInterface
 {
     Q_OBJECT
-    
+
 public:
     explicit QNetworkManagerIp4Config(const QString &dbusPathName, QObject *parent = 0);
-	~QNetworkManagerIp4Config();
+    ~QNetworkManagerIp4Config();
 
     QStringList domains() const;
-    bool isValid();
+};
 
- private:
-	QNetworkManagerIp4ConfigPrivate *d;    
+class PropertiesDBusInterface : public QDBusAbstractInterface
+{
+public:
+    PropertiesDBusInterface(const QString &service, const QString &path,
+                            const QString &interface, const QDBusConnection &connection,
+                            QObject *parent = 0)
+        : QDBusAbstractInterface(service, path, interface.toLatin1().data(), connection, parent)
+    {}
 };
 
 QT_END_NAMESPACE

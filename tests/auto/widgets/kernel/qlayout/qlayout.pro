@@ -1,14 +1,12 @@
 CONFIG += testcase
 TARGET = tst_qlayout
 
-QT += widgets widgets-private testlib
+QT += widgets widgets-private testlib testlib-private
 
 SOURCES += tst_qlayout.cpp
-wince* {
-   addFiles.files = baseline
-   addFiles.path = .
-   DEPLOYMENT += addFiles
-} else {
-   TESTDATA += baseline/*
+TESTDATA += baseline/*
+
+android:!android-embedded {
+    RESOURCES += \
+        testdata.qrc
 }
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

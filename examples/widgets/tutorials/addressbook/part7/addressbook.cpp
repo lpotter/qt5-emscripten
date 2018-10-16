@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -80,7 +90,7 @@ AddressBook::AddressBook(QWidget *parent)
     exportButton->setToolTip(tr("Export as vCard"));
     exportButton->setEnabled(false);
 
-    dialog = new FindDialog;
+    dialog = new FindDialog(this);
 
     connect(addButton, SIGNAL(clicked()), this, SLOT(addContact()));
     connect(submitButton, SIGNAL(clicked()), this, SLOT(submitContact()));
@@ -93,7 +103,7 @@ AddressBook::AddressBook(QWidget *parent)
     connect(loadButton, SIGNAL(clicked()), this, SLOT(loadFromFile()));
     connect(saveButton, SIGNAL(clicked()), this, SLOT(saveToFile()));
     connect(exportButton, SIGNAL(clicked()), this, SLOT(exportAsVCard()));
-    
+
     QVBoxLayout *buttonLayout1 = new QVBoxLayout;
     buttonLayout1->addWidget(addButton);
     buttonLayout1->addWidget(editButton);
@@ -153,7 +163,7 @@ void AddressBook::submitContact()
     }
 
     if (currentMode == AddingMode) {
-        
+
         if (!contacts.contains(name)) {
             contacts.insert(name, address);
             QMessageBox::information(this, tr("Add Successful"),
@@ -163,7 +173,7 @@ void AddressBook::submitContact()
                 tr("Sorry, \"%1\" is already in your address book.").arg(name));
         }
     } else if (currentMode == EditingMode) {
-        
+
         if (oldName != name) {
             if (!contacts.contains(name)) {
                 QMessageBox::information(this, tr("Edit Successful"),
@@ -204,7 +214,7 @@ void AddressBook::removeContact()
             QMessageBox::Yes | QMessageBox::No);
 
         if (button == QMessageBox::Yes) {
-            
+
             previous();
             contacts.remove(name);
 
@@ -298,7 +308,7 @@ void AddressBook::updateInterface(Mode mode)
         break;
 
     case NavigationMode:
-        
+
         if (contacts.isEmpty()) {
             nameLine->clear();
             addressText->clear();
@@ -331,7 +341,7 @@ void AddressBook::saveToFile()
     QString fileName = QFileDialog::getSaveFileName(this,
         tr("Save Address Book"), "",
         tr("Address Book (*.abk);;All Files (*)"));
-        
+
     if (fileName.isEmpty())
         return;
     else {
@@ -370,7 +380,6 @@ void AddressBook::loadFromFile()
 
         QDataStream in(&file);
         in.setVersion(QDataStream::Qt_4_3);
-        contacts.empty();   // empty existing contacts
         in >> contacts;
 
         QMap<QString, QString>::iterator i = contacts.begin();
@@ -393,7 +402,7 @@ void AddressBook::exportAsVCard()
     int index = name.indexOf(" ");
 
     if (index != -1) {
-        nameList = name.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+        nameList = name.split(QRegularExpression("\\s+"), QString::SkipEmptyParts);
         firstName = nameList.first();
         lastName = nameList.last();
     } else {
@@ -404,14 +413,14 @@ void AddressBook::exportAsVCard()
     QString fileName = QFileDialog::getSaveFileName(this,
         tr("Export Contact"), "",
         tr("vCard Files (*.vcf);;All Files (*)"));
-        
+
     if (fileName.isEmpty())
         return;
 
     QFile file(fileName);
 //! [export function part1]
-    
-//! [export function part2]    
+
+//! [export function part2]
     if (!file.open(QIODevice::WriteOnly)) {
         QMessageBox::information(this, tr("Unable to open file"),
             file.errorString());
@@ -422,23 +431,23 @@ void AddressBook::exportAsVCard()
 //! [export function part2]
 
 //! [export function part3]
-    out << "BEGIN:VCARD" << "\n";
-    out << "VERSION:2.1" << "\n";
-    out << "N:" << lastName << ";" << firstName << "\n";
-        
-    if (!nameList.isEmpty())            
-       out << "FN:" << nameList.join(' ') << "\n";
+    out << "BEGIN:VCARD" << '\n';
+    out << "VERSION:2.1" << '\n';
+    out << "N:" << lastName << ';' << firstName << '\n';
+
+    if (!nameList.isEmpty())
+       out << "FN:" << nameList.join(' ') << '\n';
     else
-       out << "FN:" << firstName << "\n";
-//! [export function part3] 
+       out << "FN:" << firstName << '\n';
+//! [export function part3]
 
 //! [export function part4]
     address.replace(";", "\\;", Qt::CaseInsensitive);
-    address.replace("\n", ";", Qt::CaseInsensitive);
+    address.replace('\n', ";", Qt::CaseInsensitive);
     address.replace(",", " ", Qt::CaseInsensitive);
 
-    out << "ADR;HOME:;" << address << "\n";
-    out << "END:VCARD" << "\n";
+    out << "ADR;HOME:;" << address << '\n';
+    out << "END:VCARD" << '\n';
 
     QMessageBox::information(this, tr("Export Successful"),
         tr("\"%1\" has been exported as a vCard.").arg(name));

@@ -1,8 +1,14 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qcomplextext
-QT += widgets widgets-private testlib
+QT += testlib
 QT += core-private gui-private
 SOURCES  += tst_qcomplextext.cpp
-INCLUDEPATH += $$QT_SOURCE_TREE/src/3rdparty/harfbuzz/src
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+
+TESTDATA += data
+
+android {
+    RESOURCES += \
+        android_testdata.qrc
+}
+
+builtin_testdata: DEFINES += BUILTIN_TESTDATA

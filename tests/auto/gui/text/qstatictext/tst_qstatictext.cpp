@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,27 +34,35 @@
 #include <qstatictext.h>
 #include <qpaintengine.h>
 
+#ifdef QT_BUILD_INTERNAL
 #include <private/qstatictext_p.h>
+#endif
 
 // #define DEBUG_SAVE_IMAGE
+
+static inline QImage blankSquare()
+{
+    // a "blank" square; we compare against in our testfunctions to verify
+    // that we have actually painted something
+    QPixmap pm(1000, 1000);
+    pm.fill(Qt::white);
+    return pm.toImage();
+}
 
 class tst_QStaticText: public QObject
 {
     Q_OBJECT
 public:
-    tst_QStaticText() {}
+    tst_QStaticText() : m_whiteSquare(blankSquare()) {}
 
 private slots:
-    void initTestCase();
-
-    void init();
-    void cleanup();
-
     void constructionAndDestruction();
     void drawToPoint_data();
     void drawToPoint();
     void drawToRect_data();
     void drawToRect();
+    void compareToDrawText_data();
+    void compareToDrawText();
     void setFont();
     void setTextWidth();
     void prepareToCorrectData();
@@ -87,6 +82,7 @@ private slots:
 
     void plainTextVsRichText();
 
+    void setPenPlainText_data();
     void setPenPlainText();
     void setPenRichText();
     void richTextOverridesPen();
@@ -97,31 +93,22 @@ private slots:
 
     void unprintableCharacter_qtbug12614();
 
+#ifdef QT_BUILD_INTERNAL
     void underlinedColor_qtbug20159();
     void textDocumentColor();
+#endif
+
+    void multiLine();
+
+    void size_qtbug65836();
 
 private:
     bool supportsTransformations() const;
 
-    QImage const    m_whiteSquare;
+    const QImage m_whiteSquare;
 };
 
-void tst_QStaticText::initTestCase()
-{
-    // a "blank" square; we compare against in our testfunctions to verify
-    // that we have actually painted something
-    QPixmap pm(1000, 1000);
-    pm.fill(Qt::white);
-    const_cast<QImage&>(m_whiteSquare) = pm.toImage();
-}
-
-void tst_QStaticText::init()
-{
-}
-
-void tst_QStaticText::cleanup()
-{
-}
+Q_DECLARE_METATYPE(QImage::Format);
 
 void tst_QStaticText::constructionAndDestruction()
 {
@@ -224,7 +211,67 @@ void tst_QStaticText::drawToRect()
 #endif
 
     QVERIFY(imageDrawText.toImage() != m_whiteSquare);
-    QCOMPARE(imageDrawStaticText, imageDrawText);   
+    QCOMPARE(imageDrawStaticText, imageDrawText);
+}
+
+void tst_QStaticText::compareToDrawText_data()
+{
+    QTest::addColumn<QFont>("font");
+
+    QTest::newRow("default") << QFont();
+    QFont sansserif; sansserif.setStyleHint(QFont::SansSerif);
+    QFont serif; serif.setStyleHint(QFont::Serif);
+    QFont monospace; monospace.setStyleHint(QFont::Monospace);
+    QTest::newRow("sans-serif") << QFont(sansserif.defaultFamily());
+    QTest::newRow("serif") << QFont(serif.defaultFamily());
+    QTest::newRow("monospace") << QFont(monospace.defaultFamily());
+}
+
+void tst_QStaticText::compareToDrawText()
+{
+    QFETCH(QFont, font);
+
+    QPixmap imageDrawText(1000, 1000);
+    imageDrawText.fill(Qt::white);
+    {
+        QPainter p(&imageDrawText);
+        p.setFont(font);
+        p.drawText(QRectF(11, 12, 30, 500), "Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
+    }
+
+    QPixmap imageDrawStaticPlainText(1000, 1000);
+    imageDrawStaticPlainText.fill(Qt::white);
+    {
+        QPainter p(&imageDrawStaticPlainText);
+        p.setFont(font);
+        QStaticText text("Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
+        text.setTextWidth(10),
+        p.setClipRect(QRectF(11, 12, 30, 500));
+        text.setTextFormat(Qt::PlainText);
+        p.drawStaticText(QPointF(11, 12), text);
+    }
+
+    QPixmap imageDrawStaticRichText(1000, 1000);
+    imageDrawStaticRichText.fill(Qt::white);
+    {
+        QPainter p(&imageDrawStaticRichText);
+        p.setFont(font);
+        QStaticText text("Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
+        text.setTextWidth(10),
+        p.setClipRect(QRectF(11, 12, 30, 500));
+        text.setTextFormat(Qt::RichText);
+        p.drawStaticText(QPointF(11, 12), text);
+    }
+
+#if defined(DEBUG_SAVE_IMAGE)
+    imageDrawText.save("compareToDrawText_imageDrawText.png");
+    imageDrawStaticText.save("compareToDrawText_imageDrawStaticPlainText.png");
+    imageDrawStaticText.save("compareToDrawText_imageDrawStaticRichText.png");
+#endif
+
+    QVERIFY(imageDrawText.toImage() != m_whiteSquare);
+    QCOMPARE(imageDrawStaticPlainText, imageDrawText);
+    QCOMPARE(imageDrawStaticRichText, imageDrawText);
 }
 
 void tst_QStaticText::prepareToCorrectData()
@@ -418,6 +465,9 @@ void tst_QStaticText::rotatedPainter()
 
     QVERIFY(imageDrawText.toImage() != m_whiteSquare);
 
+#ifdef Q_OS_ANDROID
+    QEXPECT_FAIL("", "QTBUG-69218", Continue);
+#endif
     if (!supportsTransformations())
       QEXPECT_FAIL("", "Graphics system does not support transformed text on this platform", Abort);
     QCOMPARE(imageDrawStaticText, imageDrawText);
@@ -575,6 +625,9 @@ void tst_QStaticText::transformationChanged()
 
     QVERIFY(imageDrawText.toImage() != m_whiteSquare);
 
+#ifdef Q_OS_ANDROID
+    QEXPECT_FAIL("", "QTBUG-69220", Continue);
+#endif
     if (!supportsTransformations())
       QEXPECT_FAIL("", "Graphics system does not support transformed text on this platform", Abort);
     QCOMPARE(imageDrawStaticText, imageDrawText);
@@ -615,32 +668,62 @@ void tst_QStaticText::plainTextVsRichText()
     QCOMPARE(imagePlainText, imageRichText);
 }
 
+static bool checkPixels(const QImage &image,
+                        Qt::GlobalColor expectedColor1, Qt::GlobalColor expectedColor2,
+                        QByteArray *errorMessage)
+{
+    const QRgb expectedRgb1 = QColor(expectedColor1).rgba();
+    const QRgb expectedRgb2 = QColor(expectedColor2).rgba();
+
+    for (int x = 0, w = image.width(); x < w; ++x) {
+        for (int y = 0, h = image.height(); y < h; ++y) {
+            const QRgb pixel = image.pixel(x, y);
+            if (pixel != expectedRgb1 && pixel != expectedRgb2) {
+                QString message;
+                QDebug(&message) << "Color mismatch in image" << image
+                    << "at" << x << ',' << y << ':' << showbase << hex << pixel
+                    << "(expected: " << expectedRgb1 << ',' << expectedRgb2 << ')';
+                *errorMessage = message.toLocal8Bit();
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void tst_QStaticText::setPenPlainText_data()
+{
+    QTest::addColumn<QImage::Format>("format");
+
+    QTest::newRow("argb32pm") << QImage::Format_ARGB32_Premultiplied;
+    QTest::newRow("rgb32") << QImage::Format_RGB32;
+    QTest::newRow("rgba8888pm") << QImage::Format_RGBA8888_Premultiplied;
+    QTest::newRow("rgbx8888") << QImage::Format_RGBX8888;
+}
+
 void tst_QStaticText::setPenPlainText()
 {
+    QFETCH(QImage::Format, format);
+
     QFont font = QGuiApplication::font();
     font.setStyleStrategy(QFont::NoAntialias);
 
     QFontMetricsF fm(font);
-    QPixmap image(qCeil(fm.width("XXXXX")), qCeil(fm.height()));
+    QImage image(qCeil(fm.horizontalAdvance("XXXXX")), qCeil(fm.height()), format);
     image.fill(Qt::white);
     {
         QPainter p(&image);
         p.setFont(font);
-        p.setPen(Qt::green);
+        p.setPen(Qt::yellow);
 
         QStaticText staticText("XXXXX");
         staticText.setTextFormat(Qt::PlainText);
         p.drawStaticText(0, 0, staticText);
     }
 
-    QImage img = image.toImage();
-    for (int x=0; x<img.width(); ++x) {
-        for (int y=0; y<img.height(); ++y) {
-            QRgb pixel = img.pixel(x, y);
-            QVERIFY(pixel == QColor(Qt::white).rgba()
-                    || pixel == QColor(Qt::green).rgba());
-        }
-    }
+    QByteArray errorMessage;
+    QVERIFY2(checkPixels(image, Qt::yellow, Qt::white, &errorMessage),
+             errorMessage.constData());
 }
 
 void tst_QStaticText::setPenRichText()
@@ -649,7 +732,7 @@ void tst_QStaticText::setPenRichText()
     font.setStyleStrategy(QFont::NoAntialias);
 
     QFontMetricsF fm(font);
-    QPixmap image(qCeil(fm.width("XXXXX")), qCeil(fm.height()));
+    QPixmap image(qCeil(fm.horizontalAdvance("XXXXX")), qCeil(fm.height()));
     image.fill(Qt::white);
     {
         QPainter p(&image);
@@ -662,14 +745,9 @@ void tst_QStaticText::setPenRichText()
         p.drawStaticText(0, 0, staticText);
     }
 
-    QImage img = image.toImage();
-    for (int x=0; x<img.width(); ++x) {
-        for (int y=0; y<img.height(); ++y) {
-            QRgb pixel = img.pixel(x, y);
-            QVERIFY(pixel == QColor(Qt::white).rgba()
-                    || pixel == QColor(Qt::green).rgba());
-        }
-    }
+    QByteArray errorMessage;
+    QVERIFY2(checkPixels(image.toImage(), Qt::green, Qt::white, &errorMessage),
+             errorMessage.constData());
 }
 
 void tst_QStaticText::richTextOverridesPen()
@@ -678,7 +756,7 @@ void tst_QStaticText::richTextOverridesPen()
     font.setStyleStrategy(QFont::NoAntialias);
 
     QFontMetricsF fm(font);
-    QPixmap image(qCeil(fm.width("XXXXX")), qCeil(fm.height()));
+    QPixmap image(qCeil(fm.horizontalAdvance("XXXXX")), qCeil(fm.height()));
     image.fill(Qt::white);
     {
         QPainter p(&image);
@@ -691,14 +769,9 @@ void tst_QStaticText::richTextOverridesPen()
         p.drawStaticText(0, 0, staticText);
     }
 
-    QImage img = image.toImage();
-    for (int x=0; x<img.width(); ++x) {
-        for (int y=0; y<img.height(); ++y) {
-            QRgb pixel = img.pixel(x, y);
-            QVERIFY(pixel == QColor(Qt::white).rgba()
-                    || pixel == QColor(Qt::red).rgba());
-        }
-    }
+    QByteArray errorMessage;
+    QVERIFY2(checkPixels(image.toImage(), Qt::red, Qt::white, &errorMessage),
+             errorMessage.constData());
 }
 
 void tst_QStaticText::drawStruckOutText()
@@ -713,6 +786,7 @@ void tst_QStaticText::drawStruckOutText()
 
     QFont font;
     font.setStrikeOut(true);
+    font.setStyleStrategy(QFont::ForceIntegerMetrics);
 
     {
         QPainter p(&imageDrawText);
@@ -748,6 +822,7 @@ void tst_QStaticText::drawOverlinedText()
 
     QFont font;
     font.setOverline(true);
+    font.setStyleStrategy(QFont::ForceIntegerMetrics);
 
     {
         QPainter p(&imageDrawText);
@@ -783,6 +858,7 @@ void tst_QStaticText::drawUnderlinedText()
 
     QFont font;
     font.setUnderline(true);
+    font.setStyleStrategy(QFont::ForceIntegerMetrics);
 
     {
         QPainter p(&imageDrawText);
@@ -814,6 +890,7 @@ void tst_QStaticText::unprintableCharacter_qtbug12614()
     QVERIFY(staticText.size().isValid()); // Force layout. Should not crash.
 }
 
+#ifdef QT_BUILD_INTERNAL
 void tst_QStaticText::underlinedColor_qtbug20159()
 {
     QString multiScriptText;
@@ -849,6 +926,97 @@ void tst_QStaticText::textDocumentColor()
     QVERIFY(d->items[1].color.isValid());
 
     QCOMPARE(d->items[1].color, QColor(Qt::red));
+}
+#endif
+
+class TestPaintEngine: public QPaintEngine
+{
+public:
+    void drawTextItem(const QPointF &p, const QTextItem &) override
+    {
+        differentVerticalPositions.insert(qRound(p.y()));
+    }
+
+    void updateState(const QPaintEngineState &) override {}
+
+    void drawPolygon(const QPointF *, int , PolygonDrawMode ) override {}
+
+    bool begin(QPaintDevice *) override  { return true; }
+    bool end() override { return true; }
+    void drawPixmap(const QRectF &, const QPixmap &, const QRectF &) override {}
+    Type type() const override
+    {
+        return User;
+    }
+
+    QSet<int> differentVerticalPositions;
+};
+
+class TestPixmap: public QPixmap
+{
+public:
+    TestPixmap(int w, int h) : QPixmap(w, h), testPaintEngine(new TestPaintEngine) {}
+    ~TestPixmap() { delete testPaintEngine; }
+
+    QPaintEngine *paintEngine() const
+    {
+        return testPaintEngine;
+    }
+
+    TestPaintEngine *testPaintEngine;
+};
+
+void tst_QStaticText::multiLine()
+{
+    TestPixmap pixmap(100, 100);
+
+    TestPaintEngine *paintEngine = pixmap.testPaintEngine;
+
+    {
+        QPainter p(&pixmap);
+        QStaticText text;
+        text.setText(QLatin1String("line 1") + QChar(QChar::LineSeparator) + QLatin1String("line 2"));
+        p.drawStaticText(0, 0, text);
+    }
+
+    QCOMPARE(paintEngine->differentVerticalPositions.size(), 2);
+}
+
+void tst_QStaticText::size_qtbug65836()
+{
+    const QString text = QLatin1String("Lorem ipsum dolor sit amet, "
+                                        "consectetur adipiscing elit.");
+    QFont font("Courier");
+    font.setPixelSize(15);
+
+    {
+        QStaticText st1(text);
+        st1.setTextFormat(Qt::PlainText);
+        st1.prepare(QTransform(), font);
+
+        QStaticText st2(text);
+        st2.setTextFormat(Qt::RichText);
+        QTextOption opt;
+        opt.setWrapMode(QTextOption::NoWrap);
+        st2.setTextOption(opt);
+        st2.prepare(QTransform(), font);
+
+        QCOMPARE(st1.size(), st2.size());
+    }
+
+    {
+        QStaticText st1(text);
+        st1.setTextFormat(Qt::PlainText);
+        st1.setTextWidth(10.0);
+        st1.prepare(QTransform(), font);
+
+        QStaticText st2(text);
+        st2.setTextFormat(Qt::RichText);
+        st2.setTextWidth(10.0);
+        st2.prepare(QTransform(), font);
+
+        QCOMPARE(st1.size(), st2.size());
+    }
 }
 
 QTEST_MAIN(tst_QStaticText)

@@ -1,4 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qthreadonce
 QT = core testlib
 SOURCES = tst_qthreadonce.cpp
@@ -10,4 +10,3 @@ SOURCES = tst_qthreadonce.cpp
 
 # Temporary:
 SOURCES += qthreadonce.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

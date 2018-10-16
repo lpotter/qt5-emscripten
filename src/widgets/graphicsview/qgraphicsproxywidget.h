@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,12 @@
 #ifndef QGRAPHICSPROXYWIDGET_H
 #define QGRAPHICSPROXYWIDGET_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qgraphicswidget.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
-
-
-#if !defined(QT_NO_GRAPHICSVIEW)
 
 class QGraphicsProxyWidgetPrivate;
 
@@ -57,7 +53,7 @@ class Q_WIDGETS_EXPORT QGraphicsProxyWidget : public QGraphicsWidget
 {
     Q_OBJECT
 public:
-    QGraphicsProxyWidget(QGraphicsItem *parent = 0, Qt::WindowFlags wFlags = 0);
+    QGraphicsProxyWidget(QGraphicsItem *parent = nullptr, Qt::WindowFlags wFlags = Qt::WindowFlags());
     ~QGraphicsProxyWidget();
 
     void setWidget(QWidget *widget);
@@ -65,63 +61,63 @@ public:
 
     QRectF subWidgetRect(const QWidget *widget) const;
 
-    void setGeometry(const QRectF &rect);
+    void setGeometry(const QRectF &rect) override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
     enum {
         Type = 12
     };
-    int type() const;
+    int type() const override;
 
     QGraphicsProxyWidget *createProxyForChildWidget(QWidget *child);
 
 protected:
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value);
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
-    bool event(QEvent *event);
-    bool eventFilter(QObject *object, QEvent *event);
+    bool event(QEvent *event) override;
+    bool eventFilter(QObject *object, QEvent *event) override;
 
-    void showEvent(QShowEvent *event);
-    void hideEvent(QHideEvent *event);
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 #ifndef QT_NO_CONTEXTMENU
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event);
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
 #endif
 
-#ifndef QT_NO_DRAGANDDROP
-    void dragEnterEvent(QGraphicsSceneDragDropEvent *event);
-    void dragLeaveEvent(QGraphicsSceneDragDropEvent *event);
-    void dragMoveEvent(QGraphicsSceneDragDropEvent *event);
-    void dropEvent(QGraphicsSceneDragDropEvent *event);
+#if QT_CONFIG(draganddrop)
+    void dragEnterEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dragLeaveEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dragMoveEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dropEvent(QGraphicsSceneDragDropEvent *event) override;
 #endif
 
-    void hoverEnterEvent(QGraphicsSceneHoverEvent *event);
-    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event);
-    void hoverMoveEvent(QGraphicsSceneHoverEvent *event);
-    void grabMouseEvent(QEvent *event);
-    void ungrabMouseEvent(QEvent *event);
+    void hoverEnterEvent(QGraphicsSceneHoverEvent *event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
+    void grabMouseEvent(QEvent *event) override;
+    void ungrabMouseEvent(QEvent *event) override;
 
-    void mouseMoveEvent(QGraphicsSceneMouseEvent *event);
-    void mousePressEvent(QGraphicsSceneMouseEvent *event);
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event);
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event);
-#ifndef QT_NO_WHEELEVENT
-    void wheelEvent(QGraphicsSceneWheelEvent *event);
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QGraphicsSceneWheelEvent *event) override;
 #endif
 
-    void keyPressEvent(QKeyEvent *event);
-    void keyReleaseEvent(QKeyEvent *event);
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
-    void focusInEvent(QFocusEvent *event);
-    void focusOutEvent(QFocusEvent *event);
-    bool focusNextPrevChild(bool next);
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    bool focusNextPrevChild(bool next) override;
 
-    QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
-    void inputMethodEvent(QInputMethodEvent *event);
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
 
-    QSizeF sizeHint(Qt::SizeHint which, const QSizeF &constraint = QSizeF()) const;
-    void resizeEvent(QGraphicsSceneResizeEvent *event);
+    QSizeF sizeHint(Qt::SizeHint which, const QSizeF &constraint = QSizeF()) const override;
+    void resizeEvent(QGraphicsSceneResizeEvent *event) override;
 
 protected Q_SLOTS:
     QGraphicsProxyWidget *newProxyWidget(const QWidget *);
@@ -136,11 +132,6 @@ private:
     friend class QGraphicsItem;
 };
 
-#endif
-
 QT_END_NAMESPACE
 
-QT_END_HEADER
-
 #endif
-

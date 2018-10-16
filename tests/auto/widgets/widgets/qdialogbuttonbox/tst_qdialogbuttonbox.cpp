@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,11 +34,9 @@
 #include <qdialogbuttonbox.h>
 #include <limits.h>
 
-Q_DECLARE_METATYPE(QList<int>)
 Q_DECLARE_METATYPE(QDialogButtonBox::ButtonRole)
 Q_DECLARE_METATYPE(QDialogButtonBox::StandardButton)
 Q_DECLARE_METATYPE(QDialogButtonBox::StandardButtons)
-Q_DECLARE_METATYPE(QAbstractButton*)
 
 class tst_QDialogButtonBox : public QObject
 {
@@ -70,10 +55,12 @@ public slots:
 private slots:
     void standardButtons();
     void testConstructor1();
-    void testConstrurtor2();
-    void testConstrurtor2_data();
+    void testConstructor2();
+    void testConstructor2_data();
     void testConstructor3();
     void testConstructor3_data();
+    void testConstructor4();
+    void testConstructor4_data();
     void setOrientation_data();
     void setOrientation();
     void addButton1_data();
@@ -98,6 +85,7 @@ private slots:
 //    void buttons();
 
     void testDelete();
+    void testSignalEmissionAfterDelete_QTBUG_45835();
     void testRemove();
     void testMultipleAdd();
     void testStandardButtonMapping_data();
@@ -109,6 +97,8 @@ private slots:
     void testDefaultButton();
 
     void task191642_default();
+    void testDeletedStandardButton();
+
 private:
     qint64 timeStamp;
     qint64 buttonClicked1TimeStamp;
@@ -119,6 +109,7 @@ private:
 
 tst_QDialogButtonBox::tst_QDialogButtonBox()
 {
+    qRegisterMetaType<QAbstractButton *>();
 }
 
 tst_QDialogButtonBox::~tst_QDialogButtonBox()
@@ -138,17 +129,17 @@ void tst_QDialogButtonBox::layoutReuse()
     QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok);
     QPointer<QLayout> layout = box->layout();
     box->setCenterButtons(!box->centerButtons());
-    QVERIFY(layout == box->layout());
+    QCOMPARE(layout.data(), box->layout());
     QEvent event(QEvent::StyleChange);
     QApplication::sendEvent(box, &event);
-    QVERIFY(layout == box->layout());
+    QCOMPARE(layout.data(), box->layout());
     box->setOrientation(box->orientation() == Qt::Horizontal ? Qt::Vertical : Qt::Horizontal);
-    QVERIFY(layout == 0);
+    QVERIFY(layout.isNull());
     QVERIFY(layout != box->layout());
     delete box;
 }
 
-void tst_QDialogButtonBox::testConstrurtor2_data()
+void tst_QDialogButtonBox::testConstructor2_data()
 {
     QTest::addColumn<int>("orientation");
 
@@ -156,7 +147,7 @@ void tst_QDialogButtonBox::testConstrurtor2_data()
     QTest::newRow("vertical") << int(Qt::Vertical);
 }
 
-void tst_QDialogButtonBox::testConstrurtor2()
+void tst_QDialogButtonBox::testConstructor2()
 {
     QFETCH(int, orientation);
     Qt::Orientation orient = Qt::Orientation(orientation);
@@ -200,6 +191,41 @@ void tst_QDialogButtonBox::testConstructor3()
 
     QDialogButtonBox buttonBox(buttons, (Qt::Orientation)orientation);
     QCOMPARE(int(buttonBox.orientation()), orientation);
+    QTEST(buttonBox.buttons().count(), "buttonCount");
+}
+
+void tst_QDialogButtonBox::testConstructor4_data()
+{
+    QTest::addColumn<QDialogButtonBox::StandardButtons>("buttons");
+    QTest::addColumn<int>("buttonCount");
+
+    QTest::newRow("nothing") << (QDialogButtonBox::StandardButtons)0 << 0;
+    QTest::newRow("only 1") << QDialogButtonBox::StandardButtons(QDialogButtonBox::Ok) << 1;
+    QTest::newRow("only 1.. twice")
+                        << (QDialogButtonBox::Ok | QDialogButtonBox::Ok)
+                        << 1;
+    QTest::newRow("only 2")
+            << (QDialogButtonBox::Ok | QDialogButtonBox::Cancel)
+            << 2;
+    QTest::newRow("two different things")
+            << (QDialogButtonBox::Save | QDialogButtonBox::Close)
+            << 2;
+    QTest::newRow("three")
+            << (QDialogButtonBox::Ok
+                    | QDialogButtonBox::Cancel
+                    | QDialogButtonBox::Help)
+            << 3;
+    QTest::newRow("everything")
+            << (QDialogButtonBox::StandardButtons)UINT_MAX
+            << 18;
+}
+
+void tst_QDialogButtonBox::testConstructor4()
+{
+    QFETCH(QDialogButtonBox::StandardButtons, buttons);
+
+    QDialogButtonBox buttonBox(buttons);
+    QCOMPARE(buttonBox.orientation(), Qt::Horizontal);
     QTEST(buttonBox.buttons().count(), "buttonCount");
 }
 
@@ -267,7 +293,7 @@ void tst_QDialogButtonBox::addButton1()
     QPushButton *button = new QPushButton();
     buttonBox.addButton(button, role);
     QTEST(buttonBox.buttons().count(), "totalCount");
-    QList<QAbstractButton *> children = qFindChildren<QAbstractButton *>(&buttonBox);
+    QList<QAbstractButton *> children = buttonBox.findChildren<QAbstractButton *>();
     QTEST(children.count(), "totalCount");
     delete button;
 }
@@ -294,7 +320,7 @@ void tst_QDialogButtonBox::addButton2()
     QCOMPARE(buttonBox.buttons().count(), 0);
     buttonBox.addButton(text, role);
     QTEST(buttonBox.buttons().count(), "totalCount");
-    QList<QAbstractButton *> children = qFindChildren<QAbstractButton *>(&buttonBox);
+    QList<QAbstractButton *> children = buttonBox.findChildren<QAbstractButton *>();
     QTEST(children.count(), "totalCount");
 }
 
@@ -321,7 +347,7 @@ void tst_QDialogButtonBox::addButton3()
     QCOMPARE(buttonBox.buttons().count(), 0);
     buttonBox.addButton(button);
     QTEST(buttonBox.buttons().count(), "totalCount");
-    QList<QAbstractButton *> children = qFindChildren<QAbstractButton *>(&buttonBox);
+    QList<QAbstractButton *> children = buttonBox.findChildren<QAbstractButton *>();
     QTEST(children.count(), "totalCount");
 }
 
@@ -343,7 +369,7 @@ void tst_QDialogButtonBox::clear()
         buttonBox.addButton("Happy", QDialogButtonBox::ButtonRole(i));
     buttonBox.clear();
     QCOMPARE(buttonBox.buttons().count(), 0);
-    QList<QAbstractButton *> children = qFindChildren<QAbstractButton *>(&buttonBox);
+    QList<QAbstractButton *> children = buttonBox.findChildren<QAbstractButton *>();
     QCOMPARE(children.count(), 0);
 }
 
@@ -378,13 +404,77 @@ void tst_QDialogButtonBox::testDelete()
     QPushButton *deleteMe = new QPushButton("Happy");
     buttonBox.addButton(deleteMe, QDialogButtonBox::HelpRole);
     QCOMPARE(buttonBox.buttons().count(), 1);
-    QList<QAbstractButton *> children = qFindChildren<QAbstractButton *>(&buttonBox);
+    QList<QAbstractButton *> children = buttonBox.findChildren<QAbstractButton *>();
     QCOMPARE(children.count(), 1);
 
     delete deleteMe;
-    children = qFindChildren<QAbstractButton *>(&buttonBox);
+    children = buttonBox.findChildren<QAbstractButton *>();
     QCOMPARE(children.count(), 0);
     QCOMPARE(buttonBox.buttons().count(), 0);
+}
+
+class ObjectDeleter : public QObject
+{
+    Q_OBJECT
+public slots:
+    void deleteButton(QAbstractButton *button)
+    {
+        delete button;
+    }
+
+    void deleteSender()
+    {
+        delete sender();
+    }
+};
+
+void tst_QDialogButtonBox::testSignalEmissionAfterDelete_QTBUG_45835()
+{
+    {
+        QDialogButtonBox buttonBox;
+        QCOMPARE(buttonBox.buttons().count(), 0);
+
+        QSignalSpy buttonClickedSpy(&buttonBox, &QDialogButtonBox::clicked);
+        QVERIFY(buttonClickedSpy.isValid());
+
+        QSignalSpy buttonBoxAcceptedSpy(&buttonBox, &QDialogButtonBox::accepted);
+        QVERIFY(buttonBoxAcceptedSpy.isValid());
+
+        QPushButton *button = buttonBox.addButton("Test", QDialogButtonBox::AcceptRole);
+        QCOMPARE(buttonBox.buttons().count(), 1);
+
+        ObjectDeleter objectDeleter;
+        connect(&buttonBox, &QDialogButtonBox::clicked, &objectDeleter, &ObjectDeleter::deleteButton);
+
+        button->click();
+
+        QCOMPARE(buttonBox.buttons().count(), 0);
+        QCOMPARE(buttonClickedSpy.count(), 1);
+        QCOMPARE(buttonBoxAcceptedSpy.count(), 1);
+    }
+
+    {
+        QPointer<QDialogButtonBox> buttonBox(new QDialogButtonBox);
+        QCOMPARE(buttonBox->buttons().count(), 0);
+
+        QSignalSpy buttonClickedSpy(buttonBox.data(), &QDialogButtonBox::clicked);
+        QVERIFY(buttonClickedSpy.isValid());
+
+        QSignalSpy buttonBoxAcceptedSpy(buttonBox.data(), &QDialogButtonBox::accepted);
+        QVERIFY(buttonBoxAcceptedSpy.isValid());
+
+        QPushButton *button = buttonBox->addButton("Test", QDialogButtonBox::AcceptRole);
+        QCOMPARE(buttonBox->buttons().count(), 1);
+
+        ObjectDeleter objectDeleter;
+        connect(buttonBox.data(), &QDialogButtonBox::clicked, &objectDeleter, &ObjectDeleter::deleteSender);
+
+        button->click();
+
+        QVERIFY(buttonBox.isNull());
+        QCOMPARE(buttonClickedSpy.count(), 1);
+        QCOMPARE(buttonBoxAcceptedSpy.count(), 0);
+    }
 }
 
 void tst_QDialogButtonBox::testMultipleAdd()
@@ -748,11 +838,27 @@ void tst_QDialogButtonBox::task191642_default()
     bb->addButton(QDialogButtonBox::Help);
 
     dlg.show();
-    QTest::qWait(10);
+    QVERIFY(QTest::qWaitForWindowActive(&dlg));
     QVERIFY(def->isDefault());
     QTest::keyPress( &dlg, Qt::Key_Enter );
-    QTest::qWait(100);
     QCOMPARE(clicked.count(), 1);
+}
+
+void tst_QDialogButtonBox::testDeletedStandardButton()
+{
+    QDialogButtonBox buttonBox;
+    delete buttonBox.addButton(QDialogButtonBox::Ok);
+    QPointer<QPushButton> buttonC = buttonBox.addButton(QDialogButtonBox::Cancel);
+    delete buttonBox.addButton(QDialogButtonBox::Cancel);
+    QPointer<QPushButton> buttonA = buttonBox.addButton(QDialogButtonBox::Apply);
+    delete buttonBox.addButton(QDialogButtonBox::Help);
+    // A few button have been deleted, they should automatically be removed
+    QCOMPARE(buttonBox.standardButtons(), QDialogButtonBox::Apply | QDialogButtonBox::Cancel);
+
+    buttonBox.setStandardButtons(QDialogButtonBox::Reset | QDialogButtonBox::Cancel);
+    // setStanderdButton should delete previous buttons
+    QVERIFY(!buttonA);
+    QVERIFY(!buttonC);
 }
 
 QTEST_MAIN(tst_QDialogButtonBox)

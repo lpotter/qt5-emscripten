@@ -2,7 +2,6 @@ TEMPLATE = app
 TARGET = tst_bench_qbytearray
 
 QT = core testlib
-CONFIG += release
 
+TESTDATA += main.cpp
 SOURCES += main.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,22 +44,24 @@
 #include <QtCore/qstringlist.h>
 #include <QtCore/qshareddata.h>
 
-QT_BEGIN_HEADER
+#include <functional>
+
+QT_REQUIRE_CONFIG(processenvironment);
 
 QT_BEGIN_NAMESPACE
 
+class QProcessPrivate;
 
-#ifndef QT_NO_PROCESS
-
-#if !defined(Q_OS_WIN) || defined(qdoc)
+#if !defined(Q_OS_WIN) || defined(Q_CLANG_QDOC)
 typedef qint64 Q_PID;
 #else
 QT_END_NAMESPACE
 typedef struct _PROCESS_INFORMATION *Q_PID;
+typedef struct _SECURITY_ATTRIBUTES Q_SECURITY_ATTRIBUTES;
+typedef struct _STARTUPINFOW Q_STARTUPINFO;
 QT_BEGIN_NAMESPACE
 #endif
 
-class QProcessPrivate;
 class QProcessEnvironmentPrivate;
 
 class Q_CORE_EXPORT QProcessEnvironment
@@ -70,9 +70,12 @@ public:
     QProcessEnvironment();
     QProcessEnvironment(const QProcessEnvironment &other);
     ~QProcessEnvironment();
+#ifdef Q_COMPILER_RVALUE_REFS
+    QProcessEnvironment &operator=(QProcessEnvironment && other) Q_DECL_NOTHROW { swap(other); return *this; }
+#endif
     QProcessEnvironment &operator=(const QProcessEnvironment &other);
 
-    inline void swap(QProcessEnvironment &other) { qSwap(d, other.d); }
+    void swap(QProcessEnvironment &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     bool operator==(const QProcessEnvironment &other) const;
     inline bool operator!=(const QProcessEnvironment &other) const
@@ -102,6 +105,8 @@ private:
 
 Q_DECLARE_SHARED(QProcessEnvironment)
 
+#if QT_CONFIG(process)
+
 class Q_CORE_EXPORT QProcess : public QIODevice
 {
     Q_OBJECT
@@ -114,37 +119,65 @@ public:
         WriteError,
         UnknownError
     };
+    Q_ENUM(ProcessError)
+
     enum ProcessState {
         NotRunning,
         Starting,
         Running
     };
+    Q_ENUM(ProcessState)
+
     enum ProcessChannel {
         StandardOutput,
         StandardError
     };
+    Q_ENUM(ProcessChannel)
+
     enum ProcessChannelMode {
         SeparateChannels,
         MergedChannels,
-        ForwardedChannels
+        ForwardedChannels,
+        ForwardedOutputChannel,
+        ForwardedErrorChannel
     };
+    Q_ENUM(ProcessChannelMode)
+
+    enum InputChannelMode {
+        ManagedInputChannel,
+        ForwardedInputChannel
+    };
+    Q_ENUM(InputChannelMode)
+
     enum ExitStatus {
         NormalExit,
         CrashExit
     };
+    Q_ENUM(ExitStatus)
 
-    explicit QProcess(QObject *parent = 0);
+    explicit QProcess(QObject *parent = nullptr);
     virtual ~QProcess();
 
     void start(const QString &program, const QStringList &arguments, OpenMode mode = ReadWrite);
+#if !defined(QT_NO_PROCESS_COMBINED_ARGUMENT_START)
     void start(const QString &command, OpenMode mode = ReadWrite);
+#endif
+    void start(OpenMode mode = ReadWrite);
+    bool startDetached(qint64 *pid = nullptr);
+    bool open(OpenMode mode = ReadWrite) override;
+
     QString program() const;
+    void setProgram(const QString &program);
+
     QStringList arguments() const;
+    void setArguments(const QStringList & arguments);
 
     ProcessChannelMode readChannelMode() const;
     void setReadChannelMode(ProcessChannelMode mode);
     ProcessChannelMode processChannelMode() const;
     void setProcessChannelMode(ProcessChannelMode mode);
+    InputChannelMode inputChannelMode() const;
+    void setInputChannelMode(InputChannelMode mode);
 
     ProcessChannel readChannel() const;
     void setReadChannel(ProcessChannel channel);
@@ -157,10 +190,26 @@ public:
     void setStandardErrorFile(const QString &fileName, OpenMode mode = Truncate);
     void setStandardOutputProcess(QProcess *destination);
 
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) || defined(Q_CLANG_QDOC)
     QString nativeArguments() const;
     void setNativeArguments(const QString &arguments);
-#endif
+    struct CreateProcessArguments
+    {
+        const wchar_t *applicationName;
+        wchar_t *arguments;
+        Q_SECURITY_ATTRIBUTES *processAttributes;
+        Q_SECURITY_ATTRIBUTES *threadAttributes;
+        bool inheritHandles;
+        unsigned long flags;
+        void *environment;
+        const wchar_t *currentDirectory;
+        Q_STARTUPINFO *startupInfo;
+        Q_PID processInformation;
+    };
+    typedef std::function<void(CreateProcessArguments *)> CreateProcessArgumentModifier;
+    CreateProcessArgumentModifier createProcessArgumentsModifier() const;
+    void setCreateProcessArgumentsModifier(CreateProcessArgumentModifier modifier);
+#endif // Q_OS_WIN || Q_CLANG_QDOC
 
     QString workingDirectory() const;
     void setWorkingDirectory(const QString &dir);
@@ -175,10 +224,11 @@ public:
 
     // #### Qt 5: Q_PID is a pointer on Windows and a value on Unix
     Q_PID pid() const;
+    qint64 processId() const;
 
     bool waitForStarted(int msecs = 30000);
-    bool waitForReadyRead(int msecs = 30000);
-    bool waitForBytesWritten(int msecs = 30000);
+    bool waitForReadyRead(int msecs = 30000) override;
+    bool waitForBytesWritten(int msecs = 30000) override;
     bool waitForFinished(int msecs = 30000);
 
     QByteArray readAllStandardOutput();
@@ -188,52 +238,47 @@ public:
     QProcess::ExitStatus exitStatus() const;
 
     // QIODevice
-    qint64 bytesAvailable() const;
-    qint64 bytesToWrite() const;
-    bool isSequential() const;
-    bool canReadLine() const;
-    void close();
-    bool atEnd() const;
+    qint64 bytesAvailable() const override; // ### Qt6: remove trivial override
+    qint64 bytesToWrite() const override;
+    bool isSequential() const override;
+    bool canReadLine() const override; // ### Qt6: remove trivial override
+    void close() override;
+    bool atEnd() const override; // ### Qt6: remove trivial override
 
     static int execute(const QString &program, const QStringList &arguments);
-    static int execute(const QString &program);
+    static int execute(const QString &command);
 
-    static bool startDetached(const QString &program, const QStringList &arguments, const QString &workingDirectory,
-                              qint64 *pid = 0);
-    static bool startDetached(const QString &program, const QStringList &arguments);
-    static bool startDetached(const QString &program);
+    static bool startDetached(const QString &program, const QStringList &arguments,
+                              const QString &workingDirectory
+#if defined(Q_QDOC)
+                              = QString()
+#endif
+                              , qint64 *pid = nullptr);
+#if !defined(Q_QDOC)
+    static bool startDetached(const QString &program, const QStringList &arguments); // ### Qt6: merge overloads
+#endif
+    static bool startDetached(const QString &command);
 
     static QStringList systemEnvironment();
+
+    static QString nullDevice();
 
 public Q_SLOTS:
     void terminate();
     void kill();
 
 Q_SIGNALS:
-    void started(
-#if !defined(qdoc)
-        QPrivateSignal
-#endif
-    );
-    void finished(int exitCode);
+    void started(QPrivateSignal);
+    void finished(int exitCode); // ### Qt 6: merge the two signals with a default value
     void finished(int exitCode, QProcess::ExitStatus exitStatus);
+#if QT_DEPRECATED_SINCE(5,6)
     void error(QProcess::ProcessError error);
-    void stateChanged(QProcess::ProcessState state
-#if !defined(qdoc)
-        , QPrivateSignal
 #endif
-    );
+    void errorOccurred(QProcess::ProcessError error);
+    void stateChanged(QProcess::ProcessState state, QPrivateSignal);
 
-    void readyReadStandardOutput(
-#if !defined(qdoc)
-        QPrivateSignal
-#endif
-    );
-    void readyReadStandardError(
-#if !defined(qdoc)
-        QPrivateSignal
-#endif
-    );
+    void readyReadStandardOutput(QPrivateSignal);
+    void readyReadStandardError(QPrivateSignal);
 
 protected:
     void setProcessState(ProcessState state);
@@ -241,8 +286,8 @@ protected:
     virtual void setupChildProcess();
 
     // QIODevice
-    qint64 readData(char *data, qint64 maxlen);
-    qint64 writeData(const char *data, qint64 len);
+    qint64 readData(char *data, qint64 maxlen) override;
+    qint64 writeData(const char *data, qint64 len) override;
 
 private:
     Q_DECLARE_PRIVATE(QProcess)
@@ -253,14 +298,11 @@ private:
     Q_PRIVATE_SLOT(d_func(), bool _q_canWrite())
     Q_PRIVATE_SLOT(d_func(), bool _q_startupNotification())
     Q_PRIVATE_SLOT(d_func(), bool _q_processDied())
-    Q_PRIVATE_SLOT(d_func(), void _q_notified())
     friend class QProcessManager;
 };
 
-#endif // QT_NO_PROCESS
+#endif // QT_CONFIG(process)
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPROCESS_H

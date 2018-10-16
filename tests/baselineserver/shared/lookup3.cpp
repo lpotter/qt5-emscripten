@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,8 +34,8 @@ These functions are based on:
 lookup3.c, by Bob Jenkins, May 2006, Public Domain.
 
 These are functions for producing 32-bit hashes for hash table lookup.
-hashword(), hashlittle(), hashlittle2(), hashbig(), mix(), and final() 
-are externally useful functions.  Routines to test the hash are included 
+hashword(), hashlittle(), hashlittle2(), hashbig(), mix(), and final()
+are externally useful functions.  Routines to test the hash are included
 if SELF_TEST is defined.  You can use this free for any purpose.  It's in
 the public domain.  It has no warranty.
 
@@ -56,7 +43,7 @@ You probably want to use hashlittle().  hashlittle() and hashbig()
 hash byte arrays.  hashlittle() is is faster than hashbig() on
 little-endian machines.  Intel and AMD are little-endian machines.
 On second thought, you probably want hashlittle2(), which is identical to
-hashlittle() except it returns two 32-bit hashes for the price of one.  
+hashlittle() except it returns two 32-bit hashes for the price of one.
 You could implement hashbig2() if you wanted but I haven't bothered here.
 
 If you want to find a hash of, say, exactly 7 integers, do
@@ -69,9 +56,9 @@ If you want to find a hash of, say, exactly 7 integers, do
 then use c as the hash value.  If you have a variable length array of
 4-byte integers to hash, use hashword().  If you have a byte array (like
 a character string), use hashlittle().  If you have several byte arrays, or
-a mix of things, see the comments above hashlittle().  
+a mix of things, see the comments above hashlittle().
 
-Why is this so big?  I read 12 bytes at a time into 3 4-byte integers, 
+Why is this so big?  I read 12 bytes at a time into 3 4-byte integers,
 then mix those integers.  This is fast (you can do a lot more thorough
 mixing with 12*3 instructions on 3 integers than you can with 3 instructions
 on 1 byte), but shoehorning those bytes into integers efficiently is messy.
@@ -110,7 +97,7 @@ This was tested for:
   the output delta to a Gray code (a^(a>>1)) so a string of 1's (as
   is commonly produced by subtraction) look like a single 1-bit
   difference.
-* the base values were pseudorandom, all zero but one bit set, or 
+* the base values were pseudorandom, all zero but one bit set, or
   all zero plus a counter that starts at zero.
 
 Some k values for my "a-=c; a^=rot(c,k); c+=b;" arrangement that
@@ -120,7 +107,7 @@ satisfy this are
    14  9  3  7 17  3
 Well, "9 15 3 18 27 15" didn't quite get 32 bits diffing
 for "differ" defined as + with a one-bit base and a two-bit delta.  I
-used http://burtleburtle.net/bob/hash/avalanche.html to choose 
+used http://burtleburtle.net/bob/hash/avalanche.html to choose
 the operations, constants, and arrangements of the variables.
 
 This does not achieve avalanche.  There are input bits of (a,b,c)
@@ -159,7 +146,7 @@ produce values of c that look totally different.  This was tested for
   the output delta to a Gray code (a^(a>>1)) so a string of 1's (as
   is commonly produced by subtraction) look like a single 1-bit
   difference.
-* the base values were pseudorandom, all zero but one bit set, or 
+* the base values were pseudorandom, all zero but one bit set, or
   all zero plus a counter that starts at zero.
 
 These constants passed:
@@ -218,11 +205,14 @@ quint32        initval)         /* the previous hash, or an arbitrary value */
 
   /*------------------------------------------- handle the last 3 quint32's */
   switch(length)                     /* all the case statements fall through */
-  { 
+  {
   case 3 : c+=k[2];
+           Q_FALLTHROUGH();
   case 2 : b+=k[1];
+           Q_FALLTHROUGH();
   case 1 : a+=k[0];
-    final(a,b,c);
+           final(a,b,c);
+           Q_FALLTHROUGH();
   case 0:     /* case 0: nothing left to add */
     break;
   }
@@ -235,7 +225,7 @@ quint32        initval)         /* the previous hash, or an arbitrary value */
 --------------------------------------------------------------------
 hashword2() -- same as hashword(), but take two seeds and return two
 32-bit values.  pc and pb must both be nonnull, and *pc and *pb must
-both be initialized with seeds.  If you pass in (*pb)==0, the output 
+both be initialized with seeds.  If you pass in (*pb)==0, the output
 (*pc) will be the same as the return value from hashword().
 --------------------------------------------------------------------
 */
@@ -264,11 +254,14 @@ quint32       *pb)               /* IN: more seed OUT: secondary hash value */
 
   /*------------------------------------------- handle the last 3 quint32's */
   switch(length)                     /* all the case statements fall through */
-  { 
+  {
   case 3 : c+=k[2];
+           Q_FALLTHROUGH();
   case 2 : b+=k[1];
+           Q_FALLTHROUGH();
   case 1 : a+=k[0];
     final(a,b,c);
+           Q_FALLTHROUGH();
   case 0:     /* case 0: nothing left to add */
     break;
   }
@@ -328,7 +321,7 @@ quint32 hashlittle( const void *key, size_t length, quint32 initval)
     }
 
     /*----------------------------- handle the last (probably partial) block */
-    /* 
+    /*
      * "k[2]&0xffffff" actually reads beyond the end of the string, but
      * then masks off the part it's not allowed to read.  Because the
      * string is aligned, the masked-off tail is in the same word as the
@@ -362,16 +355,24 @@ quint32 hashlittle( const void *key, size_t length, quint32 initval)
     switch(length)
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((quint32)k8[10])<<16;  /* fall through */
-    case 10: c+=((quint32)k8[9])<<8;    /* fall through */
-    case 9 : c+=k8[8];                   /* fall through */
+    case 11: c+=((quint32)k8[10])<<16;
+             Q_FALLTHROUGH();
+    case 10: c+=((quint32)k8[9])<<8;
+             Q_FALLTHROUGH();
+    case 9 : c+=k8[8];
+             Q_FALLTHROUGH();
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((quint32)k8[6])<<16;   /* fall through */
-    case 6 : b+=((quint32)k8[5])<<8;    /* fall through */
-    case 5 : b+=k8[4];                   /* fall through */
+    case 7 : b+=((quint32)k8[6])<<16;
+             Q_FALLTHROUGH();
+    case 6 : b+=((quint32)k8[5])<<8;
+             Q_FALLTHROUGH();
+    case 5 : b+=k8[4];
+             Q_FALLTHROUGH();
     case 4 : a+=k[0]; break;
-    case 3 : a+=((quint32)k8[2])<<16;   /* fall through */
-    case 2 : a+=((quint32)k8[1])<<8;    /* fall through */
+    case 3 : a+=((quint32)k8[2])<<16;
+             Q_FALLTHROUGH();
+    case 2 : a+=((quint32)k8[1])<<8;
+             Q_FALLTHROUGH();
     case 1 : a+=k8[0]; break;
     case 0 : return c;
     }
@@ -401,23 +402,28 @@ quint32 hashlittle( const void *key, size_t length, quint32 initval)
              b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 11: c+=((quint32)k8[10])<<16;     /* fall through */
+    case 11: c+=((quint32)k8[10])<<16;
+             Q_FALLTHROUGH();
     case 10: c+=k[4];
              b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 9 : c+=k8[8];                      /* fall through */
+    case 9 : c+=k8[8];
+             Q_FALLTHROUGH();
     case 8 : b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 7 : b+=((quint32)k8[6])<<16;      /* fall through */
+    case 7 : b+=((quint32)k8[6])<<16;
+             Q_FALLTHROUGH();
     case 6 : b+=k[2];
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 5 : b+=k8[4];                      /* fall through */
+    case 5 : b+=k8[4];
+             Q_FALLTHROUGH();
     case 4 : a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 3 : a+=((quint32)k8[2])<<16;      /* fall through */
+    case 3 : a+=((quint32)k8[2])<<16;
+             Q_FALLTHROUGH();
     case 2 : a+=k[0];
              break;
     case 1 : a+=k8[0];
@@ -452,16 +458,27 @@ quint32 hashlittle( const void *key, size_t length, quint32 initval)
     switch(length)                   /* all the case statements fall through */
     {
     case 12: c+=((quint32)k[11])<<24;
+             Q_FALLTHROUGH();
     case 11: c+=((quint32)k[10])<<16;
+             Q_FALLTHROUGH();
     case 10: c+=((quint32)k[9])<<8;
+             Q_FALLTHROUGH();
     case 9 : c+=k[8];
+             Q_FALLTHROUGH();
     case 8 : b+=((quint32)k[7])<<24;
+             Q_FALLTHROUGH();
     case 7 : b+=((quint32)k[6])<<16;
+             Q_FALLTHROUGH();
     case 6 : b+=((quint32)k[5])<<8;
+             Q_FALLTHROUGH();
     case 5 : b+=k[4];
+             Q_FALLTHROUGH();
     case 4 : a+=((quint32)k[3])<<24;
+             Q_FALLTHROUGH();
     case 3 : a+=((quint32)k[2])<<16;
+             Q_FALLTHROUGH();
     case 2 : a+=((quint32)k[1])<<8;
+             Q_FALLTHROUGH();
     case 1 : a+=k[0];
              break;
     case 0 : return c;
@@ -483,7 +500,7 @@ quint32 hashlittle( const void *key, size_t length, quint32 initval)
  * the key.  *pc is better mixed than *pb, so use *pc first.  If you want
  * a 64-bit value do something like "*pc + (((uint64_t)*pb)<<32)".
  */
-void hashlittle2( 
+void hashlittle2(
   const void *key,       /* the key to hash */
   size_t      length,    /* length of the key */
   quint32   *pc,        /* IN: primary initval, OUT: primary hash */
@@ -512,7 +529,7 @@ void hashlittle2(
     }
 
     /*----------------------------- handle the last (probably partial) block */
-    /* 
+    /*
      * "k[2]&0xffffff" actually reads beyond the end of the string, but
      * then masks off the part it's not allowed to read.  Because the
      * string is aligned, the masked-off tail is in the same word as the
@@ -546,16 +563,24 @@ void hashlittle2(
     switch(length)
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((quint32)k8[10])<<16;  /* fall through */
-    case 10: c+=((quint32)k8[9])<<8;    /* fall through */
-    case 9 : c+=k8[8];                   /* fall through */
+    case 11: c+=((quint32)k8[10])<<16;
+             Q_FALLTHROUGH();
+    case 10: c+=((quint32)k8[9])<<8;
+             Q_FALLTHROUGH();
+    case 9 : c+=k8[8];
+             Q_FALLTHROUGH();
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((quint32)k8[6])<<16;   /* fall through */
-    case 6 : b+=((quint32)k8[5])<<8;    /* fall through */
-    case 5 : b+=k8[4];                   /* fall through */
+    case 7 : b+=((quint32)k8[6])<<16;
+             Q_FALLTHROUGH();
+    case 6 : b+=((quint32)k8[5])<<8;
+             Q_FALLTHROUGH();
+    case 5 : b+=k8[4];
+             Q_FALLTHROUGH();
     case 4 : a+=k[0]; break;
-    case 3 : a+=((quint32)k8[2])<<16;   /* fall through */
-    case 2 : a+=((quint32)k8[1])<<8;    /* fall through */
+    case 3 : a+=((quint32)k8[2])<<16;
+             Q_FALLTHROUGH();
+    case 2 : a+=((quint32)k8[1])<<8;
+             Q_FALLTHROUGH();
     case 1 : a+=k8[0]; break;
     case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
     }
@@ -585,23 +610,28 @@ void hashlittle2(
              b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 11: c+=((quint32)k8[10])<<16;     /* fall through */
+    case 11: c+=((quint32)k8[10])<<16;
+             Q_FALLTHROUGH();
     case 10: c+=k[4];
              b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 9 : c+=k8[8];                      /* fall through */
+    case 9 : c+=k8[8];
+             Q_FALLTHROUGH();
     case 8 : b+=k[2]+(((quint32)k[3])<<16);
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 7 : b+=((quint32)k8[6])<<16;      /* fall through */
+    case 7 : b+=((quint32)k8[6])<<16;
+             Q_FALLTHROUGH();
     case 6 : b+=k[2];
              a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 5 : b+=k8[4];                      /* fall through */
+    case 5 : b+=k8[4];
+             Q_FALLTHROUGH();
     case 4 : a+=k[0]+(((quint32)k[1])<<16);
              break;
-    case 3 : a+=((quint32)k8[2])<<16;      /* fall through */
+    case 3 : a+=((quint32)k8[2])<<16;
+             Q_FALLTHROUGH();
     case 2 : a+=k[0];
              break;
     case 1 : a+=k8[0];
@@ -636,16 +666,27 @@ void hashlittle2(
     switch(length)                   /* all the case statements fall through */
     {
     case 12: c+=((quint32)k[11])<<24;
+             Q_FALLTHROUGH();
     case 11: c+=((quint32)k[10])<<16;
+             Q_FALLTHROUGH();
     case 10: c+=((quint32)k[9])<<8;
+             Q_FALLTHROUGH();
     case 9 : c+=k[8];
+             Q_FALLTHROUGH();
     case 8 : b+=((quint32)k[7])<<24;
+             Q_FALLTHROUGH();
     case 7 : b+=((quint32)k[6])<<16;
+             Q_FALLTHROUGH();
     case 6 : b+=((quint32)k[5])<<8;
+             Q_FALLTHROUGH();
     case 5 : b+=k[4];
+             Q_FALLTHROUGH();
     case 4 : a+=((quint32)k[3])<<24;
+             Q_FALLTHROUGH();
     case 3 : a+=((quint32)k[2])<<16;
+             Q_FALLTHROUGH();
     case 2 : a+=((quint32)k[1])<<8;
+             Q_FALLTHROUGH();
     case 1 : a+=k[0];
              break;
     case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
@@ -662,7 +703,7 @@ void hashlittle2(
  * hashbig():
  * This is the same as hashword() on big-endian machines.  It is different
  * from hashlittle() on all machines.  hashbig() takes advantage of
- * big-endian byte ordering. 
+ * big-endian byte ordering.
  */
 quint32 hashbig( const void *key, size_t length, quint32 initval)
 {
@@ -688,7 +729,7 @@ quint32 hashbig( const void *key, size_t length, quint32 initval)
     }
 
     /*----------------------------- handle the last (probably partial) block */
-    /* 
+    /*
      * "k[2]<<8" actually reads beyond the end of the string, but
      * then shifts out the part it's not allowed to read.  Because the
      * string is aligned, the illegal read is in the same word as the
@@ -722,16 +763,24 @@ quint32 hashbig( const void *key, size_t length, quint32 initval)
     switch(length)                   /* all the case statements fall through */
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((quint32)k8[10])<<8;  /* fall through */
-    case 10: c+=((quint32)k8[9])<<16;  /* fall through */
-    case 9 : c+=((quint32)k8[8])<<24;  /* fall through */
+    case 11: c+=((quint32)k8[10])<<8;
+             Q_FALLTHROUGH();
+    case 10: c+=((quint32)k8[9])<<16;
+             Q_FALLTHROUGH();
+    case 9 : c+=((quint32)k8[8])<<24;
+             Q_FALLTHROUGH();
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((quint32)k8[6])<<8;   /* fall through */
-    case 6 : b+=((quint32)k8[5])<<16;  /* fall through */
-    case 5 : b+=((quint32)k8[4])<<24;  /* fall through */
+    case 7 : b+=((quint32)k8[6])<<8;
+             Q_FALLTHROUGH();
+    case 6 : b+=((quint32)k8[5])<<16;
+             Q_FALLTHROUGH();
+    case 5 : b+=((quint32)k8[4])<<24;
+             Q_FALLTHROUGH();
     case 4 : a+=k[0]; break;
-    case 3 : a+=((quint32)k8[2])<<8;   /* fall through */
-    case 2 : a+=((quint32)k8[1])<<16;  /* fall through */
+    case 3 : a+=((quint32)k8[2])<<8;
+             Q_FALLTHROUGH();
+    case 2 : a+=((quint32)k8[1])<<16;
+             Q_FALLTHROUGH();
     case 1 : a+=((quint32)k8[0])<<24; break;
     case 0 : return c;
     }
@@ -765,16 +814,27 @@ quint32 hashbig( const void *key, size_t length, quint32 initval)
     switch(length)                   /* all the case statements fall through */
     {
     case 12: c+=k[11];
+             Q_FALLTHROUGH();
     case 11: c+=((quint32)k[10])<<8;
+             Q_FALLTHROUGH();
     case 10: c+=((quint32)k[9])<<16;
+             Q_FALLTHROUGH();
     case 9 : c+=((quint32)k[8])<<24;
+             Q_FALLTHROUGH();
     case 8 : b+=k[7];
+             Q_FALLTHROUGH();
     case 7 : b+=((quint32)k[6])<<8;
+             Q_FALLTHROUGH();
     case 6 : b+=((quint32)k[5])<<16;
+             Q_FALLTHROUGH();
     case 5 : b+=((quint32)k[4])<<24;
+             Q_FALLTHROUGH();
     case 4 : a+=k[3];
+             Q_FALLTHROUGH();
     case 3 : a+=((quint32)k[2])<<8;
+             Q_FALLTHROUGH();
     case 2 : a+=((quint32)k[1])<<16;
+             Q_FALLTHROUGH();
     case 1 : a+=((quint32)k[0])<<24;
              break;
     case 0 : return c;

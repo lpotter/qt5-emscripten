@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,6 +28,7 @@
 /*!
     \headerfile <QtPlugin>
     \title Defining Plugins
+    \keyword qtplugin-defining-plugins
     \ingroup plugins
 
     \brief The <QtPlugin> header file defines macros for defining plugins.
@@ -43,11 +44,11 @@
     to the interface class called \a ClassName. The \a Identifier must
     be unique. For example:
 
-    \snippet tools/plugandpaint/interfaces.h 3
+    \snippet plugandpaint/app/interfaces.h 3
 
     This macro is normally used right after the class definition for
     \a ClassName, in a header file. See the
-    \l{tools/plugandpaint}{Plug & Paint} example for details.
+    \l{tools/plugandpaint/app}{Plug & Paint} example for details.
 
     If you want to use Q_DECLARE_INTERFACE with interface classes
     declared in a namespace then you have to make sure the Q_DECLARE_INTERFACE
@@ -75,7 +76,7 @@
 
     \snippet code/doc_src_qplugin.cpp 1
 
-    See the \l{tools/plugandpaint}{Plug & Paint} example for details.
+    See the \l{tools/plugandpaint/app}{Plug & Paint} example for details.
 
     Note that the class this macro appears on must be default-constructible.
 
@@ -92,9 +93,9 @@
     \macro Q_IMPORT_PLUGIN(PluginName)
     \relates <QtPlugin>
 
-    This macro imports the plugin named \a PluginName, corresponding
-    to the \l{qmake Variable Reference#TARGET}{TARGET} specified in the
-    plugin's project file.
+    This macro imports the plugin named \a PluginName, which corresponds
+    with the name of the class that declares metadata for the plugin with
+    Q_PLUGIN_METADATA().
 
     Inserting this macro into your application's source code will allow
     you to make use of a static plugin.
@@ -109,6 +110,6 @@
     the required plugins to your build. For example:
 
     \snippet code/doc_src_qplugin.pro 3
+    \sa {Static Plugins}, {How to Create Qt Plugins}, {qmake-getting-started}{Getting Started with qmake}
 
-    \sa {Static Plugins}, {How to Create Qt Plugins}, {Using qmake}
 */

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -33,17 +33,18 @@
     \ingroup qt-gui-concepts
 
     Drag and drop provides a simple visual mechanism which users can use
-    to transfer information between and within applications. (In the
-    literature this is referred to as a "direct manipulation model".) Drag
+    to transfer information between and within applications. Drag
     and drop is similar in function to the clipboard's cut and paste
     mechanism.
 
     \tableofcontents
 
     This document describes the basic drag and drop mechanism and
-    outlines the approach used to enable it in custom widgets. Drag
-    and drop operations are also supported by Qt's item views and by
-    the graphics view framework. More information is available in
+    outlines the approach used to enable it in custom controls. Drag
+    and drop operations are also supported by many of Qt's controls,
+    such as the item views and graphics view framework, as well as
+    editing controls for Qt Widgets and Qt Quick. More information
+    about item views and graphics view is available in
     \l{Using drag and drop with item views} and \l{Graphics View
     Framework}.
 
@@ -56,22 +57,31 @@
 
     \section1 Configuration
 
-    The QApplication object provides some properties that are related
+    The QStyleHints object provides some properties that are related
     to drag and drop operations:
 
     \list
-    \li \l{QApplication::startDragTime} describes the amount of time in
+    \li \l{QStyleHints::startDragTime()} describes the amount of time in
        milliseconds that the user must hold down a mouse button over an
        object before a drag will begin.
-    \li \l{QApplication::startDragDistance} indicates how far the user has to
+    \li \l{QStyleHints::startDragDistance()} indicates how far the user has to
        move the mouse while holding down a mouse button before the movement
-       will be interpreted as dragging. Use of high values for this quantity
-       prevents accidental dragging when the user only meant to click on an
-       object.
+       will be interpreted as dragging.
+    \li \l{QStyleHints::startDragVelocity()} indicates how fast (in pixels/second)
+       the user has to move the mouse to start a drag. A value of \c 0 means
+       that there is no such limit.
     \endlist
 
-    These quantities provide sensible default values for you to use if you
-    provide drag and drop support in your widgets.
+    These quantities provide sensible default values that are compliant with
+    the underlying windowing system for you to use if you
+    provide drag and drop support in your controls.
+
+    \section1 Drag and Drop in Qt Quick
+
+    The rest of the document focuses mainly on how to implement drag and drop
+    in C++. For using drag and drop inside a Qt Quick scene, please read the
+    documentation for the Qt Quick \l{Drag}, \l{DragEvent}, and \l{DropArea} items,
+    as well as the \l {Qt Quick Examples - Drag and Drop}{Qt Quick Drag and Drop} examples.
 
     \section1 Dragging
 
@@ -333,9 +343,7 @@
 
     Applications can also communicate with each other by putting data on
     the clipboard. To access this, you need to obtain a QClipboard object
-    from the QApplication object:
-
-    \snippet widgets/charactermap/mainwindow.cpp 3
+    from the QApplication object.
 
     The QMimeData class is used to represent data that is transferred to and
     from the clipboard. To put data on the clipboard, you can use the
@@ -350,7 +358,7 @@
     For example, we can copy the contents of a QLineEdit to the clipboard
     with the following code:
 
-    \snippet widgets/charactermap/mainwindow.cpp 11
+    \snippet ../widgets/widgets/charactermap/mainwindow.cpp 11
 
     Data with different MIME types can also be put on the clipboard.
     Construct a QMimeData object and set data with setData() function in
@@ -389,13 +397,15 @@
 
     On X11, the public \l{http://www.newplanetsoftware.com/xdnd/}{XDND
     protocol} is used, while on Windows Qt uses the OLE standard, and
-    Qt for Mac OS X uses the Cocoa Drag Manager. On X11, XDND uses MIME,
+    Qt for \macos uses the Cocoa Drag Manager. On X11, XDND uses MIME,
     so no translation is necessary. The Qt API is the same regardless of
     the platform. On Windows, MIME-aware applications can communicate by
     using clipboard format names that are MIME types. Already some
     Windows applications use MIME naming conventions for their
-    clipboard formats. Internally, Qt uses QWindowsMime and
-    QMacPasteboardMime for translating proprietary clipboard formats
-    to and from MIME types.
+    clipboard formats.
+
+    Custom classes for translating proprietary clipboard formats can be
+    registered by reimplementing QWinMime on Windows or
+    QMacPasteboardMime on \macos.
 
 */

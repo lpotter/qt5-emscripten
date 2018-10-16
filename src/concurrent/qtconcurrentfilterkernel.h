@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,17 +42,15 @@
 
 #include <QtConcurrent/qtconcurrent_global.h>
 
-#ifndef QT_NO_CONCURRENT
+#if !defined(QT_NO_CONCURRENT) || defined (Q_CLANG_QDOC)
 
 #include <QtConcurrent/qtconcurrentiteratekernel.h>
 #include <QtConcurrent/qtconcurrentmapkernel.h>
 #include <QtConcurrent/qtconcurrentreducekernel.h>
 
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
 
 
-#ifndef qdoc
 
 namespace QtConcurrent {
 
@@ -99,7 +95,7 @@ public:
           reducer(OrderedReduce)
     { }
 
-    bool runIteration(typename Sequence::const_iterator it, int index, T *)
+    bool runIteration(typename Sequence::const_iterator it, int index, T *) override
     {
         IntermediateResults<typename Sequence::value_type> results;
         results.begin = index;
@@ -112,7 +108,7 @@ public:
             return false;
     }
 
-    bool runIterations(typename Sequence::const_iterator sequenceBeginIterator, int begin, int end, T *)
+    bool runIterations(typename Sequence::const_iterator sequenceBeginIterator, int begin, int end, T *) override
     {
         IntermediateResults<typename Sequence::value_type> results;
         results.begin = begin;
@@ -121,29 +117,29 @@ public:
 
 
         typename Sequence::const_iterator it = sequenceBeginIterator;
-        advance(it, begin);
+        std::advance(it, begin);
         for (int i = begin; i < end; ++i) {
             if (keep(*it))
                 results.vector.append(*it);
-            advance(it, 1);
+            std::advance(it, 1);
         }
 
         reducer.runReduce(reduce, reducedResult, results);
         return false;
     }
 
-    void finish()
+    void finish() override
     {
         reducer.finish(reduce, reducedResult);
         sequence = reducedResult;
     }
 
-    inline bool shouldThrottleThread()
+    inline bool shouldThrottleThread() override
     {
         return IterateKernelType::shouldThrottleThread() || reducer.shouldThrottle();
     }
 
-    inline bool shouldStartThread()
+    inline bool shouldStartThread() override
     {
         return IterateKernelType::shouldStartThread() && reducer.shouldStartThread();
     }
@@ -186,7 +182,7 @@ public:
     { }
 #endif
 
-    bool runIteration(Iterator it, int index, ReducedResultType *)
+    bool runIteration(Iterator it, int index, ReducedResultType *) override
     {
         IntermediateResults<typename qValueType<Iterator>::value_type> results;
         results.begin = index;
@@ -199,7 +195,7 @@ public:
         return false;
     }
 
-    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, ReducedResultType *)
+    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, ReducedResultType *) override
     {
         IntermediateResults<typename qValueType<Iterator>::value_type> results;
         results.begin = begin;
@@ -207,35 +203,35 @@ public:
         results.vector.reserve(end - begin);
 
         Iterator it = sequenceBeginIterator;
-        advance(it, begin);
+        std::advance(it, begin);
         for (int i = begin; i < end; ++i) {
             if (keep(*it))
                 results.vector.append(*it);
-            advance(it, 1);
+            std::advance(it, 1);
         }
 
         reducer.runReduce(reduce, reducedResult, results);
         return false;
     }
 
-    void finish()
+    void finish() override
     {
         reducer.finish(reduce, reducedResult);
     }
 
-    inline bool shouldThrottleThread()
+    inline bool shouldThrottleThread() override
     {
         return IterateKernelType::shouldThrottleThread() || reducer.shouldThrottle();
     }
 
-    inline bool shouldStartThread()
+    inline bool shouldStartThread() override
     {
         return IterateKernelType::shouldStartThread() && reducer.shouldStartThread();
     }
 
     typedef ReducedResultType ReturnType;
     typedef ReducedResultType ResultType;
-    ReducedResultType *result()
+    ReducedResultType *result() override
     {
         return &reducedResult;
     }
@@ -258,14 +254,14 @@ public:
         : IterateKernelType(begin, end), keep(_keep)
     { }
 
-    void start()
+    void start() override
     {
         if (this->futureInterface)
             this->futureInterface->setFilterMode(true);
         IterateKernelType::start();
     }
 
-    bool runIteration(Iterator it, int index, T *)
+    bool runIteration(Iterator it, int index, T *) override
     {
         if (keep(*it))
             this->reportResult(&(*it), index);
@@ -274,7 +270,7 @@ public:
         return false;
     }
 
-    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, T *)
+    bool runIterations(Iterator sequenceBeginIterator, int begin, int end, T *) override
     {
         const int count = end - begin;
         IntermediateResults<typename qValueType<Iterator>::value_type> results;
@@ -283,11 +279,11 @@ public:
         results.vector.reserve(count);
 
         Iterator it = sequenceBeginIterator;
-        advance(it, begin);
+        std::advance(it, begin);
         for (int i = begin; i < end; ++i) {
             if (keep(*it))
                 results.vector.append(*it);
-            advance(it, 1);
+            std::advance(it, 1);
         }
 
         this->reportResults(results.vector, begin, count);
@@ -295,6 +291,7 @@ public:
     }
 };
 
+//! [QtConcurrent-2]
 template <typename Iterator, typename KeepFunctor>
 inline
 ThreadEngineStarter<typename qValueType<Iterator>::value_type>
@@ -303,6 +300,7 @@ startFiltered(Iterator begin, Iterator end, KeepFunctor functor)
     return startThreadEngine(new FilteredEachKernel<Iterator, KeepFunctor>(begin, end, functor));
 }
 
+//! [QtConcurrent-3]
 template <typename Sequence, typename KeepFunctor>
 inline ThreadEngineStarter<typename Sequence::value_type>
 startFiltered(const Sequence &sequence, KeepFunctor functor)
@@ -314,6 +312,7 @@ startFiltered(const Sequence &sequence, KeepFunctor functor)
         return startThreadEngine(new SequenceHolderType(sequence, functor));
 }
 
+//! [QtConcurrent-4]
 template <typename ResultType, typename Sequence, typename MapFunctor, typename ReduceFunctor>
 inline ThreadEngineStarter<ResultType> startFilteredReduced(const Sequence & sequence,
                                                            MapFunctor mapFunctor, ReduceFunctor reduceFunctor,
@@ -327,6 +326,7 @@ inline ThreadEngineStarter<ResultType> startFilteredReduced(const Sequence & seq
 }
 
 
+//! [QtConcurrent-5]
 template <typename ResultType, typename Iterator, typename MapFunctor, typename ReduceFunctor>
 inline ThreadEngineStarter<ResultType> startFilteredReduced(Iterator begin, Iterator end,
                                                            MapFunctor mapFunctor, ReduceFunctor reduceFunctor,
@@ -340,10 +340,8 @@ inline ThreadEngineStarter<ResultType> startFilteredReduced(Iterator begin, Iter
 
 } // namespace QtConcurrent
 
-#endif // qdoc
 
 QT_END_NAMESPACE
-QT_END_HEADER
 
 #endif // QT_NO_CONCURRENT
 

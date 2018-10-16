@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,7 +45,7 @@
 #pragma qt_no_master_include
 #endif
 
-#include <QtTest/qtest_global.h>
+#include <QtTest/qttestglobal.h>
 #ifdef QT_GUI_LIB
 #include <QtTest/qtestkeyboard.h>
 #include <QtTest/qtestmouse.h>
@@ -57,8 +55,6 @@
 #include <QtCore/qlist.h>
 
 #include <stdlib.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -83,10 +79,10 @@ public:
     inline QTestKeyEvent(QTest::KeyAction action, char ascii, Qt::KeyboardModifiers modifiers, int delay)
         : _action(action), _delay(delay), _modifiers(modifiers),
           _ascii(ascii), _key(Qt::Key_unknown) {}
-    inline QTestEvent *clone() const { return new QTestKeyEvent(*this); }
+    inline QTestEvent *clone() const override { return new QTestKeyEvent(*this); }
 
 #ifdef QT_WIDGETS_LIB
-    inline void simulate(QWidget *w)
+    inline void simulate(QWidget *w) override
     {
         if (_ascii == 0)
             QTest::keyEvent(_action, w, _key, _modifiers, _delay);
@@ -107,11 +103,14 @@ class QTestKeyClicksEvent: public QTestEvent
 {
 public:
     inline QTestKeyClicksEvent(const QString &keys, Qt::KeyboardModifiers modifiers, int delay)
-        : _keys(keys), _modifiers(modifiers), _delay(delay) {}
-    inline QTestEvent *clone() const { return new QTestKeyClicksEvent(*this); }
+        : _keys(keys), _modifiers(modifiers), _delay(delay)
+        {
+            Q_UNUSED(_delay) // Silence -Werror,-Wunused-private-field
+        }
+    inline QTestEvent *clone() const override { return new QTestKeyClicksEvent(*this); }
 
 #ifdef QT_WIDGETS_LIB
-    inline void simulate(QWidget *w)
+    inline void simulate(QWidget *w) override
     {
         QTest::keyClicks(w, _keys, _modifiers, _delay);
     }
@@ -128,11 +127,16 @@ class QTestMouseEvent: public QTestEvent
 public:
     inline QTestMouseEvent(QTest::MouseAction action, Qt::MouseButton button,
             Qt::KeyboardModifiers modifiers, QPoint position, int delay)
-        : _action(action), _button(button), _modifiers(modifiers), _pos(position), _delay(delay) {}
-    inline QTestEvent *clone() const { return new QTestMouseEvent(*this); }
+        : _action(action), _button(button), _modifiers(modifiers), _pos(position), _delay(delay)
+        {
+            Q_UNUSED(_action)
+            Q_UNUSED(_button)
+            Q_UNUSED(_delay)
+        }
+    inline QTestEvent *clone() const override { return new QTestMouseEvent(*this); }
 
 #ifdef QT_WIDGETS_LIB
-    inline void simulate(QWidget *w)
+    inline void simulate(QWidget *w) override
     {
         QTest::mouseEvent(_action, w, _button, _modifiers, _pos, _delay);
     }
@@ -151,11 +155,14 @@ private:
 class QTestDelayEvent: public QTestEvent
 {
 public:
-    inline QTestDelayEvent(int msecs): _delay(msecs) {}
-    inline QTestEvent *clone() const { return new QTestDelayEvent(*this); }
+    inline QTestDelayEvent(int msecs): _delay(msecs)
+    {
+        Q_UNUSED(_delay)
+    }
+    inline QTestEvent *clone() const override { return new QTestDelayEvent(*this); }
 
 #ifdef QT_WIDGETS_LIB
-    inline void simulate(QWidget * /*w*/) { QTest::qWait(_delay); }
+    inline void simulate(QWidget * /*w*/) override { QTest::qWait(_delay); }
 #endif
 
 private:
@@ -195,20 +202,20 @@ public:
     inline void addKeyEvent(QTest::KeyAction action, char ascii, Qt::KeyboardModifiers modifiers = Qt::NoModifier, int msecs = -1)
     { append(new QTestKeyEvent(action, ascii, modifiers, msecs)); }
 
-    inline void addMousePress(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = 0,
+    inline void addMousePress(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(),
                               QPoint pos = QPoint(), int delay=-1)
     { append(new QTestMouseEvent(QTest::MousePress, button, stateKey, pos, delay)); }
-    inline void addMouseRelease(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = 0,
+    inline void addMouseRelease(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(),
                                 QPoint pos = QPoint(), int delay=-1)
     { append(new QTestMouseEvent(QTest::MouseRelease, button, stateKey, pos, delay)); }
-    inline void addMouseClick(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = 0,
+    inline void addMouseClick(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(),
                               QPoint pos = QPoint(), int delay=-1)
     { append(new QTestMouseEvent(QTest::MouseClick, button, stateKey, pos, delay)); }
-    inline void addMouseDClick(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = 0,
+    inline void addMouseDClick(Qt::MouseButton button, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(),
                             QPoint pos = QPoint(), int delay=-1)
     { append(new QTestMouseEvent(QTest::MouseDClick, button, stateKey, pos, delay)); }
     inline void addMouseMove(QPoint pos = QPoint(), int delay=-1)
-    { append(new QTestMouseEvent(QTest::MouseMove, Qt::NoButton, 0, pos, delay)); }
+    { append(new QTestMouseEvent(QTest::MouseMove, Qt::NoButton, Qt::KeyboardModifiers(), pos, delay)); }
 #endif //QT_GUI_LIB
 
     inline void addDelay(int msecs)
@@ -226,7 +233,5 @@ public:
 QT_END_NAMESPACE
 
 Q_DECLARE_METATYPE(QTestEventList)
-
-QT_END_HEADER
 
 #endif

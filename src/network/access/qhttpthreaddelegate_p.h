@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,6 +52,7 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include <QObject>
 #include <QThreadStorage>
 #include <QNetworkProxy>
@@ -64,11 +63,12 @@
 #include "qhttpnetworkrequest_p.h"
 #include "qhttpnetworkconnection_p.h"
 #include <QSharedPointer>
-#include "qsslconfiguration.h"
+#include <QScopedPointer>
 #include "private/qnoncontiguousbytedevice_p.h"
 #include "qnetworkaccessauthenticationmanager_p.h"
+#include <QtNetwork/private/http2protocol_p.h>
 
-#ifndef QT_NO_HTTP
+QT_REQUIRE_CONFIG(http);
 
 QT_BEGIN_NAMESPACE
 
@@ -89,7 +89,7 @@ public:
     // incoming
     bool ssl;
 #ifndef QT_NO_SSL
-    QSslConfiguration incomingSslConfiguration;
+    QScopedPointer<QSslConfiguration> incomingSslConfiguration;
 #endif
     QHttpNetworkRequest httpRequest;
     qint64 downloadBufferMaximumSize;
@@ -111,9 +111,12 @@ public:
     int incomingStatusCode;
     QString incomingReasonPhrase;
     bool isPipeliningUsed;
+    bool isSpdyUsed;
     qint64 incomingContentLength;
+    qint64 removedContentLength;
     QNetworkReply::NetworkError incomingErrorCode;
     QString incomingErrorDetail;
+    Http2::ProtocolParameters http2Parameters;
 #ifndef QT_NO_BEARERMANAGEMENT
     QSharedPointer<QNetworkSession> networkSession;
 #endif
@@ -135,14 +138,19 @@ signals:
     void proxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *);
 #endif
 #ifndef QT_NO_SSL
+    void encrypted();
     void sslErrors(const QList<QSslError> &, bool *, QList<QSslError> *);
-    void sslConfigurationChanged(const QSslConfiguration);
+    void sslConfigurationChanged(const QSslConfiguration &);
+    void preSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *);
 #endif
-    void downloadMetaData(QList<QPair<QByteArray,QByteArray> >,int,QString,bool,QSharedPointer<char>,qint64);
+    void downloadMetaData(const QList<QPair<QByteArray,QByteArray> > &, int, const QString &, bool,
+                          QSharedPointer<char>, qint64, qint64, bool);
     void downloadProgress(qint64, qint64);
-    void downloadData(QByteArray);
-    void error(QNetworkReply::NetworkError, const QString);
+    void downloadData(const QByteArray &);
+    void error(QNetworkReply::NetworkError, const QString &);
     void downloadFinished();
+    void redirected(const QUrl &url, int httpStatus, int maxRedirectsRemainig);
+
 public slots:
     // This are called via QueuedConnection from user thread
     void startRequest();
@@ -164,7 +172,9 @@ protected slots:
     void dataReadProgressSlot(qint64 done, qint64 total);
     void cacheCredentialsSlot(const QHttpNetworkRequest &request, QAuthenticator *authenticator);
 #ifndef QT_NO_SSL
+    void encryptedSlot();
     void sslErrorsSlot(const QList<QSslError> &errors);
+    void preSharedKeyAuthenticationRequiredSlot(QSslPreSharedKeyAuthenticator *authenticator);
 #endif
 
     void synchronousAuthenticationRequiredSlot(const QHttpNetworkRequest &request, QAuthenticator *);
@@ -191,6 +201,7 @@ protected:
     QByteArray m_dataArray;
     bool m_atEnd;
     qint64 m_size;
+    qint64 m_pos; // to match calls of haveDataSlot with the expected position
 public:
     QNonContiguousByteDeviceThreadForwardImpl(bool aE, qint64 s)
         : QNonContiguousByteDevice(),
@@ -198,7 +209,8 @@ public:
           m_amount(0),
           m_data(0),
           m_atEnd(aE),
-          m_size(s)
+          m_size(s),
+          m_pos(0)
     {
     }
 
@@ -206,7 +218,12 @@ public:
     {
     }
 
-    const char* readPointer(qint64 maximumLength, qint64 &len)
+    qint64 pos() const override
+    {
+        return m_pos;
+    }
+
+    const char* readPointer(qint64 maximumLength, qint64 &len) override
     {
         if (m_amount > 0) {
             len = m_amount;
@@ -226,23 +243,22 @@ public:
         return 0;
     }
 
-    bool advanceReadPointer(qint64 a)
+    bool advanceReadPointer(qint64 a) override
     {
         if (m_data == 0)
             return false;
 
         m_amount -= a;
         m_data += a;
+        m_pos += a;
 
-        // To main thread to inform about our state
-        emit processedData(a);
-
-        // FIXME possible optimization, already ask user thread for some data
+        // To main thread to inform about our state. The m_pos will be sent as a sanity check.
+        emit processedData(m_pos, a);
 
         return true;
     }
 
-    bool atEnd()
+    bool atEnd() const override
     {
         if (m_amount > 0)
             return false;
@@ -250,26 +266,42 @@ public:
             return m_atEnd;
     }
 
-    bool reset()
+    bool reset() override
     {
         m_amount = 0;
         m_data = 0;
+        m_dataArray.clear();
+
+        if (wantDataPending) {
+            // had requested the user thread to send some data (only 1 in-flight at any moment)
+            wantDataPending = false;
+        }
 
         // Communicate as BlockingQueuedConnection
         bool b = false;
         emit resetData(&b);
+        if (b) {
+            // the reset succeeded, we're at pos 0 again
+            m_pos = 0;
+            // the HTTP code will anyway abort the request if !b.
+        }
         return b;
     }
 
-    qint64 size()
+    qint64 size() const override
     {
         return m_size;
     }
 
 public slots:
     // From user thread:
-    void haveDataSlot(QByteArray dataArray, bool dataAtEnd, qint64 dataSize)
+    void haveDataSlot(qint64 pos, const QByteArray &dataArray, bool dataAtEnd, qint64 dataSize)
     {
+        if (pos != m_pos) {
+            // Sometimes when re-sending a request in the qhttpnetwork* layer there is a pending haveData from the
+            // user thread on the way to us. We need to ignore it since it is the data for the wrong(later) chunk.
+            return;
+        }
         wantDataPending = false;
 
         m_dataArray = dataArray;
@@ -289,12 +321,10 @@ signals:
 
     // to main thread:
     void wantData(qint64);
-    void processedData(qint64);
+    void processedData(qint64 pos, qint64 amount);
     void resetData(bool *b);
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_HTTP
 
 #endif // QHTTPTHREADDELEGATE_H

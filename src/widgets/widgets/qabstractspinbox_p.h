@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,9 +51,8 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qabstractspinbox.h"
-
-#ifndef QT_NO_SPINBOX
 
 #include "QtWidgets/qlineedit.h"
 #include "QtWidgets/qstyleoption.h"
@@ -63,7 +60,8 @@
 #include "QtCore/qdatetime.h"
 #include "QtCore/qvariant.h"
 #include "private/qwidget_p.h"
-#include "private/qdatetime_p.h"
+
+QT_REQUIRE_CONFIG(spinbox);
 
 QT_BEGIN_NAMESPACE
 
@@ -124,6 +122,8 @@ public:
     static int variantCompare(const QVariant &arg1, const QVariant &arg2);
     static QVariant variantBound(const QVariant &min, const QVariant &value, const QVariant &max);
 
+    virtual QVariant calculateAdaptiveDecimalStep(int steps) const;
+
     QLineEdit *edit;
     QString prefix, suffix, specialValueText;
     QVariant value, minimum, maximum, singleStep;
@@ -145,26 +145,28 @@ public:
     uint cleared : 1;
     uint ignoreUpdateEdit : 1;
     QAbstractSpinBox::CorrectionMode correctionMode;
+    QAbstractSpinBox::StepType stepType = QAbstractSpinBox::StepType::DefaultStepType;
+    Qt::KeyboardModifier stepModifier = Qt::ControlModifier;
     int acceleration;
     QStyle::SubControl hoverControl;
     QRect hoverRect;
     QAbstractSpinBox::ButtonSymbols buttonSymbols;
     QSpinBoxValidator *validator;
+    uint showGroupSeparator : 1;
+    int wheelDeltaRemainder;
 };
 
 class QSpinBoxValidator : public QValidator
 {
 public:
     QSpinBoxValidator(QAbstractSpinBox *qptr, QAbstractSpinBoxPrivate *dptr);
-    QValidator::State validate(QString &input, int &) const;
-    void fixup(QString &) const;
+    QValidator::State validate(QString &input, int &) const override;
+    void fixup(QString &) const override;
 private:
     QAbstractSpinBox *qptr;
     QAbstractSpinBoxPrivate *dptr;
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_SPINBOX
 
 #endif // QABSTRACTSPINBOX_P_H

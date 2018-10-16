@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,7 +49,7 @@
 ****************************************************************************/
 
 #include <QtWidgets>
-#include <math.h>
+#include <cmath>
 
 #include "starrating.h"
 
@@ -53,8 +63,8 @@ StarRating::StarRating(int starCount, int maxStarCount)
 
     starPolygon << QPointF(1.0, 0.5);
     for (int i = 1; i < 5; ++i)
-        starPolygon << QPointF(0.5 + 0.5 * cos(0.8 * i * 3.14),
-                               0.5 + 0.5 * sin(0.8 * i * 3.14));
+        starPolygon << QPointF(0.5 + 0.5 * std::cos(0.8 * i * 3.14),
+                               0.5 + 0.5 * std::sin(0.8 * i * 3.14));
 
     diamondPolygon << QPointF(0.4, 0.5) << QPointF(0.5, 0.4)
                    << QPointF(0.6, 0.5) << QPointF(0.5, 0.6)

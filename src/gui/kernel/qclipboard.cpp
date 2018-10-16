@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,6 +48,10 @@
 #include "qimage.h"
 #include "qtextcodec.h"
 
+#include "private/qguiapplication_p.h"
+#include <qpa/qplatformintegration.h>
+#include <qpa/qplatformclipboard.h>
+
 QT_BEGIN_NAMESPACE
 
 /*!
@@ -65,7 +67,7 @@ QT_BEGIN_NAMESPACE
     Drop}.
 
     There is a single QClipboard object in an application, accessible
-    as QApplication::clipboard().
+    as QGuiApplication::clipboard().
 
     Example:
     \snippet code/src_gui_kernel_qclipboard.cpp 0
@@ -114,28 +116,39 @@ QT_BEGIN_NAMESPACE
 
     \endlist
 
-    \section1 Notes for Mac OS X Users
+    \section1 Notes for \macos Users
 
-    Mac OS X supports a separate find buffer that holds the current
+    \macos supports a separate find buffer that holds the current
     search string in Find operations. This find clipboard can be accessed
     by specifying the FindBuffer mode.
 
-    \section1 Notes for Windows and Mac OS X Users
+    \section1 Notes for Windows and \macos Users
 
     \list
 
-    \li Windows and Mac OS X do not support the global mouse
+    \li Windows and \macos do not support the global mouse
     selection; they only supports the global clipboard, i.e. they
     only add text to the clipboard when an explicit copy or cut is
     made.
 
-    \li Windows and Mac OS X does not have the concept of ownership;
+    \li Windows and \macos does not have the concept of ownership;
     the clipboard is a fully global resource so all applications are
     notified of changes.
 
     \endlist
 
-    \sa QApplication
+    \section1 Notes for Universal Windows Platform Users
+
+    \list
+
+    \li The Universal Windows Platform only allows to query the
+    clipboard in case the application is active and an application
+    window has focus. Accessing the clipboard data when in background
+    will fail due to access denial.
+
+    \endlist
+
+    \sa QGuiApplication
 */
 
 /*!
@@ -145,7 +158,7 @@ QT_BEGIN_NAMESPACE
 
     Do not call this function.
 
-    Call QApplication::clipboard() instead to get a pointer to the
+    Call QGuiApplication::clipboard() instead to get a pointer to the
     application's global clipboard object.
 
     There is only one clipboard in the window system, and creating
@@ -163,7 +176,7 @@ QClipboard::QClipboard(QObject *parent)
 
     Destroys the clipboard.
 
-    You should never delete the clipboard. QApplication will do this
+    You should never delete the clipboard. QGuiApplication will do this
     when the application terminates.
 */
 QClipboard::~QClipboard()
@@ -185,7 +198,7 @@ QClipboard::~QClipboard()
 
     This signal is emitted when the clipboard data is changed.
 
-    On Mac OS X and with Qt version 4.3 or higher, clipboard
+    On \macos and with Qt version 4.3 or higher, clipboard
     changes made by other applications will only be detected
     when the application is activated.
 
@@ -197,7 +210,7 @@ QClipboard::~QClipboard()
 
     This signal is emitted when the selection is changed. This only
     applies to windowing systems that support selections, e.g. X11.
-    Windows and Mac OS X don't support selections.
+    Windows and \macos don't support selections.
 
     \sa dataChanged(), findBufferChanged(), changed()
 */
@@ -207,7 +220,7 @@ QClipboard::~QClipboard()
     \since 4.2
 
     This signal is emitted when the find buffer is changed. This only
-    applies to Mac OS X.
+    applies to \macos.
 
     With Qt version 4.3 or higher, clipboard changes made by other
     applications will only be detected when the application is activated.
@@ -226,11 +239,11 @@ QClipboard::~QClipboard()
     the global clipboard.
 
     \value Selection  indicates that data should be stored and retrieved from
-    the global mouse selection. Support for \c Selection is provided only on 
+    the global mouse selection. Support for \c Selection is provided only on
     systems with a global mouse selection (e.g. X11).
 
     \value FindBuffer indicates that data should be stored and retrieved from
-    the Find buffer. This mode is used for holding search strings on Mac OS X.
+    the Find buffer. This mode is used for holding search strings on \macos.
 
     \omitvalue LastMode
 
@@ -344,7 +357,7 @@ void QClipboard::setText(const QString &text, Mode mode)
     clipboard is used.  If \a mode is QClipboard::Clipboard, the
     image is retrieved from the global clipboard.  If \a mode is
     QClipboard::Selection, the image is retrieved from the global
-    mouse selection. 
+    mouse selection.
 
     \sa setImage(), pixmap(), mimeData(), QImage::isNull()
 */
@@ -423,8 +436,9 @@ void QClipboard::setPixmap(const QPixmap &pixmap, Mode mode)
 /*!
     \fn QMimeData *QClipboard::mimeData(Mode mode) const
 
-    Returns a reference to a QMimeData representation of the current
-    clipboard data.
+    Returns a pointer to a QMimeData representation of the current
+    clipboard data (can be NULL if the given \a mode is not
+    supported by the platform).
 
     The \a mode argument is used to control which part of the system
     clipboard is used.  If \a mode is QClipboard::Clipboard, the
@@ -436,8 +450,18 @@ void QClipboard::setPixmap(const QPixmap &pixmap, Mode mode)
     The text(), image(), and pixmap() functions are simpler
     wrappers for retrieving text, image, and pixmap data.
 
+    \note The pointer returned might become invalidated when the contents
+    of the clipboard changes; either by calling one of the setter functions
+    or externally by the system clipboard changing.
+
     \sa setMimeData()
 */
+const QMimeData* QClipboard::mimeData(Mode mode) const
+{
+    QPlatformClipboard *clipboard = QGuiApplicationPrivate::platformIntegration()->clipboard();
+    if (!clipboard->supportsMode(mode)) return 0;
+    return clipboard->mimeData(mode);
+}
 
 /*!
     \fn void QClipboard::setMimeData(QMimeData *src, Mode mode)
@@ -458,8 +482,20 @@ void QClipboard::setPixmap(const QPixmap &pixmap, Mode mode)
 
     \sa mimeData()
 */
+void QClipboard::setMimeData(QMimeData* src, Mode mode)
+{
+    QPlatformClipboard *clipboard = QGuiApplicationPrivate::platformIntegration()->clipboard();
+    if (!clipboard->supportsMode(mode)) {
+        if (src != 0) {
+            qDebug("Data set on unsupported clipboard mode. QMimeData object will be deleted.");
+            src->deleteLater();
+        }
+    } else {
+        clipboard->setMimeData(src,mode);
+    }
+}
 
-/*! 
+/*!
     \fn void QClipboard::clear(Mode mode)
     Clear the clipboard contents.
 
@@ -467,16 +503,19 @@ void QClipboard::setPixmap(const QPixmap &pixmap, Mode mode)
     clipboard is used.  If \a mode is QClipboard::Clipboard, this
     function clears the global clipboard contents.  If \a mode is
     QClipboard::Selection, this function clears the global mouse
-    selection contents. If \a mode is QClipboard::FindBuffer, this 
+    selection contents. If \a mode is QClipboard::FindBuffer, this
     function clears the search string buffer.
 
     \sa QClipboard::Mode, supportsSelection()
 */
-
+void QClipboard::clear(Mode mode)
+{
+    setMimeData(0, mode);
+}
 
 /*!
-    Returns true if the clipboard supports mouse selection; otherwise
-    returns false.
+    Returns \c true if the clipboard supports mouse selection; otherwise
+    returns \c false.
 */
 bool QClipboard::supportsSelection() const
 {
@@ -484,8 +523,8 @@ bool QClipboard::supportsSelection() const
 }
 
 /*!
-    Returns true if the clipboard supports a separate search buffer; otherwise
-    returns false.
+    Returns \c true if the clipboard supports a separate search buffer; otherwise
+    returns \c false.
 */
 bool QClipboard::supportsFindBuffer() const
 {
@@ -493,8 +532,8 @@ bool QClipboard::supportsFindBuffer() const
 }
 
 /*!
-    Returns true if this clipboard object owns the clipboard data;
-    otherwise returns false.
+    Returns \c true if this clipboard object owns the clipboard data;
+    otherwise returns \c false.
 */
 bool QClipboard::ownsClipboard() const
 {
@@ -502,8 +541,8 @@ bool QClipboard::ownsClipboard() const
 }
 
 /*!
-    Returns true if this clipboard object owns the mouse selection
-    data; otherwise returns false.
+    Returns \c true if this clipboard object owns the mouse selection
+    data; otherwise returns \c false.
 */
 bool QClipboard::ownsSelection() const
 {
@@ -513,29 +552,39 @@ bool QClipboard::ownsSelection() const
 /*!
     \since 4.2
 
-    Returns true if this clipboard object owns the find buffer data;
-    otherwise returns false.
+    Returns \c true if this clipboard object owns the find buffer data;
+    otherwise returns \c false.
 */
 bool QClipboard::ownsFindBuffer() const
 {
     return ownsMode(FindBuffer);
 }
 
-/*! 
+/*!
     \internal
     \fn bool QClipboard::supportsMode(Mode mode) const;
-    Returns true if the clipboard supports the clipboard mode speacified by \a mode;
-    otherwise returns false.
+    Returns \c true if the clipboard supports the clipboard mode speacified by \a mode;
+    otherwise returns \c false.
 */
+bool QClipboard::supportsMode(Mode mode) const
+{
+    QPlatformClipboard *clipboard = QGuiApplicationPrivate::platformIntegration()->clipboard();
+    return clipboard && clipboard->supportsMode(mode);
+}
 
-/*! 
+/*!
     \internal
     \fn bool QClipboard::ownsMode(Mode mode) const;
-    Returns true if the clipboard supports the clipboard data speacified by \a mode;
-    otherwise returns false.
+    Returns \c true if the clipboard supports the clipboard data speacified by \a mode;
+    otherwise returns \c false.
 */
+bool QClipboard::ownsMode(Mode mode) const
+{
+    QPlatformClipboard *clipboard = QGuiApplicationPrivate::platformIntegration()->clipboard();
+    return clipboard && clipboard->ownsMode(mode);
+}
 
-/*! 
+/*!
     \internal
     Emits the appropriate changed signal for \a mode.
 */
@@ -557,6 +606,6 @@ void QClipboard::emitChanged(Mode mode)
     emit changed(mode);
 }
 
-#endif // QT_NO_CLIPBOARD
-
 QT_END_NAMESPACE
+
+#endif // QT_NO_CLIPBOARD

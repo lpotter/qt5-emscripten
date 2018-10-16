@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,60 +41,70 @@
 #include "qpixmap.h"
 #include "qbitmap.h"
 #include "qpixmapcache.h"
+#include <qpa/qplatformpixmap.h>
 #include "qdatastream.h"
 #include "qvariant.h"
 #include "qline.h"
 #include "qdebug.h"
+#include <QtCore/qjsondocument.h>
+#include <QtCore/qjsonarray.h>
 #include <QtCore/qcoreapplication.h>
 #include "private/qhexstring_p.h"
 #include <QtCore/qnumeric.h>
+#include <QtCore/qfile.h>
+#include <QtCore/qmutex.h>
 
 QT_BEGIN_NAMESPACE
 
 const uchar *qt_patternForBrush(int brushStyle, bool invert)
 {
     Q_ASSERT(brushStyle > Qt::SolidPattern && brushStyle < Qt::LinearGradientPattern);
-    if(invert) {
-        static const uchar dense1_pat[] = { 0xff, 0xbb, 0xff, 0xff, 0xff, 0xbb, 0xff, 0xff };
-        static const uchar dense2_pat[] = { 0x77, 0xff, 0xdd, 0xff, 0x77, 0xff, 0xdd, 0xff };
-        static const uchar dense3_pat[] = { 0x55, 0xbb, 0x55, 0xee, 0x55, 0xbb, 0x55, 0xee };
-        static const uchar dense4_pat[] = { 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55 };
-        static const uchar dense5_pat[] = { 0xaa, 0x44, 0xaa, 0x11, 0xaa, 0x44, 0xaa, 0x11 };
-        static const uchar dense6_pat[] = { 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22, 0x00 };
-        static const uchar dense7_pat[] = { 0x00, 0x44, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00 };
-        static const uchar hor_pat[]    = { 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00 };
-        static const uchar ver_pat[]    = { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10 };
-        static const uchar cross_pat[]  = { 0x10, 0x10, 0x10, 0xff, 0x10, 0x10, 0x10, 0x10 };
-        static const uchar bdiag_pat[]  = { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
-        static const uchar fdiag_pat[]  = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
-        static const uchar dcross_pat[] = { 0x81, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x81 };
-        static const uchar *const pat_tbl[] = {
-            dense1_pat, dense2_pat, dense3_pat, dense4_pat, dense5_pat,
-            dense6_pat, dense7_pat,
-            hor_pat, ver_pat, cross_pat, bdiag_pat, fdiag_pat, dcross_pat };
-        return pat_tbl[brushStyle - Qt::Dense1Pattern];
-    }
-    static const uchar dense1_pat[] = { 0x00, 0x44, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00 };
-    static const uchar dense2_pat[] = { 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22, 0x00 };
-    static const uchar dense3_pat[] = { 0xaa, 0x44, 0xaa, 0x11, 0xaa, 0x44, 0xaa, 0x11 };
-    static const uchar dense4_pat[] = { 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa };
-    static const uchar dense5_pat[] = { 0x55, 0xbb, 0x55, 0xee, 0x55, 0xbb, 0x55, 0xee };
-    static const uchar dense6_pat[] = { 0x77, 0xff, 0xdd, 0xff, 0x77, 0xff, 0xdd, 0xff };
-    static const uchar dense7_pat[] = { 0xff, 0xbb, 0xff, 0xff, 0xff, 0xbb, 0xff, 0xff };
-    static const uchar hor_pat[]    = { 0xff, 0xff, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff };
-    static const uchar ver_pat[]    = { 0xef, 0xef, 0xef, 0xef, 0xef, 0xef, 0xef, 0xef };
-    static const uchar cross_pat[]  = { 0xef, 0xef, 0xef, 0x00, 0xef, 0xef, 0xef, 0xef };
-    static const uchar bdiag_pat[]  = { 0x7f, 0xbf, 0xdf, 0xef, 0xf7, 0xfb, 0xfd, 0xfe };
-    static const uchar fdiag_pat[]  = { 0xfe, 0xfd, 0xfb, 0xf7, 0xef, 0xdf, 0xbf, 0x7f };
-    static const uchar dcross_pat[] = { 0x7e, 0xbd, 0xdb, 0xe7, 0xe7, 0xdb, 0xbd, 0x7e };
-    static const uchar *const pat_tbl[] = {
-        dense1_pat, dense2_pat, dense3_pat, dense4_pat, dense5_pat,
-        dense6_pat, dense7_pat,
-        hor_pat, ver_pat, cross_pat, bdiag_pat, fdiag_pat, dcross_pat };
-    return pat_tbl[brushStyle - Qt::Dense1Pattern];
+    static const uchar pat_tbl[][2][8] = {
+        {
+            /* dense1 */ { 0x00, 0x44, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00 },
+            /*~dense1 */ { 0xff, 0xbb, 0xff, 0xff, 0xff, 0xbb, 0xff, 0xff },
+        }, {
+            /* dense2 */ { 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22, 0x00 },
+            /*~dense2 */ { 0x77, 0xff, 0xdd, 0xff, 0x77, 0xff, 0xdd, 0xff },
+        }, {
+            /* dense3 */ { 0xaa, 0x44, 0xaa, 0x11, 0xaa, 0x44, 0xaa, 0x11 },
+            /*~dense3 */ { 0x55, 0xbb, 0x55, 0xee, 0x55, 0xbb, 0x55, 0xee },
+        }, {
+            /* dense4 */ { 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa },
+            /*~dense4 */ { 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55 },
+        }, {
+            /* dense5 */ { 0x55, 0xbb, 0x55, 0xee, 0x55, 0xbb, 0x55, 0xee },
+            /*~dense5 */ { 0xaa, 0x44, 0xaa, 0x11, 0xaa, 0x44, 0xaa, 0x11 },
+        }, {
+            /* dense6 */ { 0x77, 0xff, 0xdd, 0xff, 0x77, 0xff, 0xdd, 0xff },
+            /*~dense6 */ { 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22, 0x00 },
+        }, {
+            /* dense7 */ { 0xff, 0xbb, 0xff, 0xff, 0xff, 0xbb, 0xff, 0xff },
+            /*~dense7 */ { 0x00, 0x44, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00 },
+        }, {
+            /* hor */    { 0xff, 0xff, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff },
+            /*~hor */    { 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00 },
+        }, {
+            /* ver */    { 0xef, 0xef, 0xef, 0xef, 0xef, 0xef, 0xef, 0xef },
+            /*~ver */    { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10 },
+        }, {
+            /* cross */  { 0xef, 0xef, 0xef, 0x00, 0xef, 0xef, 0xef, 0xef },
+            /*~cross */  { 0x10, 0x10, 0x10, 0xff, 0x10, 0x10, 0x10, 0x10 },
+        }, {
+            /* bdiag */  { 0x7f, 0xbf, 0xdf, 0xef, 0xf7, 0xfb, 0xfd, 0xfe },
+            /*~bdiag */  { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 },
+        }, {
+            /* fdiag */  { 0xfe, 0xfd, 0xfb, 0xf7, 0xef, 0xdf, 0xbf, 0x7f },
+            /*~fdiag */  { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 },
+        }, {
+            /* dcross */ { 0x7e, 0xbd, 0xdb, 0xe7, 0xe7, 0xdb, 0xbd, 0x7e },
+            /*~dcross */ { 0x81, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x81 },
+        },
+    };
+    return pat_tbl[brushStyle - Qt::Dense1Pattern][invert];
 }
 
-QPixmap qt_pixmapForBrush(int brushStyle, bool invert)
+Q_GUI_EXPORT QPixmap qt_pixmapForBrush(int brushStyle, bool invert)
 {
 
     QPixmap pm;
@@ -306,7 +314,7 @@ struct QBrushDataPointerDeleter
     the style is a gradient. The same is the case if the style is
     Qt::TexturePattern style unless the current texture is a QBitmap.
 
-    The isOpaque() function returns true if the brush is fully opaque
+    The isOpaque() function returns \c true if the brush is fully opaque
     otherwise false. A brush is considered opaque if:
 
     \list
@@ -454,13 +462,8 @@ QBrush::QBrush(const QImage &image)
 */
 
 QBrush::QBrush(Qt::BrushStyle style)
+    : QBrush(QColor(Qt::black), style)
 {
-    if (qbrush_check_type(style))
-        init(Qt::black, style);
-    else {
-        d.reset(nullBrushInstance());
-        d->ref.ref();
-    }
 }
 
 /*!
@@ -487,13 +490,8 @@ QBrush::QBrush(const QColor &color, Qt::BrushStyle style)
     \sa setColor(), setStyle()
 */
 QBrush::QBrush(Qt::GlobalColor color, Qt::BrushStyle style)
+    : QBrush(QColor(color), style)
 {
-    if (qbrush_check_type(style))
-        init(color, style);
-    else {
-        d.reset(nullBrushInstance());
-        d->ref.ref();
-    }
 }
 
 /*!
@@ -503,7 +501,7 @@ QBrush::QBrush(Qt::GlobalColor color, Qt::BrushStyle style)
     The style is set to Qt::TexturePattern. The color will only have
     an effect for QBitmaps.
 
-    \sa setColor(), setPixmap()
+    \sa setColor(), setTexture()
 */
 
 QBrush::QBrush(const QColor &color, const QPixmap &pixmap)
@@ -520,7 +518,7 @@ QBrush::QBrush(const QColor &color, const QPixmap &pixmap)
     The style is set to Qt::TexturePattern. The color will only have
     an effect for QBitmaps.
 
-    \sa setColor(), setPixmap()
+    \sa setColor(), setTexture()
 */
 QBrush::QBrush(Qt::GlobalColor color, const QPixmap &pixmap)
 {
@@ -575,13 +573,22 @@ void QBrush::cleanUp(QBrushData *x)
     QBrushDataPointerDeleter::deleteData(x);
 }
 
+static Q_DECL_CONSTEXPR inline bool use_same_brushdata(Qt::BrushStyle lhs, Qt::BrushStyle rhs)
+{
+    return lhs == rhs // includes Qt::TexturePattern
+        || (lhs >= Qt::NoBrush && lhs <= Qt::DiagCrossPattern && rhs >= Qt::NoBrush && rhs <= Qt::DiagCrossPattern)
+        || (lhs >= Qt::LinearGradientPattern && lhs <= Qt::ConicalGradientPattern && rhs >= Qt::LinearGradientPattern && rhs <= Qt::ConicalGradientPattern)
+           ;
+}
 
 void QBrush::detach(Qt::BrushStyle newStyle)
 {
-    if (newStyle == d->style && d->ref.load() == 1)
+    if (use_same_brushdata(newStyle, d->style) && d->ref.load() == 1) {
+        d->style = newStyle;
         return;
+    }
 
-    QScopedPointer<QBrushData> x;
+    QScopedPointer<QBrushData, QBrushDataPointerDeleter> x;
     switch(newStyle) {
     case Qt::TexturePattern: {
         QTexturedBrushData *tbd = new QTexturedBrushData;
@@ -597,20 +604,30 @@ void QBrush::detach(Qt::BrushStyle newStyle)
         }
     case Qt::LinearGradientPattern:
     case Qt::RadialGradientPattern:
-    case Qt::ConicalGradientPattern:
-        x.reset(new QGradientBrushData);
-        static_cast<QGradientBrushData *>(x.data())->gradient =
-            static_cast<QGradientBrushData *>(d.data())->gradient;
+    case Qt::ConicalGradientPattern: {
+        QGradientBrushData *gbd = new QGradientBrushData;
+        switch (d->style) {
+        case Qt::LinearGradientPattern:
+        case Qt::RadialGradientPattern:
+        case Qt::ConicalGradientPattern:
+            gbd->gradient =
+                    static_cast<QGradientBrushData *>(d.data())->gradient;
+            break;
+        default:
+            break;
+        }
+        x.reset(gbd);
         break;
+        }
     default:
         x.reset(new QBrushData);
         break;
     }
-    x->ref.store(1);
+    x->ref.store(1); // must be first lest the QBrushDataPointerDeleter turns into a no-op
     x->style = newStyle;
     x->color = d->color;
     x->transform = d->transform;
-    d.reset(x.take());
+    d.swap(x);
 }
 
 
@@ -631,6 +648,13 @@ QBrush &QBrush::operator=(const QBrush &b)
     return *this;
 }
 
+/*!
+    \fn QBrush &QBrush::operator=(QBrush &&other)
+
+    Move-assigns \a other to this QBrush instance.
+
+    \since 5.2
+*/
 
 /*!
     \fn void QBrush::swap(QBrush &other)
@@ -696,6 +720,9 @@ void QBrush::setStyle(Qt::BrushStyle style)
 
 void QBrush::setColor(const QColor &c)
 {
+    if (d->color == c)
+        return;
+
     detach(d->style);
     d->color = c;
 }
@@ -823,7 +850,7 @@ Q_GUI_EXPORT bool qt_isExtendedRadialGradient(const QBrush &brush)
 }
 
 /*!
-    Returns true if the brush is fully opaque otherwise false. A brush
+    Returns \c true if the brush is fully opaque otherwise false. A brush
     is considered opaque if:
 
     \list
@@ -905,8 +932,8 @@ void QBrush::setTransform(const QTransform &matrix)
 /*!
     \fn bool QBrush::operator!=(const QBrush &brush) const
 
-    Returns true if the brush is different from the given \a brush;
-    otherwise returns false.
+    Returns \c true if the brush is different from the given \a brush;
+    otherwise returns \c false.
 
     Two brushes are different if they have different styles, colors or
     transforms or different pixmaps or gradients depending on the style.
@@ -917,8 +944,8 @@ void QBrush::setTransform(const QTransform &matrix)
 /*!
     \fn bool QBrush::operator==(const QBrush &brush) const
 
-    Returns true if the brush is equal to the given \a brush;
-    otherwise returns false.
+    Returns \c true if the brush is equal to the given \a brush;
+    otherwise returns \c false.
 
     Two brushes are equal if they have equal styles, colors and
     transforms and equal pixmaps or gradients depending on the style.
@@ -935,9 +962,34 @@ bool QBrush::operator==(const QBrush &b) const
     switch (d->style) {
     case Qt::TexturePattern:
         {
-            const QPixmap &us = (static_cast<QTexturedBrushData *>(d.data()))->pixmap();
-            const QPixmap &them = (static_cast<QTexturedBrushData *>(b.d.data()))->pixmap();
-            return ((us.isNull() && them.isNull()) || us.cacheKey() == them.cacheKey());
+            // Note this produces false negatives if the textures have identical data,
+            // but does not share the same data in memory. Since equality is likely to
+            // be used to avoid iterating over the data for a texture update, this should
+            // still be better than doing an accurate comparison.
+            const QPixmap *us = 0, *them = 0;
+            qint64 cacheKey1, cacheKey2;
+            if (qHasPixmapTexture(*this)) {
+                us = (static_cast<QTexturedBrushData *>(d.data()))->m_pixmap;
+                cacheKey1 = us->cacheKey();
+            } else
+                cacheKey1 = (static_cast<QTexturedBrushData *>(d.data()))->image().cacheKey();
+
+            if (qHasPixmapTexture(b)) {
+                them = (static_cast<QTexturedBrushData *>(b.d.data()))->m_pixmap;
+                cacheKey2 = them->cacheKey();
+            } else
+                cacheKey2 = (static_cast<QTexturedBrushData *>(b.d.data()))->image().cacheKey();
+
+            if (cacheKey1 != cacheKey2)
+                return false;
+            if (!us == !them) // both images or both pixmaps
+                return true;
+            // Only raster QPixmaps use the same cachekeys as QImages.
+            if (us && us->handle()->classId() == QPlatformPixmap::RasterClass)
+                return true;
+            if (them && them->handle()->classId() == QPlatformPixmap::RasterClass)
+                return true;
+            return false;
         }
     case Qt::LinearGradientPattern:
     case Qt::RadialGradientPattern:
@@ -958,7 +1010,7 @@ bool QBrush::operator==(const QBrush &b) const
 */
 QDebug operator<<(QDebug dbg, const QBrush &b)
 {
-    static const char *BRUSH_STYLES[] = {
+    static const char BRUSH_STYLES[][24] = {
      "NoBrush",
      "SolidPattern",
      "Dense1Pattern",
@@ -977,12 +1029,13 @@ QDebug operator<<(QDebug dbg, const QBrush &b)
      "LinearGradientPattern",
      "RadialGradientPattern",
      "ConicalGradientPattern",
-     0, 0, 0, 0, 0, 0,
+     "", "", "", "", "", "",
      "TexturePattern" // 24
     };
 
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QBrush(" << b.color() << ',' << BRUSH_STYLES[b.style()] << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
 
@@ -1014,14 +1067,20 @@ QDataStream &operator<<(QDataStream &s, const QBrush &b)
 
     s << style << b.color();
     if (b.style() == Qt::TexturePattern) {
-        s << b.texture();
+        if (s.version() >= QDataStream::Qt_5_5)
+            s << b.textureImage();
+        else
+            s << b.texture();
     } else if (s.version() >= QDataStream::Qt_4_0 && gradient_style) {
         const QGradient *gradient = b.gradient();
         int type_as_int = int(gradient->type());
         s << type_as_int;
         if (s.version() >= QDataStream::Qt_4_3) {
             s << int(gradient->spread());
-            s << int(gradient->coordinateMode());
+            QGradient::CoordinateMode co_mode = gradient->coordinateMode();
+            if (s.version() < QDataStream::Qt_5_12 && co_mode == QGradient::ObjectMode)
+                co_mode = QGradient::ObjectBoundingMode;
+            s << int(co_mode);
         }
 
         if (s.version() >= QDataStream::Qt_4_5)
@@ -1074,10 +1133,17 @@ QDataStream &operator>>(QDataStream &s, QBrush &b)
     QColor color;
     s >> style;
     s >> color;
+    b = QBrush(color);
     if (style == Qt::TexturePattern) {
-        QPixmap pm;
-        s >> pm;
-        b = QBrush(color, pm);
+        if (s.version() >= QDataStream::Qt_5_5) {
+            QImage img;
+            s >> img;
+            b.setTextureImage(qMove(img));
+        } else {
+            QPixmap pm;
+            s >> pm;
+            b.setTexture(qMove(pm));
+        }
     } else if (style == Qt::LinearGradientPattern
                || style == Qt::RadialGradientPattern
                || style == Qt::ConicalGradientPattern) {
@@ -1111,6 +1177,7 @@ QDataStream &operator>>(QDataStream &s, QBrush &b)
             QColor c;
 
             s >> numStops;
+            stops.reserve(numStops);
             for (quint32 i = 0; i < numStops; ++i) {
                 s >> n >> c;
                 stops << QPair<qreal, QColor>(n, c);
@@ -1270,6 +1337,72 @@ QGradient::QGradient()
 {
 }
 
+/*!
+    \enum QGradient::Preset
+    \since 5.12
+
+    This enum specifies a set of predefined presets for QGradient,
+    based on the gradients from https://webgradients.com/.
+*/
+
+/*!
+    \fn QGradient::QGradient(QGradient::Preset preset)
+    \since 5.12
+
+    Constructs a gradient based on a predefined \a preset.
+
+    The coordinate mode of the resulting gradient is
+    QGradient::ObjectMode, allowing the preset
+    to be applied to arbitrary object sizes.
+*/
+QGradient::QGradient(Preset preset)
+    : QGradient()
+{
+    static QHash<int, QGradient> cachedPresets;
+    static QMutex cacheMutex;
+    QMutexLocker locker(&cacheMutex);
+    if (cachedPresets.contains(preset)) {
+        const QGradient &cachedPreset = cachedPresets.value(preset);
+        m_type = cachedPreset.m_type;
+        m_data = cachedPreset.m_data;
+        m_stops = cachedPreset.m_stops;
+        m_spread = cachedPreset.m_spread;
+        dummy = cachedPreset.dummy;
+    } else {
+        static QJsonDocument jsonPresets = []() {
+            QFile webGradients(QLatin1String(":/qgradient/webgradients.binaryjson"));
+            webGradients.open(QFile::ReadOnly);
+            return QJsonDocument::fromBinaryData(webGradients.readAll());
+        }();
+
+        const QJsonValue presetData = jsonPresets[preset - 1];
+        if (!presetData.isObject())
+            return;
+
+        m_type = LinearGradient;
+        setCoordinateMode(ObjectMode);
+        setSpread(PadSpread);
+
+        const QJsonValue start = presetData[QLatin1Literal("start")];
+        const QJsonValue end = presetData[QLatin1Literal("end")];
+        m_data.linear.x1 = start[QLatin1Literal("x")].toDouble();
+        m_data.linear.y1 = start[QLatin1Literal("y")].toDouble();
+        m_data.linear.x2 = end[QLatin1Literal("x")].toDouble();
+        m_data.linear.y2 = end[QLatin1Literal("y")].toDouble();
+
+        for (const QJsonValue &stop : presetData[QLatin1String("stops")].toArray()) {
+            setColorAt(stop[QLatin1Literal("position")].toDouble(),
+                QColor(QRgb(stop[QLatin1Literal("color")].toInt())));
+        }
+
+        cachedPresets.insert(preset, *this);
+    }
+}
+
+QT_END_NAMESPACE
+static void initGradientPresets() { Q_INIT_RESOURCE(qmake_webgradients); }
+Q_CONSTRUCTOR_FUNCTION(initGradientPresets);
+QT_BEGIN_NAMESPACE
 
 /*!
     \enum QGradient::Type
@@ -1359,6 +1492,25 @@ void QGradient::setColorAt(qreal pos, const QColor &color)
         m_stops.insert(index, QGradientStop(pos, color));
 }
 
+static inline bool ok(QGradientStop stop)
+{
+    return stop.first >= 0 && stop.first <= 1; // rejects NaNs
+}
+
+static inline bool ok(const QGradientStops &stops)
+{
+    qreal lastPos = -1;
+    for (const QGradientStop &stop : stops) {
+        if (Q_UNLIKELY(!ok(stop)))
+            return false;
+        const bool sorted = stop.first > lastPos; // rejects duplicates
+        if (Q_UNLIKELY(!sorted))
+            return false;
+        lastPos = stop.first;
+    }
+    return true;
+}
+
 /*!
     \fn void QGradient::setStops(const QGradientStops &stopPoints)
 
@@ -1370,6 +1522,14 @@ void QGradient::setColorAt(qreal pos, const QColor &color)
 */
 void QGradient::setStops(const QGradientStops &stops)
 {
+    // ## Qt 6: consider taking \a stops by value, so we can move into m_stops
+    if (Q_LIKELY(ok(stops))) {
+        // fast path for the common case: if everything is ok with the stops, just copy them
+        m_stops = stops;
+        return;
+    }
+    // otherwise, to keep the pre-5.9 behavior, add them one after another,
+    // so each stop is checked, invalid ones are skipped, they are added in-order (which may be O(N^2)).
     m_stops.clear();
     for (int i=0; i<stops.size(); ++i)
         setColorAt(stops.at(i).first, stops.at(i).second);
@@ -1405,14 +1565,19 @@ QGradientStops QGradient::stops() const
 
     \value LogicalMode This is the default mode. The gradient coordinates
     are specified logical space just like the object coordinates.
+    \value ObjectMode In this mode the gradient coordinates are
+    relative to the bounding rectangle of the object being drawn, with
+    (0,0) in the top left corner, and (1,1) in the bottom right corner
+    of the object's bounding rectangle. This value was added in Qt
+    5.12.
     \value StretchToDeviceMode In this mode the gradient coordinates
     are relative to the bounding rectangle of the paint device,
     with (0,0) in the top left corner, and (1,1) in the bottom right
     corner of the paint device.
-    \value ObjectBoundingMode In this mode the gradient coordinates are
-    relative to the bounding rectangle of the object being drawn, with
-    (0,0) in the top left corner, and (1,1) in the bottom right corner
-    of the object's bounding rectangle.
+    \value ObjectBoundingMode This mode is the same as ObjectMode, except that
+    the {QBrush::transform()} {brush transform}, if any, is applied relative to
+    the logical space instead of the object space. This enum value is
+    deprecated and should not be used in new code.
 */
 
 /*!
@@ -1484,15 +1649,15 @@ void QGradient::setInterpolationMode(InterpolationMode mode)
     \fn bool QGradient::operator!=(const QGradient &gradient) const
     \since 4.2
 
-    Returns true if the gradient is the same as the other \a gradient
-    specified; otherwise returns false.
+    Returns \c true if the gradient is the same as the other \a gradient
+    specified; otherwise returns \c false.
 
     \sa operator==()
 */
 
 /*!
-    Returns true if the gradient is the same as the other \a gradient
-    specified; otherwise returns false.
+    Returns \c true if the gradient is the same as the other \a gradient
+    specified; otherwise returns \c false.
 
     \sa operator!=()
 */
@@ -1614,13 +1779,8 @@ QLinearGradient::QLinearGradient(const QPointF &start, const QPointF &finalStop)
     \sa QGradient::setColorAt(), QGradient::setStops()
 */
 QLinearGradient::QLinearGradient(qreal xStart, qreal yStart, qreal xFinalStop, qreal yFinalStop)
+    : QLinearGradient(QPointF(xStart, yStart), QPointF(xFinalStop, yFinalStop))
 {
-    m_type = LinearGradient;
-    m_spread = PadSpread;
-    m_data.linear.x1 = xStart;
-    m_data.linear.y1 = yStart;
-    m_data.linear.x2 = xFinalStop;
-    m_data.linear.y2 = yFinalStop;
 }
 
 
@@ -1823,19 +1983,8 @@ QRadialGradient::QRadialGradient(const QPointF &center, qreal radius)
 */
 
 QRadialGradient::QRadialGradient(qreal cx, qreal cy, qreal radius, qreal fx, qreal fy)
+    : QRadialGradient(QPointF(cx, cy), radius, QPointF(fx, fy))
 {
-    m_type = RadialGradient;
-    m_spread = PadSpread;
-    m_data.radial.cx = cx;
-    m_data.radial.cy = cy;
-    m_data.radial.cradius = radius;
-
-    QPointF adapted_focal = qt_radial_gradient_adapt_focal_point(QPointF(cx, cy),
-                                                                 radius,
-                                                                 QPointF(fx, fy));
-
-    m_data.radial.fx = adapted_focal.x();
-    m_data.radial.fy = adapted_focal.y();
 }
 
 /*!
@@ -1845,14 +1994,8 @@ QRadialGradient::QRadialGradient(qreal cx, qreal cy, qreal radius, qreal fx, qre
     \sa QGradient::setColorAt(), QGradient::setStops()
  */
 QRadialGradient::QRadialGradient(qreal cx, qreal cy, qreal radius)
+    : QRadialGradient(QPointF(cx, cy), radius)
 {
-    m_type = RadialGradient;
-    m_spread = PadSpread;
-    m_data.radial.cx = cx;
-    m_data.radial.cy = cy;
-    m_data.radial.cradius = radius;
-    m_data.radial.fx = cx;
-    m_data.radial.fy = cy;
 }
 
 
@@ -2152,12 +2295,8 @@ QConicalGradient::QConicalGradient(const QPointF &center, qreal angle)
 */
 
 QConicalGradient::QConicalGradient(qreal cx, qreal cy, qreal angle)
+    : QConicalGradient(QPointF(cx, cy), angle)
 {
-    m_type = ConicalGradient;
-    m_spread = PadSpread;
-    m_data.conical.cx = cx;
-    m_data.conical.cy = cy;
-    m_data.conical.angle = angle;
 }
 
 

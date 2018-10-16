@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,8 +48,6 @@
 # include <QtCore/qpoint.h>
 #endif
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -60,7 +56,6 @@ class QPointF;
 class Q_CORE_EXPORT QEasingCurve
 {
     Q_GADGET
-    Q_ENUMS(Type)
 public:
     enum Type {
         Linear,
@@ -77,6 +72,7 @@ public:
         InCurve, OutCurve, SineCurve, CosineCurve,
         BezierSpline, TCBSpline, Custom, NCurveTypes
     };
+    Q_ENUM(Type)
 
     QEasingCurve(Type type = Linear);
     QEasingCurve(const QEasingCurve &other);
@@ -85,12 +81,12 @@ public:
     QEasingCurve &operator=(const QEasingCurve &other)
     { if ( this != &other ) { QEasingCurve copy(other); swap(copy); } return *this; }
 #ifdef Q_COMPILER_RVALUE_REFS
-    QEasingCurve(QEasingCurve &&other) : d_ptr(other.d_ptr) { other.d_ptr = 0; }
-    QEasingCurve &operator=(QEasingCurve &&other)
+    QEasingCurve(QEasingCurve &&other) Q_DECL_NOTHROW : d_ptr(other.d_ptr) { other.d_ptr = nullptr; }
+    QEasingCurve &operator=(QEasingCurve &&other) Q_DECL_NOTHROW
     { qSwap(d_ptr, other.d_ptr); return *this; }
 #endif
 
-    inline void swap(QEasingCurve &other) { qSwap(d_ptr, other.d_ptr); }
+    void swap(QEasingCurve &other) Q_DECL_NOTHROW { qSwap(d_ptr, other.d_ptr); }
 
     bool operator==(const QEasingCurve &other) const;
     inline bool operator!=(const QEasingCurve &other) const
@@ -129,7 +125,7 @@ private:
     friend Q_CORE_EXPORT QDataStream &operator>>(QDataStream &, QEasingCurve &);
 #endif
 };
-Q_DECLARE_TYPEINFO(QEasingCurve, Q_MOVABLE_TYPE);
+Q_DECLARE_SHARED(QEasingCurve)
 
 #ifndef QT_NO_DEBUG_STREAM
 Q_CORE_EXPORT QDebug operator<<(QDebug debug, const QEasingCurve &item);
@@ -141,7 +137,5 @@ Q_CORE_EXPORT QDataStream &operator>>(QDataStream &, QEasingCurve &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

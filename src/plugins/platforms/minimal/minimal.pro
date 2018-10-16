@@ -1,9 +1,10 @@
 TARGET = qminimal
 
-PLUGIN_TYPE = platforms
-load(qt_plugin)
+QT += \
+    core-private gui-private \
+    eventdispatcher_support-private fontdatabase_support-private
 
-QT += core-private gui-private platformsupport-private
+DEFINES += QT_NO_FOREACH
 
 SOURCES =   main.cpp \
             qminimalintegration.cpp \
@@ -12,3 +13,10 @@ HEADERS =   qminimalintegration.h \
             qminimalbackingstore.h
 
 OTHER_FILES += minimal.json
+
+qtConfig(freetype): QMAKE_USE_PRIVATE += freetype
+
+PLUGIN_TYPE = platforms
+PLUGIN_CLASS_NAME = QMinimalIntegrationPlugin
+!equals(TARGET, $$QT_DEFAULT_QPA_PLUGIN): PLUGIN_EXTENDS = -
+load(qt_plugin)

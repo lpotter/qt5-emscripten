@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,21 +45,12 @@
 
 QT_BEGIN_NAMESPACE
 
-inline static void blend_pixel(quint32 &dst, const quint32 src)
-{
-    if (src >= 0xff000000)
-        dst = src;
-    else if (src != 0)
-        dst = src + BYTE_MUL(dst, qAlpha(~src));
-}
-
-
 /* The instruction palignr uses direct arguments, so we have to generate the code fo the different
    shift (4, 8, 12). Checking the alignment inside the loop is unfortunatelly way too slow.
  */
 #define BLENDING_LOOP(palignrOffset, length)\
-    for (; x < length-3; x += 4) { \
-        const __m128i srcVectorLastLoaded = _mm_load_si128((__m128i *)&src[x - minusOffsetToAlignSrcOn16Bytes + 4]);\
+    for (; x-minusOffsetToAlignSrcOn16Bytes < length-7; x += 4) { \
+        const __m128i srcVectorLastLoaded = _mm_load_si128((const __m128i *)&src[x - minusOffsetToAlignSrcOn16Bytes + 4]);\
         const __m128i srcVector = _mm_alignr_epi8(srcVectorLastLoaded, srcVectorPrevLoaded, palignrOffset); \
         const __m128i srcVectorAlpha = _mm_and_si128(srcVector, alphaMask); \
         if (_mm_movemask_epi8(_mm_cmpeq_epi32(srcVectorAlpha, alphaMask)) == 0xffff) { \
@@ -103,9 +92,9 @@ inline static void blend_pixel(quint32 &dst, const quint32 src)
     if (!minusOffsetToAlignSrcOn16Bytes) {\
         /* src is aligned, usual algorithm but with aligned operations.\
            See the SSE2 version for more documentation on the algorithm itself. */\
-        const __m128i alphaShuffleMask = _mm_set_epi8(0xff,15,0xff,15,0xff,11,0xff,11,0xff,7,0xff,7,0xff,3,0xff,3);\
+        const __m128i alphaShuffleMask = _mm_set_epi8(char(0xff),15,char(0xff),15,char(0xff),11,char(0xff),11,char(0xff),7,char(0xff),7,char(0xff),3,char(0xff),3);\
         for (; x < length-3; x += 4) { \
-            const __m128i srcVector = _mm_load_si128((__m128i *)&src[x]); \
+            const __m128i srcVector = _mm_load_si128((const __m128i *)&src[x]); \
             const __m128i srcVectorAlpha = _mm_and_si128(srcVector, alphaMask); \
             if (_mm_movemask_epi8(_mm_cmpeq_epi32(srcVectorAlpha, alphaMask)) == 0xffff) { \
                 _mm_store_si128((__m128i *)&dst[x], srcVector); \
@@ -121,10 +110,10 @@ inline static void blend_pixel(quint32 &dst, const quint32 src)
         } /* end for() */\
     } else if ((length - x) >= 8) {\
         /* We use two vectors to extract the src: prevLoaded for the first pixels, lastLoaded for the current pixels. */\
-        __m128i srcVectorPrevLoaded = _mm_load_si128((__m128i *)&src[x - minusOffsetToAlignSrcOn16Bytes]);\
+        __m128i srcVectorPrevLoaded = _mm_load_si128((const __m128i *)&src[x - minusOffsetToAlignSrcOn16Bytes]);\
         const int palignrOffset = minusOffsetToAlignSrcOn16Bytes << 2;\
 \
-        const __m128i alphaShuffleMask = _mm_set_epi8(0xff,15,0xff,15,0xff,11,0xff,11,0xff,7,0xff,7,0xff,3,0xff,3);\
+        const __m128i alphaShuffleMask = _mm_set_epi8(char(0xff),15,char(0xff),15,char(0xff),11,char(0xff),11,char(0xff),7,char(0xff),7,char(0xff),3,char(0xff),3);\
         switch (palignrOffset) {\
         case 4:\
             BLENDING_LOOP(4, length)\
@@ -176,6 +165,24 @@ void qt_blend_argb32_on_argb32_ssse3(uchar *destPixels, int dbpl,
             src = (const quint32 *)(((const uchar *) src) + sbpl);
         }
     }
+}
+
+const uint *QT_FASTCALL fetchPixelsBPP24_ssse3(uint *buffer, const uchar *src, int index, int count)
+{
+    const quint24 *s = reinterpret_cast<const quint24 *>(src);
+    for (int i = 0; i < count; ++i)
+        buffer[i] = s[index + i];
+    return buffer;
+}
+
+extern void QT_FASTCALL qt_convert_rgb888_to_rgb32_ssse3(quint32 *dst, const uchar *src, int len);
+
+const uint * QT_FASTCALL qt_fetchUntransformed_888_ssse3(uint *buffer, const Operator *, const QSpanData *data,
+                                                         int y, int x, int length)
+{
+    const uchar *line = data->texture.scanLine(y) + x * 3;
+    qt_convert_rgb888_to_rgb32_ssse3(buffer, line, length);
+    return buffer;
 }
 
 QT_END_NAMESPACE

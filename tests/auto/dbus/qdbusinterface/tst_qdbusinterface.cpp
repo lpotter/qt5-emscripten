@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,6 +33,7 @@
 #include <QtTest/QtTest>
 #include <QtCore/qvariant.h>
 #include <QtDBus/QtDBus>
+#include <QtDBus/private/qdbus_symbols_p.h>
 #include <qdebug.h>
 #include "../qdbusmarshall/common.h"
 #include "myobject.h"
@@ -226,6 +214,8 @@ private slots:
     void propertyWritePeer();
     void complexPropertyReadPeer();
     void complexPropertyWritePeer();
+
+    void interactiveAuthorizationRequired();
 private:
     QProcess proc;
 };
@@ -274,13 +264,15 @@ void tst_QDBusInterface::initTestCase()
                        | QDBusConnection::ExportAllSlots
                        | QDBusConnection::ExportAllInvokables);
 
-    // start peer server
-    #ifdef Q_OS_WIN
-    proc.start("qmyserver");
-    #else
-    proc.start("./qmyserver/qmyserver");
-    #endif
-    QVERIFY(proc.waitForStarted());
+#ifdef Q_OS_WIN
+#  define EXE ".exe"
+#else
+#  define EXE ""
+#endif
+    proc.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    proc.start(QFINDTESTDATA("qmyserver/qmyserver" EXE));
+    QVERIFY2(proc.waitForStarted(), qPrintable(proc.errorString()));
+    QVERIFY(proc.waitForReadyRead());
 
     WaitForQMyServer w;
     QVERIFY(w.ok());
@@ -289,23 +281,25 @@ void tst_QDBusInterface::initTestCase()
     // get peer server address
     QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "address");
     QDBusMessage rpl = con.call(req);
-    QVERIFY(rpl.type() == QDBusMessage::ReplyMessage);
+    QCOMPARE(rpl.type(), QDBusMessage::ReplyMessage);
     QString address = rpl.arguments().at(0).toString();
 
     // connect to peer server
     QDBusConnection peercon = QDBusConnection::connectToPeer(address, "peer");
     QVERIFY(peercon.isConnected());
 
-    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "isConnected");
+    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "waitForConnected");
     QDBusMessage rpl2 = con.call(req2);
-    QVERIFY(rpl2.type() == QDBusMessage::ReplyMessage);
-    QVERIFY(rpl2.arguments().at(0).toBool());
+    QCOMPARE(rpl2.type(), QDBusMessage::ReplyMessage);
+    QVERIFY2(rpl2.type() == QDBusMessage::ReplyMessage, rpl2.errorMessage().toLatin1());
 }
 
 void tst_QDBusInterface::cleanupTestCase()
 {
+    QDBusMessage msg = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "quit");
+    QDBusConnection::sessionBus().call(msg);
+    proc.waitForFinished(200);
     proc.close();
-    proc.kill();
 }
 
 void tst_QDBusInterface::notConnected()
@@ -352,7 +346,7 @@ void tst_QDBusInterface::invalidAfterServiceOwnerChanged()
 
     QTestEventLoop::instance().connect(connIface, SIGNAL(serviceOwnerChanged(QString,QString,QString)),
                                        SLOT(exitLoop()));
-    QVERIFY(connIface->registerService("com.example.Test") == QDBusConnectionInterface::ServiceRegistered);
+    QCOMPARE(connIface->registerService("com.example.Test").value(), QDBusConnectionInterface::ServiceRegistered);
 
     QTestEventLoop::instance().enterLoop(5);
 
@@ -411,6 +405,7 @@ public:
     VirtualObject() :success(true) {}
 
     QString introspect(const QString &path) const {
+        Q_ASSERT(QThread::currentThread() == thread());
         if (path == "/some/path/superNode")
             return "zitroneneis";
         if (path == "/some/path/superNode/foo")
@@ -421,6 +416,7 @@ public:
     }
 
     bool handleMessage(const QDBusMessage &message, const QDBusConnection &connection) {
+        Q_ASSERT(QThread::currentThread() == thread());
         ++callCount;
         lastMessage = message;
 
@@ -1132,6 +1128,30 @@ void tst_QDBusInterface::complexPropertyWritePeer()
     QVERIFY(iface.setProperty("complexProp", QVariant::fromValue(arg)));
     QCOMPARE(callCountPeer(), 1);
     QCOMPARE(complexPropPeer(), arg);
+}
+
+void tst_QDBusInterface::interactiveAuthorizationRequired()
+{
+    int major;
+    int minor;
+    int micro;
+    q_dbus_get_version(&major, &minor, &micro);
+
+    QVersionNumber dbusVersion(major, minor, micro);
+    if (dbusVersion < QVersionNumber(1, 9, 2))
+        QSKIP("Your DBus library is too old to support interactive authorization");
+
+    QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "interactiveAuthorization");
+    QDBusMessage reply = QDBusConnection::sessionBus().call(req);
+
+    QCOMPARE(reply.type(), QDBusMessage::ErrorMessage);
+    QCOMPARE(reply.errorName(), QStringLiteral("org.freedesktop.DBus.Error.InteractiveAuthorizationRequired"));
+
+    req.setInteractiveAuthorizationAllowed(true);
+    reply = QDBusConnection::sessionBus().call(req);
+
+    QCOMPARE(reply.type(), QDBusMessage::ReplyMessage);
+    QVERIFY(reply.arguments().at(0).toBool());
 }
 
 QTEST_MAIN(tst_QDBusInterface)

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2017 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,11 +43,14 @@
 #include "qfile.h"
 #include "qfsfileengine_p.h"
 #include "qtemporaryfile.h"
+#include "qtemporaryfile_p.h"
 #include "qlist.h"
 #include "qfileinfo.h"
 #include "private/qiodevice_p.h"
 #include "private/qfile_p.h"
+#include "private/qfilesystemengine_p.h"
 #include "private/qsystemerror_p.h"
+#include "private/qtemporaryfile_p.h"
 #if defined(QT_BUILD_CORE_LIB)
 # include "qcoreapplication.h"
 #endif
@@ -142,7 +144,7 @@ QAbstractFileEngine *QFilePrivate::engine() const
     The size of the file is returned by size(). You can get the
     current file position using pos(), or move to a new file position
     using seek(). If you've reached the end of the file, atEnd()
-    returns true.
+    returns \c true.
 
     \section1 Reading Files Directly
 
@@ -166,7 +168,7 @@ QAbstractFileEngine *QFilePrivate::engine() const
     disk into a 16-bit Unicode QString. By default, it assumes that
     the user system's local 8-bit encoding is used (e.g., UTF-8
     on most unix based operating systems; see QTextCodec::codecForLocale() for
-    details). This can be changed using setCodec().
+    details). This can be changed using \l QTextStream::setCodec().
 
     To write text, we can use operator<<(), which is overloaded to
     take a QTextStream on the left and various data types (including
@@ -206,12 +208,19 @@ QAbstractFileEngine *QFilePrivate::engine() const
 
     \section1 Platform Specific Issues
 
-    File permissions are handled differently on Linux/Mac OS X and
+    File permissions are handled differently on Unix-like systems and
     Windows.  In a non \l{QIODevice::isWritable()}{writable}
-    directory on Linux, files cannot be created. This is not always
+    directory on Unix-like systems, files cannot be created. This is not always
     the case on Windows, where, for instance, the 'My Documents'
     directory usually is not writable, but it is still possible to
     create files in it.
+
+    Qt's understanding of file permissions is limited, which affects especially
+    the \l QFile::setPermissions() function. On Windows, Qt will set only the
+    legacy read-only flag, and that only when none of the Write* flags are
+    passed. Qt does not manipulate access control lists (ACLs), which makes this
+    function mostly useless for NTFS volumes. It may still be of use for USB
+    sticks that use VFAT file systems. POSIX ACLs are not manipulated, either.
 
     \sa QTextStream, QDataStream, QFileInfo, QDir, {The Qt Resource System}
 */
@@ -232,7 +241,7 @@ QFile::QFile(QFilePrivate &dd)
 }
 #else
 /*!
-    \internal
+    Constructs a QFile object.
 */
 QFile::QFile()
     : QFileDevice(*new QFilePrivate, 0)
@@ -402,8 +411,8 @@ QFile::setFileName(const QString &name)
 /*!
     \overload
 
-    Returns true if the file specified by fileName() exists; otherwise
-    returns false.
+    Returns \c true if the file specified by fileName() exists; otherwise
+    returns \c false.
 
     \sa fileName(), setFileName()
 */
@@ -414,18 +423,21 @@ QFile::exists() const
     Q_D(const QFile);
     // 0x1000000 = QAbstractFileEngine::Refresh, forcing an update
     return (d->engine()->fileFlags(QAbstractFileEngine::FlagsMask
-                                    | QAbstractFileEngine::FileFlag(0x1000000)) & QAbstractFileEngine::ExistsFlag);
+                                    | QAbstractFileEngine::Refresh) & QAbstractFileEngine::ExistsFlag);
 }
 
 /*!
-    Returns true if the file specified by \a fileName exists; otherwise
-    returns false.
+    Returns \c true if the file specified by \a fileName exists; otherwise
+    returns \c false.
+
+    \note If \a fileName is a symlink that points to a non-existing
+    file, false is returned.
 */
 
 bool
 QFile::exists(const QString &fileName)
 {
-    return QFileInfo(fileName).exists();
+    return QFileInfo::exists(fileName);
 }
 
 /*!
@@ -438,7 +450,7 @@ QFile::exists(const QString &fileName)
     link.
 
     This name may not represent an existing file; it is only a string.
-    QFile::exists() returns true if the symlink points to an existing file.
+    QFile::exists() returns \c true if the symlink points to an existing file.
 
     \sa fileName(), setFileName()
 */
@@ -464,7 +476,7 @@ QFile::readLink() const
     empty string if the \a fileName does not correspond to a symbolic link.
 
     This name may not represent an existing file; it is only a string.
-    QFile::exists() returns true if the symlink points to an existing file.
+    QFile::exists() returns \c true if the symlink points to an existing file.
 */
 
 /*!
@@ -479,8 +491,8 @@ QFile::readLink(const QString &fileName)
 }
 
 /*!
-    Removes the file specified by fileName(). Returns true if successful;
-    otherwise returns false.
+    Removes the file specified by fileName(). Returns \c true if successful;
+    otherwise returns \c false.
 
     The file is closed before it is removed.
 
@@ -491,7 +503,8 @@ bool
 QFile::remove()
 {
     Q_D(QFile);
-    if (d->fileName.isEmpty()) {
+    if (d->fileName.isEmpty() &&
+            !static_cast<QFSFileEngine *>(d->engine())->isUnnamedFile()) {
         qWarning("QFile::remove: Empty or null file name");
         return false;
     }
@@ -512,7 +525,7 @@ QFile::remove()
 
     Removes the file specified by the \a fileName given.
 
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
     \sa remove()
 */
@@ -525,9 +538,9 @@ QFile::remove(const QString &fileName)
 
 /*!
     Renames the file currently specified by fileName() to \a newName.
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
-    If a file with the name \a newName already exists, rename() returns false
+    If a file with the name \a newName already exists, rename() returns \c false
     (i.e., QFile will not overwrite it).
 
     The file is closed before it is renamed.
@@ -544,21 +557,78 @@ bool
 QFile::rename(const QString &newName)
 {
     Q_D(QFile);
-    if (d->fileName.isEmpty()) {
+
+    // if this is a QTemporaryFile, the virtual fileName() call here may do something
+    if (fileName().isEmpty()) {
         qWarning("QFile::rename: Empty or null file name");
         return false;
     }
-    if (QFile(newName).exists()) {
-        // ### Race condition. If a file is moved in after this, it /will/ be
-        // overwritten. On Unix, the proper solution is to use hardlinks:
-        // return ::link(old, new) && ::remove(old);
-        d->setError(QFile::RenameError, tr("Destination file exists"));
+    if (d->fileName == newName) {
+        d->setError(QFile::RenameError, tr("Destination file is the same file."));
         return false;
+    }
+    if (!exists()) {
+        d->setError(QFile::RenameError, tr("Source file does not exist."));
+        return false;
+    }
+
+    // If the file exists and it is a case-changing rename ("foo" -> "Foo"),
+    // compare Ids to make sure it really is a different file.
+    // Note: this does not take file engines into account.
+    bool changingCase = false;
+    QByteArray targetId = QFileSystemEngine::id(QFileSystemEntry(newName));
+    if (!targetId.isNull()) {
+        QByteArray fileId = d->fileEngine ?
+                    d->fileEngine->id() :
+                    QFileSystemEngine::id(QFileSystemEntry(d->fileName));
+        changingCase = (fileId == targetId && d->fileName.compare(newName, Qt::CaseInsensitive) == 0);
+        if (!changingCase) {
+            d->setError(QFile::RenameError, tr("Destination file exists"));
+            return false;
+        }
+
+#ifdef Q_OS_LINUX
+        // rename() on Linux simply does nothing when renaming "foo" to "Foo" on a case-insensitive
+        // FS, such as FAT32. Move the file away and rename in 2 steps to work around.
+        QTemporaryFileName tfn(d->fileName);
+        QFileSystemEntry src(d->fileName);
+        QSystemError error;
+        for (int attempt = 0; attempt < 16; ++attempt) {
+            QFileSystemEntry tmp(tfn.generateNext(), QFileSystemEntry::FromNativePath());
+
+            // rename to temporary name
+            if (!QFileSystemEngine::renameFile(src, tmp, error))
+                continue;
+
+            // rename to final name
+            if (QFileSystemEngine::renameFile(tmp, QFileSystemEntry(newName), error)) {
+                d->fileEngine->setFileName(newName);
+                d->fileName = newName;
+                return true;
+            }
+
+            // We need to restore the original file.
+            QSystemError error2;
+            if (QFileSystemEngine::renameFile(tmp, src, error2))
+                break;      // report the original error, below
+
+            // report both errors
+            d->setError(QFile::RenameError,
+                        tr("Error while renaming: %1").arg(error.toString())
+                        + QLatin1Char('\n')
+                        + tr("Unable to restore from %1: %2").
+                        arg(QDir::toNativeSeparators(tmp.filePath()), error2.toString()));
+            return false;
+        }
+        d->setError(QFile::RenameError,
+                    tr("Error while renaming: %1").arg(error.toString()));
+        return false;
+#endif // Q_OS_LINUX
     }
     unsetError();
     close();
     if(error() == QFile::NoError) {
-        if (d->engine()->rename(newName)) {
+        if (changingCase ? d->engine()->renameOverwrite(newName) : d->engine()->rename(newName)) {
             unsetError();
             // engine was able to handle the new name so we just reset it
             d->fileEngine->setFileName(newName);
@@ -606,8 +676,11 @@ QFile::rename(const QString &newName)
                 return !error;
             }
             close();
+            d->setError(QFile::RenameError,
+                        tr("Cannot open destination file: %1").arg(out.errorString()));
+        } else {
+            d->setError(QFile::RenameError, errorString());
         }
-        d->setError(QFile::RenameError, out.isOpen() ? errorString() : out.errorString());
     }
     return false;
 }
@@ -615,10 +688,10 @@ QFile::rename(const QString &newName)
 /*!
     \overload
 
-    Renames the file \a oldName to \a newName. Returns true if
-    successful; otherwise returns false.
+    Renames the file \a oldName to \a newName. Returns \c true if
+    successful; otherwise returns \c false.
 
-    If a file with the name \a newName already exists, rename() returns false
+    If a file with the name \a newName already exists, rename() returns \c false
     (i.e., QFile will not overwrite it).
 
     \sa rename()
@@ -634,8 +707,8 @@ QFile::rename(const QString &oldName, const QString &newName)
 
     Creates a link named \a linkName that points to the file currently specified by
     fileName().  What a link is depends on the underlying filesystem (be it a
-    shortcut on Windows or a symbolic link on Unix). Returns true if successful;
-    otherwise returns false.
+    shortcut on Windows or a symbolic link on Unix). Returns \c true if successful;
+    otherwise returns \c false.
 
     This function will not overwrite an already existing entity in the file system;
     in this case, \c link() will return false and set \l{QFile::}{error()} to
@@ -650,7 +723,7 @@ bool
 QFile::link(const QString &linkName)
 {
     Q_D(QFile);
-    if (d->fileName.isEmpty()) {
+    if (fileName().isEmpty()) {
         qWarning("QFile::link: Empty or null file name");
         return false;
     }
@@ -668,8 +741,8 @@ QFile::link(const QString &linkName)
 
     Creates a link named \a linkName that points to the file \a fileName. What a link is
     depends on the underlying filesystem (be it a shortcut on Windows
-    or a symbolic link on Unix). Returns true if successful; otherwise
-    returns false.
+    or a symbolic link on Unix). Returns \c true if successful; otherwise
+    returns \c false.
 
     \sa link()
 */
@@ -682,10 +755,10 @@ QFile::link(const QString &fileName, const QString &linkName)
 
 /*!
     Copies the file currently specified by fileName() to a file called
-    \a newName.  Returns true if successful; otherwise returns false.
+    \a newName.  Returns \c true if successful; otherwise returns \c false.
 
     Note that if a file with the name \a newName already exists,
-    copy() returns false (i.e. QFile will not overwrite it).
+    copy() returns \c false (i.e. QFile will not overwrite it).
 
     The source file is closed before it is copied.
 
@@ -696,11 +769,11 @@ bool
 QFile::copy(const QString &newName)
 {
     Q_D(QFile);
-    if (d->fileName.isEmpty()) {
+    if (fileName().isEmpty()) {
         qWarning("QFile::copy: Empty or null file name");
         return false;
     }
-    if (QFile(newName).exists()) {
+    if (QFile::exists(newName)) {
         // ### Race condition. If a file is moved in after this, it /will/ be
         // overwritten. On Unix, the proper solution is to use hardlinks:
         // return ::link(old, new) && ::remove(old); See also rename().
@@ -737,25 +810,27 @@ QFile::copy(const QString &newName)
                     close();
                     d->setError(QFile::CopyError, tr("Cannot open for output"));
                 } else {
-                    char block[4096];
-                    qint64 totalRead = 0;
-                    while(!atEnd()) {
-                        qint64 in = read(block, sizeof(block));
-                        if (in <= 0)
-                            break;
-                        totalRead += in;
-                        if(in != out.write(block, in)) {
-                            close();
-                            d->setError(QFile::CopyError, tr("Failure to write block"));
-                            error = true;
-                            break;
+                    if (!d->engine()->cloneTo(out.d_func()->engine())) {
+                        char block[4096];
+                        qint64 totalRead = 0;
+                        while (!atEnd()) {
+                            qint64 in = read(block, sizeof(block));
+                            if (in <= 0)
+                                break;
+                            totalRead += in;
+                            if (in != out.write(block, in)) {
+                                close();
+                                d->setError(QFile::CopyError, tr("Failure to write block"));
+                                error = true;
+                                break;
+                            }
                         }
-                    }
 
-                    if (totalRead != size()) {
-                        // Unable to read from the source. The error string is
-                        // already set from read().
-                        error = true;
+                        if (totalRead != size()) {
+                            // Unable to read from the source. The error string is
+                            // already set from read().
+                            error = true;
+                        }
                     }
                     if (!error && !out.rename(newName)) {
                         error = true;
@@ -785,10 +860,10 @@ QFile::copy(const QString &newName)
 /*!
     \overload
 
-    Copies the file \a fileName to \a newName. Returns true if successful;
-    otherwise returns false.
+    Copies the file \a fileName to \a newName. Returns \c true if successful;
+    otherwise returns \c false.
 
-    If a file with the name \a newName already exists, copy() returns false
+    If a file with the name \a newName already exists, copy() returns \c false
     (i.e., QFile will not overwrite it).
 
     \sa rename()
@@ -821,9 +896,9 @@ bool QFile::open(OpenMode mode)
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    if (mode & Append)
+    // Either Append or NewOnly implies WriteOnly
+    if (mode & (Append | NewOnly))
         mode |= WriteOnly;
-
     unsetError();
     if ((mode & (ReadOnly | WriteOnly)) == 0) {
         qWarning("QIODevice::open: File access not specified");
@@ -849,7 +924,7 @@ bool QFile::open(OpenMode mode)
 
     Opens the existing file handle \a fh in the given \a mode.
     \a handleFlags may be used to specify additional options.
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_io_qfile.cpp 3
@@ -869,8 +944,6 @@ bool QFile::open(OpenMode mode)
         \li Since this function opens the file without specifying the file name,
            you cannot use this QFile with a QFileInfo.
     \endlist
-
-    \note For Windows CE you may not be able to call resize().
 
     \sa close()
 
@@ -895,14 +968,17 @@ bool QFile::open(FILE *fh, OpenMode mode, FileHandleFlags handleFlags)
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    if (mode & Append)
+    // Either Append or NewOnly implies WriteOnly
+    if (mode & (Append | NewOnly))
         mode |= WriteOnly;
     unsetError();
     if ((mode & (ReadOnly | WriteOnly)) == 0) {
         qWarning("QFile::open: File access not specified");
         return false;
     }
-    if (d->openExternalFile(mode, fh, handleFlags)) {
+
+    // QIODevice provides the buffering, so request unbuffered file engines
+    if (d->openExternalFile(mode | Unbuffered, fh, handleFlags)) {
         QIODevice::open(mode);
         if (!(mode & Append) && !isSequential()) {
             qint64 pos = (qint64)QT_FTELL(fh);
@@ -921,7 +997,7 @@ bool QFile::open(FILE *fh, OpenMode mode, FileHandleFlags handleFlags)
 
     Opens the existing file descriptor \a fd in the given \a mode.
     \a handleFlags may be used to specify additional options.
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
     When a QFile is opened using this function, behaviour of close() is
     controlled by the AutoCloseHandle flag.
@@ -939,9 +1015,6 @@ bool QFile::open(FILE *fh, OpenMode mode, FileHandleFlags handleFlags)
     those cases, size() returns \c 0.  See QIODevice::isSequential()
     for more information.
 
-    \warning For Windows CE you may not be able to call seek(), setSize(),
-    fileTime(). size() returns \c 0.
-
     \warning Since this function opens the file without specifying the file name,
              you cannot use this QFile with a QFileInfo.
 
@@ -954,14 +1027,17 @@ bool QFile::open(int fd, OpenMode mode, FileHandleFlags handleFlags)
         qWarning("QFile::open: File (%s) already open", qPrintable(fileName()));
         return false;
     }
-    if (mode & Append)
+    // Either Append or NewOnly implies WriteOnly
+    if (mode & (Append | NewOnly))
         mode |= WriteOnly;
     unsetError();
     if ((mode & (ReadOnly | WriteOnly)) == 0) {
         qWarning("QFile::open: File access not specified");
         return false;
     }
-    if (d->openExternalFile(mode, fd, handleFlags)) {
+
+    // QIODevice provides the buffering, so request unbuffered file engines
+    if (d->openExternalFile(mode | Unbuffered, fd, handleFlags)) {
         QIODevice::open(mode);
         if (!(mode & Append) && !isSequential()) {
             qint64 pos = (qint64)QT_LSEEK(fd, QT_OFF_T(0), SEEK_CUR);
@@ -986,10 +1062,12 @@ bool QFile::resize(qint64 sz)
 /*!
     \overload
 
-    Sets \a fileName to size (in bytes) \a sz. Returns true if the file if
+    Sets \a fileName to size (in bytes) \a sz. Returns \c true if
     the resize succeeds; false otherwise. If \a sz is larger than \a
     fileName currently is the new bytes will be set to 0, if \a sz is
     smaller the file is simply truncated.
+
+    \warning This function can fail if the file doesn't exist.
 
     \sa resize()
 */
@@ -1023,8 +1101,11 @@ QFile::permissions(const QString &fileName)
 
 /*!
     Sets the permissions for the file to the \a permissions specified.
-    Returns true if successful, or false if the permissions cannot be
+    Returns \c true if successful, or \c false if the permissions cannot be
     modified.
+
+    \warning This function does not manipulate ACLs, which may limit its
+    effectiveness.
 
     \sa permissions(), setFileName()
 */
@@ -1055,3 +1136,7 @@ qint64 QFile::size() const
 }
 
 QT_END_NAMESPACE
+
+#ifndef QT_NO_QOBJECT
+#include "moc_qfile.cpp"
+#endif

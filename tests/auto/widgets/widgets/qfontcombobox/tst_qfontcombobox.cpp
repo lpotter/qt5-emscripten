@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,12 +33,6 @@
 class tst_QFontComboBox : public QObject
 {
     Q_OBJECT
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
 
 private slots:
     void qfontcombobox_data();
@@ -77,28 +58,6 @@ public:
         { return SubQFontComboBox::event(e); }
 };
 
-// This will be called before the first test function is executed.
-// It is only called once.
-void tst_QFontComboBox::initTestCase()
-{
-}
-
-// This will be called after the last test function is executed.
-// It is only called once.
-void tst_QFontComboBox::cleanupTestCase()
-{
-}
-
-// This will be called before each test function is executed.
-void tst_QFontComboBox::init()
-{
-}
-
-// This will be called after every test function.
-void tst_QFontComboBox::cleanup()
-{
-}
-
 void tst_QFontComboBox::qfontcombobox_data()
 {
 }
@@ -121,18 +80,21 @@ void tst_QFontComboBox::qfontcombobox()
 void tst_QFontComboBox::currentFont_data()
 {
     QTest::addColumn<QFont>("currentFont");
+    QFontDatabase db;
     // Normalize the names
     QFont defaultFont;
     QFontInfo fi(defaultFont);
     defaultFont = QFont(fi.family()); // make sure we have a real font name and not something like 'Sans Serif'.
-    QTest::newRow("default") << defaultFont;
+    if (!db.isPrivateFamily(defaultFont.family()))
+        QTest::newRow("default") << defaultFont;
     defaultFont.setPointSize(defaultFont.pointSize() + 10);
-    QTest::newRow("default2") << defaultFont;
-    QFontDatabase db;
+    if (!db.isPrivateFamily(defaultFont.family()))
+        QTest::newRow("default2") << defaultFont;
     QStringList list = db.families();
     for (int i = 0; i < list.count(); ++i) {
         QFont f = QFont(QFontInfo(QFont(list.at(i))).family());
-        QTest::newRow(qPrintable(list.at(i))) << f;
+        if (!db.isPrivateFamily(f.family()))
+            QTest::newRow(qPrintable(list.at(i))) << f;
     }
 }
 
@@ -209,6 +171,8 @@ void tst_QFontComboBox::fontFilters()
         fontFilters &= ~spacingMask;
 
     for (int i = 0; i < list.count(); ++i) {
+        if (db.isPrivateFamily(list[i]))
+            continue;
         if (fontFilters & QFontComboBox::ScalableFonts) {
             if (!db.isSmoothlyScalable(list[i]))
                 continue;
@@ -240,7 +204,7 @@ void tst_QFontComboBox::sizeHint()
     SubQFontComboBox box;
     QSize sizeHint = box.QComboBox::sizeHint();
     QFontMetrics fm(box.font());
-    sizeHint.setWidth(qMax(sizeHint.width(), fm.width(QLatin1Char('m'))*14));
+    sizeHint.setWidth(qMax(sizeHint.width(), fm.horizontalAdvance(QLatin1Char('m'))*14));
     QCOMPARE(box.sizeHint(), sizeHint);
 }
 
@@ -256,7 +220,7 @@ void tst_QFontComboBox::writingSystem_data()
     QTest::newRow("Runic") << QFontDatabase::Runic;
 
     for (int i = 0; i < 31; ++i)
-        QTest::newRow(qPrintable(QString("enum %1").arg(i))) << (QFontDatabase::WritingSystem)i;
+        QTest::newRow(("enum " + QByteArray::number(i)).constData()) << (QFontDatabase::WritingSystem)i;
 }
 
 // public QFontDatabase::WritingSystem writingSystem() const
@@ -273,7 +237,12 @@ void tst_QFontComboBox::writingSystem()
 
     QFontDatabase db;
     QStringList list = db.families(writingSystem);
-    QCOMPARE(box.model()->rowCount(), list.count());
+    int c = list.count();
+    for (int i = 0; i < list.count(); ++i) {
+        if (db.isPrivateFamily(list[i]))
+            c--;
+    }
+    QCOMPARE(box.model()->rowCount(), c);
 
     if (list.count() == 0)
         QCOMPARE(box.currentFont(), QFont());

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,33 +10,58 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qprinterinfo.h"
 #include "qprinterinfo_p.h"
+#include "qprintdevice_p.h"
 
 #ifndef QT_NO_PRINTER
+
+#include <QtCore/qdebug.h>
 
 #include <qpa/qplatformprintplugin.h>
 #include <qpa/qplatformprintersupport.h>
 
 QT_BEGIN_NAMESPACE
 
-QPrinterInfoPrivate QPrinterInfoPrivate::shared_null;
+Q_GLOBAL_STATIC(QPrinterInfoPrivate, shared_null);
 
+class QPrinterInfoPrivateDeleter
+{
+public:
+    static inline void cleanup(QPrinterInfoPrivate *d)
+    {
+        if (d != shared_null)
+            delete d;
+    }
+};
+
+QPrinterInfoPrivate::QPrinterInfoPrivate(const QString &id)
+{
+    if (!id.isEmpty()) {
+        QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
+        if (ps)
+            m_printDevice = ps->createPrintDevice(id);
+    }
+}
+
+QPrinterInfoPrivate::~QPrinterInfoPrivate()
+{
+}
 
 /*!
     \class QPrinterInfo
@@ -56,34 +81,12 @@ QPrinterInfoPrivate QPrinterInfoPrivate::shared_null;
 */
 
 /*!
-    \fn QList<QPrinterInfo> QPrinterInfo::availablePrinters()
-
-    Returns a list of available printers on the system.
-*/
-
-/*!
-    \fn QPrinterInfo QPrinterInfo::defaultPrinter()
-
-    Returns the default printer on the system.
-
-    The return value should be checked using isNull() before being
-    used, in case there is no default printer.
-
-    On some systems it is possible for there to be available printers
-    but none of them set to be the default printer.
-
-    \sa isNull()
-    \sa isDefault()
-    \sa availablePrinters()
-*/
-
-/*!
     Constructs an empty QPrinterInfo object.
 
     \sa isNull()
 */
 QPrinterInfo::QPrinterInfo()
-    : d_ptr(&QPrinterInfoPrivate::shared_null)
+    : d_ptr(shared_null)
 {
 }
 
@@ -91,7 +94,7 @@ QPrinterInfo::QPrinterInfo()
     Constructs a copy of \a other.
 */
 QPrinterInfo::QPrinterInfo(const QPrinterInfo &other)
-    : d_ptr(new QPrinterInfoPrivate(*other.d_ptr))
+    : d_ptr((other.d_ptr.data() == shared_null) ? shared_null : new QPrinterInfoPrivate(*other.d_ptr))
 {
 }
 
@@ -99,12 +102,15 @@ QPrinterInfo::QPrinterInfo(const QPrinterInfo &other)
     Constructs a QPrinterInfo object from \a printer.
 */
 QPrinterInfo::QPrinterInfo(const QPrinter &printer)
-    : d_ptr(&QPrinterInfoPrivate::shared_null)
+    : d_ptr(shared_null)
 {
     QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
     if (ps) {
-        QPrinterInfo pi = ps->printerInfo(printer.printerName());
-        d_ptr.reset(new QPrinterInfoPrivate(*pi.d_ptr));
+        QPrinterInfo pi(printer.printerName());
+        if (pi.d_ptr.data() == shared_null)
+            d_ptr.reset(shared_null);
+        else
+            d_ptr.reset(new QPrinterInfoPrivate(*pi.d_ptr));
     }
 }
 
@@ -130,7 +136,10 @@ QPrinterInfo::~QPrinterInfo()
 QPrinterInfo &QPrinterInfo::operator=(const QPrinterInfo &other)
 {
     Q_ASSERT(d_ptr);
-    d_ptr.reset(new QPrinterInfoPrivate(*other.d_ptr));
+    if (other.d_ptr.data() == shared_null)
+        d_ptr.reset(shared_null);
+    else
+        d_ptr.reset(new QPrinterInfoPrivate(*other.d_ptr));
     return *this;
 }
 
@@ -145,7 +154,7 @@ QPrinterInfo &QPrinterInfo::operator=(const QPrinterInfo &other)
 QString QPrinterInfo::printerName() const
 {
     const Q_D(QPrinterInfo);
-    return d->name;
+    return d->m_printDevice.id();
 }
 
 /*!
@@ -157,7 +166,7 @@ QString QPrinterInfo::printerName() const
 QString QPrinterInfo::description() const
 {
     const Q_D(QPrinterInfo);
-    return d->description;
+    return d->m_printDevice.name();
 }
 
 /*!
@@ -168,7 +177,7 @@ QString QPrinterInfo::description() const
 QString QPrinterInfo::location() const
 {
     const Q_D(QPrinterInfo);
-    return d->location;
+    return d->m_printDevice.location();
 }
 
 /*!
@@ -179,7 +188,7 @@ QString QPrinterInfo::location() const
 QString QPrinterInfo::makeAndModel() const
 {
     const Q_D(QPrinterInfo);
-    return d->makeAndModel;
+    return d->m_printDevice.makeAndModel();
 }
 
 /*!
@@ -191,23 +200,114 @@ QString QPrinterInfo::makeAndModel() const
 bool QPrinterInfo::isNull() const
 {
     Q_D(const QPrinterInfo);
-    return d == &QPrinterInfoPrivate::shared_null;
+    return d == shared_null || !d->m_printDevice.isValid();
 }
 
 /*!
-    Returns whether this printer is the default printer.
+    Returns whether this printer is currently the default printer.
 */
 bool QPrinterInfo::isDefault() const
 {
     Q_D(const QPrinterInfo);
-    return d->isDefault;
+    return d->m_printDevice.isDefault();
 }
 
 /*!
+    Returns whether this printer is a remote network printer.
+
+    \since 5.3
+*/
+bool QPrinterInfo::isRemote() const
+{
+    Q_D(const QPrinterInfo);
+    return d->m_printDevice.isRemote();
+}
+
+/*!
+    Returns the current state of this printer.
+
+    This state may not always be accurate, depending on the platform, printer
+    driver, or printer itself.
+
+    \since 5.3
+*/
+QPrinter::PrinterState QPrinterInfo::state() const
+{
+    Q_D(const QPrinterInfo);
+    return QPrinter::PrinterState(d->m_printDevice.state());
+}
+
+/*!
+    Returns a list of Page Sizes supported by this printer.
+
+    \since 5.3
+*/
+
+QList<QPageSize> QPrinterInfo::supportedPageSizes() const
+{
+    Q_D(const QPrinterInfo);
+    return d->m_printDevice.supportedPageSizes();
+}
+
+/*!
+    Returns the current default Page Size for this printer.
+
+    \since 5.3
+*/
+
+QPageSize QPrinterInfo::defaultPageSize() const
+{
+    Q_D(const QPrinterInfo);
+    return d->m_printDevice.defaultPageSize();
+}
+
+/*!
+    Returns whether this printer supports custom page sizes.
+
+    \since 5.3
+*/
+
+bool QPrinterInfo::supportsCustomPageSizes() const
+{
+    Q_D(const QPrinterInfo);
+    return d->m_printDevice.supportsCustomPageSizes();
+}
+
+/*!
+    Returns the minimum physical page size supported by this printer.
+
+    \sa maximumPhysicalPageSize()
+
+    \since 5.3
+*/
+
+QPageSize QPrinterInfo::minimumPhysicalPageSize() const
+{
+    Q_D(const QPrinterInfo);
+    return QPageSize(d->m_printDevice.minimumPhysicalPageSize(), QString(), QPageSize::ExactMatch);
+}
+
+/*!
+    Returns the maximum physical page size supported by this printer.
+
+    \sa minimumPhysicalPageSize()
+
+    \since 5.3
+*/
+
+QPageSize QPrinterInfo::maximumPhysicalPageSize() const
+{
+    Q_D(const QPrinterInfo);
+    return QPageSize(d->m_printDevice.maximumPhysicalPageSize(), QString(), QPageSize::ExactMatch);
+}
+
+#if QT_DEPRECATED_SINCE(5,3)
+/*!
+    \obsolete Use supportedPageSizes() instead.
+
     Returns a list of supported paper sizes by the printer.
 
     Not all printer drivers support this query, so the list may be empty.
-    On Mac OS X 10.3, this function always returns an empty list.
 
     \since 4.4
 */
@@ -215,27 +315,154 @@ bool QPrinterInfo::isDefault() const
 QList<QPrinter::PaperSize> QPrinterInfo::supportedPaperSizes() const
 {
     Q_D(const QPrinterInfo);
-    if (!isNull() && !d->hasPaperSizes) {
-        d->paperSizes = QPlatformPrinterSupportPlugin::get()->supportedPaperSizes(*this);
-        d->hasPaperSizes = true;
-    }
-    return d->paperSizes;
+    QList<QPrinter::PaperSize> list;
+    const QList<QPageSize> supportedPageSizes = d->m_printDevice.supportedPageSizes();
+    list.reserve(supportedPageSizes.size());
+    for (const QPageSize &pageSize : supportedPageSizes)
+        list.append(QPrinter::PaperSize(pageSize.id()));
+    return list;
 }
 
-QList<QPrinterInfo> QPrinterInfo::availablePrinters()
+/*!
+    \obsolete Use supportedPageSizes() instead.
+
+    Returns a list of all the paper names supported by the driver with the
+    corresponding size in millimeters.
+
+    Not all printer drivers support this query, so the list may be empty.
+
+    \since 5.1
+*/
+
+QList<QPair<QString, QSizeF> > QPrinterInfo::supportedSizesWithNames() const
+{
+    Q_D(const QPrinterInfo);
+    QList<QPair<QString, QSizeF> > list;
+    const QList<QPageSize> supportedPageSizes = d->m_printDevice.supportedPageSizes();
+    list.reserve(supportedPageSizes.size());
+    for (const QPageSize &pageSize : supportedPageSizes)
+        list.append(qMakePair(pageSize.name(), pageSize.size(QPageSize::Millimeter)));
+    return list;
+}
+#endif // QT_DEPRECATED_SINCE(5,3)
+
+/*!
+    Returns a list of resolutions supported by this printer.
+
+    \since 5.3
+*/
+
+QList<int> QPrinterInfo::supportedResolutions() const
+{
+    Q_D(const QPrinterInfo);
+    return d->m_printDevice.supportedResolutions();
+}
+
+/*!
+    Returns the default duplex mode of this printer.
+
+    \since 5.4
+*/
+
+QPrinter::DuplexMode QPrinterInfo::defaultDuplexMode() const
+{
+    Q_D(const QPrinterInfo);
+    return QPrinter::DuplexMode(d->m_printDevice.defaultDuplexMode());
+}
+
+/*!
+    Returns a list of duplex modes supported by this printer.
+
+    \since 5.4
+*/
+
+QList<QPrinter::DuplexMode> QPrinterInfo::supportedDuplexModes() const
+{
+    Q_D(const QPrinterInfo);
+    QList<QPrinter::DuplexMode> list;
+    const auto supportedDuplexModes = d->m_printDevice.supportedDuplexModes();
+    list.reserve(supportedDuplexModes.size());
+    for (QPrint::DuplexMode mode : supportedDuplexModes)
+        list << QPrinter::DuplexMode(mode);
+    return list;
+}
+
+/*!
+    Returns a list of all the available Printer Names on this system.
+
+    It is recommended to use this instead of availablePrinters() as
+    it will be faster on most systems.
+
+    Note that the list may become outdated if changes are made on the local
+    system or remote print server. Only instantiate required QPrinterInfo
+    instances when needed, and always check for validity before calling.
+
+    \since 5.3
+*/
+QStringList QPrinterInfo::availablePrinterNames()
 {
     QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
-    if (!ps)
-        return QList<QPrinterInfo>();
-    return ps->availablePrinters();
+    if (ps)
+        return ps->availablePrintDeviceIds();
+    return QStringList();
 }
+
+/*!
+    Returns a list of QPrinterInfo objects for all the available printers
+    on this system.
+
+    It is NOT recommended to use this as creating each printer instance may
+    take a long time, especially if there are remote networked printers, and
+    retained instances may become outdated if changes are made on the local
+    system or remote print server. Use availablePrinterNames() instead and
+    only instantiate printer instances as you need them.
+*/
+QList<QPrinterInfo> QPrinterInfo::availablePrinters()
+{
+    QList<QPrinterInfo> list;
+    QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
+    if (ps) {
+        const QStringList availablePrintDeviceIds = ps->availablePrintDeviceIds();
+        list.reserve(availablePrintDeviceIds.size());
+        for (const QString &id : availablePrintDeviceIds)
+            list.append(QPrinterInfo(id));
+    }
+    return list;
+}
+
+/*!
+    Returns the current default printer name.
+
+    \since 5.3
+*/
+QString QPrinterInfo::defaultPrinterName()
+{
+    QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
+    if (ps)
+        return ps->defaultPrintDeviceId();
+    return QString();
+}
+
+/*!
+    Returns the default printer on the system.
+
+    The return value should be checked using isNull() before being
+    used, in case there is no default printer.
+
+    On some systems it is possible for there to be available printers
+    but none of them set to be the default printer.
+
+    \sa isNull()
+    \sa isDefault()
+    \sa availablePrinters()
+*/
 
 QPrinterInfo QPrinterInfo::defaultPrinter()
 {
     QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
-    if (!ps)
-        return QPrinterInfo();
-    return ps->defaultPrinter();
+    if (ps)
+        return QPrinterInfo(ps->defaultPrintDeviceId());
+    return QPrinterInfo();
 }
 
 /*!
@@ -249,11 +476,23 @@ QPrinterInfo QPrinterInfo::defaultPrinter()
 */
 QPrinterInfo QPrinterInfo::printerInfo(const QString &printerName)
 {
-    QPlatformPrinterSupport *ps = QPlatformPrinterSupportPlugin::get();
-    if (!ps)
-        return QPrinterInfo();
-    return ps->printerInfo(printerName);
+    return QPrinterInfo(printerName);
 }
+
+#  ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug debug, const QPrinterInfo &p)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug << "QPrinterInfo(";
+    if (p.isNull())
+        debug << "null";
+    else
+        p.d_ptr->m_printDevice.format(debug);
+    debug << ')';
+    return debug;
+}
+#  endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE
 

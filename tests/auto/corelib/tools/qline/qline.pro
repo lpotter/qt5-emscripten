@@ -1,6 +1,5 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qline
 QT = core testlib
 SOURCES = tst_qline.cpp
-unix:!mac:!vxworks:LIBS+=-lm
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+unix:!darwin:!vxworks:!haiku:!integrity: LIBS+=-lm

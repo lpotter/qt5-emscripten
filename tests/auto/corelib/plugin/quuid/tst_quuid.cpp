@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,6 +41,7 @@ private slots:
 
     void fromChar();
     void toString();
+    void fromString_data();
     void fromString();
     void toByteArray();
     void fromByteArray();
@@ -64,6 +52,7 @@ private slots:
     void isNull();
     void equal();
     void notEqual();
+    void cpp11();
 
     // Only in Qt > 3.2.x
     void generate();
@@ -79,6 +68,8 @@ private slots:
 
     void qvariant();
     void qvariant_conversion();
+
+    void darwinTypes();
 
 public:
     // Variables
@@ -101,9 +92,15 @@ void tst_QUuid::initTestCase()
     //"{1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b}";
     uuidB = QUuid(0x1ab6e93a, 0xb1cb, 0x4a87, 0xba, 0x47, 0xec, 0x7e, 0x99, 0x03, 0x9a, 0x7b);
 
+#if QT_CONFIG(process)
     // chdir to the directory containing our testdata, then refer to it with relative paths
+#ifdef Q_OS_ANDROID
+    QString testdata_dir = QCoreApplication::applicationDirPath();
+#else // !Q_OS_ANDROID
     QString testdata_dir = QFileInfo(QFINDTESTDATA("testProcessUniqueness")).absolutePath();
+#endif
     QVERIFY2(QDir::setCurrent(testdata_dir), qPrintable("Could not chdir to " + testdata_dir));
+#endif
 
     //"{3d813cbb-47fb-32ba-91df-831e1593ac29}"; http://www.rfc-editor.org/errata_search.php?rfc=4122&eid=1352
     uuidC = QUuid(0x3d813cbb, 0x47fb, 0x32ba, 0x91, 0xdf, 0x83, 0x1e, 0x15, 0x93, 0xac, 0x29);
@@ -131,26 +128,85 @@ void tst_QUuid::fromChar()
 void tst_QUuid::toString()
 {
     QCOMPARE(uuidA.toString(), QString("{fc69b59e-cc34-4436-a43c-ee95d128b8c5}"));
+    QCOMPARE(uuidA.toString(QUuid::WithoutBraces),
+             QString("fc69b59e-cc34-4436-a43c-ee95d128b8c5"));
+    QCOMPARE(uuidA.toString(QUuid::Id128),
+             QString("fc69b59ecc344436a43cee95d128b8c5"));
 
     QCOMPARE(uuidB.toString(), QString("{1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b}"));
+    QCOMPARE(uuidB.toString(QUuid::WithoutBraces),
+             QString("1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b"));
+    QCOMPARE(uuidB.toString(QUuid::Id128),
+             QString("1ab6e93ab1cb4a87ba47ec7e99039a7b"));
+}
+
+void tst_QUuid::fromString_data()
+{
+    QTest::addColumn<QUuid>("expected");
+    QTest::addColumn<QString>("input");
+
+    QUuid invalid = {};
+
+#define ROW(which, string) \
+    QTest::addRow("%-38s -> %s", string, #which) << which << string
+    ROW(uuidA,   "{fc69b59e-cc34-4436-a43c-ee95d128b8c5}");
+    ROW(uuidA,    "fc69b59e-cc34-4436-a43c-ee95d128b8c5}");
+    ROW(uuidA,   "{fc69b59e-cc34-4436-a43c-ee95d128b8c5" );
+    ROW(uuidA,    "fc69b59e-cc34-4436-a43c-ee95d128b8c5" );
+
+    ROW(uuidA,   "{fc69b59e-cc34-4436-a43c-ee95d128b8c56"); // too long (not an error!)
+    ROW(invalid, "{fc69b59e-cc34-4436-a43c-ee95d128b8c"  ); // premature end (within length limits)
+    ROW(invalid, " fc69b59e-cc34-4436-a43c-ee95d128b8c5}"); // leading space
+    ROW(uuidA,   "{fc69b59e-cc34-4436-a43c-ee95d128b8c5 "); // trailing space (not an error!)
+    ROW(invalid, "{gc69b59e-cc34-4436-a43c-ee95d128b8c5}"); // non-hex digit in 1st group
+    ROW(invalid, "{fc69b59e-cp34-4436-a43c-ee95d128b8c5}"); // non-hex digit in 2nd group
+    ROW(invalid, "{fc69b59e-cc34-44r6-a43c-ee95d128b8c5}"); // non-hex digit in 3rd group
+    ROW(invalid, "{fc69b59e-cc34-4436-a4yc-ee95d128b8c5}"); // non-hex digit in 4th group
+    ROW(invalid, "{fc69b59e-cc34-4436-a43c-ee95d128j8c5}"); // non-hex digit in last group
+    ROW(invalid, "(fc69b59e-cc34-4436-a43c-ee95d128b8c5}"); // wrong initial character
+    ROW(invalid, "{fc69b59e+cc34-4436-a43c-ee95d128b8c5}"); // wrong 1st separator
+    ROW(invalid, "{fc69b59e-cc34*4436-a43c-ee95d128b8c5}"); // wrong 2nd separator
+    ROW(invalid, "{fc69b59e-cc34-44366a43c-ee95d128b8c5}"); // wrong 3rd separator
+    ROW(invalid, "{fc69b59e-cc34-4436-a43c\303\244ee95d128b8c5}"); // wrong 4th separator (&auml;)
+    ROW(uuidA,   "{fc69b59e-cc34-4436-a43c-ee95d128b8c5)"); // wrong final character (not an error!)
+
+    ROW(uuidB,   "{1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b}");
+#undef ROW
 }
 
 void tst_QUuid::fromString()
 {
-    QCOMPARE(uuidA, QUuid(QString("{fc69b59e-cc34-4436-a43c-ee95d128b8c5}")));
-    QCOMPARE(uuidA, QUuid(QString("fc69b59e-cc34-4436-a43c-ee95d128b8c5}")));
-    QCOMPARE(uuidA, QUuid(QString("{fc69b59e-cc34-4436-a43c-ee95d128b8c5")));
-    QCOMPARE(uuidA, QUuid(QString("fc69b59e-cc34-4436-a43c-ee95d128b8c5")));
-    QCOMPARE(QUuid(), QUuid(QString("{fc69b59e-cc34-4436-a43c-ee95d128b8c")));
+    QFETCH(const QUuid, expected);
+    QFETCH(const QString, input);
 
-    QCOMPARE(uuidB, QUuid(QString("{1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b}")));
+    const auto inputL1 = input.toLatin1();
+    const auto inputU8 = input.toUtf8();
+
+    QCOMPARE(expected, QUuid(input));
+    QCOMPARE(expected, QUuid(inputU8));
+    QCOMPARE(expected, QUuid(inputL1));
+
+    QCOMPARE(expected, QUuid::fromString(input));
+
+    // for QLatin1String, construct one whose data() is not NUL-terminated:
+    const auto longerInputL1 = inputL1 + '5'; // the '5' makes the premature end check incorrectly succeed
+    const auto inputL1S = QLatin1String(longerInputL1.data(), inputL1.size());
+    QCOMPARE(expected, QUuid::fromString(inputL1S));
 }
 
 void tst_QUuid::toByteArray()
 {
     QCOMPARE(uuidA.toByteArray(), QByteArray("{fc69b59e-cc34-4436-a43c-ee95d128b8c5}"));
+    QCOMPARE(uuidA.toByteArray(QUuid::WithoutBraces),
+             QByteArray("fc69b59e-cc34-4436-a43c-ee95d128b8c5"));
+    QCOMPARE(uuidA.toByteArray(QUuid::Id128),
+             QByteArray("fc69b59ecc344436a43cee95d128b8c5"));
 
     QCOMPARE(uuidB.toByteArray(), QByteArray("{1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b}"));
+    QCOMPARE(uuidB.toByteArray(QUuid::WithoutBraces),
+             QByteArray("1ab6e93a-b1cb-4a87-ba47-ec7e99039a7b"));
+    QCOMPARE(uuidB.toByteArray(QUuid::Id128),
+             QByteArray("1ab6e93ab1cb4a87ba47ec7e99039a7b"));
 }
 
 void tst_QUuid::fromByteArray()
@@ -230,11 +286,11 @@ void tst_QUuid::equal()
     QVERIFY( !(uuidA == uuidB) );
 
     QUuid copy(uuidA);
-    QVERIFY(uuidA == copy);
+    QCOMPARE(uuidA, copy);
 
     QUuid assigned;
     assigned = uuidA;
-    QVERIFY(uuidA == assigned);
+    QCOMPARE(uuidA, assigned);
 }
 
 
@@ -243,6 +299,17 @@ void tst_QUuid::notEqual()
     QVERIFY( uuidA != uuidB );
 }
 
+void tst_QUuid::cpp11() {
+#ifdef Q_COMPILER_UNIFORM_INIT
+    // "{fc69b59e-cc34-4436-a43c-ee95d128b8c5}" cf, initTestCase
+    Q_DECL_CONSTEXPR QUuid u1{0xfc69b59e, 0xcc34, 0x4436, 0xa4, 0x3c, 0xee, 0x95, 0xd1, 0x28, 0xb8, 0xc5};
+    Q_DECL_CONSTEXPR QUuid u2 = {0xfc69b59e, 0xcc34, 0x4436, 0xa4, 0x3c, 0xee, 0x95, 0xd1, 0x28, 0xb8, 0xc5};
+    Q_UNUSED(u1);
+    Q_UNUSED(u2);
+#else
+    QSKIP("This compiler is not in C++11 mode or it doesn't support uniform initialization");
+#endif
+}
 
 void tst_QUuid::generate()
 {
@@ -256,19 +323,33 @@ void tst_QUuid::generate()
 
 void tst_QUuid::less()
 {
-    QVERIFY( !(uuidA < uuidB) );
+    QVERIFY(  uuidB <  uuidA);
+    QVERIFY(  uuidB <= uuidA);
+    QVERIFY(!(uuidA <  uuidB) );
+    QVERIFY(!(uuidA <= uuidB));
 
     QUuid null_uuid;
     QVERIFY(null_uuid < uuidA); // Null uuid is always less than a valid one
+    QVERIFY(null_uuid <= uuidA);
+
+    QVERIFY(null_uuid <= null_uuid);
+    QVERIFY(uuidA <= uuidA);
 }
 
 
 void tst_QUuid::more()
 {
-    QVERIFY( uuidA > uuidB );
+    QVERIFY(  uuidA >  uuidB);
+    QVERIFY(  uuidA >= uuidB);
+    QVERIFY(!(uuidB >  uuidA));
+    QVERIFY(!(uuidB >= uuidA));
 
     QUuid null_uuid;
-    QVERIFY( !(null_uuid > uuidA) ); // Null uuid is always less than a valid one
+    QVERIFY(!(null_uuid >  uuidA)); // Null uuid is always less than a valid one
+    QVERIFY(!(null_uuid >= uuidA));
+
+    QVERIFY(null_uuid >= null_uuid);
+    QVERIFY(uuidA >= uuidA);
 }
 
 
@@ -321,6 +402,12 @@ void tst_QUuid::threadUniqueness()
 
 void tst_QUuid::processUniqueness()
 {
+#if !QT_CONFIG(process)
+    QSKIP("No qprocess support", SkipAll);
+#else
+#ifdef Q_OS_ANDROID
+    QSKIP("This test crashes on Android");
+#endif
     QProcess process;
     QString processOneOutput;
     QString processTwoOutput;
@@ -328,6 +415,8 @@ void tst_QUuid::processUniqueness()
     // Start it once
 #ifdef Q_OS_MAC
     process.start("testProcessUniqueness/testProcessUniqueness.app");
+#elif defined(Q_OS_ANDROID)
+    process.start("libtestProcessUniqueness.so");
 #else
     process.start("testProcessUniqueness/testProcessUniqueness");
 #endif
@@ -337,6 +426,8 @@ void tst_QUuid::processUniqueness()
     // Start it twice
 #ifdef Q_OS_MAC
     process.start("testProcessUniqueness/testProcessUniqueness.app");
+#elif defined(Q_OS_ANDROID)
+    process.start("libtestProcessUniqueness.so");
 #else
     process.start("testProcessUniqueness/testProcessUniqueness");
 #endif
@@ -345,6 +436,7 @@ void tst_QUuid::processUniqueness()
 
     // They should be *different*!
     QVERIFY(processOneOutput != processTwoOutput);
+#endif
 }
 
 void tst_QUuid::hash()
@@ -371,9 +463,16 @@ void tst_QUuid::qvariant_conversion()
     QUuid uuid = QUuid::createUuid();
     QVariant v = QVariant::fromValue(uuid);
 
+    // QUuid -> QString
     QVERIFY(v.canConvert<QString>());
     QCOMPARE(v.toString(), uuid.toString());
     QCOMPARE(v.value<QString>(), uuid.toString());
+
+    // QUuid -> QByteArray
+    QVERIFY(v.canConvert<QByteArray>());
+    QCOMPARE(v.toByteArray(), uuid.toByteArray());
+    QCOMPARE(v.value<QByteArray>(), uuid.toByteArray());
+
     QVERIFY(!v.canConvert<int>());
     QVERIFY(!v.canConvert<QStringList>());
 
@@ -382,6 +481,24 @@ void tst_QUuid::qvariant_conversion()
     QCOMPARE(sv.type(), QVariant::String);
     QVERIFY(sv.canConvert<QUuid>());
     QCOMPARE(sv.value<QUuid>(), uuid);
+
+    // QString -> QUuid
+    {
+        QVariant sv = QVariant::fromValue(uuid.toByteArray());
+        QCOMPARE(sv.type(), QVariant::ByteArray);
+        QVERIFY(sv.canConvert<QUuid>());
+        QCOMPARE(sv.value<QUuid>(), uuid);
+    }
+}
+
+void tst_QUuid::darwinTypes()
+{
+#ifndef Q_OS_DARWIN
+    QSKIP("This is a Darwin-only test");
+#else
+    extern void tst_QUuid_darwinTypes(); // in tst_quuid_darwin.mm
+    tst_QUuid_darwinTypes();
+#endif
 }
 
 QTEST_MAIN(tst_QUuid)

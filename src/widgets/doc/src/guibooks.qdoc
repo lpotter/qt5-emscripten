@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -58,7 +58,7 @@
     alphabetical dictionary of widgets and other user interface elements,
     with comprehensive coverage of each. Each chapter covers one widget
     or other element, contains the most important recommendation from the
-    Macintosh, Windows and Motif style guides, notes about common
+    \macos, Windows and Motif style guides, notes about common
     problems, comparison with other widgets that can serve some of the
     same roles as this one, etc.
 
@@ -72,11 +72,11 @@
     \b{\l{http://www.amazon.com/exec/obidos/ASIN/0201622165/trolltech/t}{Macintosh
     Human Interface Guidelines}}, Second Edition, ISBN
     0-201-62216-5, is worth buying for the \e {don't}s alone. Even
-    if you're not writing Macintosh software, avoiding most of what it
+    if you are not writing software for \macos, avoiding most of what it
     advises against will produce more easily comprehensible software.
     Doing what it tells you to do may also help.
 
-    \b{\l{http://www.amazon.com/exec/obidos/ASIN/047159900X/trolltech/t}{The
+    \b{\l{http://www.amazon.com/New-Windows-Interface-Microsoft-Press/dp/1556156790/}{The
     Microsoft Windows User Experience}}, ISBN 1-55615-679-0,
     is Microsoft's look and feel bible. Indispensable for everyone who
     has customers that worship Microsoft, and it's quite good, too.

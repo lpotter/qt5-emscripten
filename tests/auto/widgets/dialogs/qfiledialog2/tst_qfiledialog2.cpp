@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,11 +48,14 @@
 #include <qlineedit.h>
 #include <qlayout.h>
 #include <qmenu.h>
+#include <qrandom.h>
 #include "../../../../../src/widgets/dialogs/qsidebar_p.h"
 #include "../../../../../src/widgets/dialogs/qfilesystemmodel_p.h"
 #include "../../../../../src/widgets/dialogs/qfiledialog_p.h"
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#include <qpa/qplatformdialoghelper.h>
+
+#if defined(Q_OS_WIN)
 #include "../../../network-settings.h"
 #endif
 
@@ -76,16 +66,11 @@ Q_GUI_EXPORT void qt_test_resetFetchedRoot();
 QT_END_NAMESPACE
 #endif
 
-class QNonNativeFileDialog : public QFileDialog
+static QByteArray msgDoesNotExist(const QString &name)
 {
-    Q_OBJECT
-public:
-    QNonNativeFileDialog(QWidget *parent = 0, const QString &caption = QString(), const QString &directory = QString(), const QString &filter = QString())
-        : QFileDialog(parent, caption, directory, filter)
-    {
-        setOption(QFileDialog::DontUseNativeDialog, true);
-    }
-};
+    return (QLatin1Char('"') + QDir::toNativeSeparators(name)
+        + QLatin1String("\" does not exist.")).toLocal8Bit();
+}
 
 class tst_QFileDialog2 : public QObject
 {
@@ -93,13 +78,12 @@ Q_OBJECT
 
 public:
     tst_QFileDialog2();
-    virtual ~tst_QFileDialog2();
 
-public slots:
+private slots:
+    void initTestCase();
     void init();
     void cleanup();
 
-private slots:
 #ifdef QT_BUILD_INTERNAL
     void deleteDirAndFiles();
     void listRoot();
@@ -124,11 +108,12 @@ private slots:
 #ifndef Q_OS_MAC
     void task227930_correctNavigationKeyboardBehavior();
 #endif
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     void task226366_lowerCaseHardDriveWindows();
 #endif
     void completionOnLevelAfterRoot();
     void task233037_selectingDirectory();
+    void task235069_hideOnEscape_data();
     void task235069_hideOnEscape();
     void task203703_returnProperSeparator();
     void task228844_ensurePreviousSorting();
@@ -141,47 +126,50 @@ private slots:
     void QTBUG6558_showDirsOnly();
     void QTBUG4842_selectFilterWithHideNameFilterDetails();
     void dontShowCompleterOnRoot();
+    void nameFilterParsing_data();
+    void nameFilterParsing();
 
 private:
-    QByteArray userSettings;
+    void cleanupSettingsFile();
+
     QTemporaryDir tempDir;
 };
 
 tst_QFileDialog2::tst_QFileDialog2()
-    : userSettings()
-    , tempDir(QDir::tempPath() + "/tst_qfiledialog2.XXXXXX")
+    : tempDir(QDir::tempPath() + "/tst_qfiledialog2.XXXXXX")
 {
-#if defined(Q_OS_WINCE)
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
+    QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
 }
 
-tst_QFileDialog2::~tst_QFileDialog2()
+void tst_QFileDialog2::cleanupSettingsFile()
 {
+    // clean up the sidebar between each test
+    QSettings settings(QSettings::UserScope, QLatin1String("QtProject"));
+    settings.beginGroup(QLatin1String("FileDialog"));
+    settings.remove(QString());
+    settings.endGroup();
+    settings.beginGroup(QLatin1String("Qt")); // Compatibility settings
+    settings.remove(QLatin1String("filedialog"));
+    settings.endGroup();
+}
+
+void tst_QFileDialog2::initTestCase()
+{
+    QVERIFY2(tempDir.isValid(), qPrintable(tempDir.errorString()));
+    QStandardPaths::setTestModeEnabled(true);
+    cleanupSettingsFile();
 }
 
 void tst_QFileDialog2::init()
 {
-    QVERIFY(tempDir.isValid());
-
-    // Save the developers settings so they don't get mad when their sidebar folders are gone.
-    QSettings settings(QSettings::UserScope, QLatin1String("Trolltech"));
-    settings.beginGroup(QLatin1String("Qt"));
-    userSettings = settings.value(QLatin1String("filedialog")).toByteArray();
-    settings.remove(QLatin1String("filedialog"));
-
-    // populate it with some default settings
-    QNonNativeFileDialog fd;
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1000);
-#endif
+    QFileDialogPrivate::setLastVisitedDirectory(QUrl());
+    // populate the sidebar with some default settings
+    QFileDialog fd;
 }
 
 void tst_QFileDialog2::cleanup()
 {
-    QSettings settings(QSettings::UserScope, QLatin1String("Trolltech"));
-    settings.beginGroup(QLatin1String("Qt"));
-    settings.setValue(QLatin1String("filedialog"), userSettings);
+    cleanupSettingsFile();
 }
 
 #ifdef QT_BUILD_INTERNAL
@@ -192,30 +180,25 @@ void tst_QFileDialog2::listRoot()
     QTest::qWait(1500);
     qt_test_resetFetchedRoot();
     QString dir(QDir::currentPath());
-    QNonNativeFileDialog fd(0, QString(), dir);
+    QFileDialog fd(0, QString(), dir);
     fd.show();
     QCOMPARE(qt_test_isFetchedRoot(),false);
     fd.setDirectory("");
-#ifdef Q_OS_WINCE
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QCOMPARE(qt_test_isFetchedRoot(),true);
+    QTRY_COMPARE(qt_test_isFetchedRoot(),true);
 }
 #endif
 
 void tst_QFileDialog2::heapCorruption()
 {
-    QVector<QNonNativeFileDialog*> dialogs;
+    QVector<QFileDialog*> dialogs;
     for (int i=0; i < 10; i++) {
-        QNonNativeFileDialog *f = new QNonNativeFileDialog(NULL);
+        QFileDialog *f = new QFileDialog(NULL);
         dialogs << f;
     }
     qDeleteAll(dialogs);
 }
 
-struct FriendlyQFileDialog : public QNonNativeFileDialog
+struct FriendlyQFileDialog : public QFileDialog
 {
     friend class tst_QFileDialog2;
     Q_DECLARE_PRIVATE(QFileDialog)
@@ -236,28 +219,25 @@ void tst_QFileDialog2::deleteDirAndFiles()
     QTemporaryFile *t;
     t = new QTemporaryFile(tempPath + "/foo/aXXXXXX");
     t->setAutoRemove(false);
-    t->open();
+    QVERIFY2(t->open(), qPrintable(t->errorString()));
     t->close();
     delete t;
 
     t = new QTemporaryFile(tempPath + "/foo/B/yXXXXXX");
     t->setAutoRemove(false);
-    t->open();
+    QVERIFY2(t->open(), qPrintable(t->errorString()));
     t->close();
     delete t;
     FriendlyQFileDialog fd;
-    fd.setOption(QFileDialog::DontUseNativeDialog);
     fd.d_func()->removeDirectory(tempPath);
-    QFileInfo info(tempPath);
-    QTest::qWait(2000);
-    QVERIFY(!info.exists());
+    QTRY_VERIFY(!QFileInfo::exists(tempPath));
 }
 #endif
 
 void tst_QFileDialog2::filter()
 {
-    QNonNativeFileDialog fd;
-    QAction *hiddenAction = qFindChild<QAction*>(&fd, "qt_show_hidden_action");
+    QFileDialog fd;
+    QAction *hiddenAction = fd.findChild<QAction*>("qt_show_hidden_action");
     QVERIFY(hiddenAction);
     QVERIFY(hiddenAction->isEnabled());
     QVERIFY(!hiddenAction->isChecked());
@@ -269,8 +249,8 @@ void tst_QFileDialog2::filter()
 
 void tst_QFileDialog2::showNameFilterDetails()
 {
-    QNonNativeFileDialog fd;
-    QComboBox *filters = qFindChild<QComboBox*>(&fd, "fileTypeCombo");
+    QFileDialog fd;
+    QComboBox *filters = fd.findChild<QComboBox*>("fileTypeCombo");
     QVERIFY(filters);
     QVERIFY(fd.isNameFilterDetailsVisible());
 
@@ -294,29 +274,29 @@ void tst_QFileDialog2::showNameFilterDetails()
 
 void tst_QFileDialog2::unc()
 {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     // Only test UNC on Windows./
     QString dir("\\\\"  + QtNetworkSettings::winServerName() + "\\testsharewritable");
 #else
     QString dir(QDir::currentPath());
 #endif
-    QVERIFY(QFile::exists(dir));
-    QNonNativeFileDialog fd(0, QString(), dir);
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
+    QVERIFY2(QFile::exists(dir), msgDoesNotExist(dir).constData());
+    QFileDialog fd(0, QString(), dir);
+    QFileSystemModel *model = fd.findChild<QFileSystemModel*>("qt_filesystem_model");
     QVERIFY(model);
     QCOMPARE(model->index(fd.directory().absolutePath()), model->index(dir));
 }
 
 void tst_QFileDialog2::emptyUncPath()
 {
-    QNonNativeFileDialog fd;
-	fd.show();
-	QLineEdit *lineEdit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
+    QFileDialog fd;
+    fd.show();
+    QLineEdit *lineEdit = fd.findChild<QLineEdit*>("fileNameEdit");
     QVERIFY(lineEdit);
-	 // press 'keys' for the input
+    // press 'keys' for the input
     for (int i = 0; i < 3 ; ++i)
         QTest::keyPress(lineEdit, Qt::Key_Backslash);
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
+    QFileSystemModel *model = fd.findChild<QFileSystemModel*>("qt_filesystem_model");
     QVERIFY(model);
 }
 
@@ -327,7 +307,7 @@ struct MenuCloser : public QObject {
 
     void close()
     {
-        QMenu *menu = qFindChild<QMenu*>(w);
+        QMenu *menu = w->findChild<QMenu*>();
         if (!menu) {
             qDebug("%s: cannot find file dialog child of type QMenu", Q_FUNC_INFO);
             w->close();
@@ -337,7 +317,7 @@ struct MenuCloser : public QObject {
 };
 static bool openContextMenu(QFileDialog &fd)
 {
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
+    QListView *list = fd.findChild<QListView*>("listView");
     if (!list) {
         qDebug("%s: didn't find file dialog child \"listView\"", Q_FUNC_INFO);
         return false;
@@ -358,8 +338,7 @@ void tst_QFileDialog2::task143519_deleteAndRenameActionBehavior()
     // test based on task233037_selectingDirectory
 
     struct TestContext {
-        TestContext()
-            : current(QDir::current()) {}
+        explicit TestContext(const QString &path) : current(path) {}
         ~TestContext() {
             file.remove();
             current.rmdir(test.dirName());
@@ -367,7 +346,9 @@ void tst_QFileDialog2::task143519_deleteAndRenameActionBehavior()
         QDir current;
         QDir test;
         QFile file;
-    } ctx;
+    };
+
+    TestContext ctx(tempDir.path());
 
     // setup testbed
     QVERIFY(ctx.current.mkdir("task143519_deleteAndRenameActionBehavior_test")); // ensure at least one item
@@ -378,24 +359,25 @@ void tst_QFileDialog2::task143519_deleteAndRenameActionBehavior()
     QVERIFY(ctx.file.permissions() & QFile::WriteUser);
     ctx.file.close();
 
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setViewMode(QFileDialog::List);
     fd.setDirectory(ctx.test.absolutePath());
+    fd.selectFile(ctx.file.fileName());
     fd.show();
 
-    QTest::qWaitForWindowActive(&fd);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
 
     // grab some internals:
-    QAction *rm = qFindChild<QAction*>(&fd, "qt_delete_action");
+    QAction *rm = fd.findChild<QAction*>("qt_delete_action");
     QVERIFY(rm);
-    QAction *mv = qFindChild<QAction*>(&fd, "qt_rename_action");
+    QAction *mv = fd.findChild<QAction*>("qt_rename_action");
     QVERIFY(mv);
 
     // these are the real test cases:
 
     // defaults
     QVERIFY(openContextMenu(fd));
-    QCOMPARE(fd.selectedFiles().size(), 1);
+    QCOMPARE(fd.selectedFiles(), QStringList(ctx.file.fileName()));
     QCOMPARE(rm->isEnabled(), !fd.isReadOnly());
     QCOMPARE(mv->isEnabled(), !fd.isReadOnly());
 
@@ -419,7 +401,7 @@ void tst_QFileDialog2::task143519_deleteAndRenameActionBehavior()
 
 void tst_QFileDialog2::task178897_minimumSize()
 {
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     QSize oldMs = fd.layout()->minimumSize();
     QStringList history = fd.history();
     history << QDir::toNativeSeparators("/verylongdirectory/"
@@ -456,9 +438,11 @@ void tst_QFileDialog2::task180459_lastDirectory_data()
 
 void tst_QFileDialog2::task180459_lastDirectory()
 {
+    if (!QGuiApplication::platformName().compare(QLatin1String("cocoa"), Qt::CaseInsensitive))
+        QSKIP("Insignificant on OSX"); //QTBUG-39183
     //first visit the temp directory and close the dialog
-    QNonNativeFileDialog *dlg = new QNonNativeFileDialog(0, "", tempDir.path());
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(dlg, "qt_filesystem_model");
+    QFileDialog *dlg = new QFileDialog(0, "", tempDir.path());
+    QFileSystemModel *model = dlg->findChild<QFileSystemModel*>("qt_filesystem_model");
     QVERIFY(model);
     QCOMPARE(model->index(tempDir.path()), model->index(dlg->directory().absolutePath()));
     delete dlg;
@@ -468,13 +452,13 @@ void tst_QFileDialog2::task180459_lastDirectory()
     QFETCH(bool, isEnabled);
     QFETCH(QString, result);
 
-    dlg = new QNonNativeFileDialog(0, "", path);
-    model = qFindChild<QFileSystemModel*>(dlg, "qt_filesystem_model");
+    dlg = new QFileDialog(0, "", path);
+    model = dlg->findChild<QFileSystemModel*>("qt_filesystem_model");
     QVERIFY(model);
     dlg->setAcceptMode(QFileDialog::AcceptSave);
     QCOMPARE(model->index(dlg->directory().absolutePath()), model->index(directory));
 
-    QDialogButtonBox *buttonBox = qFindChild<QDialogButtonBox*>(dlg, "buttonBox");
+    QDialogButtonBox *buttonBox = dlg->findChild<QDialogButtonBox*>("buttonBox");
     QPushButton *button = buttonBox->button(QDialogButtonBox::Save);
     QVERIFY(button);
     QCOMPARE(button->isEnabled(), isEnabled);
@@ -505,7 +489,7 @@ protected:
             path = parentIndex.child(source_row,0).data(Qt::DisplayRole).toString();
 
             do {
-              path = parentIndex.data(Qt::DisplayRole).toString() + "/" + path;
+              path = parentIndex.data(Qt::DisplayRole).toString() + QLatin1Char('/') + path;
               parentIndex = parentIndex.parent();
             } while(parentIndex.isValid());
 
@@ -544,14 +528,14 @@ protected:
         }
 };
 
-class CrashDialog : public QNonNativeFileDialog
+class CrashDialog : public QFileDialog
 {
         Q_OBJECT
 
 public:
         CrashDialog(QWidget *parent, const QString &caption, const
 QString &dir, const QString &filter)
-                   : QNonNativeFileDialog(parent, caption, dir, filter)
+                   : QFileDialog(parent, caption, dir, filter)
         {
                 sortProxy *proxyModel = new sortProxy(this);
                 setProxyModel(proxyModel);
@@ -561,34 +545,34 @@ QString &dir, const QString &filter)
 #ifdef QT_BUILD_INTERNAL
 void tst_QFileDialog2::task227304_proxyOnFileDialog()
 {
-    QNonNativeFileDialog fd(0, "", QDir::currentPath(), 0);
+    QFileDialog fd(0, "", QDir::currentPath(), 0);
     fd.setProxyModel(new FilterDirModel(QDir::currentPath()));
     fd.show();
-    QLineEdit *edit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
-    QTest::qWait(200);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QLineEdit *edit = fd.findChild<QLineEdit*>("fileNameEdit");
+    QVERIFY(edit);
     QTest::keyClick(edit, Qt::Key_T);
     QTest::keyClick(edit, Qt::Key_S);
-    QTest::qWait(200);
     QTest::keyClick(edit->completer()->popup(), Qt::Key_Down);
 
     CrashDialog *dialog = new CrashDialog(0, QString("crash dialog test"), QDir::homePath(), QString("*") );
     dialog->setFileMode(QFileDialog::ExistingFile);
     dialog->show();
+    QVERIFY(QTest::qWaitForWindowActive(dialog));
 
-    QListView *list = qFindChild<QListView*>(dialog, "listView");
-    QTest::qWait(200);
+    QListView *list = dialog->findChild<QListView*>("listView");
+    QVERIFY(list);
     QTest::keyClick(list, Qt::Key_Down);
     QTest::keyClick(list, Qt::Key_Return);
-    QTest::qWait(200);
 
     dialog->close();
     fd.close();
 
-    QNonNativeFileDialog fd2(0, "I should not crash with a proxy", tempDir.path(), 0);
+    QFileDialog fd2(0, "I should not crash with a proxy", tempDir.path(), 0);
     QSortFilterProxyModel *pm = new QSortFilterProxyModel;
     fd2.setProxyModel(pm);
     fd2.show();
-    QSidebar *sidebar = qFindChild<QSidebar*>(&fd2, "sidebar");
+    QSidebar *sidebar = fd2.findChild<QSidebar*>("sidebar");
     sidebar->setFocus();
     sidebar->selectUrl(QUrl::fromLocalFile(QDir::homePath()));
     QTest::mouseClick(sidebar->viewport(), Qt::LeftButton, 0, sidebar->visualRect(sidebar->model()->index(1, 0)).center());
@@ -612,25 +596,22 @@ void tst_QFileDialog2::task227930_correctNavigationKeyboardBehavior()
     QVERIFY(file2.open(QIODevice::WriteOnly | QIODevice::Text));
     current.cdUp();
     current.mkdir("test2");
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setViewMode(QFileDialog::List);
     fd.setDirectory(current.absolutePath());
     fd.show();
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
-    QTest::qWait(200);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QListView *list = fd.findChild<QListView*>("listView");
+    QVERIFY(list);
     QTest::keyClick(list, Qt::Key_Down);
     QTest::keyClick(list, Qt::Key_Return);
-    QTest::qWait(200);
     QTest::mouseClick(list->viewport(), Qt::LeftButton,0);
     QTest::keyClick(list, Qt::Key_Down);
     QTest::keyClick(list, Qt::Key_Backspace);
-    QTest::qWait(200);
     QTest::keyClick(list, Qt::Key_Down);
     QTest::keyClick(list, Qt::Key_Down);
     QTest::keyClick(list, Qt::Key_Return);
-    QTest::qWait(200);
     QCOMPARE(fd.isVisible(), true);
-    QTest::qWait(200);
     file.close();
     file2.close();
     file.remove();
@@ -640,14 +621,14 @@ void tst_QFileDialog2::task227930_correctNavigationKeyboardBehavior()
 }
 #endif
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
 void tst_QFileDialog2::task226366_lowerCaseHardDriveWindows()
 {
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setDirectory(QDir::root().path());
     fd.show();
-    QLineEdit *edit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
-    QToolButton *buttonParent = qFindChild<QToolButton*>(&fd, "toParentButton");
+    QLineEdit *edit = fd.findChild<QLineEdit*>("fileNameEdit");
+    QToolButton *buttonParent = fd.findChild<QToolButton*>("toParentButton");
     QTest::qWait(200);
     QTest::mouseClick(buttonParent, Qt::LeftButton,0,QPoint(0,0));
     QTest::qWait(2000);
@@ -669,8 +650,8 @@ void tst_QFileDialog2::task226366_lowerCaseHardDriveWindows()
 
 void tst_QFileDialog2::completionOnLevelAfterRoot()
 {
-    QNonNativeFileDialog fd;
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+    QFileDialog fd;
+#if defined(Q_OS_WIN)
     fd.setDirectory("C:/");
     QDir current = fd.directory();
     QStringList entryList = current.entryList(QStringList(), QDir::Dirs);
@@ -690,7 +671,7 @@ void tst_QFileDialog2::completionOnLevelAfterRoot()
             }
             if (!invalid) {
                 foreach (const QString &check, entryList) {
-                    if (check.startsWith(entry.left(5)) && check != entry) {
+                    if (check.startsWith(entry.left(5), Qt::CaseInsensitive) && check != entry) {
                         invalid = true;
                         break;
                     }
@@ -703,7 +684,7 @@ void tst_QFileDialog2::completionOnLevelAfterRoot()
         }
     }
     if (testDir.isEmpty())
-        QSKIP("This test requires to have an unique directory of at least six ascii characters under c:/");
+        QSKIP("This test requires to have a unique directory of at least six ascii characters under c:/");
 #else
     fd.setFilter(QDir::Hidden | QDir::AllDirs | QDir::Files | QDir::System);
     fd.setDirectory("/");
@@ -712,9 +693,9 @@ void tst_QFileDialog2::completionOnLevelAfterRoot()
         QSKIP("This test requires to have an etc directory under /");
 #endif
     fd.show();
-    QLineEdit *edit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
+    QLineEdit *edit = fd.findChild<QLineEdit*>("fileNameEdit");
     QTest::qWait(2000);
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     //I love testlib :D
     for (int i = 0; i < 5; i++)
         QTest::keyClick(edit, testDir.at(i).toLower().toLatin1() - 'a' + Qt::Key_A);
@@ -725,7 +706,7 @@ void tst_QFileDialog2::completionOnLevelAfterRoot()
     QTest::qWait(200);
     QTest::keyClick(edit->completer()->popup(), Qt::Key_Down);
     QTest::qWait(200);
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     QCOMPARE(edit->text(), testDir);
 #else
     QTRY_COMPARE(edit->text(), QString("etc"));
@@ -736,45 +717,57 @@ void tst_QFileDialog2::task233037_selectingDirectory()
 {
     QDir current = QDir::currentPath();
     current.mkdir("test");
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setViewMode(QFileDialog::List);
     fd.setDirectory(current.absolutePath());
     fd.setAcceptMode( QFileDialog::AcceptSave);
     fd.show();
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
+    QListView *list = fd.findChild<QListView*>("listView");
     QTest::qWait(3000); // Wait for sort to settle (I need a signal).
 #ifdef QT_KEYPAD_NAVIGATION
     list->setEditFocus(true);
 #endif
     QTest::keyClick(list, Qt::Key_Down);
-    QTest::qWait(100);
-    QDialogButtonBox *buttonBox = qFindChild<QDialogButtonBox*>(&fd, "buttonBox");
+    QDialogButtonBox *buttonBox = fd.findChild<QDialogButtonBox*>("buttonBox");
+    QVERIFY(buttonBox);
     QPushButton *button = buttonBox->button(QDialogButtonBox::Save);
     QVERIFY(button);
-    QCOMPARE(button->isEnabled(), true);
+    QVERIFY(button->isEnabled());
     current.rmdir("test");
+}
+
+void tst_QFileDialog2::task235069_hideOnEscape_data()
+{
+    QTest::addColumn<QString>("childName");
+    QTest::addColumn<QFileDialog::ViewMode>("viewMode");
+    QTest::newRow("listView") << QStringLiteral("listView") << QFileDialog::List;
+    QTest::newRow("fileNameEdit") << QStringLiteral("fileNameEdit") << QFileDialog::List;
+    QTest::newRow("treeView") << QStringLiteral("treeView") << QFileDialog::Detail;
 }
 
 void tst_QFileDialog2::task235069_hideOnEscape()
 {
+    QFETCH(QString, childName);
+    QFETCH(QFileDialog::ViewMode, viewMode);
     QDir current = QDir::currentPath();
-    QNonNativeFileDialog fd;
-    fd.setViewMode(QFileDialog::List);
+
+    QFileDialog fd;
+    QSignalSpy spyFinished(&fd, &QDialog::finished);
+    QVERIFY(spyFinished.isValid());
+    QSignalSpy spyRejected(&fd, &QDialog::rejected);
+    QVERIFY(spyRejected.isValid());
+    fd.setViewMode(viewMode);
     fd.setDirectory(current.absolutePath());
-    fd.setAcceptMode( QFileDialog::AcceptSave);
+    fd.setAcceptMode(QFileDialog::AcceptSave);
     fd.show();
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
-    list->setFocus();
-    QTest::qWait(200);
-    QTest::keyClick(list, Qt::Key_Escape);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QWidget *child = fd.findChild<QWidget *>(childName);
+    QVERIFY(child);
+    child->setFocus();
+    QTest::keyClick(child, Qt::Key_Escape);
     QCOMPARE(fd.isVisible(), false);
-    QNonNativeFileDialog fd2;
-    fd2.setDirectory(current.absolutePath());
-    fd2.setAcceptMode( QFileDialog::AcceptSave);
-    fd2.show();
-    QLineEdit *edit = qFindChild<QLineEdit*>(&fd2, "fileNameEdit");
-    QTest::keyClick(edit, Qt::Key_Escape);
-    QCOMPARE(fd2.isVisible(), false);
+    QCOMPARE(spyFinished.count(), 1); // QTBUG-7690
+    QCOMPARE(spyRejected.count(), 1); // reject(), don't hide()
 }
 
 #ifdef QT_BUILD_INTERNAL
@@ -789,14 +782,13 @@ void tst_QFileDialog2::task236402_dontWatchDeletedDir()
     fd.setDirectory(current.absolutePath());
     fd.setAcceptMode( QFileDialog::AcceptSave);
     fd.show();
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QListView *list = fd.findChild<QListView*>("listView");
+    QVERIFY(list);
     list->setFocus();
-    QTest::qWait(200);
     QTest::keyClick(list, Qt::Key_Return);
-    QTest::qWait(200);
     QTest::keyClick(list, Qt::Key_Backspace);
     QTest::keyClick(list, Qt::Key_Down);
-    QTest::qWait(200);
     fd.d_func()->removeDirectory(current.absolutePath() + "/aaaaaaaaaa/");
     QTest::qWait(1000);
 }
@@ -806,21 +798,21 @@ void tst_QFileDialog2::task203703_returnProperSeparator()
 {
     QDir current = QDir::currentPath();
     current.mkdir("aaaaaaaaaaaaaaaaaa");
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setDirectory(current.absolutePath());
     fd.setViewMode(QFileDialog::List);
     fd.setFileMode(QFileDialog::Directory);
     fd.show();
-    QTest::qWait(500);
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QListView *list = fd.findChild<QListView*>("listView");
+    QVERIFY(list);
     list->setFocus();
-    QTest::qWait(200);
     QTest::keyClick(list, Qt::Key_Return);
-    QTest::qWait(1000);
-    QDialogButtonBox *buttonBox = qFindChild<QDialogButtonBox*>(&fd, "buttonBox");
+    QDialogButtonBox *buttonBox = fd.findChild<QDialogButtonBox*>("buttonBox");
+    QVERIFY(buttonBox);
     QPushButton *button = buttonBox->button(QDialogButtonBox::Cancel);
+    QVERIFY(button);
     QTest::keyClick(button, Qt::Key_Return);
-    QTest::qWait(500);
     QString result = fd.selectedFiles().first();
     QVERIFY(result.at(result.count() - 1) != '/');
     QVERIFY(!result.contains('\\'));
@@ -840,78 +832,59 @@ void tst_QFileDialog2::task228844_ensurePreviousSorting()
     current.mkdir("f");
     current.mkdir("g");
     QTemporaryFile *tempFile = new QTemporaryFile(current.absolutePath() + "/rXXXXXX");
-    tempFile->open();
+    QVERIFY2(tempFile->open(), qPrintable(tempFile->errorString()));
     current.cdUp();
 
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
     fd.setDirectory(current.absolutePath());
     fd.setViewMode(QFileDialog::Detail);
     fd.show();
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QTreeView *tree = qFindChild<QTreeView*>(&fd, "treeView");
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
+    QTreeView *tree = fd.findChild<QTreeView*>("treeView");
+    QVERIFY(tree);
     tree->header()->setSortIndicator(3,Qt::DescendingOrder);
-    QTest::qWait(200);
-    QDialogButtonBox *buttonBox = qFindChild<QDialogButtonBox*>(&fd, "buttonBox");
+    QDialogButtonBox *buttonBox = fd.findChild<QDialogButtonBox*>("buttonBox");
+    QVERIFY(buttonBox);
     QPushButton *button = buttonBox->button(QDialogButtonBox::Open);
+    QVERIFY(button);
     QTest::mouseClick(button, Qt::LeftButton);
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QNonNativeFileDialog fd2;
+    QFileDialog fd2;
     fd2.setFileMode(QFileDialog::Directory);
     fd2.restoreState(fd.saveState());
     current.cd("aaaaaaaaaaaaaaaaaa");
     fd2.setDirectory(current.absolutePath());
     fd2.show();
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QTreeView *tree2 = qFindChild<QTreeView*>(&fd2, "treeView");
+    QVERIFY(QTest::qWaitForWindowActive(&fd2));
+    QTreeView *tree2 = fd2.findChild<QTreeView*>("treeView");
+    QVERIFY(tree2);
     tree2->setFocus();
 
     QCOMPARE(tree2->rootIndex().data(QFileSystemModel::FilePathRole).toString(),current.absolutePath());
 
-    QDialogButtonBox *buttonBox2 = qFindChild<QDialogButtonBox*>(&fd2, "buttonBox");
+    QDialogButtonBox *buttonBox2 = fd2.findChild<QDialogButtonBox*>("buttonBox");
+    QVERIFY(buttonBox2);
     QPushButton *button2 = buttonBox2->button(QDialogButtonBox::Open);
+    QVERIFY(button2);
     fd2.selectFile("g");
     QTest::mouseClick(button2, Qt::LeftButton);
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QCOMPARE(fd2.selectedFiles().first(), current.absolutePath() + QChar('/') + QLatin1String("g"));
+    QCOMPARE(fd2.selectedFiles().first(), current.absolutePath() + QLatin1String("/g"));
 
-    QNonNativeFileDialog fd3(0, "This is a third file dialog", tempFile->fileName());
+    QFileDialog fd3(0, "This is a third file dialog", tempFile->fileName());
     fd3.restoreState(fd.saveState());
     fd3.setFileMode(QFileDialog::Directory);
     fd3.show();
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
-    QTreeView *tree3 = qFindChild<QTreeView*>(&fd3, "treeView");
+    QVERIFY(QTest::qWaitForWindowActive(&fd3));
+    QTreeView *tree3 = fd3.findChild<QTreeView*>("treeView");
+    QVERIFY(tree3);
     tree3->setFocus();
 
     QCOMPARE(tree3->rootIndex().data(QFileSystemModel::FilePathRole).toString(), current.absolutePath());
 
-    QDialogButtonBox *buttonBox3 = qFindChild<QDialogButtonBox*>(&fd3, "buttonBox");
+    QDialogButtonBox *buttonBox3 = fd3.findChild<QDialogButtonBox*>("buttonBox");
+    QVERIFY(buttonBox3);
     QPushButton *button3 = buttonBox3->button(QDialogButtonBox::Open);
+    QVERIFY(button3);
     QTest::mouseClick(button3, Qt::LeftButton);
-#if defined(Q_OS_WINCE)
-    QTest::qWait(1500);
-#else
-    QTest::qWait(500);
-#endif
     QCOMPARE(fd3.selectedFiles().first(), tempFile->fileName());
 
     current.cd("aaaaaaaaaaaaaaaaaa");
@@ -931,11 +904,10 @@ void tst_QFileDialog2::task228844_ensurePreviousSorting()
 
 void tst_QFileDialog2::task239706_editableFilterCombo()
 {
-    QNonNativeFileDialog d;
+    QFileDialog d;
     d.setNameFilter("*.cpp *.h");
-
     d.show();
-    QTest::qWait(500);
+    QVERIFY(QTest::qWaitForWindowActive(&d));
 
     QList<QComboBox *> comboList = d.findChildren<QComboBox *>();
     QComboBox *filterCombo = 0;
@@ -956,7 +928,7 @@ void tst_QFileDialog2::task218353_relativePaths()
 {
     QDir appDir = QDir::current();
     QVERIFY(appDir.cdUp() != false);
-    QNonNativeFileDialog d(0, "TestDialog", "..");
+    QFileDialog d(0, "TestDialog", "..");
     QCOMPARE(d.directory().absolutePath(), appDir.absolutePath());
 
     d.setDirectory(appDir.absolutePath() + QLatin1String("/non-existing-directory/../another-non-existing-dir/../"));
@@ -972,7 +944,7 @@ void tst_QFileDialog2::task218353_relativePaths()
 #ifdef QT_BUILD_INTERNAL
 void tst_QFileDialog2::task251321_sideBarHiddenEntries()
 {
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
 
     QDir current = QDir::currentPath();
     current.mkdir(".hidden");
@@ -986,20 +958,17 @@ void tst_QFileDialog2::task251321_sideBarHiddenEntries()
     urls << QUrl::fromLocalFile(hiddenSubDir.absolutePath());
     fd.setSidebarUrls(urls);
     fd.show();
-    QTest::qWait(250);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
 
-    QSidebar *sidebar = qFindChild<QSidebar*>(&fd, "sidebar");
+    QSidebar *sidebar = fd.findChild<QSidebar*>("sidebar");
+    QVERIFY(sidebar);
     sidebar->setFocus();
     sidebar->selectUrl(QUrl::fromLocalFile(hiddenSubDir.absolutePath()));
     QTest::mouseClick(sidebar->viewport(), Qt::LeftButton, 0, sidebar->visualRect(sidebar->model()->index(0, 0)).center());
     // give the background processes more time on windows mobile
-#ifdef Q_OS_WINCE
-    QTest::qWait(1000);
-#else
     QTest::qWait(250);
-#endif
 
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
+    QFileSystemModel *model = fd.findChild<QFileSystemModel*>("qt_filesystem_model");
     QCOMPARE(model->rowCount(model->index(hiddenSubDir.absolutePath())), 2);
 
     hiddenSubDir.rmdir("happy2");
@@ -1032,7 +1001,7 @@ public :
 #ifdef QT_BUILD_INTERNAL
 void tst_QFileDialog2::task251341_sideBarRemoveEntries()
 {
-    QNonNativeFileDialog fd;
+    QFileDialog fd;
 
     QDir current = QDir::currentPath();
     current.mkdir("testDir");
@@ -1043,16 +1012,17 @@ void tst_QFileDialog2::task251341_sideBarRemoveEntries()
     urls << QUrl::fromLocalFile("NotFound");
     fd.setSidebarUrls(urls);
     fd.show();
-    QTest::qWait(250);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
 
-    QSidebar *sidebar = qFindChild<QSidebar*>(&fd, "sidebar");
+    QSidebar *sidebar = fd.findChild<QSidebar*>("sidebar");
+    QVERIFY(sidebar);
     sidebar->setFocus();
     //We enter in the first bookmark
     sidebar->selectUrl(QUrl::fromLocalFile(testSubDir.absolutePath()));
     QTest::mouseClick(sidebar->viewport(), Qt::LeftButton, 0, sidebar->visualRect(sidebar->model()->index(0, 0)).center());
-    QTest::qWait(250);
 
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
+    QFileSystemModel *model = fd.findChild<QFileSystemModel*>("qt_filesystem_model");
+    QVERIFY(model);
     //There is no file
     QCOMPARE(model->rowCount(model->index(testSubDir.absolutePath())), 0);
     //Icon is not enabled QUrlModel::EnabledRole
@@ -1063,7 +1033,6 @@ void tst_QFileDialog2::task251341_sideBarRemoveEntries()
     //We enter in the second bookmark which is invalid
     sidebar->selectUrl(QUrl::fromLocalFile("NotFound"));
     QTest::mouseClick(sidebar->viewport(), Qt::LeftButton, 0, sidebar->visualRect(sidebar->model()->index(1, 0)).center());
-    QTest::qWait(250);
 
     //We fallback to root because the entry in the bookmark is invalid
     QCOMPARE(model->rowCount(model->index("NotFound")), model->rowCount(model->index(model->rootPath())));
@@ -1099,8 +1068,9 @@ void tst_QFileDialog2::task254490_selectFileMultipleTimes()
     QString tempPath = tempDir.path();
     QTemporaryFile *t;
     t = new QTemporaryFile;
+    QVERIFY2(t->open(), qPrintable(t->errorString()));
     t->open();
-    QNonNativeFileDialog fd(0, "TestFileDialog");
+    QFileDialog fd(0, "TestFileDialog");
 
     fd.setDirectory(tempPath);
     fd.setViewMode(QFileDialog::List);
@@ -1114,12 +1084,12 @@ void tst_QFileDialog2::task254490_selectFileMultipleTimes()
     fd.selectFile("new_file.txt");
 
     fd.show();
-    QTest::qWait(250);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
 
-    QLineEdit *lineEdit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
+    QLineEdit *lineEdit = fd.findChild<QLineEdit*>("fileNameEdit");
     QVERIFY(lineEdit);
     QCOMPARE(lineEdit->text(),QLatin1String("new_file.txt"));
-    QListView *list = qFindChild<QListView*>(&fd, "listView");
+    QListView *list = fd.findChild<QListView*>("listView");
     QVERIFY(list);
     QCOMPARE(list->selectionModel()->selectedRows(0).count(), 0);
 
@@ -1133,10 +1103,10 @@ void tst_QFileDialog2::task257579_sideBarWithNonCleanUrls()
     QLatin1String dirname("autotest_task257579");
     dir.rmdir(dirname); //makes sure it doesn't exist any more
     QVERIFY(dir.mkdir(dirname));
-    QString url = QString::fromLatin1("%1/%2/..").arg(dir.absolutePath()).arg(dirname);
-    QNonNativeFileDialog fd;
+    QString url = dir.absolutePath() + QLatin1Char('/') + dirname + QLatin1String("/..");
+    QFileDialog fd;
     fd.setSidebarUrls(QList<QUrl>() << QUrl::fromLocalFile(url));
-    QSidebar *sidebar = qFindChild<QSidebar*>(&fd, "sidebar");
+    QSidebar *sidebar = fd.findChild<QSidebar*>("sidebar");
     QCOMPARE(sidebar->urls().count(), 1);
     QVERIFY(sidebar->urls().first().toLocalFile() != url);
     QCOMPARE(sidebar->urls().first().toLocalFile(), QDir::cleanPath(url));
@@ -1154,14 +1124,14 @@ void tst_QFileDialog2::task257579_sideBarWithNonCleanUrls()
 
 void tst_QFileDialog2::task259105_filtersCornerCases()
 {
-    QNonNativeFileDialog fd(0, "TestFileDialog");
+    QFileDialog fd(0, "TestFileDialog");
     fd.setNameFilter(QLatin1String("All Files! (*);;Text Files (*.txt)"));
     fd.setOption(QFileDialog::HideNameFilterDetails, true);
     fd.show();
-    QTest::qWait(250);
+    QVERIFY(QTest::qWaitForWindowActive(&fd));
 
     //Extensions are hidden
-    QComboBox *filters = qFindChild<QComboBox*>(&fd, "fileTypeCombo");
+    QComboBox *filters = fd.findChild<QComboBox*>("fileTypeCombo");
     QVERIFY(filters);
     QCOMPARE(filters->currentText(), QLatin1String("All Files!"));
     filters->setCurrentIndex(1);
@@ -1169,7 +1139,6 @@ void tst_QFileDialog2::task259105_filtersCornerCases()
 
     //We should have the full names
     fd.setOption(QFileDialog::HideNameFilterDetails, false);
-    QTest::qWait(250);
     filters->setCurrentIndex(0);
     QCOMPARE(filters->currentText(), QLatin1String("All Files! (*)"));
     filters->setCurrentIndex(1);
@@ -1183,14 +1152,12 @@ void tst_QFileDialog2::task259105_filtersCornerCases()
 
     fd.setOption(QFileDialog::HideNameFilterDetails, true);
     filters->setCurrentIndex(0);
-    QTest::qWait(500);
     QCOMPARE(filters->currentText(), QLatin1String("\352 (I like cheese) All Files!"));
     filters->setCurrentIndex(1);
     QCOMPARE(filters->currentText(), QLatin1String("Text Files"));
 
     fd.setOption(QFileDialog::HideNameFilterDetails, true);
     filters->setCurrentIndex(0);
-    QTest::qWait(500);
     QCOMPARE(filters->currentText(), QLatin1String("\352 (I like cheese) All Files!"));
     filters->setCurrentIndex(1);
     QCOMPARE(filters->currentText(), QLatin1String("Text Files"));
@@ -1199,10 +1166,9 @@ void tst_QFileDialog2::task259105_filtersCornerCases()
 void tst_QFileDialog2::QTBUG4419_lineEditSelectAll()
 {
     QString tempPath = tempDir.path();
-    QTemporaryFile *t;
-    t = new QTemporaryFile(tempPath + "/tst_qfiledialog2_lineEditSelectAll.XXXXXX");
-    t->open();
-    QNonNativeFileDialog fd(0, "TestFileDialog", t->fileName());
+    QTemporaryFile temporaryFile(tempPath + "/tst_qfiledialog2_lineEditSelectAll.XXXXXX");
+    QVERIFY2(temporaryFile.open(), qPrintable(temporaryFile.errorString()));
+    QFileDialog fd(0, "TestFileDialog", temporaryFile.fileName());
 
     fd.setDirectory(tempPath);
     fd.setViewMode(QFileDialog::List);
@@ -1210,23 +1176,23 @@ void tst_QFileDialog2::QTBUG4419_lineEditSelectAll()
     fd.setFileMode(QFileDialog::AnyFile);
 
     fd.show();
-    QApplication::setActiveWindow(&fd);
+    fd.activateWindow();
     QVERIFY(QTest::qWaitForWindowActive(&fd));
     QCOMPARE(fd.isVisible(), true);
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd));
 
-    QLineEdit *lineEdit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
+    QLineEdit *lineEdit = fd.findChild<QLineEdit*>("fileNameEdit");
     QVERIFY(lineEdit);
 
-    QTRY_COMPARE(tempPath + QChar('/') + lineEdit->text(), t->fileName());
-    QCOMPARE(tempPath + QChar('/') + lineEdit->selectedText(), t->fileName());
+    QTRY_COMPARE(tempPath + QChar('/') + lineEdit->text(), temporaryFile.fileName());
+    QCOMPARE(tempPath + QChar('/') + lineEdit->selectedText(), temporaryFile.fileName());
 }
 
 void tst_QFileDialog2::QTBUG6558_showDirsOnly()
 {
     const QString tempPath = tempDir.path();
     QDir dirTemp(tempPath);
-    const QString tempName = QLatin1String("showDirsOnly.") + QString::number(qrand());
+    const QString tempName = QLatin1String("showDirsOnly.") + QString::number(QRandomGenerator::global()->generate());
     dirTemp.mkdir(tempName);
     dirTemp.cd(tempName);
     QTRY_VERIFY(dirTemp.exists());
@@ -1245,7 +1211,7 @@ void tst_QFileDialog2::QTBUG6558_showDirsOnly()
     out << "The magic number is: " << 49 << "\n";
     tempFile.close();
 
-    QNonNativeFileDialog fd(0, "TestFileDialog");
+    QFileDialog fd(0, "TestFileDialog");
 
     fd.setDirectory(dir.absolutePath());
     fd.setViewMode(QFileDialog::List);
@@ -1258,7 +1224,7 @@ void tst_QFileDialog2::QTBUG6558_showDirsOnly()
     QCOMPARE(fd.isVisible(), true);
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd));
 
-    QFileSystemModel *model = qFindChild<QFileSystemModel*>(&fd, "qt_filesystem_model");
+    QFileSystemModel *model = fd.findChild<QFileSystemModel*>("qt_filesystem_model");
     QTRY_COMPARE(model->rowCount(model->index(dir.absolutePath())), 2);
 
     fd.setOption(QFileDialog::ShowDirsOnly, false);
@@ -1294,7 +1260,7 @@ void tst_QFileDialog2::QTBUG4842_selectFilterWithHideNameFilterDetails()
     filtersStr << "Images (*.png *.xpm *.jpg)" << "Text files (*.txt)" << "XML files (*.xml)";
     QString chosenFilterString("Text files (*.txt)");
 
-    QNonNativeFileDialog fd(0, "TestFileDialog");
+    QFileDialog fd(0, "TestFileDialog");
     fd.setAcceptMode(QFileDialog::AcceptSave);
     fd.setOption(QFileDialog::HideNameFilterDetails, true);
     fd.setNameFilters(filtersStr);
@@ -1306,11 +1272,11 @@ void tst_QFileDialog2::QTBUG4842_selectFilterWithHideNameFilterDetails()
     QCOMPARE(fd.isVisible(), true);
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd));
 
-    QComboBox *filters = qFindChild<QComboBox*>(&fd, "fileTypeCombo");
+    QComboBox *filters = fd.findChild<QComboBox*>("fileTypeCombo");
     //We compare the current combobox text with the stripped version
     QCOMPARE(filters->currentText(), QString("Text files"));
 
-    QNonNativeFileDialog fd2(0, "TestFileDialog");
+    QFileDialog fd2(0, "TestFileDialog");
     fd2.setAcceptMode(QFileDialog::AcceptSave);
     fd2.setOption(QFileDialog::HideNameFilterDetails, false);
     fd2.setNameFilters(filtersStr);
@@ -1322,7 +1288,7 @@ void tst_QFileDialog2::QTBUG4842_selectFilterWithHideNameFilterDetails()
     QCOMPARE(fd2.isVisible(), true);
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd2));
 
-    QComboBox *filters2 = qFindChild<QComboBox*>(&fd2, "fileTypeCombo");
+    QComboBox *filters2 = fd2.findChild<QComboBox*>("fileTypeCombo");
     //We compare the current combobox text with the non stripped version
     QCOMPARE(filters2->currentText(), chosenFilterString);
 
@@ -1330,7 +1296,7 @@ void tst_QFileDialog2::QTBUG4842_selectFilterWithHideNameFilterDetails()
 
 void tst_QFileDialog2::dontShowCompleterOnRoot()
 {
-    QNonNativeFileDialog fd(0, "TestFileDialog");
+    QFileDialog fd(0, "TestFileDialog");
     fd.setAcceptMode(QFileDialog::AcceptSave);
     fd.show();
 
@@ -1340,13 +1306,32 @@ void tst_QFileDialog2::dontShowCompleterOnRoot()
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd));
 
     fd.setDirectory("");
-    QLineEdit *lineEdit = qFindChild<QLineEdit*>(&fd, "fileNameEdit");
+    QLineEdit *lineEdit = fd.findChild<QLineEdit*>("fileNameEdit");
     QTRY_VERIFY(lineEdit->text().isEmpty());
 
     //The gatherer thread will then return the result
     QApplication::processEvents();
 
     QTRY_VERIFY(lineEdit->completer()->popup()->isHidden());
+}
+
+void tst_QFileDialog2::nameFilterParsing_data()
+{
+    QTest::addColumn<QString>("filterString");
+    QTest::addColumn<QStringList>("filters");
+
+    // QTBUG-47923: Do not trip over "*,v".
+    QTest::newRow("text") << "plain text document (*.txt *.asc *,v *.doc)"
+        << (QStringList() << "*.txt" << "*.asc" << "*,v" << "*.doc");
+    QTest::newRow("html") << "HTML document (*.html *.htm)"
+       << (QStringList() << "*.html" <<  "*.htm");
+}
+
+void tst_QFileDialog2::nameFilterParsing()
+{
+    QFETCH(QString, filterString);
+    QFETCH(QStringList, filters);
+    QCOMPARE(QPlatformFileDialogHelper::cleanFilterList(filterString), filters);
 }
 
 QTEST_MAIN(tst_QFileDialog2)

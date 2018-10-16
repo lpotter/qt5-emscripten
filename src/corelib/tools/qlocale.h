@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,14 +45,13 @@
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qshareddata.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
 class QDataStream;
 class QDate;
 class QDateTime;
+class QLocale;
 class QTime;
 class QVariant;
 class QTextStream;
@@ -62,12 +59,13 @@ class QTextStreamPrivate;
 
 class QLocalePrivate;
 
+Q_CORE_EXPORT uint qHash(const QLocale &key, uint seed = 0) Q_DECL_NOTHROW;
+
 class Q_CORE_EXPORT QLocale
 {
     Q_GADGET
-    Q_ENUMS(Language)
-    Q_ENUMS(Country)
     friend class QString;
+    friend class QStringRef;
     friend class QByteArray;
     friend class QIntValidator;
     friend class QDoubleValidatorPrivate;
@@ -206,7 +204,7 @@ public:
         Turkish = 125,
         Turkmen = 126,
         Tahitian = 127,
-        Uigur = 128,
+        Uighur = 128,
         Ukrainian = 129,
         Urdu = 130,
         Uzbek = 131,
@@ -339,20 +337,122 @@ public:
         Kako = 258,
         Meta = 259,
         Ngiemboon = 260,
-        Norwegian = NorwegianBokmal,
+        Aragonese = 261,
+        Akkadian = 262,
+        AncientEgyptian = 263,
+        AncientGreek = 264,
+        Aramaic = 265,
+        Balinese = 266,
+        Bamun = 267,
+        BatakToba = 268,
+        Buginese = 269,
+        Buhid = 270,
+        Carian = 271,
+        Chakma = 272,
+        ClassicalMandaic = 273,
+        Coptic = 274,
+        Dogri = 275,
+        EasternCham = 276,
+        EasternKayah = 277,
+        Etruscan = 278,
+        Gothic = 279,
+        Hanunoo = 280,
+        Ingush = 281,
+        LargeFloweryMiao = 282,
+        Lepcha = 283,
+        Limbu = 284,
+        Lisu = 285,
+        Lu = 286,
+        Lycian = 287,
+        Lydian = 288,
+        Mandingo = 289,
+        Manipuri = 290,
+        Meroitic = 291,
+        NorthernThai = 292,
+        OldIrish = 293,
+        OldNorse = 294,
+        OldPersian = 295,
+        OldTurkish = 296,
+        Pahlavi = 297,
+        Parthian = 298,
+        Phoenician = 299,
+        PrakritLanguage = 300,
+        Rejang = 301,
+        Sabaean = 302,
+        Samaritan = 303,
+        Santali = 304,
+        Saurashtra = 305,
+        Sora = 306,
+        Sylheti = 307,
+        Tagbanwa = 308,
+        TaiDam = 309,
+        TaiNua = 310,
+        Ugaritic = 311,
+        Akoose = 312,
+        Lakota = 313,
+        StandardMoroccanTamazight = 314,
+        Mapuche = 315,
+        CentralKurdish = 316,
+        LowerSorbian = 317,
+        UpperSorbian = 318,
+        Kenyang = 319,
+        Mohawk = 320,
+        Nko = 321,
+        Prussian = 322,
+        Kiche = 323,
+        SouthernSami = 324,
+        LuleSami = 325,
+        InariSami = 326,
+        SkoltSami = 327,
+        Warlpiri = 328,
+        ManichaeanMiddlePersian = 329,
+        Mende = 330,
+        AncientNorthArabian = 331,
+        LinearA = 332,
+        HmongNjua = 333,
+        Ho = 334,
+        Lezghian = 335,
+        Bassa = 336,
+        Mono = 337,
+        TedimChin = 338,
+        Maithili = 339,
+        Ahom = 340,
+        AmericanSignLanguage = 341,
+        ArdhamagadhiPrakrit = 342,
+        Bhojpuri = 343,
+        HieroglyphicLuwian = 344,
+        LiteraryChinese = 345,
+        Mazanderani = 346,
+        Mru = 347,
+        Newari = 348,
+        NorthernLuri = 349,
+        Palauan = 350,
+        Papiamento = 351,
+        Saraiki = 352,
+        TokelauLanguage = 353,
+        TokPisin = 354,
+        TuvaluLanguage = 355,
+        UncodedLanguages = 356,
+        Cantonese = 357,
+        Osage = 358,
+        Tangut = 359,
+
+        Afan = Oromo,
+        Bhutani = Dzongkha,
+        Byelorussian = Belarusian,
+        Cambodian = Khmer,
+        Chewa = Nyanja,
+        Frisian = WesternFrisian,
+        Kurundi = Rundi,
         Moldavian = Romanian,
+        Norwegian = NorwegianBokmal,
+        RhaetoRomance = Romansh,
         SerboCroatian = Serbian,
         Tagalog = Filipino,
         Twi = Akan,
-        Afan = Oromo,
-        Byelorussian = Belarusian,
-        Bhutani = Dzongkha,
-        Cambodian = Khmer,
-        Kurundi = Rundi,
-        RhaetoRomance = Romansh,
-        Chewa = Nyanja,
-        Frisian = WesternFrisian,
-        LastLanguage = Ngiemboon
+        Uigur = Uighur,
+
+        LastLanguage = Tangut
     };
 
     enum Script {
@@ -392,9 +492,117 @@ public:
         SyriacScript = 33,
         YiScript = 34,
         VaiScript = 35,
+        AvestanScript = 36,
+        BalineseScript = 37,
+        BamumScript = 38,
+        BatakScript = 39,
+        BopomofoScript = 40,
+        BrahmiScript = 41,
+        BugineseScript = 42,
+        BuhidScript = 43,
+        CanadianAboriginalScript = 44,
+        CarianScript = 45,
+        ChakmaScript = 46,
+        ChamScript = 47,
+        CopticScript = 48,
+        CypriotScript = 49,
+        EgyptianHieroglyphsScript = 50,
+        FraserScript = 51,
+        GlagoliticScript = 52,
+        GothicScript = 53,
+        HanScript = 54,
+        HangulScript = 55,
+        HanunooScript = 56,
+        ImperialAramaicScript = 57,
+        InscriptionalPahlaviScript = 58,
+        InscriptionalParthianScript = 59,
+        JavaneseScript = 60,
+        KaithiScript = 61,
+        KatakanaScript = 62,
+        KayahLiScript = 63,
+        KharoshthiScript = 64,
+        LannaScript = 65,
+        LepchaScript = 66,
+        LimbuScript = 67,
+        LinearBScript = 68,
+        LycianScript = 69,
+        LydianScript = 70,
+        MandaeanScript = 71,
+        MeiteiMayekScript = 72,
+        MeroiticScript = 73,
+        MeroiticCursiveScript = 74,
+        NkoScript = 75,
+        NewTaiLueScript = 76,
+        OghamScript = 77,
+        OlChikiScript = 78,
+        OldItalicScript = 79,
+        OldPersianScript = 80,
+        OldSouthArabianScript = 81,
+        OrkhonScript = 82,
+        OsmanyaScript = 83,
+        PhagsPaScript = 84,
+        PhoenicianScript = 85,
+        PollardPhoneticScript = 86,
+        RejangScript = 87,
+        RunicScript = 88,
+        SamaritanScript = 89,
+        SaurashtraScript = 90,
+        SharadaScript = 91,
+        ShavianScript = 92,
+        SoraSompengScript = 93,
+        CuneiformScript = 94,
+        SundaneseScript = 95,
+        SylotiNagriScript = 96,
+        TagalogScript = 97,
+        TagbanwaScript = 98,
+        TaiLeScript = 99,
+        TaiVietScript = 100,
+        TakriScript = 101,
+        UgariticScript = 102,
+        BrailleScript = 103,
+        HiraganaScript = 104,
+        CaucasianAlbanianScript = 105,
+        BassaVahScript = 106,
+        DuployanScript = 107,
+        ElbasanScript = 108,
+        GranthaScript = 109,
+        PahawhHmongScript = 110,
+        KhojkiScript = 111,
+        LinearAScript = 112,
+        MahajaniScript = 113,
+        ManichaeanScript = 114,
+        MendeKikakuiScript = 115,
+        ModiScript = 116,
+        MroScript = 117,
+        OldNorthArabianScript = 118,
+        NabataeanScript = 119,
+        PalmyreneScript = 120,
+        PauCinHauScript = 121,
+        OldPermicScript = 122,
+        PsalterPahlaviScript = 123,
+        SiddhamScript = 124,
+        KhudawadiScript = 125,
+        TirhutaScript = 126,
+        VarangKshitiScript = 127,
+        AhomScript = 128,
+        AnatolianHieroglyphsScript = 129,
+        HatranScript = 130,
+        MultaniScript = 131,
+        OldHungarianScript = 132,
+        SignWritingScript = 133,
+        AdlamScript = 134,
+        BhaiksukiScript = 135,
+        MarchenScript = 136,
+        NewaScript = 137,
+        OsageScript = 138,
+        TangutScript = 139,
+        HanWithBopomofoScript = 140,
+        JamoScript = 141,
+
         SimplifiedChineseScript = SimplifiedHanScript,
         TraditionalChineseScript = TraditionalHanScript,
-        LastScript = VaiScript
+
+        LastScript = JamoScript
     };
     enum Country {
         AnyCountry = 0,
@@ -610,14 +818,14 @@ public:
         Tanzania = 210,
         Thailand = 211,
         Togo = 212,
-        Tokelau = 213,
+        TokelauCountry = 213,
         Tonga = 214,
         TrinidadAndTobago = 215,
         Tunisia = 216,
         Turkey = 217,
         Turkmenistan = 218,
         TurksAndCaicosIslands = 219,
-        Tuvalu = 220,
+        TuvaluCountry = 220,
         Uganda = 221,
         Ukraine = 222,
         UnitedArabEmirates = 223,
@@ -643,7 +851,7 @@ public:
         Serbia = 243,
         SaintBarthelemy = 244,
         SaintMartin = 245,
-        LatinAmericaAndTheCaribbean = 246,
+        LatinAmerica = 246,
         AscensionIsland = 247,
         AlandIslands = 248,
         DiegoGarcia = 249,
@@ -654,15 +862,29 @@ public:
         SouthSudan = 254,
         Bonaire = 255,
         SintMaarten = 256,
+        Kosovo = 257,
+        EuropeanUnion = 258,
+        OutlyingOceania = 259,
+        World = 260,
+        Europe = 261,
+
         DemocraticRepublicOfCongo = CongoKinshasa,
-        PeoplesRepublicOfCongo = CongoBrazzaville,
         DemocraticRepublicOfKorea = NorthKorea,
+        LatinAmericaAndTheCaribbean = LatinAmerica,
+        PeoplesRepublicOfCongo = CongoBrazzaville,
         RepublicOfKorea = SouthKorea,
         RussianFederation = Russia,
         SyrianArabRepublic = Syria,
-        LastCountry = SintMaarten
+        Tokelau = TokelauCountry,
+        Tuvalu = TuvaluCountry,
+
+        LastCountry = Europe
     };
 // GENERATED PART ENDS HERE
+
+    Q_ENUM(Language)
+    Q_ENUM(Country)
+    Q_ENUM(Script)
 
     enum MeasurementSystem {
         MetricSystem,
@@ -670,13 +892,23 @@ public:
         ImperialUKSystem,
         ImperialSystem = ImperialUSSystem // Qt 4 compatibility
     };
+    Q_ENUM(MeasurementSystem)
 
     enum FormatType { LongFormat, ShortFormat, NarrowFormat };
     enum NumberOption {
+        DefaultNumberOptions = 0x0,
         OmitGroupSeparator = 0x01,
-        RejectGroupSeparator = 0x02
+        RejectGroupSeparator = 0x02,
+        OmitLeadingZeroInExponent = 0x04,
+        RejectLeadingZeroInExponent = 0x08,
+        IncludeTrailingZeroesAfterDot = 0x10,
+        RejectTrailingZeroesAfterDot = 0x20
     };
     Q_DECLARE_FLAGS(NumberOptions, NumberOption)
+
+    enum FloatingPointPrecisionOption {
+        FloatingPointShortest = -128
+    };
 
     enum CurrencySymbolFormat {
         CurrencyIsoCode,
@@ -684,14 +916,31 @@ public:
         CurrencyDisplayName
     };
 
+    enum DataSizeFormat {
+        // Single-bit values, for internal use.
+        DataSizeBase1000 = 1, // use factors of 1000 instead of IEC's 1024;
+        DataSizeSIQuantifiers = 2, // use SI quantifiers instead of IEC ones.
+
+        // Flags values for use in API:
+        DataSizeIecFormat = 0, // base 1024, KiB, MiB, GiB, ...
+        DataSizeTraditionalFormat = DataSizeSIQuantifiers, // base 1024, kB, MB, GB, ...
+        DataSizeSIFormat = DataSizeBase1000 | DataSizeSIQuantifiers // base 1000, kB, MB, GB, ...
+    };
+    Q_DECLARE_FLAGS(DataSizeFormats, DataSizeFormat)
+    Q_FLAG(DataSizeFormats)
+
     QLocale();
     QLocale(const QString &name);
     QLocale(Language language, Country country = AnyCountry);
     QLocale(Language language, Script script, Country country);
     QLocale(const QLocale &other);
+#ifdef Q_COMPILER_RVALUE_REFS
+    QLocale &operator=(QLocale &&other) Q_DECL_NOTHROW { swap(other); return *this; }
+#endif
+    QLocale &operator=(const QLocale &other);
     ~QLocale();
 
-    QLocale &operator=(const QLocale &other);
+    void swap(QLocale &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     Language language() const;
     Script script() const;
@@ -702,14 +951,34 @@ public:
     QString nativeLanguageName() const;
     QString nativeCountryName() const;
 
-    short toShort(const QString &s, bool *ok = 0) const;
-    ushort toUShort(const QString &s, bool *ok = 0) const;
-    int toInt(const QString &s, bool *ok = 0) const;
-    uint toUInt(const QString &s, bool *ok = 0) const;
-    qlonglong toLongLong(const QString &s, bool *ok = 0) const;
-    qulonglong toULongLong(const QString &s, bool *ok = 0) const;
-    float toFloat(const QString &s, bool *ok = 0) const;
-    double toDouble(const QString &s, bool *ok = 0) const;
+#if QT_STRINGVIEW_LEVEL < 2
+    short toShort(const QString &s, bool *ok = nullptr) const;
+    ushort toUShort(const QString &s, bool *ok = nullptr) const;
+    int toInt(const QString &s, bool *ok = nullptr) const;
+    uint toUInt(const QString &s, bool *ok = nullptr) const;
+    qlonglong toLongLong(const QString &s, bool *ok = nullptr) const;
+    qulonglong toULongLong(const QString &s, bool *ok = nullptr) const;
+    float toFloat(const QString &s, bool *ok = nullptr) const;
+    double toDouble(const QString &s, bool *ok = nullptr) const;
+
+    short toShort(const QStringRef &s, bool *ok = nullptr) const;
+    ushort toUShort(const QStringRef &s, bool *ok = nullptr) const;
+    int toInt(const QStringRef &s, bool *ok = nullptr) const;
+    uint toUInt(const QStringRef &s, bool *ok = nullptr) const;
+    qlonglong toLongLong(const QStringRef &s, bool *ok = nullptr) const;
+    qulonglong toULongLong(const QStringRef &s, bool *ok = nullptr) const;
+    float toFloat(const QStringRef &s, bool *ok = nullptr) const;
+    double toDouble(const QStringRef &s, bool *ok = nullptr) const;
+#endif
+
+    short toShort(QStringView s, bool *ok = nullptr) const;
+    ushort toUShort(QStringView s, bool *ok = nullptr) const;
+    int toInt(QStringView s, bool *ok = nullptr) const;
+    uint toUInt(QStringView s, bool *ok = nullptr) const;
+    qlonglong toLongLong(QStringView s, bool *ok = nullptr) const;
+    qulonglong toULongLong(QStringView s, bool *ok = nullptr) const;
+    float toFloat(QStringView s, bool *ok = nullptr) const;
+    double toDouble(QStringView s, bool *ok = nullptr) const;
 
     QString toString(qlonglong i) const;
     QString toString(qulonglong i) const;
@@ -719,17 +988,23 @@ public:
     inline QString toString(uint i) const;
     QString toString(double i, char f = 'g', int prec = 6) const;
     inline QString toString(float i, char f = 'g', int prec = 6) const;
+
+#if QT_STRINGVIEW_LEVEL < 2
     QString toString(const QDate &date, const QString &formatStr) const;
-    QString toString(const QDate &date, FormatType format = LongFormat) const;
     QString toString(const QTime &time, const QString &formatStr) const;
+    QString toString(const QDateTime &dateTime, const QString &format) const;
+#endif
+    QString toString(const QDate &date, QStringView formatStr) const;
+    QString toString(const QTime &time, QStringView formatStr) const;
+    QString toString(const QDateTime &dateTime, QStringView format) const;
+    QString toString(const QDate &date, FormatType format = LongFormat) const;
     QString toString(const QTime &time, FormatType format = LongFormat) const;
     QString toString(const QDateTime &dateTime, FormatType format = LongFormat) const;
-    QString toString(const QDateTime &dateTime, const QString &format) const;
 
     QString dateFormat(FormatType format = LongFormat) const;
     QString timeFormat(FormatType format = LongFormat) const;
     QString dateTimeFormat(FormatType format = LongFormat) const;
-#ifndef QT_NO_DATESTRING
+#if QT_CONFIG(datestring)
     QDate toDate(const QString &string, FormatType = LongFormat) const;
     QTime toTime(const QString &string, FormatType = LongFormat) const;
     QDateTime toDateTime(const QString &string, FormatType format = LongFormat) const;
@@ -773,8 +1048,20 @@ public:
     inline QString toCurrencyString(ushort, const QString &symbol = QString()) const;
     inline QString toCurrencyString(int, const QString &symbol = QString()) const;
     inline QString toCurrencyString(uint, const QString &symbol = QString()) const;
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    QString toCurrencyString(double, const QString &symbol = QString(), int precision = -1) const;
+    inline QString toCurrencyString(float i, const QString &symbol = QString(), int precision = -1) const
+    { return toCurrencyString(double(i), symbol, precision); }
+#else
     QString toCurrencyString(double, const QString &symbol = QString()) const;
-    inline QString toCurrencyString(float, const QString &symbol = QString()) const;
+    QString toCurrencyString(double, const QString &symbol, int precision) const;
+    inline QString toCurrencyString(float i, const QString &symbol = QString()) const
+    { return toCurrencyString(double(i), symbol); }
+    inline QString toCurrencyString(float i, const QString &symbol, int precision) const
+    { return toCurrencyString(double(i), symbol, precision); }
+#endif
+
+    QString formattedDataSize(qint64 bytes, int precision = 2, DataSizeFormats format = DataSizeIecFormat);
 
     QStringList uiLanguages() const;
 
@@ -804,9 +1091,11 @@ public:
 private:
     QLocale(QLocalePrivate &dd);
     friend class QLocalePrivate;
+    friend Q_CORE_EXPORT uint qHash(const QLocale &key, uint seed) Q_DECL_NOTHROW;
+
     QSharedDataPointer<QLocalePrivate> d;
 };
-Q_DECLARE_TYPEINFO(QLocale, Q_MOVABLE_TYPE);
+Q_DECLARE_SHARED(QLocale)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QLocale::NumberOptions)
 
 inline QString QLocale::toString(short i) const
@@ -828,8 +1117,6 @@ inline QString QLocale::toCurrencyString(int i, const QString &symbol) const
 { return toCurrencyString(qlonglong(i), symbol); }
 inline QString QLocale::toCurrencyString(uint i, const QString &symbol) const
 { return toCurrencyString(qulonglong(i), symbol); }
-inline QString QLocale::toCurrencyString(float i, const QString &symbol) const
-{ return toCurrencyString(double(i), symbol); }
 
 #ifndef QT_NO_DATASTREAM
 Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QLocale &);
@@ -841,7 +1128,5 @@ Q_CORE_EXPORT QDebug operator<<(QDebug, const QLocale &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLOCALE_H

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +41,9 @@
 #include "qevent.h"
 #include "qdrawutil.h"
 #include "qapplication.h"
+#if QT_CONFIG(abstractbutton)
 #include "qabstractbutton.h"
+#endif
 #include "qstyle.h"
 #include "qstyleoption.h"
 #include <limits.h>
@@ -61,12 +61,62 @@
 
 QT_BEGIN_NAMESPACE
 
+QLabelPrivate::QLabelPrivate()
+    : QFramePrivate(),
+      sh(),
+      msh(),
+      text(),
+      pixmap(nullptr),
+      scaledpixmap(nullptr),
+      cachedimage(nullptr),
+#ifndef QT_NO_PICTURE
+      picture(nullptr),
+#endif
+#if QT_CONFIG(movie)
+      movie(),
+#endif
+      control(nullptr),
+      shortcutCursor(),
+#ifndef QT_NO_CURSOR
+      cursor(),
+#endif
+#ifndef QT_NO_SHORTCUT
+      buddy(),
+      shortcutId(0),
+#endif
+      textformat(Qt::AutoText),
+      textInteractionFlags(Qt::LinksAccessibleByMouse),
+      sizePolicy(),
+      margin(0),
+      align(Qt::AlignLeft | Qt::AlignVCenter | Qt::TextExpandTabs),
+      indent(-1),
+      valid_hints(false),
+      scaledcontents(false),
+      textLayoutDirty(false),
+      textDirty(false),
+      isRichText(false),
+      isTextLabel(false),
+      hasShortcut(/*???*/),
+#ifndef QT_NO_CURSOR
+      validCursor(false),
+      onAnchor(false),
+#endif
+      openExternalLinks(false)
+{
+}
+
+QLabelPrivate::~QLabelPrivate()
+{
+}
+
 /*!
     \class QLabel
     \brief The QLabel widget provides a text or image display.
 
     \ingroup basicwidgets
     \inmodule QtWidgets
+
+    \image windows-label.png
 
     QLabel is used for displaying text or an image. No user
     interaction functionality is provided. The visual appearance of
@@ -133,25 +183,13 @@ QT_BEGIN_NAMESPACE
     was a button (inheriting from QAbstractButton), triggering the
     mnemonic would emulate a button click.
 
-    \table 100%
-    \row
-    \li \inlineimage macintosh-label.png Screenshot of a Macintosh style label
-    \li A label shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-    \row
-    \li \inlineimage fusion-label.png Screenshot of a Fusion style label
-    \li A label shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \row
-    \li \inlineimage windowsxp-label.png Screenshot of a Windows XP style label
-    \li A label shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
-    \endtable
-
     \sa QLineEdit, QTextEdit, QPixmap, QMovie,
         {fowler}{GUI Design Handbook: Label}
 */
 
 #ifndef QT_NO_PICTURE
 /*!
-    Returns the label's picture or 0 if the label doesn't have a
+    Returns the label's picture or nullptr if the label doesn't have a
     picture.
 */
 
@@ -187,10 +225,8 @@ QLabel::QLabel(QWidget *parent, Qt::WindowFlags f)
     \sa setText(), setAlignment(), setFrameStyle(), setIndent()
 */
 QLabel::QLabel(const QString &text, QWidget *parent, Qt::WindowFlags f)
-        : QFrame(*new QLabelPrivate(), parent, f)
+    : QLabel(parent, f)
 {
-    Q_D(QLabel);
-    d->init();
     setText(text);
 }
 
@@ -210,41 +246,8 @@ void QLabelPrivate::init()
 {
     Q_Q(QLabel);
 
-    valid_hints = false;
-    margin = 0;
-#ifndef QT_NO_MOVIE
-    movie = 0;
-#endif
-#ifndef QT_NO_SHORTCUT
-    shortcutId = 0;
-#endif
-    pixmap = 0;
-    scaledpixmap = 0;
-    cachedimage = 0;
-#ifndef QT_NO_PICTURE
-    picture = 0;
-#endif
-    align = Qt::AlignLeft | Qt::AlignVCenter | Qt::TextExpandTabs;
-    indent = -1;
-    scaledcontents = false;
-    textLayoutDirty = false;
-    textDirty = false;
-    textformat = Qt::AutoText;
-    control = 0;
-    textInteractionFlags = Qt::LinksAccessibleByMouse;
-    isRichText = false;
-    isTextLabel = false;
-
     q->setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred,
                                  QSizePolicy::Label));
-
-#ifndef QT_NO_CURSOR
-    validCursor = false;
-    onAnchor = false;
-#endif
-
-    openExternalLinks = false;
-
     setLayoutItemMargins(QStyle::SE_LabelLayoutItem);
 }
 
@@ -285,7 +288,7 @@ void QLabel::setText(const QString &text)
         return;
 
     QWidgetTextControl *oldControl = d->control;
-    d->control = 0;
+    d->control = nullptr;
 
     d->clearContents();
     d->text = text;
@@ -300,7 +303,7 @@ void QLabel::setText(const QString &text)
         d->ensureTextControl();
     } else {
         delete d->control;
-        d->control = 0;
+        d->control = nullptr;
     }
 
     if (d->isRichText) {
@@ -345,7 +348,7 @@ void QLabel::clear()
     \property QLabel::pixmap
     \brief the label's pixmap
 
-    If no pixmap has been set this will return 0.
+    If no pixmap has been set this will return nullptr.
 
     Setting the pixmap clears any previous content. The buddy
     shortcut, if any, is disabled.
@@ -460,7 +463,7 @@ Qt::Alignment QLabel::alignment() const
     \property QLabel::wordWrap
     \brief the label's word-wrapping policy
 
-    If this property is true then label text is wrapped where
+    If this property is \c true then label text is wrapped where
     necessary at word-breaks; otherwise it is not wrapped at all.
 
     By default, word wrap is disabled.
@@ -569,9 +572,10 @@ QSize QLabelPrivate::sizeForWidth(int w) const
     } else if (picture && !picture->isNull()) {
         br = picture->boundingRect();
 #endif
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     } else if (movie && !movie->currentPixmap().isNull()) {
         br = movie->currentPixmap().rect();
+        br.setSize(br.size() / movie->currentPixmap().devicePixelRatio());
 #endif
     } else if (isTextLabel) {
         int align = QStyle::visualAlignment(textDirection(), QFlag(this->align));
@@ -579,7 +583,7 @@ QSize QLabelPrivate::sizeForWidth(int w) const
         int m = indent;
 
         if (m < 0 && q->frameWidth()) // no indent, but we do have a frame
-            m = fm.width(QLatin1Char('x')) - margin*2;
+            m = fm.horizontalAdvance(QLatin1Char('x')) - margin*2;
         if (m > 0) {
             if ((align & Qt::AlignLeft) || (align & Qt::AlignRight))
                 hextra += m;
@@ -710,7 +714,7 @@ void QLabel::setTextInteractionFlags(Qt::TextInteractionFlags flags)
         d->ensureTextControl();
     } else {
         delete d->control;
-        d->control = 0;
+        d->control = nullptr;
     }
 
     if (d->control)
@@ -749,10 +753,10 @@ void QLabel::setSelection(int start, int length)
     \property QLabel::hasSelectedText
     \brief whether there is any text selected
 
-    hasSelectedText() returns true if some or all of the text has been
-    selected by the user; otherwise returns false.
+    hasSelectedText() returns \c true if some or all of the text has been
+    selected by the user; otherwise returns \c false.
 
-    By default, this property is false.
+    By default, this property is \c false.
 
     \sa selectedText()
 
@@ -875,13 +879,11 @@ void QLabel::mouseReleaseEvent(QMouseEvent *ev)
     d->sendControlEvent(ev);
 }
 
+#ifndef QT_NO_CONTEXTMENU
 /*!\reimp
 */
 void QLabel::contextMenuEvent(QContextMenuEvent *ev)
 {
-#ifdef QT_NO_CONTEXTMENU
-    Q_UNUSED(ev);
-#else
     Q_D(QLabel);
     if (!d->isTextLabel) {
         ev->ignore();
@@ -895,8 +897,8 @@ void QLabel::contextMenuEvent(QContextMenuEvent *ev)
     ev->accept();
     menu->setAttribute(Qt::WA_DeleteOnClose);
     menu->popup(ev->globalPos());
-#endif
 }
+#endif // QT_NO_CONTEXTMENU
 
 /*!
     \reimp
@@ -961,13 +963,17 @@ bool QLabel::event(QEvent *e)
     if (type == QEvent::Shortcut) {
         QShortcutEvent *se = static_cast<QShortcutEvent *>(e);
         if (se->shortcutId() == d->shortcutId) {
-            QWidget * w = d->buddy;
-            QAbstractButton *button = qobject_cast<QAbstractButton *>(w);
+            QWidget *w = d->buddy;
+            if (!w)
+                return QFrame::event(e);
             if (w->focusPolicy() != Qt::NoFocus)
                 w->setFocus(Qt::ShortcutFocusReason);
+#if QT_CONFIG(abstractbutton)
+            QAbstractButton *button = qobject_cast<QAbstractButton *>(w);
             if (button && !se->isAmbiguous())
                 button->animateClick();
             else
+#endif
                 window()->setAttribute(Qt::WA_KeyboardFocusChange);
             return true;
         }
@@ -1001,8 +1007,8 @@ void QLabel::paintEvent(QPaintEvent *)
     int align = QStyle::visualAlignment(d->isTextLabel ? d->textDirection()
                                                        : layoutDirection(), QFlag(d->align));
 
-#ifndef QT_NO_MOVIE
-    if (d->movie) {
+#if QT_CONFIG(movie)
+    if (d->movie && !d->movie->currentPixmap().isNull()) {
         if (d->scaledcontents)
             style->drawItemPixmap(&painter, cr, align, d->movie->currentPixmap().scaled(cr.size()));
         else
@@ -1015,13 +1021,13 @@ void QLabel::paintEvent(QPaintEvent *)
         QStyleOption opt;
         opt.initFrom(this);
 #ifndef QT_NO_STYLE_STYLESHEET
-        if (QStyleSheetStyle* cssStyle = qobject_cast<QStyleSheetStyle*>(style)) {
+        if (QStyleSheetStyle* cssStyle = qt_styleSheet(style))
             cssStyle->styleSheetPalette(this, &opt, &opt.palette);
-        }
 #endif
         if (d->control) {
 #ifndef QT_NO_SHORTCUT
-            const bool underline = (bool)style->styleHint(QStyle::SH_UnderlineShortcut, 0, this, 0);
+            const bool underline = static_cast<bool>(style->styleHint(QStyle::SH_UnderlineShortcut,
+                                                                      nullptr, this, nullptr));
             if (d->shortcutId != 0
                 && underline != d->shortcutCursor.charFormat().fontUnderline()) {
                 QTextCharFormat fmt;
@@ -1032,20 +1038,6 @@ void QLabel::paintEvent(QPaintEvent *)
             d->ensureTextLayouted();
 
             QAbstractTextDocumentLayout::PaintContext context;
-            if (!isEnabled() && !d->control &&
-                // We cannot support etched for rich text controls because custom
-                // colors and links will override the light palette
-                style->styleHint(QStyle::SH_EtchDisabledText, &opt, this)) {
-                context.palette = opt.palette;
-                context.palette.setColor(QPalette::Text, context.palette.light().color());
-                painter.save();
-                painter.translate(lr.x() + 1, lr.y() + 1);
-                painter.setClipRect(lr.translated(-lr.x() - 1, -lr.y() - 1));
-                QAbstractTextDocumentLayout *layout = d->control->document()->documentLayout();
-                layout->draw(&painter, context);
-                painter.restore();
-            }
-
             // Adjust the palette
             context.palette = opt.palette;
 
@@ -1098,11 +1090,16 @@ void QLabel::paintEvent(QPaintEvent *)
     if (d->pixmap && !d->pixmap->isNull()) {
         QPixmap pix;
         if (d->scaledcontents) {
-            if (!d->scaledpixmap || d->scaledpixmap->size() != cr.size()) {
+            QSize scaledSize = cr.size() * devicePixelRatioF();
+            if (!d->scaledpixmap || d->scaledpixmap->size() != scaledSize) {
                 if (!d->cachedimage)
                     d->cachedimage = new QImage(d->pixmap->toImage());
                 delete d->scaledpixmap;
-                d->scaledpixmap = new QPixmap(QPixmap::fromImage(d->cachedimage->scaled(cr.size(),Qt::IgnoreAspectRatio,Qt::SmoothTransformation)));
+                QImage scaledImage =
+                    d->cachedimage->scaled(scaledSize,
+                                           Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+                d->scaledpixmap = new QPixmap(QPixmap::fromImage(scaledImage));
+                d->scaledpixmap->setDevicePixelRatio(devicePixelRatioF());
             }
             pix = *d->scaledpixmap;
         } else
@@ -1160,7 +1157,7 @@ void QLabelPrivate::updateLabel()
     Alt+P.
 
     To unset a previously set buddy, call this function with \a buddy
-    set to 0.
+    set to nullptr.
 
     \sa buddy(), setText(), QShortcut, setAlignment()
 */
@@ -1168,7 +1165,15 @@ void QLabelPrivate::updateLabel()
 void QLabel::setBuddy(QWidget *buddy)
 {
     Q_D(QLabel);
+
+    if (d->buddy)
+        disconnect(d->buddy, SIGNAL(destroyed()), this, SLOT(_q_buddyDeleted()));
+
     d->buddy = buddy;
+
+    if (buddy)
+        connect(buddy, SIGNAL(destroyed()), this, SLOT(_q_buddyDeleted()));
+
     if (d->isTextLabel) {
         if (d->shortcutId)
             releaseShortcut(d->shortcutId);
@@ -1182,7 +1187,7 @@ void QLabel::setBuddy(QWidget *buddy)
 
 
 /*!
-    Returns this label's buddy, or 0 if no buddy is currently set.
+    Returns this label's buddy, or nullptr if no buddy is currently set.
 
     \sa setBuddy()
 */
@@ -1209,9 +1214,16 @@ void QLabelPrivate::updateShortcut()
     shortcutId = q->grabShortcut(QKeySequence::mnemonic(text));
 }
 
+
+void QLabelPrivate::_q_buddyDeleted()
+{
+    Q_Q(QLabel);
+    q->setBuddy(nullptr);
+}
+
 #endif // QT_NO_SHORTCUT
 
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
 void QLabelPrivate::_q_movieUpdated(const QRect& rect)
 {
     Q_Q(QLabel);
@@ -1271,7 +1283,7 @@ void QLabel::setMovie(QMovie *movie)
         d->updateLabel();
 }
 
-#endif // QT_NO_MOVIE
+#endif // QT_CONFIG(movie)
 
 /*!
   \internal
@@ -1282,20 +1294,20 @@ void QLabel::setMovie(QMovie *movie)
 void QLabelPrivate::clearContents()
 {
     delete control;
-    control = 0;
+    control = nullptr;
     isTextLabel = false;
     hasShortcut = false;
 
 #ifndef QT_NO_PICTURE
     delete picture;
-    picture = 0;
+    picture = nullptr;
 #endif
     delete scaledpixmap;
-    scaledpixmap = 0;
+    scaledpixmap = nullptr;
     delete cachedimage;
-    cachedimage = 0;
+    cachedimage = nullptr;
     delete pixmap;
-    pixmap = 0;
+    pixmap = nullptr;
 
     text.clear();
     Q_Q(QLabel);
@@ -1304,12 +1316,12 @@ void QLabelPrivate::clearContents()
         q->releaseShortcut(shortcutId);
     shortcutId = 0;
 #endif
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     if (movie) {
         QObject::disconnect(movie, SIGNAL(resized(QSize)), q, SLOT(_q_movieResized(QSize)));
         QObject::disconnect(movie, SIGNAL(updated(QRect)), q, SLOT(_q_movieUpdated(QRect)));
     }
-    movie = 0;
+    movie = nullptr;
 #endif
 #ifndef QT_NO_CURSOR
     if (onAnchor) {
@@ -1324,10 +1336,10 @@ void QLabelPrivate::clearContents()
 }
 
 
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
 
 /*!
-    Returns a pointer to the label's movie, or 0 if no movie has been
+    Returns a pointer to the label's movie, or nullptr if no movie has been
     set.
 
     \sa setMovie()
@@ -1339,7 +1351,7 @@ QMovie *QLabel::movie() const
     return d->movie;
 }
 
-#endif  // QT_NO_MOVIE
+#endif  // QT_CONFIG(movie)
 
 /*!
     \property QLabel::textFormat
@@ -1416,9 +1428,9 @@ void QLabel::setScaledContents(bool enable)
     d->scaledcontents = enable;
     if (!enable) {
         delete d->scaledpixmap;
-        d->scaledpixmap = 0;
+        d->scaledpixmap = nullptr;
         delete d->cachedimage;
-        d->cachedimage = 0;
+        d->cachedimage = nullptr;
     }
     update(contentsRect());
 }
@@ -1445,7 +1457,7 @@ QRect QLabelPrivate::documentRect() const
                                                           : q->layoutDirection(), QFlag(this->align));
     int m = indent;
     if (m < 0 && q->frameWidth()) // no indent, but we do have a frame
-        m = q->fontMetrics().width(QLatin1Char('x')) / 2 - margin;
+        m = q->fontMetrics().horizontalAdvance(QLatin1Char('x')) / 2 - margin;
     if (m > 0) {
         if (align & Qt::AlignLeft)
             cr.setLeft(cr.left() + m);
@@ -1617,7 +1629,7 @@ QMenu *QLabelPrivate::createStandardContextMenu(const QPoint &pos)
     }
 
     if (linkToCopy.isEmpty() && !control)
-        return 0;
+        return nullptr;
 
     return control->createStandardContextMenu(p, q_func());
 }

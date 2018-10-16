@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Copyright (C) 2012 Intel Corporation
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
 ** Copyright (C) 2012 Olivier Goffart <ogoffart@woboq.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -12,30 +12,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,19 +54,25 @@
 // We mean it.
 //
 
-#include <QtCore/qglobal.h>
+#include <QtCore/private/qglobal_p.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qmutex.h>
 #include <QtCore/qatomic.h>
+#include <QtCore/qdeadlinetimer.h>
 
 #if defined(Q_OS_MAC)
 # include <mach/semaphore.h>
-#endif
-
-#if defined(Q_OS_LINUX) && !defined(QT_LINUXBASE)
+#elif defined(Q_OS_LINUX) && !defined(QT_LINUXBASE)
 // use Linux mutexes everywhere except for LSB builds
 #  define QT_LINUX_FUTEX
+#elif defined(Q_OS_UNIX)
+# if _POSIX_VERSION-0 >= 200112L || _XOPEN_VERSION-0 >= 600
+#  include <semaphore.h>
+#  define QT_UNIX_SEMAPHORE
+# endif
 #endif
+
+struct timespec;
 
 QT_BEGIN_NAMESPACE
 
@@ -90,7 +94,7 @@ public:
     bool wait(int timeout = -1);
     void wakeUp() Q_DECL_NOTHROW;
 
-    // Conrol the lifetime of the privates
+    // Control the lifetime of the privates
     QAtomicInt refCount;
     int id;
 
@@ -126,6 +130,8 @@ public:
     //platform specific stuff
 #if defined(Q_OS_MAC)
     semaphore_t mach_semaphore;
+#elif defined(QT_UNIX_SEMAPHORE)
+    sem_t semaphore;
 #elif defined(Q_OS_UNIX)
     bool wakeup;
     pthread_mutex_t mutex;
@@ -136,6 +142,13 @@ public:
 };
 #endif //QT_LINUX_FUTEX
 
+
+#ifdef Q_OS_UNIX
+// helper functions for qmutex_unix.cpp and qwaitcondition_unix.cpp
+// they are in qwaitcondition_unix.cpp actually
+void qt_initialize_pthread_cond(pthread_cond_t *cond, const char *where);
+void qt_abstime_for_timeout(struct timespec *ts, QDeadlineTimer deadline);
+#endif
 
 QT_END_NAMESPACE
 

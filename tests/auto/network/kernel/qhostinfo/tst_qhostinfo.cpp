@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -66,8 +54,7 @@
 #endif
 
 #include <time.h>
-#include <qlibrary.h>
-#if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -77,46 +64,36 @@
 #include <qhostinfo.h>
 #include "private/qhostinfo_p.h"
 
-#if !defined(QT_NO_GETADDRINFO)
-# if !defined(Q_OS_WINCE)
-#  include <sys/types.h>
-# else
-#  include <types.h>
-# endif
-# if defined(Q_OS_UNIX)
+#include <sys/types.h>
+#if defined(Q_OS_UNIX)
 #  include <sys/socket.h>
-# endif
-# if !defined(Q_OS_WIN)
 #  include <netdb.h>
-# endif
 #endif
 
 #include "../../../network-settings.h"
 
-const char * const lupinellaIp = "10.3.4.6";
+#define TEST_DOMAIN ".test.qt-project.org"
 
 
 class tst_QHostInfo : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QHostInfo();
-    virtual ~tst_QHostInfo();
-
-
-public slots:
-    void init();
-    void cleanup();
-    void initTestCase();
-
 private slots:
+    void init();
+    void initTestCase();
+    void swapFunction();
+    void moveOperator();
     void getSetCheck();
     void staticInformation();
     void lookupIPv4_data();
     void lookupIPv4();
     void lookupIPv6_data();
     void lookupIPv6();
+    void lookupConnectToFunctionPointer_data();
+    void lookupConnectToFunctionPointer();
+    void lookupConnectToLambda_data();
+    void lookupConnectToLambda();
     void reverseLookup_data();
     void reverseLookup();
 
@@ -134,7 +111,6 @@ private slots:
     void cache();
 
     void abortHostLookup();
-    void abortHostLookupInDifferentThread();
 protected slots:
     void resultsReady(const QHostInfo &);
 
@@ -150,6 +126,29 @@ private:
     QScopedPointer<QNetworkSession> networkSession;
 #endif
 };
+
+void tst_QHostInfo::swapFunction()
+{
+    QHostInfo obj1, obj2;
+    obj1.setError(QHostInfo::HostInfoError(0));
+    obj2.setError(QHostInfo::HostInfoError(1));
+    obj1.swap(obj2);
+    QCOMPARE(QHostInfo::HostInfoError(0), obj2.error());
+    QCOMPARE(QHostInfo::HostInfoError(1), obj1.error());
+}
+
+void tst_QHostInfo::moveOperator()
+{
+    QHostInfo obj1, obj2, obj3(1);
+    obj1.setError(QHostInfo::HostInfoError(0));
+    obj2.setError(QHostInfo::HostInfoError(1));
+    obj1 = std::move(obj2);
+    obj2 = obj3;
+    QCOMPARE(QHostInfo::HostInfoError(1), obj1.error());
+    QCOMPARE(obj3.lookupId(), obj2.lookupId());
+}
+
+
 
 // Testing get/set functions
 void tst_QHostInfo::getSetCheck()
@@ -178,14 +177,6 @@ void tst_QHostInfo::staticInformation()
     qDebug() << "Domain name:" << QHostInfo::localDomainName();
 }
 
-tst_QHostInfo::tst_QHostInfo()
-{
-}
-
-tst_QHostInfo::~tst_QHostInfo()
-{
-}
-
 void tst_QHostInfo::initTestCase()
 {
     QVERIFY(QtNetworkSettings::verifyTestNetworkSettings());
@@ -196,7 +187,7 @@ void tst_QHostInfo::initTestCase()
     networkSession.reset(new QNetworkSession(networkConfiguration));
     if (!networkSession->isOpen()) {
         networkSession->open();
-        QVERIFY(networkSession->waitForOpened(30000));
+        networkSession->waitForOpened(30000);
     }
 #endif
 
@@ -209,27 +200,24 @@ void tst_QHostInfo::initTestCase()
         ipv6Available = true;
     }
 
-// HP-UX 11i does not support IPv6 reverse lookups.
-#if !defined(QT_NO_GETADDRINFO) && !(defined(Q_OS_HPUX) && defined(__ia64))
     // check if the system getaddrinfo can do IPv6 lookups
     struct addrinfo hint, *result = 0;
     memset(&hint, 0, sizeof hint);
     hint.ai_family = AF_UNSPEC;
-# ifdef AI_ADDRCONFIG
+#ifdef AI_ADDRCONFIG
     hint.ai_flags = AI_ADDRCONFIG;
-# endif
+#endif
 
     int res = getaddrinfo("::1", "80", &hint, &result);
     if (res == 0) {
         // this test worked
         freeaddrinfo(result);
-        res = getaddrinfo("ipv6-test.dev.troll.no", "80", &hint, &result);
+        res = getaddrinfo("aaaa-single" TEST_DOMAIN, "80", &hint, &result);
         if (res == 0 && result != 0 && result->ai_family != AF_INET) {
             freeaddrinfo(result);
             ipv6LookupsAvailable = true;
         }
     }
-#endif
 
     // run each testcase with and without test enabled
     QTest::addColumn<bool>("cache");
@@ -246,10 +234,6 @@ void tst_QHostInfo::init()
     qt_qhostinfo_enable_cache(cache);
 }
 
-void tst_QHostInfo::cleanup()
-{
-}
-
 void tst_QHostInfo::lookupIPv4_data()
 {
     QTest::addColumn<QString>("hostname");
@@ -260,14 +244,14 @@ void tst_QHostInfo::lookupIPv4_data()
     QTest::newRow("lookup_01") << QtNetworkSettings::serverName() << QtNetworkSettings::serverIP().toString() << int(QHostInfo::NoError);
     QTest::newRow("empty") << "" << "" << int(QHostInfo::HostNotFound);
 
-    QTest::newRow("single_ip4") << "lupinella.troll.no" << lupinellaIp << int(QHostInfo::NoError);
-    QTest::newRow("multiple_ip4") << "multi.dev.troll.no" << "1.2.3.4 1.2.3.5 10.3.3.31" << int(QHostInfo::NoError);
-    QTest::newRow("literal_ip4") << lupinellaIp << lupinellaIp << int(QHostInfo::NoError);
+    QTest::newRow("single_ip4") << "a-single" TEST_DOMAIN << "192.0.2.1" << int(QHostInfo::NoError);
+    QTest::newRow("multiple_ip4") << "a-multi" TEST_DOMAIN << "192.0.2.1 192.0.2.2 192.0.2.3" << int(QHostInfo::NoError);
+    QTest::newRow("literal_ip4") << "192.0.2.1" << "192.0.2.1" << int(QHostInfo::NoError);
 
-    QTest::newRow("notfound") << "this-name-does-not-exist-hopefully." << "" << int(QHostInfo::HostNotFound);
+    QTest::newRow("notfound") << "invalid" TEST_DOMAIN << "" << int(QHostInfo::HostNotFound);
 
-    QTest::newRow("idn-ace") << "xn--alqualond-34a.troll.no" << "10.3.3.55" << int(QHostInfo::NoError);
-    QTest::newRow("idn-unicode") << QString::fromLatin1("alqualond\353.troll.no") << "10.3.3.55" << int(QHostInfo::NoError);
+    QTest::newRow("idn-ace") << "a-single.xn--alqualond-34a" TEST_DOMAIN << "192.0.2.1" << int(QHostInfo::NoError);
+    QTest::newRow("idn-unicode") << QString::fromLatin1("a-single.alqualond\353" TEST_DOMAIN) << "192.0.2.1" << int(QHostInfo::NoError);
 }
 
 void tst_QHostInfo::lookupIPv4()
@@ -305,11 +289,9 @@ void tst_QHostInfo::lookupIPv6_data()
     QTest::addColumn<QString>("addresses");
     QTest::addColumn<int>("err");
 
-    QTest::newRow("ipv6-net") << "www.ipv6-net.org" << "62.93.217.177 2001:618:1401::4" << int(QHostInfo::NoError);
-    QTest::newRow("ipv6-test") << "ipv6-test.dev.troll.no" << "2001:638:a00:2::2" << int(QHostInfo::NoError);
-    QTest::newRow("dns6-test") << "dns6-test-dev.troll.no" << "2001:470:1f01:115::10" << int(QHostInfo::NoError);
-    QTest::newRow("multi-dns6") << "multi-dns6-test-dev.troll.no" << "2001:470:1f01:115::11 2001:470:1f01:115::12" << int(QHostInfo::NoError);
-    QTest::newRow("dns46-test") << "dns46-test-dev.troll.no" << "10.3.4.90 2001:470:1f01:115::13" << int(QHostInfo::NoError);
+    QTest::newRow("aaaa-single") << "aaaa-single" TEST_DOMAIN << "2001:db8::1" << int(QHostInfo::NoError);
+    QTest::newRow("aaaa-multi") << "aaaa-multi" TEST_DOMAIN << "2001:db8::1 2001:db8::2 2001:db8::3" << int(QHostInfo::NoError);
+    QTest::newRow("a-plus-aaaa") << "a-plus-aaaa" TEST_DOMAIN << "198.51.100.1 2001:db8::1:1" << int(QHostInfo::NoError);
 
     // avoid using real IPv6 addresses here because this will do a DNS query
     // real addresses are between 2000:: and 3fff:ffff:ffff:ffff:ffff:ffff:ffff
@@ -344,6 +326,74 @@ void tst_QHostInfo::lookupIPv6()
     expected.sort();
 
     QCOMPARE(tmp.join(' ').toLower(), expected.join(' ').toLower());
+}
+
+void tst_QHostInfo::lookupConnectToFunctionPointer_data()
+{
+    lookupIPv4_data();
+}
+
+void tst_QHostInfo::lookupConnectToFunctionPointer()
+{
+    QFETCH(QString, hostname);
+    QFETCH(int, err);
+    QFETCH(QString, addresses);
+
+    lookupDone = false;
+    QHostInfo::lookupHost(hostname, this, &tst_QHostInfo::resultsReady);
+
+    QTestEventLoop::instance().enterLoop(10);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+    QVERIFY(lookupDone);
+
+    if (int(lookupResults.error()) != int(err))
+        qWarning() << hostname << "=>" << lookupResults.errorString();
+    QCOMPARE(int(lookupResults.error()), int(err));
+
+    QStringList tmp;
+    for (const auto &result : lookupResults.addresses())
+        tmp.append(result.toString());
+    tmp.sort();
+
+    QStringList expected = addresses.split(' ');
+    expected.sort();
+
+    QCOMPARE(tmp.join(' '), expected.join(' '));
+}
+
+void tst_QHostInfo::lookupConnectToLambda_data()
+{
+    lookupIPv4_data();
+}
+
+void tst_QHostInfo::lookupConnectToLambda()
+{
+    QFETCH(QString, hostname);
+    QFETCH(int, err);
+    QFETCH(QString, addresses);
+
+    lookupDone = false;
+    QHostInfo::lookupHost(hostname, [=](const QHostInfo &hostInfo) {
+        resultsReady(hostInfo);
+    });
+
+    QTestEventLoop::instance().enterLoop(10);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+    QVERIFY(lookupDone);
+
+    if (int(lookupResults.error()) != int(err))
+        qWarning() << hostname << "=>" << lookupResults.errorString();
+    QCOMPARE(int(lookupResults.error()), int(err));
+
+    QStringList tmp;
+    for (int i = 0; i < lookupResults.addresses().count(); ++i)
+        tmp.append(lookupResults.addresses().at(i).toString());
+    tmp.sort();
+
+    QStringList expected = addresses.split(' ');
+    expected.sort();
+
+    QCOMPARE(tmp.join(' '), expected.join(' '));
 }
 
 void tst_QHostInfo::reverseLookup_data()
@@ -415,7 +465,7 @@ void tst_QHostInfo::raceCondition()
 {
     for (int i = 0; i < 1000; ++i) {
         QTcpSocket socket;
-        socket.connectToHost("notavalidname.troll.no", 80);
+        socket.connectToHost("invalid" TEST_DOMAIN, 80);
     }
 }
 
@@ -424,21 +474,17 @@ class LookupThread : public QThread
 protected:
     inline void run()
     {
-         QHostInfo info = QHostInfo::fromName("qt-project.org");
+         QHostInfo info = QHostInfo::fromName("a-single" TEST_DOMAIN);
          QCOMPARE(info.error(), QHostInfo::NoError);
          QVERIFY(info.addresses().count() > 0);
-         QCOMPARE(info.addresses().at(0).toString(), QString("87.238.53.172"));
+         QCOMPARE(info.addresses().at(0).toString(), QString("192.0.2.1"));
     }
 };
 
 void tst_QHostInfo::threadSafety()
 {
     const int nattempts = 5;
-#if defined(Q_OS_WINCE)
-    const int runs = 10;
-#else
     const int runs = 100;
-#endif
     LookupThread thr[nattempts];
     for (int j = 0; j < runs; ++j) {
         for (int i = 0; i < nattempts; ++i)
@@ -462,7 +508,7 @@ public:
 void LookupReceiver::start()
 {
     for (int i=0;i<numrequests;i++)
-        QHostInfo::lookupHost(QString("qt-project.org"), this, SLOT(resultsReady(QHostInfo)));
+        QHostInfo::lookupHost(QString("a-single" TEST_DOMAIN), this, SLOT(resultsReady(QHostInfo)));
 }
 
 void LookupReceiver::resultsReady(const QHostInfo &info)
@@ -493,7 +539,7 @@ void tst_QHostInfo::threadSafetyAsynchronousAPI()
         QVERIFY(threads.at(k)->wait(60000));
     foreach (LookupReceiver* receiver, receivers) {
         QCOMPARE(receiver->result.error(), QHostInfo::NoError);
-        QCOMPARE(receiver->result.addresses().at(0).toString(), QString("87.238.53.172"));
+        QCOMPARE(receiver->result.addresses().at(0).toString(), QString("192.0.2.1"));
         QCOMPARE(receiver->numrequests, 0);
     }
 }
@@ -530,9 +576,15 @@ void tst_QHostInfo::multipleDifferentLookups_data()
 void tst_QHostInfo::multipleDifferentLookups()
 {
     QStringList hostnameList;
-    hostnameList << "www.ovi.com" << "www.nokia.com" << "qt-project.org" << "www.trolltech.com" << "troll.no"
-            << "www.qtcentre.org" << "forum.nokia.com" << "www.nokia.com" << "wiki.forum.nokia.com"
-            << "www.nokia.com" << "nokia.de" << "127.0.0.1" << "----";
+    hostnameList << "a-single" TEST_DOMAIN
+                 << "a-multi" TEST_DOMAIN
+                 << "aaaa-single" TEST_DOMAIN
+                 << "aaaa-multi" TEST_DOMAIN
+                 << "a-plus-aaaa" TEST_DOMAIN
+                 << "multi" TEST_DOMAIN
+                 << "localhost" TEST_DOMAIN
+                 << "cname" TEST_DOMAIN
+                 << "127.0.0.1" << "----";
 
     QFETCH(int, repeats);
     const int COUNT = hostnameList.size();
@@ -566,13 +618,13 @@ void tst_QHostInfo::cache()
     QHostInfo result = qt_qhostinfo_lookup("localhost", this, SLOT(resultsReady(QHostInfo)), &valid, &id);
     QTestEventLoop::instance().enterLoop(5);
     QVERIFY(!QTestEventLoop::instance().timeout());
-    QVERIFY(valid == false);
+    QVERIFY(!valid);
     QVERIFY(result.addresses().isEmpty());
 
     // loopkup second time, result should come directly
     valid = false;
     result = qt_qhostinfo_lookup("localhost", this, SLOT(resultsReady(QHostInfo)), &valid, &id);
-    QVERIFY(valid == true);
+    QVERIFY(valid);
     QVERIFY(!result.addresses().isEmpty());
 
     // clear the cache
@@ -583,7 +635,7 @@ void tst_QHostInfo::cache()
     result = qt_qhostinfo_lookup("localhost", this, SLOT(resultsReady(QHostInfo)), &valid, &id);
     QTestEventLoop::instance().enterLoop(5);
     QVERIFY(!QTestEventLoop::instance().timeout());
-    QVERIFY(valid == false);
+    QVERIFY(!valid);
     QVERIFY(result.addresses().isEmpty());
 
     // the slot should have been called 2 times.
@@ -604,7 +656,7 @@ void tst_QHostInfo::abortHostLookup()
     lookupsDoneCounter = 0;
     bool valid = false;
     int id = -1;
-    QHostInfo result = qt_qhostinfo_lookup("qt-project.org", this, SLOT(resultsReady(QHostInfo)), &valid, &id);
+    QHostInfo result = qt_qhostinfo_lookup("a-single" TEST_DOMAIN, this, SLOT(resultsReady(QHostInfo)), &valid, &id);
     QVERIFY(!valid);
     //it is assumed that the DNS request/response in the backend is slower than it takes to call abort
     QHostInfo::abortHostLookup(id);
@@ -624,26 +676,6 @@ public slots:
 public:
     int id;
 };
-
-void tst_QHostInfo::abortHostLookupInDifferentThread()
-{
-    //reset counter
-    lookupsDoneCounter = 0;
-    bool valid = false;
-    int id = -1;
-    QHostInfo result = qt_qhostinfo_lookup("qt-project.org", this, SLOT(resultsReady(QHostInfo)), &valid, &id);
-    QVERIFY(!valid);
-    QThread thread;
-    LookupAborter aborter;
-    aborter.id = id;
-    aborter.moveToThread(&thread);
-    connect(&thread, SIGNAL(started()), &aborter, SLOT(abort()));
-    //it is assumed that the DNS request/response in the backend is slower than it takes to schedule the thread and call abort
-    thread.start();
-    QVERIFY(thread.wait(5000));
-    QTestEventLoop::instance().enterLoop(5);
-    QCOMPARE(lookupsDoneCounter, 0);
-}
 
 QTEST_MAIN(tst_QHostInfo)
 #include "tst_qhostinfo.moc"

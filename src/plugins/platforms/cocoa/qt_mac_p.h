@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,12 +51,12 @@
 // We mean it.
 //
 
-#include "qmacdefines_mac.h"
-
 #ifdef __OBJC__
-#include <Cocoa/Cocoa.h>
+#include <AppKit/AppKit.h>
 #include <objc/runtime.h>
 #endif
+
+#include "qmacdefines_mac.h"
 
 #include <CoreServices/CoreServices.h>
 
@@ -66,34 +64,15 @@
 #include "QtCore/qvariant.h"
 #include "QtCore/qmimedata.h"
 #include "QtCore/qpointer.h"
+#include "QtCore/qloggingcategory.h"
 #include "private/qcore_mac_p.h"
 
 
 #include "QtGui/qpainter.h"
 
-#include <Carbon/Carbon.h>
-
 QT_BEGIN_NAMESPACE
 class QWidget;
 class QDragMoveEvent;
-
-/* Event masks */
-// internal Qt types
-
-enum {
-    //AE types
-    typeAEClipboardChanged = 1,
-    //types
-    typeQWidget = 1,  /* QWidget *  */
-    //params
-    kEventParamQWidget = 'qwid',   /* typeQWidget */
-    //events
-    kEventQtRequestContext = 13,
-    kEventQtRequestMenubarUpdate = 14,
-    kEventQtRequestShowSheet = 17,
-    kEventQtRequestActivate = 18,
-    kEventQtRequestWindowChange = 20
-};
 
 // Simple class to manage short-lived regions
 class QMacSmartQuickDrawRegion
@@ -111,89 +90,7 @@ public:
     }
 };
 
-// Class for chaining to gether a bunch of fades. It pretty much is only used for qmenu fading.
-class QMacWindowFader
-{
-    QWidgetList m_windowsToFade;
-    float m_duration;
-    Q_DISABLE_COPY(QMacWindowFader)
-public:
-    QMacWindowFader(); // PLEASE DON'T CALL THIS.
-    static QMacWindowFader *currentFader();
-    void registerWindowToFade(QWidget *window);
-    void setFadeDuration(float durationInSecs) { m_duration = durationInSecs; }
-    float fadeDuration() const { return m_duration; }
-    void performFade();
-};
-
-class Q_WIDGETS_EXPORT QMacCocoaAutoReleasePool
-{
-private:
-    void *pool;
-public:
-    QMacCocoaAutoReleasePool();
-    ~QMacCocoaAutoReleasePool();
-
-    inline void *handle() const { return pool; }
-};
-
-QString qt_mac_removeMnemonics(const QString &original); //implemented in qmacstyle_mac.cpp
-
-class Q_WIDGETS_EXPORT QMacWindowChangeEvent
-{
-private:
-    static QList<QMacWindowChangeEvent*> *change_events;
-public:
-    QMacWindowChangeEvent() {
-    }
-    virtual ~QMacWindowChangeEvent() {
-    }
-    static inline void exec(bool ) {
-    }
-protected:
-    virtual void windowChanged() = 0;
-    virtual void flushWindowChanged() = 0;
-};
-
-class QMacCGContext
-{
-    CGContextRef context;
-public:
-    QMacCGContext(QPainter *p); //qpaintengine_mac.mm
-    inline QMacCGContext() { context = 0; }
-    inline QMacCGContext(const QPaintDevice *pdev) {
-        extern CGContextRef qt_mac_cg_context(const QPaintDevice *);
-        context = qt_mac_cg_context(pdev);
-    }
-    inline QMacCGContext(CGContextRef cg, bool takeOwnership=false) {
-        context = cg;
-        if(!takeOwnership)
-            CGContextRetain(context);
-    }
-    inline QMacCGContext(const QMacCGContext &copy) : context(0) { *this = copy; }
-    inline ~QMacCGContext() {
-        if(context)
-            CGContextRelease(context);
-    }
-    inline bool isNull() const { return context; }
-    inline operator CGContextRef() { return context; }
-    inline QMacCGContext &operator=(const QMacCGContext &copy) {
-        if(context)
-            CGContextRelease(context);
-        context = copy.context;
-        CGContextRetain(context);
-        return *this;
-    }
-    inline QMacCGContext &operator=(CGContextRef cg) {
-        if(context)
-            CGContextRelease(context);
-        context = cg;
-        CGContextRetain(context); //we do not take ownership
-        return *this;
-    }
-};
-
-class QMacPasteboardMime;
+class QMacInternalPasteboardMime;
 class QMimeData;
 
 
@@ -206,12 +103,6 @@ extern QPoint qt_mac_nativeMapFromParent(const QWidget *child, const QPoint &pt)
 #ifdef check
 # undef check
 #endif
-
-QFont qfontForThemeFont(ThemeFontID themeID);
-
-QColor qcolorForTheme(ThemeBrush brush);
-
-QColor qcolorForThemeTextColor(ThemeTextColor themeColor);
 
 struct QMacDndAnswerRecord {
     QRect rect;

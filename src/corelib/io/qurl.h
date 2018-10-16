@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Copyright (C) 2012 Intel Corporation.
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -11,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,7 +48,10 @@
 #include <QtCore/qpair.h>
 #include <QtCore/qglobal.h>
 
-QT_BEGIN_HEADER
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+Q_FORWARD_DECLARE_CF_TYPE(CFURL);
+Q_FORWARD_DECLARE_OBJC_CLASS(NSURL);
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -68,8 +69,8 @@ public:
     Q_DECL_CONSTEXPR inline QUrlTwoFlags(E1 f) : i(f) {}
     Q_DECL_CONSTEXPR inline QUrlTwoFlags(E2 f) : i(f) {}
     Q_DECL_CONSTEXPR inline QUrlTwoFlags(QFlag f) : i(f) {}
-    Q_DECL_CONSTEXPR inline QUrlTwoFlags(QFlags<E1> f) : i(f.operator int()) {}
-    Q_DECL_CONSTEXPR inline QUrlTwoFlags(QFlags<E2> f) : i(f.operator int()) {}
+    Q_DECL_CONSTEXPR inline QUrlTwoFlags(QFlags<E1> f) : i(f.operator typename QFlags<E1>::Int()) {}
+    Q_DECL_CONSTEXPR inline QUrlTwoFlags(QFlags<E2> f) : i(f.operator typename QFlags<E2>::Int()) {}
     Q_DECL_CONSTEXPR inline QUrlTwoFlags(Zero = 0) : i(0) {}
 
     inline QUrlTwoFlags &operator&=(int mask) { i &= mask; return *this; }
@@ -81,40 +82,44 @@ public:
     inline QUrlTwoFlags &operator^=(E1 f) { i ^= f; return *this; }
     inline QUrlTwoFlags &operator^=(E2 f) { i ^= f; return *this; }
 
-    Q_DECL_CONSTEXPR inline operator QFlags<E1>() const { return E1(i); }
-    Q_DECL_CONSTEXPR inline operator QFlags<E2>() const { return E2(i); }
+    Q_DECL_CONSTEXPR inline operator QFlags<E1>() const { return QFlag(i); }
+    Q_DECL_CONSTEXPR inline operator QFlags<E2>() const { return QFlag(i); }
     Q_DECL_CONSTEXPR inline operator int() const { return i; }
     Q_DECL_CONSTEXPR inline bool operator!() const { return !i; }
 
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator|(QUrlTwoFlags f) const
-    { return QUrlTwoFlags(E1(i | f.i)); }
+    { return QUrlTwoFlags(QFlag(i | f.i)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator|(E1 f) const
-    { return QUrlTwoFlags(E1(i | f)); }
+    { return QUrlTwoFlags(QFlag(i | f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator|(E2 f) const
-    { return QUrlTwoFlags(E2(i | f)); }
+    { return QUrlTwoFlags(QFlag(i | f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator^(QUrlTwoFlags f) const
-    { return QUrlTwoFlags(E1(i ^ f.i)); }
+    { return QUrlTwoFlags(QFlag(i ^ f.i)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator^(E1 f) const
-    { return QUrlTwoFlags(E1(i ^ f)); }
+    { return QUrlTwoFlags(QFlag(i ^ f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator^(E2 f) const
-    { return QUrlTwoFlags(E2(i ^ f)); }
+    { return QUrlTwoFlags(QFlag(i ^ f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator&(int mask) const
-    { return QUrlTwoFlags(E1(i & mask)); }
+    { return QUrlTwoFlags(QFlag(i & mask)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator&(uint mask) const
-    { return QUrlTwoFlags(E1(i & mask)); }
+    { return QUrlTwoFlags(QFlag(i & mask)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator&(E1 f) const
-    { return QUrlTwoFlags(E1(i & f)); }
+    { return QUrlTwoFlags(QFlag(i & f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator&(E2 f) const
-    { return QUrlTwoFlags(E2(i & f)); }
+    { return QUrlTwoFlags(QFlag(i & f)); }
     Q_DECL_CONSTEXPR inline QUrlTwoFlags operator~() const
-    { return QUrlTwoFlags(E1(~i)); }
+    { return QUrlTwoFlags(QFlag(~i)); }
 
-    inline bool testFlag(E1 f) const { return (i & f) == f && (f != 0 || i == int(f)); }
-    inline bool testFlag(E2 f) const { return (i & f) == f && (f != 0 || i == int(f)); }
+    Q_DECL_CONSTEXPR inline bool testFlag(E1 f) const { return (i & f) == f && (f != 0 || i == int(f)); }
+    Q_DECL_CONSTEXPR inline bool testFlag(E2 f) const { return (i & f) == f && (f != 0 || i == int(f)); }
 };
 
 template<typename E1, typename E2>
 class QTypeInfo<QUrlTwoFlags<E1, E2> > : public QTypeInfoMerger<QUrlTwoFlags<E1, E2>, E1, E2> {};
+
+class QUrl;
+// qHash is a friend, but we can't use default arguments for friends (§8.3.6.4)
+Q_CORE_EXPORT uint qHash(const QUrl &url, uint seed = 0) Q_DECL_NOTHROW;
 
 class Q_CORE_EXPORT QUrl
 {
@@ -138,7 +143,9 @@ public:
         RemoveFragment = 0x80,
         // 0x100 was a private code in Qt 4, keep unused for a while
         PreferLocalFile = 0x200,
-        StripTrailingSlash = 0x400
+        StripTrailingSlash = 0x400,
+        RemoveFilename = 0x800,
+        NormalizePathSegments = 0x1000
     };
 
     enum ComponentFormattingOption {
@@ -154,7 +161,13 @@ public:
         FullyDecoded = FullyEncoded | DecodeReserved | 0x4000000
     };
     Q_DECLARE_FLAGS(ComponentFormattingOptions, ComponentFormattingOption)
-#ifdef qdoc
+#ifdef Q_QDOC
+private:
+    // We need to let qdoc think that FormattingOptions is a normal QFlags, but
+    // it needs to be a QUrlTwoFlags for compiling default arguments of somme functions.
+    template<typename T> struct QFlags : QUrlTwoFlags<T, ComponentFormattingOption>
+    { using QUrlTwoFlags<T, ComponentFormattingOption>::QUrlTwoFlags; };
+public:
     Q_DECLARE_FLAGS(FormattingOptions, UrlFormattingOption)
 #else
     typedef QUrlTwoFlags<UrlFormattingOption, ComponentFormattingOption> FormattingOptions;
@@ -170,24 +183,34 @@ public:
     QUrl &operator=(const QString &url);
 #endif
 #ifdef Q_COMPILER_RVALUE_REFS
-    QUrl(QUrl &&other) : d(0)
-    { qSwap(d, other.d); }
-    inline QUrl &operator=(QUrl &&other)
+    QUrl(QUrl &&other) Q_DECL_NOTHROW : d(other.d)
+    { other.d = nullptr; }
+    inline QUrl &operator=(QUrl &&other) Q_DECL_NOTHROW
     { qSwap(d, other.d); return *this; }
 #endif
     ~QUrl();
 
-    inline void swap(QUrl &other) { qSwap(d, other.d); }
+    inline void swap(QUrl &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     void setUrl(const QString &url, ParsingMode mode = TolerantMode);
     QString url(FormattingOptions options = FormattingOptions(PrettyDecoded)) const;
     QString toString(FormattingOptions options = FormattingOptions(PrettyDecoded)) const;
     QString toDisplayString(FormattingOptions options = FormattingOptions(PrettyDecoded)) const;
+    Q_REQUIRED_RESULT QUrl adjusted(FormattingOptions options) const;
 
     QByteArray toEncoded(FormattingOptions options = FullyEncoded) const;
     static QUrl fromEncoded(const QByteArray &url, ParsingMode mode = TolerantMode);
 
+    enum UserInputResolutionOption {
+        DefaultResolution,
+        AssumeLocalFile
+    };
+    Q_DECLARE_FLAGS(UserInputResolutionOptions, UserInputResolutionOption)
+
     static QUrl fromUserInput(const QString &userInput);
+    // ### Qt6 merge with fromUserInput(QString), by adding = QString()
+    static QUrl fromUserInput(const QString &userInput, const QString &workingDirectory,
+                              UserInputResolutionOptions options = DefaultResolution);
 
     bool isValid() const;
     QString errorString() const;
@@ -204,21 +227,24 @@ public:
     void setUserInfo(const QString &userInfo, ParsingMode mode = TolerantMode);
     QString userInfo(ComponentFormattingOptions options = PrettyDecoded) const;
 
-    void setUserName(const QString &userName, ParsingMode mode = TolerantMode);
-    QString userName(ComponentFormattingOptions options = PrettyDecoded) const;
+    void setUserName(const QString &userName, ParsingMode mode = DecodedMode);
+    QString userName(ComponentFormattingOptions options = FullyDecoded) const;
 
-    void setPassword(const QString &password, ParsingMode mode = TolerantMode);
-    QString password(ComponentFormattingOptions = PrettyDecoded) const;
+    void setPassword(const QString &password, ParsingMode mode = DecodedMode);
+    QString password(ComponentFormattingOptions = FullyDecoded) const;
 
-    void setHost(const QString &host, ParsingMode mode = TolerantMode);
-    QString host(ComponentFormattingOptions = PrettyDecoded) const;
-    QString topLevelDomain(ComponentFormattingOptions options = PrettyDecoded) const;
+    void setHost(const QString &host, ParsingMode mode = DecodedMode);
+    QString host(ComponentFormattingOptions = FullyDecoded) const;
+#if QT_CONFIG(topleveldomain)
+    QString topLevelDomain(ComponentFormattingOptions options = FullyDecoded) const;
+#endif
 
     void setPort(int port);
     int port(int defaultPort = -1) const;
 
-    void setPath(const QString &path, ParsingMode mode = TolerantMode);
-    QString path(ComponentFormattingOptions options = PrettyDecoded) const;
+    void setPath(const QString &path, ParsingMode mode = DecodedMode);
+    QString path(ComponentFormattingOptions options = FullyDecoded) const;
+    QString fileName(ComponentFormattingOptions options = FullyDecoded) const;
 
     bool hasQuery() const;
     void setQuery(const QString &query, ParsingMode mode = TolerantMode);
@@ -229,7 +255,7 @@ public:
     QString fragment(ComponentFormattingOptions options = PrettyDecoded) const;
     void setFragment(const QString &fragment, ParsingMode mode = TolerantMode);
 
-    QUrl resolved(const QUrl &relative) const;
+    Q_REQUIRED_RESULT QUrl resolved(const QUrl &relative) const;
 
     bool isRelative() const;
     bool isParentOf(const QUrl &url) const;
@@ -245,10 +271,19 @@ public:
     bool operator ==(const QUrl &url) const;
     bool operator !=(const QUrl &url) const;
 
+    bool matches(const QUrl &url, FormattingOptions options) const;
+
     static QString fromPercentEncoding(const QByteArray &);
     static QByteArray toPercentEncoding(const QString &,
                                         const QByteArray &exclude = QByteArray(),
                                         const QByteArray &include = QByteArray());
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+    static QUrl fromCFURL(CFURLRef url);
+    CFURLRef toCFURL() const Q_DECL_CF_RETURNS_RETAINED;
+    static QUrl fromNSURL(const NSURL *url);
+    NSURL *toNSURL() const Q_DECL_NS_RETURNS_AUTORELEASED;
+#endif
+
 #if QT_DEPRECATED_SINCE(5,0)
     QT_DEPRECATED static QString fromPunycode(const QByteArray &punycode)
     { return fromAce(punycode); }
@@ -322,8 +357,11 @@ public:
     static QString fromAce(const QByteArray &);
     static QByteArray toAce(const QString &);
     static QStringList idnWhitelist();
+    static QStringList toStringList(const QList<QUrl> &uris, FormattingOptions options = FormattingOptions(PrettyDecoded));
+    static QList<QUrl> fromStringList(const QStringList &uris, ParsingMode mode = TolerantMode);
+
     static void setIdnWhitelist(const QStringList &);
-    friend Q_CORE_EXPORT uint qHash(const QUrl &url, uint seed = 0) Q_DECL_NOTHROW;
+    friend Q_CORE_EXPORT uint qHash(const QUrl &url, uint seed) Q_DECL_NOTHROW;
 
 private:
     QUrlPrivate *d;
@@ -338,6 +376,7 @@ Q_DECLARE_SHARED(QUrl)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QUrl::ComponentFormattingOptions)
 //Q_DECLARE_OPERATORS_FOR_FLAGS(QUrl::FormattingOptions)
 
+#ifndef Q_QDOC
 Q_DECL_CONSTEXPR inline QUrl::FormattingOptions operator|(QUrl::UrlFormattingOption f1, QUrl::UrlFormattingOption f2)
 { return QUrl::FormattingOptions(f1) | f2; }
 Q_DECL_CONSTEXPR inline QUrl::FormattingOptions operator|(QUrl::UrlFormattingOption f1, QUrl::FormattingOptions f2)
@@ -365,6 +404,7 @@ Q_DECL_CONSTEXPR inline QUrl::FormattingOptions operator|(QUrl::ComponentFormatt
 
 //inline QUrl::UrlFormattingOption &operator=(const QUrl::UrlFormattingOption &i, QUrl::ComponentFormattingOptions f)
 //{ i = int(f); f; }
+#endif // Q_QDOC
 
 #ifndef QT_NO_DATASTREAM
 Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QUrl &);
@@ -380,7 +420,5 @@ QT_END_NAMESPACE
 #if QT_DEPRECATED_SINCE(5,0)
 # include <QtCore/qurlquery.h>
 #endif
-
-QT_END_HEADER
 
 #endif // QURL_H

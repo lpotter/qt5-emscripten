@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,53 +51,78 @@
 //
 //
 
-#include "qglobal.h"
+#include <QtPrintSupport/private/qtprintsupportglobal_p.h>
 
-#ifndef QT_NO_PRINTDIALOG
+#include "qprinter.h"
+#include "kernel/qprint_p.h"
+
+#include <QtGui/qpagelayout.h>
 
 #include <ui_qpagesetupwidget.h>
+
+QT_REQUIRE_CONFIG(printdialog);
 
 QT_BEGIN_NAMESPACE
 
 class QPrinter;
+class QPrintDevice;
 class QPagePreview;
-class QCUPSSupport;
 
 class QPageSetupWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit QPageSetupWidget(QWidget *parent = 0);
-    explicit QPageSetupWidget(QPrinter *printer, QWidget *parent = 0);
-    void setPrinter(QPrinter *printer);
-    /// copy information from the widget and apply that to the printer.
+    explicit QPageSetupWidget(QWidget *parent = nullptr);
+
+    void setPrinter(QPrinter *printer, QPrintDevice *printDevice,
+                    QPrinter::OutputFormat outputFormat, const QString &printerName);
     void setupPrinter() const;
-    void selectPrinter();
-    void selectPdfPsPrinter(const QPrinter *p);
+    void updateSavedValues();
+    void revertToSavedValues();
+
+#if QT_CONFIG(cups)
+    bool hasPpdConflict() const;
+
+signals:
+    void ppdOptionChanged();
+#endif
 
 private slots:
-    void _q_pageOrientationChanged();
-    void _q_paperSizeChanged();
-    void unitChanged(int item);
-    void setTopMargin(double newValue);
-    void setBottomMargin(double newValue);
-    void setLeftMargin(double newValue);
-    void setRightMargin(double newValue);
+    void pageSizeChanged();
+    void pageOrientationChanged();
+    void pagesPerSheetChanged();
+    void unitChanged();
+    void topMarginChanged(double newValue);
+    void bottomMarginChanged(double newValue);
+    void leftMarginChanged(double newValue);
+    void rightMarginChanged(double newValue);
 
 private:
-    Ui::QPageSetupWidget widget;
+    friend class QUnixPrintWidgetPrivate;  // Needed by checkFields()
+
+    void updateWidget();
+    void initUnits();
+    void initPagesPerSheet();
+    void initPageSizes();
+
+    Ui::QPageSetupWidget m_ui;
     QPagePreview *m_pagePreview;
     QPrinter *m_printer;
-    qreal m_leftMargin;
-    qreal m_topMargin;
-    qreal m_rightMargin;
-    qreal m_bottomMargin;
-    QSizeF m_paperSize;
-    qreal m_currentMultiplier;
+    QPrintDevice *m_printDevice;
+#if QT_CONFIG(cups)
+    ppd_option_t *m_pageSizePpdOption;
+#endif
+    QPrinter::OutputFormat m_outputFormat;
+    QString m_printerName;
+    QPageLayout m_pageLayout;
+    QPageLayout m_savedPageLayout;
+    QPageLayout::Unit m_units;
+    QPageLayout::Unit m_savedUnits;
+    int m_savedPagesPerSheet;
+    int m_savedPagesPerSheetLayout;
     bool m_blockSignals;
-    bool m_cups;
+    int m_realCustomPageSizeIndex;
 };
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_PRINTDIALOG
 #endif

@@ -2,22 +2,21 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtGui
 description             = Qt GUI Reference Documentation
-url                     = http://qt-project.org/doc/qtgui
-version                 = 5.0.0
+version                 = $QT_VERSION
 
 examplesinstallpath     = gui
 
 qhp.projects            = QtGui
 
 qhp.QtGui.file         = qtgui.qhp
-qhp.QtGui.namespace           = org.qt-project.qtgui.500
+qhp.QtGui.namespace           = org.qt-project.qtgui.$QT_VERSION_TAG
 qhp.QtGui.virtualFolder       = qtgui
 qhp.QtGui.indexTitle          = Qt GUI
 qhp.QtGui.indexRoot           =
 
-qhp.QtGui.filterAttributes    = qtgui 5.0.0 qtrefdoc
-qhp.QtGui.customFilters.Qt.name = Qtgui 5.0.0
-qhp.QtGui.customFilters.Qt.filterAttributes = qtgui 5.0.0
+qhp.QtGui.filterAttributes    = qtgui $QT_VERSION qtrefdoc
+qhp.QtGui.customFilters.Qt.name = QtGui $QT_VERSION
+qhp.QtGui.customFilters.Qt.filterAttributes = qtgui $QT_VERSION
 
 qhp.QtGui.subprojects         = classes
 qhp.QtGui.subprojects.classes.title = C++ Classes
@@ -29,20 +28,38 @@ tagfile                 = ../../../doc/qtgui/qtgui.tags
 
 depends += \
     qtcore \
+    qtimageformats \
+    qtmacextras \
+    qtmultimedia \
     qtnetwork \
     qtopengl \
+    qtplatformheaders \
     qtsvg \
     qtqml \
     qtquick \
     qtwidgets \
-    qtdoc
+    qtdoc \
+    qmake \
+    qttestlib
 
 headerdirs  += ..
 
 sourcedirs  += .. \
-               ../../../examples/gui/doc
+               ../../../examples/gui/doc/src \
+               src/includes
 
 exampledirs += ../../../examples/gui \
+               ../../../examples/vulkan \
                snippets
 
-imagedirs   += images
+imagedirs   += images \
+               ../../../examples/gui/doc/images \
+               ../../../doc/src/images \
+
+manifestmeta.highlighted.names      = "QtGui/Analog Clock Window Example"
+
+navigation.landingpage = "Qt GUI"
+navigation.cppclassespage = "Qt GUI C++ Classes"
+
+# Ignore warnings about undocumented enum values for the QGradient presets
+spurious += "Undocumented enum item '.*' in QGradient::Preset"

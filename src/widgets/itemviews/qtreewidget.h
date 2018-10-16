@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,15 @@
 #ifndef QTREEWIDGET_H
 #define QTREEWIDGET_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qtreeview.h>
 #include <QtWidgets/qtreewidgetitemiterator.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qvector.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(treewidget);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_TREEWIDGET
 
 class QTreeWidget;
 class QTreeModel;
@@ -86,8 +82,8 @@ public:
     inline void setSelected(bool select);
     inline bool isSelected() const;
 
-    inline void setHidden(bool hide);
-    inline bool isHidden() const;
+    void setHidden(bool hide);
+    bool isHidden() const;
 
     inline void setExpanded(bool expand);
     inline bool isExpanded() const;
@@ -123,7 +119,7 @@ public:
     inline void setToolTip(int column, const QString &toolTip);
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     inline QString whatsThis(int column) const
         { return data(column, Qt::WhatsThisRole).toString(); }
     inline void setWhatsThis(int column, const QString &whatsThis);
@@ -182,7 +178,7 @@ public:
     inline QTreeWidgetItem *parent() const { return par; }
     inline QTreeWidgetItem *child(int index) const {
         if (index < 0 || index >= children.size())
-            return 0;
+            return nullptr;
         executePendingSort();
         return children.at(index);
     }
@@ -228,7 +224,7 @@ inline void QTreeWidgetItem::setText(int column, const QString &atext)
 inline void QTreeWidgetItem::setIcon(int column, const QIcon &aicon)
 { setData(column, Qt::DecorationRole, aicon); }
 
-#ifndef QT_NO_STATUSTIP
+#if QT_CONFIG(statustip)
 inline void QTreeWidgetItem::setStatusTip(int column, const QString &astatusTip)
 { setData(column, Qt::StatusTipRole, astatusTip); }
 #endif
@@ -238,7 +234,7 @@ inline void QTreeWidgetItem::setToolTip(int column, const QString &atoolTip)
 { setData(column, Qt::ToolTipRole, atoolTip); }
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
 inline void QTreeWidgetItem::setWhatsThis(int column, const QString &awhatsThis)
 { setData(column, Qt::WhatsThisRole, awhatsThis); }
 #endif
@@ -265,7 +261,7 @@ class Q_WIDGETS_EXPORT QTreeWidget : public QTreeView
     friend class QTreeModel;
     friend class QTreeWidgetItem;
 public:
-    explicit QTreeWidget(QWidget *parent = 0);
+    explicit QTreeWidget(QWidget *parent = nullptr);
     ~QTreeWidget();
 
     int columnCount() const;
@@ -303,6 +299,8 @@ public:
     void editItem(QTreeWidgetItem *item, int column = 0);
     void openPersistentEditor(QTreeWidgetItem *item, int column = 0);
     void closePersistentEditor(QTreeWidgetItem *item, int column = 0);
+    using QAbstractItemView::isPersistentEditorOpen;
+    bool isPersistentEditorOpen(QTreeWidgetItem *item, int column = 0) const;
 
     QWidget *itemWidget(QTreeWidgetItem *item, int column) const;
     void setItemWidget(QTreeWidgetItem *item, int column, QWidget *widget);
@@ -326,7 +324,7 @@ public:
     QTreeWidgetItem *itemAbove(const QTreeWidgetItem *item) const;
     QTreeWidgetItem *itemBelow(const QTreeWidgetItem *item) const;
 
-    void setSelectionModel(QItemSelectionModel *selectionModel);
+    void setSelectionModel(QItemSelectionModel *selectionModel) override;
 
 public Q_SLOTS:
     void scrollToItem(const QTreeWidgetItem *item,
@@ -341,6 +339,7 @@ Q_SIGNALS:
     void itemDoubleClicked(QTreeWidgetItem *item, int column);
     void itemActivated(QTreeWidgetItem *item, int column);
     void itemEntered(QTreeWidgetItem *item, int column);
+    // ### Qt 6: add changed roles
     void itemChanged(QTreeWidgetItem *item, int column);
     void itemExpanded(QTreeWidgetItem *item);
     void itemCollapsed(QTreeWidgetItem *item);
@@ -348,20 +347,36 @@ Q_SIGNALS:
     void itemSelectionChanged();
 
 protected:
-    bool event(QEvent *e);
+    bool event(QEvent *e) override;
     virtual QStringList mimeTypes() const;
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    virtual QMimeData *mimeData(const QList<QTreeWidgetItem *> &items) const;
+#else
     virtual QMimeData *mimeData(const QList<QTreeWidgetItem*> items) const;
+#endif
     virtual bool dropMimeData(QTreeWidgetItem *parent, int index,
                               const QMimeData *data, Qt::DropAction action);
     virtual Qt::DropActions supportedDropActions() const;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+public:
+#else
+protected:
+#endif
     QList<QTreeWidgetItem*> items(const QMimeData *data) const;
 
-    QModelIndex indexFromItem(QTreeWidgetItem *item, int column = 0) const;
+    QModelIndex indexFromItem(const QTreeWidgetItem *item, int column = 0) const;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    QModelIndex indexFromItem(QTreeWidgetItem *item, int column = 0) const; // ### Qt 6: remove
+#endif
     QTreeWidgetItem *itemFromIndex(const QModelIndex &index) const;
-    void dropEvent(QDropEvent *event);
 
+protected:
+#if QT_CONFIG(draganddrop)
+    void dropEvent(QDropEvent *event) override;
+#endif
 private:
-    void setModel(QAbstractItemModel *model);
+    void setModel(QAbstractItemModel *model) override;
 
     Q_DECLARE_PRIVATE(QTreeWidget)
     Q_DISABLE_COPY(QTreeWidget)
@@ -381,7 +396,7 @@ private:
 };
 
 inline void QTreeWidget::removeItemWidget(QTreeWidgetItem *item, int column)
-{ setItemWidget(item, column, 0); }
+{ setItemWidget(item, column, nullptr); }
 
 inline QTreeWidgetItem *QTreeWidget::itemAt(int ax, int ay) const
 { return itemAt(QPoint(ax, ay)); }
@@ -394,12 +409,6 @@ inline void QTreeWidgetItem::setSelected(bool aselect)
 
 inline bool QTreeWidgetItem::isSelected() const
 { return (view ? view->isItemSelected(this) : false); }
-
-inline void QTreeWidgetItem::setHidden(bool ahide)
-{ if (view) view->setItemHidden(this, ahide); }
-
-inline bool QTreeWidgetItem::isHidden() const
-{ return (view ? view->isItemHidden(this) : false); }
 
 inline void QTreeWidgetItem::setExpanded(bool aexpand)
 { if (view) view->setItemExpanded(this, aexpand); }
@@ -419,10 +428,6 @@ inline void QTreeWidgetItem::setDisabled(bool disabled)
 inline bool QTreeWidgetItem::isDisabled() const
 { return !(flags() & Qt::ItemIsEnabled); }
 
-#endif // QT_NO_TREEWIDGET
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTREEWIDGET_H

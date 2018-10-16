@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,9 +29,6 @@
 #include <QUndoGroup>
 #include <QUndoStack>
 #include <QAction>
-
-// Temporarily disabling IRIX due to build issuues with GCC
-#if !defined(__sgi) || defined(__sgi) && !defined(__GNUC__)
 
 /******************************************************************************
 ** Commands
@@ -213,7 +197,7 @@ void tst_QUndoGroup::setActive()
     QUndoGroup group;
     QUndoStack stack1(&group), stack2(&group);
 
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
     QCOMPARE(stack1.isActive(), false);
     QCOMPARE(stack2.isActive(), false);
 
@@ -236,13 +220,13 @@ void tst_QUndoGroup::setActive()
     QCOMPARE(stack3.isActive(), false);
 
     group.removeStack(&stack2);
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
     QCOMPARE(stack1.isActive(), false);
     QCOMPARE(stack2.isActive(), true);
     QCOMPARE(stack3.isActive(), false);
 
     group.removeStack(&stack2);
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
     QCOMPARE(stack1.isActive(), false);
     QCOMPARE(stack2.isActive(), true);
     QCOMPARE(stack3.isActive(), false);
@@ -278,7 +262,7 @@ void tst_QUndoGroup::deleteStack()
 
     QUndoStack *stack1 = new QUndoStack(&group);
     QCOMPARE(group.stacks(), QList<QUndoStack*>() << stack1);
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
 
     stack1->setActive();
     QCOMPARE(group.activeStack(), stack1);
@@ -297,17 +281,17 @@ void tst_QUndoGroup::deleteStack()
 
     delete stack1;
     QCOMPARE(group.stacks(), QList<QUndoStack*>() << stack3);
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
 
     stack3->setActive(false);
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
 
     stack3->setActive(true);
     QCOMPARE(group.activeStack(), stack3);
 
     group.removeStack(stack3);
     QCOMPARE(group.stacks(), QList<QUndoStack*>());
-    QCOMPARE(group.activeStack(), (QUndoStack*)0);
+    QCOMPARE(group.activeStack(), nullptr);
 
     delete stack3;
 }
@@ -375,14 +359,14 @@ static QString glue(const QString &s1, const QString &s2)
 void tst_QUndoGroup::checkSignals()
 {
     QUndoGroup group;
-    QAction *undo_action = group.createUndoAction(0, QString("foo"));
-    QAction *redo_action = group.createRedoAction(0, QString("bar"));
-    QSignalSpy indexChangedSpy(&group, SIGNAL(indexChanged(int)));
-    QSignalSpy cleanChangedSpy(&group, SIGNAL(cleanChanged(bool)));
-    QSignalSpy canUndoChangedSpy(&group, SIGNAL(canUndoChanged(bool)));
-    QSignalSpy undoTextChangedSpy(&group, SIGNAL(undoTextChanged(QString)));
-    QSignalSpy canRedoChangedSpy(&group, SIGNAL(canRedoChanged(bool)));
-    QSignalSpy redoTextChangedSpy(&group, SIGNAL(redoTextChanged(QString)));
+    const QScopedPointer<QAction> undo_action(group.createUndoAction(0, QString("foo")));
+    const QScopedPointer<QAction> redo_action(group.createRedoAction(0, QString("bar")));
+    QSignalSpy indexChangedSpy(&group, &QUndoGroup::indexChanged);
+    QSignalSpy cleanChangedSpy(&group, &QUndoGroup::cleanChanged);
+    QSignalSpy canUndoChangedSpy(&group, &QUndoGroup::canUndoChanged);
+    QSignalSpy undoTextChangedSpy(&group, &QUndoGroup::undoTextChanged);
+    QSignalSpy canRedoChangedSpy(&group, &QUndoGroup::canRedoChanged);
+    QSignalSpy redoTextChangedSpy(&group, &QUndoGroup::redoTextChanged);
 
     QString str;
 
@@ -588,16 +572,13 @@ void tst_QUndoGroup::checkSignals()
                 true,       // indexChanged
                 true,       // undoChanged
                 true)       // redoChanged
-
-    delete undo_action;
-    delete redo_action;
 }
 
 void tst_QUndoGroup::addStackAndDie()
 {
     // Test that QUndoStack doesn't keep a reference to QUndoGroup after the
     // group is deleted.
-    QUndoStack *stack = new QUndoStack; 
+    QUndoStack *stack = new QUndoStack;
     QUndoGroup *group = new QUndoGroup;
     group->addStack(stack);
     delete group;
@@ -607,20 +588,28 @@ void tst_QUndoGroup::addStackAndDie()
 
 void tst_QUndoGroup::commandTextFormat()
 {
+#if !QT_CONFIG(process)
+    QSKIP("No QProcess available");
+#else
     QString binDir = QLibraryInfo::location(QLibraryInfo::BinariesPath);
 
     if (QProcess::execute(binDir + "/lrelease -version") != 0)
         QSKIP("lrelease is missing or broken");
 
-    QVERIFY(!QProcess::execute(binDir + "/lrelease testdata/qundogroup.ts"));
+    const QString tsFile = QFINDTESTDATA("testdata/qundogroup.ts");
+    QVERIFY(!tsFile.isEmpty());
+    QFile::remove("qundogroup.qm"); // Avoid confusion by strays.
+    QVERIFY(!QProcess::execute(binDir + "/lrelease -silent " + tsFile + " -qm qundogroup.qm"));
 
     QTranslator translator;
-    QVERIFY(translator.load("testdata/qundogroup.qm"));
+
+    QVERIFY(translator.load("qundogroup.qm"));
+    QFile::remove("qundogroup.qm");
     qApp->installTranslator(&translator);
 
     QUndoGroup group;
-    QAction *undo_action = group.createUndoAction(0);
-    QAction *redo_action = group.createRedoAction(0);
+    const QScopedPointer<QAction> undo_action(group.createUndoAction(0));
+    const QScopedPointer<QAction> redo_action(group.createRedoAction(0));
 
     QCOMPARE(undo_action->text(), QString("Undo-default-text"));
     QCOMPARE(redo_action->text(), QString("Redo-default-text"));
@@ -643,23 +632,8 @@ void tst_QUndoGroup::commandTextFormat()
     QCOMPARE(redo_action->text(), QString("redo-prefix append redo-suffix"));
 
     qApp->removeTranslator(&translator);
-}
-
-#else
-class tst_QUndoGroup : public QObject
-{
-    Q_OBJECT
-public:
-    tst_QUndoGroup() {}
-
-private slots:
-    void setActive() { QSKIP( "Not tested on irix-g++"); }
-    void addRemoveStack() { QSKIP( "Not tested on irix-g++"); }
-    void deleteStack() { QSKIP( "Not tested on irix-g++"); }
-    void checkSignals() { QSKIP( "Not tested on irix-g++"); }
-    void addStackAndDie() { QSKIP( "Not tested on irix-g++"); }
-};
 #endif
+}
 
 QTEST_MAIN(tst_QUndoGroup)
 

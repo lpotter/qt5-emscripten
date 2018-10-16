@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -64,9 +51,11 @@
 #include <QPlainTextEdit>
 #include <QDialog>
 
+#include <QtWidgets/private/qabstractitemdelegate_p.h>
+
 Q_DECLARE_METATYPE(QAbstractItemDelegate::EndEditHint)
 
-#if defined (Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined (Q_OS_WIN) && !defined(Q_OS_WINRT)
 #include <windows.h>
 #define Q_CHECK_PAINTEVENTS \
     if (::SwitchDesktop(::GetThreadDesktop(::GetCurrentThreadId())) == 0) \
@@ -197,15 +186,7 @@ class tst_QItemDelegate : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QItemDelegate();
-    virtual ~tst_QItemDelegate();
-
 private slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
     void getSetCheck();
     void textRectangle_data();
     void textRectangle();
@@ -220,7 +201,7 @@ private slots:
     void doLayout();
     void rect_data();
     void rect();
-    void eventFilter();
+    void testEventFilter();
     void dateTimeEditor_data();
     void dateTimeEditor();
     void dateAndTimeEditorTest2();
@@ -232,9 +213,27 @@ private slots:
     void enterKey_data();
     void enterKey();
     void comboBox();
+    void testLineEditValidation_data();
+    void testLineEditValidation();
 
     void task257859_finalizeEdit();
     void QTBUG4435_keepSelectionOnCheck();
+
+    void QTBUG16469_textForRole();
+    void dateTextForRole_data();
+    void dateTextForRole();
+
+#ifdef QT_BUILD_INTERNAL
+private:
+    struct RoleDelegate : public QItemDelegate
+    {
+        QString textForRole(Qt::ItemDataRole role, const QVariant &value, const QLocale &locale)
+        {
+            QAbstractItemDelegatePrivate *d = reinterpret_cast<QAbstractItemDelegatePrivate *>(qGetPtrHelper(d_ptr));
+            return d->textForRole(role, value, locale);
+        }
+    };
+#endif
 };
 
 
@@ -259,30 +258,6 @@ void tst_QItemDelegate::getSetCheck()
     QCOMPARE(obj1.hasClipping(), false);
     obj1.setClipping(true);
     QCOMPARE(obj1.hasClipping(), true);
-}
-
-tst_QItemDelegate::tst_QItemDelegate()
-{
-}
-
-tst_QItemDelegate::~tst_QItemDelegate()
-{
-}
-
-void tst_QItemDelegate::initTestCase()
-{
-}
-
-void tst_QItemDelegate::cleanupTestCase()
-{
-}
-
-void tst_QItemDelegate::init()
-{
-}
-
-void tst_QItemDelegate::cleanup()
-{
 }
 
 void tst_QItemDelegate::textRectangle_data()
@@ -365,7 +340,7 @@ void tst_QItemDelegate::editorKeyPress()
     view.setCurrentIndex(index); // the editor will only selectAll on the current index
     view.edit(index);
 
-    QList<QLineEdit*> lineEditors = qFindChildren<QLineEdit *>(view.viewport());
+    QList<QLineEdit*> lineEditors = view.viewport()->findChildren<QLineEdit *>();
     QCOMPARE(lineEditors.count(), 1);
 
     QLineEdit *editor = lineEditors.at(0);
@@ -394,7 +369,7 @@ void tst_QItemDelegate::doubleEditorNegativeInput()
     view.setCurrentIndex(index); // the editor will only selectAll on the current index
     view.edit(index);
 
-    QList<QDoubleSpinBox*> editors = qFindChildren<QDoubleSpinBox *>(view.viewport());
+    QList<QDoubleSpinBox*> editors = view.viewport()->findChildren<QDoubleSpinBox *>();
     QCOMPARE(editors.count(), 1);
 
     QDoubleSpinBox *editor = editors.at(0);
@@ -513,7 +488,7 @@ void tst_QItemDelegate::doLayout_data()
         << QRect(0, 0, 50, 50)
         << QRect(0, 0, 1000, 1000)
         << QRect(0, 0, 400, 400)
-        << QRect(m, 0, 50 + 2*m, 1000)
+        << QRect(0, 0, 50 + 2*m, 1000)
         << QRect(50 + 2*m, 0, 1000 + 2*m, 1000 + m)
         << QRect(50 + 2*m, 1000 + m, 1000 + 2*m, 400);
     /*
@@ -549,7 +524,7 @@ void tst_QItemDelegate::doLayout_data()
         << QRect(0, 0, 50, 50)
         << QRect(0, 0, 1000, 1000)
         << QRect(0, 0, 400, 400)
-        << QRect(m, 0, 50 + 2 * m, 1000)
+        << QRect(0, 0, 50 + 2 * m, 1000)
         << QRect(50 + 2 * m, 400 + m, 1000 + 2 * m, 1000)
         << QRect(50 + 2 * m, 0, 1000 + 2 * m, 400 + m);
 
@@ -573,7 +548,7 @@ void tst_QItemDelegate::doLayout_data()
         << QRect(0, 0, 50, 50)
         << QRect(0, 0, 1000, 1000)
         << QRect(0, 0, 400, 400)
-        << QRect(m, 0, 50 + 2 * m, 1000)
+        << QRect(0, 0, 50 + 2 * m, 1000)
         << QRect(50 + 2 * m, 0, 1000 + 2 * m, 1000)
         << QRect(1050 + 4 * m, 0, 400 + 2 * m, 1000);
 
@@ -597,7 +572,7 @@ void tst_QItemDelegate::doLayout_data()
         << QRect(0, 0, 50, 50)
         << QRect(0, 0, 1000, 1000)
         << QRect(0, 0, 400, 400)
-        << QRect(m, 0, 50 + 2 * m, 1000)
+        << QRect(0, 0, 50 + 2 * m, 1000)
         << QRect(450 + 4 * m, 0, 1000 + 2 * m, 1000)
         << QRect(50 + 2 * m, 0, 400 + 2 * m, 1000);
 
@@ -695,7 +670,7 @@ void tst_QItemDelegate::rect()
 
 //TODO : Add a test for the keyPress event
 //with Qt::Key_Enter and Qt::Key_Return
-void tst_QItemDelegate::eventFilter()
+void tst_QItemDelegate::testEventFilter()
 {
     TestItemDelegate delegate;
     QWidget widget;
@@ -776,7 +751,7 @@ void tst_QItemDelegate::dateTimeEditor()
 
     QTestEventLoop::instance().enterLoop(1);
 
-    QTimeEdit *timeEditor = qFindChild<QTimeEdit *>(widget.viewport());
+    QTimeEdit *timeEditor = widget.viewport()->findChild<QTimeEdit *>();
     QVERIFY(timeEditor);
     QCOMPARE(timeEditor->time(), time);
     // The data must actually be different in order for the model
@@ -788,10 +763,8 @@ void tst_QItemDelegate::dateTimeEditor()
     widget.setFocus();
     widget.editItem(item2);
 
-    QTestEventLoop::instance().enterLoop(1);
-
-    QDateEdit *dateEditor = qFindChild<QDateEdit *>(widget.viewport());
-    QVERIFY(dateEditor);
+    QTRY_VERIFY(widget.viewport()->findChild<QDateEdit *>());
+    QDateEdit *dateEditor = widget.viewport()->findChild<QDateEdit *>();
     QCOMPARE(dateEditor->date(), date);
     dateEditor->setDate(date.addDays(60));
 
@@ -812,9 +785,9 @@ void tst_QItemDelegate::dateTimeEditor()
     dateTimeEditor->setTime(time.addSecs(600));
     widget.clearFocus();
 
-    QVERIFY(item1->data(Qt::EditRole).userType() == QMetaType::QTime);
-    QVERIFY(item2->data(Qt::EditRole).userType() == QMetaType::QDate);
-    QVERIFY(item3->data(Qt::EditRole).userType() == QMetaType::QDateTime);
+    QCOMPARE(item1->data(Qt::EditRole).userType(), int(QMetaType::QTime));
+    QCOMPARE(item2->data(Qt::EditRole).userType(), int(QMetaType::QDate));
+    QCOMPARE(item3->data(Qt::EditRole).userType(), int(QMetaType::QDateTime));
 }
 
 // A delegate where we can either enforce a certain widget or use the standard widget.
@@ -909,9 +882,9 @@ void tst_QItemDelegate::dateAndTimeEditorTest2()
     s.setData(i1, datetime2);
     editor = w.fastEdit(i1);
     timeEdit = qobject_cast<QTimeEdit*>(editor);
-    QVERIFY(timeEdit == 0);
+    QVERIFY(!timeEdit);
     dateEdit = qobject_cast<QDateEdit*>(editor);
-    QVERIFY(dateEdit == 0);
+    QVERIFY(!dateEdit);
     dateTimeEdit =  qobject_cast<QDateTimeEdit*>(editor);
     QVERIFY(dateTimeEdit);
     QCOMPARE(dateTimeEdit->dateTime(), datetime2);
@@ -1062,7 +1035,7 @@ void tst_QItemDelegate::decoration()
     }
     case QVariant::Image: {
         QImage img(size, QImage::Format_Mono);
-        memset(img.bits(), 0, img.byteCount());
+        memset(img.bits(), 0, img.sizeInBytes());
         value = img;
         break;
     }
@@ -1091,8 +1064,6 @@ void tst_QItemDelegate::decoration()
 
 void tst_QItemDelegate::editorEvent_data()
 {
-    QTest::addColumn<QRect>("rect");
-    QTest::addColumn<QString>("text");
     QTest::addColumn<int>("checkState");
     QTest::addColumn<int>("flags");
     QTest::addColumn<bool>("inCheck");
@@ -1101,16 +1072,16 @@ void tst_QItemDelegate::editorEvent_data()
     QTest::addColumn<bool>("edited");
     QTest::addColumn<int>("expectedCheckState");
 
-    QTest::newRow("unchecked, checkable, release")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
-        << (int)(Qt::Unchecked)
-        << (int)(Qt::ItemIsEditable
+    const int defaultFlags = (int)(Qt::ItemIsEditable
             |Qt::ItemIsSelectable
             |Qt::ItemIsUserCheckable
             |Qt::ItemIsEnabled
             |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+            |Qt::ItemIsDropEnabled);
+
+    QTest::newRow("unchecked, checkable, release")
+        << (int)(Qt::Unchecked)
+        << defaultFlags
         << true
         << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::LeftButton)
@@ -1118,15 +1089,8 @@ void tst_QItemDelegate::editorEvent_data()
         << (int)(Qt::Checked);
 
     QTest::newRow("checked, checkable, release")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
         << (int)(Qt::Checked)
-        << (int)(Qt::ItemIsEditable
-            |Qt::ItemIsSelectable
-            |Qt::ItemIsUserCheckable
-            |Qt::ItemIsEnabled
-            |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+        << defaultFlags
         << true
         << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::LeftButton)
@@ -1134,15 +1098,8 @@ void tst_QItemDelegate::editorEvent_data()
         << (int)(Qt::Unchecked);
 
     QTest::newRow("unchecked, checkable, release")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
         << (int)(Qt::Unchecked)
-        << (int)(Qt::ItemIsEditable
-            |Qt::ItemIsSelectable
-            |Qt::ItemIsUserCheckable
-            |Qt::ItemIsEnabled
-            |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+        << defaultFlags
         << true
         << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::LeftButton)
@@ -1150,15 +1107,8 @@ void tst_QItemDelegate::editorEvent_data()
         << (int)(Qt::Checked);
 
     QTest::newRow("unchecked, checkable, release, right button")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
         << (int)(Qt::Unchecked)
-        << (int)(Qt::ItemIsEditable
-            |Qt::ItemIsSelectable
-            |Qt::ItemIsUserCheckable
-            |Qt::ItemIsEnabled
-            |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+        << defaultFlags
         << true
         << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::RightButton)
@@ -1166,15 +1116,8 @@ void tst_QItemDelegate::editorEvent_data()
         << (int)(Qt::Unchecked);
 
     QTest::newRow("unchecked, checkable, release outside")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
         << (int)(Qt::Unchecked)
-        << (int)(Qt::ItemIsEditable
-            |Qt::ItemIsSelectable
-            |Qt::ItemIsUserCheckable
-            |Qt::ItemIsEnabled
-            |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+        << defaultFlags
         << false
         << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::LeftButton)
@@ -1182,17 +1125,64 @@ void tst_QItemDelegate::editorEvent_data()
         << (int)(Qt::Unchecked);
 
     QTest::newRow("unchecked, checkable, dblclick")
-        << QRect(0, 0, 20, 20)
-        << QString("foo")
         << (int)(Qt::Unchecked)
-        << (int)(Qt::ItemIsEditable
-            |Qt::ItemIsSelectable
-            |Qt::ItemIsUserCheckable
-            |Qt::ItemIsEnabled
-            |Qt::ItemIsDragEnabled
-            |Qt::ItemIsDropEnabled)
+        << defaultFlags
         << true
         << (int)(QEvent::MouseButtonDblClick)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::Unchecked);
+
+    QTest::newRow("unchecked, tristate, release")
+        << (int)(Qt::Unchecked)
+        << (int)(defaultFlags | Qt::ItemIsAutoTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::Checked);
+
+    QTest::newRow("partially checked, tristate, release")
+        << (int)(Qt::PartiallyChecked)
+        << (int)(defaultFlags | Qt::ItemIsAutoTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::Checked);
+
+    QTest::newRow("checked, tristate, release")
+        << (int)(Qt::Checked)
+        << (int)(defaultFlags | Qt::ItemIsAutoTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::Unchecked);
+
+    QTest::newRow("unchecked, user-tristate, release")
+        << (int)(Qt::Unchecked)
+        << (int)(defaultFlags | Qt::ItemIsUserTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::PartiallyChecked);
+
+    QTest::newRow("partially checked, user-tristate, release")
+        << (int)(Qt::PartiallyChecked)
+        << (int)(defaultFlags | Qt::ItemIsUserTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
+        << (int)(Qt::LeftButton)
+        << true
+        << (int)(Qt::Checked);
+
+    QTest::newRow("checked, user-tristate, release")
+        << (int)(Qt::Checked)
+        << (int)(defaultFlags | Qt::ItemIsUserTristate)
+        << true
+        << (int)(QEvent::MouseButtonRelease)
         << (int)(Qt::LeftButton)
         << true
         << (int)(Qt::Unchecked);
@@ -1200,8 +1190,6 @@ void tst_QItemDelegate::editorEvent_data()
 
 void tst_QItemDelegate::editorEvent()
 {
-    QFETCH(QRect, rect);
-    QFETCH(QString, text);
     QFETCH(int, checkState);
     QFETCH(int, flags);
     QFETCH(bool, inCheck);
@@ -1215,12 +1203,12 @@ void tst_QItemDelegate::editorEvent()
     QVERIFY(index.isValid());
 
     QStandardItem *item = model.itemFromIndex(index);
-    item->setText(text);
+    item->setText("foo");
     item->setCheckState((Qt::CheckState)checkState);
     item->setFlags((Qt::ItemFlags)flags);
 
     QStyleOptionViewItem option;
-    option.rect = rect;
+    option.rect = QRect(0, 0, 20, 20);
     option.state |= QStyle::State_Enabled;
     // mimic QStyledItemDelegate::initStyleOption logic
     option.features |= QStyleOptionViewItem::HasCheckIndicator | QStyleOptionViewItem::HasDisplay;
@@ -1259,11 +1247,19 @@ void tst_QItemDelegate::enterKey_data()
     QTest::addColumn<bool>("expectedFocus");
 
     QTest::newRow("lineedit enter") << LineEdit << int(Qt::Key_Enter) << false;
+    QTest::newRow("lineedit return") << LineEdit << int(Qt::Key_Return) << false;
+    QTest::newRow("lineedit tab") << LineEdit << int(Qt::Key_Tab) << false;
+    QTest::newRow("lineedit backtab") << LineEdit << int(Qt::Key_Backtab) << false;
+
     QTest::newRow("textedit enter") << TextEdit << int(Qt::Key_Enter) << true;
+    QTest::newRow("textedit return") << TextEdit << int(Qt::Key_Return) << true;
+    QTest::newRow("textedit tab") << TextEdit << int(Qt::Key_Tab) << true;
+    QTest::newRow("textedit backtab") << TextEdit << int(Qt::Key_Backtab) << false;
+
     QTest::newRow("plaintextedit enter") << PlainTextEdit << int(Qt::Key_Enter) << true;
     QTest::newRow("plaintextedit return") << PlainTextEdit << int(Qt::Key_Return) << true;
-    QTest::newRow("plaintextedit tab") << PlainTextEdit << int(Qt::Key_Tab) << false;
-    QTest::newRow("lineedit tab") << LineEdit << int(Qt::Key_Tab) << false;
+    QTest::newRow("plaintextedit tab") << PlainTextEdit << int(Qt::Key_Tab) << true;
+    QTest::newRow("plaintextedit backtab") << PlainTextEdit << int(Qt::Key_Backtab) << false;
 }
 
 void tst_QItemDelegate::enterKey()
@@ -1280,7 +1276,7 @@ void tst_QItemDelegate::enterKey()
     view.show();
     QApplication::setActiveWindow(&view);
     view.setFocus();
-    QTest::qWait(30);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
 
     struct TestDelegate : public QItemDelegate
     {
@@ -1310,21 +1306,20 @@ void tst_QItemDelegate::enterKey()
     QModelIndex index = model.index(0, 0);
     view.setCurrentIndex(index); // the editor will only selectAll on the current index
     view.edit(index);
-    QTest::qWait(30);
 
-    QList<QWidget*> lineEditors = qFindChildren<QWidget *>(view.viewport(), QString::fromLatin1("TheEditor"));
+    QList<QWidget*> lineEditors = view.viewport()->findChildren<QWidget *>(QString::fromLatin1("TheEditor"));
     QCOMPARE(lineEditors.count(), 1);
 
     QPointer<QWidget> editor = lineEditors.at(0);
     QCOMPARE(editor->hasFocus(), true);
 
     QTest::keyClick(editor, Qt::Key(key));
-    QApplication::processEvents();
 
-    // The line edit has already been destroyed, so avoid that case.
-    if (widget == TextEdit || widget == PlainTextEdit) {
+    if (expectedFocus) {
         QVERIFY(!editor.isNull());
-        QCOMPARE(editor && editor->hasFocus(), expectedFocus);
+        QVERIFY(editor->hasFocus());
+    } else {
+        QTRY_VERIFY(editor.isNull()); // editor deletion happens via deleteLater
     }
 }
 
@@ -1338,13 +1333,12 @@ void tst_QItemDelegate::task257859_finalizeEdit()
     view.show();
     QApplication::setActiveWindow(&view);
     view.setFocus();
-    QTest::qWait(30);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
 
     QModelIndex index = model.index(0, 0);
     view.edit(index);
-    QTest::qWait(30);
 
-    QList<QLineEdit *> lineEditors = qFindChildren<QLineEdit *>(view.viewport());
+    QList<QLineEdit *> lineEditors = view.viewport()->findChildren<QLineEdit *>();
     QCOMPARE(lineEditors.count(), 1);
 
     QPointer<QWidget> editor = lineEditors.at(0);
@@ -1367,7 +1361,7 @@ void tst_QItemDelegate::QTBUG4435_keepSelectionOnCheck()
     }
     QTableView view;
     view.setModel(&model);
-    view.setItemDelegate(new TestItemDelegate);
+    view.setItemDelegate(new TestItemDelegate(&view));
     view.show();
     view.selectAll();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
@@ -1392,13 +1386,12 @@ void tst_QItemDelegate::comboBox()
     QTableWidget widget(1, 1);
     widget.setItem(0, 0, item1);
     widget.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&widget));
 
     widget.editItem(item1);
 
-    QTestEventLoop::instance().enterLoop(1);
-
-    QComboBox *boolEditor = qFindChild<QComboBox*>(widget.viewport());
-    QVERIFY(boolEditor);
+    QComboBox *boolEditor = nullptr;
+    QTRY_VERIFY( (boolEditor = widget.viewport()->findChild<QComboBox*>()) );
     QCOMPARE(boolEditor->currentIndex(), 1); // True is selected initially.
     // The data must actually be different in order for the model
     // to be updated.
@@ -1413,6 +1406,197 @@ void tst_QItemDelegate::comboBox()
     QCOMPARE(data.toBool(), false);
 }
 
+void tst_QItemDelegate::testLineEditValidation_data()
+{
+    QTest::addColumn<int>("key");
+
+    QTest::newRow("enter") << int(Qt::Key_Enter);
+    QTest::newRow("return") << int(Qt::Key_Return);
+    QTest::newRow("tab") << int(Qt::Key_Tab);
+    QTest::newRow("backtab") << int(Qt::Key_Backtab);
+    QTest::newRow("escape") << int(Qt::Key_Escape);
+}
+
+void tst_QItemDelegate::testLineEditValidation()
+{
+    QFETCH(int, key);
+
+    struct TestDelegate : public QItemDelegate
+    {
+        virtual QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
+        {
+            Q_UNUSED(option);
+            Q_UNUSED(index);
+
+            QLineEdit *editor = new QLineEdit(parent);
+            QRegularExpression re("\\w+,\\w+"); // two words separated by a comma
+            editor->setValidator(new QRegularExpressionValidator(re, editor));
+            editor->setObjectName(QStringLiteral("TheEditor"));
+            return editor;
+        }
+    } delegate;
+
+    QStandardItemModel model;
+    // need a couple of dummy items to test tab and back tab
+    model.appendRow(new QStandardItem(QStringLiteral("dummy")));
+    QStandardItem *item = new QStandardItem(QStringLiteral("abc,def"));
+    model.appendRow(item);
+    model.appendRow(new QStandardItem(QStringLiteral("dummy")));
+
+    QListView view;
+    view.setModel(&model);
+    view.setItemDelegate(&delegate);
+    view.show();
+    view.setFocus();
+    QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
+
+    QPointer<QLineEdit> editor;
+    QPersistentModelIndex index = model.indexFromItem(item);
+
+    view.setCurrentIndex(index);
+    view.edit(index);
+
+    const auto findEditors = [&]() {
+        return view.findChildren<QLineEdit *>(QStringLiteral("TheEditor"));
+    };
+    QCOMPARE(findEditors().count(), 1);
+    editor = findEditors().at(0);
+    editor->clear();
+
+    // first try to set a valid text
+    QTest::keyClicks(editor, QStringLiteral("foo,bar"));
+
+    // close the editor
+    QTest::keyClick(editor, Qt::Key(key));
+
+    QTRY_VERIFY(editor.isNull());
+    if (key != Qt::Key_Escape)
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("foo,bar"));
+    else
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("abc,def"));
+
+    // now an invalid (but partially matching) text
+    view.setCurrentIndex(index);
+    view.edit(index);
+
+    QTRY_COMPARE(findEditors().count(), 1);
+    editor = findEditors().at(0);
+    editor->clear();
+
+    // edit
+    QTest::keyClicks(editor, QStringLiteral("foobar"));
+
+    // try to close the editor
+    QTest::keyClick(editor, Qt::Key(key));
+
+    if (key != Qt::Key_Escape) {
+        QVERIFY(!editor.isNull());
+        QCOMPARE(qApp->focusWidget(), editor.data());
+        QCOMPARE(editor->text(), QStringLiteral("foobar"));
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("foo,bar"));
+    } else {
+        QTRY_VERIFY(editor.isNull());
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("abc,def"));
+    }
+
+    // reset the view to forcibly close the editor
+    view.reset();
+    QTRY_COMPARE(findEditors().count(), 0);
+
+    // set a valid text again
+    view.setCurrentIndex(index);
+    view.edit(index);
+
+    QTRY_COMPARE(findEditors().count(), 1);
+    editor = findEditors().at(0);
+    editor->clear();
+
+    // set a valid text
+    QTest::keyClicks(editor, QStringLiteral("gender,bender"));
+
+    // close the editor
+    QTest::keyClick(editor, Qt::Key(key));
+
+    QTRY_VERIFY(editor.isNull());
+    if (key != Qt::Key_Escape)
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("gender,bender"));
+    else
+        QCOMPARE(item->data(Qt::DisplayRole).toString(), QStringLiteral("abc,def"));
+}
+
+void tst_QItemDelegate::QTBUG16469_textForRole()
+{
+#ifndef QT_BUILD_INTERNAL
+    QSKIP("This test requires a developer build");
+#else
+    RoleDelegate delegate;
+    QLocale locale;
+
+    const float f = 123.456f;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, f, locale), locale.toString(f));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, f, locale), locale.toString(f));
+    const double d = 123.456;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, d, locale), locale.toString(d, 'g', 6));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, d, locale), locale.toString(d, 'g', 6));
+    const int i = 1234567;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, i, locale), locale.toString(i));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, i, locale), locale.toString(i));
+    const qlonglong ll = 1234567;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, ll, locale), locale.toString(ll));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, ll, locale), locale.toString(ll));
+    const uint ui = 1234567;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, ui, locale), locale.toString(ui));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, ui, locale), locale.toString(ui));
+    const qulonglong ull = 1234567;
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, ull, locale), locale.toString(ull));
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, ull, locale), locale.toString(ull));
+
+    const QString text("text");
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, text, locale), text);
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, text, locale), text);
+    const QString multipleLines("multiple\nlines");
+    QString multipleLines2 = multipleLines;
+    multipleLines2.replace(QLatin1Char('\n'), QChar::LineSeparator);
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, multipleLines, locale), multipleLines2);
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, multipleLines, locale), multipleLines);
+#endif
+}
+
+void tst_QItemDelegate::dateTextForRole_data()
+{
+#ifdef QT_BUILD_INTERNAL
+    QTest::addColumn<QDateTime>("when");
+
+    QTest::newRow("now") << QDateTime::currentDateTime(); // It's a local time
+    QDate date(2013, 12, 11);
+    QTime time(10, 9, 8, 765);
+    // Ensure we exercise every time-spec variant:
+    QTest::newRow("local") << QDateTime(date, time, Qt::LocalTime);
+    QTest::newRow("UTC") << QDateTime(date, time, Qt::UTC);
+    QTest::newRow("zone") << QDateTime(date, time, QTimeZone("Europe/Dublin"));
+    QTest::newRow("offset") << QDateTime(date, time, Qt::OffsetFromUTC, 36000);
+#endif
+}
+
+void tst_QItemDelegate::dateTextForRole()
+{
+#ifndef QT_BUILD_INTERNAL
+    QSKIP("This test requires a developer build");
+#else
+    QFETCH(QDateTime, when);
+    RoleDelegate delegate;
+    QLocale locale;
+# define CHECK(value) \
+    QCOMPARE(delegate.textForRole(Qt::DisplayRole, value, locale), locale.toString(value, QLocale::ShortFormat)); \
+    QCOMPARE(delegate.textForRole(Qt::ToolTipRole, value, locale), locale.toString(value, QLocale::LongFormat))
+
+    CHECK(when);
+    CHECK(when.date());
+    CHECK(when.time());
+# undef CHECK
+#endif
+}
 
 // ### _not_ covered:
 

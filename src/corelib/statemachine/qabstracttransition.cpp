@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,41 +10,37 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qabstracttransition.h"
-
-#ifndef QT_NO_STATEMACHINE
-
 #include "qabstracttransition_p.h"
 #include "qabstractstate.h"
+#include "qhistorystate.h"
 #include "qstate.h"
 #include "qstatemachine.h"
 
@@ -109,21 +105,46 @@ QT_BEGIN_NAMESPACE
     parallel group state.
 */
 
-QAbstractTransitionPrivate::QAbstractTransitionPrivate()
-{
-}
+/*!
+    \property QAbstractTransition::transitionType
 
-QAbstractTransitionPrivate *QAbstractTransitionPrivate::get(QAbstractTransition *q)
+    \brief indicates whether this transition is an internal transition, or an external transition.
+
+    Internal and external transitions behave the same, except for the case of a transition whose
+    source state is a compound state and whose target(s) is a descendant of the source. In such a
+    case, an internal transition will not exit and re-enter its source state, while an external one
+    will.
+
+    By default, the type is an external transition.
+*/
+
+/*!
+  \enum QAbstractTransition::TransitionType
+
+  This enum specifies the kind of transition. By default, the type is an external transition.
+
+  \value ExternalTransition Any state that is the source state of a transition (which is not a
+                            target-less transition) is left, and re-entered when necessary.
+  \value InternalTransition If the target state of a transition is a sub-state of a compound state,
+                            and that compound state is the source state, an internal transition will
+                            not leave the source state.
+
+  \sa QAbstractTransition::transitionType
+*/
+
+QAbstractTransitionPrivate::QAbstractTransitionPrivate()
+    : transitionType(QAbstractTransition::ExternalTransition)
 {
-    return q->d_func();
 }
 
 QStateMachine *QAbstractTransitionPrivate::machine() const
 {
-    QState *source = sourceState();
-    if (!source)
-        return 0;
-    return source->machine();
+    if (QState *source = sourceState())
+        return source->machine();
+    Q_Q(const QAbstractTransition);
+    if (QHistoryState *parent = qobject_cast<QHistoryState *>(q->parent()))
+        return parent->machine();
+    return 0;
 }
 
 bool QAbstractTransitionPrivate::callEventTest(QEvent *e)
@@ -201,10 +222,15 @@ QAbstractState *QAbstractTransition::targetState() const
 void QAbstractTransition::setTargetState(QAbstractState* target)
 {
     Q_D(QAbstractTransition);
+    if ((d->targetStates.size() == 1 && target == d->targetStates.at(0).data()) ||
+         (d->targetStates.isEmpty() && target == 0)) {
+        return;
+    }
     if (!target)
         d->targetStates.clear();
     else
         setTargetStates(QList<QAbstractState*>() << target);
+    emit targetStateChanged(QPrivateSignal());
 }
 
 /*!
@@ -230,17 +256,72 @@ void QAbstractTransition::setTargetStates(const QList<QAbstractState*> &targets)
 {
     Q_D(QAbstractTransition);
 
+    // Verify if any of the new target states is a null-pointer:
     for (int i = 0; i < targets.size(); ++i) {
-        QAbstractState *target = targets.at(i);
-        if (!target) {
+        if (targets.at(i) == nullptr) {
             qWarning("QAbstractTransition::setTargetStates: target state(s) cannot be null");
             return;
         }
     }
 
-    d->targetStates.clear();
-    for (int i = 0; i < targets.size(); ++i)
-        d->targetStates.append(targets.at(i));
+    // First clean out any target states that got destroyed, but for which we still have a QPointer
+    // around.
+    for (int i = 0; i < d->targetStates.size(); ) {
+        if (d->targetStates.at(i).isNull()) {
+            d->targetStates.remove(i);
+        } else {
+            ++i;
+        }
+    }
+
+    // Easy check: if both lists are empty, we're done.
+    if (targets.isEmpty() && d->targetStates.isEmpty())
+        return;
+
+    bool sameList = true;
+
+    if (targets.size() != d->targetStates.size()) {
+        // If the sizes of the lists are different, we don't need to be smart: they're different. So
+        // we can just set the new list as the targetStates.
+        sameList = false;
+    } else {
+        QVector<QPointer<QAbstractState> > copy(d->targetStates);
+        for (int i = 0; i < targets.size(); ++i) {
+            sameList &= copy.removeOne(targets.at(i));
+            if (!sameList)
+                break; // ok, we now know the lists are not the same, so stop the loop.
+        }
+
+        sameList &= copy.isEmpty();
+    }
+
+    if (sameList)
+        return;
+
+    d->targetStates.resize(targets.size());
+    for (int i = 0; i < targets.size(); ++i) {
+        d->targetStates[i] = targets.at(i);
+    }
+
+    emit targetStatesChanged(QPrivateSignal());
+}
+
+/*!
+  Returns the type of the transition.
+*/
+QAbstractTransition::TransitionType QAbstractTransition::transitionType() const
+{
+    Q_D(const QAbstractTransition);
+    return d->transitionType;
+}
+
+/*!
+  Sets the type of the transition to \a type.
+*/
+void QAbstractTransition::setTransitionType(TransitionType type)
+{
+    Q_D(QAbstractTransition);
+    d->transitionType = type;
 }
 
 /*!
@@ -324,6 +405,24 @@ QList<QAbstractAnimation*> QAbstractTransition::animations() const
 */
 
 /*!
+  \fn QAbstractTransition::targetStateChanged()
+  \since 5.4
+
+  This signal is emitted when the targetState property is changed.
+
+  \sa QAbstractTransition::targetState
+*/
+
+/*!
+  \fn QAbstractTransition::targetStatesChanged()
+  \since 5.4
+
+  This signal is emitted when the targetStates property is changed.
+
+  \sa QAbstractTransition::targetStates
+*/
+
+/*!
   \reimp
 */
 bool QAbstractTransition::event(QEvent *e)
@@ -333,4 +432,4 @@ bool QAbstractTransition::event(QEvent *e)
 
 QT_END_NAMESPACE
 
-#endif //QT_NO_STATEMACHINE
+#include "moc_qabstracttransition.cpp"

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -105,7 +103,7 @@
 */
 
 /*!
-    \fn QAbstractAnimation::finished()
+    \fn void QAbstractAnimation::finished()
 
     QAbstractAnimation emits this signal after the animation has stopped and
     has reached the end.
@@ -116,7 +114,7 @@
 */
 
 /*!
-    \fn QAbstractAnimation::stateChanged(QAbstractAnimation::State newState, QAbstractAnimation::State oldState)
+    \fn void QAbstractAnimation::stateChanged(QAbstractAnimation::State newState, QAbstractAnimation::State oldState)
 
     QAbstractAnimation emits this signal whenever the state of the animation has
     changed from \a oldState to \a newState. This signal is emitted after the virtual
@@ -126,7 +124,7 @@
 */
 
 /*!
-    \fn QAbstractAnimation::currentLoopChanged(int currentLoop)
+    \fn void QAbstractAnimation::currentLoopChanged(int currentLoop)
 
     QAbstractAnimation emits this signal whenever the current loop
     changes. \a currentLoop is the current loop.
@@ -135,7 +133,7 @@
 */
 
 /*!
-    \fn QAbstractAnimation::directionChanged(QAbstractAnimation::Direction newDirection);
+    \fn void QAbstractAnimation::directionChanged(QAbstractAnimation::Direction newDirection);
 
     QAbstractAnimation emits this signal whenever the direction has been
     changed. \a newDirection is the new direction.
@@ -161,6 +159,9 @@
 #define PAUSE_TIMER_COARSE_THRESHOLD 2000
 
 QT_BEGIN_NAMESPACE
+
+typedef QList<QAbstractAnimationTimer*>::ConstIterator TimerListConstIt;
+typedef QList<QAbstractAnimation*>::ConstIterator AnimationListConstIt;
 
 /*!
   \class QAbstractAnimationTimer
@@ -214,15 +215,14 @@ QT_BEGIN_NAMESPACE
     QUnifiedTimer drives animations indirectly, via QAbstractAnimationTimer.
 */
 
-#ifndef QT_NO_THREAD
 Q_GLOBAL_STATIC(QThreadStorage<QUnifiedTimer *>, unifiedTimer)
-#endif
 
 QUnifiedTimer::QUnifiedTimer() :
     QObject(), defaultDriver(this), lastTick(0), timingInterval(DEFAULT_TIMER_INTERVAL),
     currentAnimationIdx(0), insideTick(false), insideRestart(false), consistentTiming(false), slowMode(false),
     startTimersPending(false), stopTimerPending(false),
-    slowdownFactor(5.0f), profilerCallback(0)
+    slowdownFactor(5.0f), profilerCallback(0),
+    driverStartTime(0), temporalDrift(0)
 {
     time.invalidate();
     driver = &defaultDriver;
@@ -232,17 +232,12 @@ QUnifiedTimer::QUnifiedTimer() :
 QUnifiedTimer *QUnifiedTimer::instance(bool create)
 {
     QUnifiedTimer *inst;
-#ifndef QT_NO_THREAD
     if (create && !unifiedTimer()->hasLocalData()) {
         inst = new QUnifiedTimer;
         unifiedTimer()->setLocalData(inst);
     } else {
         inst = unifiedTimer() ? unifiedTimer()->localData() : 0;
     }
-#else
-    static QUnifiedTimer unifiedTimer;
-    inst = &unifiedTimer;
-#endif
     return inst;
 }
 
@@ -253,8 +248,47 @@ QUnifiedTimer *QUnifiedTimer::instance()
 
 void QUnifiedTimer::maybeUpdateAnimationsToCurrentTime()
 {
-    if (time.elapsed() - lastTick > 50)
-        updateAnimationTimers(driver->elapsed());
+    if (elapsed() - lastTick > 50)
+        updateAnimationTimers(-1);
+}
+
+qint64 QUnifiedTimer::elapsed() const
+{
+    if (driver->isRunning())
+        return driverStartTime + driver->elapsed();
+    else if (time.isValid())
+        return time.elapsed() + temporalDrift;
+
+    // Reaching here would normally indicate that the function is called
+    // under the wrong circumstances as neither pauses nor actual animations
+    // are running and there should be no need to query for elapsed().
+    return 0;
+}
+
+void QUnifiedTimer::startAnimationDriver()
+{
+    if (driver->isRunning()) {
+        qWarning("QUnifiedTimer::startAnimationDriver: driver is already running...");
+        return;
+    }
+    // Set the start time to the currently elapsed() value before starting.
+    // This means we get the animation system time including the temporal drift
+    // which is what we want.
+    driverStartTime = elapsed();
+    driver->start();
+}
+
+void QUnifiedTimer::stopAnimationDriver()
+{
+    if (!driver->isRunning()) {
+        qWarning("QUnifiedTimer::stopAnimationDriver: driver is not running");
+        return;
+    }
+    // Update temporal drift. Since the driver is running, elapsed() will
+    // return the total animation time in driver-time. Subtract the current
+    // wall time to get the delta.
+    temporalDrift = elapsed() - time.elapsed();
+    driver->stop();
 }
 
 void QUnifiedTimer::updateAnimationTimers(qint64 currentTick)
@@ -263,7 +297,7 @@ void QUnifiedTimer::updateAnimationTimers(qint64 currentTick)
     if(insideTick)
         return;
 
-    qint64 totalElapsed = currentTick >= 0 ? currentTick : time.elapsed();
+    qint64 totalElapsed = currentTick > 0 ? currentTick : elapsed();
 
     // ignore consistentTiming in case the pause timer is active
     qint64 delta = (consistentTiming && !pauseTimer.isActive()) ?
@@ -277,10 +311,12 @@ void QUnifiedTimer::updateAnimationTimers(qint64 currentTick)
 
     lastTick = totalElapsed;
 
-    //we make sure we only call update time if the time has actually changed
-    //it might happen in some cases that the time doesn't change because events are delayed
-    //when the CPU load is high
-    if (delta) {
+    //we make sure we only call update time if the time has actually advanced
+    //* it might happen in some cases that the time doesn't change because events are delayed
+    //  when the CPU load is high
+    //* it might happen in some cases that the delta is negative because the animation driver
+    //  advances faster than time.elapsed()
+    if (delta > 0) {
         insideTick = true;
         if (profilerCallback)
             profilerCallback(delta);
@@ -320,8 +356,7 @@ void QUnifiedTimer::localRestart()
     } else if (!driver->isRunning()) {
         if (pauseTimer.isActive())
             pauseTimer.stop();
-        driver->setStartTime(time.isValid() ? time.elapsed() : 0);
-        driver->start();
+        startAnimationDriver();
     }
 
 }
@@ -342,27 +377,26 @@ void QUnifiedTimer::setTimingInterval(int interval)
 
     if (driver->isRunning() && !pauseTimer.isActive()) {
         //we changed the timing interval
-        driver->stop();
-        driver->setStartTime(time.isValid() ? time.elapsed() : 0);
-        driver->start();
+        stopAnimationDriver();
+        startAnimationDriver();
     }
 }
 
 void QUnifiedTimer::startTimers()
 {
     startTimersPending = false;
-    if (!animationTimers.isEmpty())
-        updateAnimationTimers(-1);
 
     //we transfer the waiting animations into the "really running" state
     animationTimers += animationTimersToStart;
     animationTimersToStart.clear();
     if (!animationTimers.isEmpty()) {
-        localRestart();
         if (!time.isValid()) {
             lastTick = 0;
             time.start();
+            temporalDrift = 0;
+            driverStartTime = 0;
         }
+        localRestart();
     }
 }
 
@@ -370,7 +404,7 @@ void QUnifiedTimer::stopTimer()
 {
     stopTimerPending = false;
     if (animationTimers.isEmpty()) {
-        driver->stop();
+        stopAnimationDriver();
         pauseTimer.stop();
         // invalidate the start reference time
         time.invalidate();
@@ -465,8 +499,8 @@ void QUnifiedTimer::resumeAnimationTimer(QAbstractAnimationTimer *timer)
 int QUnifiedTimer::closestPausedAnimationTimerTimeToFinish()
 {
     int closestTimeToFinish = INT_MAX;
-    for (int i = 0; i < pausedAnimationTimers.size(); ++i) {
-        int timeToFinish = pausedAnimationTimers.at(i)->pauseDuration;
+    for (TimerListConstIt it = pausedAnimationTimers.constBegin(), cend = pausedAnimationTimers.constEnd(); it != cend; ++it) {
+        const int timeToFinish = (*it)->pauseDuration;
         if (timeToFinish < closestTimeToFinish)
             closestTimeToFinish = timeToFinish;
     }
@@ -480,14 +514,12 @@ void QUnifiedTimer::installAnimationDriver(QAnimationDriver *d)
         return;
     }
 
-    if (driver->isRunning()) {
-        driver->stop();
-        d->setStartTime(time.isValid() ? time.elapsed() : 0);
-        d->start();
-    }
-
+    bool running = driver->isRunning();
+    if (running)
+        stopAnimationDriver();
     driver = d;
-
+    if (running)
+        startAnimationDriver();
 }
 
 void QUnifiedTimer::uninstallAnimationDriver(QAnimationDriver *d)
@@ -497,17 +529,16 @@ void QUnifiedTimer::uninstallAnimationDriver(QAnimationDriver *d)
         return;
     }
 
+    bool running = driver->isRunning();
+    if (running)
+        stopAnimationDriver();
     driver = &defaultDriver;
-
-    if (d->isRunning()) {
-        d->stop();
-        driver->setStartTime(time.isValid() ? time.elapsed() : 0);
-        driver->start();
-    }
+    if (running)
+        startAnimationDriver();
 }
 
 /*!
-    Returns true if \a d is the currently installed animation driver
+    Returns \c true if \a d is the currently installed animation driver
     and is not the default animation driver (which can never be uninstalled).
 */
 bool QUnifiedTimer::canUninstallAnimationDriver(QAnimationDriver *d)
@@ -515,7 +546,7 @@ bool QUnifiedTimer::canUninstallAnimationDriver(QAnimationDriver *d)
     return d == driver && driver != &defaultDriver;
 }
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
 Q_GLOBAL_STATIC(QThreadStorage<QAnimationTimer *>, animationTimer)
 #endif
 
@@ -530,7 +561,7 @@ QAnimationTimer::QAnimationTimer() :
 QAnimationTimer *QAnimationTimer::instance(bool create)
 {
     QAnimationTimer *inst;
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
     if (create && !animationTimer()->hasLocalData()) {
         inst = new QAnimationTimer;
         animationTimer()->setLocalData(inst);
@@ -538,6 +569,7 @@ QAnimationTimer *QAnimationTimer::instance(bool create)
         inst = animationTimer() ? animationTimer()->localData() : 0;
     }
 #else
+    Q_UNUSED(create);
     static QAnimationTimer animationTimer;
     inst = &animationTimer;
 #endif
@@ -600,10 +632,12 @@ void QAnimationTimer::restartAnimationTimer()
 
 void QAnimationTimer::startAnimations()
 {
+    if (!startAnimationPending)
+        return;
     startAnimationPending = false;
+
     //force timer to update, which prevents large deltas for our newly added animations
-    if (!animations.isEmpty())
-        QUnifiedTimer::instance()->maybeUpdateAnimationsToCurrentTime();
+    QUnifiedTimer::instance()->maybeUpdateAnimationsToCurrentTime();
 
     //we transfer the waiting animations into the "really running" state
     animations += animationsToStart;
@@ -615,7 +649,8 @@ void QAnimationTimer::startAnimations()
 void QAnimationTimer::stopTimer()
 {
     stopTimerPending = false;
-    if (animations.isEmpty()) {
+    bool pendingStart = startAnimationPending && animationsToStart.size() > 0;
+    if (animations.isEmpty() && !pendingStart) {
         QUnifiedTimer::resumeAnimationTimer(this);
         QUnifiedTimer::stopAnimationTimer(this);
         // invalidate the start reference time
@@ -694,8 +729,8 @@ void QAnimationTimer::unregisterRunningAnimation(QAbstractAnimation *animation)
 int QAnimationTimer::closestPauseAnimationTimeToFinish()
 {
     int closestTimeToFinish = INT_MAX;
-    for (int i = 0; i < runningPauseAnimations.size(); ++i) {
-        QAbstractAnimation *animation = runningPauseAnimations.at(i);
+    for (AnimationListConstIt it = runningPauseAnimations.constBegin(), cend = runningPauseAnimations.constEnd(); it != cend; ++it) {
+        const QAbstractAnimation *animation = *it;
         int timeToFinish;
 
         if (animation->direction() == QAbstractAnimation::Forward)
@@ -746,20 +781,25 @@ QAnimationDriver::~QAnimationDriver()
     This is to take into account that pauses can occur in running
     animations which will stop the driver, but the time still
     increases.
+
+    \obsolete
+
+    This logic is now handled internally in the animation system.
  */
-void QAnimationDriver::setStartTime(qint64 startTime)
+void QAnimationDriver::setStartTime(qint64)
 {
-    Q_D(QAnimationDriver);
-    d->startTime = startTime;
 }
 
 /*!
     Returns the start time of the animation.
+
+    \obsolete
+
+    This logic is now handled internally in the animation system.
  */
 qint64 QAnimationDriver::startTime() const
 {
-    Q_D(const QAnimationDriver);
-    return d->startTime;
+    return 0;
 }
 
 
@@ -769,6 +809,10 @@ qint64 QAnimationDriver::startTime() const
 
     If \a timeStep is positive, it will be used as the current time in the
     calculations; otherwise, the current clock time will be used.
+
+    Since 5.4, the timeStep argument is ignored and elapsed() will be
+    used instead in combination with the internal time offsets of the
+    animation system.
  */
 
 void QAnimationDriver::advanceAnimation(qint64 timeStep)
@@ -827,8 +871,9 @@ void QAnimationDriver::start()
 {
     Q_D(QAnimationDriver);
     if (!d->running) {
-        emit started();
         d->running = true;
+        d->timer.start();
+        emit started();
     }
 }
 
@@ -837,8 +882,8 @@ void QAnimationDriver::stop()
 {
     Q_D(QAnimationDriver);
     if (d->running) {
-        emit stopped();
         d->running = false;
+        emit stopped();
     }
 }
 
@@ -851,9 +896,8 @@ void QAnimationDriver::stop()
 
 qint64 QAnimationDriver::elapsed() const
 {
-    // The default implementation picks up the elapsed time from the
-    // unified timer and can ignore the time offset.
-    return QUnifiedTimer::instance()->time.elapsed();
+    Q_D(const QAnimationDriver);
+    return d->running ? d->timer.elapsed() : 0;
 }
 
 /*!
@@ -1432,5 +1476,6 @@ void QAbstractAnimation::updateDirection(QAbstractAnimation::Direction direction
 QT_END_NAMESPACE
 
 #include "moc_qabstractanimation.cpp"
+#include "moc_qabstractanimation_p.cpp"
 
 #endif //QT_NO_ANIMATION

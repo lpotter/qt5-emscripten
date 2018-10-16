@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -59,7 +69,7 @@ public:
     {
     }
 
-    virtual void resizeEvent(QResizeEvent *event)
+    void resizeEvent(QResizeEvent *event) override
     {
         w->setGeometry(0, 0, event->size().width(), event->size().height());
     }
@@ -91,7 +101,7 @@ public:
         original->setZValue(z);
     }
 
-    void setGeometry (const QRectF &rect)
+    void setGeometry (const QRectF &rect) override
     {
         original->setTransform(QTransform::fromScale(rect.width() / r.width(),
                                                      rect.height() / r.height()), true);
@@ -100,7 +110,7 @@ public:
     }
 
 protected:
-    QSizeF sizeHint(Qt::SizeHint which, const QSizeF &constraint = QSizeF()) const
+    QSizeF sizeHint(Qt::SizeHint which, const QSizeF &constraint = QSizeF()) const override
     {
         Q_UNUSED(constraint);
         QSizeF sh;
@@ -138,7 +148,7 @@ public:
     {
     }
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem*, QWidget*)
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) override
     {
         QPointF reflection = QPointF();
         reflection.setY(scaled.height() + 2);
@@ -170,14 +180,14 @@ public:
         painter->drawPixmap(reflection, tmp);
     }
 
-    void resizeEvent(QGraphicsSceneResizeEvent *event)
+    void resizeEvent(QGraphicsSceneResizeEvent *event) override
     {
         QSize newSize = event->newSize().toSize();
         newSize.setHeight(newSize.height() / 2);
         scaled = original.scaled(newSize);
     }
 
-    QRectF boundingRect() const
+    QRectF boundingRect() const override
     {
         QSize size(scaled.width(), scaled.height() * 2 + 2);
         return QRectF(QPointF(0, 0), size);

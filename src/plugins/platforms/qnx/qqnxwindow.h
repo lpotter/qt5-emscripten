@@ -1,7 +1,7 @@
 /***************************************************************************
 **
-** Copyright (C) 2011 - 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2011 - 2013 BlackBerry Limited. All rights reserved.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,13 +41,11 @@
 #define QQNXWINDOW_H
 
 #include <qpa/qplatformwindow.h>
+#include "qqnxabstractcover.h"
 
-#include "qqnxbuffer.h"
+#include <QtCore/QScopedPointer>
 
-#include <QtGui/QImage>
-#include <QtCore/QMutex>
-
-#ifndef QT_NO_OPENGL
+#if !defined(QT_NO_OPENGL)
 #include <EGL/egl.h>
 #endif
 
@@ -60,9 +56,6 @@ QT_BEGIN_NAMESPACE
 // all surfaces double buffered
 #define MAX_BUFFER_COUNT    2
 
-#ifndef QT_NO_OPENGL
-class QQnxGLContext;
-#endif
 class QQnxScreen;
 
 class QSurfaceFormat;
@@ -71,96 +64,94 @@ class QQnxWindow : public QPlatformWindow
 {
 friend class QQnxScreen;
 public:
-    QQnxWindow(QWindow *window, screen_context_t context);
+    QQnxWindow(QWindow *window, screen_context_t context, bool needRootWindow);
     virtual ~QQnxWindow();
 
-    void setGeometry(const QRect &rect);
-    void setVisible(bool visible);
-    void setOpacity(qreal level);
+    void setGeometry(const QRect &rect) override;
+    void setVisible(bool visible) override;
+    void setOpacity(qreal level) override;
 
-    bool isExposed() const;
+    bool isExposed() const override;
 
-    WId winId() const { return (WId)m_window; }
+    WId winId() const override { return window()->type() == Qt::Desktop ? -1 : (WId)m_window; }
     screen_window_t nativeHandle() const { return m_window; }
 
-    // Called by QQnxGLContext::createSurface()
-    QSize requestedBufferSize() const;
-
-    void adjustBufferSize();
     void setBufferSize(const QSize &size);
     QSize bufferSize() const { return m_bufferSize; }
-    bool hasBuffers() const { return !m_bufferSize.isEmpty(); }
-
-    QQnxBuffer &renderBuffer();
-    void scroll(const QRegion &region, int dx, int dy, bool flush=false);
-    void post(const QRegion &dirty);
 
     void setScreen(QQnxScreen *platformScreen);
 
-    void setParent(const QPlatformWindow *window);
-    void raise();
-    void lower();
-    void requestActivateWindow();
-    void setWindowState(Qt::WindowState state);
+    void setParent(const QPlatformWindow *window) override;
+    void raise() override;
+    void lower() override;
+    void requestActivateWindow() override;
+    void setWindowState(Qt::WindowStates state) override;
+    void setExposed(bool exposed);
 
-    void gainedFocus();
+    void propagateSizeHints() override;
 
-    QQnxScreen *screen() const { return m_screen; }
+    void setMMRendererWindowName(const QString &name);
+    void setMMRendererWindow(screen_window_t handle);
+    void clearMMRendererWindow();
+
+    QPlatformScreen *screen() const override;
     const QList<QQnxWindow*>& children() const { return m_childWindows; }
-
-#ifndef QT_NO_OPENGL
-    void setPlatformOpenGLContext(QQnxGLContext *platformOpenGLContext);
-    QQnxGLContext *platformOpenGLContext() const { return m_platformOpenGLContext; }
-#endif
 
     QQnxWindow *findWindow(screen_window_t windowHandle);
 
-    void blitFrom(QQnxWindow *sourceWindow, const QPoint &sourceOffset, const QRegion &targetRegion);
+    void minimize();
 
-private:
-    QRect setGeometryHelper(const QRect &rect);
-    void removeFromParent();
-    void setOffset(const QPoint &setOffset);
-    void updateVisibility(bool parentVisible);
-    void updateZorder(int &topZorder);
+    QString mmRendererWindowName() const { return m_mmRendererWindowName; }
 
-    void fetchBuffers();
+    screen_window_t mmRendererWindow() const { return m_mmRendererWindow; }
 
-    // Copies content from the previous buffer (back buffer) to the current buffer (front buffer)
-    void blitPreviousToCurrent(const QRegion &region, int dx, int dy, bool flush=false);
+    void setRotation(int rotation);
 
-    void blitHelper(QQnxBuffer &source, QQnxBuffer &target, const QPoint &sourceOffset,
-                    const QPoint &targetOffset, const QRegion &region, bool flush = false);
+    QByteArray groupName() const { return m_windowGroupName; }
+    void joinWindowGroup(const QByteArray &groupName);
 
-    static int platformWindowFormatToNativeFormat(const QSurfaceFormat &format);
+    bool shouldMakeFullScreen() const;
+
+    void windowPosted();
+
+protected:
+    virtual int pixelFormat() const = 0;
+    virtual void resetBuffers() = 0;
+
+    void initWindow();
 
     screen_context_t m_screenContext;
+
+private:
+    void createWindowGroup();
+    void setGeometryHelper(const QRect &rect);
+    void removeFromParent();
+    void updateVisibility(bool parentVisible);
+    void updateZorder(int &topZorder);
+    void updateZorder(screen_window_t window, int &zOrder);
+    void applyWindowState();
+    void setFocus(screen_window_t newFocusWindow);
+
     screen_window_t m_window;
     QSize m_bufferSize;
-    QQnxBuffer m_buffers[MAX_BUFFER_COUNT];
-    int m_currentBufferIndex;
-    int m_previousBufferIndex;
-    QRegion m_previousDirty;
-    QRegion m_scrolled;
 
-#ifndef QT_NO_OPENGL
-    QQnxGLContext *m_platformOpenGLContext;
-#endif
     QQnxScreen *m_screen;
-    QList<QQnxWindow*> m_childWindows;
     QQnxWindow *m_parentWindow;
+    QList<QQnxWindow*> m_childWindows;
+    QScopedPointer<QQnxAbstractCover> m_cover;
     bool m_visible;
+    bool m_exposed;
     QRect m_unmaximizedGeometry;
-    Qt::WindowState m_windowState;
+    Qt::WindowStates m_windowState;
+    QString m_mmRendererWindowName;
+    screen_window_t m_mmRendererWindow;
 
-    // This mutex is used to protect access to the m_requestedBufferSize
-    // member. This member is used in conjunction with QQnxGLContext::requestNewSurface()
-    // to coordinate recreating the EGL surface which involves destroying any
-    // existing EGL surface; resizing the native window buffers; and creating a new
-    // EGL surface. All of this has to be done from the thread that is calling
-    // QQnxGLContext::makeCurrent()
-    mutable QMutex m_mutex;
-    QSize m_requestedBufferSize;
+    // Group name of window group headed by this window
+    QByteArray m_windowGroupName;
+    // Group name that we have joined or "" if we've not joined any group.
+    QByteArray m_parentGroupName;
+
+    bool m_isTopLevel;
 };
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,24 +42,14 @@
 #include "qtextureglyphcache_p.h"
 #include "private/qfontengine_p.h"
 #include "private/qnumeric_p.h"
-#include "private/qnativeimage_p.h"
 
 QT_BEGIN_NAMESPACE
 
 // #define CACHE_DEBUG
 
-// returns the highest number closest to v, which is a power of 2
-// NB! assumes 32 bit ints
-static inline int qt_next_power_of_two(int v)
+// out-of-line to avoid vtable duplication, breaking e.g. RTTI
+QTextureGlyphCache::~QTextureGlyphCache()
 {
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    ++v;
-    return v;
 }
 
 int QTextureGlyphCache::calculateSubPixelPositionCount(glyph_t glyph) const
@@ -69,11 +57,14 @@ int QTextureGlyphCache::calculateSubPixelPositionCount(glyph_t glyph) const
     // Test 12 different subpixel positions since it factors into 3*4 so it gives
     // the coverage we need.
 
-    QList<QImage> images;
-    for (int i=0; i<12; ++i) {
+    const int NumSubpixelPositions = 12;
+
+    QImage images[NumSubpixelPositions];
+    int numImages = 0;
+    for (int i = 0; i < NumSubpixelPositions; ++i) {
         QImage img = textureMapForGlyph(glyph, QFixed::fromReal(i / 12.0));
 
-        if (images.isEmpty()) {
+        if (numImages == 0) {
             QPainterPath path;
             QFixedPoint point;
             m_current_fontengine->addGlyphsToPath(&glyph, &point, 1, &path, QTextItem::RenderFlags());
@@ -82,21 +73,21 @@ int QTextureGlyphCache::calculateSubPixelPositionCount(glyph_t glyph) const
             if (path.isEmpty())
                 break;
 
-            images.append(img);
+            images[numImages++] = qMove(img);
         } else {
             bool found = false;
-            for (int j=0; j<images.size(); ++j) {
-                if (images.at(j) == img) {
+            for (int j = 0; j < numImages; ++j) {
+                if (images[j] == img) {
                     found = true;
                     break;
                 }
             }
             if (!found)
-                images.append(img);
+                images[numImages++] = qMove(img);
         }
     }
 
-    return images.size();
+    return numImages;
 }
 
 bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const glyph_t *glyphs,
@@ -108,8 +99,8 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
 #endif
 
     m_current_fontengine = fontEngine;
-    const int margin = m_current_fontengine->glyphMargin(m_type);
-    const int paddingDoubled = glyphPadding() * 2;
+    const int padding = glyphPadding();
+    const int paddingDoubled = padding * 2;
 
     bool supportsSubPixelPositions = fontEngine->supportsSubPixelPositions();
     if (fontEngine->m_subPixelPositionCount == 0) {
@@ -122,15 +113,13 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
         }
     }
 
+    if (m_cx == 0 && m_cy == 0) {
+        m_cx = padding;
+        m_cy = padding;
+    }
+
     QHash<GlyphAndSubPixelPosition, Coord> listItemCoordinates;
     int rowHeight = 0;
-
-    QFontEngine::GlyphFormat format;
-    switch (m_type) {
-    case Raster_A8: format = QFontEngine::Format_A8; break;
-    case Raster_RGBMask: format = QFontEngine::Format_A32; break;
-    default: format = QFontEngine::Format_Mono; break;
-    }
 
     // check each glyph for its metrics and get the required rowHeight.
     for (int i=0; i < numGlyphs; ++i) {
@@ -146,7 +135,8 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
             continue;
         if (listItemCoordinates.contains(GlyphAndSubPixelPosition(glyph, subPixelPosition)))
             continue;
-        glyph_metrics_t metrics = fontEngine->alphaMapBoundingBox(glyph, subPixelPosition, m_transform, format);
+
+        glyph_metrics_t metrics = fontEngine->alphaMapBoundingBox(glyph, subPixelPosition, m_transform, m_format);
 
 #ifdef CACHE_DEBUG
         printf("(%4x): w=%.2f, h=%.2f, xoff=%.2f, yoff=%.2f, x=%.2f, y=%.2f\n",
@@ -157,7 +147,7 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
                metrics.yoff.toReal(),
                metrics.x.toReal(),
                metrics.y.toReal());
-#endif        
+#endif
         GlyphAndSubPixelPosition key(glyph, subPixelPosition);
         int glyph_width = metrics.width.ceil().toInt();
         int glyph_height = metrics.height.ceil().toInt();
@@ -167,10 +157,8 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
             coords.insert(key, c);
             continue;
         }
-        glyph_width += margin * 2 + 4;
-        glyph_height += margin * 2 + 4;
         // align to 8-bit boundary
-        if (m_type == QFontEngineGlyphCache::Raster_Mono)
+        if (m_format == QFontEngine::Format_Mono)
             glyph_width = (glyph_width+7)&~7;
 
         Coord c = { 0, 0, // will be filled in later
@@ -185,13 +173,13 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
     if (listItemCoordinates.isEmpty())
         return true;
 
-    rowHeight += margin * 2 + paddingDoubled;
+    rowHeight += paddingDoubled;
 
     if (m_w == 0) {
         if (fontEngine->maxCharWidth() <= QT_DEFAULT_TEXTURE_GLYPH_CACHE_WIDTH)
             m_w = QT_DEFAULT_TEXTURE_GLYPH_CACHE_WIDTH;
         else
-            m_w = qt_next_power_of_two(fontEngine->maxCharWidth());
+            m_w = qNextPowerOfTwo(qCeil(fontEngine->maxCharWidth()) - 1);
     }
 
     // now actually use the coords and paint the wanted glyps into cache.
@@ -200,23 +188,23 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
     while (iter != listItemCoordinates.end()) {
         Coord c = iter.value();
 
-        m_currentRowHeight = qMax(m_currentRowHeight, c.h + margin * 2);
+        m_currentRowHeight = qMax(m_currentRowHeight, c.h);
 
-        if (m_cx + c.w > requiredWidth) {
+        if (m_cx + c.w + padding > requiredWidth) {
             int new_width = requiredWidth*2;
-            while (new_width < m_cx + c.w)
+            while (new_width < m_cx + c.w + padding)
                 new_width *= 2;
             if (new_width <= maxTextureWidth()) {
                 requiredWidth = new_width;
             } else {
                 // no room on the current line, start new glyph strip
-                m_cx = 0;
+                m_cx = padding;
                 m_cy += m_currentRowHeight + paddingDoubled;
-                m_currentRowHeight = c.h + margin * 2; // New row
+                m_currentRowHeight = c.h; // New row
             }
         }
 
-        if (maxTextureHeight() > 0 && m_cy + c.h > maxTextureHeight()) {
+        if (maxTextureHeight() > 0 && m_cy + c.h + padding > maxTextureHeight()) {
             // We can't make a cache of the required size, so we bail out
             return false;
         }
@@ -236,7 +224,7 @@ bool QTextureGlyphCache::populate(QFontEngine *fontEngine, int numGlyphs, const 
 
 void QTextureGlyphCache::fillInPendingGlyphs()
 {
-    if (m_pendingGlyphs.isEmpty())
+    if (!hasPendingGlyphs())
         return;
 
     int requiredHeight = m_h;
@@ -253,11 +241,12 @@ void QTextureGlyphCache::fillInPendingGlyphs()
 
     if (isNull() || requiredHeight > m_h || requiredWidth > m_w) {
         if (isNull())
-            createCache(qt_next_power_of_two(requiredWidth), qt_next_power_of_two(requiredHeight));
+            createCache(qNextPowerOfTwo(requiredWidth - 1), qNextPowerOfTwo(requiredHeight - 1));
         else
-            resizeCache(qt_next_power_of_two(requiredWidth), qt_next_power_of_two(requiredHeight));
+            resizeCache(qNextPowerOfTwo(requiredWidth - 1), qNextPowerOfTwo(requiredHeight - 1));
     }
 
+    beginFillTexture();
     {
         QHash<GlyphAndSubPixelPosition, Coord>::iterator iter = m_pendingGlyphs.begin();
         while (iter != m_pendingGlyphs.end()) {
@@ -267,20 +256,31 @@ void QTextureGlyphCache::fillInPendingGlyphs()
             ++iter;
         }
     }
+    endFillTexture();
 
     m_pendingGlyphs.clear();
 }
 
 QImage QTextureGlyphCache::textureMapForGlyph(glyph_t g, QFixed subPixelPosition) const
 {
-    if (m_type == QFontEngineGlyphCache::Raster_RGBMask)
+    switch (m_format) {
+    case QFontEngine::Format_A32:
         return m_current_fontengine->alphaRGBMapForGlyph(g, subPixelPosition, m_transform);
-    return m_current_fontengine->alphaMapForGlyph(g, subPixelPosition, m_transform);
+    case QFontEngine::Format_ARGB:
+        return m_current_fontengine->bitmapForGlyph(g, subPixelPosition, m_transform);
+    default:
+        return m_current_fontengine->alphaMapForGlyph(g, subPixelPosition, m_transform);
+    }
 }
 
 /************************************************************************
  * QImageTextureGlyphCache
  */
+
+// out-of-line to avoid vtable duplication, breaking e.g. RTTI
+QImageTextureGlyphCache::~QImageTextureGlyphCache()
+{
+}
 
 void QImageTextureGlyphCache::resizeTextureData(int width, int height)
 {
@@ -289,22 +289,21 @@ void QImageTextureGlyphCache::resizeTextureData(int width, int height)
 
 void QImageTextureGlyphCache::createTextureData(int width, int height)
 {
-    switch (m_type) {
-    case QFontEngineGlyphCache::Raster_Mono:
+    switch (m_format) {
+    case QFontEngine::Format_Mono:
         m_image = QImage(width, height, QImage::Format_Mono);
         break;
-    case QFontEngineGlyphCache::Raster_A8: {
-        m_image = QImage(width, height, QImage::Format_Indexed8);
-        m_image.fill(0);
-        QVector<QRgb> colors(256);
-        QRgb *it = colors.data();
-        for (int i=0; i<256; ++i, ++it)
-            *it = 0xff000000 | i | (i<<8) | (i<<16);
-        m_image.setColorTable(colors);
-        break;   }
-    case QFontEngineGlyphCache::Raster_RGBMask:
+    case QFontEngine::Format_A8:
+        m_image = QImage(width, height, QImage::Format_Alpha8);
+        break;
+    case QFontEngine::Format_A32:
         m_image = QImage(width, height, QImage::Format_RGB32);
         break;
+    case QFontEngine::Format_ARGB:
+        m_image = QImage(width, height, QImage::Format_ARGB32_Premultiplied);
+        break;
+    default:
+        Q_UNREACHABLE();
     }
 }
 
@@ -319,17 +318,19 @@ void QImageTextureGlyphCache::fillTexture(const Coord &c, glyph_t g, QFixed subP
         return;
     }
 #endif
+    Q_ASSERT(mask.width() <= c.w && mask.height() <= c.h);
 
-    if (m_type == QFontEngineGlyphCache::Raster_RGBMask) {        
+    if (m_format == QFontEngine::Format_A32
+        || m_format == QFontEngine::Format_ARGB) {
         QImage ref(m_image.bits() + (c.x * 4 + c.y * m_image.bytesPerLine()),
-                   qMax(mask.width(), c.w), qMax(mask.height(), c.h), m_image.bytesPerLine(),
+                   qMin(mask.width(), c.w), qMin(mask.height(), c.h), m_image.bytesPerLine(),
                    m_image.format());
         QPainter p(&ref);
         p.setCompositionMode(QPainter::CompositionMode_Source);
         p.fillRect(0, 0, c.w, c.h, QColor(0,0,0,0)); // TODO optimize this
         p.drawImage(0, 0, mask);
         p.end();
-    } else if (m_type == QFontEngineGlyphCache::Raster_Mono) {
+    } else if (m_format == QFontEngine::Format_Mono) {
         if (mask.depth() > 1) {
             // TODO optimize this
             mask = mask.alphaChannel();
@@ -346,7 +347,7 @@ void QImageTextureGlyphCache::fillTexture(const Coord &c, glyph_t g, QFixed subP
             uchar *dest = d + (c.y + y) *dbpl + c.x/8;
 
             if (y < mh) {
-                uchar *src = mask.scanLine(y);
+                const uchar *src = mask.constScanLine(y);
                 for (int x = 0; x < c.w/8; ++x) {
                     if (x < (mw+7)/8)
                         dest[x] = src[x];
@@ -368,7 +369,7 @@ void QImageTextureGlyphCache::fillTexture(const Coord &c, glyph_t g, QFixed subP
             for (int y = 0; y < c.h; ++y) {
                 uchar *dest = d + (c.y + y) *dbpl + c.x;
                 if (y < mh) {
-                    uchar *src = (uchar *) mask.scanLine(y);
+                    const uchar *src = mask.constScanLine(y);
                     for (int x = 0; x < c.w; ++x) {
                         if (x < mw)
                             dest[x] = (src[x >> 3] & (1 << (7 - (x & 7)))) > 0 ? 255 : 0;
@@ -379,7 +380,7 @@ void QImageTextureGlyphCache::fillTexture(const Coord &c, glyph_t g, QFixed subP
             for (int y = 0; y < c.h; ++y) {
                 uchar *dest = d + (c.y + y) *dbpl + c.x;
                 if (y < mh) {
-                    uchar *src = (uchar *) mask.scanLine(y);
+                    const uchar *src = mask.constScanLine(y);
                     for (int x = 0; x < c.w; ++x) {
                         if (x < mw)
                             dest[x] = src[x];
@@ -392,7 +393,7 @@ void QImageTextureGlyphCache::fillTexture(const Coord &c, glyph_t g, QFixed subP
 #ifdef CACHE_DEBUG
 //     QPainter p(&m_image);
 //     p.drawLine(
-    int margin = m_current_fontengine ? m_current_fontengine->glyphMargin(m_type) : 0;
+    int margin = m_current_fontengine ? m_current_fontengine->glyphMargin(m_format) : 0;
     QPoint base(c.x + margin, c.y + margin + c.baseLineY-1);
     if (m_image.rect().contains(base))
         m_image.setPixel(base, 255);

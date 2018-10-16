@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -62,17 +61,16 @@
 
 QT_BEGIN_NAMESPACE
 
-namespace {
 template<typename T>
 struct QVariantIntegrator
 {
     static const bool CanUseInternalSpace = sizeof(T) <= sizeof(QVariant::Private::Data)
-                                            && (!QTypeInfo<T>::isStatic);
+            && ((QTypeInfoQuery<T>::isRelocatable) || std::is_enum<T>::value);
+    typedef std::integral_constant<bool, CanUseInternalSpace> CanUseInternalSpace_t;
 };
 Q_STATIC_ASSERT(QVariantIntegrator<double>::CanUseInternalSpace);
 Q_STATIC_ASSERT(QVariantIntegrator<long int>::CanUseInternalSpace);
 Q_STATIC_ASSERT(QVariantIntegrator<qulonglong>::CanUseInternalSpace);
-} // namespace
 
 #ifdef Q_CC_SUN // Sun CC picks the wrong overload, so introduce awful hack
 
@@ -112,45 +110,63 @@ inline T *v_cast(QVariant::Private *d, T * = 0)
 template <class T> class QVariantPrivateSharedEx : public QVariant::PrivateShared
 {
 public:
-    QVariantPrivateSharedEx() : QVariant::PrivateShared(&m_t) { }
+    QVariantPrivateSharedEx() : QVariant::PrivateShared(&m_t), m_t() { }
     QVariantPrivateSharedEx(const T&t) : QVariant::PrivateShared(&m_t), m_t(t) { }
 
 private:
     T m_t;
 };
 
-// constructs a new variant if copy is 0, otherwise copy-constructs
 template <class T>
-inline void v_construct(QVariant::Private *x, const void *copy, T * = 0)
+inline void v_construct_helper(QVariant::Private *x, const T &t, std::true_type)
 {
-    if (!QVariantIntegrator<T>::CanUseInternalSpace) {
-        x->data.shared = copy ? new QVariantPrivateSharedEx<T>(*static_cast<const T *>(copy))
-                              : new QVariantPrivateSharedEx<T>;
-        x->is_shared = true;
-    } else {
-        if (copy)
-            new (&x->data.ptr) T(*static_cast<const T *>(copy));
-        else
-            new (&x->data.ptr) T;
-    }
+    new (&x->data) T(t);
+    x->is_shared = false;
+}
+
+template <class T>
+inline void v_construct_helper(QVariant::Private *x, const T &t, std::false_type)
+{
+    x->data.shared = new QVariantPrivateSharedEx<T>(t);
+    x->is_shared = true;
+}
+
+template <class T>
+inline void v_construct_helper(QVariant::Private *x, std::true_type)
+{
+    new (&x->data) T();
+    x->is_shared = false;
+}
+
+template <class T>
+inline void v_construct_helper(QVariant::Private *x, std::false_type)
+{
+    x->data.shared = new QVariantPrivateSharedEx<T>;
+    x->is_shared = true;
 }
 
 template <class T>
 inline void v_construct(QVariant::Private *x, const T &t)
 {
-    if (!QVariantIntegrator<T>::CanUseInternalSpace) {
-        x->data.shared = new QVariantPrivateSharedEx<T>(t);
-        x->is_shared = true;
-    } else {
-        new (&x->data.ptr) T(t);
-    }
+    // dispatch
+    v_construct_helper(x, t, typename QVariantIntegrator<T>::CanUseInternalSpace_t());
+}
+
+// constructs a new variant if copy is 0, otherwise copy-constructs
+template <class T>
+inline void v_construct(QVariant::Private *x, const void *copy, T * = 0)
+{
+    if (copy)
+        v_construct<T>(x, *static_cast<const T *>(copy));
+    else
+        v_construct_helper<T>(x, typename QVariantIntegrator<T>::CanUseInternalSpace_t());
 }
 
 // deletes the internal structures
 template <class T>
 inline void v_clear(QVariant::Private *d, T* = 0)
 {
-    
+
     if (!QVariantIntegrator<T>::CanUseInternalSpace) {
         //now we need to cast
         //because QVariant::PrivateShared doesn't have a virtual destructor
@@ -160,6 +176,36 @@ inline void v_clear(QVariant::Private *d, T* = 0)
     }
 
 }
+
+template <typename T>
+struct PrimitiveIsNull
+{
+public:
+    static bool isNull(const QVariant::Private *d)
+    {
+        return d->is_null;
+    }
+};
+
+template <typename T>
+struct PrimitiveIsNull<T*>
+{
+public:
+    static bool isNull(const QVariant::Private *d)
+    {
+        return d->is_null || d->data.ptr == nullptr;
+    }
+};
+
+template <>
+struct PrimitiveIsNull<std::nullptr_t>
+{
+public:
+    static bool isNull(const QVariant::Private *)
+    {
+        return true;
+    }
+};
 
 template<class Filter>
 class QVariantComparator {
@@ -212,7 +258,6 @@ class QVariantIsNull
     /// \internal
     /// This class checks if a type T has method called isNull. Result is kept in the Value property
     /// TODO Can we somehow generalize it? A macro version?
-#if defined(Q_COMPILER_DECLTYPE) // C++11 version
     template<typename T>
     class HasIsNullMethod {
         struct Yes { char unused[1]; };
@@ -224,44 +269,6 @@ class QVariantIsNull
     public:
         static const bool Value = (sizeof(test<T>(0)) == sizeof(Yes));
     };
-#elif defined(Q_CC_MSVC) && _MSC_VER >= 1400 // MSVC 2005, 2008 version: no decltype, but 'sealed' classes (>=2010 has decltype)
-    template<typename T>
-    class HasIsNullMethod {
-        struct Yes { char unused[1]; };
-        struct No { char unused[2]; };
-        Q_STATIC_ASSERT(sizeof(Yes) != sizeof(No));
-
-        template<class C> static Yes test(char (*)[(&C::isNull == 0) + 1]);
-        template<class C> static No test(...);
-    public:
-        static const bool Value = (sizeof(test<T>(0)) == sizeof(Yes));
-    };
-#else // C++98 version (doesn't work for final classes)
-    template<typename T, bool IsClass = QTypeInfo<T>::isComplex>
-    class HasIsNullMethod
-    {
-        struct Yes { char unused[1]; };
-        struct No { char unused[2]; };
-        Q_STATIC_ASSERT(sizeof(Yes) != sizeof(No));
-
-        struct FallbackMixin { bool isNull() const; };
-        struct Derived : public T, public FallbackMixin {}; // <- doesn't work for final classes
-        template<class C, C> struct TypeCheck {};
-
-        template<class C> static Yes test(...);
-        template<class C> static No test(TypeCheck<bool (FallbackMixin::*)() const, &C::isNull> *);
-    public:
-        static const bool Value = (sizeof(test<Derived>(0)) == sizeof(Yes));
-    };
-
-    // We need to exclude primitive types as they won't compile with HasIsNullMethod::Check classes
-    // anyway it is not a problem as the types do not have isNull method.
-    template<typename T>
-    class HasIsNullMethod<T, /* IsClass = */ false> {
-    public:
-        static const bool Value = false;
-    };
-#endif
 
     // TODO This part should go to autotests during HasIsNullMethod generalization.
     Q_STATIC_ASSERT(!HasIsNullMethod<bool>::Value);
@@ -271,11 +278,11 @@ class QVariantIsNull
     Q_STATIC_ASSERT(!HasIsNullMethod<SelfTest2>::Value);
     struct SelfTest3 : public SelfTest1 {};
     Q_STATIC_ASSERT(HasIsNullMethod<SelfTest3>::Value);
-    struct SelfTestFinal1 Q_DECL_FINAL { bool isNull() const; };
+    struct SelfTestFinal1 final { bool isNull() const; };
     Q_STATIC_ASSERT(HasIsNullMethod<SelfTestFinal1>::Value);
-    struct SelfTestFinal2 Q_DECL_FINAL {};
+    struct SelfTestFinal2 final {};
     Q_STATIC_ASSERT(!HasIsNullMethod<SelfTestFinal2>::Value);
-    struct SelfTestFinal3 Q_DECL_FINAL : public SelfTest1 {};
+    struct SelfTestFinal3 final : public SelfTest1 {};
     Q_STATIC_ASSERT(HasIsNullMethod<SelfTestFinal3>::Value);
 
     template<typename T, bool HasIsNull = HasIsNullMethod<T>::Value>
@@ -291,7 +298,7 @@ class QVariantIsNull
     {
         static bool isNull(const QVariant::Private *d)
         {
-            return d->is_null;
+            return PrimitiveIsNull<T>::isNull(d);
         }
     };
 
@@ -337,39 +344,11 @@ protected:
 template<class Filter>
 class QVariantConstructor
 {
-    template<typename T, bool CanUseInternalSpace = QVariantIntegrator<T>::CanUseInternalSpace>
-    struct CallConstructor {};
-
-    template<typename T>
-    struct CallConstructor<T, /* CanUseInternalSpace = */ true>
-    {
-        CallConstructor(const QVariantConstructor &tc)
-        {
-            if (tc.m_copy)
-                new (&tc.m_x->data.ptr) T(*static_cast<const T*>(tc.m_copy));
-            else
-                new (&tc.m_x->data.ptr) T();
-            tc.m_x->is_shared = false;
-        }
-    };
-
-    template<typename T>
-    struct CallConstructor<T, /* CanUseInternalSpace = */ false>
-    {
-        CallConstructor(const QVariantConstructor &tc)
-        {
-            Q_STATIC_ASSERT(QTypeInfo<T>::isComplex || sizeof(T) > sizeof(QVariant::Private::Data));
-            tc.m_x->data.shared = tc.m_copy ? new QVariantPrivateSharedEx<T>(*static_cast<const T*>(tc.m_copy))
-                                      : new QVariantPrivateSharedEx<T>;
-            tc.m_x->is_shared = true;
-        }
-    };
-
     template<typename T, bool IsAcceptedType = Filter::template Acceptor<T>::IsAccepted>
     struct FilteredConstructor {
         FilteredConstructor(const QVariantConstructor &tc)
         {
-            CallConstructor<T> tmp(tc);
+            v_construct<T>(tc.m_x, tc.m_copy);
             tc.m_x->is_null = !tc.m_copy;
         }
     };

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +47,10 @@
 #include "qobject_p.h"
 #include "qeventloop_p.h"
 #include <private/qthread_p.h>
+
+#ifdef Q_OS_WASM
+#include <emscripten.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -101,10 +103,10 @@ QEventLoop::QEventLoop(QObject *parent)
     : QObject(*new QEventLoopPrivate, parent)
 {
     Q_D(QEventLoop);
-    if (!QCoreApplication::instance()) {
+    if (!QCoreApplication::instance() && QCoreApplicationPrivate::threadRequiresCoreApplication()) {
         qWarning("QEventLoop: Cannot be used without QApplication");
-    } else if (!d->threadData->eventDispatcher) {
-        QThreadPrivate::createEventDispatcher(d->threadData);
+    } else {
+        d->threadData->ensureEventDispatcher();
     }
 }
 
@@ -117,8 +119,8 @@ QEventLoop::~QEventLoop()
 
 /*!
     Processes pending events that match \a flags until there are no
-    more events to process. Returns true if pending events were handled;
-    otherwise returns false.
+    more events to process. Returns \c true if pending events were handled;
+    otherwise returns \c false.
 
     This function is especially useful if you have a long running
     operation and want to show its progress without allowing user
@@ -131,9 +133,9 @@ QEventLoop::~QEventLoop()
 bool QEventLoop::processEvents(ProcessEventsFlags flags)
 {
     Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher)
+    if (!d->threadData->hasEventDispatcher())
         return false;
-    return d->threadData->eventDispatcher->processEvents(flags);
+    return d->threadData->eventDispatcher.load()->processEvents(flags);
 }
 
 /*!
@@ -180,7 +182,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
         LoopReference(QEventLoopPrivate *d, QMutexLocker &locker) : d(d), locker(locker), exceptionCaught(true)
         {
             d->inExec = true;
-            d->exit = false;
+            d->exit.storeRelease(false);
             ++d->threadData->loopLevel;
             d->threadData->eventLoops.push(d->q_func());
             locker.unlock();
@@ -190,8 +192,10 @@ int QEventLoop::exec(ProcessEventsFlags flags)
         {
             if (exceptionCaught) {
                 qWarning("Qt has caught an exception thrown from an event handler. Throwing\n"
-                         "exceptions from an event handler is not supported in Qt. You must\n"
-                         "reimplement QApplication::notify() and catch all exceptions there.\n");
+                         "exceptions from an event handler is not supported in Qt.\n"
+                         "You must not let any exception whatsoever propagate through Qt code.\n"
+                         "If that is not possible, in Qt 5 you must at least reimplement\n"
+                         "QCoreApplication::notify() and catch all exceptions there.\n");
             }
             locker.relock();
             QEventLoop *eventLoop = d->threadData->eventLoops.pop();
@@ -208,11 +212,20 @@ int QEventLoop::exec(ProcessEventsFlags flags)
     if (app && app->thread() == thread())
         QCoreApplication::removePostedEvents(app, QEvent::Quit);
 
-    while (!d->exit)
+#ifdef Q_OS_WASM
+    // Partial support for nested event loops: Make the runtime throw a JavaSrcript
+    // exception, which returns control to the browser while preserving the C++ stack.
+    // Event processing then continues as normal. The sleep call below never returns.
+    // QTBUG-70185
+    if (d->threadData->loopLevel > 1)
+        emscripten_sleep(1);
+#endif
+
+    while (!d->exit.loadAcquire())
         processEvents(flags | WaitForMoreEvents | EventLoopExec);
 
     ref.exceptionCaught = false;
-    return d->returnCode;
+    return d->returnCode.load();
 }
 
 /*!
@@ -234,7 +247,7 @@ int QEventLoop::exec(ProcessEventsFlags flags)
 void QEventLoop::processEvents(ProcessEventsFlags flags, int maxTime)
 {
     Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher)
+    if (!d->threadData->hasEventDispatcher())
         return;
 
     QElapsedTimer start;
@@ -263,16 +276,27 @@ void QEventLoop::processEvents(ProcessEventsFlags flags, int maxTime)
 void QEventLoop::exit(int returnCode)
 {
     Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher)
+    if (!d->threadData->hasEventDispatcher())
         return;
 
-    d->returnCode = returnCode;
-    d->exit = true;
-    d->threadData->eventDispatcher->interrupt();
+    d->returnCode.store(returnCode);
+    d->exit.storeRelease(true);
+    d->threadData->eventDispatcher.load()->interrupt();
+
+#ifdef Q_OS_WASM
+    // QEventLoop::exec() never returns in emscripten. We implement approximate behavior here.
+    // QTBUG-70185
+    if (d->threadData->loopLevel == 1) {
+        emscripten_force_exit(returnCode);
+    } else {
+        d->inExec = false;
+        --d->threadData->loopLevel;
+    }
+#endif
 }
 
 /*!
-    Returns true if the event loop is running; otherwise returns
+    Returns \c true if the event loop is running; otherwise returns
     false. The event loop is considered running from the time when
     exec() is called until exit() is called.
 
@@ -281,7 +305,7 @@ void QEventLoop::exit(int returnCode)
 bool QEventLoop::isRunning() const
 {
     Q_D(const QEventLoop);
-    return !d->exit;
+    return !d->exit.loadAcquire();
 }
 
 /*!
@@ -292,9 +316,9 @@ bool QEventLoop::isRunning() const
 void QEventLoop::wakeUp()
 {
     Q_D(QEventLoop);
-    if (!d->threadData->eventDispatcher)
+    if (!d->threadData->hasEventDispatcher())
         return;
-    d->threadData->eventDispatcher->wakeUp();
+    d->threadData->eventDispatcher.load()->wakeUp();
 }
 
 
@@ -441,3 +465,5 @@ QEventLoopLocker::~QEventLoopLocker()
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qeventloop.cpp"

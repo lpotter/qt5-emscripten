@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -66,15 +64,20 @@
 #  endif
 #endif
 
+#ifdef Q_OS_UNIX
+struct statx;
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QFileSystemEngine;
 
-class QFileSystemMetaData
+class Q_AUTOTEST_EXPORT QFileSystemMetaData
 {
 public:
     QFileSystemMetaData()
-        : knownFlagsMask(0)
+        : knownFlagsMask(0),
+          size_(-1)
     {
     }
 
@@ -100,7 +103,7 @@ public:
         LinkType            = 0x00010000,
         FileType            = 0x00020000,
         DirectoryType       = 0x00040000,
-#if defined(Q_OS_MAC) && !defined(Q_OS_IOS)
+#if defined(Q_OS_DARWIN)
         BundleType          = 0x00080000,
         AliasType           = 0x08000000,
 #else
@@ -121,16 +124,22 @@ public:
         // Attributes
         HiddenAttribute     = 0x00100000,
         SizeAttribute       = 0x00200000,   // Note: overlaps with QAbstractFileEngine::LocalDiskFlag
-        ExistsAttribute     = 0x00400000,
+        ExistsAttribute     = 0x00400000,   // For historical reasons, indicates existence of data, not the file
+#if defined(Q_OS_WIN)
+        WasDeletedAttribute =        0x0,
+#else
+        WasDeletedAttribute = 0x40000000,   // Indicates the file was deleted
+#endif
 
-        Attributes          = HiddenAttribute | SizeAttribute | ExistsAttribute,
+        Attributes          = HiddenAttribute | SizeAttribute | ExistsAttribute | WasDeletedAttribute,
 
-        // Times
-        CreationTime        = 0x01000000,   // Note: overlaps with QAbstractFileEngine::Refresh
+        // Times - if we know one of them, we know them all
+        AccessTime          = 0x02000000,
+        BirthTime           = 0x02000000,
+        MetadataChangeTime  = 0x02000000,
         ModificationTime    = 0x02000000,
-        AccessTime          = 0x04000000,
 
-        Times               = CreationTime | ModificationTime | AccessTime,
+        Times               = AccessTime | BirthTime | MetadataChangeTime | ModificationTime,
 
         // Owner IDs
         UserId              = 0x10000000,
@@ -145,6 +154,7 @@ public:
                             | QFileSystemMetaData::DirectoryType
                             | QFileSystemMetaData::SequentialType
                             | QFileSystemMetaData::SizeAttribute
+                            | QFileSystemMetaData::WasDeletedAttribute
                             | QFileSystemMetaData::Times
                             | QFileSystemMetaData::OwnerIds,
 
@@ -192,6 +202,7 @@ public:
     bool isLegacyLink() const               { return (entryFlags & LegacyLinkType); }
     bool isSequential() const               { return (entryFlags & SequentialType); }
     bool isHidden() const                   { return (entryFlags & HiddenAttribute); }
+    bool wasDeleted() const                 { return (entryFlags & WasDeletedAttribute); }
 #if defined(Q_OS_WIN)
     bool isLnkFile() const                  { return (entryFlags & WinLnkType); }
 #else
@@ -202,9 +213,10 @@ public:
 
     QFile::Permissions permissions() const  { return QFile::Permissions(Permissions & entryFlags); }
 
-    QDateTime creationTime() const;
-    QDateTime modificationTime() const;
     QDateTime accessTime() const;
+    QDateTime birthTime() const;
+    QDateTime metadataChangeTime() const;
+    QDateTime modificationTime() const;
 
     QDateTime fileTime(QAbstractFileEngine::FileTime time) const;
     uint userId() const;
@@ -212,6 +224,7 @@ public:
     uint ownerId(QAbstractFileEngine::FileOwner owner) const;
 
 #ifdef Q_OS_UNIX
+    void fillFromStatxBuf(const struct statx &statBuffer);
     void fillFromStatBuf(const QT_STATBUF &statBuffer);
     void fillFromDirEnt(const QT_DIRENT &statBuffer);
 #endif
@@ -219,7 +232,9 @@ public:
 #if defined(Q_OS_WIN)
     inline void fillFromFileAttribute(DWORD fileAttribute, bool isDriveRoot = false);
     inline void fillFromFindData(WIN32_FIND_DATA &findData, bool setLinkType = false, bool isDriveRoot = false);
+#  ifndef Q_OS_WINRT
     inline void fillFromFindInfo(BY_HANDLE_FILE_INFORMATION &fileInfo);
+#  endif
 #endif
 private:
     friend class QFileSystemEngine;
@@ -232,13 +247,16 @@ private:
     // Platform-specific data goes here:
 #if defined(Q_OS_WIN)
     DWORD fileAttribute_;
-    FILETIME creationTime_;
+    FILETIME birthTime_;
+    FILETIME changeTime_;
     FILETIME lastAccessTime_;
     FILETIME lastWriteTime_;
 #else
-    time_t creationTime_;
-    time_t modificationTime_;
-    time_t accessTime_;
+    // msec precision
+    qint64 accessTime_;
+    qint64 birthTime_;
+    qint64 metadataChangeTime_;
+    qint64 modificationTime_;
 
     uint userId_;
     uint groupId_;
@@ -248,7 +266,7 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QFileSystemMetaData::MetaDataFlags)
 
-#if defined(Q_OS_MAC) && !defined(Q_OS_IOS)
+#if defined(Q_OS_DARWIN)
 inline bool QFileSystemMetaData::isBundle() const                   { return (entryFlags & BundleType); }
 inline bool QFileSystemMetaData::isAlias() const                    { return (entryFlags & AliasType); }
 #else
@@ -266,8 +284,11 @@ inline QDateTime QFileSystemMetaData::fileTime(QAbstractFileEngine::FileTime tim
     case QAbstractFileEngine::AccessTime:
         return accessTime();
 
-    case QAbstractFileEngine::CreationTime:
-        return creationTime();
+    case QAbstractFileEngine::BirthTime:
+        return birthTime();
+
+    case QAbstractFileEngine::MetadataChangeTime:
+        return metadataChangeTime();
     }
 
     return QDateTime();
@@ -275,9 +296,14 @@ inline QDateTime QFileSystemMetaData::fileTime(QAbstractFileEngine::FileTime tim
 #endif
 
 #if defined(Q_OS_UNIX)
-inline QDateTime QFileSystemMetaData::creationTime() const          { return QDateTime::fromTime_t(creationTime_); }
-inline QDateTime QFileSystemMetaData::modificationTime() const      { return QDateTime::fromTime_t(modificationTime_); }
-inline QDateTime QFileSystemMetaData::accessTime() const            { return QDateTime::fromTime_t(accessTime_); }
+inline QDateTime QFileSystemMetaData::birthTime() const
+{ return birthTime_ ? QDateTime::fromMSecsSinceEpoch(birthTime_) : QDateTime(); }
+inline QDateTime QFileSystemMetaData::metadataChangeTime() const
+{ return metadataChangeTime_ ? QDateTime::fromMSecsSinceEpoch(metadataChangeTime_) : QDateTime(); }
+inline QDateTime QFileSystemMetaData::modificationTime() const
+{ return modificationTime_ ? QDateTime::fromMSecsSinceEpoch(modificationTime_) : QDateTime(); }
+inline QDateTime QFileSystemMetaData::accessTime() const
+{ return accessTime_ ? QDateTime::fromMSecsSinceEpoch(accessTime_) : QDateTime(); }
 
 inline uint QFileSystemMetaData::userId() const                     { return userId_; }
 inline uint QFileSystemMetaData::groupId() const                    { return groupId_; }
@@ -316,9 +342,9 @@ inline void QFileSystemMetaData::fillFromFileAttribute(DWORD fileAttribute,bool 
 inline void QFileSystemMetaData::fillFromFindData(WIN32_FIND_DATA &findData, bool setLinkType, bool isDriveRoot)
 {
     fillFromFileAttribute(findData.dwFileAttributes, isDriveRoot);
-    creationTime_ = findData.ftCreationTime;
+    birthTime_ = findData.ftCreationTime;
     lastAccessTime_ = findData.ftLastAccessTime;
-    lastWriteTime_ = findData.ftLastWriteTime;
+    changeTime_ = lastWriteTime_ = findData.ftLastWriteTime;
     if (fileAttribute_ & FILE_ATTRIBUTE_DIRECTORY) {
         size_ = 0;
     } else {
@@ -330,22 +356,20 @@ inline void QFileSystemMetaData::fillFromFindData(WIN32_FIND_DATA &findData, boo
     if (setLinkType) {
         knownFlagsMask |=  LinkType;
         entryFlags &= ~LinkType;
-#if !defined(Q_OS_WINCE)
         if ((fileAttribute_ & FILE_ATTRIBUTE_REPARSE_POINT)
             && (findData.dwReserved0 == IO_REPARSE_TAG_SYMLINK)) {
             entryFlags |= LinkType;
         }
-#endif
-
     }
 }
 
+#ifndef Q_OS_WINRT
 inline void QFileSystemMetaData::fillFromFindInfo(BY_HANDLE_FILE_INFORMATION &fileInfo)
 {
     fillFromFileAttribute(fileInfo.dwFileAttributes);
-    creationTime_ = fileInfo.ftCreationTime;
+    birthTime_ = fileInfo.ftCreationTime;
     lastAccessTime_ = fileInfo.ftLastAccessTime;
-    lastWriteTime_ = fileInfo.ftLastWriteTime;
+    changeTime_ = lastWriteTime_ = fileInfo.ftLastWriteTime;
     if (fileAttribute_ & FILE_ATTRIBUTE_DIRECTORY) {
         size_ = 0;
     } else {
@@ -355,7 +379,8 @@ inline void QFileSystemMetaData::fillFromFindInfo(BY_HANDLE_FILE_INFORMATION &fi
     }
     knownFlagsMask |=  Times | SizeAttribute;
 }
-#endif
+#endif // !Q_OS_WINRT
+#endif // Q_OS_WIN
 
 QT_END_NAMESPACE
 

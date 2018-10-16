@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -234,7 +244,7 @@ for (i = map.begin(); i != map.end(); ++i)
 //! [20]
 QMap<QString, int>::iterator i = map.begin();
 while (i != map.end()) {
-    if (i.key().startsWith("_"))
+    if (i.key().startsWith('_'))
         i = map.erase(i);
     else
         ++i;
@@ -247,7 +257,7 @@ QMap<QString, int>::iterator i = map.begin();
 while (i != map.end()) {
     QMap<QString, int>::iterator prev = i;
     ++i;
-    if (prev.key().startsWith("_"))
+    if (prev.key().startsWith('_'))
         map.erase(prev);
 }
 //! [21]
@@ -256,7 +266,7 @@ while (i != map.end()) {
 //! [22]
 // WRONG
 while (i != map.end()) {
-    if (i.key().startsWith("_"))
+    if (i.key().startsWith('_'))
         map.erase(i);
     ++i;
 }
@@ -311,3 +321,22 @@ while (i != map.end() && i.key() == "plenty") {
     ++i;
 }
 //! [27]
+
+//! [keyiterator1]
+for (QMap<int, QString>::const_iterator it = map.cbegin(), end = map.cend(); it != end; ++it) {
+    cout << "The key: " << it.key() << endl
+    cout << "The value: " << it.value() << endl;
+    cout << "Also the value: " << (*it) << endl;
+}
+//! [keyiterator1]
+
+//! [keyiterator2]
+// Inefficient, keys() is expensive
+QList<int> keys = map.keys();
+int numPrimes = std::count_if(map.cbegin(), map.cend(), isPrimeNumber);
+qDeleteAll(map2.keys());
+
+// Efficient, no memory allocation needed
+int numPrimes = std::count_if(map.keyBegin(), map.keyEnd(), isPrimeNumber);
+qDeleteAll(map2.keyBegin(), map2.keyEnd());
+//! [keyiterator2]

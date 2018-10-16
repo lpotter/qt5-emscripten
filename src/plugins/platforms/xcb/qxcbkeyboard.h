@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,7 +42,12 @@
 
 #include "qxcbobject.h"
 
-#include "xcb/xcb_keysyms.h"
+#include <xcb/xcb_keysyms.h>
+
+#include <xkbcommon/xkbcommon.h>
+#if QT_CONFIG(xkb)
+#include <xkbcommon/xkbcommon-x11.h>
+#endif
 
 #include <QEvent>
 
@@ -56,37 +59,104 @@ class QXcbKeyboard : public QXcbObject
 {
 public:
     QXcbKeyboard(QXcbConnection *connection);
+
     ~QXcbKeyboard();
 
-    void handleKeyPressEvent(QXcbWindow *window, const xcb_key_press_event_t *event);
-    void handleKeyReleaseEvent(QXcbWindow *window, const xcb_key_release_event_t *event);
+    void handleKeyPressEvent(const xcb_key_press_event_t *event);
+    void handleKeyReleaseEvent(const xcb_key_release_event_t *event);
 
-    void handleMappingNotifyEvent(const xcb_mapping_notify_event_t *event);
+    Qt::KeyboardModifiers translateModifiers(int s) const;
+    void updateKeymap(xcb_mapping_notify_event_t *event);
+    void updateKeymap();
+    QList<int> possibleKeys(const QKeyEvent *e) const;
 
-    Qt::KeyboardModifiers translateModifiers(int s);
+    // when XKEYBOARD not present on the X server
+    void updateXKBMods();
+    xkb_mod_mask_t xkbModMask(quint16 state);
+    void updateXKBStateFromCore(quint16 state);
+#if QT_CONFIG(xcb_xinput)
+    void updateXKBStateFromXI(void *modInfo, void *groupInfo);
+#endif
+#if QT_CONFIG(xkb)
+    // when XKEYBOARD is present on the X server
+    int coreDeviceId() const { return core_device_id; }
+    void updateXKBState(xcb_xkb_state_notify_event_t *state);
+#endif
+    void handleStateChanges(xkb_state_component changedComponents);
+
+protected:
+    void handleKeyEvent(xcb_window_t sourceWindow, QEvent::Type type, xcb_keycode_t code,
+                        quint16 state, xcb_timestamp_t time, bool fromSendEvent);
+
+    void resolveMaskConflicts();
+    QString lookupString(struct xkb_state *state, xcb_keycode_t code) const;
+    QString lookupStringNoKeysymTransformations(xkb_keysym_t keysym) const;
+    int keysymToQtKey(xcb_keysym_t keysym, Qt::KeyboardModifiers modifiers,
+                      struct xkb_state *state, xcb_keycode_t code) const;
+
+    typedef QMap<xcb_keysym_t, int> KeysymModifierMap;
+    struct xkb_keymap *keymapFromCore(const KeysymModifierMap &keysymMods);
+
+    // when XKEYBOARD not present on the X server
+    void updateModifiers(const KeysymModifierMap &keysymMods);
+    KeysymModifierMap keysymsToModifiers();
+    // when XKEYBOARD is present on the X server
+    void updateVModMapping();
+    void updateVModToRModMapping();
+
+    xkb_keysym_t lookupLatinKeysym(xkb_keycode_t keycode) const;
+    void checkForLatinLayout() const;
 
 private:
-    void handleKeyEvent(QWindow *window, QEvent::Type type, xcb_keycode_t code, quint16 state, xcb_timestamp_t time);
+    bool m_config = false;
+    bool m_isAutoRepeat = false;
+    xcb_keycode_t m_autoRepeatCode = 0;
 
-    int translateKeySym(uint key) const;
-    QString translateKeySym(xcb_keysym_t keysym, uint xmodifiers,
-                            int &code, Qt::KeyboardModifiers &modifiers,
-                            QByteArray &chars, int &count);
-    void setupModifiers();
-    void setMask(uint sym, uint mask);
-    xcb_keysym_t lookupString(QWindow *window, uint state, xcb_keycode_t code,
-                              QEvent::Type type, QByteArray *chars);
+    struct _mod_masks {
+        uint alt;
+        uint altgr;
+        uint meta;
+        uint super;
+        uint hyper;
+    };
 
-    uint m_alt_mask;
-    uint m_super_mask;
-    uint m_hyper_mask;
-    uint m_meta_mask;
-    uint m_mode_switch_mask;
-    uint m_num_lock_mask;
-    uint m_caps_lock_mask;
+    _mod_masks rmod_masks;
 
-    xcb_key_symbols_t *m_key_symbols;
-    xcb_keycode_t m_autorepeat_code;
+    // when XKEYBOARD not present on the X server
+    xcb_key_symbols_t *m_key_symbols = nullptr;
+    struct _xkb_mods {
+        xkb_mod_index_t shift;
+        xkb_mod_index_t lock;
+        xkb_mod_index_t control;
+        xkb_mod_index_t mod1;
+        xkb_mod_index_t mod2;
+        xkb_mod_index_t mod3;
+        xkb_mod_index_t mod4;
+        xkb_mod_index_t mod5;
+    };
+    _xkb_mods xkb_mods;
+#if QT_CONFIG(xkb)
+    // when XKEYBOARD is present on the X server
+    _mod_masks vmod_masks;
+    int core_device_id;
+#endif
+
+    struct XKBStateDeleter {
+        void operator()(struct xkb_state *state) const { return xkb_state_unref(state); }
+    };
+    struct XKBKeymapDeleter {
+        void operator()(struct xkb_keymap *keymap) const { return xkb_keymap_unref(keymap); }
+    };
+    struct XKBContextDeleter {
+        void operator()(struct xkb_context *context) const { return xkb_context_unref(context); }
+    };
+    using ScopedXKBState = std::unique_ptr<struct xkb_state, XKBStateDeleter>;
+    using ScopedXKBKeymap = std::unique_ptr<struct xkb_keymap, XKBKeymapDeleter>;
+    using ScopedXKBContext = std::unique_ptr<struct xkb_context, XKBContextDeleter>;
+
+    ScopedXKBState m_xkbState;
+    ScopedXKBKeymap m_xkbKeymap;
+    ScopedXKBContext m_xkbContext;
 };
 
 QT_END_NAMESPACE

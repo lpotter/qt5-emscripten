@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -222,7 +222,7 @@
           transformations for you. This makes it very easy to implement custom
           items. For example, if you receive a mouse press or a drag enter
           event, the event position is given in item coordinates. The
-          QGraphicsItem::contains() virtual function, which returns true if a
+          QGraphicsItem::contains() virtual function, which returns \c true if a
           certain point is inside your item, and false otherwise, takes a
           point argument in item coordinates. Similarly, an item's bounding
           rect and shape are in item coordinates.
@@ -301,7 +301,7 @@
           pass a QPainterPath to mapToScene(), and then pass the mapped path
           to QGraphicsScene::items().
 
-          You can map coordinates and shapes to and from and item's scene by
+          You can map coordinates and shapes to and from an item's scene by
           calling QGraphicsItem::mapToScene() and
           QGraphicsItem::mapFromScene(). You can also map to an item's parent
           item by calling QGraphicsItem::mapToParent() and
@@ -491,10 +491,7 @@
           not supported. For example, you can create decorated windows by
           passing the Qt::Window window flag to QGraphicsWidget's constructor,
           but Graphics View currently doesn't support the Qt::Sheet and
-          Qt::Drawer flags that are common on Mac OS X.
-
-          The capabilities of QGraphicsWidget are expected to grow depending
-          on community feedback.
+          Qt::Drawer flags that are common on \macos.
 
         \section3 QGraphicsLayout
 

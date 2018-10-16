@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +41,7 @@
 #define QXCBBACKINGSTORE_H
 
 #include <qpa/qplatformbackingstore.h>
+#include <QtCore/QStack>
 
 #include <xcb/xcb.h>
 
@@ -50,25 +49,67 @@
 
 QT_BEGIN_NAMESPACE
 
-class QXcbShmImage;
+class QXcbBackingStoreImage;
 
 class QXcbBackingStore : public QXcbObject, public QPlatformBackingStore
 {
 public:
-    QXcbBackingStore(QWindow *widget);
+    QXcbBackingStore(QWindow *window);
     ~QXcbBackingStore();
 
-    QPaintDevice *paintDevice();
-    void flush(QWindow *window, const QRegion &region, const QPoint &offset);
-    void resize(const QSize &size, const QRegion &staticContents);
-    bool scroll(const QRegion &area, int dx, int dy);
+    QPaintDevice *paintDevice() override;
+    void flush(QWindow *window, const QRegion &region, const QPoint &offset) override;
+#ifndef QT_NO_OPENGL
+    void composeAndFlush(QWindow *window, const QRegion &region, const QPoint &offset,
+                         QPlatformTextureList *textures,
+                         bool translucentBackground) override;
+#endif
+    QImage toImage() const override;
 
-    void beginPaint(const QRegion &);
-    void endPaint(const QRegion &);
+    QPlatformGraphicsBuffer *graphicsBuffer() const override;
+
+    void resize(const QSize &size, const QRegion &staticContents) override;
+    bool scroll(const QRegion &area, int dx, int dy) override;
+
+    void beginPaint(const QRegion &) override;
+    void endPaint() override;
+
+    static bool createSystemVShmSegment(QXcbConnection *c, size_t segmentSize = 1,
+                                        void *shmInfo = nullptr);
+
+protected:
+    virtual void render(xcb_window_t window, const QRegion &region, const QPoint &offset);
+    virtual void recreateImage(QXcbWindow *win, const QSize &size);
+
+    QXcbBackingStoreImage *m_image = nullptr;
+    QStack<QRegion> m_paintRegions;
+    QImage m_rgbImage;
+};
+
+class QXcbSystemTrayBackingStore : public QXcbBackingStore
+{
+public:
+    QXcbSystemTrayBackingStore(QWindow *window);
+    ~QXcbSystemTrayBackingStore();
+
+    void beginPaint(const QRegion &) override;
+
+protected:
+    void render(xcb_window_t window, const QRegion &region, const QPoint &offset) override;
+    void recreateImage(QXcbWindow *win, const QSize &size) override;
 
 private:
-    QXcbShmImage *m_image;
-    bool m_syncingResize;
+#if QT_CONFIG(xcb_render)
+    void initXRenderMode();
+
+    xcb_pixmap_t m_xrenderPixmap = XCB_NONE;
+    xcb_render_picture_t m_xrenderPicture = XCB_NONE;
+    xcb_render_pictformat_t m_xrenderPictFormat  = XCB_NONE;
+    xcb_render_picture_t m_windowPicture = XCB_NONE;
+#endif
+    bool m_usingXRenderMode = false;
+    bool m_useGrabbedBackgound = false;
+    QPixmap m_grabbedBackground;
 };
 
 QT_END_NAMESPACE

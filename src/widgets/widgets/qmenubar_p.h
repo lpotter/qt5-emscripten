@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,13 +51,15 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qstyleoption.h"
 #include <private/qmenu_p.h> // Mac needs what in this file!
 #include <qpa/qplatformmenu.h>
 
+QT_REQUIRE_CONFIG(menubar);
+
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_MENUBAR
 class QMenuBarExtension;
 class QMenuBarPrivate : public QWidgetPrivate
 {
@@ -67,18 +67,12 @@ class QMenuBarPrivate : public QWidgetPrivate
 public:
     QMenuBarPrivate() : itemsDirty(0), currentAction(0), mouseDown(0),
                          closePopupMode(0), defaultPopDown(1), popupState(0), keyboardState(0), altPressed(0),
-                         nativeMenuBar(-1), doChildEffects(false), platformMenuBar(0)
+                         doChildEffects(false), platformMenuBar(0)
+    { }
 
-#ifdef Q_OS_WINCE
-                         , wce_menubar(0), wceClassicMenu(false)
-#endif
-        { }
     ~QMenuBarPrivate()
         {
             delete platformMenuBar;
-#ifdef Q_OS_WINCE
-            delete wce_menubar;
-#endif
         }
 
     void init();
@@ -110,8 +104,6 @@ public:
     uint keyboardState : 1, altPressed : 1;
     QPointer<QWidget> keyboardFocusWidget;
 
-
-    int nativeMenuBar : 3;  // Only has values -1, 0, and 1
     //firing of events
     void activateAction(QAction *, QAction::ActionEvent);
 
@@ -119,10 +111,6 @@ public:
     void _q_actionHovered();
     void _q_internalShortcutActivated(int);
     void _q_updateLayout();
-
-#ifdef Q_OS_WINCE
-    void _q_updateDefaultAction();
-#endif
 
     //extra widgets in the menubar
     QPointer<QWidget> leftWidget, rightWidget;
@@ -136,8 +124,7 @@ public:
 
     // reparenting
     void handleReparent();
-    QWidget *oldParent;
-    QWidget *oldWindow;
+    QVector<QPointer<QWidget> > oldParents;
 
     QList<QAction*> hiddenActions;
     //default action
@@ -145,52 +132,12 @@ public:
 
     QBasicTimer autoReleaseTimer;
     QPlatformMenuBar *platformMenuBar;
+    QPlatformMenu *getPlatformMenu(const QAction *action);
+    QPlatformMenu *findInsertionPlatformMenu(const QAction *action);
+    void copyActionToPlatformMenu(const QAction *e, QPlatformMenu *menu);
 
     inline int indexOf(QAction *act) const { return q_func()->actions().indexOf(act); }
-
-#ifdef Q_OS_WINCE
-    void wceCreateMenuBar(QWidget *);
-    void wceDestroyMenuBar();
-    struct QWceMenuBarPrivate {
-        QList<QWceMenuAction*> actionItems;
-        QList<QWceMenuAction*> actionItemsLeftButton;
-        QList<QList<QWceMenuAction*>> actionItemsClassic;
-        HMENU menuHandle;
-        HMENU leftButtonMenuHandle;
-        HWND menubarHandle;
-        HWND parentWindowHandle;
-        bool leftButtonIsMenu;
-        QPointer<QAction> leftButtonAction;
-        QMenuBarPrivate *d;
-        int leftButtonCommand;
-
-        QWceMenuBarPrivate(QMenuBarPrivate *menubar);
-        ~QWceMenuBarPrivate();
-        void addAction(QAction *, QAction *);
-        void addAction(QAction *, QWceMenuAction* =0);
-        void addAction(QWceMenuAction *, QWceMenuAction* =0);
-        void syncAction(QWceMenuAction *);
-        inline void syncAction(QAction *a) { syncAction(findAction(a)); }
-        void removeAction(QWceMenuAction *);
-        void rebuild();
-        inline void removeAction(QAction *a) { removeAction(findAction(a)); }
-        inline QWceMenuAction *findAction(QAction *a) {
-            for(int i = 0; i < actionItems.size(); i++) {
-                QWceMenuAction *act = actionItems[i];
-                if(a == act->action)
-                    return act;
-            }
-            return 0;
-        }
-    } *wce_menubar;
-    bool wceClassicMenu;
-    void wceCommands(uint command);
-    void wceRefresh();
-    bool wceEmitSignals(QList<QWceMenuAction*> actions, uint command);
-#endif
 };
-
-#endif // QT_NO_MENUBAR
 
 QT_END_NAMESPACE
 

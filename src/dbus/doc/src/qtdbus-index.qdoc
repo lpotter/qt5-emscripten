@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -31,7 +31,6 @@
     \brief An introduction to Inter-Process Communication and Remote Procedure Calling with D-Bus.
 
     \keyword QtDBus
-    \ingroup technology-apis
 
     \section1 Introduction
 
@@ -96,7 +95,7 @@
     purpose is to be used in a one-to-many context, signal messages
     are designed to work over an "opt-in" mechanism.
 
-    The QtDBus module fully encapsulates the low-level concept of
+    The Qt D-Bus module fully encapsulates the low-level concept of
     messages into a simpler, object-oriented approach familiar to Qt
     developers. In most cases, the developer need not worry about
     sending or receiving messages.
@@ -201,6 +200,20 @@
     Information about the messages will be written to the console the application
     was launched from.
 
+    \section1 Licenses and Attributions
+
+    The Qt D-Bus module is available under commercial licenses from \l{The Qt Company}.
+    In addition, it is available under free software licenses. Since Qt 5.4,
+    these free software licenses are
+    \l{GNU Lesser General Public License, version 3}, or
+    the \l{GNU General Public License, version 2}.
+    See \l{Qt Licensing} for further details.
+
+    Furthermore, Qt D-Bus in Qt \QtVersion may contain third party
+    modules under following permissive licenses:
+
+    \generatelist{groupsbymodule attributions-qtdbus}
+
     \section1 Further Reading
 
     The following documents contain information about Qt's D-Bus integration
@@ -208,9 +221,27 @@
     type information over the bus:
 
     \list
-    \li \l{Using QtDBus Adaptors}
-    \li \l{The QtDBus Type System}
-    \li \l{QtDBus XML compiler (qdbusxml2cpp)}
+    \li \l{Using Qt D-Bus Adaptors}
+    \li \l{The Qt D-Bus Type System}
+    \li \l{Qt D-Bus XML compiler (qdbusxml2cpp)}
     \li \l{Qt D-Bus C++ Classes}
+    \li \l{Qt D-Bus Examples}
+    \li \l{D-Bus Viewer}
     \endlist
+*/
+
+/*!
+  \page qdbusviewer.html
+  \title D-Bus Viewer
+  \keyword qdbusviewer
+
+  The Qt D-Bus Viewer is a tool that lets you introspect D-Bus objects and messages. You can
+  choose between the system bus and the session bus. Click on any service on the list
+  on the left side to see all the exported objects.
+
+  You can invoke methods by double-clicking on them. If a method takes one or more IN parameters,
+  a property editor opens.
+
+  Right-click on a signal to connect to it. All emitted signals including their parameters
+  are output in the message view on the lower side of the window.
 */

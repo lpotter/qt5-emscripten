@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,10 +42,13 @@
 #include "qwindowswindow.h"
 #include "qwindowsintegration.h"
 
-#include <QtCore/QDebug>
-#include <QtCore/QSysInfo>
-#include <QtGui/QGuiApplication>
+#include <QtCore/qdebug.h>
+#include <QtCore/qsysinfo.h>
+#include <QtGui/qguiapplication.h>
 #include <qpa/qplatformnativeinterface.h>
+#include <QtPlatformHeaders/qwglnativecontext.h>
+
+#include <algorithm>
 
 #include <wingdi.h>
 #include <GL/gl.h>
@@ -136,7 +137,87 @@
 #define GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT      0x0001
 #endif
 
+#ifndef GL_CONTEXT_FLAG_DEBUG_BIT
+#define GL_CONTEXT_FLAG_DEBUG_BIT 0x00000002
+#endif
+
+// Common GL and WGL constants
+#define RESET_NOTIFICATION_STRATEGY_ARB 0x8256
+#define LOSE_CONTEXT_ON_RESET_ARB 0x8252
+
+#ifndef WGL_FRAMEBUFFER_SRGB_CAPABLE_EXT
+#define WGL_FRAMEBUFFER_SRGB_CAPABLE_EXT 0x20A9
+#endif
+
 QT_BEGIN_NAMESPACE
+
+QWindowsOpengl32DLL QOpenGLStaticContext::opengl32;
+
+QFunctionPointer QWindowsOpengl32DLL::resolve(const char *name)
+{
+    return m_lib
+        ? reinterpret_cast<QFunctionPointer>(::GetProcAddress(m_lib, name))
+        : nullptr;
+}
+
+bool QWindowsOpengl32DLL::init(bool softwareRendering)
+{
+    const QByteArray opengl32 = QByteArrayLiteral("opengl32.dll");
+    const QByteArray swopengl = QByteArrayLiteral("opengl32sw.dll");
+
+    QByteArray openglDll = qgetenv("QT_OPENGL_DLL");
+    if (openglDll.isEmpty())
+        openglDll = softwareRendering ? swopengl : opengl32;
+
+    openglDll = openglDll.toLower();
+    m_nonOpengl32 = openglDll != opengl32;
+
+    qCDebug(lcQpaGl) << "Qt: Using WGL and OpenGL from" << openglDll;
+
+    m_lib = ::LoadLibraryA(openglDll.constData());
+    if (!m_lib) {
+        qErrnoWarning(::GetLastError(), "Failed to load %s", openglDll.constData());
+        return false;
+    }
+
+    if (moduleIsNotOpengl32()) {
+        // Load opengl32.dll always. GDI functions like ChoosePixelFormat do
+        // GetModuleHandle for opengl32.dll and behave differently (and call back into
+        // opengl32) when the module is present. This is fine for dummy contexts and windows.
+        ::LoadLibraryA("opengl32.dll");
+    }
+
+    wglCreateContext = reinterpret_cast<HGLRC (WINAPI *)(HDC)>(resolve("wglCreateContext"));
+    wglDeleteContext = reinterpret_cast<BOOL (WINAPI *)(HGLRC)>(resolve("wglDeleteContext"));
+    wglGetCurrentContext = reinterpret_cast<HGLRC (WINAPI *)()>(resolve("wglGetCurrentContext"));
+    wglGetCurrentDC = reinterpret_cast<HDC (WINAPI *)()>(resolve("wglGetCurrentDC"));
+    wglGetProcAddress = reinterpret_cast<PROC (WINAPI *)(LPCSTR)>(resolve("wglGetProcAddress"));
+    wglMakeCurrent = reinterpret_cast<BOOL (WINAPI *)(HDC, HGLRC)>(resolve("wglMakeCurrent"));
+    wglShareLists = reinterpret_cast<BOOL (WINAPI *)(HGLRC, HGLRC)>(resolve("wglShareLists"));
+    wglSwapBuffers = reinterpret_cast<BOOL (WINAPI *)(HDC)>(resolve("wglSwapBuffers"));
+    wglSetPixelFormat = reinterpret_cast<BOOL (WINAPI *)(HDC, int, const PIXELFORMATDESCRIPTOR *)>(resolve("wglSetPixelFormat"));
+
+    glGetError = reinterpret_cast<GLenum (APIENTRY *)()>(resolve("glGetError"));
+    glGetIntegerv = reinterpret_cast<void (APIENTRY *)(GLenum , GLint *)>(resolve("glGetIntegerv"));
+    glGetString = reinterpret_cast<const GLubyte * (APIENTRY *)(GLenum )>(resolve("glGetString"));
+
+    return wglCreateContext && glGetError && glGetString;
+}
+
+BOOL QWindowsOpengl32DLL::swapBuffers(HDC dc)
+{
+    return moduleIsNotOpengl32() ? wglSwapBuffers(dc) : SwapBuffers(dc);
+}
+
+BOOL QWindowsOpengl32DLL::setPixelFormat(HDC dc, int pf, const PIXELFORMATDESCRIPTOR *pfd)
+{
+    return moduleIsNotOpengl32() ? wglSetPixelFormat(dc, pf, pfd) : SetPixelFormat(dc, pf, pfd);
+}
+
+QWindowsOpenGLContext *QOpenGLStaticContext::createContext(QOpenGLContext *context)
+{
+    return new QWindowsGLContext(this, context);
+}
 
 template <class MaskType, class FlagType> inline bool testFlag(MaskType mask, FlagType flag)
 {
@@ -156,46 +237,74 @@ static inline void initPixelFormatDescriptor(PIXELFORMATDESCRIPTOR *d)
     d->nVersion = 1;
 }
 
+#ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug d, const PIXELFORMATDESCRIPTOR &pd)
 {
-    QDebug nsp = d.nospace();
-    nsp << "PIXELFORMATDESCRIPTOR "
+    QDebugStateSaver saver(d);
+    d.nospace();
+    d << "PIXELFORMATDESCRIPTOR "
         << "dwFlags=" << hex << showbase << pd.dwFlags << dec << noshowbase;
-    if (pd.dwFlags & PFD_DRAW_TO_WINDOW) nsp << " PFD_DRAW_TO_WINDOW";
-    if (pd.dwFlags & PFD_DRAW_TO_BITMAP) nsp << " PFD_DRAW_TO_BITMAP";
-    if (pd.dwFlags & PFD_SUPPORT_GDI) nsp << " PFD_SUPPORT_GDI";
-    if (pd.dwFlags & PFD_SUPPORT_OPENGL) nsp << " PFD_SUPPORT_OPENGL";
-    if (pd.dwFlags & PFD_GENERIC_ACCELERATED) nsp << " PFD_GENERIC_ACCELERATED";
-    if (pd.dwFlags & PFD_SUPPORT_DIRECTDRAW) nsp << " PFD_SUPPORT_DIRECTDRAW";
-    if (pd.dwFlags & PFD_DIRECT3D_ACCELERATED) nsp << " PFD_DIRECT3D_ACCELERATED";
-    if (pd.dwFlags & PFD_SUPPORT_COMPOSITION) nsp << " PFD_SUPPORT_COMPOSITION";
-    if (pd.dwFlags & PFD_GENERIC_FORMAT) nsp << " PFD_GENERIC_FORMAT";
-    if (pd.dwFlags & PFD_NEED_PALETTE) nsp << " PFD_NEED_PALETTE";
-    if (pd.dwFlags & PFD_NEED_SYSTEM_PALETTE) nsp << " PFD_NEED_SYSTEM_PALETTE";
-    if (pd.dwFlags & PFD_DOUBLEBUFFER) nsp << " PFD_DOUBLEBUFFER";
-    if (pd.dwFlags & PFD_STEREO) nsp << " PFD_STEREO";
-    if (pd.dwFlags & PFD_SWAP_LAYER_BUFFERS) nsp << " PFD_SWAP_LAYER_BUFFERS";
-    if (hasGLOverlay(pd)) nsp << " overlay";
-    nsp << " iPixelType=" << pd.iPixelType << " cColorBits=" << pd.cColorBits
+    if (pd.dwFlags & PFD_DRAW_TO_WINDOW) d << " PFD_DRAW_TO_WINDOW";
+    if (pd.dwFlags & PFD_DRAW_TO_BITMAP) d << " PFD_DRAW_TO_BITMAP";
+    if (pd.dwFlags & PFD_SUPPORT_GDI) d << " PFD_SUPPORT_GDI";
+    if (pd.dwFlags & PFD_SUPPORT_OPENGL) d << " PFD_SUPPORT_OPENGL";
+    if (pd.dwFlags & PFD_GENERIC_ACCELERATED) d << " PFD_GENERIC_ACCELERATED";
+    if (pd.dwFlags & PFD_SUPPORT_DIRECTDRAW) d << " PFD_SUPPORT_DIRECTDRAW";
+    if (pd.dwFlags & PFD_DIRECT3D_ACCELERATED) d << " PFD_DIRECT3D_ACCELERATED";
+    if (pd.dwFlags & PFD_SUPPORT_COMPOSITION) d << " PFD_SUPPORT_COMPOSITION";
+    if (pd.dwFlags & PFD_GENERIC_FORMAT) d << " PFD_GENERIC_FORMAT";
+    if (pd.dwFlags & PFD_NEED_PALETTE) d << " PFD_NEED_PALETTE";
+    if (pd.dwFlags & PFD_NEED_SYSTEM_PALETTE) d << " PFD_NEED_SYSTEM_PALETTE";
+    if (pd.dwFlags & PFD_DOUBLEBUFFER) d << " PFD_DOUBLEBUFFER";
+    if (pd.dwFlags & PFD_STEREO) d << " PFD_STEREO";
+    if (pd.dwFlags & PFD_SWAP_LAYER_BUFFERS) d << " PFD_SWAP_LAYER_BUFFERS";
+    if (hasGLOverlay(pd)) d << " overlay";
+    d << " iPixelType=" << pd.iPixelType << " cColorBits=" << pd.cColorBits
         << " cRedBits=" << pd.cRedBits << " cRedShift=" << pd.cRedShift
         << " cGreenBits=" << pd.cGreenBits << " cGreenShift=" << pd.cGreenShift
         << " cBlueBits=" << pd.cBlueBits << " cBlueShift=" << pd.cBlueShift;
-    nsp  << " cDepthBits=" << pd.cDepthBits;
+    d  << " cDepthBits=" << pd.cDepthBits;
     if (pd.cStencilBits)
-        nsp << " cStencilBits=" << pd.cStencilBits;
+        d << " cStencilBits=" << pd.cStencilBits;
     if (pd.cAuxBuffers)
-        nsp << " cAuxBuffers=" << pd.cAuxBuffers;
-    nsp << " iLayerType=" << pd.iLayerType;
+        d << " cAuxBuffers=" << pd.cAuxBuffers;
+    d << " iLayerType=" << pd.iLayerType;
     if (pd.dwVisibleMask)
-        nsp << " dwVisibleMask=" << pd.dwVisibleMask;
+        d << " dwVisibleMask=" << pd.dwVisibleMask;
     if (pd.cAlphaBits)
-        nsp << " cAlphaBits=" << pd.cAlphaBits << " cAlphaShift=" << pd.cAlphaShift;
+        d << " cAlphaBits=" << pd.cAlphaBits << " cAlphaShift=" << pd.cAlphaShift;
     if (pd.cAccumBits)
-        nsp << " cAccumBits=" << pd.cAccumBits << " cAccumRedBits=" << pd.cAccumRedBits
+        d << " cAccumBits=" << pd.cAccumBits << " cAccumRedBits=" << pd.cAccumRedBits
         << " cAccumGreenBits=" << pd.cAccumGreenBits << " cAccumBlueBits=" << pd.cAccumBlueBits
         << " cAccumAlphaBits=" << pd.cAccumAlphaBits;
     return d;
 }
+
+QDebug operator<<(QDebug d, const QOpenGLStaticContext &s)
+{
+    QDebugStateSaver saver(d);
+    d.nospace();
+    d << "OpenGL: " << s.vendor << ',' << s.renderer << " default "
+        <<  s.defaultFormat;
+    if (s.extensions &  QOpenGLStaticContext::SampleBuffers)
+        d << ",SampleBuffers";
+    if (s.hasExtensions())
+        d << ", Extension-API present";
+    d << "\nExtensions: " << (s.extensionNames.count(' ') + 1);
+    if (QWindowsContext::verbose > 1)
+        d << s.extensionNames;
+    return d;
+}
+
+QDebug operator<<(QDebug d, const QWindowsOpenGLContextFormat &f)
+{
+    QDebugStateSaver saver(d);
+    d.nospace();
+    d << "ContextFormat: v" << (f.version >> 8) << '.' << (f.version & 0xFF)
+        << " profile: " << f.profile << " options: " << f.options;
+    return d;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 // Check whether an obtained PIXELFORMATDESCRIPTOR matches the request.
 static inline bool
@@ -204,10 +313,11 @@ static inline bool
                        bool ignoreGLSupport = false) // ARB format may not contain it.
 {
     const bool pixmapRequested = testFlag(additional.formatFlags, QWindowsGLRenderToPixmap);
-    return (ignoreGLSupport || testFlag(pfd.dwFlags, PFD_SUPPORT_OPENGL))
-        && testFlag(pfd.dwFlags, PFD_DRAW_TO_BITMAP) == pixmapRequested
-        && hasGLOverlay(pfd) == testFlag(additional.formatFlags, QWindowsGLOverlay)
-        && (!pixmapRequested || pfd.cColorBits == additional.pixmapDepth);
+    const bool pixmapOk = !pixmapRequested || testFlag(pfd.dwFlags, PFD_DRAW_TO_BITMAP);
+    const bool colorOk =  !pixmapRequested || pfd.cColorBits == additional.pixmapDepth;
+    const bool glOk = ignoreGLSupport || testFlag(pfd.dwFlags, PFD_SUPPORT_OPENGL);
+    const bool overlayOk = hasGLOverlay(pfd) == testFlag(additional.formatFlags, QWindowsGLOverlay);
+    return pixmapOk && glOk && overlayOk && colorOk;
 }
 
 static void describeFormats(HDC hdc)
@@ -217,7 +327,7 @@ static void describeFormats(HDC hdc)
         PIXELFORMATDESCRIPTOR pfd;
         initPixelFormatDescriptor(&pfd);
         DescribePixelFormat(hdc, i, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-        qDebug() << '#' << i << '/' << pfiMax << ':' << pfd;
+        qCDebug(lcQpaGl) << '#' << i << '/' << pfiMax << ':' << pfd;
     }
 }
 
@@ -228,6 +338,7 @@ static QSurfaceFormat
                                          QWindowsOpenGLAdditionalFormat *additionalIn = 0)
 {
     QSurfaceFormat format;
+    format.setRenderableType(QSurfaceFormat::OpenGL);
     if (pfd.dwFlags & PFD_DOUBLEBUFFER)
         format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
     format.setDepthBufferSize(pfd.cDepthBits);
@@ -264,9 +375,7 @@ static PIXELFORMATDESCRIPTOR
     initPixelFormatDescriptor(&pfd);
     pfd.iPixelType = PFD_TYPE_RGBA;
     pfd.iLayerType  = PFD_MAIN_PLANE;
-    pfd.dwFlags = PFD_SUPPORT_OPENGL;
-    if (QSysInfo::windowsVersion() >= QSysInfo::WV_VISTA)
-        pfd.dwFlags = PFD_SUPPORT_COMPOSITION;
+    pfd.dwFlags = PFD_SUPPORT_OPENGL | PFD_SUPPORT_COMPOSITION;
     const bool isPixmap = (additional.formatFlags & QWindowsGLRenderToPixmap) != 0;
     pfd.dwFlags |= isPixmap ? PFD_DRAW_TO_BITMAP : PFD_DRAW_TO_WINDOW;
     if (!(additional.formatFlags & QWindowsGLDirectRendering))
@@ -274,10 +383,19 @@ static PIXELFORMATDESCRIPTOR
 
     if (format.stereo())
         pfd.dwFlags |= PFD_STEREO;
-    if (format.swapBehavior() == QSurfaceFormat::DoubleBuffer && !isPixmap)
+    if (format.swapBehavior() != QSurfaceFormat::SingleBuffer && !isPixmap)
         pfd.dwFlags |= PFD_DOUBLEBUFFER;
     pfd.cDepthBits =
         format.depthBufferSize() >= 0 ? format.depthBufferSize() : 32;
+    const int redBufferSize = format.redBufferSize();
+    if (redBufferSize != -1)
+        pfd.cRedBits = BYTE(redBufferSize);
+    const int greenBufferSize = format.greenBufferSize();
+    if (greenBufferSize != -1)
+        pfd.cGreenBits = BYTE(greenBufferSize);
+    const int blueBufferSize = format.blueBufferSize();
+    if (blueBufferSize != -1)
+        pfd.cBlueBits = BYTE(blueBufferSize);
     pfd.cAlphaBits = format.alphaBufferSize() > 0 ? format.alphaBufferSize() : 8;
     pfd.cStencilBits = format.stencilBufferSize() > 0 ? format.stencilBufferSize() : 8;
     if (additional.formatFlags & QWindowsGLAccumBuffer)
@@ -292,10 +410,23 @@ static PIXELFORMATDESCRIPTOR
 // over the available formats to find the best one.
 // Note: As of Windows 7, it seems direct-rendering is handled, so,
 // the code might be obsolete?
+//
+// NB! When using an implementation with a name different than opengl32.dll
+// this code path should not be used since it will result in a mess due to GDI
+// relying on and possibly calling back into functions in opengl32.dll (and not
+// the one we are using). This is not a problem usually since for Mesa, which
+// we are most likely to ship with a name other than opengl32.dll, the ARB code
+// path should work. Hence the early bail out below.
+//
 static int choosePixelFormat(HDC hdc, const QSurfaceFormat &format,
                             const QWindowsOpenGLAdditionalFormat &additional,
                             PIXELFORMATDESCRIPTOR *obtainedPfd)
 {
+    if (QOpenGLStaticContext::opengl32.moduleIsNotOpengl32()) {
+        qWarning("Attempted to use GDI functions with a non-opengl32.dll library");
+        return 0;
+    }
+
     // 1) Try ChoosePixelFormat().
     PIXELFORMATDESCRIPTOR requestedPfd = qPixelFormatFromSurfaceFormat(format, QWindowsGLDirectRendering);
     initPixelFormatDescriptor(obtainedPfd);
@@ -334,10 +465,8 @@ static int choosePixelFormat(HDC hdc, const QSurfaceFormat &format,
                 bestPfi = pfi;
                 *obtainedPfd = checkPfd;
             }
-            if (QWindowsContext::verboseGL)
-                qDebug() << __FUNCTION__ << "    checking  " << pfi << '/' << pfiMax
-                         << " score=" << score << " (best " << bestPfi << '/' << bestScore
-                         << ") " << checkPfd;
+            qCDebug(lcQpaGl) << __FUNCTION__ << "    checking  " << pfi << '/' << pfiMax
+                << " score=" << score << " (best " << bestPfi << '/' << bestScore << ") " << checkPfd;
         }
     } // for
     if (bestPfi > 0)
@@ -347,12 +476,12 @@ static int choosePixelFormat(HDC hdc, const QSurfaceFormat &format,
 
 static inline HGLRC createContext(HDC hdc, HGLRC shared)
 {
-    HGLRC result = wglCreateContext(hdc);
+    HGLRC result = QOpenGLStaticContext::opengl32.wglCreateContext(hdc);
     if (!result) {
         qErrnoWarning("%s: wglCreateContext failed.", __FUNCTION__);
         return 0;
     }
-    if (shared && !wglShareLists(shared, result))
+    if (shared && !QOpenGLStaticContext::opengl32.wglShareLists(shared, result))
         qErrnoWarning("%s: wglShareLists() failed.", __FUNCTION__);
     return result;
 }
@@ -367,12 +496,12 @@ static int choosePixelFormat(HDC hdc,
                              const QWindowsOpenGLAdditionalFormat &additional,
                              PIXELFORMATDESCRIPTOR *obtainedPfd)
 {
-    enum { attribSize =40 };
+    enum { attribSize = 42 };
     if ((additional.formatFlags & QWindowsGLRenderToPixmap) || !staticContext.hasExtensions())
         return 0;
 
     int iAttributes[attribSize];
-    qFill(iAttributes, iAttributes + attribSize, int(0));
+    std::fill(iAttributes, iAttributes + attribSize, int(0));
     int i = 0;
     iAttributes[i++] = WGL_ACCELERATION_ARB;
     iAttributes[i++] = testFlag(additional.formatFlags, QWindowsGLDirectRendering) ?
@@ -382,14 +511,18 @@ static int choosePixelFormat(HDC hdc,
     iAttributes[i++] = WGL_DRAW_TO_WINDOW_ARB;
     iAttributes[i++] = TRUE;
     iAttributes[i++] = WGL_COLOR_BITS_ARB;
-    iAttributes[i++] = 24;
+
+    iAttributes[i++] = (format.redBufferSize() > 0)
+                       && (format.greenBufferSize() > 0)
+                       && (format.blueBufferSize() > 0) ?
+                       format.redBufferSize() + format.greenBufferSize() + format.blueBufferSize() :
+                       24;
     switch (format.swapBehavior()) {
-    case QSurfaceFormat::DefaultSwapBehavior:
-        break;
     case QSurfaceFormat::SingleBuffer:
         iAttributes[i++] = WGL_DOUBLE_BUFFER_ARB;
         iAttributes[i++] = FALSE;
         break;
+    case QSurfaceFormat::DefaultSwapBehavior:
     case QSurfaceFormat::DoubleBuffer:
     case QSurfaceFormat::TripleBuffer:
         iAttributes[i++] = WGL_DOUBLE_BUFFER_ARB;
@@ -444,7 +577,15 @@ static int choosePixelFormat(HDC hdc,
         iAttributes[i++] = WGL_SAMPLE_BUFFERS_ARB;
         iAttributes[i++] = FALSE;
     }
-    // If sample buffer request cannot be satisfied, reduce request.
+    // must be the last
+    bool srgbRequested = format.colorSpace() == QSurfaceFormat::sRGBColorSpace;
+    int srgbValuePosition = 0;
+    if (srgbRequested) {
+        srgbValuePosition = i;
+        iAttributes[i++] = WGL_FRAMEBUFFER_SRGB_CAPABLE_EXT;
+        iAttributes[i++] = TRUE;
+    }
+    // If sample or sRGB request cannot be satisfied, reduce request.
     int pixelFormat = 0;
     uint numFormats = 0;
     while (true) {
@@ -452,12 +593,25 @@ static int choosePixelFormat(HDC hdc,
             staticContext.wglChoosePixelFormatARB(hdc, iAttributes, 0, 1,
                                                &pixelFormat, &numFormats)
                 && numFormats >= 1;
-        if (valid || !sampleBuffersRequested)
+        if (valid || (!sampleBuffersRequested && !srgbRequested))
             break;
-        if (iAttributes[samplesValuePosition] > 1) {
-            iAttributes[samplesValuePosition] /= 2;
-        } else {
-            break;
+        if (srgbRequested) {
+            iAttributes[srgbValuePosition] = 0;
+            srgbRequested = false;
+        } else if (sampleBuffersRequested) {
+            if (iAttributes[samplesValuePosition] > 1) {
+                iAttributes[samplesValuePosition] /= 2;
+            } else if (iAttributes[samplesValuePosition] == 1) {
+                // Fallback in case it is unable to initialize with any
+                // samples to avoid falling back to the GDI path
+                // NB: The sample attributes needs to be at the end for this
+                // to work correctly
+                iAttributes[samplesValuePosition - 1] = FALSE;
+                iAttributes[samplesValuePosition] = 0;
+                iAttributes[samplesValuePosition + 1] = 0;
+            } else {
+                break;
+            }
         }
     }
     // Verify if format is acceptable. Note that the returned
@@ -465,15 +619,15 @@ static int choosePixelFormat(HDC hdc,
     initPixelFormatDescriptor(obtainedPfd);
     DescribePixelFormat(hdc, pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), obtainedPfd);
     if (!isAcceptableFormat(additional, *obtainedPfd, true)) {
-        if (QWindowsContext::verboseGL)
-            qDebug() << __FUNCTION__ << " obtained px #" << pixelFormat
-                     << " not acceptable=" << *obtainedPfd;
+        qCDebug(lcQpaGl) << __FUNCTION__ << " obtained px #" << pixelFormat
+            << " not acceptable=" << *obtainedPfd;
         pixelFormat = 0;
     }
 
 #ifndef QT_NO_DEBUG_OUTPUT
-    if (QWindowsContext::verboseGL) {
-        QDebug nsp = qDebug().nospace();
+    if (lcQpaGl().isDebugEnabled()) {
+        QString message;
+        QDebug nsp(&message);
         nsp << __FUNCTION__;
         if (sampleBuffersRequested)
             nsp << " samples=" << iAttributes[samplesValuePosition];
@@ -482,6 +636,7 @@ static int choosePixelFormat(HDC hdc,
             nsp << iAttributes[ii] << ',';
         nsp << noshowbase << dec << "\n    obtained px #" << pixelFormat
             << " of " << numFormats << "\n    " << *obtainedPfd;
+        qCDebug(lcQpaGl) << message;
     } // Debug
 #endif
 
@@ -493,18 +648,20 @@ static QSurfaceFormat
                           HDC hdc, int pixelFormat,
                           QWindowsOpenGLAdditionalFormat *additionalIn = 0)
 {
-    enum { attribSize =40 };
+    enum { attribSize = 42 };
 
     QSurfaceFormat result;
+    result.setRenderableType(QSurfaceFormat::OpenGL);
     if (!staticContext.hasExtensions())
         return result;
     int iAttributes[attribSize];
     int iValues[attribSize];
-    qFill(iAttributes, iAttributes + attribSize, int(0));
-    qFill(iValues, iValues + attribSize, int(0));
+    std::fill(iAttributes, iAttributes + attribSize, int(0));
+    std::fill(iValues, iValues + attribSize, int(0));
 
     int i = 0;
     const bool hasSampleBuffers = testFlag(staticContext.extensions, QOpenGLStaticContext::SampleBuffers);
+    const bool hasSrgbSupport = testFlag(staticContext.extensions, QOpenGLStaticContext::sRGBCapableFramebuffer);
 
     iAttributes[i++] = WGL_DOUBLE_BUFFER_ARB; // 0
     iAttributes[i++] = WGL_DEPTH_BITS_ARB; // 1
@@ -522,6 +679,9 @@ static QSurfaceFormat
         iAttributes[i++] = WGL_SAMPLE_BUFFERS_ARB; // 12
         iAttributes[i++] = WGL_SAMPLES_ARB; // 13
     }
+    if (hasSrgbSupport)
+        iAttributes[i++] = WGL_FRAMEBUFFER_SRGB_CAPABLE_EXT; // 12 or 14
+
     if (!staticContext.wglGetPixelFormatAttribIVARB(hdc, pixelFormat, 0, i,
                                         iAttributes, iValues)) {
         qErrnoWarning("%s: wglGetPixelFormatAttribIVARB() failed for basic parameters.", __FUNCTION__);
@@ -537,8 +697,14 @@ static QSurfaceFormat
     if (iValues[9])
         result.setOption(QSurfaceFormat::StereoBuffers);
 
-    if (hasSampleBuffers)
+    if (hasSampleBuffers) {
         result.setSamples(iValues[13]);
+        if (hasSrgbSupport && iValues[14])
+            result.setColorSpace(QSurfaceFormat::sRGBColorSpace);
+    } else {
+        if (hasSrgbSupport && iValues[12])
+            result.setColorSpace(QSurfaceFormat::sRGBColorSpace);
+    }
     if (additionalIn) {
         if (iValues[7])
             additionalIn->formatFlags |= QWindowsGLAccumBuffer;
@@ -562,7 +728,7 @@ static HGLRC createContext(const QOpenGLStaticContext &staticContext,
         return 0;
     int attributes[attribSize];
     int attribIndex = 0;
-    qFill(attributes, attributes + attribSize, int(0));
+    std::fill(attributes, attributes + attribSize, int(0));
 
     // We limit the requested version by the version of the static context as
     // wglCreateContextAttribsARB fails and returns NULL if the requested context
@@ -579,15 +745,17 @@ static HGLRC createContext(const QOpenGLStaticContext &staticContext,
         attributes[attribIndex++] = WGL_CONTEXT_MINOR_VERSION_ARB;
         attributes[attribIndex++] = minorVersion;
     }
+
+    int flags = 0;
+    if (format.testOption(QSurfaceFormat::DebugContext))
+        flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
     if (requestedVersion >= 0x0300) {
-        attributes[attribIndex++] = WGL_CONTEXT_FLAGS_ARB;
-        attributes[attribIndex] = 0;
-        if (format.testOption(QSurfaceFormat::DeprecatedFunctions))
-             attributes[attribIndex] |= WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
-        if (format.testOption(QSurfaceFormat::DebugContext))
-            attributes[attribIndex] |= WGL_CONTEXT_DEBUG_BIT_ARB;
-        attribIndex++;
+        if (!format.testOption(QSurfaceFormat::DeprecatedFunctions))
+            flags |= WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
     }
+    attributes[attribIndex++] = WGL_CONTEXT_FLAGS_ARB;
+    attributes[attribIndex++] = flags;
+
     if (requestedVersion >= 0x0302) {
         switch (format.profile()) {
         case QSurfaceFormat::NoProfile:
@@ -602,14 +770,23 @@ static HGLRC createContext(const QOpenGLStaticContext &staticContext,
             break;
         }
     }
-    if (QWindowsContext::verboseGL)
-        qDebug("%s: Creating context version %d.%d with %d attributes",
-               __FUNCTION__,  majorVersion, minorVersion, attribIndex / 2);
+
+    if (format.testOption(QSurfaceFormat::ResetNotification)) {
+        attributes[attribIndex++] = RESET_NOTIFICATION_STRATEGY_ARB;
+        attributes[attribIndex++] = LOSE_CONTEXT_ON_RESET_ARB;
+    }
+
+    qCDebug(lcQpaGl) << __FUNCTION__ << "Creating context version"
+        << majorVersion << '.' << minorVersion <<  attribIndex / 2 << "attributes";
 
     const HGLRC result =
         staticContext.wglCreateContextAttribsARB(hdc, shared, attributes);
-    if (!result)
-        qErrnoWarning("%s: wglCreateContextAttribsARB() failed.", __FUNCTION__);
+    if (!result) {
+        QString message;
+        QDebug(&message).nospace() << __FUNCTION__ << ": wglCreateContextAttribsARB() failed (GL error code: 0x"
+            << hex << staticContext.opengl32.glGetError() << dec << ") for format: " << format << ", shared context: " << shared;
+        qErrnoWarning("%s", qPrintable(message));
+    }
     return result;
 }
 
@@ -632,16 +809,17 @@ static inline HGLRC createDummyGLContext(HDC dc)
     initPixelFormatDescriptor(&pixelFormDescriptor);
     pixelFormDescriptor.dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_GENERIC_FORMAT;
     pixelFormDescriptor.iPixelType = PFD_TYPE_RGBA;
+    // Use the GDI variant, for the dummy this is fine, even when using something other than opengl32.dll.
     const int pixelFormat = ChoosePixelFormat(dc, &pixelFormDescriptor);
     if (!pixelFormat) {
         qErrnoWarning("%s: ChoosePixelFormat failed.", __FUNCTION__);
         return 0;
     }
-    if (!SetPixelFormat(dc, pixelFormat, &pixelFormDescriptor)) {
+    if (!QOpenGLStaticContext::opengl32.setPixelFormat(dc, pixelFormat, &pixelFormDescriptor)) {
         qErrnoWarning("%s: SetPixelFormat failed.", __FUNCTION__);
         return 0;
     }
-    HGLRC rc = wglCreateContext(dc);
+    HGLRC rc = QOpenGLStaticContext::opengl32.wglCreateContext(dc);
     if (!rc) {
         qErrnoWarning("%s: wglCreateContext failed.", __FUNCTION__);
         return 0;
@@ -652,8 +830,8 @@ static inline HGLRC createDummyGLContext(HDC dc)
 static inline QOpenGLContextData currentOpenGLContextData()
 {
     QOpenGLContextData result;
-    result.hdc = wglGetCurrentDC();
-    result.renderingContext = wglGetCurrentContext();
+    result.hdc = QOpenGLStaticContext::opengl32.wglGetCurrentDC();
+    result.renderingContext = QOpenGLStaticContext::opengl32.wglGetCurrentContext();
     return result;
 }
 
@@ -677,53 +855,40 @@ static inline QOpenGLContextData createDummyWindowOpenGLContextData()
     \ingroup qt-lighthouse-win
 */
 
-QWindowsOpenGLContextFormat::QWindowsOpenGLContextFormat() :
-    profile(QSurfaceFormat::NoProfile),
-    version(0),
-    options(0)
-{
-}
-
 QWindowsOpenGLContextFormat QWindowsOpenGLContextFormat::current()
 {
     QWindowsOpenGLContextFormat result;
     const QByteArray version = QOpenGLStaticContext::getGlString(GL_VERSION);
-    const int majorDot = version.indexOf('.');
-    if (majorDot != -1) {
-        int minorDot = version.indexOf('.', majorDot + 1);
-        if (minorDot == -1)
-            minorDot = version.size();
-        result.version = (version.mid(0, majorDot).toInt() << 8)
-            + version.mid(majorDot + 1, minorDot - majorDot - 1).toInt();
-    }
+    int major, minor;
+    if (QPlatformOpenGLContext::parseOpenGLVersion(version, major, minor))
+        result.version = (major << 8) + minor;
+    else
+        result.version = 0x0200;
+    result.profile = QSurfaceFormat::NoProfile;
     if (result.version < 0x0300) {
-        result.profile = QSurfaceFormat::NoProfile;
         result.options |= QSurfaceFormat::DeprecatedFunctions;
         return result;
     }
     // v3 onwards
     GLint value = 0;
-    glGetIntegerv(GL_CONTEXT_FLAGS, &value);
-    if (value & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)
+    QOpenGLStaticContext::opengl32.glGetIntegerv(GL_CONTEXT_FLAGS, &value);
+    if (!(value & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT))
         result.options |= QSurfaceFormat::DeprecatedFunctions;
-    if (value & WGL_CONTEXT_DEBUG_BIT_ARB)
+    if (value & GL_CONTEXT_FLAG_DEBUG_BIT)
         result.options |= QSurfaceFormat::DebugContext;
+    value = 0;
+    QOpenGLStaticContext::opengl32.glGetIntegerv(RESET_NOTIFICATION_STRATEGY_ARB, &value);
+    if (value == LOSE_CONTEXT_ON_RESET_ARB)
+        result.options |= QSurfaceFormat::ResetNotification;
     if (result.version < 0x0302)
         return result;
     // v3.2 onwards: Profiles
     value = 0;
-    glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &value);
-    switch (value) {
-    case WGL_CONTEXT_CORE_PROFILE_BIT_ARB:
+    QOpenGLStaticContext::opengl32.glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &value);
+    if (value & GL_CONTEXT_CORE_PROFILE_BIT)
         result.profile = QSurfaceFormat::CoreProfile;
-        break;
-    case WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB:
+    else if (value & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)
         result.profile = QSurfaceFormat::CompatibilityProfile;
-        break;
-    default:
-        result.profile = QSurfaceFormat::NoProfile;
-        break;
-    }
     return result;
 }
 
@@ -736,14 +901,6 @@ void QWindowsOpenGLContextFormat::apply(QSurfaceFormat *format) const
         format->setOption(QSurfaceFormat::DebugContext);
     if (options & QSurfaceFormat::DeprecatedFunctions)
         format->setOption(QSurfaceFormat::DeprecatedFunctions);
-}
-
-QDebug operator<<(QDebug d, const QWindowsOpenGLContextFormat &f)
-{
-    d.nospace() << "ContextFormat: v" << (f.version >> 8) << '.'
-                << (f.version & 0xFF) << " profile: " << f.profile
-                << " options: " << f.options;
-    return d;
 }
 
 /*!
@@ -773,15 +930,15 @@ QOpenGLTemporaryContext::QOpenGLTemporaryContext() :
     m_previous(currentOpenGLContextData()),
     m_current(createDummyWindowOpenGLContextData())
 {
-    wglMakeCurrent(m_current.hdc, m_current.renderingContext);
+    QOpenGLStaticContext::opengl32.wglMakeCurrent(m_current.hdc, m_current.renderingContext);
 }
 
 QOpenGLTemporaryContext::~QOpenGLTemporaryContext()
 {
-    wglMakeCurrent(m_previous.hdc, m_previous.renderingContext);
+    QOpenGLStaticContext::opengl32.wglMakeCurrent(m_previous.hdc, m_previous.renderingContext);
     ReleaseDC(m_current.hwnd, m_current.hdc);
     DestroyWindow(m_current.hwnd);
-    wglDeleteContext(m_current.renderingContext);
+    QOpenGLStaticContext::opengl32.wglDeleteContext(m_current.renderingContext);
 }
 
 /*!
@@ -795,6 +952,11 @@ QOpenGLTemporaryContext::~QOpenGLTemporaryContext()
     \brief Static Open GL context containing version information, extension function pointers, etc.
 
     Functions pending integration in the next version of OpenGL are post-fixed ARB.
+
+    No WGL or OpenGL functions are called directly from the windows plugin. Instead, the
+    static context loads opengl32.dll and resolves the necessary functions. This allows
+    building the plugin without linking to opengl32 and enables QT_OPENGL_DYNAMIC builds
+    where both the EGL and WGL (this) based implementation of the context are built.
 
     \note Initialization requires an active context (see create()).
 
@@ -811,11 +973,18 @@ QOpenGLStaticContext::QOpenGLStaticContext() :
     extensionNames(QOpenGLStaticContext::getGlString(GL_EXTENSIONS)),
     extensions(0),
     defaultFormat(QWindowsOpenGLContextFormat::current()),
-    wglGetPixelFormatAttribIVARB((WglGetPixelFormatAttribIVARB)wglGetProcAddress("wglGetPixelFormatAttribivARB")),
-    wglChoosePixelFormatARB((WglChoosePixelFormatARB)wglGetProcAddress("wglChoosePixelFormatARB")),
-    wglCreateContextAttribsARB((WglCreateContextAttribsARB)wglGetProcAddress("wglCreateContextAttribsARB")),
-    wglSwapInternalExt((WglSwapInternalExt)wglGetProcAddress("wglSwapIntervalEXT")),
-    wglGetSwapInternalExt((WglGetSwapInternalExt)wglGetProcAddress("wglGetSwapIntervalEXT"))
+    wglGetPixelFormatAttribIVARB(reinterpret_cast<WglGetPixelFormatAttribIVARB>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglGetPixelFormatAttribivARB")))),
+    wglChoosePixelFormatARB(reinterpret_cast<WglChoosePixelFormatARB>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglChoosePixelFormatARB")))),
+    wglCreateContextAttribsARB(reinterpret_cast<WglCreateContextAttribsARB>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglCreateContextAttribsARB")))),
+    wglSwapInternalExt(reinterpret_cast<WglSwapInternalExt>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglSwapIntervalEXT")))),
+    wglGetSwapInternalExt(reinterpret_cast<WglGetSwapInternalExt>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglGetSwapIntervalEXT")))),
+    wglGetExtensionsStringARB(reinterpret_cast<WglGetExtensionsStringARB>(
+        reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("wglGetExtensionsStringARB"))))
 {
     if (extensionNames.startsWith(SAMPLE_BUFFER_EXTENSION " ")
             || extensionNames.indexOf(" " SAMPLE_BUFFER_EXTENSION " ") != -1)
@@ -824,36 +993,25 @@ QOpenGLStaticContext::QOpenGLStaticContext() :
 
 QByteArray QOpenGLStaticContext::getGlString(unsigned int which)
 {
-    if (const GLubyte *s = glGetString(which))
-        return QByteArray((const char*)s);
+    if (const GLubyte *s = opengl32.glGetString(which))
+        return QByteArray(reinterpret_cast<const char*>(s));
     return QByteArray();
 }
 
-QOpenGLStaticContext *QOpenGLStaticContext::create()
+QOpenGLStaticContext *QOpenGLStaticContext::create(bool softwareRendering)
 {
+    if (!opengl32.init(softwareRendering)) {
+        qWarning("Failed to load and resolve WGL/OpenGL functions");
+        return 0;
+    }
+
     // We need a current context for wglGetProcAdress()/getGLString() to work.
     QScopedPointer<QOpenGLTemporaryContext> temporaryContext;
-    if (!wglGetCurrentContext())
+    if (!QOpenGLStaticContext::opengl32.wglGetCurrentContext())
         temporaryContext.reset(new QOpenGLTemporaryContext);
     QOpenGLStaticContext *result = new QOpenGLStaticContext;
-    if (QWindowsContext::verboseGL)
-         qDebug() << __FUNCTION__ << *result;
+    qCDebug(lcQpaGl) << __FUNCTION__ << *result;
     return result;
-}
-
-QDebug operator<<(QDebug d, const QOpenGLStaticContext &s)
-{
-    QDebug nsp = d.nospace();
-    nsp << "OpenGL: " << s.vendor << ',' << s.renderer << " default "
-        <<  s.defaultFormat;
-    if (s.extensions &  QOpenGLStaticContext::SampleBuffers)
-        nsp << ",SampleBuffers";
-    if (s.hasExtensions())
-        nsp << ", Extension-API present";
-    nsp  << "\nExtensions: " << (s.extensionNames.count(' ') + 1);
-    if (QWindowsContext::verboseGL > 1)
-        nsp <<  s.extensionNames;
-    return d;
 }
 
 /*!
@@ -871,19 +1029,75 @@ QDebug operator<<(QDebug d, const QOpenGLStaticContext &s)
     \ingroup qt-lighthouse-win
 */
 
-QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContext,
+QWindowsGLContext::QWindowsGLContext(QOpenGLStaticContext *staticContext,
                                      QOpenGLContext *context) :
     m_staticContext(staticContext),
     m_context(context),
     m_renderingContext(0),
-    m_pixelFormat(0), m_extensionsUsed(false)
+    m_pixelFormat(0),
+    m_extensionsUsed(false),
+    m_swapInterval(-1),
+    m_ownsContext(true),
+    m_getGraphicsResetStatus(0),
+    m_lost(false)
 {
+    if (!m_staticContext) // Something went very wrong. Stop here, isValid() will return false.
+        return;
+
+    QVariant nativeHandle = context->nativeHandle();
+    if (!nativeHandle.isNull()) {
+        // Adopt and existing context.
+        if (!nativeHandle.canConvert<QWGLNativeContext>()) {
+            qWarning("QWindowsGLContext: Requires a QWGLNativeContext");
+            return;
+        }
+        QWGLNativeContext handle = nativeHandle.value<QWGLNativeContext>();
+        HGLRC wglcontext = handle.context();
+        HWND wnd = handle.window();
+        if (!wglcontext || !wnd) {
+            qWarning("QWindowsGLContext: No context and window given");
+            return;
+        }
+
+        HDC dc = GetDC(wnd);
+        // A window with an associated pixel format is mandatory.
+        // When no SetPixelFormat() call has been made, the following will fail.
+        m_pixelFormat = GetPixelFormat(dc);
+        bool ok = m_pixelFormat != 0;
+        if (!ok)
+            qWarning("QWindowsGLContext: Failed to get pixel format");
+        ok = DescribePixelFormat(dc, m_pixelFormat, sizeof(PIXELFORMATDESCRIPTOR), &m_obtainedPixelFormatDescriptor);
+        if (!ok) {
+            qWarning("QWindowsGLContext: Failed to describe pixel format");
+        } else {
+            QWindowsOpenGLAdditionalFormat obtainedAdditional;
+            m_obtainedFormat = GDI::qSurfaceFormatFromPixelFormat(m_obtainedPixelFormatDescriptor, &obtainedAdditional);
+            m_renderingContext = wglcontext;
+            ok = updateObtainedParams(dc);
+        }
+
+        ReleaseDC(wnd, dc);
+
+        if (ok)
+            m_ownsContext = false;
+        else
+            m_renderingContext = 0;
+
+        return;
+    }
+
+    QSurfaceFormat format = context->format();
+    if (format.renderableType() == QSurfaceFormat::DefaultRenderableType)
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+    if (format.renderableType() != QSurfaceFormat::OpenGL)
+        return;
+
     // workaround for matrox driver:
     // make a cheap call to opengl to force loading of DLL
     static bool opengl32dll = false;
     if (!opengl32dll) {
         GLint params;
-        glGetIntegerv(GL_DEPTH_BITS, &params);
+        staticContext->opengl32.glGetIntegerv(GL_DEPTH_BITS, &params);
         opengl32dll = true;
     }
 
@@ -894,7 +1108,7 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
     HWND dummyWindow = 0;
     HDC hdc = 0;
     bool tryExtensions = false;
-    int obtainedSwapInternal = -1;
+    int obtainedSwapInterval = -1;
     do {
         dummyWindow = createDummyGLWindow();
         if (!dummyWindow)
@@ -903,7 +1117,7 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
         if (!hdc)
             break;
 
-        if (QWindowsContext::verboseGL > 1)
+        if (QWindowsContext::verbose > 1)
             describeFormats(hdc);
         // Preferably use direct rendering and ARB extensions (unless pixmap
         // or explicitly turned off on command line).
@@ -914,8 +1128,16 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
                 && !(QWindowsIntegration::instance()->options() & QWindowsIntegration::DisableArb);
         QWindowsOpenGLAdditionalFormat obtainedAdditional;
         if (tryExtensions) {
+            if (m_staticContext->wglGetExtensionsStringARB) {
+                const char *exts = m_staticContext->wglGetExtensionsStringARB(hdc);
+                if (exts) {
+                    qCDebug(lcQpaGl) << __FUNCTION__ << "WGL extensions:" << exts;
+                    if (strstr(exts, "WGL_EXT_framebuffer_sRGB"))
+                        m_staticContext->extensions |= QOpenGLStaticContext::sRGBCapableFramebuffer;
+                }
+            }
             m_pixelFormat =
-                ARB::choosePixelFormat(hdc, *m_staticContext, context->format(),
+                ARB::choosePixelFormat(hdc, *m_staticContext, format,
                                        requestedAdditional, &m_obtainedPixelFormatDescriptor);
             if (m_pixelFormat > 0) {
                 m_obtainedFormat =
@@ -925,7 +1147,7 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
             }
         } // tryExtensions
         if (!m_pixelFormat) { // Failed, try GDI
-            m_pixelFormat = GDI::choosePixelFormat(hdc, context->format(), requestedAdditional,
+            m_pixelFormat = GDI::choosePixelFormat(hdc, format, requestedAdditional,
                                                    &m_obtainedPixelFormatDescriptor);
             if (m_pixelFormat)
                 m_obtainedFormat =
@@ -936,7 +1158,7 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
             qWarning("%s: Unable find a suitable pixel format.", __FUNCTION__);
             break;
         }
-        if (!SetPixelFormat(hdc, m_pixelFormat, &m_obtainedPixelFormatDescriptor)) {
+        if (!QOpenGLStaticContext::opengl32.setPixelFormat(hdc, m_pixelFormat, &m_obtainedPixelFormatDescriptor)) {
             qErrnoWarning("SetPixelFormat failed.");
             break;
         }
@@ -948,7 +1170,7 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
         if (m_extensionsUsed)
             m_renderingContext =
                 ARB::createContext(*m_staticContext, hdc,
-                                   context->format(),
+                                   format,
                                    requestedAdditional,
                                    sharingRenderingContext);
         if (!m_renderingContext)
@@ -960,48 +1182,85 @@ QWindowsGLContext::QWindowsGLContext(const QOpenGLStaticContextPtr &staticContex
         }
 
         // Query obtained parameters and apply swap interval.
-        if (!wglMakeCurrent(hdc, m_renderingContext)) {
-            qWarning("Failed to make context current.");
+        if (!updateObtainedParams(hdc, &obtainedSwapInterval))
             break;
-        }
 
-        QWindowsOpenGLContextFormat::current().apply(&m_obtainedFormat);
-
-        if (requestedAdditional.swapInterval != -1 && m_staticContext->wglSwapInternalExt) {
-            m_staticContext->wglSwapInternalExt(requestedAdditional.swapInterval);
-            if (m_staticContext->wglGetSwapInternalExt)
-                obtainedSwapInternal = m_staticContext->wglGetSwapInternalExt();
-        }
-        wglMakeCurrent(0, 0);
     } while (false);
+
+    // Make the HGLRC retrievable via QOpenGLContext::nativeHandle().
+    // Do not provide the window since it is the dummy one and it is about to disappear.
+    if (m_renderingContext)
+        context->setNativeHandle(QVariant::fromValue<QWGLNativeContext>(QWGLNativeContext(m_renderingContext, 0)));
+
     if (hdc)
         ReleaseDC(dummyWindow, hdc);
     if (dummyWindow)
         DestroyWindow(dummyWindow);
 
-    if (QWindowsContext::verboseGL)
-        qDebug() << __FUNCTION__ << this << (tryExtensions ? "ARB" : "GDI")
-            << " requested: " << context->format()
-            << "\n    obtained #" << m_pixelFormat << (m_extensionsUsed ? "ARB" : "GDI")
-            << m_obtainedFormat << "\n    " << m_obtainedPixelFormatDescriptor
-            << " swap interval: " << obtainedSwapInternal
-            << "\n    default: " << m_staticContext->defaultFormat
-            << "\n    HGLRC=" << m_renderingContext;
+    qCDebug(lcQpaGl) << __FUNCTION__ << this << (tryExtensions ? "ARB" : "GDI")
+        << " requested: " << context->format()
+        << "\n    obtained #" << m_pixelFormat << (m_extensionsUsed ? "ARB" : "GDI") << m_obtainedFormat
+        << "\n    " << m_obtainedPixelFormatDescriptor << " swap interval: " << obtainedSwapInterval
+        << "\n    default: " << m_staticContext->defaultFormat
+        << "\n    HGLRC=" << m_renderingContext;
 }
 
 QWindowsGLContext::~QWindowsGLContext()
 {
-    if (m_renderingContext)
-        wglDeleteContext(m_renderingContext);
+    if (m_renderingContext && m_ownsContext)
+        QOpenGLStaticContext::opengl32.wglDeleteContext(m_renderingContext);
     releaseDCs();
+}
+
+bool QWindowsGLContext::updateObtainedParams(HDC hdc, int *obtainedSwapInterval)
+{
+    HGLRC prevContext = QOpenGLStaticContext::opengl32.wglGetCurrentContext();
+    HDC prevSurface = QOpenGLStaticContext::opengl32.wglGetCurrentDC();
+
+    if (!QOpenGLStaticContext::opengl32.wglMakeCurrent(hdc, m_renderingContext)) {
+        qWarning("Failed to make context current.");
+        return false;
+    }
+
+    QWindowsOpenGLContextFormat::current().apply(&m_obtainedFormat);
+
+    if (m_staticContext->wglGetSwapInternalExt && obtainedSwapInterval)
+        *obtainedSwapInterval = m_staticContext->wglGetSwapInternalExt();
+
+    bool hasRobustness = false;
+    if (m_obtainedFormat.majorVersion() < 3) {
+        const char *exts = reinterpret_cast<const char *>(QOpenGLStaticContext::opengl32.glGetString(GL_EXTENSIONS));
+        hasRobustness = exts && strstr(exts, "GL_ARB_robustness");
+    } else {
+        typedef const GLubyte * (APIENTRY *glGetStringi_t)(GLenum, GLuint);
+        glGetStringi_t glGetStringi = reinterpret_cast<glGetStringi_t>(
+            reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("glGetStringi")));
+        if (glGetStringi) {
+            GLint n = 0;
+            QOpenGLStaticContext::opengl32.glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+            for (GLint i = 0; i < n; ++i) {
+                const char *p = reinterpret_cast<const char *>(glGetStringi(GL_EXTENSIONS, i));
+                if (p && !strcmp(p, "GL_ARB_robustness")) {
+                    hasRobustness = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (hasRobustness) {
+        m_getGraphicsResetStatus = reinterpret_cast<GlGetGraphicsResetStatusArbType>(
+            reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress("glGetGraphicsResetStatusARB")));
+    }
+
+    QOpenGLStaticContext::opengl32.wglMakeCurrent(prevSurface, prevContext);
+    return true;
 }
 
 void QWindowsGLContext::releaseDCs()
 {
-    const QOpenGLContextData *end = m_windowContexts.end();
-    for (const QOpenGLContextData *p = m_windowContexts.begin(); p < end; ++p)
-        ReleaseDC(p->hwnd, p->hdc);
-    m_windowContexts.resize(0);
+    for (const auto &e : m_windowContexts)
+        ReleaseDC(e.hwnd, e.hdc);
+    m_windowContexts.clear();
 }
 
 static inline QWindowsWindow *glWindowOf(QPlatformSurface *s)
@@ -1016,40 +1275,49 @@ static inline HWND handleOf(QPlatformSurface *s)
 
 // Find a window in a context list.
 static inline const QOpenGLContextData *
-    findByHWND(const Array<QOpenGLContextData> &data, HWND hwnd)
+    findByHWND(const std::vector<QOpenGLContextData> &data, HWND hwnd)
 {
-    const QOpenGLContextData *end = data.end();
-    for (const QOpenGLContextData *p = data.begin(); p < end; ++p)
-        if (p->hwnd == hwnd)
-            return p;
+    for (const auto &e : data) {
+        if (e.hwnd == hwnd)
+            return &e;
+    }
     return 0;
 }
 
 void QWindowsGLContext::swapBuffers(QPlatformSurface *surface)
 {
-    if (QWindowsContext::verboseGL > 1)
-        qDebug() << __FUNCTION__ << surface;
-    if (const QOpenGLContextData *contextData = findByHWND(m_windowContexts, handleOf(surface))) {
-        SwapBuffers(contextData->hdc);
-    } else {
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaGl) << __FUNCTION__ << surface;
+
+    if (const QOpenGLContextData *contextData = findByHWND(m_windowContexts, handleOf(surface)))
+        QOpenGLStaticContext::opengl32.swapBuffers(contextData->hdc);
+    else
         qWarning("%s: Cannot find window %p", __FUNCTION__, handleOf(surface));
-    }
 }
 
 bool QWindowsGLContext::makeCurrent(QPlatformSurface *surface)
 {
 #ifdef DEBUG_GL
-    if (QWindowsContext::verboseGL > 1)
-        qDebug("%s context=%p contexts=%d", __FUNCTION__, this, m_windowContexts.size());
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaGl) << __FUNCTION__ << this << m_windowContexts.size() << "contexts";
 #endif // DEBUG_GL
 
-    Q_ASSERT(surface->surface()->surfaceType() == QSurface::OpenGLSurface);
+    Q_ASSERT(surface->surface()->supportsOpenGL());
 
     // Do we already have a DC entry for that window?
     QWindowsWindow *window = static_cast<QWindowsWindow *>(surface);
+    window->aboutToMakeCurrent();
     const HWND hwnd = window->handle();
-    if (const QOpenGLContextData *contextData = findByHWND(m_windowContexts, hwnd))
-        return wglMakeCurrent(contextData->hdc, contextData->renderingContext);
+    if (const QOpenGLContextData *contextData = findByHWND(m_windowContexts, hwnd)) {
+        // Repeated calls to wglMakeCurrent when vsync is enabled in the driver will
+        // often result in 100% cpuload. This check is cheap and avoids the problem.
+        // This is reproducable on NVidia cards and Intel onboard chips.
+        if (QOpenGLStaticContext::opengl32.wglGetCurrentContext() == contextData->renderingContext
+                && QOpenGLStaticContext::opengl32.wglGetCurrentDC() == contextData->hdc) {
+            return true;
+        }
+        return QOpenGLStaticContext::opengl32.wglMakeCurrent(contextData->hdc, contextData->renderingContext);
+    }
     // Create a new entry.
     const QOpenGLContextData newContext(m_renderingContext, hwnd, GetDC(hwnd));
     if (!newContext.hdc)
@@ -1057,7 +1325,7 @@ bool QWindowsGLContext::makeCurrent(QPlatformSurface *surface)
     // Initialize pixel format first time. This will apply to
     // the HWND as well and  must be done only once.
     if (!window->testFlag(QWindowsWindow::OpenGlPixelFormatInitialized)) {
-        if (!SetPixelFormat(newContext.hdc, m_pixelFormat, &m_obtainedPixelFormatDescriptor)) {
+        if (!QOpenGLStaticContext::opengl32.setPixelFormat(newContext.hdc, m_pixelFormat, &m_obtainedPixelFormatDescriptor)) {
             qErrnoWarning("%s: SetPixelFormat() failed", __FUNCTION__);
             ReleaseDC(newContext.hwnd, newContext.hdc);
             return false;
@@ -1066,31 +1334,62 @@ bool QWindowsGLContext::makeCurrent(QPlatformSurface *surface)
         if (m_obtainedFormat.swapBehavior() == QSurfaceFormat::DoubleBuffer)
             window->setFlag(QWindowsWindow::OpenGLDoubleBuffered);
     }
-    m_windowContexts.append(newContext);
-    return wglMakeCurrent(newContext.hdc, newContext.renderingContext);
+    m_windowContexts.push_back(newContext);
+
+    m_lost = false;
+    bool success = QOpenGLStaticContext::opengl32.wglMakeCurrent(newContext.hdc, newContext.renderingContext);
+    if (!success) {
+        if (m_getGraphicsResetStatus && m_getGraphicsResetStatus()) {
+            m_lost = true;
+            qCDebug(lcQpaGl) << "makeCurrent(): context loss detected" << this;
+            // Drop the surface. Will recreate on the next makeCurrent.
+            window->invalidateSurface();
+        }
+    }
+
+    // Set the swap interval
+    if (m_staticContext->wglSwapInternalExt) {
+        const int interval = surface->format().swapInterval();
+        if (interval >= 0 && m_swapInterval != interval) {
+            m_swapInterval = interval;
+            m_staticContext->wglSwapInternalExt(interval);
+        }
+    }
+
+    return success;
 }
 
 void QWindowsGLContext::doneCurrent()
 {
 #ifdef DEBUG_GL
-    if (QWindowsContext::verboseGL > 1)
-        qDebug("%s context=%p %d contexts", __FUNCTION__, this, m_windowContexts.size());
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaGl) << __FUNCTION__ << this << m_windowContexts.size() << "contexts";
 #endif // DEBUG_GL
-    wglMakeCurrent(0, 0);
+    QOpenGLStaticContext::opengl32.wglMakeCurrent(0, 0);
     releaseDCs();
 }
 
-QWindowsGLContext::GL_Proc QWindowsGLContext::getProcAddress(const QByteArray &procName)
+QFunctionPointer QWindowsGLContext::getProcAddress(const char *procName)
 {
-    // TODO: Will that work with the calling conventions?
-    GL_Proc procAddress = reinterpret_cast<GL_Proc>(wglGetProcAddress(procName.constData()));
-    if (QWindowsContext::verboseGL > 1)
-        qDebug("%s('%s') with current_hglrc=%p returns %p",
-               __FUNCTION__, procName.constData(),
-               wglGetCurrentContext(), procAddress);
-    if (!procAddress)
-        qWarning("%s: Unable to resolve '%s'", __FUNCTION__, procName.constData());
-    return procAddress;
+    // Even though we use QFunctionPointer, it does not mean the function can be called.
+    // It will need to be cast to the proper function type with the correct calling
+    // convention. QFunctionPointer is nothing more than a glorified void* here.
+    QFunctionPointer procAddress = reinterpret_cast<QFunctionPointer>(QOpenGLStaticContext::opengl32.wglGetProcAddress(procName));
+
+    // We support AllGLFunctionsQueryable, which means this function must be able to
+    // return a function pointer even for functions that are in GL.h and exported
+    // normally from opengl32.dll. wglGetProcAddress() is not guaranteed to work for such
+    // functions, however in QT_OPENGL_DYNAMIC builds QOpenGLFunctions will just blindly
+    // call into here for _any_ OpenGL function.
+    if (procAddress == nullptr || reinterpret_cast<quintptr>(procAddress) < 4u
+        || procAddress == reinterpret_cast<QFunctionPointer>(-1)) {
+        procAddress = QOpenGLStaticContext::opengl32.resolve(procName);
+    }
+
+    if (QWindowsContext::verbose > 1)
+        qCDebug(lcQpaGl) << __FUNCTION__ <<  procName << QOpenGLStaticContext::opengl32.wglGetCurrentContext() << "returns" << procAddress;
+
+    return reinterpret_cast<QFunctionPointer>(procAddress);
 }
 
 QT_END_NAMESPACE

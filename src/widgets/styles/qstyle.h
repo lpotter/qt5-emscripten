@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QSTYLE_H
 #define QSTYLE_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qrect.h>
 #include <QtCore/qsize.h>
@@ -49,8 +48,6 @@
 #include <QtGui/qpixmap.h>
 #include <QtGui/qpalette.h>
 #include <QtWidgets/qsizepolicy.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -76,13 +73,13 @@ public:
     QStyle();
     virtual ~QStyle();
 
-    virtual void polish(QWidget *);
-    virtual void unpolish(QWidget *);
+    virtual void polish(QWidget *widget);
+    virtual void unpolish(QWidget *widget);
 
-    virtual void polish(QApplication *);
-    virtual void unpolish(QApplication *);
+    virtual void polish(QApplication *application);
+    virtual void unpolish(QApplication *application);
 
-    virtual void polish(QPalette &);
+    virtual void polish(QPalette &palette);
 
     virtual QRect itemTextRect(const QFontMetrics &fm, const QRect &r,
                            int flags, bool enabled,
@@ -132,6 +129,7 @@ public:
         State_Small =               0x04000000,
         State_Mini =                0x08000000
     };
+    Q_ENUM(StateFlag)
     Q_DECLARE_FLAGS(State, StateFlag)
 
 
@@ -143,7 +141,7 @@ public:
         PE_FrameGroupBox,
         PE_FrameLineEdit,
         PE_FrameMenu,
-        PE_FrameStatusBar, // obsolete
+        PE_FrameStatusBar, // ### Qt 6: remove
         PE_FrameStatusBarItem = PE_FrameStatusBar,
         PE_FrameTabWidget,
         PE_FrameWindow,
@@ -164,7 +162,7 @@ public:
         PE_IndicatorArrowUp,
         PE_IndicatorBranch,
         PE_IndicatorButtonDropDown,
-        PE_IndicatorViewItemCheck,
+        PE_IndicatorViewItemCheck, // ### Qt 6: remove
         PE_IndicatorItemViewItemCheck = PE_IndicatorViewItemCheck,
         PE_IndicatorCheckBox,
         PE_IndicatorDockWidgetResizeHandle,
@@ -180,6 +178,7 @@ public:
         PE_IndicatorToolBarSeparator,
         PE_PanelTipLabel,
         PE_IndicatorTabTear,
+        PE_IndicatorTabTearLeft = PE_IndicatorTabTear,
         PE_PanelScrollAreaCorner,
 
         PE_Widget,
@@ -195,12 +194,15 @@ public:
         PE_IndicatorTabClose,
         PE_PanelMenu,
 
+        PE_IndicatorTabTearRight,
+
         // do not add any values below/greater this
         PE_CustomBase = 0xf000000
     };
+    Q_ENUM(PrimitiveElement)
 
     virtual void drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, QPainter *p,
-                               const QWidget *w = 0) const = 0;
+                               const QWidget *w = nullptr) const = 0;
     enum ControlElement {
         CE_PushButton,
         CE_PushButtonBevel,
@@ -268,9 +270,10 @@ public:
         // do not add any values below/greater than this
         CE_CustomBase = 0xf0000000
     };
+    Q_ENUM(ControlElement)
 
     virtual void drawControl(ControlElement element, const QStyleOption *opt, QPainter *p,
-                             const QWidget *w = 0) const = 0;
+                             const QWidget *w = nullptr) const = 0;
 
     enum SubElement {
         SE_PushButtonContents,
@@ -305,10 +308,11 @@ public:
         SE_TabWidgetLeftCorner,
         SE_TabWidgetRightCorner,
 
-        SE_ViewItemCheckIndicator,
+        SE_ViewItemCheckIndicator, // ### Qt 6: remove
         SE_ItemViewItemCheckIndicator = SE_ViewItemCheckIndicator,
 
         SE_TabBarTearIndicator,
+        SE_TabBarTearIndicatorLeft = SE_TabBarTearIndicator,
 
         SE_TreeViewDisclosureItem,
 
@@ -348,12 +352,17 @@ public:
 
         SE_ToolBarHandle,
 
+        SE_TabBarScrollLeftButton,
+        SE_TabBarScrollRightButton,
+        SE_TabBarTearIndicatorRight,
+
         // do not add any values below/greater than this
         SE_CustomBase = 0xf0000000
     };
+    Q_ENUM(SubElement)
 
     virtual QRect subElementRect(SubElement subElement, const QStyleOption *option,
-                                 const QWidget *widget = 0) const = 0;
+                                 const QWidget *widget = nullptr) const = 0;
 
 
     enum ComplexControl {
@@ -370,6 +379,7 @@ public:
         // do not add any values below/greater than this
         CC_CustomBase = 0xf0000000
     };
+    Q_ENUM(ComplexControl)
 
     enum SubControl {
         SC_None =                  0x00000000,
@@ -426,15 +436,16 @@ public:
         SC_CustomBase =            0xf0000000,
         SC_All =                   0xffffffff
     };
+    Q_ENUM(SubControl)
     Q_DECLARE_FLAGS(SubControls, SubControl)
 
 
     virtual void drawComplexControl(ComplexControl cc, const QStyleOptionComplex *opt, QPainter *p,
-                                    const QWidget *widget = 0) const = 0;
+                                    const QWidget *widget = nullptr) const = 0;
     virtual SubControl hitTestComplexControl(ComplexControl cc, const QStyleOptionComplex *opt,
-                                             const QPoint &pt, const QWidget *widget = 0) const = 0;
+                                             const QPoint &pt, const QWidget *widget = nullptr) const = 0;
     virtual QRect subControlRect(ComplexControl cc, const QStyleOptionComplex *opt,
-                                 SubControl sc, const QWidget *widget = 0) const = 0;
+                                 SubControl sc, const QWidget *widget = nullptr) const = 0;
 
     enum PixelMetric {
         PM_ButtonMargin,
@@ -495,9 +506,9 @@ public:
         PM_DialogButtonsButtonHeight,
 
         PM_MdiSubWindowFrameWidth,
-        PM_MDIFrameWidth = PM_MdiSubWindowFrameWidth,            //obsolete
+        PM_MDIFrameWidth = PM_MdiSubWindowFrameWidth,         // ### Qt 6: remove
         PM_MdiSubWindowMinimizedWidth,
-        PM_MDIMinimizedWidth = PM_MdiSubWindowMinimizedWidth,    //obsolete
+        PM_MDIMinimizedWidth = PM_MdiSubWindowMinimizedWidth, // ### Qt 6: remove
 
         PM_HeaderMargin,
         PM_HeaderMarkSize,
@@ -515,9 +526,9 @@ public:
 
         PM_SpinBoxSliderHeight,
 
-        PM_DefaultTopLevelMargin,
-        PM_DefaultChildMargin,
-        PM_DefaultLayoutSpacing,
+        PM_DefaultTopLevelMargin, // ### Qt 6: remove
+        PM_DefaultChildMargin,    // ### Qt 6: remove
+        PM_DefaultLayoutSpacing,  // ### Qt 6: remove
 
         PM_ToolBarIconSize,
         PM_ListViewIconSize,
@@ -555,13 +566,21 @@ public:
         PM_ScrollView_ScrollBarSpacing,
         PM_ScrollView_ScrollBarOverlap,
         PM_SubMenuOverlap,
+        PM_TreeViewIndentation,
+
+        PM_HeaderDefaultSectionSizeHorizontal,
+        PM_HeaderDefaultSectionSizeVertical,
+
+        PM_TitleBarButtonIconSize,
+        PM_TitleBarButtonSize,
 
         // do not add any values below/greater than this
         PM_CustomBase = 0xf0000000
     };
+    Q_ENUM(PixelMetric)
 
-    virtual int pixelMetric(PixelMetric metric, const QStyleOption *option = 0,
-                            const QWidget *widget = 0) const = 0;
+    virtual int pixelMetric(PixelMetric metric, const QStyleOption *option = nullptr,
+                            const QWidget *widget = nullptr) const = 0;
 
     enum ContentsType {
         CT_PushButton,
@@ -590,14 +609,16 @@ public:
         // do not add any values below/greater than this
         CT_CustomBase = 0xf0000000
     };
+    Q_ENUM(ContentsType)
 
     virtual QSize sizeFromContents(ContentsType ct, const QStyleOption *opt,
-                                   const QSize &contentsSize, const QWidget *w = 0) const = 0;
+                                   const QSize &contentsSize, const QWidget *w = nullptr) const = 0;
 
     enum RequestSoftwareInputPanel {
         RSIP_OnMouseClickAndAlreadyFocused,
         RSIP_OnMouseClick
     };
+    Q_ENUM(RequestSoftwareInputPanel)
 
     enum StyleHint {
         SH_EtchDisabledText,
@@ -628,7 +649,7 @@ public:
         SH_ComboBox_Popup,
         SH_TitleBar_NoBorder,
         SH_Slider_StopMouseOverSlider,
-        SH_ScrollBar_StopMouseOverSlider = SH_Slider_StopMouseOverSlider, // obsolete
+        SH_ScrollBar_StopMouseOverSlider = SH_Slider_StopMouseOverSlider, // ### Qt 6: remove
         SH_BlinkCursorWhenTextSelected,
         SH_RichText_FullWidthSelection,
         SH_Menu_Scrollable,
@@ -687,7 +708,7 @@ public:
         SH_Menu_FadeOutOnHide,
         SH_SpinBox_ClickAutoRepeatThreshold,
         SH_ItemView_PaintAlternatingRowColorsForEmptyArea,
-	    SH_FormLayoutWrapPolicy,
+        SH_FormLayoutWrapPolicy,
         SH_TabWidget_DefaultTabPosition,
         SH_ToolBar_Movable,
         SH_FormLayoutFieldGrowthPolicy,
@@ -699,13 +720,36 @@ public:
         SH_ToolButtonStyle,
         SH_RequestSoftwareInputPanel,
         SH_ScrollBar_Transient,
+        SH_Menu_SupportsSections,
+        SH_ToolTip_WakeUpDelay,
+        SH_ToolTip_FallAsleepDelay,
+        SH_Widget_Animate,
+        SH_Splitter_OpaqueResize,
+        // Whether we should use a native popup.
+        // Only supported for non-editable combo boxes on Mac OS X so far.
+        SH_ComboBox_UseNativePopup,
+        SH_LineEdit_PasswordMaskDelay,
+        SH_TabBar_ChangeCurrentDelay,
+        SH_Menu_SubMenuUniDirection,
+        SH_Menu_SubMenuUniDirectionFailCount,
+        SH_Menu_SubMenuSloppySelectOtherActions,
+        SH_Menu_SubMenuSloppyCloseTimeout,
+        SH_Menu_SubMenuResetWhenReenteringParent,
+        SH_Menu_SubMenuDontStartSloppyOnLeave,
+        SH_ItemView_ScrollMode,
+        SH_TitleBar_ShowToolTipsOnButtons,
+        SH_Widget_Animation_Duration,
+        SH_ComboBox_AllowWheelScrolling,
+        SH_SpinBox_ButtonsInsideFrame,
+        SH_SpinBox_StepModifier,
         // Add new style hint values here
 
         SH_CustomBase = 0xf0000000
     };
+    Q_ENUM(StyleHint)
 
-    virtual int styleHint(StyleHint stylehint, const QStyleOption *opt = 0,
-                          const QWidget *widget = 0, QStyleHintReturn* returnData = 0) const = 0;
+    virtual int styleHint(StyleHint stylehint, const QStyleOption *opt = nullptr,
+                          const QWidget *widget = nullptr, QStyleHintReturn* returnData = nullptr) const = 0;
 
     enum StandardPixmap {
         SP_TitleBarMenuButton,
@@ -778,15 +822,17 @@ public:
         SP_MediaSeekBackward,
         SP_MediaVolume,
         SP_MediaVolumeMuted,
+        SP_LineEditClearButton,
         // do not add any values below/greater than this
         SP_CustomBase = 0xf0000000
     };
+    Q_ENUM(StandardPixmap)
 
-    virtual QPixmap standardPixmap(StandardPixmap standardPixmap, const QStyleOption *opt = 0,
-                                   const QWidget *widget = 0) const = 0;
+    virtual QPixmap standardPixmap(StandardPixmap standardPixmap, const QStyleOption *opt = nullptr,
+                                   const QWidget *widget = nullptr) const = 0;
 
-    virtual QIcon standardIcon(StandardPixmap standardIcon, const QStyleOption *option = 0,
-                               const QWidget *widget = 0) const = 0;
+    virtual QIcon standardIcon(StandardPixmap standardIcon, const QStyleOption *option = nullptr,
+                               const QWidget *widget = nullptr) const = 0;
 
     virtual QPixmap generatedIconPixmap(QIcon::Mode iconMode, const QPixmap &pixmap,
                                         const QStyleOption *opt) const = 0;
@@ -805,10 +851,10 @@ public:
 
     virtual int layoutSpacing(QSizePolicy::ControlType control1,
                               QSizePolicy::ControlType control2, Qt::Orientation orientation,
-                              const QStyleOption *option = 0, const QWidget *widget = 0) const = 0;
+                              const QStyleOption *option = nullptr, const QWidget *widget = nullptr) const = 0;
     int combinedLayoutSpacing(QSizePolicy::ControlTypes controls1,
                               QSizePolicy::ControlTypes controls2, Qt::Orientation orientation,
-                              QStyleOption *option = 0, QWidget *widget = 0) const;
+                              QStyleOption *option = nullptr, QWidget *widget = nullptr) const;
 
     const QStyle * proxy() const;
 
@@ -826,11 +872,12 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(QStyle::State)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QStyle::SubControls)
 
 #if !defined(QT_NO_DEBUG_STREAM)
+// ### Qt 6: Remove in favor of template<class T> QDebug operator<<(QDebug, const QFlags<T> &).
+#  if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 Q_WIDGETS_EXPORT QDebug operator<<(QDebug debug, QStyle::State state);
+#  endif
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QSTYLE_H

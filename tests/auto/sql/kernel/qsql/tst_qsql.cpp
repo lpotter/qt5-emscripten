@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,12 +28,11 @@
 
 
 #include <QtTest/QtTest>
-#include <qguiapplication.h>
+#include <qcoreapplication.h>
 #include <qsqldatabase.h>
 #include <qsqlerror.h>
 #include <qsqlquery.h>
 #include <qsqlrecord.h>
-#include <qsql.h>
 #include <qsqlresult.h>
 #include <qsqldriver.h>
 #include <qdebug.h>
@@ -56,7 +42,7 @@
 
 class tst_QSql : public QObject
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     tst_QSql();
@@ -105,7 +91,6 @@ void tst_QSql::cleanup()
 {
 }
 
-
 // this is a very basic test for drivers that cannot create/delete tables
 // it can be used while developing new drivers,
 // it's original purpose is to test ODBC Text datasources that are basically
@@ -115,62 +100,61 @@ void tst_QSql::cleanup()
 void tst_QSql::basicDriverTest()
 {
     int argc = 1;
-    const char *argv[] = {"test"};
-    QGuiApplication app(argc, const_cast<char **>(argv), false);
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
+    QCoreApplication app(argc, argv, false);
     tst_Databases dbs;
-    dbs.open();
+    QVERIFY(dbs.open());
 
-    foreach( const QString& dbName, dbs.dbNames )
-    {
-        QSqlDatabase db = QSqlDatabase::database( dbName );
-        QVERIFY_SQL( db, isValid() );
+    foreach (const QString& dbName, dbs.dbNames) {
+        QSqlDatabase db = QSqlDatabase::database(dbName);
+        QVERIFY_SQL(db, isValid());
 
         QStringList tables = db.tables();
         QString tableName;
 
-        if ( tables.contains( "qtest_basictest.txt" ) )
+        if (tables.contains("qtest_basictest.txt"))
             tableName = "qtest_basictest.txt";
-        else if ( tables.contains( "qtest_basictest" ) )
+        else if (tables.contains("qtest_basictest"))
             tableName = "qtest_basictest";
-        else if ( tables.contains( "QTEST_BASICTEST" ) )
+        else if (tables.contains("QTEST_BASICTEST"))
             tableName = "QTEST_BASICTEST";
         else {
-            QVERIFY( 1 );
+            QVERIFY(1);
             continue;
         }
 
-        qDebug("Testing: %s", qPrintable(tst_Databases::dbToString( db )));
+        qDebug("Testing: %s", qPrintable(tst_Databases::dbToString(db)));
 
-        QSqlRecord rInf = db.record( tableName );
-        QCOMPARE( rInf.count(), 2 );
-        QCOMPARE( rInf.fieldName( 0 ).toLower(), QString( "id" ) );
-        QCOMPARE( rInf.fieldName( 1 ).toLower(), QString( "name" ) );
+        QSqlRecord rInf = db.record(tableName);
+        QCOMPARE(rInf.count(), 2);
+        QCOMPARE(rInf.fieldName(0).toLower(), QString("id"));
+        QCOMPARE(rInf.fieldName(1).toLower(), QString("name"));
     }
 
     dbs.close();
-    QVERIFY( 1 ); // make sure the test doesn't fail if no database drivers are there
+    QVERIFY(1); // make sure the test doesn't fail if no database drivers are there
 }
 
 // make sure that the static stuff will be deleted
-// when using multiple QGuiApplication objects
+// when using multiple QCoreApplication objects
 void tst_QSql::open()
 {
     int i;
     int argc = 1;
-    const char *argv[] = {"test"};
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
     int count = -1;
-    for ( i = 0; i < 10; ++i ) {
-        QGuiApplication app(argc, const_cast<char **>(argv), false);
-	tst_Databases dbs;
+    for (i = 0; i < 10; ++i) {
+        QCoreApplication app(argc, argv, false);
+        tst_Databases dbs;
 
-	dbs.open();
-	if ( count == -1 )
-	    // first iteration: see how many dbs are open
-	    count = (int) dbs.dbNames.count();
-	else
-	    // next iterations: make sure all are opened again
-	    QCOMPARE( count, (int)dbs.dbNames.count() );
-	dbs.close();
+        QVERIFY(dbs.open());
+        if (count == -1)
+            // first iteration: see how many dbs are open
+            count = (int) dbs.dbNames.count();
+        else
+            // next iterations: make sure all are opened again
+            QCOMPARE(count, (int)dbs.dbNames.count());
+        dbs.close();
     }
 }
 
@@ -186,26 +170,27 @@ void tst_QSql::openInvalid()
 void tst_QSql::concurrentAccess()
 {
     int argc = 1;
-    const char *argv[] = {"test"};
-    QGuiApplication app(argc, const_cast<char **>(argv), false);
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
+    QCoreApplication app(argc, argv, false);
     tst_Databases dbs;
 
-    dbs.open();
-    foreach ( const QString& dbName, dbs.dbNames ) {
-	QSqlDatabase db = QSqlDatabase::database( dbName );
-	QVERIFY( db.isValid() );
+    QVERIFY(dbs.open());
+    foreach (const QString& dbName, dbs.dbNames) {
+        QSqlDatabase db = QSqlDatabase::database(dbName);
+        QVERIFY(db.isValid());
         if (tst_Databases::isMSAccess(db))
             continue;
 
-	QSqlDatabase ndb = QSqlDatabase::addDatabase( db.driverName(), "tst_QSql::concurrentAccess" );
-	ndb.setDatabaseName( db.databaseName() );
-	ndb.setHostName( db.hostName() );
-	ndb.setPort( db.port() );
-	ndb.setUserName( db.userName() );
-	ndb.setPassword( db.password() );
-	QVERIFY_SQL( ndb, open() );
+        QSqlDatabase ndb = QSqlDatabase::addDatabase(db.driverName(), "tst_QSql::concurrentAccess");
+        ndb.setDatabaseName(db.databaseName());
+        ndb.setHostName(db.hostName());
+        ndb.setPort(db.port());
+        ndb.setUserName(db.userName());
+        ndb.setPassword(db.password());
+        QVERIFY_SQL(ndb, open());
 
-	QCOMPARE( db.tables(), ndb.tables() );
+        QCOMPARE(db.tables(), ndb.tables());
+        ndb.close();
     }
     // no database servers installed - don't fail
     QVERIFY(1);
@@ -215,64 +200,64 @@ void tst_QSql::concurrentAccess()
 void tst_QSql::openErrorRecovery()
 {
     int argc = 1;
-    const char *argv[] = {"test"};
-    QGuiApplication app(argc, const_cast<char **>(argv), false);
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
+    QCoreApplication app(argc, argv, false);
     tst_Databases dbs;
 
-    dbs.addDbs();
+    QVERIFY(dbs.addDbs());
     if (dbs.dbNames.isEmpty())
         QSKIP("No database drivers installed");
-    foreach ( const QString& dbName, dbs.dbNames ) {
-	QSqlDatabase db = QSqlDatabase::database( dbName, false );
-	CHECK_DATABASE( db );
+    foreach (const QString& dbName, dbs.dbNames) {
+        QSqlDatabase db = QSqlDatabase::database(dbName, false);
+        CHECK_DATABASE(db);
 
-	QString userName = db.userName();
-	QString password = db.password();
+        QString userName = db.userName();
+        QString password = db.password();
 
-	// force an open error
-	if ( db.open( "dummy130977", "doesnt_exist" ) ) {
+        // force an open error
+        if (db.open("dummy130977", "doesnt_exist")) {
             qDebug("Promiscuous database server without access control - test skipped for %s",
-                  qPrintable(tst_Databases::dbToString( db )) );
-	    QVERIFY(1);
-	    continue;
-	}
+                   qPrintable(tst_Databases::dbToString(db)));
+            QVERIFY(1);
+            continue;
+        }
 
-	QFAIL_SQL( db, isOpen() );
-	QVERIFY_SQL( db, isOpenError() );
+        QFAIL_SQL(db, isOpen());
+        QVERIFY_SQL(db, isOpenError());
 
-	// now open it
-	if ( !db.open( userName, password ) ) {
-	    qDebug() << "Could not open Database " << tst_Databases::dbToString( db ) <<
-		    ". Assuming DB is down, skipping... (Error: " << 
-		    tst_Databases::printError( db.lastError() ) << ")";
-	    continue;
-	}
-	QVERIFY_SQL( db, open( userName, password ) );
-	QVERIFY_SQL( db, isOpen() );
-	QFAIL_SQL( db, isOpenError() );
-	db.close();
-	QFAIL_SQL( db, isOpen() );
+        // now open it
+        if (!db.open(userName, password)) {
+            qDebug() << "Could not open Database " << tst_Databases::dbToString(db) <<
+                        ". Assuming DB is down, skipping... (Error: " <<
+                        tst_Databases::printError(db.lastError()) << ")";
+            continue;
+        }
+        QVERIFY_SQL(db, open(userName, password));
+        QVERIFY_SQL(db, isOpen());
+        QFAIL_SQL(db, isOpenError());
+        db.close();
+        QFAIL_SQL(db, isOpen());
 
-	// force another open error
-	QFAIL_SQL( db, open( "dummy130977", "doesnt_exist" ) );
-	QFAIL_SQL( db, isOpen() );
-	QVERIFY_SQL( db, isOpenError() );
+        // force another open error
+        QFAIL_SQL(db, open("dummy130977", "doesnt_exist"));
+        QFAIL_SQL(db, isOpen());
+        QVERIFY_SQL(db, isOpenError());
     }
 }
 
 void tst_QSql::registerSqlDriver()
 {
     int argc = 1;
-    const char *argv[] = {"test"};
-    QGuiApplication app(argc, const_cast<char **>(argv), false);
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
+    QCoreApplication app(argc, argv, false);
 
-    QSqlDatabase::registerSqlDriver( "QSQLTESTDRIVER", new QSqlDriverCreator<QSqlNullDriver> );
-    QVERIFY( QSqlDatabase::drivers().contains( "QSQLTESTDRIVER" ) );
+    QSqlDatabase::registerSqlDriver("QSQLTESTDRIVER", new QSqlDriverCreator<QSqlNullDriver>);
+    QVERIFY(QSqlDatabase::drivers().contains("QSQLTESTDRIVER"));
 
-    QSqlDatabase db = QSqlDatabase::addDatabase( "QSQLTESTDRIVER" );
-    QVERIFY( db.isValid() );
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLTESTDRIVER");
+    QVERIFY(db.isValid());
 
-    QCOMPARE( db.tables(), QStringList() );
+    QCOMPARE(db.tables(), QStringList());
 }
 
 QTEST_APPLESS_MAIN(tst_QSql)

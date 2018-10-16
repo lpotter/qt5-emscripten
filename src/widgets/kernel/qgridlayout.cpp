@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -85,6 +83,7 @@ public:
     void setGeometry(const QRect &r) { item_->setGeometry(r); }
     Qt::Alignment alignment() const { return item_->alignment(); }
     QLayoutItem *item() { return item_; }
+    void setItem(QLayoutItem *newitem) { item_ = newitem; }
     QLayoutItem *takeItem() { QLayoutItem *i = item_; item_ = 0; return i; }
 
     int hStretch() { return item_->widget() ?
@@ -156,13 +155,30 @@ public:
             return 0;
     }
     inline QLayoutItem *takeAt(int index) {
-        QLayoutItem *item = 0;
+        Q_Q(QGridLayout);
         if (index < things.count()) {
-            QGridBox *b = things.takeAt(index);
-            if (b) {
-                item = b->takeItem();
+            if (QGridBox *b = things.takeAt(index)) {
+                QLayoutItem *item = b->takeItem();
+                if (QLayout *l = item->layout()) {
+                    // sanity check in case the user passed something weird to QObject::setParent()
+                    if (l->parent() == q)
+                        l->setParent(0);
+                }
                 delete b;
+                return item;
             }
+        }
+        return 0;
+    }
+    QLayoutItem* replaceAt(int index, QLayoutItem *newitem) override
+    {
+        if (!newitem)
+            return 0;
+        QLayoutItem *item = 0;
+        QGridBox *b = things.value(index);
+        if (b) {
+            item = b->takeItem();
+            b->setItem(newitem);
         }
         return item;
     }
@@ -547,15 +563,15 @@ void QGridLayoutPrivate::add(QGridBox *box, int row, int col)
 
 void QGridLayoutPrivate::add(QGridBox *box, int row1, int row2, int col1, int col2)
 {
-    if (row2 >= 0 && row2 < row1)
+    if (Q_UNLIKELY(row2 >= 0 && row2 < row1))
         qWarning("QGridLayout: Multi-cell fromRow greater than toRow");
-    if (col2 >= 0 && col2 < col1)
+    if (Q_UNLIKELY(col2 >= 0 && col2 < col1))
         qWarning("QGridLayout: Multi-cell fromCol greater than toCol");
     if (row1 == row2 && col1 == col2) {
         add(box, row1, col1);
         return;
     }
-    expand(row2 + 1, col2 + 1);
+    expand(qMax(row1, row2) + 1, qMax(col1, col2) + 1);
     box->row = row1;
     box->col = col1;
 
@@ -730,9 +746,13 @@ void QGridLayoutPrivate::setupSpacings(QVector<QLayoutStruct> &chain,
                     if (orientation == Qt::Vertical) {
                         QGridBox *sibling = vReversed ? previousBox : box;
                         if (sibling) {
-                            QWidget *wid = sibling->item()->widget();
-                            if (wid)
-                                spacing = qMax(spacing, sibling->item()->geometry().top() - wid->geometry().top() );
+                            if (sibling->item()->isEmpty()) {
+                                spacing = 0;
+                            } else {
+                                QWidget *wid = sibling->item()->widget();
+                                if (wid)
+                                    spacing = qMax(spacing, sibling->item()->geometry().top() - wid->geometry().top());
+                            }
                         }
                     }
                 }
@@ -1265,7 +1285,7 @@ QSize QGridLayout::maximumSize() const
 */
 bool QGridLayout::hasHeightForWidth() const
 {
-    return ((QGridLayout*)this)->d_func()->hasHeightForWidth(horizontalSpacing(), verticalSpacing());
+    return const_cast<QGridLayout*>(this)->d_func()->hasHeightForWidth(horizontalSpacing(), verticalSpacing());
 }
 
 /*!
@@ -1412,20 +1432,6 @@ void QGridLayout::addItem(QLayoutItem *item, int row, int column, int rowSpan, i
     invalidate();
 }
 
-/*
-  Returns true if the widget \a w can be added to the layout \a l;
-  otherwise returns false.
-*/
-static bool checkWidget(QLayout *l, QWidget *w)
-{
-    if (!w) {
-        qWarning("QLayout: Cannot add null widget to %s/%s", l->metaObject()->className(),
-                  l->objectName().toLocal8Bit().data());
-        return false;
-    }
-    return true;
-}
-
 /*!
     Adds the given \a widget to the cell grid at \a row, \a column. The
     top-left position is (0, 0) by default.
@@ -1436,9 +1442,10 @@ static bool checkWidget(QLayout *l, QWidget *w)
 */
 void QGridLayout::addWidget(QWidget *widget, int row, int column, Qt::Alignment alignment)
 {
-    if (!checkWidget(this, widget))
+    Q_D(QGridLayout);
+    if (!d->checkWidget(widget))
         return;
-    if (row < 0 || column < 0) {
+    if (Q_UNLIKELY(row < 0 || column < 0)) {
         qWarning("QGridLayout: Cannot add %s/%s to %s/%s at row %d column %d",
                  widget->metaObject()->className(), widget->objectName().toLocal8Bit().data(),
                  metaObject()->className(), objectName().toLocal8Bit().data(), row, column);
@@ -1465,7 +1472,7 @@ void QGridLayout::addWidget(QWidget *widget, int fromRow, int fromColumn,
                             int rowSpan, int columnSpan, Qt::Alignment alignment)
 {
     Q_D(QGridLayout);
-    if (!checkWidget(this, widget))
+    if (!d->checkWidget(widget))
         return;
     int toRow = (rowSpan < 0) ? -1 : fromRow + rowSpan - 1;
     int toColumn = (columnSpan < 0) ? -1 : fromColumn + columnSpan - 1;
@@ -1500,7 +1507,10 @@ void QGridLayout::addWidget(QWidget *widget, int fromRow, int fromColumn,
 void QGridLayout::addLayout(QLayout *layout, int row, int column, Qt::Alignment alignment)
 {
     Q_D(QGridLayout);
-    addChildLayout(layout);
+    if (!d->checkLayout(layout))
+        return;
+    if (!adoptLayout(layout))
+        return;
     QGridBox *b = new QGridBox(layout);
     b->setAlignment(alignment);
     d->add(b, row, column);
@@ -1519,7 +1529,10 @@ void QGridLayout::addLayout(QLayout *layout, int row, int column,
                                       int rowSpan, int columnSpan, Qt::Alignment alignment)
 {
     Q_D(QGridLayout);
-    addChildLayout(layout);
+    if (!d->checkLayout(layout))
+        return;
+    if (!adoptLayout(layout))
+        return;
     QGridBox *b = new QGridBox(layout);
     b->setAlignment(alignment);
     d->add(b, row, (rowSpan < 0) ? -1 : row + rowSpan - 1, column, (columnSpan < 0) ? -1 : column + columnSpan - 1);
@@ -1683,3 +1696,5 @@ void QGridLayout::invalidate()
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qgridlayout.cpp"

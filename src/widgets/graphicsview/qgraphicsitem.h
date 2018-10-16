@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,7 +40,7 @@
 #ifndef QGRAPHICSITEM_H
 #define QGRAPHICSITEM_H
 
-#include <QtCore/qglobal.h>
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qrect.h>
@@ -52,12 +50,9 @@
 
 class tst_QGraphicsItem;
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
-
-
-#if !defined(QT_NO_GRAPHICSVIEW)
 
 class QBrush;
 class QCursor;
@@ -107,7 +102,8 @@ public:
         ItemIsFocusScope = 0x8000, // internal
         ItemSendsScenePositionChanges = 0x10000,
         ItemStopsClickFocusPropagation = 0x20000,
-        ItemStopsFocusHandling = 0x40000
+        ItemStopsFocusHandling = 0x40000,
+        ItemContainsChildrenInShape = 0x80000
         // NB! Don't forget to increase the d_ptr->flags bit field by 1 when adding a new flag.
     };
     Q_DECLARE_FLAGS(GraphicsItemFlags, GraphicsItemFlag)
@@ -162,7 +158,7 @@ public:
         SceneModal
     };
 
-    explicit QGraphicsItem(QGraphicsItem *parent = 0);
+    explicit QGraphicsItem(QGraphicsItem *parent = nullptr);
     virtual ~QGraphicsItem();
 
     QGraphicsScene *scene() const;
@@ -198,7 +194,7 @@ public:
 
     PanelModality panelModality() const;
     void setPanelModality(PanelModality panelModality);
-    bool isBlockedByModalPanel(QGraphicsItem **blockingPanel = 0) const;
+    bool isBlockedByModalPanel(QGraphicsItem **blockingPanel = nullptr) const;
 
 #ifndef QT_NO_TOOLTIP
     QString toolTip() const;
@@ -231,11 +227,11 @@ public:
     qreal effectiveOpacity() const;
     void setOpacity(qreal opacity);
 
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
     // Effect
     QGraphicsEffect *graphicsEffect() const;
     void setGraphicsEffect(QGraphicsEffect *effect);
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
 
     Qt::MouseButtons acceptedMouseButtons() const;
     void setAcceptedMouseButtons(Qt::MouseButtons buttons);
@@ -294,7 +290,7 @@ public:
     QTransform transform() const;
     QTransform sceneTransform() const;
     QTransform deviceTransform(const QTransform &viewportTransform) const;
-    QTransform itemTransform(const QGraphicsItem *other, bool *ok = 0) const;
+    QTransform itemTransform(const QGraphicsItem *other, bool *ok = nullptr) const;
     void setTransform(const QTransform &matrix, bool combine = false);
     void resetTransform();
 #if QT_DEPRECATED_SINCE(5, 0)
@@ -345,7 +341,7 @@ public:
     void setBoundingRegionGranularity(qreal granularity);
 
     // Drawing
-    virtual void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0) = 0;
+    virtual void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) = 0;
     void update(const QRectF &rect = QRectF());
     inline void update(qreal x, qreal y, qreal width, qreal height);
     void scroll(qreal dx, qreal dy, const QRectF &rect = QRectF());
@@ -542,7 +538,7 @@ inline QRectF QGraphicsItem::mapRectFromScene(qreal ax, qreal ay, qreal w, qreal
 class Q_WIDGETS_EXPORT QGraphicsObject : public QObject, public QGraphicsItem
 {
     Q_OBJECT
-    Q_PROPERTY(QGraphicsObject * parent READ parentObject WRITE setParentItem NOTIFY parentChanged DESIGNABLE false)
+    Q_PROPERTY(QGraphicsObject* parent READ parentObject WRITE setParentItem NOTIFY parentChanged DESIGNABLE false)
     Q_PROPERTY(qreal opacity READ opacity WRITE setOpacity NOTIFY opacityChanged FINAL)
     Q_PROPERTY(bool enabled READ isEnabled WRITE setEnabled NOTIFY enabledChanged)
     Q_PROPERTY(bool visible READ isVisible WRITE setVisible NOTIFY visibleChanged FINAL)
@@ -553,7 +549,7 @@ class Q_WIDGETS_EXPORT QGraphicsObject : public QObject, public QGraphicsItem
     Q_PROPERTY(qreal rotation READ rotation WRITE setRotation NOTIFY rotationChanged)
     Q_PROPERTY(qreal scale READ scale WRITE setScale NOTIFY scaleChanged)
     Q_PROPERTY(QPointF transformOriginPoint READ transformOriginPoint WRITE setTransformOriginPoint)
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
     Q_PROPERTY(QGraphicsEffect *effect READ graphicsEffect WRITE setGraphicsEffect)
 #endif
     Q_PRIVATE_PROPERTY(QGraphicsItem::d_func(), QDeclarativeListProperty<QGraphicsObject> children READ childrenList DESIGNABLE false NOTIFY childrenChanged)
@@ -562,14 +558,10 @@ class Q_WIDGETS_EXPORT QGraphicsObject : public QObject, public QGraphicsItem
     Q_CLASSINFO("DefaultProperty", "children")
     Q_INTERFACES(QGraphicsItem)
 public:
-    explicit QGraphicsObject(QGraphicsItem *parent = 0);
+    explicit QGraphicsObject(QGraphicsItem *parent = nullptr);
     ~QGraphicsObject();
 
-#ifdef Q_NO_USING_KEYWORD
-    const QObjectList &children() const { return QObject::children(); }
-#else
     using QObject::children;
-#endif
 
 #ifndef QT_NO_GESTURES
     void grabGesture(Qt::GestureType type, Qt::GestureFlags flags = Qt::GestureFlags());
@@ -596,7 +588,7 @@ Q_SIGNALS:
 protected:
     QGraphicsObject(QGraphicsItemPrivate &dd, QGraphicsItem *parent);
 
-    bool event(QEvent *ev);
+    bool event(QEvent *ev) override;
 
 private:
     friend class QGraphicsItem;
@@ -608,7 +600,7 @@ class QAbstractGraphicsShapeItemPrivate;
 class Q_WIDGETS_EXPORT QAbstractGraphicsShapeItem : public QGraphicsItem
 {
 public:
-    explicit QAbstractGraphicsShapeItem(QGraphicsItem *parent = 0);
+    explicit QAbstractGraphicsShapeItem(QGraphicsItem *parent = nullptr);
     ~QAbstractGraphicsShapeItem();
 
     QPen pen() const;
@@ -617,8 +609,8 @@ public:
     QBrush brush() const;
     void setBrush(const QBrush &brush);
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
 protected:
     QAbstractGraphicsShapeItem(QAbstractGraphicsShapeItemPrivate &dd,
@@ -633,29 +625,29 @@ class QGraphicsPathItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsPathItem : public QAbstractGraphicsShapeItem
 {
 public:
-    explicit QGraphicsPathItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsPathItem(const QPainterPath &path, QGraphicsItem *parent = 0);
+    explicit QGraphicsPathItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsPathItem(const QPainterPath &path, QGraphicsItem *parent = nullptr);
     ~QGraphicsPathItem();
 
     QPainterPath path() const;
     void setPath(const QPainterPath &path);
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 2 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsPathItem)
@@ -666,31 +658,31 @@ class QGraphicsRectItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsRectItem : public QAbstractGraphicsShapeItem
 {
 public:
-    explicit QGraphicsRectItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsRectItem(const QRectF &rect, QGraphicsItem *parent = 0);
-    explicit QGraphicsRectItem(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = 0);
+    explicit QGraphicsRectItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsRectItem(const QRectF &rect, QGraphicsItem *parent = nullptr);
+    explicit QGraphicsRectItem(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = nullptr);
     ~QGraphicsRectItem();
 
     QRectF rect() const;
     void setRect(const QRectF &rect);
     inline void setRect(qreal x, qreal y, qreal w, qreal h);
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 3 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsRectItem)
@@ -704,9 +696,9 @@ class QGraphicsEllipseItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsEllipseItem : public QAbstractGraphicsShapeItem
 {
 public:
-    explicit QGraphicsEllipseItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsEllipseItem(const QRectF &rect, QGraphicsItem *parent = 0);
-    explicit QGraphicsEllipseItem(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = 0);
+    explicit QGraphicsEllipseItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsEllipseItem(const QRectF &rect, QGraphicsItem *parent = nullptr);
+    explicit QGraphicsEllipseItem(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = nullptr);
     ~QGraphicsEllipseItem();
 
     QRectF rect() const;
@@ -719,22 +711,22 @@ public:
     int spanAngle() const;
     void setSpanAngle(int angle);
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 4 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsEllipseItem)
@@ -748,9 +740,9 @@ class QGraphicsPolygonItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsPolygonItem : public QAbstractGraphicsShapeItem
 {
 public:
-    explicit QGraphicsPolygonItem(QGraphicsItem *parent = 0);
+    explicit QGraphicsPolygonItem(QGraphicsItem *parent = nullptr);
     explicit QGraphicsPolygonItem(const QPolygonF &polygon,
-                                  QGraphicsItem *parent = 0);
+                                  QGraphicsItem *parent = nullptr);
     ~QGraphicsPolygonItem();
 
     QPolygonF polygon() const;
@@ -759,22 +751,22 @@ public:
     Qt::FillRule fillRule() const;
     void setFillRule(Qt::FillRule rule);
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 5 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsPolygonItem)
@@ -785,9 +777,9 @@ class QGraphicsLineItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsLineItem : public QGraphicsItem
 {
 public:
-    explicit QGraphicsLineItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsLineItem(const QLineF &line, QGraphicsItem *parent = 0);
-    explicit QGraphicsLineItem(qreal x1, qreal y1, qreal x2, qreal y2, QGraphicsItem *parent = 0);
+    explicit QGraphicsLineItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsLineItem(const QLineF &line, QGraphicsItem *parent = nullptr);
+    explicit QGraphicsLineItem(qreal x1, qreal y1, qreal x2, qreal y2, QGraphicsItem *parent = nullptr);
     ~QGraphicsLineItem();
 
     QPen pen() const;
@@ -798,22 +790,22 @@ public:
     inline void setLine(qreal x1, qreal y1, qreal x2, qreal y2)
     { setLine(QLineF(x1, y1, x2, y2)); }
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 6 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsLineItem)
@@ -830,8 +822,8 @@ public:
         HeuristicMaskShape
     };
 
-    explicit QGraphicsPixmapItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsPixmapItem(const QPixmap &pixmap, QGraphicsItem *parent = 0);
+    explicit QGraphicsPixmapItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsPixmapItem(const QPixmap &pixmap, QGraphicsItem *parent = nullptr);
     ~QGraphicsPixmapItem();
 
     QPixmap pixmap() const;
@@ -844,25 +836,25 @@ public:
     void setOffset(const QPointF &offset);
     inline void setOffset(qreal x, qreal y);
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 7 };
-    int type() const;
+    int type() const override;
 
     ShapeMode shapeMode() const;
     void setShapeMode(ShapeMode mode);
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsPixmapItem)
@@ -882,8 +874,8 @@ class Q_WIDGETS_EXPORT QGraphicsTextItem : public QGraphicsObject
     QDOC_PROPERTY(QTextCursor textCursor READ textCursor WRITE setTextCursor)
 
 public:
-    explicit QGraphicsTextItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsTextItem(const QString &text, QGraphicsItem *parent = 0);
+    explicit QGraphicsTextItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsTextItem(const QString &text, QGraphicsItem *parent = nullptr);
     ~QGraphicsTextItem();
 
     QString toHtml() const;
@@ -898,17 +890,17 @@ public:
     void setDefaultTextColor(const QColor &c);
     QColor defaultTextColor() const;
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 8 };
-    int type() const;
+    int type() const override;
 
     void setTextWidth(qreal width);
     qreal textWidth() const;
@@ -935,30 +927,30 @@ Q_SIGNALS:
     void linkHovered(const QString &);
 
 protected:
-    bool sceneEvent(QEvent *event);
-    void mousePressEvent(QGraphicsSceneMouseEvent *event);
-    void mouseMoveEvent(QGraphicsSceneMouseEvent *event);
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event);
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event);
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event);
-    void keyPressEvent(QKeyEvent *event);
-    void keyReleaseEvent(QKeyEvent *event);
-    void focusInEvent(QFocusEvent *event);
-    void focusOutEvent(QFocusEvent *event);
-    void dragEnterEvent(QGraphicsSceneDragDropEvent *event);
-    void dragLeaveEvent(QGraphicsSceneDragDropEvent *event);
-    void dragMoveEvent(QGraphicsSceneDragDropEvent *event);
-    void dropEvent(QGraphicsSceneDragDropEvent *event);
-    void inputMethodEvent(QInputMethodEvent *event);
-    void hoverEnterEvent(QGraphicsSceneHoverEvent *event);
-    void hoverMoveEvent(QGraphicsSceneHoverEvent *event);
-    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event);
+    bool sceneEvent(QEvent *event) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    void dragEnterEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dragLeaveEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dragMoveEvent(QGraphicsSceneDragDropEvent *event) override;
+    void dropEvent(QGraphicsSceneDragDropEvent *event) override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
+    void hoverEnterEvent(QGraphicsSceneHoverEvent *event) override;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
 
-    QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsTextItem)
@@ -973,8 +965,8 @@ class QGraphicsSimpleTextItemPrivate;
 class Q_WIDGETS_EXPORT QGraphicsSimpleTextItem : public QAbstractGraphicsShapeItem
 {
 public:
-    explicit QGraphicsSimpleTextItem(QGraphicsItem *parent = 0);
-    explicit QGraphicsSimpleTextItem(const QString &text, QGraphicsItem *parent = 0);
+    explicit QGraphicsSimpleTextItem(QGraphicsItem *parent = nullptr);
+    explicit QGraphicsSimpleTextItem(const QString &text, QGraphicsItem *parent = nullptr);
     ~QGraphicsSimpleTextItem();
 
     void setText(const QString &text);
@@ -983,22 +975,22 @@ public:
     void setFont(const QFont &font);
     QFont font() const;
 
-    QRectF boundingRect() const;
-    QPainterPath shape() const;
-    bool contains(const QPointF &point) const;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    bool contains(const QPointF &point) const override;
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 9 };
-    int type() const;
+    int type() const override;
 
 protected:
-    bool supportsExtension(Extension extension) const;
-    void setExtension(Extension extension, const QVariant &variant);
-    QVariant extension(const QVariant &variant) const;
+    bool supportsExtension(Extension extension) const override;
+    void setExtension(Extension extension, const QVariant &variant) override;
+    QVariant extension(const QVariant &variant) const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsSimpleTextItem)
@@ -1009,20 +1001,20 @@ class QGraphicsItemGroupPrivate;
 class Q_WIDGETS_EXPORT QGraphicsItemGroup : public QGraphicsItem
 {
 public:
-    explicit QGraphicsItemGroup(QGraphicsItem *parent = 0);
+    explicit QGraphicsItemGroup(QGraphicsItem *parent = nullptr);
     ~QGraphicsItemGroup();
 
     void addToGroup(QGraphicsItem *item);
     void removeFromGroup(QGraphicsItem *item);
 
-    QRectF boundingRect() const;
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = 0);
+    QRectF boundingRect() const override;
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
 
-    bool isObscuredBy(const QGraphicsItem *item) const;
-    QPainterPath opaqueArea() const;
+    bool isObscuredBy(const QGraphicsItem *item) const override;
+    QPainterPath opaqueArea() const override;
 
     enum { Type = 10 };
-    int type() const;
+    int type() const override;
 
 private:
     Q_DISABLE_COPY(QGraphicsItemGroup)
@@ -1031,14 +1023,16 @@ private:
 
 template <class T> inline T qgraphicsitem_cast(QGraphicsItem *item)
 {
-    return int(static_cast<T>(0)->Type) == int(QGraphicsItem::Type)
-        || (item && int(static_cast<T>(0)->Type) == item->type()) ? static_cast<T>(item) : 0;
+    typedef typename std::remove_cv<typename std::remove_pointer<T>::type>::type Item;
+    return int(Item::Type) == int(QGraphicsItem::Type)
+        || (item && int(Item::Type) == item->type()) ? static_cast<T>(item) : 0;
 }
 
 template <class T> inline T qgraphicsitem_cast(const QGraphicsItem *item)
 {
-    return int(static_cast<T>(0)->Type) == int(QGraphicsItem::Type)
-        || (item && int(static_cast<T>(0)->Type) == item->type()) ? static_cast<T>(item) : 0;
+    typedef typename std::remove_cv<typename std::remove_pointer<T>::type>::type Item;
+    return int(Item::Type) == int(QGraphicsItem::Type)
+        || (item && int(Item::Type) == item->type()) ? static_cast<T>(item) : 0;
 }
 
 #ifndef QT_NO_DEBUG_STREAM
@@ -1055,10 +1049,6 @@ Q_DECLARE_METATYPE(QGraphicsItem *)
 
 QT_BEGIN_NAMESPACE
 
-#endif // QT_NO_GRAPHICSVIEW
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QGRAPHICSITEM_H

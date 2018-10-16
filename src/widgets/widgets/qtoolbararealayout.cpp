@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,8 +52,6 @@
 /******************************************************************************
 ** QToolBarAreaLayoutItem
 */
-
-#ifndef QT_NO_TOOLBAR
 
 QT_BEGIN_NAMESPACE
 
@@ -349,7 +345,7 @@ void QToolBarAreaLayoutInfo::removeToolBar(QToolBar *toolBar)
 void QToolBarAreaLayoutInfo::insertToolBarBreak(QToolBar *before)
 {
     if (before == 0) {
-        if (!lines.isEmpty() && lines.last().toolBarItems.isEmpty())
+        if (!lines.isEmpty() && lines.constLast().toolBarItems.isEmpty())
             return;
         lines.append(QToolBarAreaLayoutLine(o));
         return;
@@ -485,9 +481,12 @@ void QToolBarAreaLayoutInfo::moveToolBar(QToolBar *toolbar, int pos)
 
 QList<int> QToolBarAreaLayoutInfo::gapIndex(const QPoint &pos, int *minDistance) const
 {
-    int p = pick(o, pos);
-
     if (rect.contains(pos)) {
+        // <pos> is in QToolBarAreaLayout coordinates.
+        // <item.pos> is in local dockarea coordinates (see ~20 lines below)
+        // Since we're comparing p with item.pos, we put them in the same coordinate system.
+        const int p = pick(o, pos - rect.topLeft());
+
         for (int j = 0; j < lines.count(); ++j) {
             const QToolBarAreaLayoutLine &line = lines.at(j);
             if (line.skip())
@@ -603,16 +602,21 @@ int QToolBarAreaLayoutInfo::distance(const QPoint &pos) const
         case QInternal::LeftDock:
             if (pos.y() < rect.bottom())
                 return pos.x() - rect.right();
+            break;
         case QInternal::RightDock:
             if (pos.y() < rect.bottom())
                 return rect.left() - pos.x();
+            break;
         case QInternal::TopDock:
             if (pos.x() < rect.right())
                 return pos.y() - rect.bottom();
+            break;
         case QInternal::BottomDock:
             if (pos.x() < rect.right())
                 return rect.top() - pos.y();
-        default:
+            break;
+
+        case QInternal::DockCount:
             break;
     }
     return -1;
@@ -652,9 +656,7 @@ QRect QToolBarAreaLayout::fitLayout()
     docks[QInternal::BottomDock].rect = QRect(rect.left(), center.bottom() + 1,
                                     rect.width(), bottom_hint.height());
 
-    if (!mainWindow->unifiedTitleAndToolBarOnMac()) {
-        docks[QInternal::TopDock].fitLayout();
-    }
+    docks[QInternal::TopDock].fitLayout();
     docks[QInternal::LeftDock].fitLayout();
     docks[QInternal::RightDock].fitLayout();
     docks[QInternal::BottomDock].fitLayout();
@@ -810,7 +812,7 @@ QLayoutItem *QToolBarAreaLayout::insertToolBar(QToolBar *before, QToolBar *toolB
     QInternal::DockPosition pos = findToolBar(before);
     if (pos == QInternal::DockCount)
         return 0;
-    
+
     return docks[pos].insertToolBar(before, toolBar);
 }
 
@@ -869,7 +871,7 @@ void QToolBarAreaLayout::insertItem(QToolBar *before, QLayoutItem *item)
     QInternal::DockPosition pos = findToolBar(before);
     if (pos == QInternal::DockCount)
         return;
-    
+
     docks[pos].insertItem(before, item);
 }
 
@@ -1106,16 +1108,19 @@ void QToolBarAreaLayout::clear()
     rect = QRect();
 }
 
-QToolBarAreaLayoutItem &QToolBarAreaLayout::item(const QList<int> &path)
+QToolBarAreaLayoutItem *QToolBarAreaLayout::item(const QList<int> &path)
 {
     Q_ASSERT(path.count() == 3);
 
-    Q_ASSERT(path.at(0) >= 0 && path.at(0) < QInternal::DockCount);
+    if (path.at(0) < 0 || path.at(0) >= QInternal::DockCount)
+        return 0;
     QToolBarAreaLayoutInfo &info = docks[path.at(0)];
-    Q_ASSERT(path.at(1) >= 0 && path.at(1) < info.lines.count());
+    if (path.at(1) < 0 || path.at(1) >= info.lines.count())
+        return 0;
     QToolBarAreaLayoutLine &line = info.lines[path.at(1)];
-    Q_ASSERT(path.at(2) >= 0 && path.at(2) < line.toolBarItems.count());
-    return line.toolBarItems[path.at(2)];
+    if (path.at(2) < 0 || path.at(2) >= line.toolBarItems.count())
+        return 0;
+    return &(line.toolBarItems[path.at(2)]);
 }
 
 QRect QToolBarAreaLayout::itemRect(const QList<int> &path) const
@@ -1131,23 +1136,28 @@ QRect QToolBarAreaLayout::itemRect(const QList<int> &path) const
 
 QLayoutItem *QToolBarAreaLayout::plug(const QList<int> &path)
 {
-    QToolBarAreaLayoutItem &item = this->item(path);
-    Q_ASSERT(item.gap);
-    Q_ASSERT(item.widgetItem != 0);
-    item.gap = false;
-    return item.widgetItem;
+    QToolBarAreaLayoutItem *item = this->item(path);
+    if (Q_UNLIKELY(!item)) {
+        qWarning() << "No item at" << path;
+        return 0;
+    }
+    Q_ASSERT(item->gap);
+    Q_ASSERT(item->widgetItem != 0);
+    item->gap = false;
+    return item->widgetItem;
 }
 
 QLayoutItem *QToolBarAreaLayout::unplug(const QList<int> &path, QToolBarAreaLayout *other)
 {
     //other needs to be update as well
     Q_ASSERT(path.count() == 3);
-    QToolBarAreaLayoutItem &item = this->item(path);
+    QToolBarAreaLayoutItem *item = this->item(path);
+    Q_ASSERT(item);
 
     //update the leading space here
     QToolBarAreaLayoutInfo &info = docks[path.at(0)];
     QToolBarAreaLayoutLine &line = info.lines[path.at(1)];
-    if (item.size != pick(line.o, item.realSizeHint())) {
+    if (item->size != pick(line.o, item->realSizeHint())) {
         //the item doesn't have its default size
         //so we'll give this to the next item
         int newExtraSpace = 0;
@@ -1184,9 +1194,9 @@ QLayoutItem *QToolBarAreaLayout::unplug(const QList<int> &path, QToolBarAreaLayo
         }
     }
 
-    Q_ASSERT(!item.gap);
-    item.gap = true;
-    return item.widgetItem;
+    Q_ASSERT(!item->gap);
+    item->gap = true;
+    return item->widgetItem;
 }
 
 static QRect unpackRect(uint geom0, uint geom1, bool *floating)
@@ -1259,7 +1269,7 @@ void QToolBarAreaLayout::saveState(QDataStream &stream) const
                 const QToolBarAreaLayoutItem &item = line.toolBarItems.at(k);
                 QWidget *widget = const_cast<QLayoutItem*>(item.widgetItem)->widget();
                 QString objectName = widget->objectName();
-                if (objectName.isEmpty()) {
+                if (Q_UNLIKELY(objectName.isEmpty())) {
                     qWarning("QMainWindow::saveState(): 'objectName' not set for QToolBar %p '%s'",
                                 widget, widget->windowTitle().toLocal8Bit().constData());
                 }
@@ -1285,27 +1295,19 @@ void QToolBarAreaLayout::saveState(QDataStream &stream) const
     }
 }
 
-static inline int getInt(QDataStream &stream, Qt::Orientation o, bool pre43)
+static inline int getInt(QDataStream &stream)
 {
-    if (pre43) {
-        QPoint p;
-        stream >> p;
-        return pick(o, p);
-    } else {
-        int x;
-        stream >> x;
-        return x;
-    }
+    int x;
+    stream >> x;
+    return x;
 }
 
 
-bool QToolBarAreaLayout::restoreState(QDataStream &stream, const QList<QToolBar*> &_toolBars, uchar tmarker, bool pre43, bool testing)
+bool QToolBarAreaLayout::restoreState(QDataStream &stream, const QList<QToolBar*> &_toolBars, uchar tmarker, bool testing)
 {
     QList<QToolBar*> toolBars = _toolBars;
     int lines;
     stream >> lines;
-	if (!testing)
-	testing = mainWindow->unifiedTitleAndToolBarOnMac();
 
     for (int j = 0; j < lines; ++j) {
         int pos;
@@ -1316,7 +1318,7 @@ bool QToolBarAreaLayout::restoreState(QDataStream &stream, const QList<QToolBar*
         stream >> cnt;
 
         QToolBarAreaLayoutInfo &dock = docks[pos];
-		const bool applyingLayout = !testing && !(pos == QInternal::TopDock && mainWindow->unifiedTitleAndToolBarOnMac());
+        const bool applyingLayout = !testing;
         QToolBarAreaLayoutLine line(dock.o);
 
         for (int k = 0; k < cnt; ++k) {
@@ -1326,8 +1328,8 @@ bool QToolBarAreaLayout::restoreState(QDataStream &stream, const QList<QToolBar*
             stream >> objectName;
             uchar shown;
             stream >> shown;
-            item.pos = getInt(stream, dock.o, pre43);
-            item.size = getInt(stream, dock.o, pre43);
+            item.pos = getInt(stream);
+            item.size = getInt(stream);
 
             /*
                4.3.0 added floating toolbars, but failed to add the ability to restore them.
@@ -1340,9 +1342,9 @@ bool QToolBarAreaLayout::restoreState(QDataStream &stream, const QList<QToolBar*
             QRect rect;
             bool floating = false;
             uint geom0, geom1;
-            geom0 = getInt(stream, dock.o, pre43);
+            geom0 = getInt(stream);
             if (tmarker == ToolBarStateMarkerEx) {
-                geom1 = getInt(stream, dock.o, pre43);
+                geom1 = getInt(stream);
                 rect = unpackRect(geom0, geom1, &floating);
             }
 
@@ -1387,5 +1389,3 @@ bool QToolBarAreaLayout::isEmpty() const
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TOOLBAR

@@ -1,5 +1,5 @@
 TEMPLATE	= lib
-CONFIG	+= qt warn_on dll
+CONFIG += dll
 
 win32:DEFINES	+= SIMPLEDLL_MAKEDLL
 
@@ -10,6 +10,5 @@ VERSION     = 1.0.0
 INCLUDEPATH += . tmp
 MOC_DIR	= tmp
 OBJECTS_DIR = tmp
-TARGET	= simple_dll
-DESTDIR	= ./
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+TARGET	= "simple dll"
+DESTDIR	= "dest dir"

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -324,8 +311,7 @@ void tst_QRegExp::indexIn_addMoreRows(const QByteArray &stri)
 
         while ( squareRegExp[ii] != 0 ) {
             for ( int j = 0; j < 100; j++ ) {
-                QString name;
-                name.sprintf( "square%.1d%.2d", ii, j );
+                const QString name = QString::asprintf( "square%.1d%.2d", ii, j );
 
                 QString target = "";
                 target.fill( 'a', j );
@@ -889,19 +875,19 @@ void tst_QRegExp::caretAnchoredOptimization()
 {
     QString s = "---babnana----";
     s.replace( QRegExp("^-*|(-*)$"), "" );
-    QVERIFY(s == "babnana");
+    QCOMPARE(s, QLatin1String("babnana"));
 
     s = "---babnana----";
     s.replace( QRegExp("^-*|(-{0,})$"), "" );
-    QVERIFY(s == "babnana");
+    QCOMPARE(s, QLatin1String("babnana"));
 
     s = "---babnana----";
     s.replace( QRegExp("^-*|(-{1,})$"), "" );
-    QVERIFY(s == "babnana");
+    QCOMPARE(s, QLatin1String("babnana"));
 
     s = "---babnana----";
     s.replace( QRegExp("^-*|(-+)$"), "" );
-    QVERIFY(s == "babnana");
+    QCOMPARE(s, QLatin1String("babnana"));
 }
 
 void tst_QRegExp::isEmpty()
@@ -941,11 +927,7 @@ void tst_QRegExp::rainersSlowRegExpCopyBug()
 {
     // this test should take an extreme amount of time if QRegExp is broken
     QRegExp original(email);
-#if defined(Q_OS_WINCE)
-    for (int i = 0; i < 100; ++i) {
-#else
     for (int i = 0; i < 100000; ++i) {
-#endif
         QRegExp copy = original;
         (void)copy.exactMatch("~");
         QRegExp copy2 = original;
@@ -994,13 +976,9 @@ void Thread::run()
     str += "abbbdekcz";
     int x;
 
-#if defined(Q_OS_WINCE)
-    for (int j = 0; j < 100; ++j) {
-#else
-    for (int j = 0; j < 10000; ++j) {
-#endif
+    for (int j = 0; j < 10000; ++j)
         x = rx.indexIn(str);
-    }
+
     QCOMPARE(x, 3072);
 }
 
@@ -1036,13 +1014,9 @@ void Thread2::run()
     str += "abbbdekcz";
     int x;
 
-#if defined(Q_OS_WINCE)
-    for (int j = 0; j < 100; ++j) {
-#else
-    for (int j = 0; j < 10000; ++j) {
-#endif
+    for (int j = 0; j < 10000; ++j)
         x = rx.indexIn(str);
-    }
+
     QCOMPARE(x, 3072);
 }
 
@@ -1233,6 +1207,9 @@ void tst_QRegExp::operator_eq()
         for (int j = 0; j < I * J * K * ELL; ++j) {
             QCOMPARE(rxtable[i] == rxtable[j], i / ELL == j / ELL);
             QCOMPARE(rxtable[i] != rxtable[j], i / ELL != j / ELL);
+            // this just happens to have no hash collisions. If at some point
+            // we get collisions, restrict the test to only equal elements:
+            QCOMPARE(qHash(rxtable[i]) == qHash(rxtable[j]), i / ELL == j / ELL);
         }
     }
 }
@@ -1376,12 +1353,14 @@ void tst_QRegExp::escapeSequences()
 {
     QString perlSyntaxSpecialChars("0123456789afnrtvbBdDwWsSx\\|[]{}()^$?+*");
     QString w3cXmlSchema11SyntaxSpecialChars("cCiIpP"); // as well as the perl ones
+    QString pattern = QLatin1String("\\?");
     for (int i = ' '; i <= 127; ++i) {
         QLatin1Char c(i);
         if (perlSyntaxSpecialChars.indexOf(c) == -1) {
-            QRegExp rx(QString("\\%1").arg(c), Qt::CaseSensitive, QRegExp::RegExp);
+            pattern[1] = c;
+            QRegExp rx(pattern, Qt::CaseSensitive, QRegExp::RegExp);
             // we'll never have c == 'a' since it's a special character
-            QString s = QString("aaa%1aaa").arg(c);
+            const QString s = QLatin1String("aaa") + c + QLatin1String("aaa");
             QCOMPARE(rx.indexIn(s), 3);
 
             rx.setPatternSyntax(QRegExp::RegExp2);

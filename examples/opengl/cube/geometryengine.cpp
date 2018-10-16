@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,29 +59,26 @@ struct VertexData
     QVector2D texCoord;
 };
 
-GeometryEngine::GeometryEngine() : vboIds(new GLuint[2])
-{    
-}
-
-GeometryEngine::~GeometryEngine()
-{
-    glDeleteBuffers(2, vboIds);
-    delete[] vboIds;
-}
-
-void GeometryEngine::init()
-{
-    initializeGLFunctions();
-
 //! [0]
+GeometryEngine::GeometryEngine()
+    : indexBuf(QOpenGLBuffer::IndexBuffer)
+{
+    initializeOpenGLFunctions();
+
     // Generate 2 VBOs
-    glGenBuffers(2, vboIds);
-
-//! [0]
+    arrayBuf.create();
+    indexBuf.create();
 
     // Initializes cube geometry and transfers it to VBOs
     initCubeGeometry();
 }
+
+GeometryEngine::~GeometryEngine()
+{
+    arrayBuf.destroy();
+    indexBuf.destroy();
+}
+//! [0]
 
 void GeometryEngine::initCubeGeometry()
 {
@@ -80,40 +87,40 @@ void GeometryEngine::initCubeGeometry()
     // is different.
     VertexData vertices[] = {
         // Vertex data for face 0
-        {QVector3D(-1.0, -1.0,  1.0), QVector2D(0.0, 0.0)},  // v0
-        {QVector3D( 1.0, -1.0,  1.0), QVector2D(0.33, 0.0)}, // v1
-        {QVector3D(-1.0,  1.0,  1.0), QVector2D(0.0, 0.5)},  // v2
-        {QVector3D( 1.0,  1.0,  1.0), QVector2D(0.33, 0.5)}, // v3
+        {QVector3D(-1.0f, -1.0f,  1.0f), QVector2D(0.0f, 0.0f)},  // v0
+        {QVector3D( 1.0f, -1.0f,  1.0f), QVector2D(0.33f, 0.0f)}, // v1
+        {QVector3D(-1.0f,  1.0f,  1.0f), QVector2D(0.0f, 0.5f)},  // v2
+        {QVector3D( 1.0f,  1.0f,  1.0f), QVector2D(0.33f, 0.5f)}, // v3
 
         // Vertex data for face 1
-        {QVector3D( 1.0, -1.0,  1.0), QVector2D( 0.0, 0.5)}, // v4
-        {QVector3D( 1.0, -1.0, -1.0), QVector2D(0.33, 0.5)}, // v5
-        {QVector3D( 1.0,  1.0,  1.0), QVector2D(0.0, 1.0)},  // v6
-        {QVector3D( 1.0,  1.0, -1.0), QVector2D(0.33, 1.0)}, // v7
+        {QVector3D( 1.0f, -1.0f,  1.0f), QVector2D( 0.0f, 0.5f)}, // v4
+        {QVector3D( 1.0f, -1.0f, -1.0f), QVector2D(0.33f, 0.5f)}, // v5
+        {QVector3D( 1.0f,  1.0f,  1.0f), QVector2D(0.0f, 1.0f)},  // v6
+        {QVector3D( 1.0f,  1.0f, -1.0f), QVector2D(0.33f, 1.0f)}, // v7
 
         // Vertex data for face 2
-        {QVector3D( 1.0, -1.0, -1.0), QVector2D(0.66, 0.5)}, // v8
-        {QVector3D(-1.0, -1.0, -1.0), QVector2D(1.0, 0.5)},  // v9
-        {QVector3D( 1.0,  1.0, -1.0), QVector2D(0.66, 1.0)}, // v10
-        {QVector3D(-1.0,  1.0, -1.0), QVector2D(1.0, 1.0)},  // v11
+        {QVector3D( 1.0f, -1.0f, -1.0f), QVector2D(0.66f, 0.5f)}, // v8
+        {QVector3D(-1.0f, -1.0f, -1.0f), QVector2D(1.0f, 0.5f)},  // v9
+        {QVector3D( 1.0f,  1.0f, -1.0f), QVector2D(0.66f, 1.0f)}, // v10
+        {QVector3D(-1.0f,  1.0f, -1.0f), QVector2D(1.0f, 1.0f)},  // v11
 
         // Vertex data for face 3
-        {QVector3D(-1.0, -1.0, -1.0), QVector2D(0.66, 0.0)}, // v12
-        {QVector3D(-1.0, -1.0,  1.0), QVector2D(1.0, 0.0)},  // v13
-        {QVector3D(-1.0,  1.0, -1.0), QVector2D(0.66, 0.5)}, // v14
-        {QVector3D(-1.0,  1.0,  1.0), QVector2D(1.0, 0.5)},  // v15
+        {QVector3D(-1.0f, -1.0f, -1.0f), QVector2D(0.66f, 0.0f)}, // v12
+        {QVector3D(-1.0f, -1.0f,  1.0f), QVector2D(1.0f, 0.0f)},  // v13
+        {QVector3D(-1.0f,  1.0f, -1.0f), QVector2D(0.66f, 0.5f)}, // v14
+        {QVector3D(-1.0f,  1.0f,  1.0f), QVector2D(1.0f, 0.5f)},  // v15
 
         // Vertex data for face 4
-        {QVector3D(-1.0, -1.0, -1.0), QVector2D(0.33, 0.0)}, // v16
-        {QVector3D( 1.0, -1.0, -1.0), QVector2D(0.66, 0.0)}, // v17
-        {QVector3D(-1.0, -1.0,  1.0), QVector2D(0.33, 0.5)}, // v18
-        {QVector3D( 1.0, -1.0,  1.0), QVector2D(0.66, 0.5)}, // v19
+        {QVector3D(-1.0f, -1.0f, -1.0f), QVector2D(0.33f, 0.0f)}, // v16
+        {QVector3D( 1.0f, -1.0f, -1.0f), QVector2D(0.66f, 0.0f)}, // v17
+        {QVector3D(-1.0f, -1.0f,  1.0f), QVector2D(0.33f, 0.5f)}, // v18
+        {QVector3D( 1.0f, -1.0f,  1.0f), QVector2D(0.66f, 0.5f)}, // v19
 
         // Vertex data for face 5
-        {QVector3D(-1.0,  1.0,  1.0), QVector2D(0.33, 0.5)}, // v20
-        {QVector3D( 1.0,  1.0,  1.0), QVector2D(0.66, 0.5)}, // v21
-        {QVector3D(-1.0,  1.0, -1.0), QVector2D(0.33, 1.0)}, // v22
-        {QVector3D( 1.0,  1.0, -1.0), QVector2D(0.66, 1.0)}  // v23
+        {QVector3D(-1.0f,  1.0f,  1.0f), QVector2D(0.33f, 0.5f)}, // v20
+        {QVector3D( 1.0f,  1.0f,  1.0f), QVector2D(0.66f, 0.5f)}, // v21
+        {QVector3D(-1.0f,  1.0f, -1.0f), QVector2D(0.33f, 1.0f)}, // v22
+        {QVector3D( 1.0f,  1.0f, -1.0f), QVector2D(0.66f, 1.0f)}  // v23
     };
 
     // Indices for drawing cube faces using triangle strips.
@@ -134,21 +141,21 @@ void GeometryEngine::initCubeGeometry()
 
 //! [1]
     // Transfer vertex data to VBO 0
-    glBindBuffer(GL_ARRAY_BUFFER, vboIds[0]);
-    glBufferData(GL_ARRAY_BUFFER, 24 * sizeof(VertexData), vertices, GL_STATIC_DRAW);
+    arrayBuf.bind();
+    arrayBuf.allocate(vertices, 24 * sizeof(VertexData));
 
     // Transfer index data to VBO 1
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboIds[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 34 * sizeof(GLushort), indices, GL_STATIC_DRAW);
+    indexBuf.bind();
+    indexBuf.allocate(indices, 34 * sizeof(GLushort));
 //! [1]
 }
 
 //! [2]
-void GeometryEngine::drawCubeGeometry(QGLShaderProgram *program)
+void GeometryEngine::drawCubeGeometry(QOpenGLShaderProgram *program)
 {
     // Tell OpenGL which VBOs to use
-    glBindBuffer(GL_ARRAY_BUFFER, vboIds[0]);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboIds[1]);
+    arrayBuf.bind();
+    indexBuf.bind();
 
     // Offset for position
     quintptr offset = 0;
@@ -156,7 +163,7 @@ void GeometryEngine::drawCubeGeometry(QGLShaderProgram *program)
     // Tell OpenGL programmable pipeline how to locate vertex position data
     int vertexLocation = program->attributeLocation("a_position");
     program->enableAttributeArray(vertexLocation);
-    glVertexAttribPointer(vertexLocation, 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), (const void *)offset);
+    program->setAttributeBuffer(vertexLocation, GL_FLOAT, offset, 3, sizeof(VertexData));
 
     // Offset for texture coordinate
     offset += sizeof(QVector3D);
@@ -164,7 +171,7 @@ void GeometryEngine::drawCubeGeometry(QGLShaderProgram *program)
     // Tell OpenGL programmable pipeline how to locate vertex texture coordinate data
     int texcoordLocation = program->attributeLocation("a_texcoord");
     program->enableAttributeArray(texcoordLocation);
-    glVertexAttribPointer(texcoordLocation, 2, GL_FLOAT, GL_FALSE, sizeof(VertexData), (const void *)offset);
+    program->setAttributeBuffer(texcoordLocation, GL_FLOAT, offset, 2, sizeof(VertexData));
 
     // Draw cube geometry using indices from VBO 1
     glDrawElements(GL_TRIANGLE_STRIP, 34, GL_UNSIGNED_SHORT, 0);

@@ -1,40 +1,27 @@
 /*
 *********************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the autotests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +31,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'plugindialog.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -54,9 +40,7 @@
 #define PLUGINDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QHBoxLayout>
@@ -80,39 +64,39 @@ public:
     void setupUi(QDialog *PluginDialog)
     {
         if (PluginDialog->objectName().isEmpty())
-            PluginDialog->setObjectName(QStringLiteral("PluginDialog"));
+            PluginDialog->setObjectName(QString::fromUtf8("PluginDialog"));
         PluginDialog->resize(401, 331);
         vboxLayout = new QVBoxLayout(PluginDialog);
         vboxLayout->setSpacing(6);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         vboxLayout->setContentsMargins(8, 8, 8, 8);
         label = new QLabel(PluginDialog);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
         label->setWordWrap(true);
 
         vboxLayout->addWidget(label);
 
         treeWidget = new QTreeWidget(PluginDialog);
-        treeWidget->setObjectName(QStringLiteral("treeWidget"));
+        treeWidget->setObjectName(QString::fromUtf8("treeWidget"));
         treeWidget->setTextElideMode(Qt::ElideNone);
 
         vboxLayout->addWidget(treeWidget);
 
         message = new QLabel(PluginDialog);
-        message->setObjectName(QStringLiteral("message"));
+        message->setObjectName(QString::fromUtf8("message"));
         message->setWordWrap(true);
 
         vboxLayout->addWidget(message);
 
         hboxLayout = new QHBoxLayout();
         hboxLayout->setSpacing(6);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         hboxLayout->setContentsMargins(0, 0, 0, 0);
 
         vboxLayout->addLayout(hboxLayout);
 
         buttonBox = new QDialogButtonBox(PluginDialog);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Close);
 
@@ -127,11 +111,11 @@ public:
 
     void retranslateUi(QDialog *PluginDialog)
     {
-        PluginDialog->setWindowTitle(QApplication::translate("PluginDialog", "Plugin Information", 0));
-        label->setText(QApplication::translate("PluginDialog", "TextLabel", 0));
+        PluginDialog->setWindowTitle(QApplication::translate("PluginDialog", "Plugin Information", nullptr));
+        label->setText(QApplication::translate("PluginDialog", "TextLabel", nullptr));
         QTreeWidgetItem *___qtreewidgetitem = treeWidget->headerItem();
-        ___qtreewidgetitem->setText(0, QApplication::translate("PluginDialog", "1", 0));
-        message->setText(QApplication::translate("PluginDialog", "TextLabel", 0));
+        ___qtreewidgetitem->setText(0, QApplication::translate("PluginDialog", "1", nullptr));
+        message->setText(QApplication::translate("PluginDialog", "TextLabel", nullptr));
     } // retranslateUi
 
 };

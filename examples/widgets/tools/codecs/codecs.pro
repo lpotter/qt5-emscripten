@@ -1,3 +1,6 @@
+QT += widgets
+requires(qtConfig(filedialog))
+
 HEADERS      += mainwindow.h \
                 previewform.h
 SOURCES      += main.cpp \
@@ -7,9 +10,5 @@ SOURCES      += main.cpp \
 EXAMPLE_FILES = encodedfiles
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/tools/codecs
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tools/codecs
 INSTALLS += target
-
-QT += widgets
-
-simulator: warning(This example might not fully work on Simulator platform)

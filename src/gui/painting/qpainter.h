@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QPAINTER_H
 #define QPAINTER_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qrect.h>
 #include <QtCore/qpoint.h>
@@ -59,8 +58,6 @@
 #include <QtGui/qfontinfo.h>
 #include <QtGui/qfontmetrics.h>
 #endif
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -86,7 +83,6 @@ class Q_GUI_EXPORT QPainter
 {
     Q_DECLARE_PRIVATE(QPainter)
     Q_GADGET
-    Q_FLAGS(RenderHint RenderHints)
 
 public:
     enum RenderHint {
@@ -97,8 +93,10 @@ public:
         NonCosmeticDefaultPen = 0x10,
         Qt4CompatiblePainting = 0x20
     };
+    Q_FLAG(RenderHint)
 
     Q_DECLARE_FLAGS(RenderHints, RenderHint)
+    Q_FLAG(RenderHints)
 
     class PixmapFragment {
     public:
@@ -384,7 +382,7 @@ public:
     inline void drawPixmap(int x, int y, int w, int h, const QPixmap &pm);
 
     void drawPixmapFragments(const PixmapFragment *fragments, int fragmentCount,
-                             const QPixmap &pixmap, PixmapFragmentHints hints = 0);
+                             const QPixmap &pixmap, PixmapFragmentHints hints = PixmapFragmentHints());
 
     void drawImage(const QRectF &targetRect, const QImage &image, const QRectF &sourceRect,
                    Qt::ImageConversionFlags flags = Qt::AutoColor);
@@ -418,9 +416,9 @@ public:
 
     void drawText(const QPointF &p, const QString &str, int tf, int justificationPadding);
 
-    void drawText(const QRectF &r, int flags, const QString &text, QRectF *br=0);
-    void drawText(const QRect &r, int flags, const QString &text, QRect *br=0);
-    inline void drawText(int x, int y, int w, int h, int flags, const QString &text, QRect *br=0);
+    void drawText(const QRectF &r, int flags, const QString &text, QRectF *br = nullptr);
+    void drawText(const QRect &r, int flags, const QString &text, QRect *br = nullptr);
+    inline void drawText(int x, int y, int w, int h, int flags, const QString &text, QRect *br = nullptr);
 
     void drawText(const QRectF &r, const QString &text, const QTextOption &o = QTextOption());
 
@@ -450,6 +448,10 @@ public:
     inline void fillRect(const QRect &r, Qt::BrushStyle style);
     inline void fillRect(const QRectF &r, Qt::BrushStyle style);
 
+    inline void fillRect(int x, int y, int w, int h, QGradient::Preset preset);
+    inline void fillRect(const QRect &r, QGradient::Preset preset);
+    inline void fillRect(const QRectF &r, QGradient::Preset preset);
+
     void eraseRect(const QRectF &);
     inline void eraseRect(int x, int y, int w, int h);
     inline void eraseRect(const QRect &);
@@ -463,7 +465,7 @@ public:
 
     static void setRedirected(const QPaintDevice *device, QPaintDevice *replacement,
                               const QPoint& offset = QPoint());
-    static QPaintDevice *redirected(const QPaintDevice *device, QPoint *offset = 0);
+    static QPaintDevice *redirected(const QPaintDevice *device, QPoint *offset = nullptr);
     static void restoreRedirected(const QPaintDevice *device);
 
     void beginNativePainting();
@@ -490,6 +492,7 @@ private:
     friend class QPreviewPaintEngine;
     friend class QTextEngine;
 };
+Q_DECLARE_TYPEINFO(QPainter::PixmapFragment, Q_RELOCATABLE_TYPE);
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QPainter::RenderHints)
 
@@ -747,6 +750,20 @@ inline void QPainter::fillRect(const QRectF &r, Qt::BrushStyle style)
     fillRect(r, QBrush(style));
 }
 
+inline void QPainter::fillRect(int x, int y, int w, int h, QGradient::Preset p)
+{
+    fillRect(QRect(x, y, w, h), QGradient(p));
+}
+
+inline void QPainter::fillRect(const QRect &r, QGradient::Preset p)
+{
+    fillRect(r, QGradient(p));
+}
+
+inline void QPainter::fillRect(const QRectF &r, QGradient::Preset p)
+{
+    fillRect(r, QGradient(p));
+}
 
 inline void QPainter::setBrushOrigin(int x, int y)
 {
@@ -931,7 +948,5 @@ inline void QPainter::drawPicture(const QPoint &pt, const QPicture &p)
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPAINTER_H

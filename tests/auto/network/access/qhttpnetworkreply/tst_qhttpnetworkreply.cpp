@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,37 +28,21 @@
 
 
 #include <QtTest/QtTest>
+#include <QtCore/QBuffer>
+#include <QtCore/QByteArray>
+
 #include "private/qhttpnetworkconnection_p.h"
 
 class tst_QHttpNetworkReply: public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
-    void init();
-    void cleanup();
-    void initTestCase();
-    void cleanupTestCase();
-
     void parseHeader_data();
     void parseHeader();
+
+    void parseEndOfHeader_data();
+    void parseEndOfHeader();
 };
-
-
-void tst_QHttpNetworkReply::initTestCase()
-{
-}
-
-void tst_QHttpNetworkReply::cleanupTestCase()
-{
-}
-
-void tst_QHttpNetworkReply::init()
-{
-}
-
-void tst_QHttpNetworkReply::cleanup()
-{
-}
 
 void tst_QHttpNetworkReply::parseHeader_data()
 {
@@ -128,6 +99,67 @@ void tst_QHttpNetworkReply::parseHeader()
         QString field = reply.headerField(fields.at(i).toLatin1());
         QCOMPARE(field, values.at(i));
     }
+}
+
+class TestHeaderSocket : public QAbstractSocket
+{
+public:
+    explicit TestHeaderSocket(const QByteArray &input) : QAbstractSocket(QAbstractSocket::TcpSocket, nullptr)
+    {
+        inputBuffer.setData(input);
+        inputBuffer.open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+        open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+    }
+
+    qint64 readData(char *data, qint64 maxlen) { return inputBuffer.read(data, maxlen); }
+
+    QBuffer inputBuffer;
+};
+
+class TestHeaderReply : public QHttpNetworkReply
+{
+public:
+    QHttpNetworkReplyPrivate *replyPrivate() { return static_cast<QHttpNetworkReplyPrivate *>(d_ptr.data()); }
+};
+
+void tst_QHttpNetworkReply::parseEndOfHeader_data()
+{
+    QTest::addColumn<QByteArray>("headers");
+    QTest::addColumn<qint64>("lengths");
+
+    QTest::newRow("CRLFCRLF") << QByteArray("Content-Type: text/html; charset=utf-8\r\n"
+                                            "Content-Length:\r\n 1024\r\n"
+                                            "Content-Encoding: gzip\r\n\r\nHTTPBODY")
+                               << qint64(90);
+
+    QTest::newRow("CRLFLF") << QByteArray("Content-Type: text/html; charset=utf-8\r\n"
+                                          "Content-Length:\r\n 1024\r\n"
+                                          "Content-Encoding: gzip\r\n\nHTTPBODY")
+                            << qint64(89);
+
+    QTest::newRow("LFCRLF") << QByteArray("Content-Type: text/html; charset=utf-8\r\n"
+                                          "Content-Length:\r\n 1024\r\n"
+                                          "Content-Encoding: gzip\n\r\nHTTPBODY")
+                            << qint64(89);
+
+    QTest::newRow("LFLF") << QByteArray("Content-Type: text/html; charset=utf-8\r\n"
+                                        "Content-Length:\r\n 1024\r\n"
+                                        "Content-Encoding: gzip\n\nHTTPBODY")
+                          << qint64(88);
+}
+
+void tst_QHttpNetworkReply::parseEndOfHeader()
+{
+    QFETCH(QByteArray, headers);
+    QFETCH(qint64, lengths);
+
+    TestHeaderSocket socket(headers);
+
+    TestHeaderReply reply;
+
+    QHttpNetworkReplyPrivate *replyPrivate = reply.replyPrivate();
+    qint64 headerBytes = replyPrivate->readHeader(&socket);
+    QCOMPARE(headerBytes, lengths);
 }
 
 QTEST_MAIN(tst_QHttpNetworkReply)

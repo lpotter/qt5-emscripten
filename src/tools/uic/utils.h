@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -55,27 +42,18 @@ inline bool toBool(const QString &str)
 inline QString toString(const DomString *str)
 { return str ? str->text() : QString(); }
 
-enum StringFlags {
-    Utf8String = 0x1,
-    MultiLineString = 0x2
-};
-
-inline QString fixString(const QString &str, const QString &indent,
-                         unsigned *stringFlags = 0)
+inline QString fixString(const QString &str, const QString &indent)
 {
     QString cursegment;
     QStringList result;
     const QByteArray utf8 = str.toUtf8();
     const int utf8Length = utf8.length();
 
-    unsigned flags = 0;
-
     for (int i = 0; i < utf8Length; ++i) {
         const uchar cbyte = utf8.at(i);
         if (cbyte >= 0x80) {
             cursegment += QLatin1Char('\\');
             cursegment += QString::number(cbyte, 8);
-            flags |= Utf8String;
         } else {
             switch(cbyte) {
             case '\\':
@@ -85,7 +63,6 @@ inline QString fixString(const QString &str, const QString &indent,
             case '\r':
                 break;
             case '\n':
-                flags |= MultiLineString;
                 cursegment += QLatin1String("\\n\"\n\""); break;
             default:
                 cursegment += QLatin1Char(cbyte);
@@ -111,46 +88,15 @@ inline QString fixString(const QString &str, const QString &indent,
     rc += result.join(joinstr);
     rc += QLatin1Char('"');
 
-    if (result.size() > 1)
-        flags |= MultiLineString;
-
-    if (stringFlags)
-        *stringFlags = flags;
-
     return rc;
-}
-
-inline QString writeString(const QString &s, const QString &indent)
-{
-    unsigned flags = 0;
-    const QString ret = fixString(s, indent, &flags);
-    if (flags & Utf8String)
-        return QLatin1String("QString::fromUtf8(") + ret + QLatin1Char(')');
-    // MSVC cannot concat L"foo" "bar" (C2308: concatenating mismatched strings),
-    // use QLatin1String instead (all platforms to avoid cross-compiling issues).
-    if (flags & MultiLineString)
-        return QLatin1String("QLatin1String(") + ret + QLatin1Char(')');
-    return QLatin1String("QStringLiteral(") + ret + QLatin1Char(')');
 }
 
 inline QHash<QString, DomProperty *> propertyMap(const QList<DomProperty *> &properties)
 {
     QHash<QString, DomProperty *> map;
-
-    for (int i=0; i<properties.size(); ++i) {
-        DomProperty *p = properties.at(i);
-        map.insert(p->attributeName(), p);
-    }
-
+    for (DomProperty *p : properties)
+         map.insert(p->attributeName(), p);
     return map;
-}
-
-inline QStringList unique(const QStringList &lst)
-{
-    QHash<QString, bool> h;
-    for (int i=0; i<lst.size(); ++i)
-        h.insert(lst.at(i), true);
-    return h.keys();
 }
 
 QT_END_NAMESPACE

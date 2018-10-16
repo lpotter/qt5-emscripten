@@ -1,15 +1,14 @@
 TARGET = qtslibplugin
 
-PLUGIN_TYPE = generic
-load(qt_plugin)
+SOURCES = main.cpp
 
-HEADERS	= qtslib.h
+QT += core-private gui-private input_support-private
 
-SOURCES	= main.cpp \
-	qtslib.cpp
-
-QT += gui-private
-
-LIBS += -lts
+QMAKE_USE += tslib
 
 OTHER_FILES += tslib.json
+
+PLUGIN_TYPE = generic
+PLUGIN_EXTENDS = -
+PLUGIN_CLASS_NAME = QTsLibPlugin
+load(qt_plugin)

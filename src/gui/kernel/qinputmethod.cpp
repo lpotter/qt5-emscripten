@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +42,8 @@
 #include <qguiapplication.h>
 #include <qtimer.h>
 #include <qpa/qplatforminputcontext_p.h>
+
+#include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
@@ -97,6 +97,47 @@ void QInputMethod::setInputItemTransform(const QTransform &transform)
 
     d->inputItemTransform = transform;
     emit cursorRectangleChanged();
+    emit anchorRectangleChanged();
+}
+
+
+/*!
+    \since 5.1
+
+    Returns the input item's geometry in input item coordinates.
+
+    \sa setInputItemRectangle()
+*/
+QRectF QInputMethod::inputItemRectangle() const
+{
+    Q_D(const QInputMethod);
+    return d->inputRectangle;
+}
+
+/*!
+    \since 5.1
+
+    Sets the input item's geometry to be \a rect, in input item coordinates.
+    This needs to be updated by the focused window like QQuickCanvas whenever
+    item is moved inside the scene, or focus is changed.
+*/
+void QInputMethod::setInputItemRectangle(const QRectF &rect)
+{
+    Q_D(QInputMethod);
+    d->inputRectangle = rect;
+}
+
+static QRectF inputMethodQueryRectangle_helper(Qt::InputMethodQuery imquery, const QTransform &xform)
+{
+    QRectF r;
+    if (QObject *focusObject = qGuiApp->focusObject()) {
+        QInputMethodQueryEvent query(imquery);
+        QGuiApplication::sendEvent(focusObject, &query);
+        r = query.value(imquery).toRectF();
+        if (r.isValid())
+            r = xform.mapRect(r);
+    }
+    return r;
 }
 
 /*!
@@ -109,23 +150,28 @@ void QInputMethod::setInputItemTransform(const QTransform &transform)
 QRectF QInputMethod::cursorRectangle() const
 {
     Q_D(const QInputMethod);
+    return inputMethodQueryRectangle_helper(Qt::ImCursorRectangle, d->inputItemTransform);
+}
 
-    QObject *focusObject = qGuiApp->focusObject();
-    if (!focusObject)
-        return QRectF();
+/*!
+    \property QInputMethod::anchorRectangle
+    \brief Input item's anchor rectangle in window coordinates.
 
-    QInputMethodQueryEvent query(Qt::ImCursorRectangle);
-    QGuiApplication::sendEvent(focusObject, &query);
-    QRectF r = query.value(Qt::ImCursorRectangle).toRectF();
-    if (!r.isValid())
-        return QRectF();
-
-    return d->inputItemTransform.mapRect(r);
+    Anchor rectangle is often used by various text editing controls
+    like text prediction popups for following the text selection.
+*/
+QRectF QInputMethod::anchorRectangle() const
+{
+    Q_D(const QInputMethod);
+    return inputMethodQueryRectangle_helper(Qt::ImAnchorRectangle, d->inputItemTransform);
 }
 
 /*!
     \property QInputMethod::keyboardRectangle
     \brief Virtual keyboard's geometry in window coordinates.
+
+    This might be an empty rectangle if it is not possible to know the geometry
+    of the keyboard. This is the case for a floating keyboard on android.
 */
 QRectF QInputMethod::keyboardRectangle() const
 {
@@ -136,6 +182,18 @@ QRectF QInputMethod::keyboardRectangle() const
     return QRectF();
 }
 
+/*!
+    \property QInputMethod::inputItemClipRectangle
+    \brief Input item's clipped rectangle in window coordinates.
+
+    The clipped input rectangle is often used by various input methods to determine
+    how much screen real estate is available for the input method (e.g. Virtual Keyboard).
+*/
+QRectF QInputMethod::inputItemClipRectangle() const
+{
+    Q_D(const QInputMethod);
+    return inputMethodQueryRectangle_helper(Qt::ImInputItemClipRectangle, d->inputItemTransform);
+}
 /*!
     Requests virtual keyboard to open. If the platform
     doesn't provide virtual keyboard the visibility
@@ -270,6 +328,12 @@ void QInputMethod::update(Qt::InputMethodQueries queries)
 
     if (queries & Qt::ImCursorRectangle)
         emit cursorRectangleChanged();
+
+    if (queries & (Qt::ImAnchorRectangle))
+        emit anchorRectangleChanged();
+
+    if (queries & (Qt::ImInputItemClipRectangle))
+        emit inputItemClipRectangleChanged();
 }
 
 /*!
@@ -326,16 +390,53 @@ void QInputMethod::invokeAction(Action a, int cursorPosition)
         ic->invokeAction(a, cursorPosition);
 }
 
+static inline bool platformSupportsHiddenText()
+{
+    const QPlatformInputContext *inputContext = QGuiApplicationPrivate::platformIntegration()->inputContext();
+    return inputContext && inputContext->hasCapability(QPlatformInputContext::HiddenTextCapability);
+}
+
 bool QInputMethodPrivate::objectAcceptsInputMethod(QObject *object)
 {
     bool enabled = false;
     if (object) {
-        QInputMethodQueryEvent query(Qt::ImEnabled);
+        // If the platform does not support hidden text, query the hints
+        // in addition and disable in case of ImhHiddenText.
+        static const bool supportsHiddenText = platformSupportsHiddenText();
+        QInputMethodQueryEvent query(supportsHiddenText
+                                     ? Qt::InputMethodQueries(Qt::ImEnabled)
+                                     : Qt::InputMethodQueries(Qt::ImEnabled | Qt::ImHints));
         QGuiApplication::sendEvent(object, &query);
         enabled = query.value(Qt::ImEnabled).toBool();
+        if (enabled && !supportsHiddenText
+            && Qt::InputMethodHints(query.value(Qt::ImHints).toInt()).testFlag(Qt::ImhHiddenText)) {
+            enabled = false;
+        }
     }
-
     return enabled;
+}
+
+/*!
+  Send \a query to the current focus object with parameters \a argument and return the result.
+ */
+QVariant QInputMethod::queryFocusObject(Qt::InputMethodQuery query, QVariant argument)
+{
+    QVariant retval;
+    QObject *focusObject = qGuiApp->focusObject();
+    if (!focusObject)
+        return retval;
+
+    bool newMethodWorks = QMetaObject::invokeMethod(focusObject, "inputMethodQuery",
+                                                    Qt::DirectConnection,
+                                                    Q_RETURN_ARG(QVariant, retval),
+                                                    Q_ARG(Qt::InputMethodQuery, query),
+                                                    Q_ARG(QVariant, argument));
+    if (newMethodWorks)
+        return retval;
+
+    QInputMethodQueryEvent queryEvent(query);
+    QCoreApplication::sendEvent(focusObject, &queryEvent);
+    return queryEvent.value(query);
 }
 
 QT_END_NAMESPACE

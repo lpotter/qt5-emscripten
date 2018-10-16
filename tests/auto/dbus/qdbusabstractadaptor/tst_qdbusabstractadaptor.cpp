@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -346,6 +334,24 @@ void registerMyObjectPeer(const QString & path, QDBusConnection::RegisterOptions
     QDBusMessage reply = QDBusConnection::sessionBus().call(req);
 }
 
+void syncPeer()
+{
+    static int counter = 0;
+    QString reqId = QString::number(++counter);
+
+    // wait for the sync signal with the right ID
+    QEventLoop loop;
+    QDBusConnection con("peer");
+    con.connect(QString(), objectPath, interfaceName, "syncReceived",
+                QStringList() << reqId, QString(), &loop, SLOT(quit()));
+
+    QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "requestSync");
+    req << reqId;
+    QDBusConnection::sessionBus().send(req);
+
+    loop.exec();
+}
+
 void emitSignalPeer(const QString &interface, const QString &name, const QVariant &parameter)
 {
     if (parameter.isValid())
@@ -363,15 +369,13 @@ void emitSignalPeer(const QString &interface, const QString &name, const QVarian
         req << name;
         QDBusConnection::sessionBus().send(req);
     }
-
-    QTest::qWait(1000);
 }
 
-const char* slotSpyPeer()
+QString slotSpyPeer()
 {
     QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "slotSpyServer");
     QDBusMessage reply = QDBusConnection::sessionBus().call(req);
-    return reply.arguments().at(0).toString().toLatin1().data();
+    return reply.arguments().at(0).toString();
 }
 
 QString valueSpyPeer()
@@ -483,37 +487,40 @@ void tst_QDBusAbstractAdaptor::initTestCase()
     commonInit();
 
     // start peer server
-    #ifdef Q_OS_WIN
-    proc.start("qmyserver");
-    #else
-    proc.start("./qmyserver/qmyserver");
-    #endif
-    QVERIFY(proc.waitForStarted());
+#ifdef Q_OS_WIN
+#  define EXE ".exe"
+#else
+#  define EXE ""
+#endif
+    proc.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    proc.start(QFINDTESTDATA("qmyserver/qmyserver" EXE));
+    QVERIFY2(proc.waitForStarted(), qPrintable(proc.errorString()));
+    QVERIFY(proc.waitForReadyRead());
 
     WaitForQMyServer w;
     QVERIFY(w.ok());
-    //QTest::qWait(2000);
 
     // get peer server address
     QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "address");
     QDBusMessage rpl = QDBusConnection::sessionBus().call(req);
-    QVERIFY(rpl.type() == QDBusMessage::ReplyMessage);
+    QCOMPARE(rpl.type(), QDBusMessage::ReplyMessage);
     QString address = rpl.arguments().at(0).toString();
 
     // connect to peer server
     QDBusConnection peercon = QDBusConnection::connectToPeer(address, "peer");
     QVERIFY(peercon.isConnected());
 
-    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "isConnected");
+    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "waitForConnected");
     QDBusMessage rpl2 = QDBusConnection::sessionBus().call(req2);
-    QVERIFY(rpl2.type() == QDBusMessage::ReplyMessage);
-    QVERIFY(rpl2.arguments().at(0).toBool());
+    QVERIFY2(rpl2.type() == QDBusMessage::ReplyMessage, rpl2.errorMessage().toLatin1());
 }
 
 void tst_QDBusAbstractAdaptor::cleanupTestCase()
 {
+    QDBusMessage msg = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "quit");
+    QDBusConnection::sessionBus().call(msg);
+    proc.waitForFinished(200);
     proc.close();
-    proc.kill();
 }
 
 void tst_QDBusAbstractAdaptor::methodCalls_data()
@@ -616,8 +623,6 @@ static void emitSignal(MyObject *obj, const QString &iface, const QString &name,
         obj->if4->emitSignal(name, parameter);
     else
         obj->emitSignal(name, parameter);
-
-    QTest::qWait(200);
 }
 
 void tst_QDBusAbstractAdaptor::signalEmissions_data()
@@ -670,7 +675,7 @@ void tst_QDBusAbstractAdaptor::signalEmissions()
 
         emitSignal(&obj, interface, name, parameter);
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -689,7 +694,7 @@ void tst_QDBusAbstractAdaptor::signalEmissions()
         emitSignal(&obj, "local.MyObject", "scriptableSignalInt", QVariant(1));
         emitSignal(&obj, "local.MyObject", "scriptableSignalString", QVariant("foo"));
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -710,9 +715,8 @@ void tst_QDBusAbstractAdaptor::sameSignalDifferentPaths()
     QDBusSignalSpy spy;
     con.connect(con.baseService(), "/p1", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     obj.if2->emitSignal(QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 1);
+    QTRY_COMPARE(spy.count, 1);
     QCOMPARE(spy.interface, QString("local.Interface2"));
     QCOMPARE(spy.name, QString("signal"));
     QVERIFY(spy.signature.isEmpty());
@@ -721,9 +725,8 @@ void tst_QDBusAbstractAdaptor::sameSignalDifferentPaths()
     spy.count = 0;
     con.connect(con.baseService(), "/p2", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     obj.if2->emitSignal(QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 2);
+    QTRY_COMPARE(spy.count, 2);
 }
 
 void tst_QDBusAbstractAdaptor::sameObjectDifferentPaths()
@@ -740,9 +743,8 @@ void tst_QDBusAbstractAdaptor::sameObjectDifferentPaths()
     con.connect(con.baseService(), "/p1", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     con.connect(con.baseService(), "/p2", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     obj.if2->emitSignal(QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 1);
+    QTRY_COMPARE(spy.count, 1);
     QCOMPARE(spy.interface, QString("local.Interface2"));
     QCOMPARE(spy.name, QString("signal"));
     QVERIFY(spy.signature.isEmpty());
@@ -766,9 +768,8 @@ void tst_QDBusAbstractAdaptor::scriptableSignalOrNot()
         con.connect(con.baseService(), "/p2", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         obj.emitSignal("scriptableSignalVoid", QVariant());
         obj.emitSignal("nonScriptableSignalVoid", QVariant());
-        QTest::qWait(200);
 
-        QCOMPARE(spy.count, 1);     // only /p1 must have emitted
+        QTRY_COMPARE(spy.count, 1);     // only /p1 must have emitted
         QCOMPARE(spy.interface, QString("local.MyObject"));
         QCOMPARE(spy.name, QString("scriptableSignalVoid"));
         QCOMPARE(spy.path, QString("/p1"));
@@ -786,9 +787,8 @@ void tst_QDBusAbstractAdaptor::scriptableSignalOrNot()
         con.connect(con.baseService(), "/p1", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         con.connect(con.baseService(), "/p2", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         obj.emitSignal("nonScriptableSignalVoid", QVariant());
-        QTest::qWait(200);
 
-        QCOMPARE(spy.count, 1);     // only /p2 must have emitted now
+        QTRY_COMPARE(spy.count, 1);     // only /p2 must have emitted now
         QCOMPARE(spy.interface, QString("local.MyObject"));
         QCOMPARE(spy.name, QString("nonScriptableSignalVoid"));
         QCOMPARE(spy.path, QString("/p2"));
@@ -848,7 +848,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmission()
 
         emitSignal(&obj, interface, name, parameter);
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -864,7 +864,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmission()
         emitSignal(&obj, "local.Interface4", "signal", QVariant(1));
         emitSignal(&obj, "local.Interface4", "signal", QVariant("foo"));
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -1081,6 +1081,12 @@ void tst_QDBusAbstractAdaptor::methodCallsPeer_data()
 
 void tst_QDBusAbstractAdaptor::methodCallsPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
+    if (QSysInfo::productType().compare("opensuse", Qt::CaseInsensitive) == 0
+        && QSysInfo::productVersion() == QLatin1String("42.1")
+        && qgetenv("QTEST_ENVIRONMENT").split(' ').contains("ci")) {
+        QSKIP("This test is occasionally hanging in the CI");
+    }
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1108,7 +1114,7 @@ void tst_QDBusAbstractAdaptor::methodCallsPeer()
 
     // simple call: one such method exists
     QCOMPARE(if2.call(QDBus::BlockWithGui, "method").type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface2::method()");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface2::method()"));
     if (!nInterfaces--)
         return;
 
@@ -1121,28 +1127,29 @@ void tst_QDBusAbstractAdaptor::methodCallsPeer()
     QCOMPARE(if2.call(QDBus::BlockWithGui, "methodString").type(), QDBusMessage::ErrorMessage);
 
     QCOMPARE(if3.call(QDBus::BlockWithGui, "methodVoid").type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface3::methodVoid()");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface3::methodVoid()"));
     QCOMPARE(if3.call(QDBus::BlockWithGui, "methodInt", 42).type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface3::methodInt(int)");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface3::methodInt(int)"));
     QCOMPARE(if3.call(QDBus::BlockWithGui, "methodString", QString("")).type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface3::methodString(QString)");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface3::methodString(QString)"));
 
     if (!nInterfaces--)
         return;
 
     // method overloading: different interfaces
     QCOMPARE(if4.call(QDBus::BlockWithGui, "method").type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface4::method()");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface4::method()"));
 
     // method overloading: different parameters
     QCOMPARE(if4.call(QDBus::BlockWithGui, "method.i", 42).type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface4::method(int)");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface4::method(int)"));
     QCOMPARE(if4.call(QDBus::BlockWithGui, "method.s", QString()).type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface4::method(QString)");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface4::method(QString)"));
 }
 
 void tst_QDBusAbstractAdaptor::methodCallScriptablePeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1152,7 +1159,7 @@ void tst_QDBusAbstractAdaptor::methodCallScriptablePeer()
     QDBusInterface if2(QString(), "/", "local.Interface2", con);
 
     QCOMPARE(if2.call(QDBus::BlockWithGui,"scriptableMethod").type(), QDBusMessage::ReplyMessage);
-    QCOMPARE(slotSpyPeer(), "void Interface2::scriptableMethod()");
+    QCOMPARE(slotSpyPeer(), QStringLiteral("void Interface2::scriptableMethod()"));
 }
 
 void tst_QDBusAbstractAdaptor::signalEmissionsPeer_data()
@@ -1162,6 +1169,7 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer_data()
 
 void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QFETCH(QString, interface);
     QFETCH(QString, name);
     QFETCH(QVariant, parameter);
@@ -1175,6 +1183,8 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
 
     // connect all signals and emit only one
     {
+        syncPeer();
+
         QDBusSignalSpy spy;
         con.connect(QString(), "/", "local.Interface2", "signal",
                     &spy, SLOT(slot(QDBusMessage)));
@@ -1193,7 +1203,7 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
 
         emitSignalPeer(interface, name, parameter);
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -1202,6 +1212,8 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
 
     // connect one signal and emit them all
     {
+        syncPeer();
+
         QDBusSignalSpy spy;
         con.connect(QString(), "/", interface, name, &spy, SLOT(slot(QDBusMessage)));
         emitSignalPeer("local.Interface2", "signal", QVariant());
@@ -1212,7 +1224,7 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
         emitSignalPeer("local.MyObject", "scriptableSignalInt", QVariant(1));
         emitSignalPeer("local.MyObject", "scriptableSignalString", QVariant("foo"));
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -1222,6 +1234,7 @@ void tst_QDBusAbstractAdaptor::signalEmissionsPeer()
 
 void tst_QDBusAbstractAdaptor::sameSignalDifferentPathsPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1230,12 +1243,12 @@ void tst_QDBusAbstractAdaptor::sameSignalDifferentPathsPeer()
     registerMyObjectPeer("/p1");
     registerMyObjectPeer("/p2");
 
+    syncPeer();
     QDBusSignalSpy spy;
     con.connect(QString(), "/p1", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     emitSignalPeer("local.Interface2", QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 1);
+    QTRY_COMPARE(spy.count, 1);
     QCOMPARE(spy.interface, QString("local.Interface2"));
     QCOMPARE(spy.name, QString("signal"));
     QVERIFY(spy.signature.isEmpty());
@@ -1244,13 +1257,13 @@ void tst_QDBusAbstractAdaptor::sameSignalDifferentPathsPeer()
     spy.count = 0;
     con.connect(QString(), "/p2", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     emitSignalPeer("local.Interface2", QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 2);
+    QTRY_COMPARE(spy.count, 2);
 }
 
 void tst_QDBusAbstractAdaptor::sameObjectDifferentPathsPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1259,13 +1272,13 @@ void tst_QDBusAbstractAdaptor::sameObjectDifferentPathsPeer()
     registerMyObjectPeer("/p1");
     registerMyObjectPeer("/p2", 0); // don't export anything
 
+    syncPeer();
     QDBusSignalSpy spy;
     con.connect(QString(), "/p1", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     con.connect(QString(), "/p2", "local.Interface2", "signal", &spy, SLOT(slot(QDBusMessage)));
     emitSignalPeer("local.Interface2", QString(), QVariant());
-    QTest::qWait(200);
 
-    QCOMPARE(spy.count, 1);
+    QTRY_COMPARE(spy.count, 1);
     QCOMPARE(spy.interface, QString("local.Interface2"));
     QCOMPARE(spy.name, QString("signal"));
     QVERIFY(spy.signature.isEmpty());
@@ -1273,6 +1286,7 @@ void tst_QDBusAbstractAdaptor::sameObjectDifferentPathsPeer()
 
 void tst_QDBusAbstractAdaptor::scriptableSignalOrNotPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");;
     QVERIFY(con.isConnected());
 
@@ -1282,6 +1296,7 @@ void tst_QDBusAbstractAdaptor::scriptableSignalOrNotPeer()
         registerMyObjectPeer("/p1", QDBusConnection::ExportScriptableSignals);
         registerMyObjectPeer("/p2", 0); // don't export anything
 
+        syncPeer();
         QDBusSignalSpy spy;
         con.connect(QString(), "/p1", "local.MyObject", "scriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         con.connect(QString(), "/p2", "local.MyObject", "scriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
@@ -1289,9 +1304,8 @@ void tst_QDBusAbstractAdaptor::scriptableSignalOrNotPeer()
         con.connect(QString(), "/p2", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         emitSignalPeer("local.MyObject", "scriptableSignalVoid", QVariant());
         emitSignalPeer("local.MyObject", "nonScriptableSignalVoid", QVariant());
-        QTest::qWait(200);
 
-        QCOMPARE(spy.count, 1);     // only /p1 must have emitted
+        QTRY_COMPARE(spy.count, 1);     // only /p1 must have emitted
         QCOMPARE(spy.interface, QString("local.MyObject"));
         QCOMPARE(spy.name, QString("scriptableSignalVoid"));
         QCOMPARE(spy.path, QString("/p1"));
@@ -1305,13 +1319,13 @@ void tst_QDBusAbstractAdaptor::scriptableSignalOrNotPeer()
         registerMyObjectPeer("/p2", QDBusConnection::ExportScriptableSignals
                                 | QDBusConnection::ExportNonScriptableSignals);
 
+        syncPeer();
         QDBusSignalSpy spy;
         con.connect(QString(), "/p1", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         con.connect(QString(), "/p2", "local.MyObject", "nonScriptableSignalVoid", &spy, SLOT(slot(QDBusMessage)));
         emitSignalPeer("local.MyObject", "nonScriptableSignalVoid", QVariant());
-        QTest::qWait(200);
 
-        QCOMPARE(spy.count, 1);     // only /p2 must have emitted now
+        QTRY_COMPARE(spy.count, 1);     // only /p2 must have emitted now
         QCOMPARE(spy.interface, QString("local.MyObject"));
         QCOMPARE(spy.name, QString("nonScriptableSignalVoid"));
         QCOMPARE(spy.path, QString("/p2"));
@@ -1344,6 +1358,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer_data()
 
 void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1357,6 +1372,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer()
 
     // connect all signals and emit only one
     {
+        syncPeer();
         QDBusSignalSpy spy;
         con.connect(QString(), "/", "local.Interface4", "signal", "",
                     &spy, SLOT(slot(QDBusMessage)));
@@ -1367,7 +1383,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer()
 
         emitSignalPeer(interface, name, parameter);
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -1377,13 +1393,14 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer()
     QFETCH(QString, signature);
     // connect one signal and emit them all
     {
+        syncPeer();
         QDBusSignalSpy spy;
         con.connect(QString(), "/", interface, name, signature, &spy, SLOT(slot(QDBusMessage)));
         emitSignalPeer("local.Interface4", "signal", QVariant());
         emitSignalPeer("local.Interface4", "signal", QVariant(1));
         emitSignalPeer("local.Interface4", "signal", QVariant("foo"));
 
-        QCOMPARE(spy.count, 1);
+        QTRY_COMPARE(spy.count, 1);
         QCOMPARE(spy.interface, interface);
         QCOMPARE(spy.name, name);
         QTEST(spy.signature, "signature");
@@ -1393,6 +1410,7 @@ void tst_QDBusAbstractAdaptor::overloadedSignalEmissionPeer()
 
 void tst_QDBusAbstractAdaptor::readPropertiesPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1417,6 +1435,7 @@ void tst_QDBusAbstractAdaptor::readPropertiesPeer()
 
 void tst_QDBusAbstractAdaptor::readPropertiesInvalidInterfacePeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1437,6 +1456,7 @@ void tst_QDBusAbstractAdaptor::readPropertiesEmptyInterfacePeer_data()
 
 void tst_QDBusAbstractAdaptor::readPropertiesEmptyInterfacePeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1467,6 +1487,7 @@ void tst_QDBusAbstractAdaptor::readPropertiesEmptyInterfacePeer()
 
 void tst_QDBusAbstractAdaptor::readAllPropertiesPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1493,6 +1514,7 @@ void tst_QDBusAbstractAdaptor::readAllPropertiesPeer()
 
 void tst_QDBusAbstractAdaptor::readAllPropertiesInvalidInterfacePeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1558,6 +1580,7 @@ void tst_QDBusAbstractAdaptor::readAllPropertiesEmptyInterfacePeer()
 
 void tst_QDBusAbstractAdaptor::writePropertiesPeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1809,7 +1832,7 @@ void tst_QDBusAbstractAdaptor::typeMatching_data()
     LLDateTimeMap lldtmap;
     lldtmap[-1] = QDateTime();
     QDateTime now = QDateTime::currentDateTime();
-    lldtmap[now.toTime_t()] = now; // array of struct of int64 and struct of 3 ints and struct of 4 ints and int
+    lldtmap[now.toSecsSinceEpoch()] = now; // array of struct of int64 and struct of 3 ints and struct of 4 ints and int
     QTest::newRow("lldtmap") << "LLDateTimeMap" << "a{x((iii)(iiii)i)}" << QVariant::fromValue(lldtmap);
 
     MyStruct s;
@@ -1857,7 +1880,7 @@ void tst_QDBusAbstractAdaptor::methodWithMoreThanOneReturnValue()
 
     QDBusInterface remote(con.baseService(), "/", "local.Interface3", con);
     QDBusMessage reply = remote.call(QDBus::BlockWithGui, "methodStringString", testString);
-    QVERIFY(reply.arguments().count() == 2);
+    QCOMPARE(reply.arguments().count(), 2);
 
     QDBusReply<int> intreply = reply;
     QVERIFY(intreply.isValid());
@@ -1869,6 +1892,7 @@ void tst_QDBusAbstractAdaptor::methodWithMoreThanOneReturnValue()
 
 void tst_QDBusAbstractAdaptor::methodWithMoreThanOneReturnValuePeer()
 {
+    QSKIP("Test is currently too flaky (QTBUG-66223)");
     QDBusConnection con("peer");
     QVERIFY(con.isConnected());
 
@@ -1879,7 +1903,7 @@ void tst_QDBusAbstractAdaptor::methodWithMoreThanOneReturnValuePeer()
 
     QDBusInterface remote(QString(), "/", "local.Interface3", con);
     QDBusMessage reply = remote.call(QDBus::BlockWithGui, "methodStringString", testString);
-    QVERIFY(reply.arguments().count() == 2);
+    QCOMPARE(reply.arguments().count(), 2);
 
     QDBusReply<int> intreply = reply;
     QVERIFY(intreply.isValid());

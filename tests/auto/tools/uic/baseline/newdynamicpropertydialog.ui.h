@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'newdynamicpropertydialog.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,15 +10,12 @@
 #define NEWDYNAMICPROPERTYDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QFormLayout>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QSpacerItem>
@@ -46,20 +42,20 @@ public:
     void setupUi(QDialog *qdesigner_internal__NewDynamicPropertyDialog)
     {
         if (qdesigner_internal__NewDynamicPropertyDialog->objectName().isEmpty())
-            qdesigner_internal__NewDynamicPropertyDialog->setObjectName(QStringLiteral("qdesigner_internal__NewDynamicPropertyDialog"));
+            qdesigner_internal__NewDynamicPropertyDialog->setObjectName(QString::fromUtf8("qdesigner_internal__NewDynamicPropertyDialog"));
         qdesigner_internal__NewDynamicPropertyDialog->resize(340, 118);
         verticalLayout = new QVBoxLayout(qdesigner_internal__NewDynamicPropertyDialog);
-        verticalLayout->setObjectName(QStringLiteral("verticalLayout"));
+        verticalLayout->setObjectName(QString::fromUtf8("verticalLayout"));
         formLayout = new QFormLayout();
-        formLayout->setObjectName(QStringLiteral("formLayout"));
+        formLayout->setObjectName(QString::fromUtf8("formLayout"));
         m_lineEdit = new QLineEdit(qdesigner_internal__NewDynamicPropertyDialog);
-        m_lineEdit->setObjectName(QStringLiteral("m_lineEdit"));
+        m_lineEdit->setObjectName(QString::fromUtf8("m_lineEdit"));
         m_lineEdit->setMinimumSize(QSize(220, 0));
 
         formLayout->setWidget(0, QFormLayout::FieldRole, m_lineEdit);
 
         label = new QLabel(qdesigner_internal__NewDynamicPropertyDialog);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
         QSizePolicy sizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -69,9 +65,9 @@ public:
         formLayout->setWidget(0, QFormLayout::LabelRole, label);
 
         horizontalLayout = new QHBoxLayout();
-        horizontalLayout->setObjectName(QStringLiteral("horizontalLayout"));
+        horizontalLayout->setObjectName(QString::fromUtf8("horizontalLayout"));
         m_comboBox = new QComboBox(qdesigner_internal__NewDynamicPropertyDialog);
-        m_comboBox->setObjectName(QStringLiteral("m_comboBox"));
+        m_comboBox->setObjectName(QString::fromUtf8("m_comboBox"));
 
         horizontalLayout->addWidget(m_comboBox);
 
@@ -83,7 +79,7 @@ public:
         formLayout->setLayout(1, QFormLayout::FieldRole, horizontalLayout);
 
         label_2 = new QLabel(qdesigner_internal__NewDynamicPropertyDialog);
-        label_2->setObjectName(QStringLiteral("label_2"));
+        label_2->setObjectName(QString::fromUtf8("label_2"));
         sizePolicy.setHeightForWidth(label_2->sizePolicy().hasHeightForWidth());
         label_2->setSizePolicy(sizePolicy);
 
@@ -92,12 +88,12 @@ public:
 
         verticalLayout->addLayout(formLayout);
 
-        spacerItem = new QSpacerItem(QSizePolicy::Minimum, QSizePolicy::Expanding);
+        spacerItem = new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
 
         verticalLayout->addItem(spacerItem);
 
         m_buttonBox = new QDialogButtonBox(qdesigner_internal__NewDynamicPropertyDialog);
-        m_buttonBox->setObjectName(QStringLiteral("m_buttonBox"));
+        m_buttonBox->setObjectName(QString::fromUtf8("m_buttonBox"));
         m_buttonBox->setOrientation(Qt::Horizontal);
         m_buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::Ok);
         m_buttonBox->setCenterButtons(false);
@@ -112,9 +108,9 @@ public:
 
     void retranslateUi(QDialog *qdesigner_internal__NewDynamicPropertyDialog)
     {
-        qdesigner_internal__NewDynamicPropertyDialog->setWindowTitle(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Create Dynamic Property", 0));
-        label->setText(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Property Name", 0));
-        label_2->setText(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Property Type", 0));
+        qdesigner_internal__NewDynamicPropertyDialog->setWindowTitle(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Create Dynamic Property", nullptr));
+        label->setText(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Property Name", nullptr));
+        label_2->setText(QApplication::translate("qdesigner_internal::NewDynamicPropertyDialog", "Property Type", nullptr));
     } // retranslateUi
 
 };

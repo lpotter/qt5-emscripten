@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QTEXTFORMAT_H
 #define QTEXTFORMAT_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtGui/qcolor.h>
 #include <QtGui/qfont.h>
 #include <QtCore/qshareddata.h>
@@ -50,8 +49,6 @@
 #include <QtGui/qpen.h>
 #include <QtGui/qbrush.h>
 #include <QtGui/qtextoption.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -120,6 +117,7 @@ private:
     friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &, const QTextLength &);
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QTextLength &);
 };
+Q_DECLARE_TYPEINFO(QTextLength, QT_VERSION >= QT_VERSION_CHECK(6,0,0) ? Q_PRIMITIVE_TYPE : Q_RELOCATABLE_TYPE);
 
 inline QTextLength::QTextLength(Type atype, qreal avalue)
     : lengthType(atype), fixedValueOrPercentage(avalue) {}
@@ -136,18 +134,20 @@ Q_GUI_EXPORT QDebug operator<<(QDebug, const QTextFormat &);
 class Q_GUI_EXPORT QTextFormat
 {
     Q_GADGET
-    Q_ENUMS(FormatType Property ObjectTypes)
 public:
     enum FormatType {
         InvalidFormat = -1,
         BlockFormat = 1,
         CharFormat = 2,
         ListFormat = 3,
+#if QT_DEPRECATED_SINCE(5, 3)
         TableFormat = 4,
+#endif
         FrameFormat = 5,
 
         UserFormat = 100
     };
+    Q_ENUM(FormatType)
 
     enum Property {
         ObjectIndex = 0x0,
@@ -175,6 +175,7 @@ public:
         LineHeightType = 0x1049,
         BlockNonBreakableLines = 0x1050,
         BlockTrailingHorizontalRulerWidth = 0x1060,
+        HeadingLevel = 0x1070,
 
         // character properties
         FirstFontProperty = 0x1FE0,
@@ -249,6 +250,7 @@ public:
         ImageName = 0x5000,
         ImageWidth = 0x5010,
         ImageHeight = 0x5011,
+        ImageQuality = 0x5014,
 
         // internal
         /*
@@ -265,6 +267,7 @@ public:
         // --
         UserProperty = 0x100000
     };
+    Q_ENUM(Property)
 
     enum ObjectTypes {
         NoObject,
@@ -274,6 +277,7 @@ public:
 
         UserObject = 0x1000
     };
+    Q_ENUM(ObjectTypes)
 
     enum PageBreakFlag {
         PageBreak_Auto = 0,
@@ -297,6 +301,7 @@ public:
     void merge(const QTextFormat &other);
 
     inline bool isValid() const { return type() != InvalidFormat; }
+    inline bool isEmpty() const { return propertyCount() == 0; }
 
     int type() const;
 
@@ -409,7 +414,13 @@ public:
     QTextCharFormat();
 
     bool isValid() const { return isCharFormat(); }
-    void setFont(const QFont &font);
+
+    enum FontPropertiesInheritanceBehavior {
+        FontPropertiesSpecifiedOnly,
+        FontPropertiesAll
+    };
+    void setFont(const QFont &font, FontPropertiesInheritanceBehavior behavior);
+    void setFont(const QFont &font); // ### Qt6: Merge with above
     QFont font() const;
 
     inline void setFontFamily(const QString &family)
@@ -423,9 +434,9 @@ public:
     { return doubleProperty(FontPointSize); }
 
     inline void setFontWeight(int weight)
-    { if (weight == QFont::Normal) weight = 0; setProperty(FontWeight, weight); }
+    { setProperty(FontWeight, weight); }
     inline int fontWeight() const
-    { int weight = intProperty(FontWeight); if (weight == 0) weight = QFont::Normal; return weight; }
+    { return hasProperty(FontWeight) ? intProperty(FontWeight) : QFont::Normal; }
     inline void setFontItalic(bool italic)
     { setProperty(FontItalic, italic); }
     inline bool fontItalic() const
@@ -615,6 +626,11 @@ public:
     inline int indent() const
     { return intProperty(BlockIndent); }
 
+    inline void setHeadingLevel(int alevel)
+    { setProperty(HeadingLevel, alevel); }
+    inline int headingLevel() const
+    { return intProperty(HeadingLevel); }
+
     inline void setLineHeight(qreal height, int heightType)
     { setProperty(LineHeight, height); setProperty(LineHeightType, heightType); }
     inline qreal lineHeight(qreal scriptLineHeight, qreal scaling) const;
@@ -739,6 +755,10 @@ public:
     inline qreal height() const
     { return doubleProperty(ImageHeight); }
 
+    inline void setQuality(int quality = 100);
+    inline int quality() const
+    { return intProperty(ImageQuality); }
+
 protected:
     explicit QTextImageFormat(const QTextFormat &format);
     friend class QTextFormat;
@@ -754,6 +774,9 @@ inline void QTextImageFormat::setWidth(qreal awidth)
 
 inline void QTextImageFormat::setHeight(qreal aheight)
 { setProperty(ImageHeight, aheight); }
+
+inline void QTextImageFormat::setQuality(int aquality)
+{ setProperty(ImageQuality, aquality); }
 
 class Q_GUI_EXPORT QTextFrameFormat : public QTextFormat
 {
@@ -1008,7 +1031,5 @@ inline void QTextTableCellFormat::setPadding(qreal padding)
 
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTEXTFORMAT_H

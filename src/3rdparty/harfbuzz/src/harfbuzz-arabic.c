@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
+ * Copyright (C) 2015 The Qt Company Ltd
  *
  * This is part of HarfBuzz, an OpenType Layout engine library.
  *
@@ -921,7 +921,7 @@ static void shapedString(const HB_UChar16 *uc, hb_uint32 stringLength, hb_uint32
 
     for (i = 0; i < len; i++) {
         hb_uint8 r = *ch >> 8;
-        int gpos = data - shapeBuffer;
+        const int gpos = int(data - shapeBuffer);
 
         if (r != 0x06) {
             if (r == 0x20) {
@@ -981,7 +981,7 @@ static void shapedString(const HB_UChar16 *uc, hb_uint32 stringLength, hb_uint32
 /*             qDebug("glyph %d (char %d) is mark!", gpos, i); */
         } else {
             attributes[gpos].mark = FALSE;
-            clusterStart = data - shapeBuffer;
+            clusterStart = int(data - shapeBuffer);
         }
         attributes[gpos].clusterStart = !attributes[gpos].mark;
         attributes[gpos].combiningClass = HB_GetUnicodeCharCombiningClass(*ch);
@@ -992,7 +992,7 @@ static void shapedString(const HB_UChar16 *uc, hb_uint32 stringLength, hb_uint32
         ch++;
         logClusters[i] = clusterStart;
     }
-    *shapedLength = data - shapeBuffer;
+    *shapedLength = int(data - shapeBuffer);
 
     HB_FREE_STACKARRAY(props);
 }
@@ -1114,16 +1114,22 @@ HB_Bool HB_ArabicShape(HB_ShaperItem *item)
 
     if (HB_SelectScript(item, item->item.script == HB_Script_Arabic ? arabic_features : syriac_features)) {
         HB_Bool ot_ok;
-        if (arabicSyriacOpenTypeShape(item, &ot_ok))
+        if (arabicSyriacOpenTypeShape(item, &ot_ok)) {
+            HB_FREE_STACKARRAY(shapedChars);
             return TRUE;
-        if (ot_ok)
+        }
+        if (ot_ok) {
+            HB_FREE_STACKARRAY(shapedChars);
             return FALSE;
             /* fall through to the non OT code*/
+        }
     }
 #endif
 
-    if (item->item.script != HB_Script_Arabic)
+    if (item->item.script != HB_Script_Arabic) {
+        HB_FREE_STACKARRAY(shapedChars);
         return HB_BasicShape(item);
+    }
 
     shapedString(item->string, item->stringLength, item->item.pos, item->item.length, shapedChars, &slen,
                   item->item.bidiLevel % 2,

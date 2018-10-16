@@ -3,8 +3,9 @@ SUBDIRS = \
         qdir \
         qdiriterator \
         qfile \
-        #qfileinfo \    # FIXME: broken
+        qfileinfo \
         qiodevice \
-        qprocess \
-        qtemporaryfile
+        qtemporaryfile \
+        qtextstream
 
+qtConfig(process): SUBDIRS += qprocess

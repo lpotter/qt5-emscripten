@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,7 +46,6 @@
 #include <qmath.h>
 
 #include <private/qnumeric_p.h>
-#include <private/qmath_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -118,64 +115,6 @@ QBezier QBezier::getSubRange(qreal t0, qreal t1) const
 
     return result;
 }
-
-static inline int quadraticRoots(qreal a, qreal b, qreal c,
-                                 qreal *x1, qreal *x2)
-{
-    if (qFuzzyIsNull(a)) {
-        if (qFuzzyIsNull(b))
-            return 0;
-        *x1 = *x2 = (-c / b);
-        return 1;
-    } else {
-        const qreal det = b * b - 4 * a * c;
-        if (qFuzzyIsNull(det)) {
-            *x1 = *x2 = -b / (2 * a);
-            return 1;
-        }
-        if (det > 0) {
-            if (qFuzzyIsNull(b)) {
-                *x2 = qSqrt(-c / a);
-                *x1 = -(*x2);
-                return 2;
-            }
-            const qreal stableA = b / (2 * a);
-            const qreal stableB = c / (a * stableA * stableA);
-            const qreal stableC = -1 - qSqrt(1 - stableB);
-            *x2 = stableA * stableC;
-            *x1 = (stableA * stableB) / stableC;
-            return 2;
-        } else
-            return 0;
-    }
-}
-
-static inline bool findInflections(qreal a, qreal b, qreal c,
-                                   qreal *t1 , qreal *t2, qreal *tCups)
-{
-    qreal r1 = 0, r2 = 0;
-
-    short rootsCount = quadraticRoots(a, b, c, &r1, &r2);
-
-    if (rootsCount >= 1) {
-        if (r1 < r2) {
-            *t1 = r1;
-            *t2 = r2;
-        } else {
-            *t1 = r2;
-            *t2 = r1;
-        }
-        if (!qFuzzyIsNull(a))
-            *tCups = qreal(0.5) * (-b / a);
-        else
-            *tCups = 2;
-
-        return true;
-    }
-
-    return false;
-}
-
 
 void QBezier::addToPolygon(QPolygonF *polygon, qreal bezier_flattening_threshold) const
 {
@@ -429,7 +368,7 @@ static bool addCircle(const QBezier *b, qreal offset, QBezier *o)
             cos_a = 1.;
         if (cos_a < -1.)
             cos_a = -1;
-        angles[i] = qAcos(cos_a)/Q_PI;
+        angles[i] = qAcos(cos_a) * qreal(M_1_PI);
     }
 
     if (angles[0] + angles[1] > 1.) {
@@ -468,8 +407,8 @@ int QBezier::shifted(QBezier *curveSegments, int maxSegments, qreal offset, floa
     Q_ASSERT(curveSegments);
     Q_ASSERT(maxSegments > 0);
 
-    if (x1 == x2 && x1 == x3 && x1 == x4 &&
-        y1 == y2 && y1 == y3 && y1 == y4)
+    if (qFuzzyCompare(x1, x2) && qFuzzyCompare(x1, x3) && qFuzzyCompare(x1, x4) &&
+        qFuzzyCompare(y1, y2) && qFuzzyCompare(y1, y3) && qFuzzyCompare(y1, y4))
         return 0;
 
     --maxSegments;
@@ -530,34 +469,6 @@ static QDebug operator<<(QDebug dbg, const QBezier &bz)
     return dbg;
 }
 #endif
-
-static inline void splitBezierAt(const QBezier &bez, qreal t,
-                                 QBezier *left, QBezier *right)
-{
-    left->x1 = bez.x1;
-    left->y1 = bez.y1;
-
-    left->x2 = bez.x1 + t * ( bez.x2 - bez.x1 );
-    left->y2 = bez.y1 + t * ( bez.y2 - bez.y1 );
-
-    left->x3 = bez.x2 + t * ( bez.x3 - bez.x2 ); // temporary holding spot
-    left->y3 = bez.y2 + t * ( bez.y3 - bez.y2 ); // temporary holding spot
-
-    right->x3 = bez.x3 + t * ( bez.x4 - bez.x3 );
-    right->y3 = bez.y3 + t * ( bez.y4 - bez.y3 );
-
-    right->x2 = left->x3 + t * ( right->x3 - left->x3);
-    right->y2 = left->y3 + t * ( right->y3 - left->y3);
-
-    left->x3 = left->x2 + t * ( left->x3 - left->x2 );
-    left->y3 = left->y2 + t * ( left->y3 - left->y2 );
-
-    left->x4 = right->x1 = left->x3 + t * (right->x2 - left->x3);
-    left->y4 = right->y1 = left->y3 + t * (right->y2 - left->y3);
-
-    right->x4 = bez.x4;
-    right->y4 = bez.y4;
-}
 
 qreal QBezier::length(qreal error) const
 {

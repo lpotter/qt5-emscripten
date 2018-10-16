@@ -1,3 +1,6 @@
+QT += widgets
+requires(qtConfig(filedialog))
+
 HEADERS     = mainwindow.h \
               pieceslist.h \
               puzzlewidget.h
@@ -12,10 +15,3 @@ QMAKE_PROJECT_NAME = dndpuzzle
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/draganddrop/puzzle
 INSTALLS += target
-
-wince*: {
-   addFile.files = example.jpg
-   addFile.path = .
-   DEPLOYMENT += addFile
-}
-QT += widgets

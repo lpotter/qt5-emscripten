@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,15 +41,23 @@
 
 #include "qapplication.h"
 #include "qlayoutengine_p.h"
+#if QT_CONFIG(menubar)
 #include "qmenubar.h"
+#endif
+#if QT_CONFIG(toolbar)
 #include "qtoolbar.h"
+#endif
+#if QT_CONFIG(sizegrip)
 #include "qsizegrip.h"
+#endif
 #include "qevent.h"
 #include "qstyle.h"
 #include "qvariant.h"
 #include "qwidget_p.h"
 #include "qlayout_p.h"
+#if QT_CONFIG(formlayout)
 #include "qformlayout.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -59,12 +65,10 @@ static int menuBarHeightForWidth(QWidget *menubar, int w)
 {
     if (menubar && !menubar->isHidden() && !menubar->isWindow()) {
         int result = menubar->heightForWidth(qMax(w, menubar->minimumWidth()));
-        if (result != -1)
-            return result;
-        result = menubar->sizeHint()
-            .expandedTo(menubar->minimumSize())
-            .expandedTo(menubar->minimumSizeHint())
-            .boundedTo(menubar->maximumSize()).height();
+        if (result == -1)
+            result = menubar->sizeHint().height();
+        const int min = qSmartMinSize(menubar).height();
+        result = qBound(min, result, menubar->maximumSize().height());
         if (result != -1)
             return result;
     }
@@ -105,10 +109,11 @@ static int menuBarHeightForWidth(QWidget *menubar, int w)
 
 /*!
     Constructs a new top-level QLayout, with parent \a parent.
-    \a parent may not be 0.
+    \a parent may not be a \c nullptr.
 
-    There can be only one top-level layout for a widget. It is
-    returned by QWidget::layout().
+    The layout is set directly as the top-level layout for
+    \a parent. There can be only one top-level layout for a
+    widget. It is returned by QWidget::layout().
 */
 QLayout::QLayout(QWidget *parent)
     : QObject(*new QLayoutPrivate, parent)
@@ -139,11 +144,11 @@ QLayout::QLayout(QLayoutPrivate &dd, QLayout *lay, QWidget *w)
     if (lay) {
         lay->addItem(this);
     } else if (w) {
-        if (w->layout()) {
-            qWarning("QLayout: Attempting to add QLayout \"%s\" to %s \"%s\", which"
+        if (Q_UNLIKELY(w->layout())) {
+            qWarning("QLayout: Attempting to add QLayout \"%ls\" to %s \"%ls\", which"
                      " already has a layout",
-                     qPrintable(QObject::objectName()), w->metaObject()->className(),
-                     w->objectName().toLocal8Bit().data());
+                     qUtf16Printable(QObject::objectName()), w->metaObject()->className(),
+                     qUtf16Printable(w->objectName()));
             setParent(0);
         } else {
             d->topLevel = true;
@@ -236,7 +241,7 @@ void QLayout::addWidget(QWidget *w)
 /*!
     Sets the alignment for widget \a w to \a alignment and returns
     true if \a w is found in this layout (not including child
-    layouts); otherwise returns false.
+    layouts); otherwise returns \c false.
 */
 bool QLayout::setAlignment(QWidget *w, Qt::Alignment alignment)
 {
@@ -258,8 +263,8 @@ bool QLayout::setAlignment(QWidget *w, Qt::Alignment alignment)
   \overload
 
   Sets the alignment for the layout \a l to \a alignment and
-  returns true if \a l is found in this layout (not including child
-  layouts); otherwise returns false.
+  returns \c true if \a l is found in this layout (not including child
+  layouts); otherwise returns \c false.
 */
 bool QLayout::setAlignment(QLayout *l, Qt::Alignment alignment)
 {
@@ -276,14 +281,6 @@ bool QLayout::setAlignment(QLayout *l, Qt::Alignment alignment)
     }
     return false;
 }
-
-/*!
-    \fn void QLayout::setAlignment(Qt::Alignment alignment)
-
-    Sets the alignment of this item to \a alignment.
-
-    \sa QLayoutItem::setAlignment()
-*/
 
 /*!
     \property QLayout::margin
@@ -332,8 +329,10 @@ int QLayout::spacing() const
         return boxlayout->spacing();
     } else if (const QGridLayout* gridlayout = qobject_cast<const QGridLayout*>(this)) {
         return gridlayout->spacing();
+#if QT_CONFIG(formlayout)
     } else if (const QFormLayout* formlayout = qobject_cast<const QFormLayout*>(this)) {
         return formlayout->spacing();
+#endif
     } else {
         Q_D(const QLayout);
         if (d->insideSpacing >=0) {
@@ -359,8 +358,10 @@ void QLayout::setSpacing(int spacing)
         boxlayout->setSpacing(spacing);
     } else if (QGridLayout* gridlayout = qobject_cast<QGridLayout*>(this)) {
         gridlayout->setSpacing(spacing);
+#if QT_CONFIG(formlayout)
     } else if (QFormLayout* formlayout = qobject_cast<QFormLayout*>(this)) {
         formlayout->setSpacing(spacing);
+#endif
     } else {
         Q_D(QLayout);
         d->insideSpacing = spacing;
@@ -487,7 +488,7 @@ QWidget *QLayout::parentWidget() const
     if (!d->topLevel) {
         if (parent()) {
             QLayout *parentLayout = qobject_cast<QLayout*>(parent());
-            if (!parentLayout) {
+            if (Q_UNLIKELY(!parentLayout)) {
                 qWarning("QLayout::parentWidget: A layout can only have another layout as a parent.");
                 return 0;
             }
@@ -558,7 +559,7 @@ void QLayout::invalidate()
     update();
 }
 
-static bool removeWidgetRecursively(QLayoutItem *li, QWidget *w)
+static bool removeWidgetRecursively(QLayoutItem *li, QObject *w)
 {
     QLayout *lay = li->layout();
     if (!lay)
@@ -586,11 +587,12 @@ void QLayoutPrivate::doResize(const QSize &r)
     int mbh = menuBarHeightForWidth(menubar, r.width());
     QWidget *mw = q->parentWidget();
     QRect rect = mw->testAttribute(Qt::WA_LayoutOnEntireRect) ? mw->rect() : mw->contentsRect();
-    rect.setTop(rect.top() + mbh);
+    const int mbTop = rect.top();
+    rect.setTop(mbTop + mbh);
     q->setGeometry(rect);
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     if (menubar)
-        menubar->setGeometry(0,0,r.width(), mbh);
+        menubar->setGeometry(rect.left(), mbTop, r.width(), mbh);
 #endif
 }
 
@@ -620,12 +622,11 @@ void QLayout::widgetEvent(QEvent *e)
         {
             QChildEvent *c = (QChildEvent *)e;
             if (c->child()->isWidgetType()) {
-                QWidget *w = (QWidget *)c->child();
-#ifndef QT_NO_MENUBAR
-                if (w == d->menubar)
+#if QT_CONFIG(menubar)
+                if (c->child() == d->menubar)
                     d->menubar = 0;
 #endif
-                removeWidgetRecursively(this, w);
+                removeWidgetRecursively(this, c->child());
             }
         }
         break;
@@ -647,21 +648,11 @@ void QLayout::childEvent(QChildEvent *e)
     if (!d->enabled)
         return;
 
-    if (e->type() == QEvent::ChildRemoved) {
-        QChildEvent *c = (QChildEvent*)e;
-        int i = 0;
+    if (e->type() != QEvent::ChildRemoved)
+        return;
 
-        QLayoutItem *item;
-        while ((item = itemAt(i))) {
-            if (item == static_cast<QLayout*>(c->child())) {
-                takeAt(i);
-                invalidate();
-                break;
-            } else {
-                ++i;
-            }
-        }
-    }
+    if (QLayout *childLayout = qobject_cast<QLayout *>(e->child()))
+        removeItem(childLayout);
 }
 
 /*!
@@ -680,7 +671,7 @@ int QLayout::totalHeightForWidth(int w) const
         top += wd->topmargin + wd->bottommargin;
     }
     int h = heightForWidth(w - side) + top;
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     h += menuBarHeightForWidth(d->menubar, w);
 #endif
     return h;
@@ -703,7 +694,7 @@ QSize QLayout::totalMinimumSize() const
     }
 
     QSize s = minimumSize();
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     top += menuBarHeightForWidth(d->menubar, s.width() + side);
 #endif
     return s + QSize(side, top);
@@ -728,7 +719,7 @@ QSize QLayout::totalSizeHint() const
     QSize s = sizeHint();
     if (hasHeightForWidth())
         s.setHeight(heightForWidth(s.width() + side));
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     top += menuBarHeightForWidth(d->menubar, s.width());
 #endif
     return s + QSize(side, top);
@@ -751,7 +742,7 @@ QSize QLayout::totalMaximumSize() const
     }
 
     QSize s = maximumSize();
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     top += menuBarHeightForWidth(d->menubar, s.width());
 #endif
 
@@ -772,13 +763,10 @@ QSize QLayout::totalMaximumSize() const
 QLayout::~QLayout()
 {
     Q_D(QLayout);
-    /*
-      This function may be called during the QObject destructor,
-      when the parent no longer is a QWidget.
-    */
-    if (d->topLevel && parent() && parent()->isWidgetType() &&
-         ((QWidget*)parent())->layout() == this)
-        ((QWidget*)parent())->d_func()->layout = 0;
+    if (d->topLevel && parent() && parent()->isWidgetType() && parentWidget()->layout() == this)
+        parentWidget()->d_func()->layout = 0;
+    else if (QLayout *parentLayout = qobject_cast<QLayout *>(parent()))
+        parentLayout->removeItem(this);
 }
 
 
@@ -793,9 +781,9 @@ QLayout::~QLayout()
 */
 void QLayout::addChildLayout(QLayout *l)
 {
-    if (l->parent()) {
-        qWarning("QLayout::addChildLayout: layout \"%s\" already has a parent",
-                 l->objectName().toLocal8Bit().data());
+    if (Q_UNLIKELY(l->parent())) {
+        qWarning("QLayout::addChildLayout: layout \"%ls\" already has a parent",
+                 qUtf16Printable(l->objectName()));
         return;
     }
     l->setParent(this);
@@ -806,12 +794,22 @@ void QLayout::addChildLayout(QLayout *l)
 
 }
 
+/*!
+   \internal
+ */
+bool QLayout::adoptLayout(QLayout *layout)
+{
+    const bool ok = !layout->parent();
+    addChildLayout(layout);
+    return ok;
+}
+
 #ifdef QT_DEBUG
 static bool layoutDebug()
 {
     static int checked_env = -1;
     if(checked_env == -1)
-        checked_env = !!qgetenv("QT_LAYOUT_DEBUG").toInt();
+        checked_env = !!qEnvironmentVariableIntValue("QT_LAYOUT_DEBUG");
 
     return checked_env;
 }
@@ -822,7 +820,7 @@ void QLayoutPrivate::reparentChildWidgets(QWidget *mw)
     Q_Q(QLayout);
     int n =  q->count();
 
-#ifndef QT_NO_MENUBAR
+#if QT_CONFIG(menubar)
     if (menubar && menubar->parentWidget() != mw) {
         menubar->setParent(mw);
     }
@@ -833,9 +831,9 @@ void QLayoutPrivate::reparentChildWidgets(QWidget *mw)
         if (QWidget *w = item->widget()) {
             QWidget *pw = w->parentWidget();
 #ifdef QT_DEBUG
-            if (pw && pw != mw && layoutDebug()) {
-                qWarning("QLayout::addChildLayout: widget %s \"%s\" in wrong parent; moved to correct parent",
-                         w->metaObject()->className(), w->objectName().toLocal8Bit().data());
+            if (Q_UNLIKELY(pw && pw != mw && layoutDebug())) {
+                qWarning("QLayout::addChildLayout: widget %s \"%ls\" in wrong parent; moved to correct parent",
+                         w->metaObject()->className(), qUtf16Printable(w->objectName()));
             }
 #endif
             bool needShow = mwVisible && !(w->isHidden() && w->testAttribute(Qt::WA_WState_ExplicitShowHide));
@@ -847,6 +845,47 @@ void QLayoutPrivate::reparentChildWidgets(QWidget *mw)
             l->d_func()->reparentChildWidgets(mw);
         }
     }
+}
+
+/*!
+    Returns \c true if the \a widget can be added to the \a layout;
+    otherwise returns \c false.
+*/
+bool QLayoutPrivate::checkWidget(QWidget *widget) const
+{
+    Q_Q(const QLayout);
+    if (Q_UNLIKELY(!widget)) {
+        qWarning("QLayout: Cannot add a null widget to %s/%ls", q->metaObject()->className(),
+                  qUtf16Printable(q->objectName()));
+        return false;
+    }
+    if (Q_UNLIKELY(widget == q->parentWidget())) {
+        qWarning("QLayout: Cannot add parent widget %s/%ls to its child layout %s/%ls",
+                  widget->metaObject()->className(), qUtf16Printable(widget->objectName()),
+                  q->metaObject()->className(), qUtf16Printable(q->objectName()));
+        return false;
+    }
+    return true;
+}
+
+/*!
+    Returns \c true if the \a otherLayout can be added to the \a layout;
+    otherwise returns \c false.
+*/
+bool QLayoutPrivate::checkLayout(QLayout *otherLayout) const
+{
+    Q_Q(const QLayout);
+    if (Q_UNLIKELY(!otherLayout)) {
+        qWarning("QLayout: Cannot add a null layout to %s/%ls",
+                 q->metaObject()->className(), qUtf16Printable(q->objectName()));
+        return false;
+    }
+    if (Q_UNLIKELY(otherLayout == q)) {
+        qWarning("QLayout: Cannot add layout %s/%ls to itself",
+                 q->metaObject()->className(), qUtf16Printable(q->objectName()));
+        return false;
+    }
+    return true;
 }
 
 /*!
@@ -868,17 +907,17 @@ void QLayout::addChildWidget(QWidget *w)
         QLayout *l = pw->layout();
         if (l && removeWidgetRecursively(l, w)) {
 #ifdef QT_DEBUG
-            if (layoutDebug())
-                qWarning("QLayout::addChildWidget: %s \"%s\" is already in a layout; moved to new layout",
-                         w->metaObject()->className(), w->objectName().toLocal8Bit().data());
+            if (Q_UNLIKELY(layoutDebug()))
+                qWarning("QLayout::addChildWidget: %s \"%ls\" is already in a layout; moved to new layout",
+                         w->metaObject()->className(), qUtf16Printable(w->objectName()));
 #endif
         }
     }
     if (pw && mw && pw != mw) {
 #ifdef QT_DEBUG
-            if (layoutDebug())
-                qWarning("QLayout::addChildWidget: %s \"%s\" in wrong parent; moved to correct parent",
-                         w->metaObject()->className(), w->objectName().toLocal8Bit().data());
+            if (Q_UNLIKELY(layoutDebug()))
+                qWarning("QLayout::addChildWidget: %s \"%ls\" in wrong parent; moved to correct parent",
+                         w->metaObject()->className(), qUtf16Printable(w->objectName()));
 #endif
         pw = 0;
     }
@@ -905,12 +944,7 @@ void QLayout::addChildWidget(QWidget *w)
 void QLayout::setMenuBar(QWidget *widget)
 {
     Q_D(QLayout);
-
-#ifdef Q_OS_WINCE_WM
-    if (widget && widget->size().height() > 0)
-#else
         if (widget)
-#endif
             addChildWidget(widget);
     d->menubar = widget;
 }
@@ -1030,9 +1064,9 @@ bool QLayout::activate()
     if (d->activated)
         return false;
     QWidget *mw = static_cast<QWidget*>(parent());
-    if (mw == 0) {
-        qWarning("QLayout::activate: %s \"%s\" does not have a main widget",
-                 QObject::metaObject()->className(), QObject::objectName().toLocal8Bit().data());
+    if (Q_UNLIKELY(!mw)) {
+        qWarning("QLayout::activate: %s \"%ls\" does not have a main widget",
+                 metaObject()->className(), qUtf16Printable(objectName()));
         return false;
     }
     activateRecursiveHelper(this);
@@ -1065,15 +1099,6 @@ bool QLayout::activate()
                 ms.setWidth(mw->minimumSize().width());
             if (heightSet)
                 ms.setHeight(mw->minimumSize().height());
-            if ((!heightSet || !widthSet) && hasHeightForWidth()) {
-                int h = minimumHeightForWidth(ms.width());
-                if (h > ms.height()) {
-                    if (!heightSet)
-                        ms.setHeight(0);
-                    if (!widthSet)
-                        ms.setWidth(0);
-                }
-            }
             mw->setMinimumSize(ms);
         } else if (!widthSet || !heightSet) {
             QSize ms = mw->minimumSize();
@@ -1098,6 +1123,65 @@ bool QLayout::activate()
     // ideally only if sizeHint() or sizePolicy() has changed
     mw->updateGeometry();
     return true;
+}
+
+/*!
+    \since 5.2
+
+    Searches for widget \a from and replaces it with widget \a to if found.
+    Returns the layout item that contains the widget \a from on success.
+    Otherwise \c 0 is returned. If \a options contains \c Qt::FindChildrenRecursively
+    (the default), sub-layouts are searched for doing the replacement.
+    Any other flag in \a options is ignored.
+
+    Notice that the returned item therefore might not belong to this layout,
+    but to a sub-layout.
+
+    The returned layout item is no longer owned by the layout and should be
+    either deleted or inserted to another layout. The widget \a from is no
+    longer managed by the layout and may need to be deleted or hidden. The
+    parent of widget \a from is left unchanged.
+
+    This function works for the built-in Qt layouts, but might not work for
+    custom layouts.
+
+    \sa indexOf()
+*/
+
+QLayoutItem *QLayout::replaceWidget(QWidget *from, QWidget *to, Qt::FindChildOptions options)
+{
+    Q_D(QLayout);
+    if (!from || !to)
+        return 0;
+
+    int index = -1;
+    QLayoutItem *item = 0;
+    for (int u = 0; u < count(); ++u) {
+        item = itemAt(u);
+        if (!item)
+            continue;
+
+        if (item->widget() == from) {
+            index = u;
+            break;
+        }
+
+        if (item->layout() && (options & Qt::FindChildrenRecursively)) {
+            QLayoutItem *r = item->layout()->replaceWidget(from, to, options);
+            if (r)
+                return r;
+        }
+    }
+    if (index == -1)
+        return 0;
+
+    addChildWidget(to);
+    QLayoutItem *newitem = new QWidgetItem(to);
+    newitem->setAlignment(item->alignment());
+    QLayoutItem *r = d->replaceAt(index, newitem);
+    if (!r)
+        delete newitem;
+    return r;
 }
 
 /*!
@@ -1155,6 +1239,26 @@ int QLayout::indexOf(QWidget *widget) const
     QLayoutItem *item = itemAt(i);
     while (item) {
         if (item->widget() == widget)
+            return i;
+        ++i;
+        item = itemAt(i);
+    }
+    return -1;
+}
+
+/*!
+    \since 5.12
+    Searches for layout item \a layoutItem in this layout (not including child
+    layouts).
+
+    Returns the index of \a layoutItem, or -1 if \a layoutItem is not found.
+*/
+int QLayout::indexOf(QLayoutItem *layoutItem) const
+{
+    int i = 0;
+    QLayoutItem *item = itemAt(i);
+    while (item) {
+        if (item == layoutItem)
             return i;
         ++i;
         item = itemAt(i);
@@ -1269,8 +1373,9 @@ QRect QLayout::alignmentRect(const QRect &r) const
 /*!
     Removes the widget \a widget from the layout. After this call, it
     is the caller's responsibility to give the widget a reasonable
-    geometry or to put the widget back into a layout.
-    
+    geometry or to put the widget back into a layout or to explicitly
+    hide it if necessary.
+
     \b{Note:} The ownership of \a widget remains the same as
     when it was added.
 
@@ -1330,7 +1435,7 @@ void QLayout::setEnabled(bool enable)
 }
 
 /*!
-    Returns true if the layout is enabled; otherwise returns false.
+    Returns \c true if the layout is enabled; otherwise returns \c false.
 
     \sa setEnabled()
 */
@@ -1386,85 +1491,6 @@ QSize QLayout::closestAcceptableSize(const QWidget *widget, const QSize &size)
     return result;
 }
 
-void QSizePolicy::setControlType(ControlType type)
-{
-    /*
-        The control type is a flag type, with values 0x1, 0x2, 0x4, 0x8, 0x10,
-        etc. In memory, we pack it onto the available bits (CTSize) in
-        setControlType(), and unpack it here.
-
-        Example:
-
-            0x00000001 maps to 0
-            0x00000002 maps to 1
-            0x00000004 maps to 2
-            0x00000008 maps to 3
-            etc.
-    */
-
-    int i = 0;
-    while (true) {
-        if (type & (0x1 << i)) {
-            bits.ctype = i;
-            return;
-        }
-        ++i;
-    }
-}
-
-QSizePolicy::ControlType QSizePolicy::controlType() const
-{
-    return QSizePolicy::ControlType(1 << bits.ctype);
-}
-
-#ifndef QT_NO_DATASTREAM
-
-/*!
-    \relates QSizePolicy
-    \since 4.2
-
-    Writes the size \a policy to the data stream \a stream.
-
-    \sa{Serializing Qt Data Types}{Format of the QDataStream operators}
-*/
-QDataStream &operator<<(QDataStream &stream, const QSizePolicy &policy)
-{
-    // The order here is for historical reasons. (compatibility with Qt4)
-    quint32 data = (policy.bits.horPolicy |         // [0, 3]
-                    policy.bits.verPolicy << 4 |    // [4, 7]
-                    policy.bits.hfw << 8 |          // [8]
-                    policy.bits.ctype << 9 |        // [9, 13]
-                    policy.bits.wfh << 14 |         // [14]
-                  //policy.bits.padding << 15 |     // [15]
-                    policy.bits.verStretch << 16 |  // [16, 23]
-                    policy.bits.horStretch << 24);  // [24, 31]
-    return stream << data;
-}
-
-#define VALUE_OF_BITS(data, bitstart, bitcount) ((data >> bitstart) & ((1 << bitcount) -1))
-
-/*!
-    \relates QSizePolicy
-    \since 4.2
-
-    Reads the size \a policy from the data stream \a stream.
-
-    \sa{Serializing Qt Data Types}{Format of the QDataStream operators}
-*/
-QDataStream &operator>>(QDataStream &stream, QSizePolicy &policy)
-{
-    quint32 data;
-    stream >> data;
-    policy.bits.horPolicy =  VALUE_OF_BITS(data, 0, 4);
-    policy.bits.verPolicy =  VALUE_OF_BITS(data, 4, 4);
-    policy.bits.hfw =        VALUE_OF_BITS(data, 8, 1);
-    policy.bits.ctype =      VALUE_OF_BITS(data, 9, 5);
-    policy.bits.wfh =        VALUE_OF_BITS(data, 14, 1);
-    policy.bits.padding =   0;
-    policy.bits.verStretch = VALUE_OF_BITS(data, 16, 8);
-    policy.bits.horStretch = VALUE_OF_BITS(data, 24, 8);
-    return stream;
-}
-#endif // QT_NO_DATASTREAM
-
 QT_END_NAMESPACE
+
+#include "moc_qlayout.cpp"

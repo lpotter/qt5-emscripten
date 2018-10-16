@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,38 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qurlinfo_p.h"
-
-#ifndef QT_NO_FTP
 
 #include "qurl.h"
 #include "qdir.h"
@@ -217,7 +213,7 @@ QUrlInfo::QUrlInfo(const QUrl &url, int permissions, const QString &owner,
 
 /*!
     Sets the name of the URL to \a name. The name is the full text,
-    for example, "http://qt.nokia.com/doc/qurlinfo.html".
+    for example, "http://qt-project.org/doc/qt-5.0/qtcore/qurl.html".
 
     If you call this function for an invalid URL info, this function
     turns it into a valid one.
@@ -545,7 +541,7 @@ QDateTime QUrlInfo::lastRead() const
 }
 
 /*!
-    Returns true if the URL is a directory; otherwise returns false.
+    Returns \c true if the URL is a directory; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -558,7 +554,7 @@ bool QUrlInfo::isDir() const
 }
 
 /*!
-    Returns true if the URL is a file; otherwise returns false.
+    Returns \c true if the URL is a file; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -571,7 +567,7 @@ bool QUrlInfo::isFile() const
 }
 
 /*!
-    Returns true if the URL is a symbolic link; otherwise returns false.
+    Returns \c true if the URL is a symbolic link; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -584,7 +580,7 @@ bool QUrlInfo::isSymLink() const
 }
 
 /*!
-    Returns true if the URL is writable; otherwise returns false.
+    Returns \c true if the URL is writable; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -597,7 +593,7 @@ bool QUrlInfo::isWritable() const
 }
 
 /*!
-    Returns true if the URL is readable; otherwise returns false.
+    Returns \c true if the URL is readable; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -610,7 +606,7 @@ bool QUrlInfo::isReadable() const
 }
 
 /*!
-    Returns true if the URL is executable; otherwise returns false.
+    Returns \c true if the URL is executable; otherwise returns \c false.
 
     \sa isValid()
 */
@@ -623,7 +619,7 @@ bool QUrlInfo::isExecutable() const
 }
 
 /*!
-    Returns true if \a i1 is greater than \a i2; otherwise returns
+    Returns \c true if \a i1 is greater than \a i2; otherwise returns
     false. The objects are compared by the value, which is specified
     by \a sortBy. This must be one of QDir::Name, QDir::Time or
     QDir::Size.
@@ -645,7 +641,7 @@ bool QUrlInfo::greaterThan(const QUrlInfo &i1, const QUrlInfo &i2,
 }
 
 /*!
-    Returns true if \a i1 is less than \a i2; otherwise returns false.
+    Returns \c true if \a i1 is less than \a i2; otherwise returns \c false.
     The objects are compared by the value, which is specified by \a
     sortBy. This must be one of QDir::Name, QDir::Time or QDir::Size.
 */
@@ -657,7 +653,7 @@ bool QUrlInfo::lessThan(const QUrlInfo &i1, const QUrlInfo &i2,
 }
 
 /*!
-    Returns true if \a i1 equals to \a i2; otherwise returns false.
+    Returns \c true if \a i1 equals to \a i2; otherwise returns \c false.
     The objects are compared by the value, which is specified by \a
     sortBy. This must be one of QDir::Name, QDir::Time or QDir::Size.
 */
@@ -678,8 +674,8 @@ bool QUrlInfo::equal(const QUrlInfo &i1, const QUrlInfo &i2,
 }
 
 /*!
-    Returns true if this QUrlInfo is equal to \a other; otherwise
-    returns false.
+    Returns \c true if this QUrlInfo is equal to \a other; otherwise
+    returns \c false.
 
     \sa lessThan(), equal()
 */
@@ -710,14 +706,14 @@ bool QUrlInfo::operator==(const QUrlInfo &other) const
     \fn bool QUrlInfo::operator!=(const QUrlInfo &other) const
     \since 4.2
 
-    Returns true if this QUrlInfo is not equal to \a other; otherwise
-    returns false.
+    Returns \c true if this QUrlInfo is not equal to \a other; otherwise
+    returns \c false.
 
     \sa lessThan(), equal()
 */
 
 /*!
-    Returns true if the URL info is valid; otherwise returns false.
+    Returns \c true if the URL info is valid; otherwise returns \c false.
     Valid means that the QUrlInfo contains real information.
 
     You should always check if the URL info is valid before relying on
@@ -729,5 +725,3 @@ bool QUrlInfo::isValid() const
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_FTP

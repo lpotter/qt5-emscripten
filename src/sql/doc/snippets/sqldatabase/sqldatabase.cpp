@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -239,8 +249,9 @@ void QSqlQueryModel_snippets()
     }
 
 //! [21]
-    QSqlQueryModel model;
-    model.setQuery("SELECT * FROM employee");
+    QSqlTableModel model;
+    model.setTable("employee");
+    model.select();
     int salary = model.record(4).value("salary").toInt();
 //! [21]
     Q_UNUSED(salary);
@@ -262,7 +273,7 @@ void QSqlQueryModel_snippets()
 class MyModel : public QSqlQueryModel
 {
 public:
-    QVariant data(const QModelIndex &item, int role) const;
+    QVariant data(const QModelIndex &item, int role) const override;
 
     int m_specialColumnNo;
 };
@@ -515,15 +526,15 @@ public:
     ~XyzResult() {}
 
 protected:
-    QVariant data(int /* index */) { return QVariant(); }
-    bool isNull(int /* index */) { return false; }
-    bool reset(const QString & /* query */) { return false; }
-    bool fetch(int /* index */) { return false; }
-    bool fetchFirst() { return false; }
-    bool fetchLast() { return false; }
-    int size() { return 0; }
-    int numRowsAffected() { return 0; }
-    QSqlRecord record() const { return QSqlRecord(); }
+    QVariant data(int /* index */) override { return QVariant(); }
+    bool isNull(int /* index */) override { return false; }
+    bool reset(const QString & /* query */) override { return false; }
+    bool fetch(int /* index */) override { return false; }
+    bool fetchFirst() override { return false; }
+    bool fetchLast() override { return false; }
+    int size() override { return 0; }
+    int numRowsAffected() override { return 0; }
+    QSqlRecord record() const override { return QSqlRecord(); }
 };
 //! [47]
 
@@ -534,13 +545,13 @@ public:
     XyzDriver() {}
     ~XyzDriver() {}
 
-    bool hasFeature(DriverFeature /* feature */) const { return false; }
+    bool hasFeature(DriverFeature /* feature */) const override { return false; }
     bool open(const QString & /* db */, const QString & /* user */,
               const QString & /* password */, const QString & /* host */,
-              int /* port */, const QString & /* options */)
+              int /* port */, const QString & /* options */) override
         { return false; }
     void close() {}
-    QSqlResult *createResult() const { return new XyzResult(this); }
+    QSqlResult *createResult() const override { return new XyzResult(this); }
 };
 //! [48]
 

@@ -2,10 +2,12 @@
 <TestCase name="tst_FetchBogus">
 <Environment>
     <QtVersion>@INSERT_QT_VERSION_HERE@</QtVersion>
+    <QtBuild/>
     <QTestVersion>@INSERT_QT_VERSION_HERE@</QTestVersion>
 </Environment>
 <TestFunction name="initTestCase">
 <Incident type="pass" file="" line="0" />
+    <Duration msecs="0"/>
 </TestFunction>
 <TestFunction name="fetchBogus">
 <Message type="qfatal" file="" line="0">
@@ -16,5 +18,7 @@
     <DataTag><![CDATA[foo]]></DataTag>
     <Description><![CDATA[Received a fatal error.]]></Description>
 </Incident>
+    <Duration msecs="0"/>
 </TestFunction>
+<Duration msecs="0"/>
 </TestCase>

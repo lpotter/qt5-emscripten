@@ -1,40 +1,27 @@
 /*
 *********************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the autotests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +31,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'batchtranslation.ui'
 **
-** Created: Fri Sep 4 10:17:12 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -54,14 +40,11 @@
 #define BATCHTRANSLATION_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QListView>
 #include <QtWidgets/QPushButton>
@@ -95,7 +78,7 @@ public:
     void setupUi(QDialog *databaseTranslationDialog)
     {
         if (databaseTranslationDialog->objectName().isEmpty())
-            databaseTranslationDialog->setObjectName(QStringLiteral("databaseTranslationDialog"));
+            databaseTranslationDialog->setObjectName(QString::fromUtf8("databaseTranslationDialog"));
         databaseTranslationDialog->resize(425, 370);
         vboxLayout = new QVBoxLayout(databaseTranslationDialog);
 #ifndef Q_OS_MAC
@@ -104,9 +87,9 @@ public:
 #ifndef Q_OS_MAC
         vboxLayout->setContentsMargins(9, 9, 9, 9);
 #endif
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         groupBox = new QGroupBox(databaseTranslationDialog);
-        groupBox->setObjectName(QStringLiteral("groupBox"));
+        groupBox->setObjectName(QString::fromUtf8("groupBox"));
         QSizePolicy sizePolicy(static_cast<QSizePolicy::Policy>(5), static_cast<QSizePolicy::Policy>(4));
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -119,15 +102,15 @@ public:
 #ifndef Q_OS_MAC
         vboxLayout1->setContentsMargins(9, 9, 9, 9);
 #endif
-        vboxLayout1->setObjectName(QStringLiteral("vboxLayout1"));
+        vboxLayout1->setObjectName(QString::fromUtf8("vboxLayout1"));
         ckOnlyUntranslated = new QCheckBox(groupBox);
-        ckOnlyUntranslated->setObjectName(QStringLiteral("ckOnlyUntranslated"));
+        ckOnlyUntranslated->setObjectName(QString::fromUtf8("ckOnlyUntranslated"));
         ckOnlyUntranslated->setChecked(true);
 
         vboxLayout1->addWidget(ckOnlyUntranslated);
 
         ckMarkFinished = new QCheckBox(groupBox);
-        ckMarkFinished->setObjectName(QStringLiteral("ckMarkFinished"));
+        ckMarkFinished->setObjectName(QString::fromUtf8("ckMarkFinished"));
         ckMarkFinished->setChecked(true);
 
         vboxLayout1->addWidget(ckMarkFinished);
@@ -136,7 +119,7 @@ public:
         vboxLayout->addWidget(groupBox);
 
         groupBox_2 = new QGroupBox(databaseTranslationDialog);
-        groupBox_2->setObjectName(QStringLiteral("groupBox_2"));
+        groupBox_2->setObjectName(QString::fromUtf8("groupBox_2"));
         QSizePolicy sizePolicy1(static_cast<QSizePolicy::Policy>(5), static_cast<QSizePolicy::Policy>(1));
         sizePolicy1.setHorizontalStretch(0);
         sizePolicy1.setVerticalStretch(0);
@@ -149,7 +132,7 @@ public:
 #ifndef Q_OS_MAC
         vboxLayout2->setContentsMargins(9, 9, 9, 9);
 #endif
-        vboxLayout2->setObjectName(QStringLiteral("vboxLayout2"));
+        vboxLayout2->setObjectName(QString::fromUtf8("vboxLayout2"));
         hboxLayout = new QHBoxLayout();
 #ifndef Q_OS_MAC
         hboxLayout->setSpacing(6);
@@ -157,9 +140,9 @@ public:
 #ifndef Q_OS_MAC
         hboxLayout->setContentsMargins(0, 0, 0, 0);
 #endif
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         phrasebookList = new QListView(groupBox_2);
-        phrasebookList->setObjectName(QStringLiteral("phrasebookList"));
+        phrasebookList->setObjectName(QString::fromUtf8("phrasebookList"));
         phrasebookList->setUniformItemSizes(true);
 
         hboxLayout->addWidget(phrasebookList);
@@ -169,14 +152,14 @@ public:
         vboxLayout3->setSpacing(6);
 #endif
         vboxLayout3->setContentsMargins(0, 0, 0, 0);
-        vboxLayout3->setObjectName(QStringLiteral("vboxLayout3"));
+        vboxLayout3->setObjectName(QString::fromUtf8("vboxLayout3"));
         moveUpButton = new QPushButton(groupBox_2);
-        moveUpButton->setObjectName(QStringLiteral("moveUpButton"));
+        moveUpButton->setObjectName(QString::fromUtf8("moveUpButton"));
 
         vboxLayout3->addWidget(moveUpButton);
 
         moveDownButton = new QPushButton(groupBox_2);
-        moveDownButton->setObjectName(QStringLiteral("moveDownButton"));
+        moveDownButton->setObjectName(QString::fromUtf8("moveDownButton"));
 
         vboxLayout3->addWidget(moveDownButton);
 
@@ -191,7 +174,7 @@ public:
         vboxLayout2->addLayout(hboxLayout);
 
         label = new QLabel(groupBox_2);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
         label->setWordWrap(true);
 
         vboxLayout2->addWidget(label);
@@ -204,18 +187,18 @@ public:
         hboxLayout1->setSpacing(6);
 #endif
         hboxLayout1->setContentsMargins(0, 0, 0, 0);
-        hboxLayout1->setObjectName(QStringLiteral("hboxLayout1"));
+        hboxLayout1->setObjectName(QString::fromUtf8("hboxLayout1"));
         spacerItem1 = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         hboxLayout1->addItem(spacerItem1);
 
         runButton = new QPushButton(databaseTranslationDialog);
-        runButton->setObjectName(QStringLiteral("runButton"));
+        runButton->setObjectName(QString::fromUtf8("runButton"));
 
         hboxLayout1->addWidget(runButton);
 
         cancelButton = new QPushButton(databaseTranslationDialog);
-        cancelButton->setObjectName(QStringLiteral("cancelButton"));
+        cancelButton->setObjectName(QString::fromUtf8("cancelButton"));
 
         hboxLayout1->addWidget(cancelButton);
 
@@ -230,16 +213,16 @@ public:
 
     void retranslateUi(QDialog *databaseTranslationDialog)
     {
-        databaseTranslationDialog->setWindowTitle(QApplication::translate("databaseTranslationDialog", "Qt Linguist - Batch Translation", 0));
-        groupBox->setTitle(QApplication::translate("databaseTranslationDialog", "Options", 0));
-        ckOnlyUntranslated->setText(QApplication::translate("databaseTranslationDialog", "Only translate entries with no translation", 0));
-        ckMarkFinished->setText(QApplication::translate("databaseTranslationDialog", "Set translated entries to finished", 0));
-        groupBox_2->setTitle(QApplication::translate("databaseTranslationDialog", "Phrase book preference", 0));
-        moveUpButton->setText(QApplication::translate("databaseTranslationDialog", "Move up", 0));
-        moveDownButton->setText(QApplication::translate("databaseTranslationDialog", "Move down", 0));
-        label->setText(QApplication::translate("databaseTranslationDialog", "The batch translator will search through the selected phrasebooks in the order given above.", 0));
-        runButton->setText(QApplication::translate("databaseTranslationDialog", "&Run", 0));
-        cancelButton->setText(QApplication::translate("databaseTranslationDialog", "&Cancel", 0));
+        databaseTranslationDialog->setWindowTitle(QApplication::translate("databaseTranslationDialog", "Qt Linguist - Batch Translation", nullptr));
+        groupBox->setTitle(QApplication::translate("databaseTranslationDialog", "Options", nullptr));
+        ckOnlyUntranslated->setText(QApplication::translate("databaseTranslationDialog", "Only translate entries with no translation", nullptr));
+        ckMarkFinished->setText(QApplication::translate("databaseTranslationDialog", "Set translated entries to finished", nullptr));
+        groupBox_2->setTitle(QApplication::translate("databaseTranslationDialog", "Phrase book preference", nullptr));
+        moveUpButton->setText(QApplication::translate("databaseTranslationDialog", "Move up", nullptr));
+        moveDownButton->setText(QApplication::translate("databaseTranslationDialog", "Move down", nullptr));
+        label->setText(QApplication::translate("databaseTranslationDialog", "The batch translator will search through the selected phrasebooks in the order given above.", nullptr));
+        runButton->setText(QApplication::translate("databaseTranslationDialog", "&Run", nullptr));
+        cancelButton->setText(QApplication::translate("databaseTranslationDialog", "&Cancel", nullptr));
     } // retranslateUi
 
 };

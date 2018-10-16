@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,6 @@
 
 #include "qthreadstorage.h"
 
-#ifndef QT_NO_THREAD
 #include "qthread.h"
 #include "qthread_p.h"
 #include "qmutex.h"
@@ -129,7 +126,7 @@ void **QThreadStorageData::get() const
     DEBUG_MSG("QThreadStorageData: Returning storage %d, data %p, for thread %p",
           id,
           *v,
-          data->thread);
+          data->thread.load());
 
     return *v ? v : 0;
 }
@@ -151,7 +148,7 @@ void **QThreadStorageData::set(void *p)
         DEBUG_MSG("QThreadStorageData: Deleting previous storage %d, data %p, for thread %p",
                 id,
                 value,
-                data->thread);
+                data->thread.load());
 
         QMutexLocker locker(&destructorsMutex);
         DestructorMap *destr = destructors();
@@ -167,7 +164,7 @@ void **QThreadStorageData::set(void *p)
 
     // store new data
     value = p;
-    DEBUG_MSG("QThreadStorageData: Set storage %d for thread %p to %p", id, data->thread, p);
+    DEBUG_MSG("QThreadStorageData: Set storage %d for thread %p to %p", id, data->thread.load(), p);
     return &value;
 }
 
@@ -262,13 +259,13 @@ void QThreadStorageData::finish(void **p)
 */
 
 /*!
-    \fn QThreadStorage::QThreadStorage()
+    \fn template <class T> QThreadStorage<T>::QThreadStorage()
 
     Constructs a new per-thread data storage object.
 */
 
 /*!
-    \fn QThreadStorage::~QThreadStorage()
+    \fn template <class T> QThreadStorage<T>::~QThreadStorage()
 
     Destroys the per-thread data storage object.
 
@@ -280,9 +277,9 @@ void QThreadStorageData::finish(void **p)
 */
 
 /*!
-    \fn bool QThreadStorage::hasLocalData() const
+    \fn template <class T> bool QThreadStorage<T>::hasLocalData() const
 
-    If T is a pointer type, returns true if the calling thread has
+    If T is a pointer type, returns \c true if the calling thread has
     non-zero data available.
 
     If T is a value type, returns whether the data has already been
@@ -292,7 +289,7 @@ void QThreadStorageData::finish(void **p)
 */
 
 /*!
-    \fn T &QThreadStorage::localData()
+    \fn template <class T> T &QThreadStorage<T>::localData()
 
     Returns a reference to the data that was set by the calling
     thread.
@@ -304,7 +301,7 @@ void QThreadStorageData::finish(void **p)
 */
 
 /*!
-    \fn const T QThreadStorage::localData() const
+    \fn template <class T> const T QThreadStorage<T>::localData() const
     \overload
 
     Returns a copy of the data that was set by the calling thread.
@@ -313,7 +310,7 @@ void QThreadStorageData::finish(void **p)
 */
 
 /*!
-    \fn void QThreadStorage::setLocalData(T data)
+    \fn template <class T> void QThreadStorage<T>::setLocalData(T data)
 
     Sets the local data for the calling thread to \a data. It can be
     accessed later using the localData() functions.
@@ -324,7 +321,5 @@ void QThreadStorageData::finish(void **p)
 
     \sa localData(), hasLocalData()
 */
-
-#endif // QT_NO_THREAD
 
 QT_END_NAMESPACE

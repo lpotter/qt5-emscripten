@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    Objects manager (specification).                                     */
 /*                                                                         */
-/*  Copyright 1996-2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008 by       */
+/*  Copyright 1996-2015 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -37,17 +37,6 @@ FT_BEGIN_HEADER
   /*    A handle to a TrueType driver object.                              */
   /*                                                                       */
   typedef struct TT_DriverRec_*  TT_Driver;
-
-
-  /*************************************************************************/
-  /*                                                                       */
-  /* <Type>                                                                */
-  /*    TT_Instance                                                        */
-  /*                                                                       */
-  /* <Description>                                                         */
-  /*    A handle to a TrueType size object.                                */
-  /*                                                                       */
-  typedef struct TT_SizeRec_*  TT_Size;
 
 
   /*************************************************************************/
@@ -95,8 +84,8 @@ FT_BEGIN_HEADER
     FT_F26Dot6     control_value_cutin;
     FT_F26Dot6     single_width_cutin;
     FT_F26Dot6     single_width_value;
-    FT_Short       delta_base;
-    FT_Short       delta_shift;
+    FT_UShort      delta_base;
+    FT_UShort      delta_shift;
 
     FT_Byte        instruct_control;
     /* According to Greg Hitchcock from Microsoft, the `scan_control'     */
@@ -160,7 +149,7 @@ FT_BEGIN_HEADER
   typedef struct  TT_CodeRange_
   {
     FT_Byte*  base;
-    FT_ULong  size;
+    FT_Long   size;
 
   } TT_CodeRange;
 
@@ -173,10 +162,13 @@ FT_BEGIN_HEADER
   /*                                                                       */
   typedef struct  TT_DefRecord_
   {
-    FT_Int   range;      /* in which code range is it located? */
-    FT_Long  start;      /* where does it start?               */
-    FT_UInt  opc;        /* function #, or instruction code    */
-    FT_Bool  active;     /* is it active?                      */
+    FT_Int    range;          /* in which code range is it located?     */
+    FT_Long   start;          /* where does it start?                   */
+    FT_Long   end;            /* where does it end?                     */
+    FT_UInt   opc;            /* function #, or instruction code        */
+    FT_Bool   active;         /* is it active?                          */
+    FT_Bool   inline_delta;   /* is function that defines inline delta? */
+    FT_ULong  sph_fdef_flags; /* flags to identify special functions    */
 
   } TT_DefRecord, *TT_DefArray;
 
@@ -189,41 +181,9 @@ FT_BEGIN_HEADER
   {
     FT_Fixed    xx, xy;     /* transformation matrix coefficients */
     FT_Fixed    yx, yy;
-    FT_F26Dot6  ox, oy;     /* offsets        */
+    FT_F26Dot6  ox, oy;     /* offsets                            */
 
   } TT_Transform;
-
-
-  /*************************************************************************/
-  /*                                                                       */
-  /* Subglyph loading record.  Used to load composite components.          */
-  /*                                                                       */
-  typedef struct  TT_SubglyphRec_
-  {
-    FT_Long          index;        /* subglyph index; initialized with -1 */
-    FT_Bool          is_scaled;    /* is the subglyph scaled?             */
-    FT_Bool          is_hinted;    /* should it be hinted?                */
-    FT_Bool          preserve_pps; /* preserve phantom points?            */
-
-    FT_Long          file_offset;
-
-    FT_BBox          bbox;
-    FT_Pos           left_bearing;
-    FT_Pos           advance;
-
-    TT_GlyphZoneRec  zone;
-
-    FT_Long          arg1;         /* first argument                      */
-    FT_Long          arg2;         /* second argument                     */
-
-    FT_UShort        element_flag; /* current load element flag           */
-
-    TT_Transform     transform;    /* transformation matrix               */
-
-    FT_Vector        pp1, pp2;     /* phantom points (horizontal)         */
-    FT_Vector        pp3, pp4;     /* phantom points (vertical)           */
-
-  } TT_SubGlyphRec, *TT_SubGlyph_Stack;
 
 
   /*************************************************************************/
@@ -231,8 +191,8 @@ FT_BEGIN_HEADER
   /* A note regarding non-squared pixels:                                  */
   /*                                                                       */
   /* (This text will probably go into some docs at some time; for now, it  */
-  /*  is kept here to explain some definitions in the TIns_Metrics         */
-  /*  record).                                                             */
+  /* is kept here to explain some definitions in the TT_Size_Metrics       */
+  /* record).                                                              */
   /*                                                                       */
   /* The CVT is a one-dimensional array containing values that control     */
   /* certain important characteristics in a font, like the height of all   */
@@ -353,17 +313,12 @@ FT_BEGIN_HEADER
 
     TT_GlyphZoneRec    twilight;     /* The instance's twilight zone    */
 
-    /* debugging variables */
-
-    /* When using the debugger, we must keep the */
-    /* execution context tied to the instance    */
-    /* object rather than asking it on demand.   */
-
-    FT_Bool            debug;
     TT_ExecContext     context;
 
-    FT_Bool            bytecode_ready;
-    FT_Bool            cvt_ready;
+    /* if negative, `fpgm' (resp. `prep'), wasn't executed yet; */
+    /* otherwise it is the returned error code                  */
+    FT_Error           bytecode_ready;
+    FT_Error           cvt_ready;
 
 #endif /* TT_USE_BYTECODE_INTERPRETER */
 
@@ -376,11 +331,11 @@ FT_BEGIN_HEADER
   /*                                                                       */
   typedef struct  TT_DriverRec_
   {
-    FT_DriverRec     root;
-    TT_ExecContext   context;  /* execution context        */
+    FT_DriverRec  root;
+
     TT_GlyphZoneRec  zone;     /* glyph loader points zone */
 
-    void*            extension_component;
+    FT_UInt  interpreter_version;
 
   } TT_DriverRec;
 
@@ -422,13 +377,16 @@ FT_BEGIN_HEADER
 #ifdef TT_USE_BYTECODE_INTERPRETER
 
   FT_LOCAL( FT_Error )
-  tt_size_run_fpgm( TT_Size  size );
+  tt_size_run_fpgm( TT_Size  size,
+                    FT_Bool  pedantic );
 
   FT_LOCAL( FT_Error )
-  tt_size_run_prep( TT_Size  size );
+  tt_size_run_prep( TT_Size  size,
+                    FT_Bool  pedantic );
 
   FT_LOCAL( FT_Error )
-  tt_size_ready_bytecode( TT_Size  size );
+  tt_size_ready_bytecode( TT_Size  size,
+                          FT_Bool  pedantic );
 
 #endif /* TT_USE_BYTECODE_INTERPRETER */
 
@@ -453,6 +411,10 @@ FT_BEGIN_HEADER
   /*                                                                       */
   FT_LOCAL( FT_Error )
   tt_slot_init( FT_GlyphSlot  slot );
+
+
+  /* auxiliary */
+#define IS_HINTED( flags )  ( ( flags & FT_LOAD_NO_HINTING ) == 0 )
 
 
 FT_END_HEADER

@@ -5,4 +5,9 @@ SOURCES = tst_qdir.cpp
 RESOURCES += qdir.qrc
 
 TESTDATA += testdir testData searchdir resources entrylist types tst_qdir.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+
+contains(CONFIG, builtin_testdata): DEFINES += BUILTIN_TESTDATA
+
+android:!android-embedded {
+    RESOURCES += android_testdata.qrc
+}

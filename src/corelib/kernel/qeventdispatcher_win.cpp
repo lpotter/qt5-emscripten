@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,8 +41,8 @@
 #include "qeventdispatcher_win_p.h"
 
 #include "qcoreapplication.h"
-#include "qhash.h"
 #include <private/qsystemlibrary_p.h>
+#include "qoperatingsystemversion.h"
 #include "qpair.h"
 #include "qset.h"
 #include "qsocketnotifier.h"
@@ -54,10 +53,10 @@
 #include "qcoreapplication_p.h"
 #include <private/qthread_p.h>
 #include <private/qmutexpool_p.h>
+#include <private/qwineventnotifier_p.h>
 
 QT_BEGIN_NAMESPACE
 
-HINSTANCE qWinAppInst();
 extern uint qGlobalPostedEventsCount();
 
 #ifndef TIME_KILL_SYNCHRONOUS
@@ -65,11 +64,7 @@ extern uint qGlobalPostedEventsCount();
 #endif
 
 #ifndef QS_RAWINPUT
-# ifdef Q_OS_WINCE
-#  define QS_RAWINPUT 0x0000
-# else
 #  define QS_RAWINPUT 0x0400
-# endif
 #endif
 
 #ifndef WM_TOUCH
@@ -87,198 +82,9 @@ extern uint qGlobalPostedEventsCount();
 enum {
     WM_QT_SOCKETNOTIFIER = WM_USER,
     WM_QT_SENDPOSTEDEVENTS = WM_USER + 1,
+    WM_QT_ACTIVATENOTIFIERS = WM_USER + 2,
     SendPostedEventsWindowsTimerId = ~1u
 };
-
-#if defined(Q_OS_WINCE)
-QT_BEGIN_INCLUDE_NAMESPACE
-#include <winsock.h>
-QT_END_INCLUDE_NAMESPACE
-// Asynchronous Winsocks ------------------------------------------
-#ifndef QT_NO_THREAD
-QT_BEGIN_INCLUDE_NAMESPACE
-#include <qthread.h>
-#include <qmap.h>
-#include <qmutex.h>
-QT_END_INCLUDE_NAMESPACE
-
-//#define QCE_ASYNC_DEBUG
-
-namespace {
-    class SocketAsyncHandler;
-
-    class SocketAsyncHandler : public QThread
-    {
-    public:
-        SocketAsyncHandler();
-        ~SocketAsyncHandler();
-        void run();
-        void select(SOCKET sock, HWND handle, unsigned int msg, long ev);
-        void removeSelect(SOCKET sock);
-        void safeRemove(SOCKET sock);
-    private:
-        struct SockInfo {
-            HWND handle;
-            unsigned int msg;
-            long ev;
-        };
-        QMap<SOCKET, SockInfo> sockets;
-        QMutex mutex;
-        QWaitCondition cond;
-        bool supposedToDie;
-    };
-
-    SocketAsyncHandler::SocketAsyncHandler()
-        : supposedToDie(false)
-    {
-    }
-
-    SocketAsyncHandler::~SocketAsyncHandler()
-    {
-        mutex.lock();
-        supposedToDie = true;
-        mutex.unlock();
-        cond.wakeOne();
-        wait();
-        while (sockets.size() > 0)
-            removeSelect(sockets.begin().key());
-    }
-
-    void SocketAsyncHandler::removeSelect(SOCKET sock)
-    {
-        if (!sockets.contains(sock))
-            return;
-        sockets.remove(sock);
-        return;
-    }
-
-    void SocketAsyncHandler::safeRemove(SOCKET sock)
-    {
-        QMutexLocker locker(&mutex);
-        removeSelect(sock);
-    }
-
-    void SocketAsyncHandler::select(SOCKET sock, HWND handle, unsigned int msg, long ev)
-    {
-        QMutexLocker locker(&mutex);
-
-        if (sockets.contains(sock))
-            sockets.remove(sock);
-
-        SockInfo info;
-        info.handle = handle;
-        info.msg = msg;
-        info.ev = ev;
-        sockets.insert(sock, info);
-        cond.wakeOne();
-    }
-
-    void SocketAsyncHandler::run()
-    {
-        do {
-            mutex.lock();
-
-            while (!supposedToDie && sockets.isEmpty()) {
-                cond.wait(&mutex);
-            }
-
-            if (supposedToDie) {
-                mutex.unlock();
-                break;
-            }
-
-            // Copy current items to reduce lock time
-            // and to be able to use SendMessage
-            QMap<SOCKET, SockInfo> currentSockets = sockets;
-            mutex.unlock();
-
-            fd_set readS, writeS, exS;
-            FD_ZERO(&readS);
-            FD_ZERO(&writeS);
-            FD_ZERO(&exS);
-
-            int maxFd = 0;
-
-            for (QMap<SOCKET, SockInfo>::iterator it = currentSockets.begin(); it != currentSockets.end(); ++it) {
-                const SockInfo &info = it.value();
-                int socket = it.key();
-                maxFd = qMax(maxFd, socket);
-
-                if ((info.ev & FD_READ) || (info.ev & FD_CLOSE) || (info.ev & FD_ACCEPT))
-                    FD_SET(socket, &readS);
-                if ((info.ev & FD_WRITE)|| (info.ev & FD_CONNECT))
-                    FD_SET(socket, &writeS);
-                if (info.ev & FD_OOB)
-                    FD_SET(socket, &exS);
-            }
-
-            timeval timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_usec = 50000;
-            int result = ::select(maxFd + 1, &readS, &writeS, &exS, &timeout);
-            if (result > 0) {
-                HWND handle;
-                unsigned int tmpMsg;
-                SOCKET sock;
-                HRESULT ret;
-                for (QMap<SOCKET, SockInfo>::const_iterator it = currentSockets.constBegin();
-                    it != currentSockets.constEnd(); ++it) {
-                        handle = (*it).handle;
-                        tmpMsg = (*it).msg;
-                        sock = it.key();
-                        if (FD_ISSET(sock, &readS))
-                            ret = SendMessage(handle, tmpMsg, sock, FD_READ);
-
-                        if (FD_ISSET(sock, &writeS))
-                            ret = SendMessage(handle, tmpMsg, sock, FD_WRITE);
-
-                        if (FD_ISSET(sock, &exS))
-                            ret = SendMessage(handle, tmpMsg, sock, FD_OOB);
-                }
-            }
-
-#ifdef QCE_ASYNC_DEBUG
-            else if (result == 0) { //timeout
-                qDebug("    WSAAsync select timeout");
-            } else if (result < 0) { // SocketError
-                // This might happen because of two reasons
-                // 1. We already closed a socket in between the copy and the select
-                //    and thus select() returns an error
-                // 2. Something is really wrong, then
-                //    ### Loop on all descriptors, try to select and remove the
-                //    ### broken one.
-                qWarning("WSAAsync select error %d", WSAGetLastError());
-            }
-#endif
-        } while(true);
-    }
-} // namespace
-
-Q_GLOBAL_STATIC(SocketAsyncHandler, qt_async_handler)
-
-int WSAAsyncSelect(SOCKET sock, HWND handle, unsigned int msg, long ev)
-{
-    if (sock == 0 || handle == 0 || handle == INVALID_HANDLE_VALUE) {
-        WSASetLastError(WSAEINVAL);
-        return SOCKET_ERROR;
-    }
-
-    if (msg == 0 && ev == 0)
-        qt_async_handler()->safeRemove(sock);
-    else
-        qt_async_handler()->select(sock, handle, msg, ev);
-
-    qt_async_handler()->start(QThread::LowPriority);
-    WSASetLastError(0);
-    return 0;
-}
-#else // QT_NO_THREAD
-int WSAAsyncSelect(SOCKET, HWND, unsigned int, long)
-{
-    return SOCKET_ERROR;
-}
-#endif
-#endif // Q_OS_WINCE
 
 class QEventDispatcherWin32Private;
 
@@ -286,47 +92,21 @@ class QEventDispatcherWin32Private;
 #define DWORD_PTR DWORD
 #endif
 
-typedef MMRESULT(WINAPI *ptimeSetEvent)(UINT, UINT, LPTIMECALLBACK, DWORD_PTR, UINT);
-typedef MMRESULT(WINAPI *ptimeKillEvent)(UINT);
-
-static ptimeSetEvent qtimeSetEvent = 0;
-static ptimeKillEvent qtimeKillEvent = 0;
-
 LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
 
-static void resolveTimerAPI()
-{
-    static bool triedResolve = false;
-    if (!triedResolve) {
-#ifndef QT_NO_THREAD
-        QMutexLocker locker(QMutexPool::globalInstanceGet(&triedResolve));
-        if (triedResolve)
-            return;
-#endif
-        triedResolve = true;
-#if !defined(Q_OS_WINCE)
-        qtimeSetEvent = (ptimeSetEvent)QSystemLibrary::resolve(QLatin1String("winmm"), "timeSetEvent");
-        qtimeKillEvent = (ptimeKillEvent)QSystemLibrary::resolve(QLatin1String("winmm"), "timeKillEvent");
-#else
-        qtimeSetEvent = (ptimeSetEvent)QSystemLibrary::resolve(QLatin1String("Mmtimer"), "timeSetEvent");
-        qtimeKillEvent = (ptimeKillEvent)QSystemLibrary::resolve(QLatin1String("Mmtimer"), "timeKillEvent");
-#endif
-    }
-}
-
 QEventDispatcherWin32Private::QEventDispatcherWin32Private()
-    : threadId(GetCurrentThreadId()), interrupt(false), internalHwnd(0), getMessageHook(0),
-      serialNumber(0), lastSerialNumber(0), sendPostedEventsWindowsTimerId(0), wakeUps(0)
+    : threadId(GetCurrentThreadId()), interrupt(false), closingDown(false), internalHwnd(0),
+      getMessageHook(0), serialNumber(0), lastSerialNumber(0), sendPostedEventsWindowsTimerId(0),
+      wakeUps(0), activateNotifiersPosted(false), winEventNotifierActivatedEvent(NULL)
 {
-    resolveTimerAPI();
 }
 
 QEventDispatcherWin32Private::~QEventDispatcherWin32Private()
 {
+    if (winEventNotifierActivatedEvent)
+        CloseHandle(winEventNotifierActivatedEvent);
     if (internalHwnd)
         DestroyWindow(internalHwnd);
-    QString className = QLatin1String("QEventDispatcherWin32_Internal_Widget") + QString::number(quintptr(qt_internal_proc));
-    UnregisterClass((wchar_t*)className.utf16(), qWinAppInst());
 }
 
 void QEventDispatcherWin32Private::activateEventNotifier(QWinEventNotifier * wen)
@@ -340,7 +120,7 @@ void WINAPI QT_WIN_CALLBACK qt_fast_timer_proc(uint timerId, uint /*reserved*/, 
 {
     if (!timerId) // sanity check
         return;
-    WinTimerInfo *t = (WinTimerInfo*)user;
+    auto t = reinterpret_cast<WinTimerInfo*>(user);
     Q_ASSERT(t);
     QCoreApplication::postEvent(t->dispatcher, new QTimerEvent(t->timerId));
 }
@@ -361,20 +141,21 @@ LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPA
         if (message == WM_TIMER)
             KillTimer(hwnd, wp);
         return 0;
-    } else if (dispatcher->filterNativeEvent(QByteArrayLiteral("windows_dispatcher_MSG"), &msg, &result)) {
-        return result;
     }
+    if (dispatcher->filterNativeEvent(QByteArrayLiteral("windows_dispatcher_MSG"), &msg, &result))
+        return result;
 
 #ifdef GWLP_USERDATA
-    QEventDispatcherWin32 *q = (QEventDispatcherWin32 *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    auto q = reinterpret_cast<QEventDispatcherWin32 *>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 #else
-    QEventDispatcherWin32 *q = (QEventDispatcherWin32 *) GetWindowLong(hwnd, GWL_USERDATA);
+    auto q = reinterpret_cast<QEventDispatcherWin32 *>(GetWindowLong(hwnd, GWL_USERDATA));
 #endif
     QEventDispatcherWin32Private *d = 0;
     if (q != 0)
         d = q->d_func();
 
-    if (message == WM_QT_SOCKETNOTIFIER) {
+    switch (message) {
+    case WM_QT_SOCKETNOTIFIER: {
         // socket notifier message
         int type = -1;
         switch (WSAGETSELECTEVENT(lp)) {
@@ -399,47 +180,101 @@ LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPA
             QSNDict *dict = sn_vec[type];
 
             QSockNot *sn = dict ? dict->value(wp) : 0;
-            if (sn) {
-                if (type < 3) {
-                    QEvent event(QEvent::SockAct);
-                    QCoreApplication::sendEvent(sn->obj, &event);
-                } else {
-                    QEvent event(QEvent::SockClose);
+            if (sn == nullptr) {
+                d->postActivateSocketNotifiers();
+            } else {
+                Q_ASSERT(d->active_fd.contains(sn->fd));
+                QSockFd &sd = d->active_fd[sn->fd];
+                if (sd.selected) {
+                    Q_ASSERT(sd.mask == 0);
+                    d->doWsaAsyncSelect(sn->fd, 0);
+                    sd.selected = false;
+                }
+                d->postActivateSocketNotifiers();
+
+                // Ignore the message if a notification with the same type was
+                // received previously. Suppressed message is definitely spurious.
+                const long eventCode = WSAGETSELECTEVENT(lp);
+                if ((sd.mask & eventCode) != eventCode) {
+                    sd.mask |= eventCode;
+                    QEvent event(type < 3 ? QEvent::SockAct : QEvent::SockClose);
                     QCoreApplication::sendEvent(sn->obj, &event);
                 }
             }
         }
         return 0;
-    } else if (message == WM_QT_SENDPOSTEDEVENTS
-               // we also use a Windows timer to send posted events when the message queue is full
-               || (message == WM_TIMER
-                   && d->sendPostedEventsWindowsTimerId != 0
-                   && wp == (uint)d->sendPostedEventsWindowsTimerId)) {
+    }
+    case WM_QT_ACTIVATENOTIFIERS: {
+        Q_ASSERT(d != 0);
+
+        // Postpone activation if we have unhandled socket notifier messages
+        // in the queue. WM_QT_ACTIVATENOTIFIERS will be posted again as a result of
+        // event processing.
+        MSG msg;
+        if (!PeekMessage(&msg, d->internalHwnd,
+                         WM_QT_SOCKETNOTIFIER, WM_QT_SOCKETNOTIFIER, PM_NOREMOVE)
+            && d->queuedSocketEvents.isEmpty()) {
+            // register all socket notifiers
+            for (QSFDict::iterator it = d->active_fd.begin(), end = d->active_fd.end();
+                 it != end; ++it) {
+                QSockFd &sd = it.value();
+                if (!sd.selected) {
+                    d->doWsaAsyncSelect(it.key(), sd.event);
+                    // allow any event to be accepted
+                    sd.mask = 0;
+                    sd.selected = true;
+                }
+            }
+        }
+        d->activateNotifiersPosted = false;
+        return 0;
+    }
+    case WM_TIMER:
+        if (d->sendPostedEventsWindowsTimerId == 0
+            || wp != uint(d->sendPostedEventsWindowsTimerId)) {
+            Q_ASSERT(d != 0);
+            d->sendTimerEvent(wp);
+            return 0;
+        }
+        // we also use a Windows timer to send posted events when the message queue is full
+        Q_FALLTHROUGH();
+    case WM_QT_SENDPOSTEDEVENTS: {
         const int localSerialNumber = d->serialNumber.load();
         if (localSerialNumber != d->lastSerialNumber) {
             d->lastSerialNumber = localSerialNumber;
             q->sendPostedEvents();
         }
         return 0;
-    } else if (message == WM_TIMER) {
-        Q_ASSERT(d != 0);
-        d->sendTimerEvent(wp);
-        return 0;
     }
+    } // switch (message)
 
     return DefWindowProc(hwnd, message, wp, lp);
 }
 
+static inline UINT inputTimerMask()
+{
+    UINT result = QS_TIMER | QS_INPUT | QS_RAWINPUT;
+    // QTBUG 28513, QTBUG-29097, QTBUG-29435: QS_TOUCH, QS_POINTER became part of
+    // QS_INPUT in Windows Kit 8. They should not be used when running on pre-Windows 8.
+#if WINVER > 0x0601
+    if (QOperatingSystemVersion::current() < QOperatingSystemVersion::Windows8)
+        result &= ~(QS_TOUCH | QS_POINTER);
+#endif //  WINVER > 0x0601
+    return result;
+}
+
 LRESULT QT_WIN_CALLBACK qt_GetMessageHook(int code, WPARAM wp, LPARAM lp)
 {
+    QEventDispatcherWin32 *q = qobject_cast<QEventDispatcherWin32 *>(QAbstractEventDispatcher::instance());
+    Q_ASSERT(q != 0);
+
     if (wp == PM_REMOVE) {
-        QEventDispatcherWin32 *q = qobject_cast<QEventDispatcherWin32 *>(QAbstractEventDispatcher::instance());
-        Q_ASSERT(q != 0);
         if (q) {
             MSG *msg = (MSG *) lp;
             QEventDispatcherWin32Private *d = q->d_func();
             const int localSerialNumber = d->serialNumber.load();
-            if (HIWORD(GetQueueStatus(QS_TIMER | QS_INPUT | QS_RAWINPUT)) == 0) {
+            static const UINT mask = inputTimerMask();
+            if (HIWORD(GetQueueStatus(mask)) == 0) {
                 // no more input or timer events in the message queue, we can allow posted events to be sent normally now
                 if (d->sendPostedEventsWindowsTimerId != 0) {
                     // stop the timer to send posted events, since we now allow the WM_QT_SENDPOSTEDEVENTS message
@@ -466,56 +301,96 @@ LRESULT QT_WIN_CALLBACK qt_GetMessageHook(int code, WPARAM wp, LPARAM lp)
             }
         }
     }
-#ifdef Q_OS_WINCE
-    return 0;
-#else
-    return CallNextHookEx(0, code, wp, lp);
-#endif
+    return q->d_func()->getMessageHook ? CallNextHookEx(0, code, wp, lp) : 0;
 }
 
-static HWND qt_create_internal_window(const QEventDispatcherWin32 *eventDispatcher)
+// Provide class name and atom for the message window used by
+// QEventDispatcherWin32Private via Q_GLOBAL_STATIC shared between threads.
+struct QWindowsMessageWindowClassContext
+{
+    QWindowsMessageWindowClassContext();
+    ~QWindowsMessageWindowClassContext();
+
+    ATOM atom;
+    wchar_t *className;
+};
+
+QWindowsMessageWindowClassContext::QWindowsMessageWindowClassContext()
+    : atom(0), className(0)
 {
     // make sure that multiple Qt's can coexist in the same process
-    QString className = QLatin1String("QEventDispatcherWin32_Internal_Widget") + QString::number(quintptr(qt_internal_proc));
+    const QString qClassName = QStringLiteral("QEventDispatcherWin32_Internal_Widget")
+        + QString::number(quintptr(qt_internal_proc));
+    className = new wchar_t[qClassName.size() + 1];
+    qClassName.toWCharArray(className);
+    className[qClassName.size()] = 0;
 
     WNDCLASS wc;
     wc.style = 0;
     wc.lpfnWndProc = qt_internal_proc;
     wc.cbClsExtra = 0;
     wc.cbWndExtra = 0;
-    wc.hInstance = qWinAppInst();
+    wc.hInstance = GetModuleHandle(0);
     wc.hIcon = 0;
     wc.hCursor = 0;
     wc.hbrBackground = 0;
     wc.lpszMenuName = NULL;
-    wc.lpszClassName = reinterpret_cast<const wchar_t *> (className.utf16());
+    wc.lpszClassName = className;
+    atom = RegisterClass(&wc);
+    if (!atom) {
+        qErrnoWarning("%s RegisterClass() failed", qPrintable(qClassName));
+        delete [] className;
+        className = 0;
+    }
+}
 
-    RegisterClass(&wc);
-#ifdef Q_OS_WINCE
-    HWND parent = 0;
-#else
-    HWND parent = HWND_MESSAGE;
-#endif
-    HWND wnd = CreateWindow(wc.lpszClassName,  // classname
-                            wc.lpszClassName,  // window name
+QWindowsMessageWindowClassContext::~QWindowsMessageWindowClassContext()
+{
+    if (className) {
+        UnregisterClass(className, GetModuleHandle(0));
+        delete [] className;
+    }
+}
+
+Q_GLOBAL_STATIC(QWindowsMessageWindowClassContext, qWindowsMessageWindowClassContext)
+
+static HWND qt_create_internal_window(const QEventDispatcherWin32 *eventDispatcher)
+{
+    QWindowsMessageWindowClassContext *ctx = qWindowsMessageWindowClassContext();
+    if (!ctx->atom)
+        return 0;
+    HWND wnd = CreateWindow(ctx->className,    // classname
+                            ctx->className,    // window name
                             0,                 // style
                             0, 0, 0, 0,        // geometry
-                            parent,            // parent
+                            HWND_MESSAGE,            // parent
                             0,                 // menu handle
-                            qWinAppInst(),     // application
+                            GetModuleHandle(0),     // application
                             0);                // windows creation data.
 
     if (!wnd) {
-        qWarning("QEventDispatcher: Failed to create QEventDispatcherWin32 internal window: %d\n", (int)GetLastError());
+        qErrnoWarning("CreateWindow() for QEventDispatcherWin32 internal window failed");
+        return 0;
     }
 
 #ifdef GWLP_USERDATA
-    SetWindowLongPtr(wnd, GWLP_USERDATA, (LONG_PTR)eventDispatcher);
+    SetWindowLongPtr(wnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(eventDispatcher));
 #else
-    SetWindowLong(wnd, GWL_USERDATA, (LONG)eventDispatcher);
+    SetWindowLong(wnd, GWL_USERDATA, reinterpret_cast<LONG>(eventDispatcher));
 #endif
 
     return wnd;
+}
+
+static void calculateNextTimeout(WinTimerInfo *t, quint64 currentTime)
+{
+    uint interval = t->interval;
+    if ((interval >= 20000u && t->timerType != Qt::PreciseTimer) || t->timerType == Qt::VeryCoarseTimer) {
+        // round the interval, VeryCoarseTimers only have full second accuracy
+        interval = ((interval + 500)) / 1000 * 1000;
+    }
+    t->interval = interval;
+    t->timeout = currentTime + interval;
 }
 
 void QEventDispatcherWin32Private::registerTimer(WinTimerInfo *t)
@@ -524,27 +399,27 @@ void QEventDispatcherWin32Private::registerTimer(WinTimerInfo *t)
 
     Q_Q(QEventDispatcherWin32);
 
-    int ok = 0;
+    bool ok = false;
+    calculateNextTimeout(t, qt_msectime());
     uint interval = t->interval;
     if (interval == 0u) {
         // optimization for single-shot-zero-timer
         QCoreApplication::postEvent(q, new QZeroTimerEvent(t->timerId));
-        ok = 1;
-    } else if ((interval < 20u || t->timerType == Qt::PreciseTimer) && qtimeSetEvent) {
-        ok = t->fastTimerId = qtimeSetEvent(interval, 1, qt_fast_timer_proc, (DWORD_PTR)t,
-                                            TIME_CALLBACK_FUNCTION | TIME_PERIODIC | TIME_KILL_SYNCHRONOUS);
-    } else if (interval >= 20000u || t->timerType == Qt::VeryCoarseTimer) {
-        // round the interval, VeryCoarseTimers only have full second accuracy
-        interval = ((interval + 500)) / 1000 * 1000;
+        ok = true;
+    } else if (interval < 20u || t->timerType == Qt::PreciseTimer) {
+        // 3/2016: Although MSDN states timeSetEvent() is deprecated, the function
+        // is still deemed to be the most reliable precision timer.
+        t->fastTimerId = timeSetEvent(interval, 1, qt_fast_timer_proc, DWORD_PTR(t),
+                                      TIME_CALLBACK_FUNCTION | TIME_PERIODIC | TIME_KILL_SYNCHRONOUS);
+        ok = t->fastTimerId;
     }
-    if (ok == 0) {
+
+    if (!ok) {
         // user normal timers for (Very)CoarseTimers, or if no more multimedia timers available
         ok = SetTimer(internalHwnd, t->timerId, interval, 0);
     }
 
-    t->timeout = qt_msectime() + interval;
-
-    if (ok == 0)
+    if (!ok)
         qErrnoWarning("QEventDispatcherWin32::registerTimer: Failed to create a timer");
 }
 
@@ -553,12 +428,14 @@ void QEventDispatcherWin32Private::unregisterTimer(WinTimerInfo *t)
     if (t->interval == 0) {
         QCoreApplicationPrivate::removePostedTimerEvent(t->dispatcher, t->timerId);
     } else if (t->fastTimerId != 0) {
-        qtimeKillEvent(t->fastTimerId);
+        timeKillEvent(t->fastTimerId);
         QCoreApplicationPrivate::removePostedTimerEvent(t->dispatcher, t->timerId);
     } else if (internalHwnd) {
         KillTimer(internalHwnd, t->timerId);
     }
-    delete t;
+    t->timerId = -1;
+    if (!t->inTimerEvent)
+        delete t;
 }
 
 void QEventDispatcherWin32Private::sendTimerEvent(int timerId)
@@ -568,62 +445,73 @@ void QEventDispatcherWin32Private::sendTimerEvent(int timerId)
         // send event, but don't allow it to recurse
         t->inTimerEvent = true;
 
+        // recalculate next emission
+        calculateNextTimeout(t, qt_msectime());
+
         QTimerEvent e(t->timerId);
         QCoreApplication::sendEvent(t->obj, &e);
 
         // timer could have been removed
-        t = timerDict.value(timerId);
-        if (t) {
+        if (t->timerId == -1) {
+            delete t;
+        } else {
             t->inTimerEvent = false;
         }
     }
 }
 
-void QEventDispatcherWin32Private::doWsaAsyncSelect(int socket)
+void QEventDispatcherWin32Private::doWsaAsyncSelect(int socket, long event)
 {
     Q_ASSERT(internalHwnd);
-    int sn_event = 0;
-    if (sn_read.contains(socket))
-        sn_event |= FD_READ | FD_CLOSE | FD_ACCEPT;
-    if (sn_write.contains(socket))
-        sn_event |= FD_WRITE | FD_CONNECT;
-    if (sn_except.contains(socket))
-        sn_event |= FD_OOB;
-    // BoundsChecker may emit a warning for WSAAsyncSelect when sn_event == 0
+    // BoundsChecker may emit a warning for WSAAsyncSelect when event == 0
     // This is a BoundsChecker bug and not a Qt bug
-    WSAAsyncSelect(socket, internalHwnd, sn_event ? int(WM_QT_SOCKETNOTIFIER) : 0, sn_event);
+    WSAAsyncSelect(socket, internalHwnd, event ? int(WM_QT_SOCKETNOTIFIER) : 0, event);
+}
+
+void QEventDispatcherWin32Private::postActivateSocketNotifiers()
+{
+    if (!activateNotifiersPosted)
+        activateNotifiersPosted = PostMessage(internalHwnd, WM_QT_ACTIVATENOTIFIERS, 0, 0);
 }
 
 void QEventDispatcherWin32::createInternalHwnd()
 {
     Q_D(QEventDispatcherWin32);
 
-    Q_ASSERT(!d->internalHwnd);
     if (d->internalHwnd)
         return;
     d->internalHwnd = qt_create_internal_window(this);
 
-#ifndef Q_OS_WINCE
-    // setup GetMessage hook needed to drive our posted events
-    d->getMessageHook = SetWindowsHookEx(WH_GETMESSAGE, (HOOKPROC) qt_GetMessageHook, NULL, GetCurrentThreadId());
-    if (!d->getMessageHook) {
-        qFatal("Qt: INTERNALL ERROR: failed to install GetMessage hook");
-    }
-#endif
-
-    // register all socket notifiers
-    QList<int> sockets = (d->sn_read.keys().toSet()
-                          + d->sn_write.keys().toSet()
-                          + d->sn_except.keys().toSet()).toList();
-    for (int i = 0; i < sockets.count(); ++i)
-        d->doWsaAsyncSelect(sockets.at(i));
+    installMessageHook();
 
     // start all normal timers
     for (int i = 0; i < d->timerVec.count(); ++i)
         d->registerTimer(d->timerVec.at(i));
+}
 
-    // trigger a call to sendPostedEvents()
-    wakeUp();
+void QEventDispatcherWin32::installMessageHook()
+{
+    Q_D(QEventDispatcherWin32);
+
+    if (d->getMessageHook)
+        return;
+
+    // setup GetMessage hook needed to drive our posted events
+    d->getMessageHook = SetWindowsHookEx(WH_GETMESSAGE, (HOOKPROC) qt_GetMessageHook, NULL, GetCurrentThreadId());
+    if (Q_UNLIKELY(!d->getMessageHook)) {
+        int errorCode = GetLastError();
+        qFatal("Qt: INTERNAL ERROR: failed to install GetMessage hook: %d, %s",
+               errorCode, qPrintable(qt_error_string(errorCode)));
+    }
+}
+
+void QEventDispatcherWin32::uninstallMessageHook()
+{
+    Q_D(QEventDispatcherWin32);
+
+    if (d->getMessageHook)
+        UnhookWindowsHookEx(d->getMessageHook);
+    d->getMessageHook = 0;
 }
 
 QEventDispatcherWin32::QEventDispatcherWin32(QObject *parent)
@@ -639,12 +527,30 @@ QEventDispatcherWin32::~QEventDispatcherWin32()
 {
 }
 
+static bool isUserInputMessage(UINT message)
+{
+    return (message >= WM_KEYFIRST && message <= WM_KEYLAST)
+        || (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST)
+        || message == WM_MOUSEWHEEL
+        || message == WM_MOUSEHWHEEL
+        || message == WM_TOUCH
+#ifndef QT_NO_GESTURES
+        || message == WM_GESTURE
+        || message == WM_GESTURENOTIFY
+#endif
+// Pointer input: Exclude WM_NCPOINTERUPDATE .. WM_POINTERROUTEDRELEASED
+        || (message >= 0x0241 && message <= 0x0253)
+        || message == WM_CLOSE;
+}
+
 bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
 {
     Q_D(QEventDispatcherWin32);
 
-    if (!d->internalHwnd)
+    if (!d->internalHwnd) {
         createInternalHwnd();
+        wakeUp(); // trigger a call to sendPostedEvents()
+    }
 
     d->interrupt = false;
     emit awake();
@@ -655,12 +561,14 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
     bool needWM_QT_SENDPOSTEDEVENTS = false;
     do {
         DWORD waitRet = 0;
-        HANDLE pHandles[MAXIMUM_WAIT_OBJECTS - 1];
+        DWORD nCount = 0;
+        HANDLE *pHandles = nullptr;
+        if (d->winEventNotifierActivatedEvent) {
+            nCount = 1;
+            pHandles = &d->winEventNotifierActivatedEvent;
+        }
         QVarLengthArray<MSG> processedTimers;
         while (!d->interrupt) {
-            DWORD nCount = d->winEventNotifierList.count();
-            Q_ASSERT(nCount < MAXIMUM_WAIT_OBJECTS - 1);
-
             MSG msg;
             bool haveMessage;
 
@@ -674,34 +582,23 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
                 msg = d->queuedSocketEvents.takeFirst();
             } else {
                 haveMessage = PeekMessage(&msg, 0, 0, 0, PM_REMOVE);
-                if (haveMessage && (flags & QEventLoop::ExcludeUserInputEvents)
-                    && ((msg.message >= WM_KEYFIRST
-                         && msg.message <= WM_KEYLAST)
-                        || (msg.message >= WM_MOUSEFIRST
-                            && msg.message <= WM_MOUSELAST)
-                        || msg.message == WM_MOUSEWHEEL
-                        || msg.message == WM_MOUSEHWHEEL
-                        || msg.message == WM_TOUCH
-#ifndef QT_NO_GESTURES
-                        || msg.message == WM_GESTURE
-                        || msg.message == WM_GESTURENOTIFY
-#endif
-                        || msg.message == WM_CLOSE)) {
-                    // queue user input events for later processing
-                    haveMessage = false;
-                    d->queuedUserInputEvents.append(msg);
-                }
-                if (haveMessage && (flags & QEventLoop::ExcludeSocketNotifiers)
-                    && (msg.message == WM_QT_SOCKETNOTIFIER && msg.hwnd == d->internalHwnd)) {
-                    // queue socket events for later processing
-                    haveMessage = false;
-                    d->queuedSocketEvents.append(msg);
+                if (haveMessage) {
+                    if (flags.testFlag(QEventLoop::ExcludeUserInputEvents)
+                        && isUserInputMessage(msg.message)) {
+                        // queue user input events for later processing
+                        d->queuedUserInputEvents.append(msg);
+                        continue;
+                    }
+                    if ((flags & QEventLoop::ExcludeSocketNotifiers)
+                        && (msg.message == WM_QT_SOCKETNOTIFIER && msg.hwnd == d->internalHwnd)) {
+                        // queue socket events for later processing
+                        d->queuedSocketEvents.append(msg);
+                        continue;
+                    }
                 }
             }
             if (!haveMessage) {
                 // no message - check for signalled objects
-                for (int i=0; i<(int)nCount; i++)
-                    pHandles[i] = d->winEventNotifierList.at(i)->handle();
                 waitRet = MsgWaitForMultipleObjectsEx(nCount, pHandles, 0, QS_ALLINPUT, MWMO_ALERTABLE);
                 if ((haveMessage = (waitRet == WAIT_OBJECT_0 + nCount))) {
                     // a new message has arrived, process it
@@ -709,10 +606,9 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
                 }
             }
             if (haveMessage) {
-#ifdef Q_OS_WINCE
                 // WinCE doesn't support hooks at all, so we have to call this by hand :(
-                (void) qt_GetMessageHook(0, PM_REMOVE, (LPARAM) &msg);
-#endif
+                if (!d->getMessageHook)
+                    (void) qt_GetMessageHook(0, PM_REMOVE, reinterpret_cast<LPARAM>(&msg));
 
                 if (d->internalHwnd == msg.hwnd && msg.message == WM_QT_SENDPOSTEDEVENTS) {
                     if (seenWM_QT_SENDPOSTEDEVENTS) {
@@ -743,7 +639,7 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
                     DispatchMessage(&msg);
                 }
             } else if (waitRet - WAIT_OBJECT_0 < nCount) {
-                d->activateEventNotifier(d->winEventNotifierList.at(waitRet - WAIT_OBJECT_0));
+                activateEventNotifiers();
             } else {
                 // nothing todo so break
                 break;
@@ -756,16 +652,11 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
                    && !d->interrupt
                    && (flags & QEventLoop::WaitForMoreEvents));
         if (canWait) {
-            DWORD nCount = d->winEventNotifierList.count();
-            Q_ASSERT(nCount < MAXIMUM_WAIT_OBJECTS - 1);
-            for (int i=0; i<(int)nCount; i++)
-                pHandles[i] = d->winEventNotifierList.at(i)->handle();
-
             emit aboutToBlock();
             waitRet = MsgWaitForMultipleObjectsEx(nCount, pHandles, INFINITE, QS_ALLINPUT, MWMO_ALERTABLE | MWMO_INPUTAVAILABLE);
             emit awake();
             if (waitRet - WAIT_OBJECT_0 < nCount) {
-                d->activateEventNotifier(d->winEventNotifierList.at(waitRet - WAIT_OBJECT_0));
+                activateEventNotifiers();
                 retVal = true;
             }
         }
@@ -797,7 +688,8 @@ void QEventDispatcherWin32::registerSocketNotifier(QSocketNotifier *notifier)
     if (sockfd < 0) {
         qWarning("QSocketNotifier: Internal error");
         return;
-    } else if (notifier->thread() != thread() || thread() != QThread::currentThread()) {
+    }
+    if (notifier->thread() != thread() || thread() != QThread::currentThread()) {
         qWarning("QSocketNotifier: socket notifiers cannot be enabled from another thread");
         return;
     }
@@ -817,31 +709,77 @@ void QEventDispatcherWin32::registerSocketNotifier(QSocketNotifier *notifier)
                  "same socket %d and type %s", sockfd, t[type]);
     }
 
+    createInternalHwnd();
+
     QSockNot *sn = new QSockNot;
     sn->obj = notifier;
     sn->fd  = sockfd;
     dict->insert(sn->fd, sn);
 
-    if (d->internalHwnd)
-        d->doWsaAsyncSelect(sockfd);
+    long event = 0;
+    if (d->sn_read.contains(sockfd))
+        event |= FD_READ | FD_CLOSE | FD_ACCEPT;
+    if (d->sn_write.contains(sockfd))
+        event |= FD_WRITE | FD_CONNECT;
+    if (d->sn_except.contains(sockfd))
+        event |= FD_OOB;
+
+    QSFDict::iterator it = d->active_fd.find(sockfd);
+    if (it != d->active_fd.end()) {
+        QSockFd &sd = it.value();
+        if (sd.selected) {
+            d->doWsaAsyncSelect(sockfd, 0);
+            sd.selected = false;
+        }
+        sd.event |= event;
+    } else {
+        // Disable the events which could be implicitly re-enabled. Next activation
+        // of socket notifiers will reset the mask.
+        d->active_fd.insert(sockfd, QSockFd(event, FD_READ | FD_ACCEPT | FD_WRITE | FD_OOB));
+    }
+
+    d->postActivateSocketNotifiers();
 }
 
 void QEventDispatcherWin32::unregisterSocketNotifier(QSocketNotifier *notifier)
 {
     Q_ASSERT(notifier);
-    int sockfd = notifier->socket();
-    int type = notifier->type();
 #ifndef QT_NO_DEBUG
+    int sockfd = notifier->socket();
     if (sockfd < 0) {
         qWarning("QSocketNotifier: Internal error");
         return;
-    } else if (notifier->thread() != thread() || thread() != QThread::currentThread()) {
+    }
+    if (notifier->thread() != thread() || thread() != QThread::currentThread()) {
         qWarning("QSocketNotifier: socket notifiers cannot be disabled from another thread");
         return;
     }
 #endif
+    doUnregisterSocketNotifier(notifier);
+}
 
+void QEventDispatcherWin32::doUnregisterSocketNotifier(QSocketNotifier *notifier)
+{
     Q_D(QEventDispatcherWin32);
+    int type = notifier->type();
+    int sockfd = notifier->socket();
+    Q_ASSERT(sockfd >= 0);
+
+    QSFDict::iterator it = d->active_fd.find(sockfd);
+    if (it != d->active_fd.end()) {
+        QSockFd &sd = it.value();
+        if (sd.selected)
+            d->doWsaAsyncSelect(sockfd, 0);
+        const long event[3] = { FD_READ | FD_CLOSE | FD_ACCEPT, FD_WRITE | FD_CONNECT, FD_OOB };
+        sd.event ^= event[type];
+        if (sd.event == 0) {
+            d->active_fd.erase(it);
+        } else if (sd.selected) {
+            sd.selected = false;
+            d->postActivateSocketNotifiers();
+        }
+    }
+
     QSNDict *sn_vec[3] = { &d->sn_read, &d->sn_write, &d->sn_except };
     QSNDict *dict = sn_vec[type];
     QSockNot *sn = dict->value(sockfd);
@@ -850,22 +788,27 @@ void QEventDispatcherWin32::unregisterSocketNotifier(QSocketNotifier *notifier)
 
     dict->remove(sockfd);
     delete sn;
-
-    if (d->internalHwnd)
-        d->doWsaAsyncSelect(sockfd);
 }
 
 void QEventDispatcherWin32::registerTimer(int timerId, int interval, Qt::TimerType timerType, QObject *object)
 {
+#ifndef QT_NO_DEBUG
     if (timerId < 1 || interval < 0 || !object) {
         qWarning("QEventDispatcherWin32::registerTimer: invalid arguments");
         return;
-    } else if (object->thread() != thread() || thread() != QThread::currentThread()) {
-        qWarning("QObject::startTimer: timers cannot be started from another thread");
+    }
+    if (object->thread() != thread() || thread() != QThread::currentThread()) {
+        qWarning("QEventDispatcherWin32::registerTimer: timers cannot be started from another thread");
         return;
     }
+#endif
 
     Q_D(QEventDispatcherWin32);
+
+    // exiting ... do not register new timers
+    // (QCoreApplication::closingDown() is set too late to be used here)
+    if (d->closingDown)
+        return;
 
     WinTimerInfo *t = new WinTimerInfo;
     t->dispatcher = this;
@@ -885,15 +828,17 @@ void QEventDispatcherWin32::registerTimer(int timerId, int interval, Qt::TimerTy
 
 bool QEventDispatcherWin32::unregisterTimer(int timerId)
 {
+#ifndef QT_NO_DEBUG
     if (timerId < 1) {
         qWarning("QEventDispatcherWin32::unregisterTimer: invalid argument");
         return false;
     }
     QThread *currentThread = QThread::currentThread();
     if (thread() != currentThread) {
-        qWarning("QObject::killTimer: timers cannot be stopped from another thread");
+        qWarning("QEventDispatcherWin32::unregisterTimer: timers cannot be stopped from another thread");
         return false;
     }
+#endif
 
     Q_D(QEventDispatcherWin32);
     if (d->timerVec.isEmpty() || timerId <= 0)
@@ -911,20 +856,22 @@ bool QEventDispatcherWin32::unregisterTimer(int timerId)
 
 bool QEventDispatcherWin32::unregisterTimers(QObject *object)
 {
+#ifndef QT_NO_DEBUG
     if (!object) {
         qWarning("QEventDispatcherWin32::unregisterTimers: invalid argument");
         return false;
     }
     QThread *currentThread = QThread::currentThread();
     if (object->thread() != thread() || thread() != currentThread) {
-        qWarning("QObject::killTimers: timers cannot be stopped from another thread");
+        qWarning("QEventDispatcherWin32::unregisterTimers: timers cannot be stopped from another thread");
         return false;
     }
+#endif
 
     Q_D(QEventDispatcherWin32);
     if (d->timerVec.isEmpty())
         return false;
-    register WinTimerInfo *t;
+    WinTimerInfo *t;
     for (int i=0; i<d->timerVec.size(); i++) {
         t = d->timerVec.at(i);
         if (t && t->obj == object) {                // object found
@@ -947,8 +894,7 @@ QEventDispatcherWin32::registeredTimers(QObject *object) const
 
     Q_D(const QEventDispatcherWin32);
     QList<TimerInfo> list;
-    for (int i = 0; i < d->timerVec.size(); ++i) {
-        const WinTimerInfo *t = d->timerVec.at(i);
+    for (const WinTimerInfo *t : qAsConst(d->timerVec)) {
         if (t && t->obj == object)
             list << TimerInfo(t->timerId, t->interval, t->timerType);
     }
@@ -970,12 +916,13 @@ bool QEventDispatcherWin32::registerEventNotifier(QWinEventNotifier *notifier)
     if (d->winEventNotifierList.contains(notifier))
         return true;
 
-    if (d->winEventNotifierList.count() >= MAXIMUM_WAIT_OBJECTS - 2) {
-        qWarning("QWinEventNotifier: Cannot have more than %d enabled at one time", MAXIMUM_WAIT_OBJECTS - 2);
-        return false;
-    }
     d->winEventNotifierList.append(notifier);
-    return true;
+    d->winEventNotifierListModified = true;
+
+    if (!d->winEventNotifierActivatedEvent)
+        d->winEventNotifierActivatedEvent = CreateEvent(0, TRUE, FALSE, nullptr);
+
+    return QWinEventNotifierPrivate::get(notifier)->registerWaitObject();
 }
 
 void QEventDispatcherWin32::unregisterEventNotifier(QWinEventNotifier *notifier)
@@ -991,22 +938,40 @@ void QEventDispatcherWin32::unregisterEventNotifier(QWinEventNotifier *notifier)
     Q_D(QEventDispatcherWin32);
 
     int i = d->winEventNotifierList.indexOf(notifier);
-    if (i != -1)
-        d->winEventNotifierList.takeAt(i);
+    if (i == -1)
+        return;
+    d->winEventNotifierList.takeAt(i);
+    d->winEventNotifierListModified = true;
+    QWinEventNotifierPrivate *nd = QWinEventNotifierPrivate::get(notifier);
+    if (nd->waitHandle)
+        nd->unregisterWaitObject();
 }
 
 void QEventDispatcherWin32::activateEventNotifiers()
 {
     Q_D(QEventDispatcherWin32);
-    //### this could break if events are removed/added in the activation
-    for (int i=0; i<d->winEventNotifierList.count(); i++) {
-#if !defined(Q_OS_WINCE)
-        if (WaitForSingleObjectEx(d->winEventNotifierList.at(i)->handle(), 0, TRUE) == WAIT_OBJECT_0)
-            d->activateEventNotifier(d->winEventNotifierList.at(i));
-#else
-        if (WaitForSingleObject(d->winEventNotifierList.at(i)->handle(), 0) == WAIT_OBJECT_0)
-            d->activateEventNotifier(d->winEventNotifierList.at(i));
-#endif
+    ResetEvent(d->winEventNotifierActivatedEvent);
+
+    // Activate signaled notifiers. Our winEventNotifierList can be modified in activation slots.
+    do {
+        d->winEventNotifierListModified = false;
+        for (int i = 0; i < d->winEventNotifierList.count(); ++i) {
+            QWinEventNotifier *notifier = d->winEventNotifierList.at(i);
+            QWinEventNotifierPrivate *nd = QWinEventNotifierPrivate::get(notifier);
+            if (nd->signaledCount.load() != 0) {
+                --nd->signaledCount;
+                nd->unregisterWaitObject();
+                d->activateEventNotifier(notifier);
+            }
+        }
+    } while (d->winEventNotifierListModified);
+
+    // Re-register the remaining activated notifiers.
+    for (int i = 0; i < d->winEventNotifierList.count(); ++i) {
+        QWinEventNotifier *notifier = d->winEventNotifierList.at(i);
+        QWinEventNotifierPrivate *nd = QWinEventNotifierPrivate::get(notifier);
+        if (!nd->waitHandle)
+            nd->registerWaitObject();
     }
 }
 
@@ -1026,17 +991,9 @@ int QEventDispatcherWin32::remainingTime(int timerId)
 
     quint64 currentTime = qt_msectime();
 
-    register WinTimerInfo *t;
-    for (int i=0; i<d->timerVec.size(); i++) {
-        t = d->timerVec.at(i);
-        if (t && t->timerId == timerId) {                // timer found
-            if (currentTime < t->timeout) {
-                // time to wait
-                return t->timeout - currentTime;
-            } else {
-                return 0;
-            }
-        }
+    for (const WinTimerInfo *t : qAsConst(d->timerVec)) {
+        if (t && t->timerId == timerId) // timer found, return time to wait
+            return t->timeout > currentTime ? t->timeout - currentTime : 0;
     }
 
 #ifndef QT_NO_DEBUG
@@ -1075,11 +1032,12 @@ void QEventDispatcherWin32::closingDown()
 
     // clean up any socketnotifiers
     while (!d->sn_read.isEmpty())
-        unregisterSocketNotifier((*(d->sn_read.begin()))->obj);
+        doUnregisterSocketNotifier((*(d->sn_read.begin()))->obj);
     while (!d->sn_write.isEmpty())
-        unregisterSocketNotifier((*(d->sn_write.begin()))->obj);
+        doUnregisterSocketNotifier((*(d->sn_write.begin()))->obj);
     while (!d->sn_except.isEmpty())
-        unregisterSocketNotifier((*(d->sn_except.begin()))->obj);
+        doUnregisterSocketNotifier((*(d->sn_except.begin()))->obj);
+    Q_ASSERT(d->active_fd.isEmpty());
 
     // clean up any timers
     for (int i = 0; i < d->timerVec.count(); ++i)
@@ -1087,17 +1045,16 @@ void QEventDispatcherWin32::closingDown()
     d->timerVec.clear();
     d->timerDict.clear();
 
-#ifndef Q_OS_WINCE
-    if (d->getMessageHook)
-        UnhookWindowsHookEx(d->getMessageHook);
-    d->getMessageHook = 0;
-#endif
+    d->closingDown = true;
+
+    uninstallMessageHook();
 }
 
 bool QEventDispatcherWin32::event(QEvent *e)
 {
     Q_D(QEventDispatcherWin32);
-    if (e->type() == QEvent::ZeroTimerEvent) {
+    switch (e->type()) {
+    case QEvent::ZeroTimerEvent: {
         QZeroTimerEvent *zte = static_cast<QZeroTimerEvent*>(e);
         WinTimerInfo *t = d->timerDict.value(zte->timerId());
         if (t) {
@@ -1106,8 +1063,10 @@ bool QEventDispatcherWin32::event(QEvent *e)
             QTimerEvent te(zte->timerId());
             QCoreApplication::sendEvent(t->obj, &te);
 
-            t = d->timerDict.value(zte->timerId());
-            if (t) {
+            // timer could have been removed
+            if (t->timerId == -1) {
+                delete t;
+            } else {
                 if (t->interval == 0 && t->inTimerEvent) {
                     // post the next zero timer event as long as the timer was not restarted
                     QCoreApplication::postEvent(this, new QZeroTimerEvent(zte->timerId()));
@@ -1117,9 +1076,12 @@ bool QEventDispatcherWin32::event(QEvent *e)
             }
         }
         return true;
-    } else if (e->type() == QEvent::Timer) {
-        QTimerEvent *te = static_cast<QTimerEvent*>(e);
-        d->sendTimerEvent(te->timerId());
+    }
+    case QEvent::Timer:
+        d->sendTimerEvent(static_cast<const QTimerEvent*>(e)->timerId());
+        break;
+    default:
+        break;
     }
     return QAbstractEventDispatcher::event(e);
 }
@@ -1128,6 +1090,13 @@ void QEventDispatcherWin32::sendPostedEvents()
 {
     Q_D(QEventDispatcherWin32);
     QCoreApplicationPrivate::sendPostedEvents(0, 0, d->threadData);
+}
+
+HWND QEventDispatcherWin32::internalHwnd()
+{
+    Q_D(QEventDispatcherWin32);
+    createInternalHwnd();
+    return d->internalHwnd;
 }
 
 QT_END_NAMESPACE

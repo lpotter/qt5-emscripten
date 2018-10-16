@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +50,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtCore/qabstractitemmodel.h>
 #include <private/qabstractitemmodel_p.h>
 #include <QtCore/qpair.h>
@@ -60,7 +59,7 @@
 #include <private/qtreeview_p.h>
 #include <QtWidgets/qheaderview.h>
 
-#ifndef QT_NO_TREEWIDGET
+QT_REQUIRE_CONFIG(treewidget);
 
 QT_BEGIN_NAMESPACE
 
@@ -92,24 +91,24 @@ public:
     void itemChanged(QTreeWidgetItem *item);
 
     QModelIndex index(const QTreeWidgetItem *item, int column) const;
-    QModelIndex index(int row, int column, const QModelIndex &parent) const;
-    QModelIndex parent(const QModelIndex &child) const;
-    int rowCount(const QModelIndex &parent) const;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const;
-    bool hasChildren(const QModelIndex &parent) const;
+    QModelIndex index(int row, int column, const QModelIndex &parent) const override;
+    QModelIndex parent(const QModelIndex &child) const override;
+    int rowCount(const QModelIndex &parent) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    bool hasChildren(const QModelIndex &parent) const override;
 
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-    bool setData(const QModelIndex &index, const QVariant &value, int role);
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    bool setData(const QModelIndex &index, const QVariant &value, int role) override;
 
-    QMap<int, QVariant> itemData(const QModelIndex &index) const;
+    QMap<int, QVariant> itemData(const QModelIndex &index) const override;
 
-    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     bool setHeaderData(int section, Qt::Orientation orientation, const QVariant &value,
-                       int role);
+                       int role) override;
 
-    Qt::ItemFlags flags(const QModelIndex &index) const;
+    Qt::ItemFlags flags(const QModelIndex &index) const override;
 
-    void sort(int column, Qt::SortOrder order);
+    void sort(int column, Qt::SortOrder order) override;
     void ensureSorted(int column, Qt::SortOrder order,
                       int start, int end, const QModelIndex &parent);
     static bool itemLessThan(const QPair<QTreeWidgetItem*,int> &left,
@@ -121,17 +120,17 @@ public:
         const QList<QTreeWidgetItem*>::iterator &end,
         Qt::SortOrder order, QTreeWidgetItem *item);
 
-    bool insertRows(int row, int count, const QModelIndex &);
-    bool insertColumns(int column, int count, const QModelIndex &);
+    bool insertRows(int row, int count, const QModelIndex &) override;
+    bool insertColumns(int column, int count, const QModelIndex &) override;
 
-    bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex());
+    bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
 
     // dnd
-    QStringList mimeTypes() const;
-    QMimeData *mimeData(const QModelIndexList &indexes) const;
+    QStringList mimeTypes() const override;
+    QMimeData *mimeData(const QModelIndexList &indexes) const override;
     bool dropMimeData(const QMimeData *data, Qt::DropAction action,
-                      int row, int column, const QModelIndex &parent);
-    Qt::DropActions supportedDropActions() const;
+                      int row, int column, const QModelIndex &parent) override;
+    Qt::DropActions supportedDropActions() const override;
 
     QMimeData *internalMimeData() const;
 
@@ -140,13 +139,13 @@ public:
 
 protected:
     QTreeModel(QTreeModelPrivate &, QTreeWidget *parent = 0);
-    void emitDataChanged(QTreeWidgetItem *item, int column);
+    void emitDataChanged(QTreeWidgetItem *item, int column, const QVector<int> &roles);
     void beginInsertItems(QTreeWidgetItem *parent, int row, int count);
     void endInsertItems();
     void beginRemoveItems(QTreeWidgetItem *parent, int row, int count);
     void endRemoveItems();
     void sortItems(QList<QTreeWidgetItem*> *items, int column, Qt::SortOrder order);
-    void timerEvent(QTimerEvent *);
+    void timerEvent(QTimerEvent *) override;
 
 private:
     QTreeWidgetItem *rootItem;
@@ -188,13 +187,16 @@ class QTreeWidgetItemPrivate
 {
 public:
     QTreeWidgetItemPrivate(QTreeWidgetItem *item)
-        : q(item), disabled(false), selected(false), rowGuess(-1), policy(QTreeWidgetItem::DontShowIndicatorWhenChildless) {}
+        : q(item), disabled(false), selected(false), hidden(false), rowGuess(-1),
+          policy(QTreeWidgetItem::DontShowIndicatorWhenChildless) {}
     void propagateDisabled(QTreeWidgetItem *item);
+    void updateHiddenStatus(QTreeWidgetItem *item, bool inserting);
     void sortChildren(int column, Qt::SortOrder order, bool climb);
     QTreeWidgetItem *q;
     QVariantList display;
     uint disabled : 1;
     uint selected : 1;
+    uint hidden : 1;
     int rowGuess;
     QTreeWidgetItem::ChildIndicatorPolicy policy;
 };
@@ -242,7 +244,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TREEWIDGET
 
 #endif // QTREEWIDGET_P_H

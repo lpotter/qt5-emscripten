@@ -8,18 +8,4 @@ QT += widgets widgets-private testlib
 QT += core-private gui-private
 SOURCES += tst_qfiledialog.cpp
 
-wince* {
-    addFiles.files = *.cpp
-    addFiles.path = .
-    filesInDir.files = *.pro
-    filesInDir.path = someDir
-    DEPLOYMENT += addFiles filesInDir
-}
-
-wince* {
-    DEFINES += SRCDIR=\\\"./\\\"
-} else {
-    DEFINES += SRCDIR=\\\"$$PWD/\\\"
-}
-
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+DEFINES += SRCDIR=\\\"$$PWD/\\\"

@@ -2,13 +2,9 @@ CONFIG += testcase
 TARGET = tst_qzip
 QT += gui-private testlib
 SOURCES += tst_qzip.cpp
+TESTDATA += testdata
 
-wince* {
-   addFiles.files = testdata
-   addFiles.path = .
-   DEPLOYMENT += addFiles
-   DEFINES += SRCDIR=\\\".\\\"
-} else {
-   DEFINES += SRCDIR=\\\"$$PWD\\\"
+android {
+    RESOURCES += \
+        testdata.qrc
 }
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

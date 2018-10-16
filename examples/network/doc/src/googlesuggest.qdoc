@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,10 +28,11 @@
 /*!
     \example googlesuggest
     \title Google Suggest Example
+    \ingroup examples-network
+    \brief Obtains the list of search recommendations by the Google search engine.
 
-    \brief The Google Suggest example demonstrates how to use the QNetworkAccessManager
-    class to obtain a list of suggestions from the Google search engine as the 
-    user types into a QLineEdit.
+    The example uses the QNetworkAccessManager to obtain the list of search
+    recommendations by Google as the user types into a QLineEdit.
 
     \image googlesuggest-example.png
 
@@ -67,12 +68,8 @@
     in the explicit \c editor member variable.
 
     We then create a QTreeWidget as a toplevel widget and configure the various
-    properties to give it the look of a popup widget.
-
-    The popup will be populated by the results returned from Google. We set
-    the number of columns to be two, since we want to display both the
-    suggested search term and the number of hits it will trigger in the search
-    engine.
+    properties to give it the look of a popup widget. The widget is populated
+    with the results by Google Suggest API request.
 
     Furthermore, we install the GSuggestCompletion instance as an event filter
     on the QTreeWidget, and connect the \c itemClicked() signal with the \c
@@ -109,8 +106,8 @@
     \snippet googlesuggest/googlesuggest.cpp 4
 
     The \c showCompletion() function populates the QTreeWidget with the results
-    returned from the query. It takes two QStringLists, one with the suggested
-    search terms and the other with the corresponding number of hits.
+    returned from the query. It takes a QStringList of the suggested search
+    terms.
 
     \snippet googlesuggest/googlesuggest.cpp 5
 

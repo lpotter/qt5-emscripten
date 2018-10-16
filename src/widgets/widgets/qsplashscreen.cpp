@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,10 +39,9 @@
 
 #include "qsplashscreen.h"
 
-#ifndef QT_NO_SPLASHSCREEN
-
 #include "qapplication.h"
 #include "qdesktopwidget.h"
+#include <private/qdesktopwidget_p.h>
 #include "qpainter.h"
 #include "qpixmap.h"
 #include "qtextdocument.h"
@@ -80,7 +77,7 @@ public:
    be shown during application startup.
 
    \inmodule QtWidgets
- 
+
    A splash screen is a widget that is usually displayed when an
    application is being started. Splash screens are often used for
    applications that have long start up times (e.g. database or
@@ -144,7 +141,7 @@ QSplashScreen::QSplashScreen(const QPixmap &pixmap, Qt::WindowFlags f)
     one. In that case pass the proper desktop() as the \a parent.
 */
 QSplashScreen::QSplashScreen(QWidget *parent, const QPixmap &pixmap, Qt::WindowFlags f)
-    : QWidget(*new QSplashScreenPrivate, parent, Qt::SplashScreen | f)
+    : QWidget(*new QSplashScreenPrivate, parent, Qt::SplashScreen | Qt::FramelessWindowHint | f)
 {
     d_func()->pixmap = pixmap;
     setPixmap(d_func()->pixmap);  // Does an implicit repaint
@@ -166,15 +163,14 @@ void QSplashScreen::mousePressEvent(QMouseEvent *)
 }
 
 /*!
-    This overrides QWidget::repaint(). It differs from the standard
-    repaint function in that it also calls QApplication::flush() to
-    ensure the updates are displayed, even when there is no event loop
-    present.
+    This overrides QWidget::repaint(). It differs from the standard repaint
+    function in that it also calls QApplication::processEvents() to ensure
+    the updates are displayed, even when there is no event loop present.
 */
 void QSplashScreen::repaint()
 {
     QWidget::repaint();
-    QApplication::flush();
+    QApplication::processEvents();
 }
 
 /*!
@@ -192,15 +188,11 @@ void QSplashScreen::repaint()
 /*!
     Draws the \a message text onto the splash screen with color \a
     color and aligns the text according to the flags in \a alignment.
+    This function calls repaint() to make sure the splash screen is
+    repainted immediately. As a result the message is kept up
+    to date with what your application is doing (e.g. loading files).
 
-    To make sure the splash screen is repainted immediately, you can
-    call \l{QCoreApplication}'s
-    \l{QCoreApplication::}{processEvents()} after the call to
-    showMessage(). You usually want this to make sure that the message
-    is kept up to date with what your application is doing (e.g.,
-    loading files).
-
-    \sa Qt::Alignment, clearMessage()
+    \sa Qt::Alignment, clearMessage(), message()
 */
 void QSplashScreen::showMessage(const QString &message, int alignment,
                                 const QColor &color)
@@ -211,6 +203,20 @@ void QSplashScreen::showMessage(const QString &message, int alignment,
     d->currColor = color;
     emit messageChanged(d->currStatus);
     repaint();
+}
+
+/*!
+    \since 5.2
+
+    Returns the message that is currently displayed on the splash screen.
+
+    \sa showMessage(), clearMessage()
+*/
+
+QString QSplashScreen::message() const
+{
+    Q_D(const QSplashScreen);
+    return d->currStatus;
 }
 
 /*!
@@ -225,7 +231,7 @@ void QSplashScreen::clearMessage()
     repaint();
 }
 
-// A copy of QTestLib's qWaitForWindowExposed() and qSleep().
+// A copy of Qt Test's qWaitForWindowExposed() and qSleep().
 inline static bool waitForWindowExposed(QWindow *window, int timeout = 1000)
 {
     enum { TimeOutMs = 10 };
@@ -237,7 +243,9 @@ inline static bool waitForWindowExposed(QWindow *window, int timeout = 1000)
             break;
         QCoreApplication::processEvents(QEventLoop::AllEvents, remaining);
         QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WINRT)
+        WaitForSingleObjectEx(GetCurrentThread(), TimeOutMs, false);
+#elif defined(Q_OS_WIN)
         Sleep(uint(TimeOutMs));
 #else
         struct timespec ts = { TimeOutMs / 1000, (TimeOutMs % 1000) * 1000 * 1000 };
@@ -254,8 +262,11 @@ inline static bool waitForWindowExposed(QWindow *window, int timeout = 1000)
 
 void QSplashScreen::finish(QWidget *mainWin)
 {
-    if (mainWin && mainWin->windowHandle())
+    if (mainWin) {
+        if (!mainWin->windowHandle())
+            mainWin->createWinId();
         waitForWindowExposed(mainWin->windowHandle());
+    }
     close();
 }
 
@@ -270,9 +281,9 @@ void QSplashScreen::setPixmap(const QPixmap &pixmap)
     d->pixmap = pixmap;
     setAttribute(Qt::WA_TranslucentBackground, pixmap.hasAlpha());
 
-    QRect r(QPoint(), d->pixmap.size());
+    QRect r(QPoint(), d->pixmap.size()  / d->pixmap.devicePixelRatio());
     resize(r.size());
-    move(QApplication::desktop()->screenGeometry().center() - r.center());
+    move(QDesktopWidgetPrivate::screenGeometry().center() - r.center());
     if (isVisible())
         repaint();
 }
@@ -316,7 +327,13 @@ void QSplashScreen::drawContents(QPainter *painter)
         cursor.select(QTextCursor::Document);
         QTextBlockFormat fmt;
         fmt.setAlignment(Qt::Alignment(d->currAlign));
+        fmt.setLayoutDirection(layoutDirection());
         cursor.mergeBlockFormat(fmt);
+        const QSizeF txtSize = doc.size();
+        if (d->currAlign & Qt::AlignBottom)
+            r.setTop(r.height() - txtSize.height());
+        else if (d->currAlign & Qt::AlignVCenter)
+            r.setTop(r.height() / 2 - txtSize.height() / 2);
         painter->save();
         painter->translate(r.topLeft());
         doc.drawContents(painter);
@@ -332,6 +349,7 @@ bool QSplashScreen::event(QEvent *e)
     if (e->type() == QEvent::Paint) {
         Q_D(QSplashScreen);
         QPainter painter(this);
+        painter.setLayoutDirection(layoutDirection());
         if (!d->pixmap.isNull())
             painter.drawPixmap(QPoint(), d->pixmap);
         drawContents(&painter);
@@ -341,4 +359,4 @@ bool QSplashScreen::event(QEvent *e)
 
 QT_END_NAMESPACE
 
-#endif //QT_NO_SPLASHSCREEN
+#include "moc_qsplashscreen.cpp"

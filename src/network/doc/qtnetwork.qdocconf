@@ -2,22 +2,21 @@ include($QT_INSTALL_DOCS/global/qt-module-defaults.qdocconf)
 
 project                 = QtNetwork
 description             = Qt Network Reference Documentation
-url                     = http://qt-project.org/doc/qtnetwork
-version                 = 5.0.0
+version                 = $QT_VERSION
 
 examplesinstallpath     = network
 
 qhp.projects            = QtNetwork
 
 qhp.QtNetwork.file         = qtnetwork.qhp
-qhp.QtNetwork.namespace           = org.qt-project.qtnetwork.500
+qhp.QtNetwork.namespace           = org.qt-project.qtnetwork.$QT_VERSION_TAG
 qhp.QtNetwork.virtualFolder       = qtnetwork
 qhp.QtNetwork.indexTitle          = Qt Network
 qhp.QtNetwork.indexRoot           =
 
-qhp.QtNetwork.filterAttributes    = qtnetwork 5.0.0 qtrefdoc
-qhp.QtNetwork.customFilters.Qt.name = QtNetwork 5.0.0
-qhp.QtNetwork.customFilters.Qt.filterAttributes = qtnetwork 5.0.0
+qhp.QtNetwork.filterAttributes    = qtnetwork $QT_VERSION qtrefdoc
+qhp.QtNetwork.customFilters.Qt.name = QtNetwork $QT_VERSION
+qhp.QtNetwork.customFilters.Qt.filterAttributes = qtnetwork $QT_VERSION
 
 qhp.QtNetwork.subprojects         = classes
 qhp.QtNetwork.subprojects.classes.title = C++ Classes
@@ -27,7 +26,7 @@ qhp.QtNetwork.subprojects.classes.sortPages = true
 
 tagfile                 = ../../../doc/qtnetwork/qtnetwork.tags
 
-depends                 += qtcore qtgui qtdoc
+depends                 += qtcore qtgui qtdoc qmake
 
 headerdirs  += ..
 
@@ -40,3 +39,8 @@ exampledirs += ../../../examples/network \
 
 imagedirs   += images \
                ../../../examples/network/doc/images
+
+manifestmeta.highlighted.names      = "QtNetwork/HTTP Example"
+
+navigation.landingpage = "Qt Network"
+navigation.cppclassespage = "Qt Network C++ Classes"

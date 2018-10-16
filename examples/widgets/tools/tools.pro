@@ -6,17 +6,18 @@ SUBDIRS       = \
                 echoplugin \
                 i18n \
                 plugandpaint \
-                plugandpaintplugins \
                 regexp \
+                regularexpression \
                 settingseditor \
                 styleplugin \
                 treemodelcompleter \
                 undo \
                 undoframework
 
-plugandpaint.depends = plugandpaintplugins
+contains(DEFINES, QT_NO_TRANSLATION): SUBDIRS -= i18n
 
-# install
-sources.files = tools.pro
-sources.path = $$[QT_INSTALL_EXAMPLES]/widgets/tools
-INSTALLS += sources
+!qtConfig(library) {
+    SUBDIRS -= \
+        echoplugin \
+        plugandpaint
+}

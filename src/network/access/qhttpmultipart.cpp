@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +41,7 @@
 #include "qhttpmultipart_p.h"
 #include "QtCore/qdatetime.h" // for initializing the random number generator with QTime
 #include "QtCore/qmutex.h"
-#include "QtCore/qthreadstorage.h"
+#include "QtCore/qrandom.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -134,7 +132,7 @@ QHttpPart &QHttpPart::operator=(const QHttpPart &other)
 */
 
 /*!
-    Returns true if this object is the same as \a other (i.e., if they
+    Returns \c true if this object is the same as \a other (i.e., if they
     have the same headers and body).
 
     \sa operator!=()
@@ -147,7 +145,7 @@ bool QHttpPart::operator==(const QHttpPart &other) const
 /*!
     \fn bool QHttpPart::operator!=(const QHttpPart &other) const
 
-    Returns true if this object is not the same as \a other.
+    Returns \c true if this object is not the same as \a other.
 
     \sa operator==()
 */
@@ -169,7 +167,7 @@ void QHttpPart::setHeader(QNetworkRequest::KnownHeaders header, const QVariant &
     QNetworkRequest::KnownHeaders), the raw format will be parsed and
     the corresponding "cooked" header will be set as well.
 
-    Note: setting the same header twice overrides the previous
+    \note Setting the same header twice overrides the previous
     setting. To accomplish the behaviour of multiple HTTP headers of
     the same name, you should concatenate the two values, separating
     them with a comma (",") and set one single raw header.
@@ -433,23 +431,16 @@ void QHttpPartPrivate::checkHeaderCreated() const
     }
 }
 
-Q_GLOBAL_STATIC(QThreadStorage<bool *>, seedCreatedStorage);
-
 QHttpMultiPartPrivate::QHttpMultiPartPrivate() : contentType(QHttpMultiPart::MixedType), device(new QHttpMultiPartIODevice(this))
 {
-    if (!seedCreatedStorage()->hasLocalData()) {
-        qsrand(QTime(0,0,0).msecsTo(QTime::currentTime()) ^ reinterpret_cast<quintptr>(this));
-        seedCreatedStorage()->setLocalData(new bool(true));
-    }
-
-    boundary = QByteArray("boundary_.oOo._")
-               + QByteArray::number(qrand()).toBase64()
-               + QByteArray::number(qrand()).toBase64()
-               + QByteArray::number(qrand()).toBase64();
+    // 24 random bytes, becomes 32 characters when encoded to Base64
+    quint32 random[6];
+    QRandomGenerator::global()->fillRange(random);
+    boundary = "boundary_.oOo._"
+               + QByteArray::fromRawData(reinterpret_cast<char *>(random), sizeof(random)).toBase64();
 
     // boundary must not be longer than 70 characters, see RFC 2046, section 5.1.1
-    if (boundary.count() > 70)
-        boundary = boundary.left(70);
+    Q_ASSERT(boundary.count() <= 70);
 }
 
 qint64 QHttpMultiPartIODevice::size() const
@@ -485,9 +476,12 @@ bool QHttpMultiPartIODevice::isSequential() const
 
 bool QHttpMultiPartIODevice::reset()
 {
+    // Reset QIODevice's data
+    QIODevice::reset();
     for (int a = 0; a < multiPart->parts.count(); a++)
         if (!multiPart->parts[a].d->reset())
             return false;
+    readPointer = 0;
     return true;
 }
 qint64 QHttpMultiPartIODevice::readData(char *data, qint64 maxSize)
@@ -496,7 +490,8 @@ qint64 QHttpMultiPartIODevice::readData(char *data, qint64 maxSize)
 
     // skip the parts we have already read
     while (index < multiPart->parts.count() &&
-           readPointer >= partOffsets.at(index) + multiPart->parts.at(index).d->size())
+           readPointer >= partOffsets.at(index) + multiPart->parts.at(index).d->size()
+           + multiPart->boundary.count() + 6) // 6 == 2 boundary dashes, \r\n after boundary, \r\n after multipart
         index++;
 
     // read the data

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,38 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qcursor.h"
-
-#ifndef QT_NO_CURSOR
 
 #include <qcoreapplication.h>
 #include <qbitmap.h>
@@ -50,6 +46,10 @@
 #include <qvariant.h>
 #include <private/qcursor_p.h>
 #include <qdebug.h>
+
+#include <qpa/qplatformcursor.h>
+#include <private/qguiapplication_p.h>
+#include <private/qhighdpiscaling_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -154,6 +154,30 @@ QT_BEGIN_NAMESPACE
 */
 
 /*!
+    \fn QCursor::QCursor(QCursor &&other)
+    \since 5.5
+
+    Move-constructs a cursor from \a other. After being moved from,
+    the only valid operations on \a other are destruction and
+    (move and copy) assignment. The effects of calling any other
+    member function on a moved-from instance are undefined.
+*/
+
+/*!
+    \fn QCursor &QCursor::operator=(QCursor &&other)
+
+    Move-assigns \a other to this QCursor instance.
+
+    \since 5.2
+*/
+
+/*!
+  \fn void QCursor::swap(QCursor &other)
+
+  Swaps this cursor with the \a other cursor.
+ */
+
+/*!
     \fn QPoint QCursor::pos(const QScreen *screen)
 
     Returns the position of the cursor (hot spot) of the \a screen
@@ -164,6 +188,18 @@ QT_BEGIN_NAMESPACE
 
     \sa setPos(), QWidget::mapFromGlobal(), QWidget::mapToGlobal()
 */
+QPoint QCursor::pos(const QScreen *screen)
+{
+    if (screen) {
+        if (const QPlatformCursor *cursor = screen->handle()->cursor()) {
+            const QPlatformScreen *ps = screen->handle();
+            QPoint nativePos = cursor->pos();
+            ps = ps->screenForPosition(nativePos);
+            return QHighDpi::fromNativePixels(nativePos, ps->screen());
+        }
+    }
+    return QGuiApplicationPrivate::lastCursorPosition.toPoint();
+}
 
 /*!
     \fn QPoint QCursor::pos()
@@ -183,7 +219,10 @@ QT_BEGIN_NAMESPACE
 
     \sa setPos(), QWidget::mapFromGlobal(), QWidget::mapToGlobal(), QGuiApplication::primaryScreen()
 */
-
+QPoint QCursor::pos()
+{
+    return QCursor::pos(QGuiApplication::primaryScreen());
+}
 
 /*!
     \fn void QCursor::setPos(QScreen *screen, int x, int y)
@@ -206,6 +245,19 @@ QT_BEGIN_NAMESPACE
 
     \sa pos(), QWidget::mapFromGlobal(), QWidget::mapToGlobal()
 */
+void QCursor::setPos(QScreen *screen, int x, int y)
+{
+    if (screen) {
+        if (QPlatformCursor *cursor = screen->handle()->cursor()) {
+            const QPoint devicePos = QHighDpi::toNativePixels(QPoint(x, y), screen);
+            // Need to check, since some X servers generate null mouse move
+            // events, causing looping in applications which call setPos() on
+            // every mouse move event.
+            if (devicePos != cursor->pos())
+                cursor->setPos(devicePos);
+        }
+    }
+}
 
 /*!
     \fn void QCursor::setPos(int x, int y)
@@ -218,6 +270,12 @@ QT_BEGIN_NAMESPACE
 
     \sa pos(), QWidget::mapFromGlobal(), QWidget::mapToGlobal(), QGuiApplication::primaryScreen()
 */
+void QCursor::setPos(int x, int y)
+{
+    QCursor::setPos(QGuiApplication::primaryScreen(), x, y);
+}
+
+#ifndef QT_NO_CURSOR
 
 /*!
     \fn void QCursor::setPos (const QPoint &p)
@@ -322,9 +380,6 @@ QDataStream &operator>>(QDataStream &s, QCursor &c)
     because this size is supported on all platforms. Some platforms
     also support 16 x 16, 48 x 48, and 64 x 64 cursors.
 
-    \note On Windows CE, the cursor size is fixed. If the pixmap
-    is bigger than the system size, it will be scaled.
-
     \sa QPixmap::QPixmap(), QPixmap::setMask()
 */
 
@@ -347,7 +402,7 @@ QCursor::QCursor(const QPixmap &pixmap, int hotX, int hotY)
         bmm.fill(Qt::color1);
     }
 
-    d = QCursorData::setBitmap(bm, bmm, hotX, hotY);
+    d = QCursorData::setBitmap(bm, bmm, hotX, hotY, pixmap.devicePixelRatio());
     d->pixmap = pixmap;
 }
 
@@ -381,44 +436,13 @@ QCursor::QCursor(const QPixmap &pixmap, int hotX, int hotY)
     because this size is supported on all platforms. Some platforms
     also support 16 x 16, 48 x 48, and 64 x 64 cursors.
 
-    \note On Windows CE, the cursor size is fixed. If the pixmap
-    is bigger than the system size, it will be scaled.
-
     \sa QBitmap::QBitmap(), QBitmap::setMask()
 */
 
 QCursor::QCursor(const QBitmap &bitmap, const QBitmap &mask, int hotX, int hotY)
     : d(0)
 {
-    d = QCursorData::setBitmap(bitmap, mask, hotX, hotY);
-}
-
-QCursorData *qt_cursorTable[Qt::LastCursor + 1];
-bool QCursorData::initialized = false;
-
-/*! \internal */
-void QCursorData::cleanup()
-{
-    if(!QCursorData::initialized)
-        return;
-
-    for (int shape = 0; shape <= Qt::LastCursor; ++shape) {
-        // In case someone has a static QCursor defined with this shape
-        if (!qt_cursorTable[shape]->ref.deref())
-            delete qt_cursorTable[shape];
-        qt_cursorTable[shape] = 0;
-    }
-    QCursorData::initialized = false;
-}
-
-/*! \internal */
-void QCursorData::initialize()
-{
-    if (QCursorData::initialized)
-        return;
-    for (int shape = 0; shape <= Qt::LastCursor; ++shape)
-        qt_cursorTable[shape] = new QCursorData((Qt::CursorShape)shape);
-    QCursorData::initialized = true;
+    d = QCursorData::setBitmap(bitmap, mask, hotX, hotY, 1.0);
 }
 
 /*!
@@ -453,6 +477,54 @@ QCursor::QCursor(Qt::CursorShape shape)
     setShape(shape);
 }
 
+/*!
+    \fn bool operator==(const QCursor &lhs, const QCursor &rhs)
+    \relates QCursor
+    \since 5.10
+
+    Equality operator. Returns \c true if \a lhs and \a rhs
+    have the same \l{QCursor::}{shape()} and, in the case of
+    \l{Qt::BitmapCursor}{bitmap cursors}, the same \l{QCursor::}{hotSpot()}
+    and either the same \l{QCursor::}{pixmap()} or the same
+    \l{QCursor::}{bitmap()} and \l{QCursor::}{mask()}.
+
+    \note When comparing bitmap cursors, this function only
+    compares the bitmaps' \l{QPixmap::cacheKey()}{cache keys},
+    not each pixel.
+
+    \sa operator!=(const QCursor &lhs, const QCursor &rhs)
+*/
+bool operator==(const QCursor &lhs, const QCursor &rhs) Q_DECL_NOTHROW
+{
+    if (lhs.d == rhs.d)
+        return true; // Copy or same shape
+
+    // Check pixmaps or bitmaps cache keys. Notice that having BitmapCursor
+    // shape implies either non-null pixmap or non-null bitmap and mask
+    if (lhs.shape() == Qt::BitmapCursor && rhs.shape() == Qt::BitmapCursor
+            && lhs.hotSpot() == rhs.hotSpot()) {
+        if (!lhs.d->pixmap.isNull())
+            return lhs.d->pixmap.cacheKey() == rhs.d->pixmap.cacheKey();
+
+        if (!rhs.d->pixmap.isNull())
+            return false;
+
+        return lhs.d->bm->cacheKey() == rhs.d->bm->cacheKey()
+                && lhs.d->bmm->cacheKey() == rhs.d->bmm->cacheKey();
+    }
+
+    return false;
+}
+
+/*!
+    \fn bool operator!=(const QCursor &lhs, const QCursor &rhs)
+    \relates QCursor
+    \since 5.10
+
+    Inequality operator. Returns the equivalent of !(\a lhs == \a rhs).
+
+    \sa operator==(const QCursor &lhs, const QCursor &rhs)
+*/
 
 /*!
     Returns the cursor shape identifier. The return value is one of
@@ -589,10 +661,78 @@ QCursor::operator QVariant() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QCursor &c)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QCursor(Qt::CursorShape(" << c.shape() << "))";
-    return dbg.space();
+    return dbg;
 }
 #endif
+
+/*****************************************************************************
+  Internal QCursorData class
+ *****************************************************************************/
+
+QCursorData *qt_cursorTable[Qt::LastCursor + 1];
+bool QCursorData::initialized = false;
+
+QCursorData::QCursorData(Qt::CursorShape s)
+    : ref(1), cshape(s), bm(0), bmm(0), hx(0), hy(0)
+{
+}
+
+QCursorData::~QCursorData()
+{
+    delete bm;
+    delete bmm;
+}
+
+/*! \internal */
+void QCursorData::cleanup()
+{
+    if(!QCursorData::initialized)
+        return;
+
+    for (int shape = 0; shape <= Qt::LastCursor; ++shape) {
+        // In case someone has a static QCursor defined with this shape
+        if (!qt_cursorTable[shape]->ref.deref())
+            delete qt_cursorTable[shape];
+        qt_cursorTable[shape] = 0;
+    }
+    QCursorData::initialized = false;
+}
+
+/*! \internal */
+void QCursorData::initialize()
+{
+    if (QCursorData::initialized)
+        return;
+    for (int shape = 0; shape <= Qt::LastCursor; ++shape)
+        qt_cursorTable[shape] = new QCursorData((Qt::CursorShape)shape);
+    QCursorData::initialized = true;
+}
+
+QCursorData *QCursorData::setBitmap(const QBitmap &bitmap, const QBitmap &mask, int hotX, int hotY, qreal devicePixelRatio)
+{
+    if (!QCursorData::initialized)
+        QCursorData::initialize();
+    if (bitmap.depth() != 1 || mask.depth() != 1 || bitmap.size() != mask.size()) {
+        qWarning("QCursor: Cannot create bitmap cursor; invalid bitmap(s)");
+        QCursorData *c = qt_cursorTable[0];
+        c->ref.ref();
+        return c;
+    }
+    QCursorData *d = new QCursorData;
+    d->bm  = new QBitmap(bitmap);
+    d->bmm = new QBitmap(mask);
+    d->cshape = Qt::BitmapCursor;
+    d->hx = hotX >= 0 ? hotX : bitmap.width() / 2 / devicePixelRatio;
+    d->hy = hotY >= 0 ? hotY : bitmap.height() / 2 / devicePixelRatio;
+
+    return d;
+}
+
+void QCursorData::update()
+{
+}
 
 QT_END_NAMESPACE
 #endif // QT_NO_CURSOR

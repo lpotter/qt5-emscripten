@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2018 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,44 +40,137 @@
 
 #include "qfactoryloader_p.h"
 
-#ifndef QT_NO_LIBRARY
+#ifndef QT_NO_QOBJECT
 #include "qfactoryinterface.h"
 #include "qmap.h"
 #include <qdir.h>
 #include <qdebug.h>
 #include "qmutex.h"
 #include "qplugin.h"
+#include "qplugin_p.h"
 #include "qpluginloader.h"
 #include "private/qobject_p.h"
 #include "private/qcoreapplication_p.h"
+#include "qcbormap.h"
+#include "qcborvalue.h"
 #include "qjsondocument.h"
 #include "qjsonvalue.h"
 #include "qjsonobject.h"
 #include "qjsonarray.h"
 
+#include <qtcore_tracepoints_p.h>
+
 QT_BEGIN_NAMESPACE
 
-Q_GLOBAL_STATIC(QList<QFactoryLoader *>, qt_factory_loaders)
+static inline int metaDataSignatureLength()
+{
+    return sizeof("QTMETADATA  ") - 1;
+}
 
-Q_GLOBAL_STATIC_WITH_ARGS(QMutex, qt_factoryloader_mutex, (QMutex::Recursive))
+static QJsonDocument jsonFromCborMetaData(const char *raw, qsizetype size, QString *errMsg)
+{
+    // extract the keys not stored in CBOR
+    int qt_metadataVersion = quint8(raw[0]);
+    int qt_version = qFromBigEndian<quint16>(raw + 1);
+    int qt_archRequirements = quint8(raw[3]);
+    if (Q_UNLIKELY(raw[-1] != '!' || qt_metadataVersion != 0)) {
+        *errMsg = QStringLiteral("Invalid metadata version");
+        return QJsonDocument();
+    }
+
+    raw += 4;
+    size -= 4;
+    QByteArray ba = QByteArray::fromRawData(raw, int(size));
+    QCborParserError err;
+    QCborValue metadata = QCborValue::fromCbor(ba, &err);
+
+    if (err.error != QCborError::NoError) {
+        *errMsg = QLatin1String("Metadata parsing error: ") + err.error.toString();
+        return QJsonDocument();
+    }
+
+    if (!metadata.isMap()) {
+        *errMsg = QStringLiteral("Unexpected metadata contents");
+        return QJsonDocument();
+    }
+
+    QJsonObject o;
+    o.insert(QLatin1String("version"), qt_version << 8);
+    o.insert(QLatin1String("debug"), bool(qt_archRequirements & 1));
+    o.insert(QLatin1String("archreq"), qt_archRequirements);
+
+    // convert the top-level map integer keys
+    for (auto it : metadata.toMap()) {
+        QString key;
+        if (it.first.isInteger()) {
+            switch (it.first.toInteger()) {
+#define CONVERT_TO_STRING(IntKey, StringKey, Description) \
+            case int(IntKey): key = QStringLiteral(StringKey); break;
+                QT_PLUGIN_FOREACH_METADATA(CONVERT_TO_STRING)
+#undef CONVERT_TO_STRING
+
+            case int(QtPluginMetaDataKeys::Requirements):
+                // special case: recreate the debug key
+                o.insert(QLatin1String("debug"), bool(it.second.toInteger() & 1));
+                key = QStringLiteral("archreq");
+                break;
+            }
+        } else {
+            key = it.first.toString();
+        }
+
+        if (!key.isEmpty())
+            o.insert(key, it.second.toJsonValue());
+    }
+    return QJsonDocument(o);
+}
+
+QJsonDocument qJsonFromRawLibraryMetaData(const char *raw, qsizetype sectionSize, QString *errMsg)
+{
+    raw += metaDataSignatureLength();
+    sectionSize -= metaDataSignatureLength();
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    if (Q_UNLIKELY(raw[-1] == ' ')) {
+        // the size of the embedded JSON object can be found 8 bytes into the data (see qjson_p.h)
+        uint size = qFromLittleEndian<uint>(raw + 8);
+        // but the maximum size of binary JSON is 128 MB
+        size = qMin(size, 128U * 1024 * 1024);
+        // and it doesn't include the size of the header (8 bytes)
+        size += 8;
+        // finally, it can't be bigger than the file or section size
+        size = qMin(sectionSize, qsizetype(size));
+
+        QByteArray json(raw, size);
+        return QJsonDocument::fromBinaryData(json);
+    }
+#endif
+
+    return jsonFromCborMetaData(raw, sectionSize, errMsg);
+}
 
 class QFactoryLoaderPrivate : public QObjectPrivate
 {
     Q_DECLARE_PUBLIC(QFactoryLoader)
 public:
     QFactoryLoaderPrivate(){}
+    QByteArray iid;
+#if QT_CONFIG(library)
     ~QFactoryLoaderPrivate();
     mutable QMutex mutex;
-    QByteArray iid;
     QList<QLibraryPrivate*> libraryList;
     QMap<QString,QLibraryPrivate*> keyMap;
-    QStringList keyList;
     QString suffix;
     Qt::CaseSensitivity cs;
     QStringList loadedPaths;
-
-    void unloadPath(const QString &path);
+#endif
 };
+
+#if QT_CONFIG(library)
+
+Q_GLOBAL_STATIC(QList<QFactoryLoader *>, qt_factory_loaders)
+
+Q_GLOBAL_STATIC_WITH_ARGS(QMutex, qt_factoryloader_mutex, (QMutex::Recursive))
 
 QFactoryLoaderPrivate::~QFactoryLoaderPrivate()
 {
@@ -88,25 +180,6 @@ QFactoryLoaderPrivate::~QFactoryLoaderPrivate()
         library->release();
     }
 }
-
-QFactoryLoader::QFactoryLoader(const char *iid,
-                               const QString &suffix,
-                               Qt::CaseSensitivity cs)
-    : QObject(*new QFactoryLoaderPrivate)
-{
-    moveToThread(QCoreApplicationPrivate::mainThread());
-    Q_D(QFactoryLoader);
-    d->iid = iid;
-    d->cs = cs;
-    d->suffix = suffix;
-
-
-    QMutexLocker locker(qt_factoryloader_mutex());
-    update();
-    qt_factory_loaders()->append(this);
-}
-
-
 
 void QFactoryLoader::update()
 {
@@ -121,22 +194,53 @@ void QFactoryLoader::update()
         d->loadedPaths << pluginDir;
 
         QString path = pluginDir + d->suffix;
+
+        if (qt_debug_component())
+            qDebug() << "QFactoryLoader::QFactoryLoader() checking directory path" << path << "...";
+
         if (!QDir(path).exists(QLatin1String(".")))
             continue;
 
-        QStringList plugins = QDir(path).entryList(QDir::Files);
+        QStringList plugins = QDir(path).entryList(
+#ifdef Q_OS_WIN
+                    QStringList(QStringLiteral("*.dll")),
+#endif
+                    QDir::Files);
         QLibraryPrivate *library = 0;
+
         for (int j = 0; j < plugins.count(); ++j) {
             QString fileName = QDir::cleanPath(path + QLatin1Char('/') + plugins.at(j));
 
+#ifdef Q_OS_MAC
+            const bool isDebugPlugin = fileName.endsWith(QLatin1String("_debug.dylib"));
+            const bool isDebugLibrary =
+                #ifdef QT_DEBUG
+                    true;
+                #else
+                    false;
+                #endif
+
+            // Skip mismatching plugins so that we don't end up loading both debug and release
+            // versions of the same Qt libraries (due to the plugin's dependencies).
+            if (isDebugPlugin != isDebugLibrary)
+                continue;
+#elif defined(Q_PROCESSOR_X86)
+            if (fileName.endsWith(QLatin1String(".avx2")) || fileName.endsWith(QLatin1String(".avx512"))) {
+                // ignore AVX2-optimized file, we'll do a bait-and-switch to it later
+                continue;
+            }
+#endif
             if (qt_debug_component()) {
                 qDebug() << "QFactoryLoader::QFactoryLoader() looking at" << fileName;
             }
+
+            Q_TRACE(QFactoryLoader_update, fileName);
+
             library = QLibraryPrivate::findOrCreate(QFileInfo(fileName).canonicalFilePath());
             if (!library->isPlugin()) {
                 if (qt_debug_component()) {
-                    qDebug() << library->errorString;
-                    qDebug() << "         not a plugin";
+                    qDebug() << library->errorString << endl
+                             << "         not a plugin";
                 }
                 library->release();
                 continue;
@@ -151,10 +255,8 @@ void QFactoryLoader::update()
                 metaDataOk = true;
 
                 QJsonArray k = object.value(QLatin1String("Keys")).toArray();
-                for (int i = 0; i < k.size(); ++i) {
-                    QString s = k.at(i).toString();
-                    keys += s;
-                }
+                for (int i = 0; i < k.size(); ++i)
+                    keys += d->cs ? k.at(i).toString() : k.at(i).toString().toLower();
             }
             if (qt_debug_component())
                 qDebug() << "Got keys from plugin meta data" << keys;
@@ -165,15 +267,13 @@ void QFactoryLoader::update()
                 continue;
             }
 
-            d->libraryList += library;
+            int keyUsageCount = 0;
             for (int k = 0; k < keys.count(); ++k) {
                 // first come first serve, unless the first
                 // library was built with a future Qt version,
                 // whereas the new one has a Qt version that fits
                 // better
-                QString key = keys.at(k);
-                if (!d->cs)
-                    key = key.toLower();
+                const QString &key = keys.at(k);
                 QLibraryPrivate *previous = d->keyMap.value(key);
                 int prev_qt_version = 0;
                 if (previous) {
@@ -182,8 +282,14 @@ void QFactoryLoader::update()
                 int qt_version = (int)library->metaData.value(QLatin1String("version")).toDouble();
                 if (!previous || (prev_qt_version > QT_VERSION && qt_version <= QT_VERSION)) {
                     d->keyMap[key] = library;
-                    d->keyList += keys.at(k);
+                    ++keyUsageCount;
                 }
+            }
+            if (keyUsageCount || keys.isEmpty()) {
+                library->setLoadHints(QLibrary::PreventUnloadHint); // once loaded, don't unload
+                d->libraryList += library;
+            } else {
+                library->release();
             }
         }
     }
@@ -200,63 +306,6 @@ QFactoryLoader::~QFactoryLoader()
 {
     QMutexLocker locker(qt_factoryloader_mutex());
     qt_factory_loaders()->removeAll(this);
-}
-
-QList<QJsonObject> QFactoryLoader::metaData() const
-{
-    Q_D(const QFactoryLoader);
-    QMutexLocker locker(&d->mutex);
-    QList<QJsonObject> metaData;
-    for (int i = 0; i < d->libraryList.size(); ++i)
-        metaData.append(d->libraryList.at(i)->metaData);
-
-    QVector<QStaticPlugin> staticPlugins = QLibraryPrivate::staticPlugins();
-    for (int i = 0; i < staticPlugins.count(); ++i) {
-        const char *rawMetaData = staticPlugins.at(i).metaData();
-        QJsonObject object = QLibraryPrivate::fromRawMetaData(rawMetaData).object();
-        if (object.value(QLatin1String("IID")) != QLatin1String(d->iid.constData(), d->iid.size()))
-            continue;
-
-        metaData.append(object);
-    }
-    return metaData;
-}
-
-QObject *QFactoryLoader::instance(int index) const
-{
-    Q_D(const QFactoryLoader);
-    if (index < 0)
-        return 0;
-
-    if (index < d->libraryList.size()) {
-        QLibraryPrivate *library = d->libraryList.at(index);
-        if (library->instance || library->loadPlugin()) {
-            if (!library->inst)
-                library->inst = library->instance();
-            QObject *obj = library->inst.data();
-            if (obj) {
-                if (!obj->parent())
-                    obj->moveToThread(QCoreApplicationPrivate::mainThread());
-                return obj;
-            }
-        }
-        return 0;
-    }
-
-    index -= d->libraryList.size();
-    QVector<QStaticPlugin> staticPlugins = QLibraryPrivate::staticPlugins();
-    for (int i = 0; i < staticPlugins.count(); ++i) {
-        const char *rawMetaData = staticPlugins.at(i).metaData();
-        QJsonObject object = QLibraryPrivate::fromRawMetaData(rawMetaData).object();
-        if (object.value(QLatin1String("IID")) != QLatin1String(d->iid.constData(), d->iid.size()))
-            continue;
-
-        if (index == 0)
-            return staticPlugins.at(i).instance();
-        --index;
-    }
-
-    return 0;
 }
 
 #if defined(Q_OS_UNIX) && !defined (Q_OS_MAC)
@@ -277,15 +326,96 @@ void QFactoryLoader::refreshAll()
     }
 }
 
+#endif // QT_CONFIG(library)
+
+QFactoryLoader::QFactoryLoader(const char *iid,
+                               const QString &suffix,
+                               Qt::CaseSensitivity cs)
+    : QObject(*new QFactoryLoaderPrivate)
+{
+    moveToThread(QCoreApplicationPrivate::mainThread());
+    Q_D(QFactoryLoader);
+    d->iid = iid;
+#if QT_CONFIG(library)
+    d->cs = cs;
+    d->suffix = suffix;
+
+    QMutexLocker locker(qt_factoryloader_mutex());
+    update();
+    qt_factory_loaders()->append(this);
+#else
+    Q_UNUSED(suffix);
+    Q_UNUSED(cs);
+#endif
+}
+
+QList<QJsonObject> QFactoryLoader::metaData() const
+{
+    Q_D(const QFactoryLoader);
+    QList<QJsonObject> metaData;
+#if QT_CONFIG(library)
+    QMutexLocker locker(&d->mutex);
+    for (int i = 0; i < d->libraryList.size(); ++i)
+        metaData.append(d->libraryList.at(i)->metaData);
+#endif
+
+    const auto staticPlugins = QPluginLoader::staticPlugins();
+    for (const QStaticPlugin &plugin : staticPlugins) {
+        const QJsonObject object = plugin.metaData();
+        if (object.value(QLatin1String("IID")) != QLatin1String(d->iid.constData(), d->iid.size()))
+            continue;
+        metaData.append(object);
+    }
+    return metaData;
+}
+
+QObject *QFactoryLoader::instance(int index) const
+{
+    Q_D(const QFactoryLoader);
+    if (index < 0)
+        return 0;
+
+#if QT_CONFIG(library)
+    QMutexLocker lock(&d->mutex);
+    if (index < d->libraryList.size()) {
+        QLibraryPrivate *library = d->libraryList.at(index);
+        if (library->instance || library->loadPlugin()) {
+            if (!library->inst)
+                library->inst = library->instance();
+            QObject *obj = library->inst.data();
+            if (obj) {
+                if (!obj->parent())
+                    obj->moveToThread(QCoreApplicationPrivate::mainThread());
+                return obj;
+            }
+        }
+        return 0;
+    }
+    index -= d->libraryList.size();
+    lock.unlock();
+#endif
+
+    QVector<QStaticPlugin> staticPlugins = QPluginLoader::staticPlugins();
+    for (int i = 0; i < staticPlugins.count(); ++i) {
+        const QJsonObject object = staticPlugins.at(i).metaData();
+        if (object.value(QLatin1String("IID")) != QLatin1String(d->iid.constData(), d->iid.size()))
+            continue;
+
+        if (index == 0)
+            return staticPlugins.at(i).instance();
+        --index;
+    }
+
+    return 0;
+}
+
 QMultiMap<int, QString> QFactoryLoader::keyMap() const
 {
     QMultiMap<int, QString> result;
-    const QString metaDataKey = QStringLiteral("MetaData");
-    const QString keysKey = QStringLiteral("Keys");
     const QList<QJsonObject> metaDataList = metaData();
     for (int i = 0; i < metaDataList.size(); ++i) {
-        const QJsonObject metaData = metaDataList.at(i).value(metaDataKey).toObject();
-        const QJsonArray keys = metaData.value(keysKey).toArray();
+        const QJsonObject metaData = metaDataList.at(i).value(QLatin1String("MetaData")).toObject();
+        const QJsonArray keys = metaData.value(QLatin1String("Keys")).toArray();
         const int keyCount = keys.size();
         for (int k = 0; k < keyCount; ++k)
             result.insert(i, keys.at(k).toString());
@@ -295,12 +425,10 @@ QMultiMap<int, QString> QFactoryLoader::keyMap() const
 
 int QFactoryLoader::indexOf(const QString &needle) const
 {
-    const QString metaDataKey = QStringLiteral("MetaData");
-    const QString keysKey = QStringLiteral("Keys");
     const QList<QJsonObject> metaDataList = metaData();
     for (int i = 0; i < metaDataList.size(); ++i) {
-        const QJsonObject metaData = metaDataList.at(i).value(metaDataKey).toObject();
-        const QJsonArray keys = metaData.value(keysKey).toArray();
+        const QJsonObject metaData = metaDataList.at(i).value(QLatin1String("MetaData")).toObject();
+        const QJsonArray keys = metaData.value(QLatin1String("Keys")).toArray();
         const int keyCount = keys.size();
         for (int k = 0; k < keyCount; ++k) {
             if (!keys.at(k).toString().compare(needle, Qt::CaseInsensitive))
@@ -312,4 +440,6 @@ int QFactoryLoader::indexOf(const QString &needle) const
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_LIBRARY
+#include "moc_qfactoryloader_p.cpp"
+
+#endif // QT_NO_QOBJECT

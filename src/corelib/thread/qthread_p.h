@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,13 +57,25 @@
 #include "QtCore/qthread.h"
 #include "QtCore/qmutex.h"
 #include "QtCore/qstack.h"
+#if QT_CONFIG(thread)
 #include "QtCore/qwaitcondition.h"
+#endif
 #include "QtCore/qmap.h"
 #include "QtCore/qcoreapplication.h"
 #include "private/qobject_p.h"
 
 #include <algorithm>
+#include <atomic>
 
+#ifdef Q_OS_WINRT
+namespace ABI {
+    namespace Windows {
+        namespace Foundation {
+            struct IAsyncAction;
+        }
+    }
+}
+#endif // Q_OS_WINRT
 
 QT_BEGIN_NAMESPACE
 
@@ -113,7 +124,7 @@ public:
     void addEvent(const QPostEvent &ev) {
         int priority = ev.priority;
         if (isEmpty() ||
-            last().priority >= priority ||
+            constLast().priority >= priority ||
             insertionOffset >= size()) {
             // optimization: we can simply append if the last event in
             // the queue has higher or equal priority
@@ -132,7 +143,14 @@ private:
     using QVector<QPostEvent>::insert;
 };
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
+
+class Q_CORE_EXPORT QDaemonThread : public QThread
+{
+public:
+    QDaemonThread(QObject *parent = 0);
+    ~QDaemonThread();
+};
 
 class QThreadPrivate : public QObjectPrivate
 {
@@ -142,12 +160,15 @@ public:
     QThreadPrivate(QThreadData *d = 0);
     ~QThreadPrivate();
 
+    void setPriority(QThread::Priority prio);
+
     mutable QMutex mutex;
     QAtomicInt quitLockRef;
 
     bool running;
     bool finished;
     bool isInFinish; //when in QThreadPrivate::finish
+    std::atomic<bool> interruptionRequested;
 
     bool exited;
     int returnCode;
@@ -158,7 +179,6 @@ public:
     static QThread *threadForId(int id);
 
 #ifdef Q_OS_UNIX
-    pthread_t thread_id;
     QWaitCondition thread_done;
 
     static void *start(void *arg);
@@ -167,17 +187,17 @@ public:
 #endif // Q_OS_UNIX
 
 #ifdef Q_OS_WIN
-    static unsigned int __stdcall start(void *);
-    static void finish(void *, bool lockAnyway=true);
+    static unsigned int __stdcall start(void *) Q_DECL_NOEXCEPT;
+    static void finish(void *, bool lockAnyway=true) Q_DECL_NOEXCEPT;
 
     Qt::HANDLE handle;
     unsigned int id;
     int waiters;
     bool terminationEnabled, terminatePending;
-# endif
+#endif // Q_OS_WIN
     QThreadData *data;
 
-    static void createEventDispatcher(QThreadData *data);
+    static QAbstractEventDispatcher *createEventDispatcher(QThreadData *data);
 
     void ref()
     {
@@ -192,19 +212,21 @@ public:
     }
 };
 
-#else // QT_NO_THREAD
+#else // QT_CONFIG(thread)
 
 class QThreadPrivate : public QObjectPrivate
 {
 public:
-    QThreadPrivate(QThreadData *d = 0) : data(d ? d : new QThreadData) {}
-    ~QThreadPrivate() { delete data; }
+    QThreadPrivate(QThreadData *d = 0);
+    ~QThreadPrivate();
 
+    mutable QMutex mutex;
     QThreadData *data;
+    bool running = false;
 
     static void setCurrentThread(QThread*) {}
     static QThread *threadForId(int) { return QThread::currentThread(); }
-    static void createEventDispatcher(QThreadData *data);
+    static QAbstractEventDispatcher *createEventDispatcher(QThreadData *data);
 
     void ref() {}
     void deref() {}
@@ -212,45 +234,92 @@ public:
     Q_DECLARE_PUBLIC(QThread)
 };
 
-#endif // QT_NO_THREAD
+#endif // QT_CONFIG(thread)
 
 class QThreadData
 {
-    QAtomicInt _ref;
-
 public:
     QThreadData(int initialRefCount = 1);
     ~QThreadData();
 
-    static QThreadData *current();
+    static Q_AUTOTEST_EXPORT QThreadData *current(bool createIfNecessary = true);
+#ifdef Q_OS_WINRT
+    static void setMainThread();
+#endif
+    static void clearCurrentThreadData();
     static QThreadData *get2(QThread *thread)
     { Q_ASSERT_X(thread != 0, "QThread", "internal error"); return thread->d_func()->data; }
 
 
     void ref();
     void deref();
+    inline bool hasEventDispatcher() const
+    { return eventDispatcher.load() != nullptr; }
+    QAbstractEventDispatcher *createEventDispatcher();
+    QAbstractEventDispatcher *ensureEventDispatcher()
+    {
+        QAbstractEventDispatcher *ed = eventDispatcher.load();
+        if (Q_LIKELY(ed))
+            return ed;
+        return createEventDispatcher();
+    }
 
-    QThread *thread;
-    Qt::HANDLE threadId;
-    bool quitNow;
+    bool canWaitLocked()
+    {
+        QMutexLocker locker(&postEventList.mutex);
+        return canWait;
+    }
+
+    // This class provides per-thread (by way of being a QThreadData
+    // member) storage for qFlagLocation()
+    class FlaggedDebugSignatures
+    {
+        static const uint Count = 2;
+
+        uint idx;
+        const char* locations[Count];
+
+    public:
+        FlaggedDebugSignatures() : idx(0)
+        { std::fill_n(locations, Count, static_cast<char*>(0)); }
+
+        void store(const char* method)
+        { locations[idx++ % Count] = method; }
+
+        bool contains(const char *method) const
+        { return std::find(locations, locations + Count, method) != locations + Count; }
+    };
+
+private:
+    QAtomicInt _ref;
+
+public:
     int loopLevel;
-    QAbstractEventDispatcher *eventDispatcher;
+    int scopeLevel;
+
     QStack<QEventLoop *> eventLoops;
     QPostEventList postEventList;
-    bool canWait;
+    QAtomicPointer<QThread> thread;
+    QAtomicPointer<void> threadId;
+    QAtomicPointer<QAbstractEventDispatcher> eventDispatcher;
     QVector<void *> tls;
+    FlaggedDebugSignatures flaggedSignatures;
+
+    bool quitNow;
+    bool canWait;
     bool isAdopted;
+    bool requiresCoreApplication;
 };
 
-class QScopedLoopLevelCounter
+class QScopedScopeLevelCounter
 {
     QThreadData *threadData;
 public:
-    inline QScopedLoopLevelCounter(QThreadData *threadData)
+    inline QScopedScopeLevelCounter(QThreadData *threadData)
         : threadData(threadData)
-    { ++threadData->loopLevel; }
-    inline ~QScopedLoopLevelCounter()
-    { --threadData->loopLevel; }
+    { ++threadData->scopeLevel; }
+    inline ~QScopedScopeLevelCounter()
+    { --threadData->scopeLevel; }
 };
 
 // thread wrapper for the main() thread
@@ -264,7 +333,9 @@ public:
     void init();
 
 private:
-    void run();
+#if QT_CONFIG(thread)
+    void run() override;
+#endif
 };
 
 QT_END_NAMESPACE

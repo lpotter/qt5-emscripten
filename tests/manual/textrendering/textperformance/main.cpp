@@ -1,45 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include <QtWidgets>
+#include <QApplication>
+#include <QDialog>
+#include <QFontDatabase>
+#include <QPainter>
+#include <QRandomGenerator>
+#include <QTime>
+#include <QTimer>
 
 static const int lastMeasurementsCount = 50;
 
@@ -101,17 +94,17 @@ public:
         static const QString text = QLatin1String("Qt rocks!!!");
         static const int textsPerPaint = 30;
         for (int i = 0; i < textsPerPaint; i++) {
-            const int fontSize = 4 + (qrand() % 5);
-            const int fontWeight = (qrand() % 2) == 1 ? QFont::Normal : QFont::Bold;
-            const bool fontItalic = (qrand() % 2) == 1;
+            const int fontSize = 4 + QRandomGenerator::global()->bounded(5);
+            const int fontWeight = QRandomGenerator::global()->bounded(2) == 1 ? QFont::Normal : QFont::Bold;
+            const bool fontItalic = QRandomGenerator::global()->bounded(2) == 1;
             const QFont font("Default", fontSize, fontWeight, fontItalic);
             p.setFont(font);
-            p.setPen(QColor::fromHsv(qrand() % 359, 155 + qrand() % 100,
-                                     155 + qrand() % 100, 100 + qrand() % 155));
+            p.setPen(QColor::fromHsv(QRandomGenerator::global()->bounded(359), 155 + QRandomGenerator::global()->bounded(100),
+                                     155 + QRandomGenerator::global()->bounded(100), 100 + QRandomGenerator::global()->bounded(155)));
             const QSize textSize(p.fontMetrics().boundingRect(text).size());
             const QPoint position(
-                -textSize.width() / 2 + (qrand() % size.width()),
-                textSize.height() / 2 + (qrand() % size.height()));
+                -textSize.width() / 2 + QRandomGenerator::global()->bounded(size.width()),
+                textSize.height() / 2 + QRandomGenerator::global()->bounded(size.height()));
             p.drawText(position, text);
         }
     }
@@ -134,8 +127,8 @@ public:
 
         QString text;
         for (int i = 0; i < piecesPerPaint; ++i) {
-            QString piece = QLatin1String(pieces[qrand() % piecesCount]);
-            if (i == 0 || qrand() % 2) {
+            QString piece = QLatin1String(pieces[QRandomGenerator::global()->bounded(piecesCount)]);
+            if (i == 0 || QRandomGenerator::global()->bounded(2)) {
                 // Make this piece the beginning of a new sentence.
                 piece[0] = piece[0].toUpper();
                 if (i > 0)
@@ -168,7 +161,7 @@ public:
         for (int i = 0; i < systemsPerPaint; i++) {
             if (i > 0)
                 text.append(QLatin1Char(' '));
-            text.append(samples.at(qrand() % samples.count()));
+            text.append(samples.at(QRandomGenerator::global()->bounded(samples.count())));
         }
         p.drawText(QRectF(QPointF(0, 0), QSizeF(size)),
                    Qt::AlignTop | Qt::AlignAbsolute | Qt::TextWordWrap, text);

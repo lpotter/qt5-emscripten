@@ -3,8 +3,6 @@ SUBDIRS = \
         blendbench \
         qimageconversion \
         qimagereader \
+        qimagescale \
         qpixmap \
         qpixmapcache
-
-isEmpty(QT.widgets.name): SUBDIRS -= \
-        qimagereader

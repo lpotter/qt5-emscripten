@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -141,7 +128,6 @@ static bool checkReverseDirection(QGraphicsWidget *widget)
     layout->getContentsMargins(&left, &top, &right, &bottom);
     widget->setLayoutDirection(Qt::LeftToRight);
     QApplication::processEvents();
-    const QRectF layoutGeometry = layout->geometry();
     QMap<QGraphicsLayoutItem *, QRectF> geometries;
     for (int i = 0; i < layout->count(); ++i) {
         QGraphicsLayoutItem *item = layout->itemAt(i);
@@ -149,7 +135,7 @@ static bool checkReverseDirection(QGraphicsWidget *widget)
     }
     widget->setLayoutDirection(Qt::RightToLeft);
     QApplication::processEvents();
-    layoutGeometry.adjusted(+right, +top, -left, -bottom);
+    const QRectF layoutGeometry = layout->geometry().adjusted(+right, +top, -left, -bottom);
     for (int i = 0; i < layout->count(); ++i) {
         QGraphicsLayoutItem *item = layout->itemAt(i);
         const QRectF rightToLeftGeometry = item->geometry();
@@ -661,7 +647,7 @@ void tst_QGraphicsAnchorLayout::snake()
     QCOMPARE(c->geometry(), QRectF(90.0, 200.0, 100.0, 100.0));
     QCOMPARE(p.size(), layoutMaximumSize);
 
-    QVERIFY(layoutHasConflict(l) == false);
+    QVERIFY(!layoutHasConflict(l));
 
     // Test QSizePolicy::ExpandFlag, it shouldn't change the extreme
     // points of the layout...
@@ -1365,14 +1351,22 @@ void tst_QGraphicsAnchorLayout::hardComplexS60()
     delete p;
 }
 
+static inline QByteArray msgStability(const QRectF &actual, const QRectF &expected, int pass, int item)
+{
+    QString result;
+    QDebug(&result)
+        << "The layout has several solutions, but which solution it picks is not stable ("
+        << actual << "!=" << expected << ", iteration" << pass << ", item" << item << ')';
+    return result.toLocal8Bit();
+}
+
 void tst_QGraphicsAnchorLayout::stability()
 {
     QVector<QRectF> geometries;
     geometries.resize(7);
-    QGraphicsWidget *p = new QGraphicsWidget(0, Qt::Window);
-    bool sameAsPreviousArrangement = true;
+    QGraphicsWidget p(0, Qt::Window);
     // it usually fails after 3-4 iterations
-    for (int pass = 0; pass < 20 && sameAsPreviousArrangement; ++pass) {
+    for (int pass = 0; pass < 20; ++pass) {
         // In case we need to "scramble" the heap allocator to provoke this bug.
         //static const int primes[] = {2, 3, 5, 13, 89, 233, 1597, 28657, 514229}; // fibo primes
         //const int primeCount = sizeof(primes)/sizeof(int);
@@ -1380,23 +1374,22 @@ void tst_QGraphicsAnchorLayout::stability()
         //void *mem = malloc(alloc);
         //free(mem);
         QGraphicsAnchorLayout *l = createAmbiguousS60Layout();
-        p->setLayout(l);
+        p.setLayout(l);
         QSizeF layoutMinimumSize = l->effectiveSizeHint(Qt::MinimumSize);
         l->setGeometry(QRectF(QPointF(0,0), layoutMinimumSize));
         QApplication::processEvents();
-        for (int i = l->count() - 1; i >=0 && sameAsPreviousArrangement; --i) {
-            QRectF geom = l->itemAt(i)->geometry();
+        for (int i = l->count() - 1; i >=0; --i) {
+            const QRectF actualGeom = l->itemAt(i)->geometry();
             if (pass != 0) {
-                sameAsPreviousArrangement = (geometries[i] == geom);
+                if (actualGeom != geometries[i])
+                    QEXPECT_FAIL("", msgStability(actualGeom, geometries[i], pass, i).constData(), Abort);
+                QCOMPARE(actualGeom, geometries[i]);
             }
-            geometries[i] = geom;
+            geometries[i] = actualGeom;
         }
-        p->setLayout(0);    // uninstalls and deletes the layout
+        p.setLayout(0);    // uninstalls and deletes the layout
         QApplication::processEvents();
     }
-    delete p;
-    QEXPECT_FAIL("", "The layout have several solutions, but which solution it picks is not stable", Continue);
-    QCOMPARE(sameAsPreviousArrangement, true);
 }
 
 void tst_QGraphicsAnchorLayout::delete_anchor()
@@ -2042,9 +2035,9 @@ void tst_QGraphicsAnchorLayout::graphicsAnchorHandling()
     QGraphicsAnchor *invalidAnchor = l->anchor(a, Qt::AnchorTop, l, Qt::AnchorBottom);
 
     // Ensure none of these anchors are accessible.
-    QVERIFY(layoutAnchor == 0);
-    QVERIFY(itemAnchor == 0);
-    QVERIFY(invalidAnchor == 0);
+    QVERIFY(!layoutAnchor);
+    QVERIFY(!itemAnchor);
+    QVERIFY(!invalidAnchor);
 
     // Hook the anchors to a QObject
     QObject object;

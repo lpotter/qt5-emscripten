@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,11 +40,11 @@
 #include "qsidebar_p.h"
 #include "qfilesystemmodel.h"
 
-#ifndef QT_NO_FILEDIALOG
-
 #include <qaction.h>
 #include <qurl.h>
+#if QT_CONFIG(menu)
 #include <qmenu.h>
+#endif
 #include <qmimedata.h>
 #include <qevent.h>
 #include <qdebug.h>
@@ -68,6 +66,8 @@ void QSideBarDelegate::initStyleOption(QStyleOptionViewItem *option,
 }
 
 /*!
+    \internal
+    \class QUrlModel
     QUrlModel lets you have indexes from a QFileSystemModel to a list.  When QFileSystemModel
     changes them QUrlModel will automatically update.
 
@@ -109,16 +109,16 @@ Qt::ItemFlags QUrlModel::flags(const QModelIndex &index) const
 QMimeData *QUrlModel::mimeData(const QModelIndexList &indexes) const
 {
     QList<QUrl> list;
-    for (int i = 0; i < indexes.count(); ++i) {
-        if (indexes.at(i).column() == 0)
-           list.append(indexes.at(i).data(UrlRole).toUrl());
+    for (const auto &index : indexes) {
+        if (index.column() == 0)
+           list.append(index.data(UrlRole).toUrl());
     }
     QMimeData *data = new QMimeData();
     data->setUrls(list);
     return data;
 }
 
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 
 /*!
     Decide based upon the data if it should be accepted or not
@@ -127,12 +127,12 @@ QMimeData *QUrlModel::mimeData(const QModelIndexList &indexes) const
 */
 bool QUrlModel::canDrop(QDragEnterEvent *event)
 {
-    if (!event->mimeData()->formats().contains(mimeTypes().first()))
+    if (!event->mimeData()->formats().contains(mimeTypes().constFirst()))
         return false;
 
     const QList<QUrl> list = event->mimeData()->urls();
-    for (int i = 0; i < list.count(); ++i) {
-        QModelIndex idx = fileSystemModel->index(list.at(0).toLocalFile());
+    for (const auto &url : list) {
+        const QModelIndex idx = fileSystemModel->index(url.toLocalFile());
         if (!fileSystemModel->isDir(idx))
             return false;
     }
@@ -145,7 +145,7 @@ bool QUrlModel::canDrop(QDragEnterEvent *event)
 bool QUrlModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
                                  int row, int column, const QModelIndex &parent)
 {
-    if (!data->formats().contains(mimeTypes().first()))
+    if (!data->formats().contains(mimeTypes().constFirst()))
         return false;
     Q_UNUSED(action);
     Q_UNUSED(column);
@@ -154,7 +154,7 @@ bool QUrlModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     return true;
 }
 
-#endif // QT_NO_DRAGANDDROP
+#endif // QT_CONFIG(draganddrop)
 
 /*!
     \reimp
@@ -198,7 +198,9 @@ void QUrlModel::setUrl(const QModelIndex &index, const QUrl &url, const QModelIn
 
         QIcon newIcon = qvariant_cast<QIcon>(dirIndex.data(Qt::DecorationRole));
         if (!dirIndex.isValid()) {
-            newIcon = fileSystemModel->iconProvider()->icon(QFileIconProvider::Folder);
+            const QFileIconProvider *provider = fileSystemModel->iconProvider();
+            if (provider)
+                newIcon = provider->icon(QFileIconProvider::Folder);
             newName = QFileInfo(url.toLocalFile()).fileName();
             if (!invalidUrls.contains(url))
                 invalidUrls.append(url);
@@ -249,15 +251,17 @@ void QUrlModel::addUrls(const QList<QUrl> &list, int row, bool move)
             continue;
         //this makes sure the url is clean
         const QString cleanUrl = QDir::cleanPath(url.toLocalFile());
-        url = QUrl::fromLocalFile(cleanUrl);
+        if (!cleanUrl.isEmpty())
+            url = QUrl::fromLocalFile(cleanUrl);
 
         for (int j = 0; move && j < rowCount(); ++j) {
             QString local = index(j, 0).data(UrlRole).toUrl().toLocalFile();
 #if defined(Q_OS_WIN)
-            if (index(j, 0).data(UrlRole).toUrl().toLocalFile().toLower() == cleanUrl.toLower()) {
+            const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
 #else
-            if (index(j, 0).data(UrlRole).toUrl().toLocalFile() == cleanUrl) {
+            const Qt::CaseSensitivity cs = Qt::CaseSensitive;
 #endif
+            if (!cleanUrl.compare(local, cs)) {
                 removeRow(j);
                 if (j <= row)
                     row--;
@@ -270,7 +274,7 @@ void QUrlModel::addUrls(const QList<QUrl> &list, int row, bool move)
             continue;
         insertRows(row, 1);
         setUrl(index(row, 0), url, idx);
-        watching.append(qMakePair(idx, cleanUrl));
+        watching.append({idx, cleanUrl});
     }
 }
 
@@ -280,7 +284,9 @@ void QUrlModel::addUrls(const QList<QUrl> &list, int row, bool move)
 QList<QUrl> QUrlModel::urls() const
 {
     QList<QUrl> list;
-    for (int i = 0; i < rowCount(); ++i)
+    const int numRows = rowCount();
+    list.reserve(numRows);
+    for (int i = 0; i < numRows; ++i)
         list.append(data(index(i, 0), UrlRole).toUrl());
     return list;
 }
@@ -320,7 +326,7 @@ void QUrlModel::dataChanged(const QModelIndex &topLeft, const QModelIndex &botto
 {
     QModelIndex parent = topLeft.parent();
     for (int i = 0; i < watching.count(); ++i) {
-        QModelIndex index = watching.at(i).first;
+        QModelIndex index = watching.at(i).index;
         if (index.model() && topLeft.model()) {
             Q_ASSERT(index.model() == topLeft.model());
         }
@@ -329,7 +335,7 @@ void QUrlModel::dataChanged(const QModelIndex &topLeft, const QModelIndex &botto
             && index.column() >= topLeft.column()
             && index.column() <= bottomRight.column()
             && index.parent() == parent) {
-                changed(watching.at(i).second);
+                changed(watching.at(i).path);
         }
     }
 }
@@ -340,13 +346,15 @@ void QUrlModel::dataChanged(const QModelIndex &topLeft, const QModelIndex &botto
 void QUrlModel::layoutChanged()
 {
     QStringList paths;
-    for (int i = 0; i < watching.count(); ++i)
-        paths.append(watching.at(i).second);
+    const int numPaths = watching.count();
+    paths.reserve(numPaths);
+    for (int i = 0; i < numPaths; ++i)
+        paths.append(watching.at(i).path);
     watching.clear();
-    for (int i = 0; i < paths.count(); ++i) {
+    for (int i = 0; i < numPaths; ++i) {
         QString path = paths.at(i);
         QModelIndex newIndex = fileSystemModel->index(path);
-        watching.append(QPair<QModelIndex, QString>(newIndex, path));
+        watching.append({newIndex, path});
         if (newIndex.isValid())
             changed(path);
      }
@@ -383,7 +391,7 @@ void QSidebar::setModelAndUrls(QFileSystemModel *model, const QList<QUrl> &newUr
 
     connect(selectionModel(), SIGNAL(currentChanged(QModelIndex,QModelIndex)),
             this, SLOT(clicked(QModelIndex)));
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     setDragDropMode(QAbstractItemView::DragDrop);
 #endif
     setContextMenuPolicy(Qt::CustomContextMenu);
@@ -397,13 +405,13 @@ QSidebar::~QSidebar()
 {
 }
 
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 void QSidebar::dragEnterEvent(QDragEnterEvent *event)
 {
     if (urlModel->canDrop(event))
         QListView::dragEnterEvent(event);
 }
-#endif // QT_NO_DRAGANDDROP
+#endif // QT_CONFIG(draganddrop)
 
 QSize QSidebar::sizeHint() const
 {
@@ -429,7 +437,7 @@ void QSidebar::selectUrl(const QUrl &url)
             this, SLOT(clicked(QModelIndex)));
 }
 
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
 /*!
     \internal
 
@@ -448,7 +456,7 @@ void QSidebar::showContextMenu(const QPoint &position)
     if (actions.count() > 0)
         QMenu::exec(actions, mapToGlobal(position));
 }
-#endif // QT_NO_MENU
+#endif // QT_CONFIG(menu)
 
 /*!
     \internal
@@ -459,12 +467,15 @@ void QSidebar::removeEntry()
 {
     QList<QModelIndex> idxs = selectionModel()->selectedIndexes();
     QList<QPersistentModelIndex> indexes;
-    for (int i = 0; i < idxs.count(); i++)
+    const int numIndexes = idxs.count();
+    indexes.reserve(numIndexes);
+    for (int i = 0; i < numIndexes; i++)
         indexes.append(idxs.at(i));
 
-    for (int i = 0; i < indexes.count(); ++i)
+    for (int i = 0; i < numIndexes; ++i) {
         if (!indexes.at(i).data(QUrlModel::UrlRole).toUrl().path().isEmpty())
             model()->removeRow(indexes.at(i).row());
+    }
 }
 
 /*!
@@ -506,4 +517,4 @@ bool QSidebar::event(QEvent * event)
 
 QT_END_NAMESPACE
 
-#endif
+#include "moc_qsidebar_p.cpp"

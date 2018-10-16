@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +42,7 @@
 #include <qlibraryinfo.h>
 #include <qobject.h>
 #include <qcoreapplication.h>
+#include <private/qcoreapplication_p.h>
 
 #include "stdio.h"
 #include "stdlib.h"
@@ -52,47 +51,53 @@ QT_BEGIN_NAMESPACE
 
 #include "qconfig_eval.cpp"
 
-static const char boilerplate_unsuported[] =
+static const char boilerplate_supported_but_time_limited[] =
     "\nQt %1 Evaluation License\n"
-    "Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).\n"
+    "Copyright (C) 2016 The Qt Company Ltd.\n"
     "This trial version may only be used for evaluation purposes\n"
     "and will shut down after 120 minutes.\n"
     "Registered to:\n"
     "   Licensee: %2\n\n"
     "The evaluation expires in %4 days\n\n"
-    "Contact http://qt.digia.com/contact-us for pricing and purchasing information.\n";
+    "Contact http://www.qt.io/contact-us for pricing and purchasing information.\n";
 
 static const char boilerplate_supported[] =
     "\nQt %1 Evaluation License\n"
-    "Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).\n"
+    "Copyright (C) 2016 The Qt Company Ltd.\n"
     "This trial version may only be used for evaluation purposes\n"
     "Registered to:\n"
     "   Licensee: %2\n\n"
     "The evaluation expires in %4 days\n\n"
-    "Contact http://qt.digia.com/contact-us for pricing and purchasing information.\n";
+    "Contact http://www.qt.io/contact-us for pricing and purchasing information.\n";
 
 static const char boilerplate_expired[] =
     "This software is using the trial version of the Qt GUI toolkit.\n"
     "The trial period has expired. If you need more time to\n"
     "evaluate Qt, or if you have any questions about Qt, contact us\n"
-    "at: http://qt.digia.com/contact-us.\n\n";
+    "at: http://www.qt.io/contact-us.\n\n";
 
 static const char will_shutdown_1min[] =
     "\nThe evaluation of Qt will SHUT DOWN in 1 minute.\n"
-    "Contact http://qt.digia.com/contact-us for pricing and purchasing information.\n";
+    "Contact http://www.qt.io/contact-us for pricing and purchasing information.\n";
 
 static const char will_shutdown_now[] =
     "\nThe evaluation of Qt has now reached its automatic\n"
     "timeout and will shut down.\n"
-    "Contact http://qt.digia.com/contact-us for pricing and purchasing information.\n";
+    "Contact http://www.qt.io/contact-us for pricing and purchasing information.\n";
 
-static int qt_eval_is_supported()
+enum EvaluationStatus {
+    EvaluationNotSupported = 0,
+    EvaluationSupportedButTimeLimited,
+    EvaluationSupported
+};
+
+static EvaluationStatus qt_eval_is_supported()
 {
     const volatile char *const license_key = qt_eval_key_data + 12;
 
     // fast fail
     if (!qt_eval_key_data[0] || !*license_key)
-        return -1;
+        return EvaluationNotSupported;
 
     // is this an unsupported evaluation?
     const volatile char *typecode = license_key;
@@ -103,36 +108,40 @@ static int qt_eval_is_supported()
 
     if (!field && typecode[1] == '4' && typecode[2] == 'M') {
         if (typecode[0] == 'Q')
-            return 0;
+            return EvaluationSupportedButTimeLimited;
         else if (typecode[0] == 'R' || typecode[0] == 'Z')
-            return 1;
+            return EvaluationSupported;
     }
-    return -1;
+    return EvaluationNotSupported;
 }
 
 static int qt_eval_days_left()
 {
-    if (qt_eval_is_supported() < 0)
-        return -2;
+    const volatile char *const expiry_date = qt_eval_expiry_date + 12;
 
     QDate today = QDate::currentDate();
-    QDate build = QLibraryInfo::buildDate();
-    return qMax(-1, today.daysTo(build) + 30);
+    QDate lastday = QDate::fromString(
+                QString::fromLatin1(const_cast<const char*>(expiry_date)), Qt::ISODate);
+    return today.daysTo(lastday);
+}
+
+static bool qt_eval_is_expired()
+{
+    return qt_eval_days_left() < 0;
 }
 
 static QString qt_eval_string()
 {
     const char *msg;
     switch (qt_eval_is_supported()) {
-    case 0:
-        msg = boilerplate_unsuported;
+    case EvaluationSupportedButTimeLimited:
+        msg = boilerplate_supported_but_time_limited;
         break;
-    case 1:
+    case EvaluationSupported:
         msg = boilerplate_supported;
         break;
     default:
         return QString();
-        msg = 0;
     }
 
     return QString::fromLatin1(msg)
@@ -153,13 +162,13 @@ public:
 
     QCoreFuriCuri() : QObject(), warn(-1), kill(-1)
     {
-        if (!qt_eval_is_supported()) {
+        if (qt_eval_is_supported() == EvaluationSupportedButTimeLimited) {
             warn = startTimer(WARN_TIMEOUT);
             kill = 0;
         }
     }
 
-    void timerEvent(QTimerEvent *e) {
+    void timerEvent(QTimerEvent *e) override {
         if (e->timerId() == warn) {
             killTimer(warn);
             fprintf(stderr, "%s\n", will_shutdown_1min);
@@ -173,39 +182,34 @@ public:
 
 #if defined(QT_BUILD_CORE_LIB) || defined (QT_BOOTSTRAPPED)
 
-void qt_core_eval_init(uint type)
+void qt_core_eval_init(QCoreApplicationPrivate::Type type)
 {
-    if (!type)
-        return;     // GUI app
-
-    switch (qt_eval_days_left()) {
-    case -2:
+    if (type != QCoreApplicationPrivate::Tty)
         return;
 
-    case -1:
-        fprintf(stderr, "%s\n", boilerplate_expired);
-        if (type == 0) {
-            // if we're a console app only.
-            exit(0);
-        }
+    if (!qt_eval_is_supported())
+        return;
 
-    default:
+    if (qt_eval_is_expired()) {
+        fprintf(stderr, "%s\n", boilerplate_expired);
+        exit(0);
+    } else {
         fprintf(stderr, "%s\n", qPrintable(qt_eval_string()));
-        if (type == 0) {
-            Q_UNUSED(new QCoreFuriCuri());
-        }
+        Q_UNUSED(new QCoreFuriCuri());
     }
 }
 #endif
 
-#ifdef QT_BUILD_GUI_LIB
+#ifdef QT_BUILD_WIDGETS_LIB
 
 QT_BEGIN_INCLUDE_NAMESPACE
 #include <qdialog.h>
 #include <qlabel.h>
 #include <qlayout.h>
 #include <qmessagebox.h>
+#if QT_CONFIG(pushbutton)
 #include <qpushbutton.h>
+#endif
 #include <qtimer.h>
 #include <qapplication.h>
 QT_END_INCLUDE_NAMESPACE
@@ -453,18 +457,13 @@ public:
     {
         setWindowTitle(QLatin1String(" "));
 
-        QString str = qt_eval_string();
-        if (expired) {
-            str = QLatin1String(boilerplate_expired);
-        } else {
-            str = qt_eval_string();
-        }
+        QString str = expired ? QLatin1String(boilerplate_expired) : qt_eval_string();
         str = str.trimmed();
 
         QFrame *border = new QFrame(this);
 
         QLabel *pixmap_label = new QLabel(border);
-        pixmap_label->setPixmap(qtlogo_eval_xpm);
+        pixmap_label->setPixmap(QPixmap(qtlogo_eval_xpm));
         pixmap_label->setAlignment(Qt::AlignTop);
 
         QLabel *text_label = new QLabel(str, border);
@@ -496,6 +495,7 @@ public:
             setParent(parentWidget(), Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
             QTimer::singleShot(7000, this, SLOT(close()));
             setAttribute(Qt::WA_DeleteOnClose);
+            setAttribute(Qt::WA_QuitOnClose, false);
         }
 
         setFixedSize(sizeHint());
@@ -519,23 +519,19 @@ public:
 };
 
 
-void qt_gui_eval_init(uint)
+void qt_gui_eval_init(QCoreApplicationPrivate::Type type)
 {
-    switch (qt_eval_days_left()) {
-    case -2:
+    Q_UNUSED(type);
+
+    if (!qt_eval_is_supported())
         return;
 
-    case -1: {
+    if (qt_eval_is_expired()) {
         EvalMessageBox box(true);
         box.exec();
         ::exit(0);
-    }
-
-    default: {
-        EvalMessageBox *box = new EvalMessageBox(false);
-        box->show();
+    } else {
         Q_UNUSED(new QGuiFuriCuri());
-    }
     }
 }
 
@@ -546,14 +542,14 @@ static QString qt_eval_title_prefix()
 
 QString qt_eval_adapt_window_title(const QString &title)
 {
-    if (qt_eval_days_left() == -2)
+    if (!qt_eval_is_supported())
         return title;
     return qt_eval_title_prefix() + title;
 }
 
 void qt_eval_init_widget(QWidget *w)
 {
-    if (qt_eval_days_left() == -2)
+    if (!qt_eval_is_supported())
         return;
     if (w->isTopLevel() && w->windowTitle().isEmpty() && w->windowType() != Qt::Desktop ) {
         w->setWindowTitle(QLatin1String(" "));

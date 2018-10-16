@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,6 +48,7 @@ private slots:
     void reset() const;
     void resetSimplified() const;
     void waitForReadyIODevice() const;
+    void inputFromSlowDevice() const;
 };
 
 /*!
@@ -72,7 +60,7 @@ private slots:
 void tst_QXmlInputSource::reset() const
 {
     const QString input(QString::fromLatin1("<element attribute1='value1' attribute2='value2'/>"));
-   
+
     QXmlSimpleReader reader;
     QXmlDefaultHandler handler;
     reader.setContentHandler(&handler);
@@ -100,7 +88,7 @@ void tst_QXmlInputSource::reset() const
 void tst_QXmlInputSource::resetSimplified() const
 {
     const QString input(QString::fromLatin1("<element/>"));
-   
+
     QXmlSimpleReader reader;
 
     QXmlInputSource source;
@@ -155,7 +143,7 @@ public slots:
 
     void requestFinished(QNetworkReply *reply)
     {
-        QVERIFY(reply->error() == QNetworkReply::NoError);
+        QCOMPARE(reply->error(), QNetworkReply::NoError);
         reply->deleteLater();
     }
 
@@ -218,6 +206,89 @@ void tst_QXmlInputSource::waitForReadyIODevice() const
 
     el.exec();
     QVERIFY(sv.success);
+}
+
+// This class is used to emulate a case where less than 4 bytes are sent in
+// a single packet to ensure it is still parsed correctly
+class SlowIODevice : public QIODevice
+{
+public:
+    SlowIODevice(const QString &expectedData, QObject *parent = 0)
+        : QIODevice(parent), currentPos(0), readyToSend(true)
+    {
+        stringData = expectedData.toUtf8();
+        dataTimer = new QTimer(this);
+        connect(dataTimer, &QTimer::timeout, [=]() {
+            readyToSend = true;
+            emit readyRead();
+            dataTimer->stop();
+        });
+        dataTimer->start(1000);
+    }
+    bool open(SlowIODevice::OpenMode) override
+    {
+        setOpenMode(ReadOnly);
+        return true;
+    }
+    bool isSequential() const override
+    {
+        return true;
+    }
+    qint64 bytesAvailable() const override
+    {
+        if (readyToSend && stringData.size() != currentPos)
+            return qMax(3, stringData.size() - currentPos);
+        return 0;
+    }
+    qint64 readData(char *data, qint64 maxSize) override
+    {
+        if (!readyToSend)
+            return 0;
+        const qint64 readSize = qMin(qMin((qint64)3, maxSize), (qint64)(stringData.size() - currentPos));
+        if (readSize > 0)
+            memcpy(data, &stringData.constData()[currentPos], readSize);
+        currentPos += readSize;
+        readyToSend = false;
+        if (currentPos != stringData.size())
+            dataTimer->start(1000);
+        return readSize;
+    }
+    qint64 writeData(const char *, qint64) override { return 0; }
+    bool waitForReadyRead(int msecs) override
+    {
+        // Delibrately wait a maximum of 10 seconds for the sake
+        // of the test, so it doesn't unduly hang
+        const int waitTime = qMax(10000, msecs);
+        QTime t;
+        t.start();
+        while (t.elapsed() < waitTime) {
+            QCoreApplication::processEvents();
+            if (readyToSend)
+                return true;
+        }
+        return false;
+    }
+private:
+    QByteArray stringData;
+    int currentPos;
+    bool readyToSend;
+    QTimer *dataTimer;
+};
+
+void tst_QXmlInputSource::inputFromSlowDevice() const
+{
+    QString expectedData = QStringLiteral("<foo><bar>kake</bar><bar>ja</bar></foo>");
+    SlowIODevice slowDevice(expectedData);
+    QXmlInputSource source(&slowDevice);
+    QString data;
+    while (true) {
+        const QChar nextChar = source.next();
+        if (nextChar == QXmlInputSource::EndOfDocument)
+            break;
+        else if (nextChar != QXmlInputSource::EndOfData)
+            data += nextChar;
+    }
+    QCOMPARE(data, expectedData);
 }
 
 QTEST_MAIN(tst_QXmlInputSource)

@@ -1,46 +1,33 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qnativeevents.h"
-#include <Carbon/Carbon.h>
+#include <CoreGraphics/CoreGraphics.h>
 #include <QtCore>
 
 //  ************************************************************
@@ -64,15 +51,15 @@ static Qt::KeyboardModifiers getModifiersFromQuartzEvent(CGEventRef inEvent)
 
 static void setModifiersFromQNativeEvent(CGEventRef inEvent, const QNativeEvent &event)
 {
-    CGEventFlags flags = 0;
+    CGEventFlags flags = CGEventFlags(0);
     if (event.modifiers.testFlag(Qt::ShiftModifier))
-        flags |= kCGEventFlagMaskShift;
+        flags = CGEventFlags(flags | kCGEventFlagMaskShift);
     if (event.modifiers.testFlag(Qt::ControlModifier))
-        flags |= kCGEventFlagMaskControl;
+        flags = CGEventFlags(flags | kCGEventFlagMaskControl);
     if (event.modifiers.testFlag(Qt::AltModifier))
-        flags |= kCGEventFlagMaskAlternate;
+        flags = CGEventFlags(flags | kCGEventFlagMaskAlternate);
     if (event.modifiers.testFlag(Qt::MetaModifier))
-        flags |= kCGEventFlagMaskCommand;
+        flags = CGEventFlags(flags | kCGEventFlagMaskCommand);
     CGEventSetFlags(inEvent, flags);
 }
 
@@ -189,28 +176,18 @@ static CGEventRef EventHandler_Quartz(CGEventTapProxy proxy, CGEventType type, C
     return inEvent;
 }
 
-Qt::Native::Status insertEventHandler_Quartz(QNativeInput *nativeInput, int pid = 0)
+Qt::Native::Status insertEventHandler_Quartz(QNativeInput *nativeInput)
 {
     uid_t uid = geteuid();
     if (uid != 0)
         qWarning("MacNativeEvents: You must be root to listen for key events!");
 
-    CFMachPortRef port;
-    if (!pid){
-        port = CGEventTapCreate(kCGHIDEventTap,
-            kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
-            kCGEventMaskForAllEvents, EventHandler_Quartz, nativeInput);
-    } else {
-        ProcessSerialNumber psn;
-        GetProcessForPID(pid, &psn);
-        port = CGEventTapCreateForPSN(&psn,
-            kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
-            kCGEventMaskForAllEvents, EventHandler_Quartz, nativeInput);
-    }
+    CFMachPortRef port = CGEventTapCreate(kCGHIDEventTap,
+        kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
+        kCGEventMaskForAllEvents, EventHandler_Quartz, nativeInput);
 
     CFRunLoopSourceRef eventSrc = CFMachPortCreateRunLoopSource(NULL, port, 0);
-    CFRunLoopAddSource((CFRunLoopRef) GetCFRunLoopFromEventLoop(GetMainEventLoop()),
-        eventSrc, kCFRunLoopCommonModes);
+    CFRunLoopAddSource(CFRunLoopGetMain(), eventSrc, kCFRunLoopCommonModes);
 
     return Qt::Native::Success;
 }
@@ -218,19 +195,6 @@ Qt::Native::Status insertEventHandler_Quartz(QNativeInput *nativeInput, int pid 
 Qt::Native::Status removeEventHandler_Quartz()
 {
     return Qt::Native::Success; // ToDo:
-}
-
-Qt::Native::Status sendNativeKeyEventToProcess_Quartz(const QNativeKeyEvent &event, int pid)
-{
-    ProcessSerialNumber psn;
-    GetProcessForPID(pid, &psn);
-
-    CGEventRef e = CGEventCreateKeyboardEvent(0, (uint)event.nativeKeyCode, event.press);
-    setModifiersFromQNativeEvent(e, event);
-    SetFrontProcess(&psn);
-    CGEventPostToPSN(&psn, e);
-    CFRelease(e);
-    return Qt::Native::Success;
 }
 
 Qt::Native::Status sendNativeKeyEvent_Quartz(const QNativeKeyEvent &event)
@@ -248,7 +212,7 @@ Qt::Native::Status sendNativeMouseMoveEvent_Quartz(const QNativeMouseMoveEvent &
     pos.x = event.globalPos.x();
     pos.y = event.globalPos.y();
 
-    CGEventRef e = CGEventCreateMouseEvent(0, kCGEventMouseMoved, pos, 0);
+    CGEventRef e = CGEventCreateMouseEvent(0, kCGEventMouseMoved, pos, kCGMouseButtonLeft /* ignored */);
     setModifiersFromQNativeEvent(e, event);
     CGEventPost(kCGHIDEventTap, e);
     CFRelease(e);
@@ -261,7 +225,7 @@ Qt::Native::Status sendNativeMouseButtonEvent_Quartz(const QNativeMouseButtonEve
     pos.x = event.globalPos.x();
     pos.y = event.globalPos.y();
 
-    CGEventType type = 0;
+    CGEventType type = kCGEventNull;
     if (event.button == Qt::LeftButton)
         type = (event.clickCount > 0) ? kCGEventLeftMouseDown : kCGEventLeftMouseUp;
     else if (event.button == Qt::RightButton)
@@ -269,7 +233,12 @@ Qt::Native::Status sendNativeMouseButtonEvent_Quartz(const QNativeMouseButtonEve
     else
         type = (event.clickCount > 0) ? kCGEventOtherMouseDown : kCGEventOtherMouseUp;
 
-    CGEventRef e = CGEventCreateMouseEvent(0, type, pos, event.button);
+    // The mouseButton argument to CGEventCreateMouseEvent() is ignored unless the type
+    // is kCGEventOtherSomething, so defaulting to kCGMouseButtonLeft is fine.
+    CGMouseButton mouseButton = (type == kCGEventOtherMouseDown || type == kCGEventOtherMouseUp) ?
+        kCGMouseButtonCenter : kCGMouseButtonLeft;
+
+    CGEventRef e = CGEventCreateMouseEvent(0, type, pos, mouseButton);
     setModifiersFromQNativeEvent(e, event);
     CGEventSetIntegerValueField(e, kCGMouseEventClickState, event.clickCount);
     CGEventPost(kCGHIDEventTap, e);
@@ -283,7 +252,7 @@ Qt::Native::Status sendNativeMouseDragEvent_Quartz(const QNativeMouseDragEvent &
     pos.x = event.globalPos.x();
     pos.y = event.globalPos.y();
 
-    CGEventType type = 0;
+    CGEventType type = kCGEventNull;
     if (event.button == Qt::LeftButton)
         type = kCGEventLeftMouseDragged;
     else if (event.button == Qt::RightButton)
@@ -291,7 +260,11 @@ Qt::Native::Status sendNativeMouseDragEvent_Quartz(const QNativeMouseDragEvent &
     else
         type = kCGEventOtherMouseDragged;
 
-    CGEventRef e = CGEventCreateMouseEvent(0, type, pos, event.button);
+    // The mouseButton argument to CGEventCreateMouseEvent() is ignored unless the type
+    // is kCGEventOtherSomething, so defaulting to kCGMouseButtonLeft is fine.
+    CGMouseButton mouseButton = type == kCGEventOtherMouseDragged ? kCGMouseButtonCenter : kCGMouseButtonLeft;
+
+    CGEventRef e = CGEventCreateMouseEvent(0, type, pos, mouseButton);
     setModifiersFromQNativeEvent(e, event);
     CGEventPost(kCGHIDEventTap, e);
     CFRelease(e);
@@ -348,12 +321,9 @@ Qt::Native::Status QNativeInput::sendNativeMouseWheelEvent(const QNativeMouseWhe
     return sendNativeMouseWheelEvent_Quartz(event);
 }
 
-Qt::Native::Status QNativeInput::sendNativeKeyEvent(const QNativeKeyEvent &event, int pid)
+Qt::Native::Status QNativeInput::sendNativeKeyEvent(const QNativeKeyEvent &event)
 {
-    if (!pid)
-        return sendNativeKeyEvent_Quartz(event);
-    else
-        return sendNativeKeyEventToProcess_Quartz(event, pid);
+    return sendNativeKeyEvent_Quartz(event);
 }
 
 Qt::Native::Status QNativeInput::sendNativeModifierEvent(const QNativeModifierEvent &event)

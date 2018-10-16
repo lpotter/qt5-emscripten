@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,7 +37,9 @@
 #include <QtNetwork/qnetworksession.h>
 #endif
 
-#define TESTFILE QString("http://%1/qtest/cgi-bin/").arg(QtNetworkSettings::serverName())
+#include <algorithm>
+
+#define TESTFILE QLatin1String("http://") + QtNetworkSettings::serverName() + QLatin1String("/qtest/cgi-bin/")
 
 class tst_QAbstractNetworkCache : public QObject
 {
@@ -121,7 +110,7 @@ public:
 
 tst_QAbstractNetworkCache::tst_QAbstractNetworkCache()
 {
-    QCoreApplication::setOrganizationName(QLatin1String("Trolltech"));
+    QCoreApplication::setOrganizationName(QLatin1String("QtProject"));
     QCoreApplication::setApplicationName(QLatin1String("autotest_qabstractnetworkcache"));
     QCoreApplication::setApplicationVersion(QLatin1String("1.0"));
 }
@@ -201,9 +190,9 @@ void tst_QAbstractNetworkCache::lastModified_data()
     QTest::newRow("304-3") << QNetworkRequest::PreferCache << "httpcachetest_lastModified304.cgi" << true;
 
     QTest::newRow("200-0") << QNetworkRequest::AlwaysNetwork << "httpcachetest_lastModified200.cgi" << AlwaysFalse;
-    QTest::newRow("200-1") << QNetworkRequest::PreferNetwork << "httpcachetest_lastModified200.cgi" << false;
+    QTest::newRow("200-1") << QNetworkRequest::PreferNetwork << "httpcachetest_lastModified200.cgi" << true;
     QTest::newRow("200-2") << QNetworkRequest::AlwaysCache << "httpcachetest_lastModified200.cgi" << AlwaysTrue;
-    QTest::newRow("200-3") << QNetworkRequest::PreferCache << "httpcachetest_lastModified200.cgi" << false;
+    QTest::newRow("200-3") << QNetworkRequest::PreferCache << "httpcachetest_lastModified200.cgi" << true;
 }
 
 void tst_QAbstractNetworkCache::lastModified()
@@ -273,8 +262,6 @@ void tst_QAbstractNetworkCache::cacheControl_data()
     QTest::newRow("304-3") << QNetworkRequest::AlwaysCache << "httpcachetest_cachecontrol.cgi?max-age=1000, must-revalidate" << false;
     QTest::newRow("304-4") << QNetworkRequest::PreferCache << "httpcachetest_cachecontrol.cgi?max-age=1000, must-revalidate" << true;
 
-    // see QTBUG-7060
-    //QTest::newRow("nokia-boston") << QNetworkRequest::PreferNetwork << "http://waplabdc.nokia-boston.com/browser/users/venkat/cache/Cache_directives/private_1b.asp" << true;
     QTest::newRow("304-2b") << QNetworkRequest::PreferNetwork << "httpcachetest_cachecontrol200.cgi?private, max-age=1000" << true;
     QTest::newRow("304-4b") << QNetworkRequest::PreferCache << "httpcachetest_cachecontrol200.cgi?private, max-age=1000" << true;
 }
@@ -302,6 +289,7 @@ void tst_QAbstractNetworkCache::runTest()
 
     QNetworkAccessManager manager;
     NetworkDiskCache *diskCache = new NetworkDiskCache(&manager);
+    QVERIFY2(diskCache->tempDir.isValid(), qPrintable(diskCache->tempDir.errorString()));
     manager.setCache(diskCache);
     QCOMPARE(diskCache->gotData, false);
 
@@ -336,8 +324,8 @@ void tst_QAbstractNetworkCache::runTest()
     if (fetchFromCache) {
         QList<QByteArray> rawHeaderList = reply->rawHeaderList();
         QList<QByteArray> rawHeaderList2 = reply2->rawHeaderList();
-        qSort(rawHeaderList);
-        qSort(rawHeaderList2);
+        std::sort(rawHeaderList.begin(), rawHeaderList.end());
+        std::sort(rawHeaderList2.begin(), rawHeaderList2.end());
     }
     QCOMPARE(diskCache->gotData, fetchFromCache);
 }
@@ -352,6 +340,7 @@ void tst_QAbstractNetworkCache::checkSynchronous()
 
     QNetworkAccessManager manager;
     NetworkDiskCache *diskCache = new NetworkDiskCache(&manager);
+    QVERIFY2(diskCache->tempDir.isValid(), qPrintable(diskCache->tempDir.errorString()));
     manager.setCache(diskCache);
     QCOMPARE(diskCache->gotData, false);
 
@@ -390,8 +379,8 @@ void tst_QAbstractNetworkCache::checkSynchronous()
     if (fetchFromCache) {
         QList<QByteArray> rawHeaderList = reply->rawHeaderList();
         QList<QByteArray> rawHeaderList2 = reply2->rawHeaderList();
-        qSort(rawHeaderList);
-        qSort(rawHeaderList2);
+        std::sort(rawHeaderList.begin(), rawHeaderList.end());
+        std::sort(rawHeaderList2.begin(), rawHeaderList2.end());
     }
     QCOMPARE(diskCache->gotData, fetchFromCache);
 }
@@ -400,6 +389,7 @@ void tst_QAbstractNetworkCache::deleteCache()
 {
     QNetworkAccessManager manager;
     NetworkDiskCache *diskCache = new NetworkDiskCache(&manager);
+    QVERIFY2(diskCache->tempDir.isValid(), qPrintable(diskCache->tempDir.errorString()));
     manager.setCache(diskCache);
 
     QString url = "httpcachetest_cachecontrol.cgi?max-age=1000";

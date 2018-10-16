@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,12 +40,21 @@
 #ifndef QGENERICUNIXTHEMES_H
 #define QGENERICUNIXTHEMES_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <qpa/qplatformtheme.h>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 #include <QtGui/QFont>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -63,75 +70,87 @@ public:
     QFont *fonts[QPlatformTheme::NFonts];
 };
 
+class QGenericUnixThemePrivate;
+
 class QGenericUnixTheme : public QPlatformTheme
 {
+    Q_DECLARE_PRIVATE(QGenericUnixTheme)
 public:
     QGenericUnixTheme();
 
     static QPlatformTheme *createUnixTheme(const QString &name);
     static QStringList themeNames();
 
-    virtual const QFont *font(Font type) const;
-    virtual QVariant themeHint(ThemeHint hint) const;
+    const QFont *font(Font type) const override;
+    QVariant themeHint(ThemeHint hint) const override;
 
     static QStringList xdgIconThemePaths();
+    static QStringList iconFallbackPaths();
+#ifndef QT_NO_DBUS
+    QPlatformMenuBar *createPlatformMenuBar() const override;
+#endif
+#if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
+    QPlatformSystemTrayIcon *createPlatformSystemTrayIcon() const override;
+#endif
 
     static const char *name;
-
-private:
-    const QFont m_systemFont;
 };
 
 #ifndef QT_NO_SETTINGS
+class QKdeThemePrivate;
+
 class QKdeTheme : public QPlatformTheme
 {
-    QKdeTheme(const QString &kdeHome, int kdeVersion);
+    Q_DECLARE_PRIVATE(QKdeTheme)
 public:
+    QKdeTheme(const QStringList& kdeDirs, int kdeVersion);
 
     static QPlatformTheme *createKdeTheme();
-    virtual QVariant themeHint(ThemeHint hint) const;
+    QVariant themeHint(ThemeHint hint) const override;
 
-    virtual const QPalette *palette(Palette type = SystemPalette) const
-        { return m_resources.palettes[type]; }
+    QIcon fileIcon(const QFileInfo &fileInfo,
+                   QPlatformTheme::IconOptions iconOptions = 0) const override;
 
-    virtual const QFont *font(Font type) const
-        { return m_resources.fonts[type]; }
+    const QPalette *palette(Palette type = SystemPalette) const override;
+
+    const QFont *font(Font type) const override;
+#ifndef QT_NO_DBUS
+    QPlatformMenuBar *createPlatformMenuBar() const override;
+#endif
+#if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
+    QPlatformSystemTrayIcon *createPlatformSystemTrayIcon() const override;
+#endif
 
     static const char *name;
-
-private:
-    QString globalSettingsFile() const;
-    void refresh();
-
-    const QString m_kdeHome;
-    const int m_kdeVersion;
-
-    ResourceHelper m_resources;
-    QString m_iconThemeName;
-    QString m_iconFallbackThemeName;
-    QStringList m_styleNames;
-    int m_toolButtonStyle;
-    int m_toolBarIconSize;
 };
 #endif // QT_NO_SETTINGS
 
+class QGnomeThemePrivate;
+
 class QGnomeTheme : public QPlatformTheme
 {
+    Q_DECLARE_PRIVATE(QGnomeTheme)
 public:
     QGnomeTheme();
-    virtual QVariant themeHint(ThemeHint hint) const;
-    virtual const QFont *font(Font type) const;
+    QVariant themeHint(ThemeHint hint) const override;
+    QIcon fileIcon(const QFileInfo &fileInfo,
+                   QPlatformTheme::IconOptions = 0) const override;
+    const QFont *font(Font type) const override;
+    QString standardButtonText(int button) const override;
+
+    virtual QString gtkFontName() const;
+#ifndef QT_NO_DBUS
+    QPlatformMenuBar *createPlatformMenuBar() const override;
+#endif
+#if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
+    QPlatformSystemTrayIcon *createPlatformSystemTrayIcon() const override;
+#endif
 
     static const char *name;
-
-private:
-    const QFont m_systemFont;
 };
 
 QPlatformTheme *qt_createUnixTheme();
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QGENERICUNIXTHEMES_H

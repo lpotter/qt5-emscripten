@@ -1,65 +1,62 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qfileiconprovider.h"
+#include "qfileiconprovider_p.h"
 
-#ifndef QT_NO_FILEICONPROVIDER
-#include <qstyle.h>
 #include <qapplication.h>
 #include <qdir.h>
 #include <qpixmapcache.h>
 #include <private/qfunctions_p.h>
 #include <private/qguiapplication_p.h>
+#include <private/qicon_p.h>
+#include <private/qfilesystementry_p.h>
 #include <qpa/qplatformintegration.h>
 #include <qpa/qplatformservices.h>
 #include <qpa/qplatformtheme.h>
 
 #if defined(Q_OS_WIN)
 #  include <qt_windows.h>
-#  include <commctrl.h>
-#  include <objbase.h>
-#endif
-
-#if defined(Q_OS_UNIX) && !defined(QT_NO_STYLE_GTK)
-#  include <private/qgtkstyle_p_p.h>
+#  ifndef Q_OS_WINRT
+#    include <commctrl.h>
+#    include <objbase.h>
+#  endif
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -83,37 +80,18 @@ QT_BEGIN_NAMESPACE
   \value File
 */
 
-class QFileIconProviderPrivate
-{
-    Q_DECLARE_PUBLIC(QFileIconProvider)
 
-public:
-    QFileIconProviderPrivate();
-    QIcon getIcon(QStyle::StandardPixmap name) const;
-    QIcon getIcon(const QFileInfo &fi) const;
+/*!
+    \enum QFileIconProvider::Option
+    \since 5.2
 
-    QFileIconProvider *q_ptr;
-    const QString homePath;
+    \value DontUseCustomDirectoryIcons Always use the default directory icon.
+    Some platforms allow the user to set a different icon. Custom icon lookup
+    cause a big performance impact over network or removable drives.
+*/
 
-private:
-    mutable QIcon file;
-    mutable QIcon fileLink;
-    mutable QIcon directory;
-    mutable QIcon directoryLink;
-    mutable QIcon harddisk;
-    mutable QIcon floppy;
-    mutable QIcon cdrom;
-    mutable QIcon ram;
-    mutable QIcon network;
-    mutable QIcon computer;
-    mutable QIcon desktop;
-    mutable QIcon trashcan;
-    mutable QIcon generic;
-    mutable QIcon home;
-};
-
-QFileIconProviderPrivate::QFileIconProviderPrivate() :
-    homePath(QDir::home().absolutePath())
+QFileIconProviderPrivate::QFileIconProviderPrivate(QFileIconProvider *q) :
+    q_ptr(q), homePath(QDir::home().absolutePath())
 {
 }
 
@@ -179,7 +157,7 @@ QIcon QFileIconProviderPrivate::getIcon(QStyle::StandardPixmap name) const
 */
 
 QFileIconProvider::QFileIconProvider()
-    : d_ptr(new QFileIconProviderPrivate)
+    : d_ptr(new QFileIconProviderPrivate(this))
 {
 }
 
@@ -190,6 +168,31 @@ QFileIconProvider::QFileIconProvider()
 
 QFileIconProvider::~QFileIconProvider()
 {
+}
+
+/*!
+    \since 5.2
+    Sets \a options that affect the icon provider.
+    \sa options()
+*/
+
+void QFileIconProvider::setOptions(QFileIconProvider::Options options)
+{
+    Q_D(QFileIconProvider);
+    d->options = options;
+}
+
+/*!
+    \since 5.2
+    Returns all the options that affect the icon provider.
+    By default, all options are disabled.
+    \sa setOptions()
+*/
+
+QFileIconProvider::Options QFileIconProvider::options() const
+{
+    Q_D(const QFileIconProvider);
+    return d->options;
 }
 
 /*!
@@ -220,51 +223,18 @@ QIcon QFileIconProvider::icon(IconType type) const
     return QIcon();
 }
 
-QIcon QFileIconProviderPrivate::getIcon(const QFileInfo &fi) const
+static inline QPlatformTheme::IconOptions toThemeIconOptions(QFileIconProvider::Options options)
 {
-    QIcon retIcon;
-    const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme();
-    if (!theme)
-        return retIcon;
-
-    QList<int> sizes = theme->themeHint(QPlatformTheme::IconPixmapSizes).value<QList<int> >();
-    if (sizes.isEmpty())
-        return retIcon;
-
-    const QString fileExtension = fi.suffix().toUpper();
-    const QString keyBase = QLatin1String("qt_.") + fi.suffix().toUpper();
-
-    bool cacheable = fi.isFile() && !fi.isExecutable() && !fi.isSymLink() && fileExtension != QLatin1String("ICO");
-    if (cacheable) {
-        QPixmap pixmap;
-        QPixmapCache::find(keyBase + QString::number(sizes.at(0)), pixmap);
-        if (!pixmap.isNull()) {
-            bool iconIsComplete = true;
-            retIcon.addPixmap(pixmap);
-            for (int i = 1; i < sizes.count(); i++)
-                if (QPixmapCache::find(keyBase + QString::number(sizes.at(i)), pixmap)) {
-                    retIcon.addPixmap(pixmap);
-                } else {
-                    iconIsComplete = false;
-                    break;
-                }
-            if (iconIsComplete)
-                return retIcon;
-        }
-    }
-
-    Q_FOREACH (int size, sizes) {
-        QPixmap pixmap = theme->fileIconPixmap(fi, QSizeF(size, size));
-        if (!pixmap.isNull()) {
-            retIcon.addPixmap(pixmap);
-            if (cacheable)
-                QPixmapCache::insert(keyBase + QString::number(size), pixmap);
-        }
-    }
-
-    return retIcon;
+    QPlatformTheme::IconOptions result;
+    if (options & QFileIconProvider::DontUseCustomDirectoryIcons)
+        result |= QPlatformTheme::DontUseCustomDirectoryIcons;
+    return result;
 }
 
+QIcon QFileIconProviderPrivate::getIcon(const QFileInfo &fi) const
+{
+    return QGuiApplicationPrivate::platformTheme()->fileIcon(fi, toThemeIconOptions(options));
+}
 
 /*!
   Returns an icon for the file described by \a info.
@@ -274,23 +244,15 @@ QIcon QFileIconProvider::icon(const QFileInfo &info) const
 {
     Q_D(const QFileIconProvider);
 
-#if defined(Q_OS_UNIX) && !defined(QT_NO_STYLE_GTK)
-    const QByteArray desktopEnvironment = QGuiApplicationPrivate::platformIntegration()->services()->desktopEnvironment();
-    if (desktopEnvironment != QByteArrayLiteral("KDE")) {
-        QIcon gtkIcon = QGtkStylePrivate::getFilesystemIcon(info);
-        if (!gtkIcon.isNull())
-            return gtkIcon;
-    }
-#endif
-
     QIcon retIcon = d->getIcon(info);
     if (!retIcon.isNull())
         return retIcon;
 
-    if (info.isRoot())
-#if defined (Q_OS_WIN) && !defined(Q_OS_WINCE)
+    const QString &path = info.absoluteFilePath();
+    if (path.isEmpty() || QFileSystemEntry::isRootPath(path))
+#if defined (Q_OS_WIN) && !defined(Q_OS_WINRT)
     {
-        UINT type = GetDriveType((wchar_t *)info.absoluteFilePath().utf16());
+        UINT type = GetDriveType(reinterpret_cast<const wchar_t *>(path.utf16()));
 
         switch (type) {
         case DRIVE_REMOVABLE:
@@ -338,11 +300,13 @@ QIcon QFileIconProvider::icon(const QFileInfo &info) const
 
 QString QFileIconProvider::type(const QFileInfo &info) const
 {
-    if (info.isRoot())
+    if (QFileSystemEntry::isRootPath(info.absoluteFilePath()))
         return QApplication::translate("QFileDialog", "Drive");
     if (info.isFile()) {
-        if (!info.suffix().isEmpty())
-            return info.suffix() + QLatin1Char(' ') + QApplication::translate("QFileDialog", "File");
+        if (!info.suffix().isEmpty()) {
+            //: %1 is a file name suffix, for example txt
+            return QApplication::translate("QFileDialog", "%1 File").arg(info.suffix());
+        }
         return QApplication::translate("QFileDialog", "File");
     }
 
@@ -359,7 +323,7 @@ QString QFileIconProvider::type(const QFileInfo &info) const
 
     if (info.isSymLink())
 #ifdef Q_OS_MAC
-        return QApplication::translate("QFileDialog", "Alias", "Mac OS X Finder");
+        return QApplication::translate("QFileDialog", "Alias", "OS X Finder");
 #else
         return QApplication::translate("QFileDialog", "Shortcut", "All other platforms");
 #endif
@@ -372,5 +336,3 @@ QString QFileIconProvider::type(const QFileInfo &info) const
 }
 
 QT_END_NAMESPACE
-
-#endif

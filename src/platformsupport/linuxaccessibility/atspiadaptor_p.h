@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,24 +41,35 @@
 #ifndef ATSPIADAPTOR_H
 #define ATSPIADAPTOR_H
 
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
 #include <atspi/atspi-constants.h>
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QtCore/qsharedpointer.h>
 #include <QtDBus/qdbusvirtualobject.h>
 #include <QtGui/qaccessible.h>
-#include <QtGui/qaccessible2.h>
 
 #include "dbusconnection_p.h"
 #include "struct_marshallers_p.h"
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(accessibility);
+
 QT_BEGIN_NAMESPACE
 
 class QAccessibleInterface;
 class QSpiAccessibleInterface;
 class QSpiApplicationAdaptor;
 
-typedef QSharedPointer<QAccessibleInterface> QAIPointer;
 
 class AtSpiAdaptor :public QDBusVirtualObject
 {
@@ -75,8 +84,8 @@ public:
     bool handleMessage(const QDBusMessage &message, const QDBusConnection &connection);
     void notify(QAccessibleEvent *event);
 
-    void setInitialized(bool init);
-
+    void init();
+    void checkInitializedAndEnabled();
 public Q_SLOTS:
     void eventListenerRegistered(const QString &bus, const QString &path);
     void eventListenerDeregistered(const QString &bus, const QString &path);
@@ -91,44 +100,47 @@ private:
     bool sendDBusSignal(const QString &path, const QString &interface, const QString &name, const QVariantList &arguments) const;
     QVariant variantForPath(const QString &path) const;
 
-    void sendFocusChanged(const QAIPointer &interface) const;
-    void notifyAboutCreation(const QAIPointer &interface) const;
-    void notifyAboutDestruction(const QAIPointer &interface) const;
+    void sendFocusChanged(QAccessibleInterface *interface) const;
+    void notifyAboutCreation(QAccessibleInterface *interface) const;
+    void notifyAboutDestruction(QAccessibleInterface *interface) const;
+    void childrenChanged(QAccessibleInterface *interface) const;
 
     // handlers for the different accessible interfaces
-    bool applicationInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool accessibleInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool componentInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool actionInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool textInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool editableTextInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool valueInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
-    bool tableInterface(const QAIPointer &interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool applicationInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool accessibleInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool componentInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool actionInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool textInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool editableTextInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool valueInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
+    bool tableInterface(QAccessibleInterface *interface, const QString &function, const QDBusMessage &message, const QDBusConnection &connection);
 
     void sendReply(const QDBusConnection &connection, const QDBusMessage &message, const QVariant &argument) const;
 
-    QAIPointer interfaceFromPath(const QString& dbusPath) const;
-    QString pathForInterface(const QAIPointer &interface, bool inDestructor = false) const;
+    QAccessibleInterface *interfaceFromPath(const QString& dbusPath) const;
+    QString pathForInterface(QAccessibleInterface *interface) const;
     QString pathForObject(QObject *object) const;
 
+    void notifyStateChange(QAccessibleInterface *interface, const QString& state, int value);
+
     // accessible helper functions
-    AtspiRole getRole(const QAIPointer &interface) const;
-    QSpiRelationArray relationSet(const QAIPointer &interface, const QDBusConnection &connection) const;
-    QStringList accessibleInterfaces(const QAIPointer &interface) const;
+    AtspiRole getRole(QAccessibleInterface *interface) const;
+    QSpiRelationArray relationSet(QAccessibleInterface *interface, const QDBusConnection &connection) const;
+    QStringList accessibleInterfaces(QAccessibleInterface *interface) const;
 
     // component helper functions
-    static QRect getExtents(const QAIPointer &interface, uint coordType);
-    static QRect translateRectToWindowCoordinates(const QAIPointer &interface, const QRect &rect);
+    static QRect getExtents(QAccessibleInterface *interface, uint coordType);
+    static QRect translateRectToWindowCoordinates(QAccessibleInterface *interface, const QRect &rect);
 
     // action helper functions
-    QSpiActionArray getActions(QAccessibleActionInterface* interface) const;
+    QSpiActionArray getActions(QAccessibleInterface *interface) const;
 
     // text helper functions
-    QVariantList getAttributes(const QAIPointer &, int offset, bool includeDefaults) const;
-    QVariantList getAttributeValue(const QAIPointer &, int offset, const QString &attributeName) const;
-    QRect getCharacterExtents(const QAIPointer &, int offset, uint coordType) const;
-    QRect getRangeExtents(const QAIPointer &, int startOffset, int endOffset, uint coordType) const;
-    QAccessible2::BoundaryType qAccessibleBoundaryType(int atspiTextBoundaryType) const;
+    QVariantList getAttributes(QAccessibleInterface *, int offset, bool includeDefaults) const;
+    QVariantList getAttributeValue(QAccessibleInterface *, int offset, const QString &attributeName) const;
+    QList<QVariant> getCharacterExtents(QAccessibleInterface *, int offset, uint coordType) const;
+    QList<QVariant> getRangeExtents(QAccessibleInterface *, int startOffset, int endOffset, uint coordType) const;
+    QAccessible::TextBoundaryType qAccessibleBoundaryType(int atspiTextBoundaryType) const;
     static bool inheritsQAction(QObject *object);
 
     // private vars
@@ -138,9 +150,6 @@ private:
 
     /// Assigned from the accessibility registry.
     int m_applicationId;
-    bool initialized;
-
-    mutable QHash<quintptr, QPointer<QObject> > m_handledObjects;
 
     // Bit fields - which updates to send
 
@@ -215,6 +224,5 @@ private:
 };
 
 QT_END_NAMESPACE
-QT_END_HEADER
 
 #endif

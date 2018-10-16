@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,12 +51,17 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtCore/QHash>
 #include <QtCore/QQueue>
 #include <QtCore/QString>
 #include <QtCore/QDebug>
 
+#include <functional> // for std::less
+
 #include <float.h>
+
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
 
@@ -75,9 +78,7 @@ public:
                 row = g->m_graph.constBegin();
                 //test if the graph is empty
                 if (row != g->m_graph.constEnd())
-                {
-                    column = (*row)->constBegin();
-                }
+                    column = row->cbegin();
             } else {
                 row = g->m_graph.constEnd();
             }
@@ -103,16 +104,15 @@ public:
                 return row != o.row || column != o.column;
            }
         }
-        inline const_iterator& operator=(const const_iterator &o) const { row = o.row; column = o.column; return *this;}
 
         // prefix
         const_iterator &operator++() {
             if (row != g->m_graph.constEnd()) {
                 ++column;
-                if (column == (*row)->constEnd()) {
+                if (column == row->cend()) {
                     ++row;
                     if (row != g->m_graph.constEnd()) {
-                        column = (*row)->constBegin();
+                        column = row->cbegin();
                     }
                 }
             }
@@ -121,7 +121,7 @@ public:
 
     private:
         const Graph *g;
-        typename QHash<Vertex *, QHash<Vertex *, EdgeData *> * >::const_iterator row;
+        typename QHash<Vertex *, QHash<Vertex *, EdgeData *> >::const_iterator row;
         typename QHash<Vertex *, EdgeData *>::const_iterator column;
     };
 
@@ -141,8 +141,13 @@ public:
      *
      */
     EdgeData *edgeData(Vertex* first, Vertex* second) {
-        QHash<Vertex *, EdgeData *> *row = m_graph.value(first);
-        return row ? row->value(second) : 0;
+        const auto it = m_graph.constFind(first);
+        if (it == m_graph.cend())
+            return nullptr;
+        const auto jt = it->constFind(second);
+        if (jt == it->cend())
+            return nullptr;
+        return *jt;
     }
 
     void createEdge(Vertex *first, Vertex *second, EdgeData *data)
@@ -194,11 +199,11 @@ public:
 
     QList<Vertex *> adjacentVertices(Vertex *vertex) const
     {
-        QHash<Vertex *, EdgeData *> *row = m_graph.value(vertex);
-        QList<Vertex *> l;
-        if (row)
-            l = row->keys();
-        return l;
+        const auto it = m_graph.constFind(vertex);
+        if (it == m_graph.cend())
+            return QList<Vertex *>();
+        else
+            return it->keys();
     }
 
     QSet<Vertex*> vertices() const {
@@ -209,15 +214,14 @@ public:
         return setOfVertices;
     }
 
-    QList<QPair<Vertex*, Vertex*> > connections() const {
-        QList<QPair<Vertex*, Vertex*> > conns;
+    QVector<QPair<Vertex*, Vertex*> > connections() const {
+        QVector<QPair<Vertex*, Vertex*> > conns;
         for (const_iterator it = constBegin(); it != constEnd(); ++it) {
             Vertex *from = it.from();
             Vertex *to = it.to();
             // do not return (from,to) *and* (to,from)
-            if (from < to) {
+            if (std::less<Vertex*>()(from, to))
                 conns.append(qMakePair(from, to));
-            }
         }
         return conns;
     }
@@ -230,9 +234,8 @@ public:
         QSet<Vertex *> setOfVertices = vertices();
         for (typename QSet<Vertex*>::const_iterator it = setOfVertices.begin(); it != setOfVertices.end(); ++it) {
             Vertex *v = *it;
-            QList<Vertex*> adjacents = adjacentVertices(v);
-            for (int i = 0; i < adjacents.count(); ++i) {
-                Vertex *v1 = adjacents.at(i);
+            const QList<Vertex*> adjacents = adjacentVertices(v);
+            for (auto *v1 : adjacents) {
                 EdgeData *data = edgeData(v, v1);
                 bool forward = data->from == v;
                 if (forward) {
@@ -249,36 +252,30 @@ public:
             }
             strVertices += QString::fromLatin1("\"%1\" [label=\"%2\"]\n").arg(v->toString()).arg(v->toString());
         }
-        return QString::fromLatin1("%1\n%2\n").arg(strVertices).arg(edges);
+        return QString::fromLatin1("%1\n%2\n").arg(strVertices, edges);
     }
 #endif
 
 protected:
     void createDirectedEdge(Vertex *from, Vertex *to, EdgeData *data)
     {
-        QHash<Vertex *, EdgeData *> *adjacentToFirst = m_graph.value(from);
-        if (!adjacentToFirst) {
-            adjacentToFirst = new QHash<Vertex *, EdgeData *>();
-            m_graph.insert(from, adjacentToFirst);
-        }
-        adjacentToFirst->insert(to, data);
+        m_graph[from][to] = data;
     }
 
     void removeDirectedEdge(Vertex *from, Vertex *to)
     {
-        QHash<Vertex *, EdgeData *> *adjacentToFirst = m_graph.value(from);
-        Q_ASSERT(adjacentToFirst);
+        const auto it = m_graph.find(from);
+        Q_ASSERT(it != m_graph.end());
 
-        adjacentToFirst->remove(to);
-        if (adjacentToFirst->isEmpty()) {
+        it->remove(to);
+        if (it->isEmpty()) {
             //nobody point to 'from' so we can remove it from the graph
-            m_graph.remove(from);
-            delete adjacentToFirst;
+            m_graph.erase(it);
         }
     }
 
 private:
-    QHash<Vertex *, QHash<Vertex *, EdgeData *> *> m_graph;
+    QHash<Vertex *, QHash<Vertex *, EdgeData *> > m_graph;
 };
 
 QT_END_NAMESPACE

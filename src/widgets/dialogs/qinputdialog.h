@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,16 +40,15 @@
 #ifndef QINPUTDIALOG_H
 #define QINPUTDIALOG_H
 
-#include <QtWidgets/qdialog.h>
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtCore/qstring.h>
 #include <QtWidgets/qlineedit.h>
 
-QT_BEGIN_HEADER
+#include <QtWidgets/qdialog.h>
+
+QT_REQUIRE_CONFIG(inputdialog);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_INPUTDIALOG
 
 class QInputDialogPrivate;
 
@@ -77,11 +74,13 @@ class Q_WIDGETS_EXPORT QInputDialog : public QDialog
     QDOC_PROPERTY(int doubleDecimals READ doubleDecimals WRITE setDoubleDecimals)
     QDOC_PROPERTY(QString okButtonText READ okButtonText WRITE setOkButtonText)
     QDOC_PROPERTY(QString cancelButtonText READ cancelButtonText WRITE setCancelButtonText)
+    QDOC_PROPERTY(double doubleStep READ doubleStep WRITE setDoubleStep)
 
 public:
     enum InputDialogOption {
-        NoButtons                   = 0x00000001,
-        UseListViewForComboBoxItems = 0x00000002
+        NoButtons                    = 0x00000001,
+        UseListViewForComboBoxItems  = 0x00000002,
+        UsePlainTextEditForTextInput = 0x00000004
     };
 
     Q_DECLARE_FLAGS(InputDialogOptions, InputDialogOption)
@@ -92,7 +91,7 @@ public:
         DoubleInput
     };
 
-    QInputDialog(QWidget *parent = 0, Qt::WindowFlags flags = 0);
+    QInputDialog(QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
     ~QInputDialog();
 
     void setInputMode(InputMode mode);
@@ -152,44 +151,50 @@ public:
     void setCancelButtonText(const QString &text);
     QString cancelButtonText() const;
 
-#ifdef Q_NO_USING_KEYWORD
-#ifndef Q_QDOC
-    void open() { QDialog::open(); }
-#endif
-#else
     using QDialog::open;
-#endif
     void open(QObject *receiver, const char *member);
 
-    QSize minimumSizeHint() const;
-    QSize sizeHint() const;
+    QSize minimumSizeHint() const override;
+    QSize sizeHint() const override;
 
-    void setVisible(bool visible);
+    void setVisible(bool visible) override;
 
     static QString getText(QWidget *parent, const QString &title, const QString &label,
                            QLineEdit::EchoMode echo = QLineEdit::Normal,
-                           const QString &text = QString(), bool *ok = 0, Qt::WindowFlags flags = 0,
+                           const QString &text = QString(), bool *ok = nullptr,
+                           Qt::WindowFlags flags = Qt::WindowFlags(),
                            Qt::InputMethodHints inputMethodHints = Qt::ImhNone);
+    static QString getMultiLineText(QWidget *parent, const QString &title, const QString &label,
+                                    const QString &text = QString(), bool *ok = nullptr,
+                                    Qt::WindowFlags flags = Qt::WindowFlags(),
+                                    Qt::InputMethodHints inputMethodHints = Qt::ImhNone);
     static QString getItem(QWidget *parent, const QString &title, const QString &label,
                            const QStringList &items, int current = 0, bool editable = true,
-                           bool *ok = 0, Qt::WindowFlags flags = 0,
+                           bool *ok = nullptr, Qt::WindowFlags flags = Qt::WindowFlags(),
                            Qt::InputMethodHints inputMethodHints = Qt::ImhNone);
 
     static int getInt(QWidget *parent, const QString &title, const QString &label, int value = 0,
                       int minValue = -2147483647, int maxValue = 2147483647,
-                      int step = 1, bool *ok = 0, Qt::WindowFlags flags = 0);
+                      int step = 1, bool *ok = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
     static double getDouble(QWidget *parent, const QString &title, const QString &label, double value = 0,
                             double minValue = -2147483647, double maxValue = 2147483647,
-                            int decimals = 1, bool *ok = 0, Qt::WindowFlags flags = 0);
+                            int decimals = 1, bool *ok = nullptr, Qt::WindowFlags flags = Qt::WindowFlags());
+    // ### Qt 6: merge overloads
+    static double getDouble(QWidget *parent, const QString &title, const QString &label, double value,
+                            double minValue, double maxValue, int decimals, bool *ok, Qt::WindowFlags flags,
+                            double step);
 
 #if QT_DEPRECATED_SINCE(5, 0)
     QT_DEPRECATED static inline int getInteger(QWidget *parent, const QString &title, const QString &label, int value = 0,
                           int minValue = -2147483647, int maxValue = 2147483647,
-                          int step = 1, bool *ok = 0, Qt::WindowFlags flags = 0)
+                          int step = 1, bool *ok = nullptr, Qt::WindowFlags flags = Qt::WindowFlags())
     {
         return getInt(parent, title, label, value, minValue, maxValue, step, ok, flags);
     }
 #endif
+
+    void setDoubleStep(double step);
+    double doubleStep() const;
 
 Q_SIGNALS:
     // ### emit signals!
@@ -201,20 +206,17 @@ Q_SIGNALS:
     void doubleValueSelected(double value);
 
 public:
-    void done(int result);
+    void done(int result) override;
 
 private:
     Q_DISABLE_COPY(QInputDialog)
     Q_PRIVATE_SLOT(d_func(), void _q_textChanged(const QString&))
+    Q_PRIVATE_SLOT(d_func(), void _q_plainTextEditTextChanged())
     Q_PRIVATE_SLOT(d_func(), void _q_currentRowChanged(const QModelIndex&, const QModelIndex&))
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QInputDialog::InputDialogOptions)
 
-#endif // QT_NO_INPUTDIALOG
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QINPUTDIALOG_H

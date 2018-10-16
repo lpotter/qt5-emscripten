@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,8 +44,6 @@
 #include <QtCore/qbytearray.h>
 #include <QtCore/qobjectdefs.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -56,7 +52,6 @@ class Q_CORE_EXPORT QEvent           // event base class
 {
     Q_GADGET
     QDOC_PROPERTY(bool accepted READ isAccepted WRITE setAccepted)
-    Q_ENUMS(Type)
 public:
     enum Type {
         /*
@@ -144,13 +139,15 @@ public:
         EnabledChange = 98,                     // enabled state has changed
         ActivationChange = 99,                  // window activation has changed
         StyleChange = 100,                      // style has changed
-        IconTextChange = 101,                   // icon text has changed
+        IconTextChange = 101,                   // icon text has changed.  Deprecated.
         ModifiedChange = 102,                   // modified state has changed
         MouseTrackingChange = 109,              // mouse tracking state has changed
 
         WindowBlocked = 103,                    // window is about to be blocked modally
         WindowUnblocked = 104,                  // windows modal blocking has ended
         WindowStateChange = 105,
+
+        ReadOnlyChange = 106,                   // readonly state has changed
 
         ToolTip = 110,
         WhatsThis = 111,
@@ -169,9 +166,9 @@ public:
 
         ToolBarChange = 120,                    // toolbar visibility toggled
 
-        ApplicationActivate = 121,              // application has been changed to active
+        ApplicationActivate = 121,              // deprecated. Use ApplicationStateChange instead.
         ApplicationActivated = ApplicationActivate, // deprecated
-        ApplicationDeactivate = 122,            // application has been changed to inactive
+        ApplicationDeactivate = 122,            // deprecated. Use ApplicationStateChange instead.
         ApplicationDeactivated = ApplicationDeactivate, // deprecated
 
         QueryWhatsThis = 123,                   // query what's this widget help
@@ -251,7 +248,7 @@ public:
         TouchEnd = 196,
 
 #ifndef QT_NO_GESTURES
-        NativeGesture = 197,                    // Internal for platform gesture support
+        NativeGesture = 197,                    // QtGui native gesture
 #endif
         RequestSoftwareInputPanel = 199,
         CloseSoftwareInputPanel = 200,
@@ -278,6 +275,16 @@ public:
         PlatformPanel = 212,
 
         StyleAnimationUpdate = 213,             // style animation target should be updated
+        ApplicationStateChange = 214,
+
+        WindowChangeInternal = 215,             // internal for QQuickWidget
+        ScreenChangeInternal = 216,
+
+        PlatformSurface = 217,                  // Platform surface created or about to be destroyed
+
+        Pointer = 218,                          // QQuickPointerEvent; ### Qt 6: QPointerEvent
+
+        TabletTrackingChange = 219,             // tablet tracking state has changed
 
         // 512 reserved for Qt Jambi's MetaCall event
         // 513 reserved for Qt Jambi's DeleteOnMainThread event
@@ -285,6 +292,7 @@ public:
         User = 1000,                            // first user event id
         MaxUser = 65535                         // last user event id
     };
+    Q_ENUM(Type)
 
     explicit QEvent(Type type);
     QEvent(const QEvent &other);
@@ -299,7 +307,7 @@ public:
     inline void accept() { m_accept = true; }
     inline void ignore() { m_accept = false; }
 
-    static int registerEventType(int hint = -1);
+    static int registerEventType(int hint = -1) Q_DECL_NOTHROW;
 
 protected:
     QEventPrivate *d;
@@ -315,16 +323,15 @@ private:
     friend class QCoreApplicationPrivate;
     friend class QThreadData;
     friend class QApplication;
-    friend class QApplicationPrivate;
     friend class QShortcutMap;
-    friend class QETWidget;
     friend class QGraphicsView;
-    friend class QGraphicsViewPrivate;
     friend class QGraphicsScene;
     friend class QGraphicsScenePrivate;
-#ifndef QT_NO_GESTURES
-    friend class QGestureManager;
-#endif
+    // from QtTest:
+    friend class QSpontaneKeyEvent;
+    // needs this:
+    Q_ALWAYS_INLINE
+    void setSpontaneous() { spont = true; }
 };
 
 class Q_CORE_EXPORT QTimerEvent : public QEvent
@@ -376,7 +383,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QCOREEVENT_H

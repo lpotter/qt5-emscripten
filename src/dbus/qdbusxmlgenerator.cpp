@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,7 @@
 
 #include <QtCore/qmetaobject.h>
 #include <QtCore/qstringlist.h>
+#include <QtCore/qdebug.h>
 
 #include "qdbusinterface_p.h"   // for ANNOTATION_NO_WAIT
 #include "qdbusabstractadaptor_p.h" // for QCLASSINFO_DBUS_*
@@ -59,11 +58,11 @@ extern Q_DBUS_EXPORT QString qDBusGenerateMetaObjectXml(QString interface, const
 static inline QString typeNameToXml(const char *typeName)
 {
     // ### copied from qtextdocument.cpp
-    // ### move this into QtCore at some point
-    QString plain = QLatin1String(typeName);
+    // ### move this into Qt Core at some point
+    const QLatin1String plain(typeName);
     QString rich;
-    rich.reserve(int(plain.length() * 1.1));
-    for (int i = 0; i < plain.length(); ++i) {
+    rich.reserve(int(plain.size() * 1.1));
+    for (int i = 0; i < plain.size(); ++i) {
         if (plain.at(i) == QLatin1Char('<'))
             rich += QLatin1String("&lt;");
         else if (plain.at(i) == QLatin1Char('>'))
@@ -74,6 +73,14 @@ static inline QString typeNameToXml(const char *typeName)
             rich += plain.at(i);
     }
     return rich;
+}
+
+static inline QLatin1String accessAsString(bool read, bool write)
+{
+    if (read)
+        return write ? QLatin1String("readwrite") : QLatin1String("read") ;
+    else
+        return write ? QLatin1String("write") : QLatin1String("") ;
 }
 
 // implement the D-Bus org.freedesktop.DBus.Introspectable interface
@@ -87,19 +94,12 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
     if (flags & (QDBusConnection::ExportScriptableProperties |
                  QDBusConnection::ExportNonScriptableProperties)) {
         for (int i = propOffset; i < mo->propertyCount(); ++i) {
-            static const char *accessvalues[] = {0, "read", "write", "readwrite"};
 
             QMetaProperty mp = mo->property(i);
 
             if (!((mp.isScriptable() && (flags & QDBusConnection::ExportScriptableProperties)) ||
                   (!mp.isScriptable() && (flags & QDBusConnection::ExportNonScriptableProperties))))
                 continue;
-
-            int access = 0;
-            if (mp.isReadable())
-                access |= 1;
-            if (mp.isWritable())
-                access |= 2;
 
             int typeId = mp.userType();
             if (!typeId)
@@ -109,9 +109,9 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
                 continue;
 
             retval += QString::fromLatin1("    <property name=\"%1\" type=\"%2\" access=\"%3\"")
-                      .arg(QLatin1String(mp.name()))
-                      .arg(QLatin1String(signature))
-                      .arg(QLatin1String(accessvalues[access]));
+                      .arg(QLatin1String(mp.name()),
+                           QLatin1String(signature),
+                           accessAsString(mp.isReadable(), mp.isWritable()));
 
             if (QDBusMetaType::signatureToType(signature) == QVariant::Invalid) {
                 const char *typeName = QMetaType::typeName(typeId);
@@ -143,9 +143,14 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
                           !(flags & (QDBusConnection::ExportScriptableInvokables | QDBusConnection::ExportNonScriptableInvokables))))
             continue;           // we're not exporting any slots or invokables
 
-        QString xml = QString::fromLatin1("    <%1 name=\"%2\">\n")
-                      .arg(isSignal ? QLatin1String("signal") : QLatin1String("method"))
-                      .arg(QString::fromLatin1(mm.name()));
+        // we want to skip non-scriptable stuff as early as possible to avoid bogus warning
+        // for methods that are not being exported at all
+        bool isScriptable = mm.attributes() & QMetaMethod::Scriptable;
+        if (!isScriptable && !(flags & (isSignal ? QDBusConnection::ExportNonScriptableSignals : QDBusConnection::ExportNonScriptableInvokables | QDBusConnection::ExportNonScriptableSlots)))
+            continue;
+
+        QString xml = QString::asprintf("    <%s name=\"%s\">\n",
+                                        isSignal ? "signal" : "method", mm.name().constData());
 
         // check the return type first
         int typeId = mm.returnType();
@@ -159,17 +164,24 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
                 if (QDBusMetaType::signatureToType(typeName) == QVariant::Invalid)
                     xml += QString::fromLatin1("      <annotation name=\"org.qtproject.QtDBus.QtTypeName.Out0\" value=\"%1\"/>\n")
                         .arg(typeNameToXml(QMetaType::typeName(typeId)));
-            } else
+            } else {
+                qWarning() << "Unsupported return type" << typeId << QMetaType::typeName(typeId) << "in method" << mm.name();
                 continue;
+            }
         }
-        else if (typeId == QMetaType::UnknownType)
+        else if (typeId == QMetaType::UnknownType) {
+            qWarning() << "Invalid return type in method" << mm.name();
             continue;           // wasn't a valid type
+        }
 
         QList<QByteArray> names = mm.parameterNames();
         QVector<int> types;
-        int inputCount = qDBusParametersForMethod(mm, types);
-        if (inputCount == -1)
+        QString errorMsg;
+        int inputCount = qDBusParametersForMethod(mm, types, errorMsg);
+        if (inputCount == -1) {
+            qWarning() << "Skipped method" << mm.name() << ":" << qPrintable(errorMsg);
             continue;           // invalid form
+        }
         if (isSignal && inputCount + 1 != types.count())
             continue;           // signal with output arguments?
         if (isSignal && types.at(inputCount) == QDBusMetaTypeId::message())
@@ -178,7 +190,6 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
             continue;           // cloned signal?
 
         int j;
-        bool isScriptable = mm.attributes() & QMetaMethod::Scriptable;
         for (j = 1; j < types.count(); ++j) {
             // input parameter for a slot or output for a signal
             if (types.at(j) == QDBusMetaTypeId::message()) {
@@ -193,10 +204,8 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
             bool isOutput = isSignal || j > inputCount;
 
             const char *signature = QDBusMetaType::typeToSignature(types.at(j));
-            xml += QString::fromLatin1("      <arg %1type=\"%2\" direction=\"%3\"/>\n")
-                   .arg(name)
-                   .arg(QLatin1String(signature))
-                   .arg(isOutput ? QLatin1String("out") : QLatin1String("in"));
+            xml += QString::asprintf("      <arg %lstype=\"%s\" direction=\"%s\"/>\n",
+                                     qUtf16Printable(name), signature, isOutput ? "out" : "in");
 
             // do we need to describe this argument?
             if (QDBusMetaType::signatureToType(signature) == QVariant::Invalid) {

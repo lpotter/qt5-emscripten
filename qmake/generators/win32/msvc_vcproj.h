@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,14 +44,13 @@ class QUuid;
 struct VcsolutionDepend;
 class VcprojGenerator : public Win32MakefileGenerator
 {
-    bool init_flag;
     bool is64Bit;
     bool writeVcprojParts(QTextStream &);
 
-    bool writeMakefile(QTextStream &);
-    bool writeProjectMakefile();
+    bool writeMakefile(QTextStream &) override;
+    bool writeProjectMakefile() override;
 
-    void init();
+    void init() override;
 
 public:
     VcprojGenerator();
@@ -77,37 +63,35 @@ public:
     static bool hasBuiltinCompiler(const QString &file);
 
     QHash<QString, QStringList> extraCompilerSources;
-    QHash<QString, QStringList> extraCompilerOutputs;
+    QHash<QString, QString> extraCompilerOutputs;
+    const QString customBuildToolFilterFileSuffix;
     bool usePCH;
     VCProjectWriter *projectWriter;
 
 protected:
     virtual VCProjectWriter *createProjectWriter();
-    virtual bool doDepends() const { return false; } //never necesary
-    virtual void processSources() { filterIncludedFiles("SOURCES"); filterIncludedFiles("GENERATED_SOURCES"); }
-    virtual QString replaceExtraCompilerVariables(const QString &, const QStringList &, const QStringList &);
-    inline QString replaceExtraCompilerVariables(const QString &val, const QString &in, const QString &out)
-    { return MakefileGenerator::replaceExtraCompilerVariables(val, in, out); }
-    virtual bool supportsMetaBuild() { return true; }
-    virtual bool supportsMergedBuilds() { return true; }
-    virtual bool mergeBuildProject(MakefileGenerator *other);
+    bool doDepends() const override { return false; } // Never necessary
+    using Win32MakefileGenerator::replaceExtraCompilerVariables;
+    QString replaceExtraCompilerVariables(const QString &, const QStringList &, const QStringList &, ReplaceFor) override;
+    bool supportsMetaBuild() override { return true; }
+    bool supportsMergedBuilds() override { return true; }
+    bool mergeBuildProject(MakefileGenerator *other) override;
 
-    virtual bool openOutput(QFile &file, const QString &build) const;
-    virtual void outputVariables();
-    QString fixFilename(QString ofile) const;
+    bool openOutput(QFile &file, const QString &build) const override;
 
-    void initOld();
     virtual void initProject();
     void initConfiguration();
     void initCompilerTool();
     void initLinkerTool();
     void initLibrarianTool();
+    void initManifestTool();
     void initResourceTool();
     void initIDLTool();
     void initCustomBuildTool();
     void initPreBuildEventTools();
     void initPostBuildEventTools();
     void initDeploymentTool();
+    void initWinDeployQtTool();
     void initPreLinkEventTools();
     void initRootFiles();
     void initSourceFiles();
@@ -116,6 +100,8 @@ protected:
     void initTranslationFiles();
     void initFormFiles();
     void initResourceFiles();
+    void initDeploymentFiles();
+    void initDistributionFiles();
     void initLexYaccFiles();
     void initExtraCompilerOutputs();
 
@@ -140,6 +126,11 @@ private:
                                       QHash<QString, ProStringList> &subdirProjectLookup,
                                       const ProStringList &allDependencies = ProStringList());
     QUuid increaseUUID(const QUuid &id);
+    QString retrievePlatformToolSet() const;
+    bool isStandardSuffix(const QString &suffix) const;
+    ProString firstInputFileName(const ProString &extraCompilerName) const;
+    QString firstExpandedOutputFileName(const ProString &extraCompilerName);
+    void createCustomBuildToolFakeFile(const QString &cbtFilePath, const QString &realOutFilePath);
     friend class VCFilter;
 };
 

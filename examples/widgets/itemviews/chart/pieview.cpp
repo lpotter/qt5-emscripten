@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,13 +48,9 @@
 **
 ****************************************************************************/
 
-#include <math.h>
 #include <QtWidgets>
-
-#ifndef M_PI
-#define M_PI 3.1415927
-#endif
-
+#include <qmath.h>
+#include <cmath>
 #include "pieview.h"
 
 PieView::PieView(QWidget *parent)
@@ -109,15 +115,15 @@ QModelIndex PieView::indexAt(const QPoint &point) const
         double cy = totalSize / 2 - wy; // positive cy for items above the center
 
         // Determine the distance from the center point of the pie chart.
-        double d = pow(pow(cx, 2) + pow(cy, 2), 0.5);
+        double d = std::sqrt(std::pow(cx, 2) + std::pow(cy, 2));
 
         if (d == 0 || d > pieSize / 2)
             return QModelIndex();
 
         // Determine the angle of the point.
-        double angle = (180 / M_PI) * acos(cx / d);
-        if (cy < 0)
-            angle = 360 - angle;
+        double angle = qRadiansToDegrees(std::atan2(cy, cx));
+        if (angle < 0)
+            angle = 360 + angle;
 
         // Find the relevant slice of the pie.
         double startAngle = 0.0;

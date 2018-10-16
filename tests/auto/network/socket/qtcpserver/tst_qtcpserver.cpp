@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -62,7 +49,9 @@
 #include <qtcpsocket.h>
 #include <qtcpserver.h>
 #include <qhostaddress.h>
-#include <qprocess.h>
+#if QT_CONFIG(process)
+# include <qprocess.h>
+#endif
 #include <qstringlist.h>
 #include <qplatformdefs.h>
 #include <qhostinfo.h>
@@ -74,21 +63,22 @@
 #include <QNetworkConfigurationManager>
 #include "../../../network-settings.h"
 
+#if defined(Q_OS_LINUX)
+#define SHOULD_CHECK_SYSCALL_SUPPORT
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <errno.h>
+#endif
+
 class tst_QTcpServer : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QTcpServer();
-    virtual ~tst_QTcpServer();
-
-
-public slots:
+private slots:
     void initTestCase_data();
     void initTestCase();
     void init();
     void cleanup();
-private slots:
     void getSetCheck();
     void constructing();
     void clientServerLoop();
@@ -100,16 +90,18 @@ private slots:
     void maxPendingConnections();
     void listenError();
     void waitForConnectionTest();
+#ifndef Q_OS_WINRT
     void setSocketDescriptor();
-    void listenWhileListening();
-#ifndef QT_NO_PROCESS
-    void addressReusable();
 #endif
+    void listenWhileListening();
+    void addressReusable();
     void setNewSocketDescriptorBlocking();
+#ifndef QT_NO_NETWORKPROXY
     void invalidProxy_data();
     void invalidProxy();
     void proxyFactory_data();
     void proxyFactory();
+#endif // !QT_NO_NETWORKPROXY
 
     void qtbug14268_peek();
 
@@ -123,7 +115,14 @@ private slots:
 
     void eagainBlockingAccept();
 
+    void canAccessPendingConnectionsWhileNotListening();
+
 private:
+    bool shouldSkipIpv6TestsForBrokenGetsockopt();
+#ifdef SHOULD_CHECK_SYSCALL_SUPPORT
+    bool ipv6GetsockoptionMissing(int level, int optname);
+#endif
+
 #ifndef QT_NO_BEARERMANAGEMENT
     QNetworkSession *networkSession;
 #endif
@@ -144,21 +143,15 @@ void tst_QTcpServer::getSetCheck()
     QCOMPARE(INT_MAX, obj1.maxPendingConnections());
 }
 
-tst_QTcpServer::tst_QTcpServer()
-{
-}
-
-tst_QTcpServer::~tst_QTcpServer()
-{
-}
-
 void tst_QTcpServer::initTestCase_data()
 {
     QTest::addColumn<bool>("setProxy");
     QTest::addColumn<int>("proxyType");
 
     QTest::newRow("WithoutProxy") << false << 0;
+#if QT_CONFIG(socks5)
     QTest::newRow("WithSocks5Proxy") << true << int(QNetworkProxy::Socks5Proxy);
+#endif
 
     crashingServerDir = QFINDTESTDATA("crashingServer");
     QVERIFY2(!crashingServerDir.isEmpty(), qPrintable(
@@ -181,17 +174,59 @@ void tst_QTcpServer::init()
 {
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy) {
             QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::Socks5Proxy, QtNetworkSettings::serverName(), 1080));
         }
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif // QT_NO_NETWORKPROXY
     }
 }
 
 void tst_QTcpServer::cleanup()
 {
+#ifndef QT_NO_NETWORKPROXY
     QNetworkProxy::setApplicationProxy(QNetworkProxy::DefaultProxy);
+#endif
 }
+
+#ifdef SHOULD_CHECK_SYSCALL_SUPPORT
+bool tst_QTcpServer::ipv6GetsockoptionMissing(int level, int optname)
+{
+    int testSocket;
+
+    testSocket = socket(PF_INET6, SOCK_STREAM, 0);
+
+    // If we can't test here, assume it's not missing
+    if (testSocket == -1)
+        return false;
+
+    bool result = false;
+    if (getsockopt(testSocket, level, optname, nullptr, 0) == -1) {
+        if (errno == EOPNOTSUPP) {
+            result = true;
+        }
+    }
+
+    close(testSocket);
+    return result;
+}
+#endif //SHOULD_CHECK_SYSCALL_SUPPORT
+
+bool tst_QTcpServer::shouldSkipIpv6TestsForBrokenGetsockopt()
+{
+#ifdef SHOULD_CHECK_SYSCALL_SUPPORT
+    // Following parameters for setsockopt are not supported by all QEMU versions:
+    if (ipv6GetsockoptionMissing(SOL_IPV6, IPV6_V6ONLY)) {
+        return true;
+    }
+#endif //SHOULD_CHECK_SYSCALL_SUPPORT
+
+    return false;
+}
+
 
 //----------------------------------------------------------------------------------
 
@@ -263,11 +298,11 @@ void tst_QTcpServer::ipv6Server()
     //### need to enter the event loop for the server to get the connection ?? ( windows)
     QTcpServer server;
     if (!server.listen(QHostAddress::LocalHostIPv6, 8944)) {
-        QVERIFY(server.serverError() == QAbstractSocket::UnsupportedSocketOperationError);
+        QCOMPARE(server.serverError(), QAbstractSocket::UnsupportedSocketOperationError);
         return;
     }
 
-    QVERIFY(server.serverPort() == 8944);
+    QCOMPARE(server.serverPort(), quint16(8944));
     QVERIFY(server.serverAddress() == QHostAddress::LocalHostIPv6);
 
     QTcpSocket client;
@@ -369,9 +404,13 @@ void tst_QTcpServer::maxPendingConnections()
 {
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy)
             QSKIP("With socks5 only 1 connection is allowed ever");
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif // QT_NO_NETWORKPROXY
     }
     //### sees to fail sometimes ... a timing issue with the test on windows
     QTcpServer server;
@@ -381,13 +420,20 @@ void tst_QTcpServer::maxPendingConnections()
     QTcpSocket socket2;
     QTcpSocket socket3;
 
+    QSignalSpy spy(&server, SIGNAL(newConnection()));
     QVERIFY(server.listen());
 
     socket1.connectToHost(QHostAddress::LocalHost, server.serverPort());
     socket2.connectToHost(QHostAddress::LocalHost, server.serverPort());
     socket3.connectToHost(QHostAddress::LocalHost, server.serverPort());
 
-    QVERIFY(server.waitForNewConnection(5000));
+    // We must have two and only two connections. First compare waits until
+    // two connections have been made. The second compare makes sure no
+    // more are accepted. Creating connections happens multithreaded so
+    // qWait must be used for that.
+    QTRY_COMPARE(spy.count(), 2);
+    QTest::qWait(100);
+    QCOMPARE(spy.count(), 2);
 
     QVERIFY(server.hasPendingConnections());
     QVERIFY(server.nextPendingConnection());
@@ -407,9 +453,13 @@ void tst_QTcpServer::listenError()
 {
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy)
             QSKIP("With socks5 we can not make hard requirements on the address or port");
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif //QT_NO_NETWORKPROXY
     }
     QTcpServer server;
     QVERIFY(!server.listen(QHostAddress("1.2.3.4"), 0));
@@ -453,9 +503,13 @@ void tst_QTcpServer::waitForConnectionTest()
 
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy)
             QSKIP("Localhost servers don't work well with SOCKS5");
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif // QT_NO_NETWORKPROXY
     }
 
     QTcpSocket findLocalIpSocket;
@@ -472,15 +526,12 @@ void tst_QTcpServer::waitForConnectionTest()
     ThreadConnector connector(findLocalIpSocket.localAddress(), server.serverPort());
     connector.start();
 
-#if defined(Q_OS_WINCE)
-    QVERIFY(server.waitForNewConnection(9000, &timeout));
-#else
     QVERIFY(server.waitForNewConnection(3000, &timeout));
-#endif
     QVERIFY(!timeout);
 }
 
 //----------------------------------------------------------------------------------
+#ifndef Q_OS_WINRT
 void tst_QTcpServer::setSocketDescriptor()
 {
     QTcpServer server;
@@ -510,6 +561,7 @@ void tst_QTcpServer::setSocketDescriptor()
     WSACleanup();
 #endif
 }
+#endif // !Q_OS_WINRT
 
 //----------------------------------------------------------------------------------
 void tst_QTcpServer::listenWhileListening()
@@ -531,6 +583,7 @@ public:
     bool ok;
 
 protected:
+#ifndef Q_OS_WINRT
     void incomingConnection(qintptr socketDescriptor)
     {
         // how a user woulddo it (qabstractsocketengine is not public)
@@ -543,32 +596,27 @@ protected:
         ::close(socketDescriptor);
 #endif
     }
+#endif // !Q_OS_WINRT
 };
 
-#ifndef QT_NO_PROCESS
 void tst_QTcpServer::addressReusable()
 {
+#if !QT_CONFIG(process)
+    QSKIP("No qprocess support", SkipAll);
+#else
+#ifdef Q_OS_LINUX
+    QSKIP("The addressReusable test is unstable on Linux. See QTBUG-39985.");
+#endif
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy)
             QSKIP("With socks5 this test does not make senans at the momment");
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif // QT_NO_NETWORKPROXY
     }
-#if defined(Q_OS_WINCE)
-    QString signalName = QString::fromLatin1("/test_signal.txt");
-    QFile::remove(signalName);
-    // The crashingServer process will crash once it gets a connection.
-    QProcess process;
-    QString processExe = crashingServerDir + "/crashingServer";
-    process.start(processExe);
-    QVERIFY2(process.waitForStarted(), qPrintable(
-        QString::fromLatin1("Could not start %1: %2").arg(processExe, process.errorString())));
-    int waitCount = 5;
-    while (waitCount-- && !QFile::exists(signalName))
-        QTest::qWait(1000);
-    QVERIFY(QFile::exists(signalName));
-    QFile::remove(signalName);
-#else
     // The crashingServer process will crash once it gets a connection.
     QProcess process;
     QString processExe = crashingServerDir + "/crashingServer";
@@ -576,7 +624,6 @@ void tst_QTcpServer::addressReusable()
     QVERIFY2(process.waitForStarted(), qPrintable(
         QString::fromLatin1("Could not start %1: %2").arg(processExe, process.errorString())));
     QVERIFY(process.waitForReadyRead(5000));
-#endif
 
     QTcpSocket socket;
     socket.connectToHost(QHostAddress::LocalHost, 49199);
@@ -589,16 +636,20 @@ void tst_QTcpServer::addressReusable()
 
     QTcpServer server;
     QVERIFY(server.listen(QHostAddress::LocalHost, 49199));
-}
 #endif
+}
 
 void tst_QTcpServer::setNewSocketDescriptorBlocking()
 {
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy) {
+#ifndef QT_NO_NETWORKPROXY
         QFETCH_GLOBAL(int, proxyType);
         if (proxyType == QNetworkProxy::Socks5Proxy)
             QSKIP("With socks5 we can not make the socket descripter blocking");
+#else // !QT_NO_NETWORKPROXY
+        QSKIP("No proxy support");
+#endif // QT_NO_NETWORKPROXY
     }
     SeverWithBlockingSockets server;
     QVERIFY(server.listen());
@@ -609,6 +660,7 @@ void tst_QTcpServer::setNewSocketDescriptorBlocking()
     QVERIFY(server.ok);
 }
 
+#ifndef QT_NO_NETWORKPROXY
 void tst_QTcpServer::invalidProxy_data()
 {
     QTest::addColumn<int>("type");
@@ -623,7 +675,7 @@ void tst_QTcpServer::invalidProxy_data()
                                 << int(QAbstractSocket::UnsupportedSocketOperationError);
 
     QTest::newRow("no-such-host") << int(QNetworkProxy::Socks5Proxy)
-                                  << "this-host-will-never-exist.troll.no" << 1080
+                                  << "invalid.test.qt-project.org" << 1080
                                   << int(QAbstractSocket::ProxyNotFoundError);
     QTest::newRow("socks5-on-http") << int(QNetworkProxy::Socks5Proxy) << fluke << 3128
                                     << int(QAbstractSocket::SocketTimeoutError);
@@ -763,6 +815,7 @@ void tst_QTcpServer::proxyFactory()
     // Sometimes, error codes change for the better
     QTEST(int(server.serverError()), "expectedError");
 }
+#endif // !QT_NO_NETWORKPROXY
 
 class Qtbug14268Helper : public QObject
 {
@@ -802,17 +855,17 @@ void tst_QTcpServer::qtbug14268_peek()
     client.write("abc\n");
     QTestEventLoop::instance().enterLoop(5);
     QVERIFY(!QTestEventLoop::instance().timeout());
-    QVERIFY(helper.lastDataPeeked == QByteArray("6162630a"));
+    QCOMPARE(helper.lastDataPeeked, QByteArray("6162630a"));
 
     client.write("def\n");
     QTestEventLoop::instance().enterLoop(5);
     QVERIFY(!QTestEventLoop::instance().timeout());
-    QVERIFY(helper.lastDataPeeked == QByteArray("6162630a6465660a"));
+    QCOMPARE(helper.lastDataPeeked, QByteArray("6162630a6465660a"));
 
     client.write("ghi\n");
     QTestEventLoop::instance().enterLoop(5);
     QVERIFY(!QTestEventLoop::instance().timeout());
-    QVERIFY(helper.lastDataPeeked == QByteArray("6162630a6465660a6768690a"));
+    QCOMPARE(helper.lastDataPeeked, QByteArray("6162630a6465660a6768690a"));
 }
 
 void tst_QTcpServer::serverAddress_data()
@@ -831,11 +884,12 @@ void tst_QTcpServer::serverAddress_data()
     QTest::newRow("AnyIPv4") << QHostAddress(QHostAddress::AnyIPv4) << QHostAddress(QHostAddress::AnyIPv4);
     if (QtNetworkSettings::hasIPv6())
         QTest::newRow("AnyIPv6") << QHostAddress(QHostAddress::AnyIPv6) << QHostAddress(QHostAddress::AnyIPv6);
-    foreach (const QHostAddress& addr, QNetworkInterface::allAddresses()) {
-        if (addr.isInSubnet(QHostAddress::parseSubnet("fe80::/10"))
-            || addr.isInSubnet(QHostAddress::parseSubnet("169.254/16")))
-            continue; //cannot bind on link local addresses
-        QTest::newRow(qPrintable(addr.toString())) << addr << addr;
+    foreach (const QNetworkInterface &iface, QNetworkInterface::allInterfaces()) {
+        if ((iface.flags() & QNetworkInterface::IsUp) == 0)
+            continue;
+        foreach (const QNetworkAddressEntry &entry, iface.addressEntries()) {
+            QTest::newRow(qPrintable(entry.ip().toString())) << entry.ip() << entry.ip();
+        }
     }
 }
 
@@ -848,6 +902,11 @@ void tst_QTcpServer::serverAddress()
     QFETCH(QHostAddress, listenAddress);
     QFETCH(QHostAddress, serverAddress);
     QTcpServer server;
+
+    if (shouldSkipIpv6TestsForBrokenGetsockopt()
+        && listenAddress == QHostAddress(QHostAddress::Any)) {
+        QSKIP("Syscalls needed for ipv6 sockoptions missing functionality");
+    }
 
     // TODO: why does this QSKIP?
     if (!server.listen(listenAddress))
@@ -886,9 +945,16 @@ void tst_QTcpServer::linkLocal()
         //Windows preallocates link local addresses to interfaces that are down.
         //These may or may not work depending on network driver (they do not work for the Bluetooth PAN driver)
         if (iface.flags() & QNetworkInterface::IsUp) {
+#if defined(Q_OS_WIN)
             // Do not connect to the Teredo Tunneling interface on Windows Xp.
             if (iface.humanReadableName() == QString("Teredo Tunneling Pseudo-Interface"))
                 continue;
+#elif defined(Q_OS_DARWIN)
+            // Do not add "utun" interfaces on macOS: nothing ever gets received
+            // (we don't know why)
+            if (iface.name().startsWith("utun"))
+                continue;
+#endif
             foreach (QNetworkAddressEntry addressEntry, iface.addressEntries()) {
                 QHostAddress addr = addressEntry.ip();
                 if (addr.isInSubnet(localMaskv4, 16)) {
@@ -932,15 +998,16 @@ void tst_QTcpServer::linkLocal()
 
     //each server should have two connections
     foreach (QTcpServer* server, servers) {
-        QTcpSocket* remote;
         //qDebug() << "checking for connections" << server->serverAddress() << ":" << server->serverPort();
         QVERIFY(server->waitForNewConnection(5000));
-        QVERIFY(remote = server->nextPendingConnection());
+        QTcpSocket* remote = server->nextPendingConnection();
+        QVERIFY(remote != nullptr);
         remote->close();
         delete remote;
         if (!server->hasPendingConnections())
             QVERIFY(server->waitForNewConnection(5000));
-        QVERIFY(remote = server->nextPendingConnection());
+        remote = server->nextPendingConnection();
+        QVERIFY(remote != nullptr);
         remote->close();
         delete remote;
         QVERIFY(!server->hasPendingConnections());
@@ -973,6 +1040,23 @@ void tst_QTcpServer::eagainBlockingAccept()
     QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 2, 500);
     s.close();
     server.close();
+}
+
+class NonListeningTcpServer : public QTcpServer
+{
+public:
+    void addSocketFromOutside(QTcpSocket* s)
+    {
+        addPendingConnection(s);
+    }
+};
+
+void tst_QTcpServer::canAccessPendingConnectionsWhileNotListening()
+{
+    NonListeningTcpServer server;
+    QTcpSocket socket;
+    server.addSocketFromOutside(&socket);
+    QCOMPARE(&socket, server.nextPendingConnection());
 }
 
 QTEST_MAIN(tst_QTcpServer)

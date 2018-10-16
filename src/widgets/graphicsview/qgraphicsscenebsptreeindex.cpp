@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -76,14 +74,14 @@
 
 #include <QtCore/qglobal.h>
 
-#ifndef QT_NO_GRAPHICSVIEW
-
 #include <private/qgraphicsscene_p.h>
 #include <private/qgraphicsscenebsptreeindex_p.h>
 #include <private/qgraphicssceneindex_p.h>
 
 #include <QtCore/qmath.h>
 #include <QtCore/qdebug.h>
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -169,7 +167,8 @@ void QGraphicsSceneBspTreeIndexPrivate::_q_updateIndex()
                 untransformableItems << item;
                 continue;
             }
-            if (item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren)
+            if (item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+                || item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorContainsChildren)
                 continue;
 
             bsp.insertItem(item, item->d_ptr->sceneEffectiveBoundingRect());
@@ -351,7 +350,8 @@ void QGraphicsSceneBspTreeIndexPrivate::removeItem(QGraphicsItem *item, bool rec
             // Avoid virtual function calls from the destructor.
             purgePending = true;
             removedItems << item;
-        } else if (!(item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren)) {
+        } else if (!(item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+                     || item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorContainsChildren)) {
             bsp.removeItem(item, item->d_ptr->sceneEffectiveBoundingRect());
         }
     } else {
@@ -510,7 +510,8 @@ void QGraphicsSceneBspTreeIndex::prepareBoundingRectChange(const QGraphicsItem *
         return;
 
     if (item->d_ptr->index == -1 || item->d_ptr->itemIsUntransformable()
-        || (item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren)) {
+        || (item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+            || item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorContainsChildren)) {
         return; // Item is not in BSP tree; nothing to do.
     }
 
@@ -550,27 +551,19 @@ QList<QGraphicsItem *> QGraphicsSceneBspTreeIndex::items(Qt::SortOrder order) co
     Q_D(const QGraphicsSceneBspTreeIndex);
     const_cast<QGraphicsSceneBspTreeIndexPrivate*>(d)->purgeRemovedItems();
     QList<QGraphicsItem *> itemList;
+    itemList.reserve(d->indexedItems.size() + d->unindexedItems.size());
 
-    // If freeItemIndexes is empty, we know there are no holes in indexedItems and
-    // unindexedItems.
-    if (d->freeItemIndexes.isEmpty()) {
-        if (d->unindexedItems.isEmpty()) {
-            itemList = d->indexedItems;
-        } else {
-            itemList = d->indexedItems + d->unindexedItems;
-        }
-    } else {
-        // Rebuild the list of items to avoid holes. ### We could also just
-        // compress the item lists at this point.
-        foreach (QGraphicsItem *item, d->indexedItems + d->unindexedItems) {
-            if (item)
-                itemList << item;
-        }
-    }
-    if (order != -1) {
-        //We sort descending order
-        d->sortItems(&itemList, order, d->sortCacheEnabled);
-    }
+    // Rebuild the list of items to avoid holes. ### We could also just
+    // compress the item lists at this point.
+    QGraphicsItem *null = nullptr; // work-around for (at least) MSVC 2012 emitting
+                                   // warning C4100 for its own header <algorithm>
+                                   // when passing nullptr directly to remove_copy:
+    std::remove_copy(d->indexedItems.cbegin(), d->indexedItems.cend(),
+                     std::back_inserter(itemList), null);
+    std::remove_copy(d->unindexedItems.cbegin(), d->unindexedItems.cend(),
+                     std::back_inserter(itemList), null);
+
+    d->sortItems(&itemList, order, d->sortCacheEnabled);
     return itemList;
 }
 
@@ -644,8 +637,10 @@ void QGraphicsSceneBspTreeIndex::itemChange(const QGraphicsItem *item, QGraphics
         QGraphicsItem::GraphicsItemFlags newFlags = *static_cast<const QGraphicsItem::GraphicsItemFlags *>(value);
         bool ignoredTransform = item->d_ptr->flags & QGraphicsItem::ItemIgnoresTransformations;
         bool willIgnoreTransform = newFlags & QGraphicsItem::ItemIgnoresTransformations;
-        bool clipsChildren = item->d_ptr->flags & QGraphicsItem::ItemClipsChildrenToShape;
-        bool willClipChildren = newFlags & QGraphicsItem::ItemClipsChildrenToShape;
+        bool clipsChildren = item->d_ptr->flags & QGraphicsItem::ItemClipsChildrenToShape
+                             || item->d_ptr->flags & QGraphicsItem::ItemContainsChildrenInShape;
+        bool willClipChildren = newFlags & QGraphicsItem::ItemClipsChildrenToShape
+                                || newFlags & QGraphicsItem::ItemContainsChildrenInShape;
         if ((ignoredTransform != willIgnoreTransform) || (clipsChildren != willClipChildren)) {
             QGraphicsItem *thatItem = const_cast<QGraphicsItem *>(item);
             // Remove item and its descendants from the index and append
@@ -666,10 +661,13 @@ void QGraphicsSceneBspTreeIndex::itemChange(const QGraphicsItem *item, QGraphics
         bool ignoredTransform = item->d_ptr->itemIsUntransformable();
         bool willIgnoreTransform = (item->d_ptr->flags & QGraphicsItem::ItemIgnoresTransformations)
                                    || (newParent && newParent->d_ptr->itemIsUntransformable());
-        bool ancestorClippedChildren = item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren;
+        bool ancestorClippedChildren = item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+                                       || item->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorContainsChildren;
         bool ancestorWillClipChildren = newParent
-                            && ((newParent->d_ptr->flags & QGraphicsItem::ItemClipsChildrenToShape)
-                                || (newParent->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren));
+                            && ((newParent->d_ptr->flags & QGraphicsItem::ItemClipsChildrenToShape
+                                 || newParent->d_ptr->flags & QGraphicsItem::ItemContainsChildrenInShape)
+                                || (newParent->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+                                    || newParent->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorContainsChildren));
         if ((ignoredTransform != willIgnoreTransform) || (ancestorClippedChildren != ancestorWillClipChildren)) {
             QGraphicsItem *thatItem = const_cast<QGraphicsItem *>(item);
             // Remove item and its descendants from the index and append
@@ -694,8 +692,7 @@ void QGraphicsSceneBspTreeIndex::itemChange(const QGraphicsItem *item, QGraphics
 bool QGraphicsSceneBspTreeIndex::event(QEvent *event)
 {
     Q_D(QGraphicsSceneBspTreeIndex);
-    switch (event->type()) {
-    case QEvent::Timer:
+    if (event->type() == QEvent::Timer) {
             if (d->indexTimerId && static_cast<QTimerEvent *>(event)->timerId() == d->indexTimerId) {
                 if (d->restartIndexTimer) {
                     d->restartIndexTimer = false;
@@ -704,16 +701,10 @@ bool QGraphicsSceneBspTreeIndex::event(QEvent *event)
                     d->_q_updateIndex();
                 }
             }
-     // Fallthrough intended - support timers in subclasses.
-    default:
-        return QObject::event(event);
     }
-    return true;
+    return QObject::event(event);
 }
 
 QT_END_NAMESPACE
 
 #include "moc_qgraphicsscenebsptreeindex_p.cpp"
-
-#endif  // QT_NO_GRAPHICSVIEW
-

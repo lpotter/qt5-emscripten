@@ -1,4 +1,7 @@
 TEMPLATE = subdirs
 SUBDIRS = \
         qmutex \
-        qthreadstorage
+        qreadwritelock \
+        qthreadstorage \
+        qthreadpool \
+        qwaitcondition \

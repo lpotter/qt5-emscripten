@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,20 +48,6 @@
 #include "qlayout_p.h"
 
 QT_BEGIN_NAMESPACE
-
-/*
-    Returns true if the \a widget can be added to the \a layout;
-    otherwise returns false.
-*/
-static bool checkWidget(QLayout *layout, QWidget *widget)
-{
-    if (!widget) {
-        qWarning("QLayout: Cannot add null widget to %s/%s", layout->metaObject()->className(),
-                  layout->objectName().toLocal8Bit().data());
-        return false;
-    }
-    return true;
-}
 
 struct QBoxLayoutItem
 {
@@ -140,6 +124,7 @@ public:
     void calcHfw(int);
 
     void effectiveMargins(int *left, int *top, int *right, int *bottom) const;
+    QLayoutItem* replaceAt(int index, QLayoutItem*) override;
 };
 
 QBoxLayoutPrivate::~QBoxLayoutPrivate()
@@ -248,7 +233,7 @@ void QBoxLayoutPrivate::effectiveMargins(int *left, int *top, int *right, int *b
                 if (right)
                     r = qMax(r, wr.right() - lir.right());
             }
-        }        
+        }
     }
 #endif
     if (left)
@@ -444,6 +429,21 @@ void QBoxLayoutPrivate::calcHfw(int w)
     hfwMinHeight = mh;
 }
 
+QLayoutItem* QBoxLayoutPrivate::replaceAt(int index, QLayoutItem *item)
+{
+    Q_Q(QBoxLayout);
+    if (!item)
+        return 0;
+    QBoxLayoutItem *b = list.value(index);
+    if (!b)
+        return 0;
+    QLayoutItem *r = b->item;
+
+    b->item = item;
+    q->invalidate();
+    return r;
+}
+
 
 /*!
     \class QBoxLayout
@@ -509,7 +509,7 @@ void QBoxLayoutPrivate::calcHfw(int w)
 
     \list
     \li setContentsMargins() sets the width of the outer border on
-       each side of the widget. This is the width of the reserved space 
+       each side of the widget. This is the width of the reserved space
        along each of the QBoxLayout's four sides.
     \li setSpacing() sets the width between neighboring boxes. (You
        can use addSpacing() to get more space at a particular spot.)
@@ -595,7 +595,7 @@ int QBoxLayout::spacing() const
 
 /*!
   Reimplements QLayout::setSpacing(). Sets the spacing
-  property to \a spacing. 
+  property to \a spacing.
 
   \sa QLayout::setSpacing(), spacing()
  */
@@ -728,6 +728,12 @@ QLayoutItem *QBoxLayout::takeAt(int index)
     QLayoutItem *item = b->item;
     b->item = 0;
     delete b;
+
+    if (QLayout *l = item->layout()) {
+        // sanity check in case the user passed something weird to QObject::setParent()
+        if (l->parent() == this)
+            l->setParent(0);
+    }
 
     invalidate();
     return item;
@@ -867,15 +873,9 @@ void QBoxLayout::insertSpacing(int index, int size)
     else
         b = QLayoutPrivate::createSpacerItem(this, 0, size, QSizePolicy::Minimum, QSizePolicy::Fixed);
 
-    QT_TRY {
-        QBoxLayoutItem *it = new QBoxLayoutItem(b);
-        it->magic = true;
-        d->list.insert(index, it);
-
-    } QT_CATCH(...) {
-        delete b;
-        QT_RETHROW;
-    }
+    QBoxLayoutItem *it = new QBoxLayoutItem(b);
+    it->magic = true;
+    d->list.insert(index, it);
     invalidate();
 }
 
@@ -936,7 +936,10 @@ void QBoxLayout::insertSpacerItem(int index, QSpacerItem *spacerItem)
 void QBoxLayout::insertLayout(int index, QLayout *layout, int stretch)
 {
     Q_D(QBoxLayout);
-    addChildLayout(layout);
+    if (!d->checkLayout(layout))
+        return;
+    if (!adoptLayout(layout))
+        return;
     if (index < 0)                                // append
         index = d->list.count();
     QBoxLayoutItem *it = new QBoxLayoutItem(layout, stretch);
@@ -968,7 +971,7 @@ void QBoxLayout::insertWidget(int index, QWidget *widget, int stretch,
                               Qt::Alignment alignment)
 {
     Q_D(QBoxLayout);
-    if (!checkWidget(this, widget))
+    if (!d->checkWidget(widget))
          return;
     addChildWidget(widget);
     if (index < 0)                                // append
@@ -976,20 +979,8 @@ void QBoxLayout::insertWidget(int index, QWidget *widget, int stretch,
     QWidgetItem *b = QLayoutPrivate::createWidgetItem(this, widget);
     b->setAlignment(alignment);
 
-    QBoxLayoutItem *it;
-    QT_TRY{
-        it = new QBoxLayoutItem(b, stretch);
-    } QT_CATCH(...) {
-        delete b;
-        QT_RETHROW;
-    }
-
-    QT_TRY{
-        d->list.insert(index, it);
-    } QT_CATCH(...) {
-        delete it;
-        QT_RETHROW;
-    }
+    QBoxLayoutItem *it = new QBoxLayoutItem(b, stretch);
+    d->list.insert(index, it);
     invalidate();
 }
 
@@ -1089,7 +1080,7 @@ void QBoxLayout::addStrut(int size)
 /*!
     Sets the stretch factor for \a widget to \a stretch and returns
     true if \a widget is found in this layout (not including child
-    layouts); otherwise returns false.
+    layouts); otherwise returns \c false.
 
     \sa setAlignment()
 */
@@ -1113,8 +1104,8 @@ bool QBoxLayout::setStretchFactor(QWidget *widget, int stretch)
     \overload
 
     Sets the stretch factor for the layout \a layout to \a stretch and
-    returns true if \a layout is found in this layout (not including
-    child layouts); otherwise returns false.
+    returns \c true if \a layout is found in this layout (not including
+    child layouts); otherwise returns \c false.
 */
 bool QBoxLayout::setStretchFactor(QLayout *layout, int stretch)
 {
@@ -1345,3 +1336,5 @@ QVBoxLayout::~QVBoxLayout()
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qboxlayout.cpp"

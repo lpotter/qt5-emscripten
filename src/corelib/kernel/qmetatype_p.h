@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include "qmetatype.h"
 
 QT_BEGIN_NAMESPACE
@@ -76,10 +75,10 @@ class QTypeModuleInfo
 {
 public:
     enum Module {
-        IsCore = !QTypeInfo<T>::isComplex, // Primitive types are in Core
+        IsCore = false,
         IsWidget = false,
         IsGui = false,
-        IsUnknown = !IsCore
+        IsUnknown = true
     };
 };
 
@@ -109,7 +108,10 @@ public: \
 #define QT_DECLARE_WIDGETS_MODULE_TYPES_ITER(TypeName, TypeId, Name) \
     QT_ASSIGN_TYPE_TO_MODULE(Name, QModulesPrivate::Widgets);
 
+QT_FOR_EACH_STATIC_PRIMITIVE_TYPE(QT_DECLARE_CORE_MODULE_TYPES_ITER)
+QT_FOR_EACH_STATIC_PRIMITIVE_POINTER(QT_DECLARE_CORE_MODULE_TYPES_ITER)
 QT_FOR_EACH_STATIC_CORE_CLASS(QT_DECLARE_CORE_MODULE_TYPES_ITER)
+QT_FOR_EACH_STATIC_CORE_POINTER(QT_DECLARE_CORE_MODULE_TYPES_ITER)
 QT_FOR_EACH_STATIC_CORE_TEMPLATE(QT_DECLARE_CORE_MODULE_TYPES_ITER)
 QT_FOR_EACH_STATIC_GUI_CLASS(QT_DECLARE_GUI_MODULE_TYPES_ITER)
 QT_FOR_EACH_STATIC_WIDGETS_CLASS(QT_DECLARE_WIDGETS_MODULE_TYPES_ITER)
@@ -122,15 +124,15 @@ QT_FOR_EACH_STATIC_WIDGETS_CLASS(QT_DECLARE_WIDGETS_MODULE_TYPES_ITER)
 class QMetaTypeInterface
 {
 public:
-    QMetaType::Creator creator;
-    QMetaType::Deleter deleter;
     QMetaType::SaveOperator saveOp;
     QMetaType::LoadOperator loadOp;
-    QMetaType::Constructor constructor;
+    QMetaType::Constructor constructor; // TODO Qt6: remove me
     QMetaType::Destructor destructor;
     int size;
-    quint32 flags; // same as QMetaType::TypeFlags
+    QMetaType::TypeFlags::Int flags;
     const QMetaObject *metaObject;
+    QMetaType::TypedConstructor typedConstructor;
+    QMetaType::TypedDestructor typedDestructor;
 };
 
 #ifndef QT_NO_DATASTREAM
@@ -156,14 +158,14 @@ public:
 
 #define QT_METATYPE_INTERFACE_INIT_IMPL(Type, DATASTREAM_DELEGATE) \
 { \
-    /*creator*/(QtMetaTypePrivate::QMetaTypeFunctionHelper<Type, QtMetaTypePrivate::TypeDefinition<Type>::IsAvailable>::Create), \
-    /*deleter*/(QtMetaTypePrivate::QMetaTypeFunctionHelper<Type, QtMetaTypePrivate::TypeDefinition<Type>::IsAvailable>::Delete), \
     DATASTREAM_DELEGATE(Type) \
     /*constructor*/(QtMetaTypePrivate::QMetaTypeFunctionHelper<Type, QtMetaTypePrivate::TypeDefinition<Type>::IsAvailable>::Construct), \
     /*destructor*/(QtMetaTypePrivate::QMetaTypeFunctionHelper<Type, QtMetaTypePrivate::TypeDefinition<Type>::IsAvailable>::Destruct), \
     /*size*/(QTypeInfo<Type>::sizeOf), \
     /*flags*/QtPrivate::QMetaTypeTypeFlags<Type>::Flags, \
-    /*metaObject*/METAOBJECT_DELEGATE(Type) \
+    /*metaObject*/METAOBJECT_DELEGATE(Type), \
+    /*typedConstructor*/ nullptr, \
+    /*typedDestructor*/ nullptr \
 }
 
 
@@ -181,14 +183,14 @@ public:
 #define QT_METATYPE_INTERFACE_INIT_NO_DATASTREAM(Type) QT_METATYPE_INTERFACE_INIT_IMPL(Type, QT_METATYPE_INTERFACE_INIT_EMPTY_DATASTREAM_IMPL)
 #define QT_METATYPE_INTERFACE_INIT_EMPTY() \
 { \
-    /*creator*/ 0, \
-    /*deleter*/ 0, \
     QT_METATYPE_INTERFACE_INIT_EMPTY_DATASTREAM_IMPL(void) \
     /*constructor*/ 0, \
     /*destructor*/ 0, \
     /*size*/ 0, \
     /*flags*/ 0, \
-    /*metaObject*/ 0 \
+    /*metaObject*/ 0 , \
+    /*typedConstructor*/ nullptr, \
+    /*typedDestructor*/ nullptr \
 }
 
 namespace QtMetaTypePrivate {
@@ -200,13 +202,17 @@ struct TypeDefinition {
 // Ignore these types, as incomplete
 #ifdef QT_BOOTSTRAPPED
 template<> struct TypeDefinition<QBitArray> { static const bool IsAvailable = false; };
+template<> struct TypeDefinition<QCborArray> { static const bool IsAvailable = false; };
+template<> struct TypeDefinition<QCborMap> { static const bool IsAvailable = false; };
+template<> struct TypeDefinition<QCborSimpleType> { static const bool IsAvailable = false; };
+template<> struct TypeDefinition<QCborValue> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QEasingCurve> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QJsonArray> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QJsonDocument> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QJsonObject> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QJsonValue> { static const bool IsAvailable = false; };
-template<> struct TypeDefinition<QModelIndex> { static const bool IsAvailable = false; };
 template<> struct TypeDefinition<QUrl> { static const bool IsAvailable = false; };
+template<> struct TypeDefinition<QByteArrayList> { static const bool IsAvailable = false; };
 #endif
 #ifdef QT_NO_GEOM_VARIANT
 template<> struct TypeDefinition<QRect> { static const bool IsAvailable = false; };
@@ -221,7 +227,7 @@ template<> struct TypeDefinition<QPointF> { static const bool IsAvailable = fals
 #ifdef QT_NO_REGEXP
 template<> struct TypeDefinition<QRegExp> { static const bool IsAvailable = false; };
 #endif
-#if defined(QT_BOOTSTRAPPED) || defined(QT_NO_REGEXP)
+#if !QT_CONFIG(regularexpression)
 template<> struct TypeDefinition<QRegularExpression> { static const bool IsAvailable = false; };
 #endif
 #ifdef QT_NO_SHORTCUT

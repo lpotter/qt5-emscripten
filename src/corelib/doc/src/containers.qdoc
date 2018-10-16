@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,7 +28,6 @@
 /*!
     \page containers.html
     \title Container Classes
-    \ingroup technology-apis
     \ingroup groups
     \ingroup qt-basic-concepts
     \keyword container class
@@ -159,19 +158,16 @@
     \endtable
 
     Containers can be nested. For example, it is perfectly possible
-    to use a QMap<QString, QList<int> >, where the key type is
-    QString and the value type QList<int>. The only pitfall is that
-    you must insert a space between the closing angle brackets (>);
-    otherwise the C++ compiler will misinterpret the two >'s as a
-    right-shift operator (>>) and report a syntax error.
+    to use a QMap<QString, QList<int>>, where the key type is
+    QString and the value type QList<int>.
 
     The containers are defined in individual header files with the
     same name as the container (e.g., \c <QLinkedList>). For
     convenience, the containers are forward declared in \c
     <QtContainerFwd>.
 
-    \keyword assignable data type
-    \keyword assignable data types
+    \target assignable data type
+    \target assignable data types
 
     The values stored in the various containers can be of any
     \e{assignable data type}. To qualify, a type must provide a
@@ -221,7 +217,7 @@
     \codeline
     \snippet streaming/main.cpp 2
 
-    \keyword default-constructed values
+    \target default-constructed value
 
     The documentation of certain container class functions refer to
     \e{default-constructed values}; for example, QVector
@@ -324,13 +320,13 @@
     \row    \li \l{QListIterator::toBack()}{toBack()}
             \li Moves the iterator to the back of the list (after the last item)
     \row    \li \l{QListIterator::hasNext()}{hasNext()}
-            \li Returns true if the iterator isn't at the back of the list
+            \li Returns \c true if the iterator isn't at the back of the list
     \row    \li \l{QListIterator::next()}{next()}
             \li Returns the next item and advances the iterator by one position
     \row    \li \l{QListIterator::peekNext()}{peekNext()}
             \li Returns the next item without moving the iterator
     \row    \li \l{QListIterator::hasPrevious()}{hasPrevious()}
-            \li Returns true if the iterator isn't at the front of the list
+            \li Returns \c true if the iterator isn't at the front of the list
     \row    \li \l{QListIterator::previous()}{previous()}
             \li Returns the previous item and moves the iterator back by one position
     \row    \li \l{QListIterator::peekPrevious()}{peekPrevious()}
@@ -387,7 +383,7 @@
     \l{QMapIterator::hasPrevious()}{hasPrevious()},
     \l{QMapIterator::previous()}{previous()}, and
     \l{QMapIterator::peekPrevious()}{peekPrevious()}. The key and
-    value components are extracted by calling key() and value() on
+    value components are extracted by calling \l{QMapIterator::key()}{key()} and \l{QMapIterator::value()}{value()} on
     the object returned by next(), peekNext(), previous(), or
     peekPrevious().
 
@@ -396,7 +392,7 @@
 
     \snippet code/doc_src_containers.cpp 7
 
-    QMapIterator also provides a key() and a value() function that
+    QMapIterator also provides a \l{QMapIterator::key()}{key()} and a \l{QMapIterator::value()}{value()} function that
     operate directly on the iterator and that return the key and
     value of the last item that the iterator jumped above. For
     example, the following code copies the contents of a QMap into a
@@ -460,22 +456,20 @@
     \snippet code/doc_src_containers.cpp 10
 
     Unlike \l{Java-style iterators}, STL-style iterators point
-    directly at items. The begin() function of a container returns an
+    directly at items. The \l{QList::begin()}{begin()} function of a container returns an
     iterator that points to the first item in the container. The
-    end() function of a container returns an iterator to the
+    \l{QList::end()}{end()} function of a container returns an iterator to the
     imaginary item one position past the last item in the container.
-    end() marks an invalid position; it must never be dereferenced.
+    \l {QList::end()}{end()} marks an invalid position; it must never be dereferenced.
     It is typically used in a loop's break condition. If the list is
-    empty, begin() equals end(), so we never execute the loop.
+    empty, \l{QList::begin}{begin()} equals \l{QList::end()}{end()}, so we never execute the loop.
 
     The diagram below shows the valid iterator positions as red
     arrows for a vector containing four items:
 
     \image stliterators1.png
 
-    Iterating backward with an STL-style iterator requires us to
-    decrement the iterator \e before we access the item. This
-    requires a \c while loop:
+    Iterating backward with an STL-style iterator is done with reverse iterators:
 
     \snippet code/doc_src_containers.cpp 11
 
@@ -485,8 +479,8 @@
     compilers also allow us to write \c{i->toLower()}, but some
     don't.
 
-    For read-only access, you can use const_iterator, constBegin(),
-    and constEnd(). For example:
+    For read-only access, you can use const_iterator, \l{QList::constBegin}{constBegin()},
+    and \l{QList::constEnd()}{constEnd()}. For example:
 
     \snippet code/doc_src_containers.cpp 12
 
@@ -534,12 +528,20 @@
     This problem doesn't occur with functions that return a const or
     non-const reference to a container.
 
-    \l{Implicit sharing} has another consequence on STL-style
-    iterators: You must not take a copy of a container while
-    non-const iterators are active on that container. Java-style
-    iterators don't suffer from that limitation.
+    \section3 Implicit sharing iterator problem
 
-    \keyword foreach
+    \l{Implicit sharing} has another consequence on STL-style
+    iterators: you should avoid copying a container while
+    iterators are active on that container. The iterators
+    point to an internal structure, and if you copy a container
+    you should be very careful with your iterators. E.g:
+
+    \snippet code/doc_src_containers.cpp 24
+
+     The above example only shows a problem with QVector, but
+     the problem exists for all the implicitly shared Qt containers.
+
+    \target foreach
     \section1 The foreach Keyword
 
     If you just want to iterate over all the items in a container
@@ -571,9 +573,11 @@
     \snippet code/doc_src_containers.cpp 18
 
     With QMap and QHash, \c foreach accesses the value component of
-    the (key, value) pairs. If you want to iterate over both the keys
-    and the values, you can use iterators (which are fastest), or you
-    can write code like this:
+    the (key, value) pairs automatically, so you should not call
+    values() on the container (it would generate an unnecessary copy,
+    see below). If you want to iterate over both the keys and the
+    values, you can use iterators (which are faster), or you can
+    obtain the keys, and use them to get the values too:
 
     \snippet code/doc_src_containers.cpp 19
 
@@ -591,6 +595,13 @@
     reference for the variable does not allow you to modify the original
     container. It only affects the copy, which is probably not what you
     want.
+
+    An alternative to Qt's \c foreach loop is the range-based \c for that is
+    part of C++ 11 and newer. However, keep in mind that the range-based
+    \c for might force a Qt container to \l{Implicit Sharing}{detach}, whereas
+    \c foreach would not. But using \c foreach always copies the container,
+    which is usually not cheap for STL containers. If in doubt, prefer
+    \c foreach for Qt containers, and range based \c for for STL ones.
 
     In addition to \c foreach, Qt also provides a \c forever
     pseudo-keyword for infinite loops:
@@ -639,11 +650,11 @@
     To describe algorithmic complexity, we use the following
     terminology, based on the "big Oh" notation:
 
-    \keyword constant time
-    \keyword logarithmic time
-    \keyword linear time
-    \keyword linear-logarithmic time
-    \keyword quadratic time
+    \target constant time
+    \target logarithmic time
+    \target linear time
+    \target linear-logarithmic time
+    \target quadratic time
 
     \list
     \li \b{Constant time:} O(1). A function is said to run in constant
@@ -750,7 +761,7 @@
     QString.
 
     QVector<T> also uses that algorithm for data types that can be
-    moved around in memory using memcpy() (including the basic C++
+    moved around in memory using \c memcpy() (including the basic C++
     types, the pointer types, and Qt's \l{shared classes}) but uses a
     different algorithm for data types that can only be moved by
     calling the copy constructor and a destructor. Since the cost of
@@ -781,7 +792,7 @@
     \endlist
 
     If you know approximately how many items you will store in a
-    container, you can start by calling reserve(), and when you are
-    done populating the container, you can call squeeze() to release
+    container, you can start by calling \l{QString::reserve()}{reserve()}, and when you are
+    done populating the container, you can call \l{QString::squeeze()}{squeeze()} to release
     the extra preallocated memory.
 */

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -177,7 +177,7 @@ and an \l{QNetworkSession::isOpen()}{isOpen()} condition.
 The state() attribute enables developers to detect whether the system
 currently maintains a global network session for the given
 QNetworkConfiguration. If \l {QNetworkSession::isOpen()}{isOpen()}
-returns true the QNetworkSession instance at hand was at least one of the
+returns \c true the QNetworkSession instance at hand was at least one of the
 entities requesting the global network session. This distinction is
 required to support the notion of session registrations. For as long as
 there are one or more open QNetworkSession instances the underlying
@@ -235,33 +235,6 @@ QNetworkSession is the central class for managing roaming related issues.
 
 Some API features are not available on all platforms. The
 \l QNetworkConfigurationManager::Capability should be used to detect
-platform features at runtime. The following table lists the various
-platform APIs being used by this API. This may assist in the process of
-determining the feature support:
-
-\table
-    \header
-    \li Platform
-    \li Backend capabilities
-    \row
-        \li Linux\unicode{0xAE}
-        \li Linux uses the \l {http://projects.gnome.org/NetworkManager}{NetworkManager}
-           and \l {http://connman.net/}{ConnMan} / \l {http://ofono.org/}{oFono} APIs
-           which support interface notifications and starting and stopping of network
-           interfaces.
-    \row
-        \li Windows\unicode{0xAE} XP
-        \li This platform supports interface notifications without active polling.
-    \row
-        \li Windows XP SP2+Hotfixes, Windows XP SP3, Windows Vista, Windows 7
-        \li In addition to standard Windows XP wifi access point monitoring has been improved which includes the ability to start and stop wifi interfaces. This requires Windows to manage the wifi interfaces.
-    \row
-        \li Mac OS\unicode{0xAE}
-        \li This platform has full support by way of CoreWLAN offered in Mac OS 10.6. Previous
-           versions of Mac OS - 10.5 and 10.4 have limited support.
-    \row
-        \li All other platforms (*nix, Windows Mobile)
-        \li This backend is the fallback for all platforms supports network interface notifications via active polling only.
-\endtable
+platform features at runtime.
 
 */

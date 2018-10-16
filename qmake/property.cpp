@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +31,7 @@
 
 #include <qdir.h>
 #include <qsettings.h>
+#include <qlibraryinfo.h>
 #include <qstringlist.h>
 #include <stdio.h>
 
@@ -53,38 +41,50 @@ static const struct {
     const char *name;
     QLibraryInfo::LibraryLocation loc;
     bool raw;
+    bool singular;
 } propList[] = {
-    { "QT_SYSROOT", QLibraryInfo::SysrootPath, true },
-    { "QT_INSTALL_PREFIX", QLibraryInfo::PrefixPath, false },
-    { "QT_INSTALL_ARCHDATA", QLibraryInfo::ArchDataPath, false },
-    { "QT_INSTALL_DATA", QLibraryInfo::DataPath, false },
-    { "QT_INSTALL_DOCS", QLibraryInfo::DocumentationPath, false },
-    { "QT_INSTALL_HEADERS", QLibraryInfo::HeadersPath, false },
-    { "QT_INSTALL_LIBS", QLibraryInfo::LibrariesPath, false },
-    { "QT_INSTALL_LIBEXECS", QLibraryInfo::LibraryExecutablesPath, false },
-    { "QT_INSTALL_BINS", QLibraryInfo::BinariesPath, false },
-    { "QT_INSTALL_TESTS", QLibraryInfo::TestsPath, false },
-    { "QT_INSTALL_PLUGINS", QLibraryInfo::PluginsPath, false },
-    { "QT_INSTALL_IMPORTS", QLibraryInfo::ImportsPath, false },
-    { "QT_INSTALL_QML", QLibraryInfo::Qml2ImportsPath, false },
-    { "QT_INSTALL_TRANSLATIONS", QLibraryInfo::TranslationsPath, false },
-    { "QT_INSTALL_CONFIGURATION", QLibraryInfo::SettingsPath, false },
-    { "QT_INSTALL_EXAMPLES", QLibraryInfo::ExamplesPath, false },
-    { "QT_INSTALL_DEMOS", QLibraryInfo::ExamplesPath, false }, // Just backwards compat
-    { "QT_HOST_PREFIX", QLibraryInfo::HostPrefixPath, true },
-    { "QT_HOST_DATA", QLibraryInfo::HostDataPath, true },
-    { "QT_HOST_BINS", QLibraryInfo::HostBinariesPath, true },
-    { "QMAKE_SPEC", QLibraryInfo::HostSpecPath, true },
-    { "QMAKE_XSPEC", QLibraryInfo::TargetSpecPath, true },
+    { "QT_SYSROOT", QLibraryInfo::SysrootPath, true, true },
+    { "QT_INSTALL_PREFIX", QLibraryInfo::PrefixPath, false, false },
+    { "QT_INSTALL_ARCHDATA", QLibraryInfo::ArchDataPath, false, false },
+    { "QT_INSTALL_DATA", QLibraryInfo::DataPath, false, false },
+    { "QT_INSTALL_DOCS", QLibraryInfo::DocumentationPath, false, false },
+    { "QT_INSTALL_HEADERS", QLibraryInfo::HeadersPath, false, false },
+    { "QT_INSTALL_LIBS", QLibraryInfo::LibrariesPath, false, false },
+    { "QT_INSTALL_LIBEXECS", QLibraryInfo::LibraryExecutablesPath, false, false },
+    { "QT_INSTALL_BINS", QLibraryInfo::BinariesPath, false, false },
+    { "QT_INSTALL_TESTS", QLibraryInfo::TestsPath, false, false },
+    { "QT_INSTALL_PLUGINS", QLibraryInfo::PluginsPath, false, false },
+    { "QT_INSTALL_IMPORTS", QLibraryInfo::ImportsPath, false, false },
+    { "QT_INSTALL_QML", QLibraryInfo::Qml2ImportsPath, false, false },
+    { "QT_INSTALL_TRANSLATIONS", QLibraryInfo::TranslationsPath, false, false },
+    { "QT_INSTALL_CONFIGURATION", QLibraryInfo::SettingsPath, false, false },
+    { "QT_INSTALL_EXAMPLES", QLibraryInfo::ExamplesPath, false, false },
+    { "QT_INSTALL_DEMOS", QLibraryInfo::ExamplesPath, false, false }, // Just backwards compat
+    { "QT_HOST_PREFIX", QLibraryInfo::HostPrefixPath, true, false },
+    { "QT_HOST_DATA", QLibraryInfo::HostDataPath, true, false },
+    { "QT_HOST_BINS", QLibraryInfo::HostBinariesPath, true, false },
+    { "QT_HOST_LIBS", QLibraryInfo::HostLibrariesPath, true, false },
+    { "QMAKE_SPEC", QLibraryInfo::HostSpecPath, true, true },
+    { "QMAKE_XSPEC", QLibraryInfo::TargetSpecPath, true, true },
 };
 
-QMakeProperty::QMakeProperty() : settings(0)
+QMakeProperty::QMakeProperty() : settings(nullptr)
 {
-    for (int i = 0; i < sizeof(propList)/sizeof(propList[0]); i++) {
+    reload();
+}
+
+void QMakeProperty::reload()
+{
+    QLibraryInfo::reload();
+    for (unsigned i = 0; i < sizeof(propList)/sizeof(propList[0]); i++) {
         QString name = QString::fromLatin1(propList[i].name);
-        m_values[ProKey(name + "/get")] = QLibraryInfo::rawLocation(propList[i].loc, QLibraryInfo::EffectivePaths);
+        if (!propList[i].singular) {
+            m_values[ProKey(name + "/src")] = QLibraryInfo::rawLocation(propList[i].loc, QLibraryInfo::EffectiveSourcePaths);
+            m_values[ProKey(name + "/get")] = QLibraryInfo::rawLocation(propList[i].loc, QLibraryInfo::EffectivePaths);
+        }
         QString val = QLibraryInfo::rawLocation(propList[i].loc, QLibraryInfo::FinalPaths);
         if (!propList[i].raw) {
+            m_values[ProKey(name + "/dev")] = QLibraryInfo::rawLocation(propList[i].loc, QLibraryInfo::DevicePaths);
             m_values[ProKey(name)] = QLibraryInfo::location(propList[i].loc);
             name += "/raw";
         }
@@ -99,13 +99,13 @@ QMakeProperty::QMakeProperty() : settings(0)
 QMakeProperty::~QMakeProperty()
 {
     delete settings;
-    settings = 0;
+    settings = nullptr;
 }
 
 void QMakeProperty::initSettings()
 {
     if(!settings) {
-        settings = new QSettings(QSettings::UserScope, "Trolltech", "QMake");
+        settings = new QSettings(QSettings::UserScope, "QtProject", "QMake");
         settings->setFallbacksEnabled(false);
     }
 }
@@ -118,10 +118,7 @@ QMakeProperty::value(const ProKey &vk)
         return val;
 
     initSettings();
-    QString v = vk.toQString();
-    if (!settings->contains(v))
-        return settings->value("2.01a/" + v).toString(); // Backwards compat
-    return settings->value(v).toString();
+    return settings->value(vk.toQString()).toString();
 }
 
 bool
@@ -135,7 +132,6 @@ QMakeProperty::setValue(QString var, const QString &val)
 {
     initSettings();
     settings->setValue(var, val);
-    settings->remove("2.01a/" + var); // Backwards compat
 }
 
 void
@@ -143,7 +139,6 @@ QMakeProperty::remove(const QString &var)
 {
     initSettings();
     settings->remove(var);
-    settings->remove("2.01a/" + var); // Backwards compat
 }
 
 bool
@@ -153,31 +148,33 @@ QMakeProperty::exec()
     if(Option::qmake_mode == Option::QMAKE_QUERY_PROPERTY) {
         if(Option::prop::properties.isEmpty()) {
             initSettings();
-            QStringList keys = settings->childKeys();
-            settings->beginGroup("2.01a");
-            keys += settings->childKeys();
-            settings->endGroup();
-            keys.removeDuplicates();
-            foreach (const QString &key, keys) {
-                QString val = settings->value(settings->contains(key) ? key : "2.01a/" + key).toString();
+            const auto keys = settings->childKeys();
+            for (const QString &key : keys) {
+                QString val = settings->value(key).toString();
                 fprintf(stdout, "%s:%s\n", qPrintable(key), qPrintable(val));
             }
             QStringList specialProps;
-            for (int i = 0; i < sizeof(propList)/sizeof(propList[0]); i++)
+            for (unsigned i = 0; i < sizeof(propList)/sizeof(propList[0]); i++)
                 specialProps.append(QString::fromLatin1(propList[i].name));
             specialProps.append("QMAKE_VERSION");
 #ifdef QT_VERSION_STR
             specialProps.append("QT_VERSION");
 #endif
-            foreach (QString prop, specialProps) {
+            for (const QString &prop : qAsConst(specialProps)) {
                 ProString val = value(ProKey(prop));
                 ProString pval = value(ProKey(prop + "/raw"));
                 ProString gval = value(ProKey(prop + "/get"));
+                ProString sval = value(ProKey(prop + "/src"));
+                ProString dval = value(ProKey(prop + "/dev"));
                 fprintf(stdout, "%s:%s\n", prop.toLatin1().constData(), val.toLatin1().constData());
                 if (!pval.isEmpty() && pval != val)
                     fprintf(stdout, "%s/raw:%s\n", prop.toLatin1().constData(), pval.toLatin1().constData());
                 if (!gval.isEmpty() && gval != (pval.isEmpty() ? val : pval))
                     fprintf(stdout, "%s/get:%s\n", prop.toLatin1().constData(), gval.toLatin1().constData());
+                if (!sval.isEmpty() && sval != gval)
+                    fprintf(stdout, "%s/src:%s\n", prop.toLatin1().constData(), sval.toLatin1().constData());
+                if (!dval.isEmpty() && dval != pval)
+                    fprintf(stdout, "%s/dev:%s\n", prop.toLatin1().constData(), dval.toLatin1().constData());
             }
             return true;
         }

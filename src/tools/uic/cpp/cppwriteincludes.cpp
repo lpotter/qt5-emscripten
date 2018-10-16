@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -82,14 +69,14 @@ static inline QString moduleHeader(const QString &module, const QString &header)
 namespace CPP {
 
 WriteIncludes::WriteIncludes(Uic *uic)
-    : m_uic(uic), m_output(uic->output()), m_scriptsActivated(false), m_laidOut(false)
+    : m_uic(uic), m_output(uic->output()), m_laidOut(false)
 {
     // When possible (no namespace) use the "QtModule/QClass" convention
     // and create a re-mapping of the old header "qclass.h" to it. Do not do this
     // for the "Phonon::Someclass" classes, however.
     const QString namespaceDelimiter = QLatin1String("::");
-    const ClassInfoEntry *classLibEnd = qclass_lib_map + sizeof(qclass_lib_map)/sizeof(ClassInfoEntry);    
-    for(const ClassInfoEntry *it = qclass_lib_map; it < classLibEnd;  ++it) {        
+    const ClassInfoEntry *classLibEnd = qclass_lib_map + sizeof(qclass_lib_map)/sizeof(ClassInfoEntry);
+    for (const ClassInfoEntry *it = qclass_lib_map; it < classLibEnd;  ++it) {
         const QString klass = QLatin1String(it->klass);
         const QString module = QLatin1String(it->module);
         QLatin1String header = QLatin1String(it->header);
@@ -105,7 +92,6 @@ WriteIncludes::WriteIncludes(Uic *uic)
 
 void WriteIncludes::acceptUI(DomUI *node)
 {
-    m_scriptsActivated = false;
     m_laidOut = false;
     m_localIncludes.clear();
     m_globalIncludes.clear();
@@ -120,12 +106,15 @@ void WriteIncludes::acceptUI(DomUI *node)
 
     add(QLatin1String("QApplication"));
     add(QLatin1String("QVariant"));
-    add(QLatin1String("QAction"));
 
-    add(QLatin1String("QButtonGroup")); // ### only if it is really necessary
-    add(QLatin1String("QHeaderView"));
+    if (node->elementButtonGroups())
+        add(QLatin1String("QButtonGroup"));
 
     TreeWalker::acceptUI(node);
+
+    const auto includeFile = m_uic->option().includeFile;
+    if (!includeFile.isEmpty())
+        m_globalIncludes.insert(includeFile);
 
     writeHeaders(m_globalIncludes, true);
     writeHeaders(m_localIncludes, false);
@@ -161,6 +150,8 @@ void WriteIncludes::acceptProperty(DomProperty *node)
         add(QLatin1String("QDate"));
     if (node->kind() == DomProperty::Locale)
         add(QLatin1String("QLocale"));
+    if (node->kind() == DomProperty::IconSet)
+        add(QLatin1String("QIcon"));
     TreeWalker::acceptProperty(node);
 }
 
@@ -173,7 +164,7 @@ void WriteIncludes::insertIncludeForClass(const QString &className, QString head
         if (!header.isEmpty())
             break;
 
-        // Known class        
+        // Known class
         const StringMap::const_iterator it = m_classToHeader.constFind(className);
         if (it != m_classToHeader.constEnd()) {
             header = it.value();
@@ -222,6 +213,14 @@ void WriteIncludes::add(const QString &className, bool determineHeader, const QS
 
     m_knownClasses.insert(className);
 
+    const CustomWidgetsInfo *cwi = m_uic->customWidgetsInfo();
+    if (cwi->extends(className, QLatin1String("QTreeView"))
+               || cwi->extends(className, QLatin1String("QTreeWidget"))
+               || cwi->extends(className, QLatin1String("QTableView"))
+               || cwi->extends(className, QLatin1String("QTableWidget"))) {
+        add(QLatin1String("QHeaderView"));
+    }
+
     if (!m_laidOut && m_uic->customWidgetsInfo()->extends(className, QLatin1String("QToolBox")))
         add(QLatin1String("QLayout")); // spacing property of QToolBox)
 
@@ -240,10 +239,6 @@ void WriteIncludes::acceptCustomWidget(DomCustomWidget *node)
     if (className.isEmpty())
         return;
 
-    if (const DomScript *domScript = node->elementScript())
-        if (!domScript->text().isEmpty())
-            activateScripts();
-
     if (!node->elementHeader() || node->elementHeader()->text().isEmpty()) {
         add(className, false); // no header specified
     } else {
@@ -256,6 +251,24 @@ void WriteIncludes::acceptCustomWidget(DomCustomWidget *node)
         }
         add(className, true, header, global);
     }
+}
+
+void WriteIncludes::acceptActionGroup(DomActionGroup *node)
+{
+    add(QLatin1String("QAction"));
+    TreeWalker::acceptActionGroup(node);
+}
+
+void WriteIncludes::acceptAction(DomAction *node)
+{
+    add(QLatin1String("QAction"));
+    TreeWalker::acceptAction(node);
+}
+
+void WriteIncludes::acceptActionRef(DomActionRef *node)
+{
+    add(QLatin1String("QAction"));
+    TreeWalker::acceptActionRef(node);
 }
 
 void WriteIncludes::acceptCustomWidgets(DomCustomWidgets *node)
@@ -282,10 +295,11 @@ void WriteIncludes::insertInclude(const QString &header, bool global)
         fprintf(stderr, "%s %s %d\n", Q_FUNC_INFO, qPrintable(header), global);
 
     OrderedSet &includes = global ?  m_globalIncludes : m_localIncludes;
-    if (includes.contains(header))
+    // Insert (if not already done).
+    const bool isNewHeader = includes.insert(header).second;
+    if (!isNewHeader)
         return;
-    // Insert. Also remember base name for quick check of suspicious custom plugins
-    includes.insert(header, false);
+    // Also remember base name for quick check of suspicious custom plugins
     const QString lowerBaseName = QFileInfo(header).completeBaseName ().toLower();
     m_includeBaseNames.insert(lowerBaseName);
 }
@@ -296,32 +310,14 @@ void WriteIncludes::writeHeaders(const OrderedSet &headers, bool global)
     const QChar closingQuote = global ? QLatin1Char('>') : QLatin1Char('"');
 
     // Check for the old headers 'qslider.h' and replace by 'QtGui/QSlider'
-    const OrderedSet::const_iterator cend = headers.constEnd();
-    for (OrderedSet::const_iterator sit = headers.constBegin(); sit != cend; ++sit) {
-        const StringMap::const_iterator hit = m_oldHeaderToNewHeader.constFind(sit.key());
-        const bool mapped =  hit != m_oldHeaderToNewHeader.constEnd();
-        const  QString header =  mapped ? hit.value() : sit.key();
-        if (!header.trimmed().isEmpty()) {
-            m_output << "#include " << openingQuote << header << closingQuote << QLatin1Char('\n');
-        }
+    for (const QString &header : headers) {
+        const QString value = m_oldHeaderToNewHeader.value(header, header);
+        const auto trimmed = QStringRef(&value).trimmed();
+        if (!trimmed.isEmpty())
+            m_output << "#include " << openingQuote << trimmed << closingQuote << QLatin1Char('\n');
     }
 }
 
-void WriteIncludes::acceptWidgetScripts(const DomScripts &scripts, DomWidget *, const  DomWidgets &)
-{
-    if (!scripts.empty()) {
-        activateScripts();
-    }
-}
-
-void WriteIncludes::activateScripts()
-{
-    if (!m_scriptsActivated) {
-        add(QLatin1String("QScriptEngine"));
-        add(QLatin1String("QDebug"));
-        m_scriptsActivated = true;
-    }
-}
 } // namespace CPP
 
 QT_END_NAMESPACE

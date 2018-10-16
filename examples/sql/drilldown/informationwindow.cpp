@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,50 +51,48 @@
 #include "informationwindow.h"
 
 //! [0]
-InformationWindow::InformationWindow(int id, QSqlRelationalTableModel *offices,
+InformationWindow::InformationWindow(int id, QSqlRelationalTableModel *items,
                                      QWidget *parent)
     : QDialog(parent)
 {
 //! [0] //! [1]
-    QLabel *locationLabel = new QLabel(tr("Location: "));
-    QLabel *countryLabel = new QLabel(tr("Country: "));
+    QLabel *itemLabel = new QLabel(tr("Item: "));
     QLabel *descriptionLabel = new QLabel(tr("Description: "));
     QLabel *imageFileLabel = new QLabel(tr("Image file: "));
 
     createButtons();
 
-    locationText = new QLabel;
-    countryText = new QLabel;
+    itemText = new QLabel;
     descriptionEditor = new QTextEdit;
 //! [1]
 
 //! [2]
     imageFileEditor = new QComboBox;
-    imageFileEditor->setModel(offices->relationModel(1));
-    imageFileEditor->setModelColumn(offices->relationModel(1)->fieldIndex("file"));
+    imageFileEditor->setModel(items->relationModel(1));
+    imageFileEditor->setModelColumn(items->relationModel(1)->fieldIndex("file"));
 //! [2]
 
 //! [3]
     mapper = new QDataWidgetMapper(this);
-    mapper->setModel(offices);
+    mapper->setModel(items);
     mapper->setSubmitPolicy(QDataWidgetMapper::ManualSubmit);
     mapper->setItemDelegate(new QSqlRelationalDelegate(mapper));
     mapper->addMapping(imageFileEditor, 1);
-    mapper->addMapping(locationText, 2, "text");
-    mapper->addMapping(countryText, 3, "text");
-    mapper->addMapping(descriptionEditor, 4);
+    mapper->addMapping(itemText, 2, "text");
+    mapper->addMapping(descriptionEditor, 3);
     mapper->setCurrentIndex(id);
 //! [3]
 
 //! [4]
-    connect(descriptionEditor, SIGNAL(textChanged()),
-            this, SLOT(enableButtons()));
-    connect(imageFileEditor, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(enableButtons()));
+    connect(descriptionEditor, &QTextEdit::textChanged, [=]() {
+        enableButtons();
+    });
+    connect(imageFileEditor, QOverload<int>::of(&QComboBox::currentIndexChanged), [=]() {
+        enableButtons();
+    });
 
     QFormLayout *formLayout = new QFormLayout;
-    formLayout->addRow(locationLabel, locationText);
-    formLayout->addRow(countryLabel, countryText);
+    formLayout->addRow(itemLabel, itemText);
     formLayout->addRow(imageFileLabel, imageFileEditor);
     formLayout->addRow(descriptionLabel, descriptionEditor);
 
@@ -93,23 +101,19 @@ InformationWindow::InformationWindow(int id, QSqlRelationalTableModel *offices,
     layout->addWidget(buttonBox);
     setLayout(layout);
 
-    locationId = id;
+    itemId = id;
     displayedImage = imageFileEditor->currentText();
 
-    // Commented the following line. Now the window will look like dialog and the Qt will place the QDialogBox buttons to menu area in Symbian.
-    // Too bad that the revert button is missing, Should the Qt place the buttons under Option menu in the menu area?!
-    // If the Qt::Window flag was used, the background of window is white in symbian and the QLabels can't be regognized from the background.
-
-    //setWindowFlags(Qt::Window);
+    setWindowFlags(Qt::Window);
     enableButtons(false);
-    setWindowTitle(tr("Office: %1").arg(locationText->text()));
+    setWindowTitle(itemText->text());
 }
 //! [4]
 
 //! [5]
-int InformationWindow::id()
+int InformationWindow::id() const
 {
-    return locationId;
+    return itemId;
 }
 //! [5]
 
@@ -128,11 +132,11 @@ void InformationWindow::submit()
 
     if (displayedImage != newImage) {
         displayedImage = newImage;
-        emit imageChanged(locationId, newImage);
+        emit imageChanged(itemId, newImage);
     }
 
     mapper->submit();
-    mapper->setCurrentIndex(locationId);
+    mapper->setCurrentIndex(itemId);
 
     enableButtons(false);
 }
@@ -147,9 +151,9 @@ void InformationWindow::createButtons()
 
     closeButton->setDefault(true);
 
-    connect(closeButton, SIGNAL(clicked()), this, SLOT(close()));
-    connect(revertButton, SIGNAL(clicked()), this, SLOT(revert()));
-    connect(submitButton, SIGNAL(clicked()), this, SLOT(submit()));
+    connect(closeButton, &QPushButton::clicked, this, &InformationWindow::close);
+    connect(revertButton, &QPushButton::clicked, this, &InformationWindow::revert);
+    connect(submitButton, &QPushButton::clicked, this, &InformationWindow::submit);
 //! [8]
 
 //! [9]

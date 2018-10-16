@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,16 +52,17 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "private/qobject_p.h"
 
-#ifndef QT_NO_COMPLETER
-
-#include "QtWidgets/qtreeview.h"
+#include "QtWidgets/qabstractitemview.h"
 #include "QtCore/qabstractproxymodel.h"
 #include "qcompleter.h"
 #include "QtWidgets/qitemdelegate.h"
 #include "QtGui/qpainter.h"
 #include "private/qabstractproxymodel_p.h"
+
+QT_REQUIRE_CONFIG(completer);
 
 QT_BEGIN_NAMESPACE
 
@@ -82,6 +81,7 @@ public:
     QCompletionModel *proxy;
     QAbstractItemView *popup;
     QCompleter::CompletionMode mode;
+    Qt::MatchFlags filterMode;
 
     QString prefix;
     Qt::CaseSensitivity cs;
@@ -101,6 +101,9 @@ public:
     void _q_autoResizePopup();
     void _q_fileSystemModelDirectoryLoaded(const QString &path);
     void setCurrentIndex(QModelIndex, bool = true);
+
+    static QCompleterPrivate *get(QCompleter *o) { return o->d_func(); }
+    static const QCompleterPrivate *get(const QCompleter *o) { return o->d_func(); }
 };
 
 class QIndexMapper
@@ -108,7 +111,7 @@ class QIndexMapper
 public:
     QIndexMapper() : v(false), f(0), t(-1) { }
     QIndexMapper(int f, int t) : v(false), f(f), t(t) { }
-    QIndexMapper(QVector<int> vec) : v(true), vector(vec), f(-1), t(-1) { }
+    QIndexMapper(const QVector<int> &vec) : v(true), vector(vec), f(-1), t(-1) { }
 
     inline int count() const { return v ? vector.count() : t - f + 1; }
     inline int operator[] (int index) const { return v ? vector[index] : f + index; }
@@ -129,7 +132,7 @@ private:
 };
 
 struct QMatchData {
-    QMatchData() : exactMatchIndex(-1) { }
+    QMatchData() : exactMatchIndex(-1), partial(false) { }
     QMatchData(const QIndexMapper& indices, int em, bool p) :
         indices(indices), exactMatchIndex(em), partial(p) { }
     QIndexMapper indices;
@@ -150,10 +153,10 @@ public:
     void filter(const QStringList &parts);
 
     QMatchData filterHistory();
-    bool matchHint(QString, const QModelIndex&, QMatchData*);
+    bool matchHint(const QString &part, const QModelIndex &parent, QMatchData *m) const;
 
     void saveInCache(QString, const QModelIndex&, const QMatchData&);
-    bool lookupCache(QString part, const QModelIndex& parent, QMatchData *m);
+    bool lookupCache(const QString &part, const QModelIndex &parent, QMatchData *m) const;
 
     virtual void filterOnDemand(int) { }
     virtual QMatchData filter(const QString&, const QModelIndex&, int) = 0;
@@ -174,7 +177,7 @@ class QSortedModelEngine : public QCompletionEngine
 {
 public:
     QSortedModelEngine(QCompleterPrivate *c) : QCompletionEngine(c) { }
-    QMatchData filter(const QString&, const QModelIndex&, int);
+    QMatchData filter(const QString&, const QModelIndex&, int) override;
     QIndexMapper indexHint(QString, const QModelIndex&, Qt::SortOrder);
     Qt::SortOrder sortOrder(const QModelIndex&) const;
 };
@@ -184,8 +187,8 @@ class QUnsortedModelEngine : public QCompletionEngine
 public:
     QUnsortedModelEngine(QCompleterPrivate *c) : QCompletionEngine(c) { }
 
-    void filterOnDemand(int);
-    QMatchData filter(const QString&, const QModelIndex&, int);
+    void filterOnDemand(int) override;
+    QMatchData filter(const QString&, const QModelIndex&, int) override;
 private:
     int buildIndices(const QString& str, const QModelIndex& parent, int n,
                      const QIndexMapper& iv, QMatchData* m);
@@ -196,7 +199,7 @@ class QCompleterItemDelegate : public QItemDelegate
 public:
     QCompleterItemDelegate(QAbstractItemView *view)
         : QItemDelegate(view), view(view) { }
-    void paint(QPainter *p, const QStyleOptionViewItem& opt, const QModelIndex& idx) const {
+    void paint(QPainter *p, const QStyleOptionViewItem& opt, const QModelIndex& idx) const override {
         QStyleOptionViewItem optCopy = opt;
         optCopy.showDecorationSelected = true;
         if (view->currentIndex() == idx)
@@ -225,16 +228,16 @@ public:
     bool setCurrentRow(int row);
     QModelIndex currentIndex(bool) const;
 
-    QModelIndex index(int row, int column, const QModelIndex & = QModelIndex()) const;
-    int rowCount(const QModelIndex &index = QModelIndex()) const;
-    int columnCount(const QModelIndex &index = QModelIndex()) const;
-    bool hasChildren(const QModelIndex &parent = QModelIndex()) const;
-    QModelIndex parent(const QModelIndex & = QModelIndex()) const { return QModelIndex(); }
-    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
+    QModelIndex index(int row, int column, const QModelIndex & = QModelIndex()) const override;
+    int rowCount(const QModelIndex &index = QModelIndex()) const override;
+    int columnCount(const QModelIndex &index = QModelIndex()) const override;
+    bool hasChildren(const QModelIndex &parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex & = QModelIndex()) const override { return QModelIndex(); }
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
-    void setSourceModel(QAbstractItemModel *sourceModel);
-    QModelIndex mapToSource(const QModelIndex& proxyIndex) const;
-    QModelIndex mapFromSource(const QModelIndex& sourceIndex) const;
+    void setSourceModel(QAbstractItemModel *sourceModel) override;
+    QModelIndex mapToSource(const QModelIndex& proxyIndex) const override;
+    QModelIndex mapFromSource(const QModelIndex& sourceIndex) const override;
 
     QCompleterPrivate *c;
     QScopedPointer<QCompletionEngine> engine;
@@ -257,7 +260,5 @@ class QCompletionModelPrivate : public QAbstractProxyModelPrivate
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_COMPLETER
 
 #endif // QCOMPLETER_P_H

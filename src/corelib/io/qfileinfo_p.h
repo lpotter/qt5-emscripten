@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -68,9 +66,18 @@ QT_BEGIN_NAMESPACE
 class QFileInfoPrivate : public QSharedData
 {
 public:
-    enum { CachedFileFlags=0x01, CachedLinkTypeFlag=0x02, CachedBundleTypeFlag=0x04,
-           CachedMTime=0x10, CachedCTime=0x20, CachedATime=0x40,
-           CachedSize =0x08, CachedPerms=0x80 };
+    enum {
+        // note: cachedFlags is only 30-bits wide
+        CachedFileFlags         = 0x01,
+        CachedLinkTypeFlag      = 0x02,
+        CachedBundleTypeFlag    = 0x04,
+        CachedSize              = 0x08,
+        CachedATime             = 0x10,
+        CachedBTime             = 0x20,
+        CachedMCTime            = 0x40,
+        CachedMTime             = 0x80,
+        CachedPerms             = 0x100
+    };
 
     inline QFileInfoPrivate()
         : QSharedData(), fileEngine(0),
@@ -96,7 +103,7 @@ public:
         fileEngine(QFileSystemEngine::resolveEntryAndCreateLegacyEngine(fileEntry, metaData)),
         cachedFlags(0),
 #ifndef QT_NO_FSFILEENGINE
-        isDefaultConstructed(false),
+        isDefaultConstructed(file.isEmpty()),
 #else
         isDefaultConstructed(!fileEngine),
 #endif
@@ -117,6 +124,20 @@ public:
         //in which case we can't trust the metadata
         if (fileEngine)
             metaData = QFileSystemMetaData();
+    }
+
+    inline QFileInfoPrivate(const QFileSystemEntry &file, const QFileSystemMetaData &data, QAbstractFileEngine *engine)
+        : fileEntry(file),
+        metaData(data),
+        fileEngine(engine),
+        cachedFlags(0),
+#ifndef QT_NO_FSFILEENGINE
+        isDefaultConstructed(false),
+#else
+        isDefaultConstructed(!fileEngine),
+#endif
+        cache_enabled(true), fileFlags(0), fileSize(0)
+    {
     }
 
     inline void clearFlags() const {
@@ -145,19 +166,40 @@ public:
     QScopedPointer<QAbstractFileEngine> const fileEngine;
 
     mutable QString fileNames[QAbstractFileEngine::NFileNames];
-    mutable QString fileOwners[2];
+    mutable QString fileOwners[2];  // QAbstractFileEngine::FileOwner: OwnerUser and OwnerGroup
+    mutable QDateTime fileTimes[4]; // QAbstractFileEngine::FileTime: BirthTime, MetadataChangeTime, ModificationTime, AccessTime
 
     mutable uint cachedFlags : 30;
     bool const isDefaultConstructed : 1; // QFileInfo is a default constructed instance
     bool cache_enabled : 1;
     mutable uint fileFlags;
     mutable qint64 fileSize;
-    mutable QDateTime fileTimes[3];
     inline bool getCachedFlag(uint c) const
     { return cache_enabled ? (cachedFlags & c) : 0; }
     inline void setCachedFlag(uint c) const
     { if (cache_enabled) cachedFlags |= c; }
 
+    template <typename Ret, typename FSLambda, typename EngineLambda>
+    Ret checkAttribute(Ret defaultValue, QFileSystemMetaData::MetaDataFlags fsFlags, const FSLambda &fsLambda,
+                       const EngineLambda &engineLambda) const
+    {
+        if (isDefaultConstructed)
+            return defaultValue;
+        if (fileEngine)
+            return engineLambda();
+        if (!cache_enabled || !metaData.hasFlags(fsFlags)) {
+            QFileSystemEngine::fillMetaData(fileEntry, metaData, fsFlags);
+            // ignore errors, fillMetaData will have cleared the flags
+        }
+        return fsLambda();
+    }
+
+    template <typename Ret, typename FSLambda, typename EngineLambda>
+    Ret checkAttribute(QFileSystemMetaData::MetaDataFlags fsFlags, const FSLambda &fsLambda,
+                       const EngineLambda &engineLambda) const
+    {
+        return checkAttribute(Ret(), fsFlags, fsLambda, engineLambda);
+    }
 };
 
 QT_END_NAMESPACE

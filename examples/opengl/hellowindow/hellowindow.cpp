@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,14 +51,14 @@
 #include "hellowindow.h"
 
 #include <QOpenGLContext>
-
-#include <QTimer>
-
+#include <QOpenGLFunctions>
+#include <QRandomGenerator>
 #include <qmath.h>
 
 Renderer::Renderer(const QSurfaceFormat &format, Renderer *share, QScreen *screen)
     : m_initialized(false)
     , m_format(format)
+    , m_currentWindow(0)
 {
     m_context = new QOpenGLContext(this);
     if (screen)
@@ -57,10 +67,15 @@ Renderer::Renderer(const QSurfaceFormat &format, Renderer *share, QScreen *scree
     if (share)
         m_context->setShareContext(share->m_context);
     m_context->create();
+
+    m_backgroundColor = QColor::fromRgbF(0.1f, 0.1f, 0.2f, 1.0f);
+    m_backgroundColor.setRed(QRandomGenerator::global()->bounded(64));
+    m_backgroundColor.setGreen(QRandomGenerator::global()->bounded(128));
+    m_backgroundColor.setBlue(QRandomGenerator::global()->bounded(256));
 }
 
-HelloWindow::HelloWindow(const QSharedPointer<Renderer> &renderer)
-    : m_colorIndex(0), m_renderer(renderer), m_timer(0)
+HelloWindow::HelloWindow(const QSharedPointer<Renderer> &renderer, QScreen *screen)
+    : m_colorIndex(0), m_renderer(renderer)
 {
     setSurfaceType(QWindow::OpenGLSurface);
     setFlags(Qt::Window | Qt::WindowSystemMenuHint | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
@@ -68,26 +83,19 @@ HelloWindow::HelloWindow(const QSharedPointer<Renderer> &renderer)
     setGeometry(QRect(10, 10, 640, 480));
 
     setFormat(renderer->format());
+    if (screen)
+        setScreen(screen);
 
     create();
-
-    connect(this, SIGNAL(needRender(QSurface *, const QColor &, const QSize &)),
-            renderer.data(), SLOT(render(QSurface *, const QColor &, const QSize &)));
 
     updateColor();
 }
 
-void HelloWindow::exposeEvent(QExposeEvent *event)
+void HelloWindow::exposeEvent(QExposeEvent *)
 {
-    Q_UNUSED(event);
-
-    render();
-
-    if (!m_timer) {
-        m_timer = new QTimer(this);
-        connect(m_timer, SIGNAL(timeout()), this, SLOT(render()));
-        m_timer->start(10);
-    }
+    m_renderer->setAnimating(this, isExposed());
+    if (isExposed())
+        m_renderer->render();
 }
 
 void HelloWindow::mousePressEvent(QMouseEvent *)
@@ -95,13 +103,16 @@ void HelloWindow::mousePressEvent(QMouseEvent *)
     updateColor();
 }
 
-void HelloWindow::render()
+QColor HelloWindow::color() const
 {
-    emit needRender(this, m_color, size());
+    QMutexLocker locker(&m_colorLock);
+    return m_color;
 }
 
 void HelloWindow::updateColor()
 {
+    QMutexLocker locker(&m_colorLock);
+
     QColor colors[] =
     {
         QColor(100, 255, 0),
@@ -109,31 +120,67 @@ void HelloWindow::updateColor()
     };
 
     m_color = colors[m_colorIndex];
-
-    m_colorIndex++;
-    if (m_colorIndex >= int(sizeof(colors) / sizeof(colors[0])))
-        m_colorIndex = 0;
+    m_colorIndex = 1 - m_colorIndex;
 }
 
-void Renderer::render(QSurface *surface, const QColor &color, const QSize &viewSize)
+void Renderer::setAnimating(HelloWindow *window, bool animating)
 {
+    QMutexLocker locker(&m_windowLock);
+    if (m_windows.contains(window) == animating)
+        return;
+
+    if (animating) {
+        m_windows << window;
+        if (m_windows.size() == 1)
+            QTimer::singleShot(0, this, &Renderer::render);
+    } else {
+        m_currentWindow = 0;
+        m_windows.removeOne(window);
+    }
+}
+
+void Renderer::render()
+{
+    QMutexLocker locker(&m_windowLock);
+
+    if (m_windows.isEmpty())
+        return;
+
+    HelloWindow *surface = m_windows.at(m_currentWindow);
+    QColor color = surface->color();
+
+    m_currentWindow = (m_currentWindow + 1) % m_windows.size();
+
     if (!m_context->makeCurrent(surface))
         return;
+
+    QSize viewSize = surface->size();
+
+    locker.unlock();
 
     if (!m_initialized) {
         initialize();
         m_initialized = true;
     }
 
-    glViewport(0, 0, viewSize.width(), viewSize.height());
+    QOpenGLFunctions *f = m_context->functions();
+    f->glViewport(0, 0, viewSize.width() * surface->devicePixelRatio(), viewSize.height() * surface->devicePixelRatio());
+    f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    f->glClearColor(m_backgroundColor.redF(), m_backgroundColor.greenF(), m_backgroundColor.blueF(), m_backgroundColor.alphaF());
+    f->glFrontFace(GL_CW);
+    f->glCullFace(GL_FRONT);
+    f->glEnable(GL_CULL_FACE);
+    f->glEnable(GL_DEPTH_TEST);
 
-    glFrontFace(GL_CW);
-    glCullFace(GL_FRONT);
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
+    m_program->bind();
+    m_vbo.bind();
+
+    m_program->enableAttributeArray(vertexAttr);
+    m_program->enableAttributeArray(normalAttr);
+    m_program->setAttributeBuffer(vertexAttr, GL_FLOAT, 0, 3);
+    const int verticesSize = vertices.count() * 3 * sizeof(GLfloat);
+    m_program->setAttributeBuffer(normalAttr, GL_FLOAT, verticesSize, 3);
 
     QMatrix4x4 modelview;
     modelview.rotate(m_fAngle, 0.0f, 1.0f, 0.0f);
@@ -141,66 +188,55 @@ void Renderer::render(QSurface *surface, const QColor &color, const QSize &viewS
     modelview.rotate(m_fAngle, 0.0f, 0.0f, 1.0f);
     modelview.translate(0.0f, -0.2f, 0.0f);
 
-    m_program->bind();
     m_program->setUniformValue(matrixUniform, modelview);
     m_program->setUniformValue(colorUniform, color);
-    paintQtLogo();
-    m_program->release();
 
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
+    m_context->functions()->glDrawArrays(GL_TRIANGLES, 0, vertices.size());
 
     m_context->swapBuffers(surface);
 
     m_fAngle += 1.0f;
+
+    QTimer::singleShot(0, this, &Renderer::render);
 }
 
-void Renderer::paintQtLogo()
-{
-    m_program->enableAttributeArray(normalAttr);
-    m_program->enableAttributeArray(vertexAttr);
-    m_program->setAttributeArray(vertexAttr, vertices.constData());
-    m_program->setAttributeArray(normalAttr, normals.constData());
-    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
-    m_program->disableAttributeArray(normalAttr);
-    m_program->disableAttributeArray(vertexAttr);
-}
+Q_GLOBAL_STATIC(QMutex, initMutex)
 
 void Renderer::initialize()
 {
-    glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
+    // Threaded shader compilation can confuse some drivers. Avoid it.
+    QMutexLocker lock(initMutex());
 
     QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
-    const char *vsrc =
-        "attribute highp vec4 vertex;\n"
-        "attribute mediump vec3 normal;\n"
-        "uniform mediump mat4 matrix;\n"
-        "uniform lowp vec4 sourceColor;\n"
-        "varying mediump vec4 color;\n"
-        "void main(void)\n"
-        "{\n"
-        "    vec3 toLight = normalize(vec3(0.0, 0.3, 1.0));\n"
-        "    float angle = max(dot(normal, toLight), 0.0);\n"
-        "    vec3 col = sourceColor.rgb;\n"
-        "    color = vec4(col * 0.2 + col * 0.8 * angle, 1.0);\n"
-        "    color = clamp(color, 0.0, 1.0);\n"
-        "    gl_Position = matrix * vertex;\n"
-        "}\n";
-    vshader->compileSourceCode(vsrc);
+    vshader->compileSourceCode(
+        "attribute highp vec4 vertex;"
+        "attribute mediump vec3 normal;"
+        "uniform mediump mat4 matrix;"
+        "uniform lowp vec4 sourceColor;"
+        "varying mediump vec4 color;"
+        "void main(void)"
+        "{"
+        "    vec3 toLight = normalize(vec3(0.0, 0.3, 1.0));"
+        "    float angle = max(dot(normal, toLight), 0.0);"
+        "    vec3 col = sourceColor.rgb;"
+        "    color = vec4(col * 0.2 + col * 0.8 * angle, 1.0);"
+        "    color = clamp(color, 0.0, 1.0);"
+        "    gl_Position = matrix * vertex;"
+        "}");
 
     QOpenGLShader *fshader = new QOpenGLShader(QOpenGLShader::Fragment, this);
-    const char *fsrc =
-        "varying mediump vec4 color;\n"
-        "void main(void)\n"
-        "{\n"
-        "    gl_FragColor = color;\n"
-        "}\n";
-    fshader->compileSourceCode(fsrc);
+    fshader->compileSourceCode(
+        "varying mediump vec4 color;"
+        "void main(void)"
+        "{"
+        "    gl_FragColor = color;"
+        "}");
 
     m_program = new QOpenGLShaderProgram(this);
     m_program->addShader(vshader);
     m_program->addShader(fshader);
     m_program->link();
+    m_program->bind();
 
     vertexAttr = m_program->attributeLocation("vertex");
     normalAttr = m_program->attributeLocation("normal");
@@ -209,6 +245,13 @@ void Renderer::initialize()
 
     m_fAngle = 0;
     createGeometry();
+
+    m_vbo.create();
+    m_vbo.bind();
+    const int verticesSize = vertices.count() * 3 * sizeof(GLfloat);
+    m_vbo.allocate(verticesSize * 2);
+    m_vbo.write(0, vertices.constData(), verticesSize);
+    m_vbo.write(verticesSize, normals.constData(), verticesSize);
 }
 
 void Renderer::createGeometry()
@@ -236,21 +279,20 @@ void Renderer::createGeometry()
     extrude(x4, y4, y4, x4);
     extrude(y4, x4, y3, x3);
 
-    const qreal Pi = 3.14159f;
     const int NumSectors = 100;
-
+    const qreal sectorAngle = 2 * qreal(M_PI) / NumSectors;
     for (int i = 0; i < NumSectors; ++i) {
-        qreal angle1 = (i * 2 * Pi) / NumSectors;
-        qreal x5 = 0.30 * qSin(angle1);
-        qreal y5 = 0.30 * qCos(angle1);
-        qreal x6 = 0.20 * qSin(angle1);
-        qreal y6 = 0.20 * qCos(angle1);
+        qreal angle = i * sectorAngle;
+        qreal x5 = 0.30 * qSin(angle);
+        qreal y5 = 0.30 * qCos(angle);
+        qreal x6 = 0.20 * qSin(angle);
+        qreal y6 = 0.20 * qCos(angle);
 
-        qreal angle2 = ((i + 1) * 2 * Pi) / NumSectors;
-        qreal x7 = 0.20 * qSin(angle2);
-        qreal y7 = 0.20 * qCos(angle2);
-        qreal x8 = 0.30 * qSin(angle2);
-        qreal y8 = 0.30 * qCos(angle2);
+        angle += sectorAngle;
+        qreal x7 = 0.20 * qSin(angle);
+        qreal y7 = 0.20 * qCos(angle);
+        qreal x8 = 0.30 * qSin(angle);
+        qreal y8 = 0.30 * qCos(angle);
 
         quad(x5, y5, x6, y6, x7, y7, x8, y8);
 

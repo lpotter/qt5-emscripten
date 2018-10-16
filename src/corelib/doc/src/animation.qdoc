@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,23 +10,24 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 /*!
     \group animation
+    \brief Provides an easy way for creating animated GUIs.
     \title Animation Framework
 
     This page lists classes belonging to \l{Qt Core}'s
@@ -46,7 +47,7 @@
     \keyword Animation
 
     The animation framework aims to provide an easy way for creating animated
-    and smooth GUI's. By animating Qt properties, the framework provides great
+    and smooth GUIs. By animating Qt properties, the framework provides great
     freedom for animating widgets and other \l{QObject}s. The framework can
     also be used with the Graphics View framework. Many of the concepts
     available in the animation framework are also available in \l{Qt Quick},
@@ -56,7 +57,7 @@
 
     In this overview, we explain the basics of its architecture. We
     also show examples of the most common techniques that the
-    framework allows for animating QObjects and graphics items.
+    framework allows for animating \l{QObject}s and graphics items.
 
     \tableofcontents
 
@@ -117,11 +118,12 @@
 
     \section1 Animating Qt Properties
 
-    As mentioned in the previous section, the QPropertyAnimation class
-    can interpolate over Qt properties. It is this class that should
-    be used for animation of values; in fact, its superclass,
-    QVariantAnimation, is an abstract class, and cannot be used
-    directly.
+    As mentioned in the previous section, the QPropertyAnimation class can
+    interpolate over Qt properties. It is often this class that should be used
+    for animation of values; in fact, its superclass, QVariantAnimation, has an
+    empty implementation of \l{QVariantAnimation::}{updateCurrentValue()}, and
+    does not change any value unless we change it ourselves on the
+    \l{QVariantAnimation::valueChanged()}{valueChanged signal}.
 
     A major reason we chose to animate Qt properties is that it
     presents us with freedom to animate already existing classes in

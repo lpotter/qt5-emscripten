@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,22 +41,18 @@ class tst_QStackedLayout : public QObject
 
 public:
     tst_QStackedLayout();
-    virtual ~tst_QStackedLayout();
 
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
+private slots:
     void init();
     void cleanup();
 
-private slots:
     void getSetCheck();
     void testCase();
     void deleteCurrent();
     void removeWidget();
     void keepFocusAfterSetCurrent();
     void heigthForWidth();
+    void replaceWidget();
 
 private:
     QWidget *testWidget;
@@ -107,18 +90,6 @@ tst_QStackedLayout::tst_QStackedLayout()
 {
 }
 
-tst_QStackedLayout::~tst_QStackedLayout()
-{
-}
-
-void tst_QStackedLayout::initTestCase()
-{
-}
-
-void tst_QStackedLayout::cleanupTestCase()
-{
-}
-
 void tst_QStackedLayout::init()
 {
     if (testWidget) {
@@ -132,8 +103,7 @@ void tst_QStackedLayout::init()
     // make sure the tests work with focus follows mouse
     QCursor::setPos(testWidget->geometry().center());
     testWidget->activateWindow();
-    QApplication::syncX();
-    QTest::qWait(250);
+    QVERIFY(QTest::qWaitForWindowActive(testWidget));
 }
 
 void tst_QStackedLayout::cleanup()
@@ -141,7 +111,6 @@ void tst_QStackedLayout::cleanup()
     delete testWidget;
     testWidget = 0;
 }
-
 
 void tst_QStackedLayout::testCase()
 {
@@ -153,7 +122,7 @@ void tst_QStackedLayout::testCase()
 
     // Nothing in layout
     QCOMPARE(testLayout->currentIndex(), -1);
-    QCOMPARE(testLayout->currentWidget(), static_cast<QWidget*>(0));
+    QCOMPARE(testLayout->currentWidget(), nullptr);
     QCOMPARE(testLayout->count(), 0);
 
     // One widget added to layout
@@ -194,7 +163,7 @@ void tst_QStackedLayout::testCase()
     QCOMPARE(spy.at(0).at(0).toInt(), -1);
     spy.clear();
     QCOMPARE(testLayout->currentIndex(), -1);
-    QCOMPARE(testLayout->currentWidget(), static_cast<QWidget*>(0));
+    QCOMPARE(testLayout->currentWidget(), nullptr);
     QCOMPARE(testLayout->count(), 0);
 
     // Another widget inserted at current index.
@@ -248,7 +217,7 @@ void tst_QStackedLayout::testCase()
     QVERIFY(w3->isVisible());
     testLayout->removeWidget(w3);
     QCOMPARE(testLayout->currentIndex(), -1);
-    QCOMPARE(testLayout->currentWidget(), static_cast<QWidget*>(0));
+    QCOMPARE(testLayout->currentWidget(), nullptr);
 }
 
 void tst_QStackedLayout::deleteCurrent()
@@ -282,24 +251,13 @@ void tst_QStackedLayout::removeWidget()
     testLayout->addWidget(w2);
     vbox->addLayout(testLayout);
     top->setFocus();
-    QTest::qWait(100);
     top->activateWindow();
-    QTest::qWait(100);
-    int i =0;
-    for (;;) {
-        if (QApplication::focusWidget() == top)
-            break;
-        else if (i >= 5)
-            QSKIP("Can't get focus");
-        QTest::qWait(100);
-        ++i;
-    }
-    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(top));
+    QTRY_COMPARE(QApplication::focusWidget(), top);
 
     // focus should stay at the 'top' widget
     testLayout->removeWidget(w1);
 
-    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(top));
+    QCOMPARE(QApplication::focusWidget(), top);
 }
 
 class LineEdit : public QLineEdit
@@ -392,6 +350,27 @@ void tst_QStackedLayout::heigthForWidth()
     stackLayout->setCurrentIndex(1);
     QCOMPARE(stackLayout->heightForWidth(200), hfw_index0);
 
+}
+
+void tst_QStackedLayout::replaceWidget()
+{
+    QWidget w;
+    QStackedLayout *stackLayout = new QStackedLayout(&w);
+
+    QLineEdit *replaceFrom = new QLineEdit;
+    QLineEdit *replaceTo = new QLineEdit;
+    stackLayout->addWidget(new QLineEdit());
+    stackLayout->addWidget(replaceFrom);
+    stackLayout->addWidget(new QLineEdit());
+    stackLayout->setCurrentWidget(replaceFrom);
+
+    QCOMPARE(stackLayout->indexOf(replaceFrom), 1);
+    QCOMPARE(stackLayout->indexOf(replaceTo), -1);
+    delete stackLayout->replaceWidget(replaceFrom, replaceTo);
+
+    QCOMPARE(stackLayout->indexOf(replaceFrom), -1);
+    QCOMPARE(stackLayout->indexOf(replaceTo), 1);
+    QCOMPARE(stackLayout->currentWidget(), replaceTo);
 }
 
 QTEST_MAIN(tst_QStackedLayout)

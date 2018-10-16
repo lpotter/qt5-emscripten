@@ -1,15 +1,11 @@
 TEMPLATE = subdirs
+QT_FOR_CONFIG += network-private
 
-linux*:contains(QT_CONFIG, dbus) {
+!android:linux*:qtHaveModule(dbus) {
     SUBDIRS += generic
     SUBDIRS += connman networkmanager
 }
 
-#win32:SUBDIRS += nla
-win32:SUBDIRS += generic
-blackberry:SUBDIRS += blackberry
-win32:!wince*:SUBDIRS += nativewifi
-macx:contains(QT_CONFIG, corewlan):SUBDIRS += corewlan
-macx:SUBDIRS += generic
+android:!android-embedded: SUBDIRS += android
 
 isEmpty(SUBDIRS):SUBDIRS = generic

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -78,6 +65,7 @@ private slots:
     /* void registerEventNotifiier(); */ // Not implemented here, see tst_QWinEventNotifier instead
     void sendPostedEvents_data();
     void sendPostedEvents();
+    void processEventsOnlySendsQueuedEvents();
 };
 
 bool tst_QEventDispatcher::event(QEvent *e)
@@ -148,8 +136,7 @@ void tst_QEventDispatcher::registerTimer()
     // process events, waiting for the next event... this should only fire the precise timer
     receivedEventType = -1;
     timerIdFromEvent = -1;
-    QVERIFY(eventDispatcher->processEvents(QEventLoop::WaitForMoreEvents));
-    QCOMPARE(receivedEventType, int(QEvent::Timer));
+    QTRY_COMPARE_WITH_TIMEOUT(receivedEventType, int(QEvent::Timer), PreciseTimerInterval * 2);
     QCOMPARE(timerIdFromEvent, preciseTimerId);
     // now unregister it and make sure it's gone
     eventDispatcher->unregisterTimer(preciseTimerId);
@@ -161,8 +148,7 @@ void tst_QEventDispatcher::registerTimer()
     // do the same again for the coarse timer
     receivedEventType = -1;
     timerIdFromEvent = -1;
-    QVERIFY(eventDispatcher->processEvents(QEventLoop::WaitForMoreEvents));
-    QCOMPARE(receivedEventType, int(QEvent::Timer));
+    QTRY_COMPARE_WITH_TIMEOUT(receivedEventType, int(QEvent::Timer), CoarseTimerInterval * 2);
     QCOMPARE(timerIdFromEvent, coarseTimerId);
     // now unregister it and make sure it's gone
     eventDispatcher->unregisterTimer(coarseTimerId);
@@ -207,6 +193,50 @@ void tst_QEventDispatcher::sendPostedEvents()
         // event shouldn't be delivered as a result of posting
         QCOMPARE(receivedEventType, int(QEvent::User));
     }
+}
+
+class ProcessEventsOnlySendsQueuedEvents : public QObject
+{
+    Q_OBJECT
+public:
+    int eventsReceived;
+
+    inline ProcessEventsOnlySendsQueuedEvents() : eventsReceived(0) {}
+
+    bool event(QEvent *event)
+    {
+        ++eventsReceived;
+
+        if (event->type() == QEvent::User)
+             QCoreApplication::postEvent(this, new QEvent(QEvent::Type(QEvent::User + 1)));
+
+        return QObject::event(event);
+    }
+public slots:
+    void timerFired()
+    {
+        QCoreApplication::postEvent(this, new QEvent(QEvent::Type(QEvent::User + 1)));
+    }
+};
+
+void tst_QEventDispatcher::processEventsOnlySendsQueuedEvents()
+{
+    ProcessEventsOnlySendsQueuedEvents object;
+
+    // Posted events during event processing should be handled on
+    // the next processEvents iteration.
+    QCoreApplication::postEvent(&object, new QEvent(QEvent::User));
+    QCoreApplication::processEvents();
+    QCOMPARE(object.eventsReceived, 1);
+    QCoreApplication::processEvents();
+    QCOMPARE(object.eventsReceived, 2);
+
+    // The same goes for posted events during timer processing
+    QTimer::singleShot(0, &object, SLOT(timerFired()));
+    QCoreApplication::processEvents();
+    QCOMPARE(object.eventsReceived, 3);
+    QCoreApplication::processEvents();
+    QCOMPARE(object.eventsReceived, 4);
 }
 
 QTEST_MAIN(tst_QEventDispatcher)

@@ -6,6 +6,5 @@ SOURCES  += tst_qtextpiecetable.cpp
 HEADERS += ../qtextdocument/common.h
 
 requires(!win32)
-requires(contains(QT_CONFIG,private_tests))
+requires(qtConfig(private_tests))
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

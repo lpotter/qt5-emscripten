@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,10 @@
 
 #include <QtTest/private/qabstracttestlogger_p.h>
 #include <QtTest/qtestassert.h>
+#include <qtestresult_p.h>
 
 #include <QtCore/qbytearray.h>
+#include <QtCore/qstring.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +50,10 @@
 
 #ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
+
+#ifdef Q_OS_ANDROID
+#include <sys/stat.h>
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -60,7 +64,7 @@ QAbstractTestLogger::QAbstractTestLogger(const char *filename)
         stream = stdout;
         return;
     }
-#if defined(_MSC_VER) && _MSC_VER >= 1400 && !defined(Q_OS_WINCE)
+#if defined(_MSC_VER)
     if (::fopen_s(&stream, filename, "wt")) {
 #else
     stream = ::fopen(filename, "wt");
@@ -69,6 +73,12 @@ QAbstractTestLogger::QAbstractTestLogger(const char *filename)
         fprintf(stderr, "Unable to open file for logging: %s\n", filename);
         ::exit(1);
     }
+#ifdef Q_OS_ANDROID
+    else {
+        // Make sure output is world-readable on Android
+        ::chmod(filename, 0666);
+    }
+#endif
 }
 
 QAbstractTestLogger::~QAbstractTestLogger()
@@ -82,9 +92,9 @@ QAbstractTestLogger::~QAbstractTestLogger()
 
 void QAbstractTestLogger::filterUnprintable(char *str) const
 {
-    char *idx = str;
+    unsigned char *idx = reinterpret_cast<unsigned char *>(str);
     while (*idx) {
-        if (((*idx < 0x20 && *idx != '\n' && *idx != '\t') || *idx > 0x7e))
+        if (((*idx < 0x20 && *idx != '\n' && *idx != '\t') || *idx == 0x7f))
             *idx = '?';
         ++idx;
     }
@@ -111,6 +121,29 @@ void QAbstractTestLogger::startLogging()
 
 void QAbstractTestLogger::stopLogging()
 {
+}
+
+void QAbstractTestLogger::addMessage(QtMsgType type, const QMessageLogContext &context,
+                                     const QString &message)
+{
+    QAbstractTestLogger::MessageTypes messageType = [=]() {
+        switch (type) {
+        case QtDebugMsg: return QAbstractTestLogger::QDebug;
+        case QtInfoMsg: return QAbstractTestLogger::QInfo;
+        case QtCriticalMsg: return QAbstractTestLogger::QSystem;
+        case QtWarningMsg: return QAbstractTestLogger::QWarning;
+        case QtFatalMsg: return QAbstractTestLogger::QFatal;
+        }
+        Q_UNREACHABLE();
+        return QAbstractTestLogger::QFatal;
+    }();
+
+    QString formattedMessage = qFormatLogMessage(type, context, message);
+
+    // Note that we explicitly ignore the file and line of the context here,
+    // as that's what QTest::messageHandler used to do when calling the same
+    // overload directly.
+    addMessage(messageType, formattedMessage);
 }
 
 namespace QTest
@@ -153,6 +186,28 @@ int qt_asprintf(QTestCharBuffer *str, const char *format, ...)
     }
 
     return res;
+}
+
+}
+
+namespace QTestPrivate
+{
+
+void generateTestIdentifier(QTestCharBuffer *identifier, int parts)
+{
+    const char *testObject = parts & TestObject ? QTestResult::currentTestObjectName() : "";
+    const char *testFunction = parts & TestFunction ? (QTestResult::currentTestFunction() ? QTestResult::currentTestFunction() : "UnknownTestFunc") : "";
+    const char *objectFunctionFiller = parts & TestObject && parts & (TestFunction | TestDataTag) ? "::" : "";
+    const char *testFuctionStart = parts & TestFunction ? "(" : "";
+    const char *testFuctionEnd = parts & TestFunction ? ")" : "";
+
+    const char *dataTag = (parts & TestDataTag) && QTestResult::currentDataTag() ? QTestResult::currentDataTag() : "";
+    const char *globalDataTag = (parts & TestDataTag) && QTestResult::currentGlobalDataTag() ? QTestResult::currentGlobalDataTag() : "";
+    const char *tagFiller = (dataTag[0] && globalDataTag[0]) ? ":" : "";
+
+    QTest::qt_asprintf(identifier, "%s%s%s%s%s%s%s%s",
+        testObject, objectFunctionFiller, testFunction, testFuctionStart,
+        globalDataTag, tagFiller, dataTag, testFuctionEnd);
 }
 
 }

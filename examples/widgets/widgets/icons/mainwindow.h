@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,9 +59,10 @@
 QT_BEGIN_NAMESPACE
 class QAction;
 class QActionGroup;
-class QGroupBox;
+class QLabel;
 class QMenu;
 class QRadioButton;
+class QButtonGroup;
 class QTableWidget;
 QT_END_NAMESPACE
 class IconPreviewArea;
@@ -65,51 +76,47 @@ class MainWindow : public QMainWindow
 public:
     MainWindow();
 
+    void loadImages(const QStringList &fileNames);
+
+    void show();
+
 private slots:
     void about();
     void changeStyle(bool checked);
-    void changeSize(bool checked = true);
+    void changeSize(int, bool);
+    void triggerChangeSize();
     void changeIcon();
-    void addImages();
+    void addSampleImages();
+    void addOtherImages();
     void removeAllImages();
+    void useHighDpiPixmapsChanged(int checkState);
+    void screenChanged();
 
 private:
-    void createPreviewGroupBox();
-    void createImagesGroupBox();
-    void createIconSizeGroupBox();
+    QWidget *createImagesGroupBox();
+    QWidget *createIconSizeGroupBox();
+    QWidget *createHighDpiIconSizeGroupBox();
     void createActions();
-    void createMenus();
     void createContextMenu();
     void checkCurrentStyle();
+    void addImages(const QString &directory);
 
-    QWidget *centralWidget;
-
-    QGroupBox *previewGroupBox;
     IconPreviewArea *previewArea;
 
-    QGroupBox *imagesGroupBox;
     QTableWidget *imagesTable;
 
-    QGroupBox *iconSizeGroupBox;
-    QRadioButton *smallRadioButton;
-    QRadioButton *largeRadioButton;
-    QRadioButton *toolBarRadioButton;
-    QRadioButton *listViewRadioButton;
-    QRadioButton *iconViewRadioButton;
-    QRadioButton *tabBarRadioButton;
-    QRadioButton *otherRadioButton;
+    QButtonGroup *sizeButtonGroup;
     IconSizeSpinBox *otherSpinBox;
 
-    QMenu *fileMenu;
-    QMenu *viewMenu;
-    QMenu *helpMenu;
-    QAction *addImagesAct;
+    QLabel *devicePixelRatioLabel;
+    QLabel *screenNameLabel;
+
+    QAction *addOtherImagesAct;
+    QAction *addSampleImagesAct;
     QAction *removeAllImagesAct;
-    QAction *exitAct;
     QAction *guessModeStateAct;
+    QAction *nativeFileDialogAct;
     QActionGroup *styleActionGroup;
-    QAction *aboutAct;
-    QAction *aboutQtAct;
 };
 //! [0]
 

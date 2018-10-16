@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,45 +10,54 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qopenglshaderprogram.h"
-#include "qopenglfunctions.h"
+#include "qopenglprogrambinarycache_p.h"
+#include "qopenglextrafunctions.h"
 #include "private/qopenglcontext_p.h"
 #include <QtCore/private/qobject_p.h>
 #include <QtCore/qdebug.h>
 #include <QtCore/qfile.h>
 #include <QtCore/qvarlengtharray.h>
 #include <QtCore/qvector.h>
+#include <QtCore/qloggingcategory.h>
+#include <QtCore/qcryptographichash.h>
+#include <QtCore/qcoreapplication.h>
 #include <QtGui/qtransform.h>
 #include <QtGui/QColor>
+#include <QtGui/QSurfaceFormat>
+
+#if !defined(QT_OPENGL_ES_2)
+#include <QtGui/qopenglfunctions_4_0_core.h>
+#endif
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -74,7 +83,7 @@ QT_BEGIN_NAMESPACE
 
     \snippet code/src_gui_qopenglshaderprogram.cpp 0
 
-    \section1 Writing portable shaders
+    \section1 Writing Portable Shaders
 
     Shader programs can be difficult to reuse across OpenGL implementations
     because of varying levels of support for standard vertex attributes and
@@ -98,7 +107,7 @@ QT_BEGIN_NAMESPACE
     to just features that are present in GLSL/ES, and avoid
     standard variable names that only work on the desktop.
 
-    \section1 Simple shader example
+    \section1 Simple Shader Example
 
     \snippet code/src_gui_qopenglshaderprogram.cpp 1
 
@@ -107,7 +116,7 @@ QT_BEGIN_NAMESPACE
 
     \snippet code/src_gui_qopenglshaderprogram.cpp 2
 
-    \section1 Binary shaders and programs
+    \section1 Binary Shaders and Programs
 
     Binary shaders may be specified using \c{glShaderBinary()} on
     the return value from QOpenGLShader::shaderId().  The QOpenGLShader instance
@@ -118,7 +127,22 @@ QT_BEGIN_NAMESPACE
     on the return value from programId().  Then the application should
     call link(), which will notice that the program has already been
     specified and linked, allowing other operations to be performed
-    on the shader program.
+    on the shader program. The shader program's id can be explicitly
+    created using the create() function.
+
+    \section2 Caching Program Binaries
+
+    As of Qt 5.9, support for caching program binaries on disk is built in. To
+    enable this, switch to using addCacheableShaderFromSourceCode() and
+    addCacheableShaderFromSourceFile(). With an OpenGL ES 3.x context or support
+    for \c{GL_ARB_get_program_binary}, this will transparently cache program
+    binaries under QStandardPaths::GenericCacheLocation or
+    QStandardPaths::CacheLocation. When support is not available, calling the
+    cacheable function variants is equivalent to the normal ones.
+
+    \note Some drivers do not have any binary formats available, even though
+    they advertise the extension or offer OpenGL ES 3.0. In this case program
+    binary support will be disabled.
 
     \sa QOpenGLShader
 */
@@ -145,7 +169,86 @@ QT_BEGIN_NAMESPACE
 
     \value Vertex Vertex shader written in the OpenGL Shading Language (GLSL).
     \value Fragment Fragment shader written in the OpenGL Shading Language (GLSL).
+    \value Geometry Geometry shaders written in the OpenGL Shading Language (GLSL)
+           (requires OpenGL >= 3.2 or OpenGL ES >= 3.2).
+    \value TessellationControl Tessellation control shaders written in the OpenGL
+           shading language (GLSL) (requires OpenGL >= 4.0 or OpenGL ES >= 3.2).
+    \value TessellationEvaluation Tessellation evaluation shaders written in the OpenGL
+           shading language (GLSL) (requires OpenGL >= 4.0 or OpenGL ES >= 3.2).
+    \value Compute Compute shaders written in the OpenGL shading language (GLSL)
+           (requires OpenGL >= 4.3 or OpenGL ES >= 3.1).
 */
+
+Q_LOGGING_CATEGORY(DBG_SHADER_CACHE, "qt.opengl.diskcache")
+
+// For GLES 3.1/3.2
+#ifndef GL_GEOMETRY_SHADER
+#define GL_GEOMETRY_SHADER         0x8DD9
+#endif
+#ifndef GL_TESS_CONTROL_SHADER
+#define GL_TESS_CONTROL_SHADER     0x8E88
+#endif
+#ifndef GL_TESS_EVALUATION_SHADER
+#define GL_TESS_EVALUATION_SHADER  0x8E87
+#endif
+#ifndef GL_COMPUTE_SHADER
+#define GL_COMPUTE_SHADER          0x91B9
+#endif
+#ifndef GL_MAX_GEOMETRY_OUTPUT_VERTICES
+#define GL_MAX_GEOMETRY_OUTPUT_VERTICES          0x8DE0
+#endif
+#ifndef GL_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS
+#define GL_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS  0x8DE1
+#endif
+#ifndef GL_PATCH_VERTICES
+#define GL_PATCH_VERTICES  0x8E72
+#endif
+#ifndef GL_PATCH_DEFAULT_OUTER_LEVEL
+#define GL_PATCH_DEFAULT_OUTER_LEVEL  0x8E74
+#endif
+#ifndef GL_PATCH_DEFAULT_INNER_LEVEL
+#define GL_PATCH_DEFAULT_INNER_LEVEL  0x8E73
+#endif
+
+#ifndef GL_NUM_PROGRAM_BINARY_FORMATS
+#define GL_NUM_PROGRAM_BINARY_FORMATS     0x87FE
+#endif
+
+#ifndef QT_OPENGL_ES_2
+static inline bool isFormatGLES(const QSurfaceFormat &f)
+{
+    return (f.renderableType() == QSurfaceFormat::OpenGLES);
+}
+#endif
+
+static inline bool supportsGeometry(const QSurfaceFormat &f)
+{
+    return f.version() >= qMakePair(3, 2);
+}
+
+static inline bool supportsCompute(const QSurfaceFormat &f)
+{
+#ifndef QT_OPENGL_ES_2
+    if (!isFormatGLES(f))
+        return f.version() >= qMakePair(4, 3);
+    else
+        return f.version() >= qMakePair(3, 1);
+#else
+    return f.version() >= qMakePair(3, 1);
+#endif
+}
+
+static inline bool supportsTessellation(const QSurfaceFormat &f)
+{
+#ifndef QT_OPENGL_ES_2
+    if (!isFormatGLES(f))
+        return f.version() >= qMakePair(4, 0);
+    else
+        return f.version() >= qMakePair(3, 2);
+#else
+    return f.version() >= qMakePair(3, 2);
+#endif
+}
 
 class QOpenGLShaderPrivate : public QObjectPrivate
 {
@@ -155,8 +258,17 @@ public:
         : shaderGuard(0)
         , shaderType(type)
         , compiled(false)
-        , glfuncs(new QOpenGLFunctions(ctx))
+        , glfuncs(new QOpenGLExtraFunctions(ctx))
+        , supportsGeometryShaders(false)
+        , supportsTessellationShaders(false)
+        , supportsComputeShaders(false)
     {
+        if (shaderType & QOpenGLShader::Geometry)
+            supportsGeometryShaders = supportsGeometry(ctx->format());
+        else if (shaderType & (QOpenGLShader::TessellationControl | QOpenGLShader::TessellationEvaluation))
+            supportsTessellationShaders = supportsTessellation(ctx->format());
+        else if (shaderType & QOpenGLShader::Compute)
+            supportsComputeShaders = supportsCompute(ctx->format());
     }
     ~QOpenGLShaderPrivate();
 
@@ -165,7 +277,15 @@ public:
     bool compiled;
     QString log;
 
-    QOpenGLFunctions *glfuncs;
+    QOpenGLExtraFunctions *glfuncs;
+
+    // Support for geometry shaders
+    bool supportsGeometryShaders;
+    // Support for tessellation shaders
+    bool supportsTessellationShaders;
+    // Support for compute shaders
+    bool supportsComputeShaders;
+
 
     bool create();
     bool compile(QOpenGLShader *q);
@@ -191,13 +311,22 @@ bool QOpenGLShaderPrivate::create()
     QOpenGLContext *context = const_cast<QOpenGLContext *>(QOpenGLContext::currentContext());
     if (!context)
         return false;
-    GLuint shader;
-    if (shaderType == QOpenGLShader::Vertex)
+    GLuint shader = 0;
+    if (shaderType == QOpenGLShader::Vertex) {
         shader = glfuncs->glCreateShader(GL_VERTEX_SHADER);
-    else
+    } else if (shaderType == QOpenGLShader::Geometry && supportsGeometryShaders) {
+        shader = glfuncs->glCreateShader(GL_GEOMETRY_SHADER);
+    } else if (shaderType == QOpenGLShader::TessellationControl && supportsTessellationShaders) {
+        shader = glfuncs->glCreateShader(GL_TESS_CONTROL_SHADER);
+    } else if (shaderType == QOpenGLShader::TessellationEvaluation && supportsTessellationShaders) {
+        shader = glfuncs->glCreateShader(GL_TESS_EVALUATION_SHADER);
+    } else if (shaderType == QOpenGLShader::Compute && supportsComputeShaders) {
+        shader = glfuncs->glCreateShader(GL_COMPUTE_SHADER);
+    } else if (shaderType == QOpenGLShader::Fragment) {
         shader = glfuncs->glCreateShader(GL_FRAGMENT_SHADER);
+    }
     if (!shader) {
-        qWarning() << "QOpenGLShader: could not create shader";
+        qWarning("QOpenGLShader: could not create shader");
         return false;
     }
     shaderGuard = new QOpenGLSharedResourceGuard(context, shader, freeShaderFunc);
@@ -226,14 +355,27 @@ bool QOpenGLShaderPrivate::compile(QOpenGLShader *q)
             "Fragment",
             "Vertex",
             "Geometry",
+            "Tessellation Control",
+            "Tessellation Evaluation",
+            "Compute",
             ""
         };
 
-        const char *type = types[3];
-        if (shaderType == QOpenGLShader::Fragment)
-            type = types[0];
-        else if (shaderType == QOpenGLShader::Vertex)
-            type = types[1];
+        const char *type = types[6];
+        switch (shaderType) {
+        case QOpenGLShader::Fragment:
+            type = types[0]; break;
+        case QOpenGLShader::Vertex:
+            type = types[1]; break;
+        case QOpenGLShader::Geometry:
+            type = types[2]; break;
+        case QOpenGLShader::TessellationControl:
+            type = types[3]; break;
+        case QOpenGLShader::TessellationEvaluation:
+            type = types[4]; break;
+        case QOpenGLShader::Compute:
+            type = types[5]; break;
+        }
 
         // Get info and source code lengths
         GLint infoLogLength = 0;
@@ -271,9 +413,10 @@ bool QOpenGLShaderPrivate::compile(QOpenGLShader *q)
 
         // Dump the source code if we got it
         if (sourceCodeBuffer) {
-            qWarning("*** Problematic %s shader source code ***", type);
-            qWarning() << qPrintable(QString::fromLatin1(sourceCodeBuffer));
-            qWarning("***");
+            qWarning("*** Problematic %s shader source code ***\n"
+                     "%ls\n"
+                     "***",
+                     type, qUtf16Printable(QString::fromLatin1(sourceCodeBuffer)));
         }
 
         // Cleanup
@@ -329,18 +472,12 @@ QOpenGLShader::ShaderType QOpenGLShader::shaderType() const
     return d->shaderType;
 }
 
-// The precision qualifiers are useful on OpenGL/ES systems,
-// but usually not present on desktop systems.  Define the
-// keywords to empty strings on desktop systems.
-#if !defined(QT_OPENGL_ES) || defined(QT_OPENGL_FORCE_SHADER_DEFINES)
-#define QOpenGL_DEFINE_QUALIFIERS 1
 static const char qualifierDefines[] =
     "#define lowp\n"
     "#define mediump\n"
     "#define highp\n";
 
-#else
-
+#if defined(QT_OPENGL_ES) && !defined(QT_OPENGL_FORCE_SHADER_DEFINES)
 // The "highp" qualifier doesn't exist in fragment shaders
 // on all ES platforms.  When it doesn't exist, use "mediump".
 #define QOpenGL_REDEFINE_HIGHP 1
@@ -350,49 +487,196 @@ static const char redefineHighp[] =
     "#endif\n";
 #endif
 
+// Boiler-plate header to have the layout attributes available we need later
+static const char blendEquationAdvancedHeader[] =
+    "#ifdef GL_KHR_blend_equation_advanced\n"
+    "#extension GL_ARB_fragment_coord_conventions : enable\n"
+    "#extension GL_KHR_blend_equation_advanced : enable\n"
+    "#endif\n";
+
+struct QVersionDirectivePosition
+{
+    Q_DECL_CONSTEXPR QVersionDirectivePosition(int position = 0, int line = -1)
+        : position(position)
+        , line(line)
+    {
+    }
+
+    Q_DECL_CONSTEXPR bool hasPosition() const
+    {
+        return position > 0;
+    }
+
+    const int position;
+    const int line;
+};
+
+static QVersionDirectivePosition findVersionDirectivePosition(const char *source)
+{
+    Q_ASSERT(source);
+
+    // According to the GLSL spec the #version directive must not be
+    // preceded by anything but whitespace and comments.
+    // In order to not get confused by #version directives within a
+    // multiline comment, we need to do some minimal comment parsing
+    // while searching for the directive.
+    enum {
+        Normal,
+        StartOfLine,
+        PreprocessorDirective,
+        CommentStarting,
+        MultiLineComment,
+        SingleLineComment,
+        CommentEnding
+    } state = StartOfLine;
+
+    const char *c = source;
+    while (*c) {
+        switch (state) {
+        case PreprocessorDirective:
+            if (*c == ' ' || *c == '\t')
+                break;
+            if (!strncmp(c, "version", strlen("version"))) {
+                // Found version directive
+                c += strlen("version");
+                while (*c && *c != '\n')
+                    ++c;
+                int splitPosition = c - source + 1;
+                int linePosition = int(std::count(source, c, '\n')) + 1;
+                return QVersionDirectivePosition(splitPosition, linePosition);
+            } else if (*c == '/')
+                state = CommentStarting;
+            else if (*c == '\n')
+                state = StartOfLine;
+            else
+                state = Normal;
+            break;
+        case StartOfLine:
+            if (*c == ' ' || *c == '\t')
+                break;
+            else if (*c == '#') {
+                state = PreprocessorDirective;
+                break;
+            }
+            state = Normal;
+            Q_FALLTHROUGH();
+        case Normal:
+            if (*c == '/')
+                state = CommentStarting;
+            else if (*c == '\n')
+                state = StartOfLine;
+            break;
+        case CommentStarting:
+            if (*c == '*')
+                state = MultiLineComment;
+            else if (*c == '/')
+                state = SingleLineComment;
+            else
+                state = Normal;
+            break;
+        case MultiLineComment:
+            if (*c == '*')
+                state = CommentEnding;
+            break;
+        case SingleLineComment:
+            if (*c == '\n')
+                state = Normal;
+            break;
+        case CommentEnding:
+            if (*c == '/')
+                state = Normal;
+            else if (*c != QLatin1Char('*'))
+                state = MultiLineComment;
+            break;
+        }
+        ++c;
+    }
+
+    return QVersionDirectivePosition(0, 1);
+}
+
 /*!
     Sets the \a source code for this shader and compiles it.
-    Returns true if the source was successfully compiled, false otherwise.
+    Returns \c true if the source was successfully compiled, false otherwise.
 
     \sa compileSourceFile()
 */
 bool QOpenGLShader::compileSourceCode(const char *source)
 {
     Q_D(QOpenGLShader);
-    if (d->shaderGuard && d->shaderGuard->id()) {
-        QVarLengthArray<const char *, 4> src;
-        QVarLengthArray<GLint, 4> srclen;
-        int headerLen = 0;
-        while (source && source[headerLen] == '#') {
-            // Skip #version and #extension directives at the start of
-            // the shader code.  We need to insert the qualifierDefines
-            // and redefineHighp just after them.
-            if (qstrncmp(source + headerLen, "#version", 8) != 0 &&
-                    qstrncmp(source + headerLen, "#extension", 10) != 0) {
-                break;
+    // This method breaks the shader code into two parts:
+    // 1. Up to and including an optional #version directive.
+    // 2. The rest.
+    // If a #version directive exists, qualifierDefines and redefineHighp
+    // are inserted after. Otherwise they are inserted right at the start.
+    // In both cases a #line directive is appended in order to compensate
+    // for line number changes in case of compiler errors.
+
+    if (d->shaderGuard && d->shaderGuard->id() && source) {
+        const QVersionDirectivePosition versionDirectivePosition = findVersionDirectivePosition(source);
+
+        QVarLengthArray<const char *, 5> sourceChunks;
+        QVarLengthArray<GLint, 5> sourceChunkLengths;
+        QOpenGLContext *ctx = QOpenGLContext::currentContext();
+
+        if (versionDirectivePosition.hasPosition()) {
+            // Append source up to and including the #version directive
+            sourceChunks.append(source);
+            sourceChunkLengths.append(GLint(versionDirectivePosition.position));
+        } else {
+            // QTBUG-55733: Intel on Windows with Compatibility profile requires a #version always
+            if (ctx->format().profile() == QSurfaceFormat::CompatibilityProfile) {
+                const char *vendor = reinterpret_cast<const char *>(ctx->functions()->glGetString(GL_VENDOR));
+                if (vendor && !strcmp(vendor, "Intel")) {
+                    static const char version110[] = "#version 110\n";
+                    sourceChunks.append(version110);
+                    sourceChunkLengths.append(GLint(sizeof(version110)) - 1);
+                }
             }
-            while (source[headerLen] != '\0' && source[headerLen] != '\n')
-                ++headerLen;
-            if (source[headerLen] == '\n')
-                ++headerLen;
         }
-        if (headerLen > 0) {
-            src.append(source);
-            srclen.append(GLint(headerLen));
-        }
-#ifdef QOpenGL_DEFINE_QUALIFIERS
-        src.append(qualifierDefines);
-        srclen.append(GLint(sizeof(qualifierDefines) - 1));
-#endif
-#ifdef QOpenGL_REDEFINE_HIGHP
         if (d->shaderType == Fragment) {
-            src.append(redefineHighp);
-            srclen.append(GLint(sizeof(redefineHighp) - 1));
+            sourceChunks.append(blendEquationAdvancedHeader);
+            sourceChunkLengths.append(GLint(sizeof(blendEquationAdvancedHeader) - 1));
+        }
+
+        // The precision qualifiers are useful on OpenGL/ES systems,
+        // but usually not present on desktop systems.
+        const QSurfaceFormat currentSurfaceFormat = ctx->format();
+        QOpenGLContextPrivate *ctx_d = QOpenGLContextPrivate::get(QOpenGLContext::currentContext());
+        if (currentSurfaceFormat.renderableType() == QSurfaceFormat::OpenGL
+                || ctx_d->workaround_missingPrecisionQualifiers
+#ifdef QT_OPENGL_FORCE_SHADER_DEFINES
+                || true
+#endif
+                ) {
+            sourceChunks.append(qualifierDefines);
+            sourceChunkLengths.append(GLint(sizeof(qualifierDefines) - 1));
+        }
+
+#ifdef QOpenGL_REDEFINE_HIGHP
+        if (d->shaderType == Fragment && !ctx_d->workaround_missingPrecisionQualifiers
+            && QOpenGLContext::currentContext()->isOpenGLES()) {
+            sourceChunks.append(redefineHighp);
+            sourceChunkLengths.append(GLint(sizeof(redefineHighp) - 1));
         }
 #endif
-        src.append(source + headerLen);
-        srclen.append(GLint(qstrlen(source + headerLen)));
-        d->glfuncs->glShaderSource(d->shaderGuard->id(), src.size(), src.data(), srclen.data());
+
+        QByteArray lineDirective;
+        // #line is rejected by some drivers:
+        // "2.1 Mesa 8.1-devel (git-48a3d4e)" or "MESA 2.1 Mesa 8.1-devel"
+        const char *version = reinterpret_cast<const char *>(ctx->functions()->glGetString(GL_VERSION));
+        if (!version || !strstr(version, "2.1 Mesa 8")) {
+            // Append #line directive in order to compensate for text insertion
+            lineDirective = QStringLiteral("#line %1\n").arg(versionDirectivePosition.line).toUtf8();
+            sourceChunks.append(lineDirective.constData());
+            sourceChunkLengths.append(GLint(lineDirective.length()));
+        }
+
+        // Append rest of shader code
+        sourceChunks.append(source + versionDirectivePosition.position);
+        sourceChunkLengths.append(GLint(qstrlen(source + versionDirectivePosition.position)));
+
+        d->glfuncs->glShaderSource(d->shaderGuard->id(), sourceChunks.size(), sourceChunks.data(), sourceChunkLengths.data());
         return d->compile(this);
     } else {
         return false;
@@ -403,7 +687,7 @@ bool QOpenGLShader::compileSourceCode(const char *source)
     \overload
 
     Sets the \a source code for this shader and compiles it.
-    Returns true if the source was successfully compiled, false otherwise.
+    Returns \c true if the source was successfully compiled, false otherwise.
 
     \sa compileSourceFile()
 */
@@ -416,7 +700,7 @@ bool QOpenGLShader::compileSourceCode(const QByteArray& source)
     \overload
 
     Sets the \a source code for this shader and compiles it.
-    Returns true if the source was successfully compiled, false otherwise.
+    Returns \c true if the source was successfully compiled, false otherwise.
 
     \sa compileSourceFile()
 */
@@ -427,7 +711,7 @@ bool QOpenGLShader::compileSourceCode(const QString& source)
 
 /*!
     Sets the source code for this shader to the contents of \a fileName
-    and compiles it.  Returns true if the file could be opened and the
+    and compiles it.  Returns \c true if the file could be opened and the
     source compiled, false otherwise.
 
     \sa compileSourceCode()
@@ -468,7 +752,7 @@ QByteArray QOpenGLShader::sourceCode() const
 }
 
 /*!
-    Returns true if this shader has been compiled; false otherwise.
+    Returns \c true if this shader has been compiled; false otherwise.
 
     \sa compileSourceCode(), compileSourceFile()
 */
@@ -509,7 +793,11 @@ public:
         , linked(false)
         , inited(false)
         , removingShaders(false)
-        , glfuncs(new QOpenGLFunctions)
+        , glfuncs(new QOpenGLExtraFunctions)
+#ifndef QT_OPENGL_ES_2
+        , tessellationFuncs(0)
+#endif
+        , linkBinaryRecursion(false)
     {
     }
     ~QOpenGLShaderProgramPrivate();
@@ -523,9 +811,20 @@ public:
     QList<QOpenGLShader *> shaders;
     QList<QOpenGLShader *> anonShaders;
 
-    QOpenGLFunctions *glfuncs;
+    QOpenGLExtraFunctions *glfuncs;
+#ifndef QT_OPENGL_ES_2
+    // for tessellation features not in GLES 3.2
+    QOpenGLFunctions_4_0_Core *tessellationFuncs;
+#endif
 
     bool hasShader(QOpenGLShader::ShaderType type) const;
+
+    QOpenGLProgramBinaryCache::ProgramDesc binaryProgram;
+    bool isCacheDisabled() const;
+    bool compileCacheable();
+    bool linkBinary();
+
+    bool linkBinaryRecursion;
 };
 
 namespace {
@@ -545,7 +844,7 @@ QOpenGLShaderProgramPrivate::~QOpenGLShaderProgramPrivate()
 
 bool QOpenGLShaderProgramPrivate::hasShader(QOpenGLShader::ShaderType type) const
 {
-    foreach (QOpenGLShader *shader, shaders) {
+    for (QOpenGLShader *shader : shaders) {
         if (shader->shaderType() == type)
             return true;
     }
@@ -572,6 +871,26 @@ QOpenGLShaderProgram::~QOpenGLShaderProgram()
 {
 }
 
+/*!
+    Requests the shader program's id to be created immediately. Returns \c true
+    if successful; \c false otherwise.
+
+    This function is primarily useful when combining QOpenGLShaderProgram
+    with other OpenGL functions that operate directly on the shader
+    program id, like \c {GL_OES_get_program_binary}.
+
+    When the shader program is used normally, the shader program's id will
+    be created on demand.
+
+    \sa programId()
+
+    \since 5.3
+ */
+bool QOpenGLShaderProgram::create()
+{
+    return init();
+}
+
 bool QOpenGLShaderProgram::init()
 {
     Q_D(QOpenGLShaderProgram);
@@ -582,9 +901,17 @@ bool QOpenGLShaderProgram::init()
     if (!context)
         return false;
     d->glfuncs->initializeOpenGLFunctions();
+
+#ifndef QT_OPENGL_ES_2
+    if (!context->isOpenGLES() && context->format().version() >= qMakePair(4, 0)) {
+        d->tessellationFuncs = context->versionFunctions<QOpenGLFunctions_4_0_Core>();
+        d->tessellationFuncs->initializeOpenGLFunctions();
+    }
+#endif
+
     GLuint program = d->glfuncs->glCreateProgram();
     if (!program) {
-        qWarning() << "QOpenGLShaderProgram: could not create shader program";
+        qWarning("QOpenGLShaderProgram: could not create shader program");
         return false;
     }
     if (d->programGuard)
@@ -594,7 +921,7 @@ bool QOpenGLShaderProgram::init()
 }
 
 /*!
-    Adds a compiled \a shader to this shader program.  Returns true
+    Adds a compiled \a shader to this shader program.  Returns \c true
     if the shader could be added, or false otherwise.
 
     Ownership of the \a shader object remains with the caller.
@@ -631,7 +958,7 @@ bool QOpenGLShaderProgram::addShader(QOpenGLShader *shader)
 
 /*!
     Compiles \a source as a shader of the specified \a type and
-    adds it to this shader program.  Returns true if compilation
+    adds it to this shader program.  Returns \c true if compilation
     was successful, false otherwise.  The compilation errors
     and warnings will be made available via log().
 
@@ -661,7 +988,7 @@ bool QOpenGLShaderProgram::addShaderFromSourceCode(QOpenGLShader::ShaderType typ
     \overload
 
     Compiles \a source as a shader of the specified \a type and
-    adds it to this shader program.  Returns true if compilation
+    adds it to this shader program.  Returns \c true if compilation
     was successful, false otherwise.  The compilation errors
     and warnings will be made available via log().
 
@@ -681,7 +1008,7 @@ bool QOpenGLShaderProgram::addShaderFromSourceCode(QOpenGLShader::ShaderType typ
     \overload
 
     Compiles \a source as a shader of the specified \a type and
-    adds it to this shader program.  Returns true if compilation
+    adds it to this shader program.  Returns \c true if compilation
     was successful, false otherwise.  The compilation errors
     and warnings will be made available via log().
 
@@ -699,7 +1026,7 @@ bool QOpenGLShaderProgram::addShaderFromSourceCode(QOpenGLShader::ShaderType typ
 
 /*!
     Compiles the contents of \a fileName as a shader of the specified
-    \a type and adds it to this shader program.  Returns true if
+    \a type and adds it to this shader program.  Returns \c true if
     compilation was successful, false otherwise.  The compilation errors
     and warnings will be made available via log().
 
@@ -723,6 +1050,139 @@ bool QOpenGLShaderProgram::addShaderFromSourceFile
     }
     d->anonShaders.append(shader);
     return addShader(shader);
+}
+
+/*!
+    Registers the shader of the specified \a type and \a source to this
+    program. Unlike addShaderFromSourceCode(), this function does not perform
+    compilation. Compilation is deferred to link(), and may not happen at all,
+    because link() may potentially use a program binary from Qt's shader disk
+    cache. This will typically lead to a significant increase in performance.
+
+    \return true if the shader has been registered or, in the non-cached case,
+    compiled successfully; false if there was an error. The compilation error
+    messages can be retrieved via log().
+
+    When the disk cache is disabled, via Qt::AA_DisableShaderDiskCache for
+    example, or the OpenGL context has no support for context binaries, calling
+    this function is equivalent to addShaderFromSourceCode().
+
+    \since 5.9
+    \sa addShaderFromSourceCode(), addCacheableShaderFromSourceFile()
+ */
+bool QOpenGLShaderProgram::addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const char *source)
+{
+    Q_D(QOpenGLShaderProgram);
+    if (!init())
+        return false;
+    if (d->isCacheDisabled())
+        return addShaderFromSourceCode(type, source);
+
+    return addCacheableShaderFromSourceCode(type, QByteArray(source));
+}
+
+/*!
+    \overload
+
+    Registers the shader of the specified \a type and \a source to this
+    program. Unlike addShaderFromSourceCode(), this function does not perform
+    compilation. Compilation is deferred to link(), and may not happen at all,
+    because link() may potentially use a program binary from Qt's shader disk
+    cache. This will typically lead to a significant increase in performance.
+
+    \return true if the shader has been registered or, in the non-cached case,
+    compiled successfully; false if there was an error. The compilation error
+    messages can be retrieved via log().
+
+    When the disk cache is disabled, via Qt::AA_DisableShaderDiskCache for
+    example, or the OpenGL context has no support for context binaries, calling
+    this function is equivalent to addShaderFromSourceCode().
+
+    \since 5.9
+    \sa addShaderFromSourceCode(), addCacheableShaderFromSourceFile()
+ */
+bool QOpenGLShaderProgram::addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const QByteArray &source)
+{
+    Q_D(QOpenGLShaderProgram);
+    if (!init())
+        return false;
+    if (d->isCacheDisabled())
+        return addShaderFromSourceCode(type, source);
+
+    d->binaryProgram.shaders.append(QOpenGLProgramBinaryCache::ShaderDesc(type, source));
+    return true;
+}
+
+/*!
+    \overload
+
+    Registers the shader of the specified \a type and \a source to this
+    program. Unlike addShaderFromSourceCode(), this function does not perform
+    compilation. Compilation is deferred to link(), and may not happen at all,
+    because link() may potentially use a program binary from Qt's shader disk
+    cache. This will typically lead to a significant increase in performance.
+
+    When the disk cache is disabled, via Qt::AA_DisableShaderDiskCache for
+    example, or the OpenGL context has no support for context binaries, calling
+    this function is equivalent to addShaderFromSourceCode().
+
+    \since 5.9
+    \sa addShaderFromSourceCode(), addCacheableShaderFromSourceFile()
+ */
+bool QOpenGLShaderProgram::addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const QString &source)
+{
+    Q_D(QOpenGLShaderProgram);
+    if (!init())
+        return false;
+    if (d->isCacheDisabled())
+        return addShaderFromSourceCode(type, source);
+
+    return addCacheableShaderFromSourceCode(type, source.toUtf8().constData());
+}
+
+/*!
+    Registers the shader of the specified \a type and \a fileName to this
+    program. Unlike addShaderFromSourceFile(), this function does not perform
+    compilation. Compilation is deferred to link(), and may not happen at all,
+    because link() may potentially use a program binary from Qt's shader disk
+    cache. This will typically lead to a significant increase in performance.
+
+    \return true if the file has been read successfully, false if the file could
+    not be opened or the normal, non-cached compilation of the shader has
+    failed. The compilation error messages can be retrieved via log().
+
+    When the disk cache is disabled, via Qt::AA_DisableShaderDiskCache for
+    example, or the OpenGL context has no support for context binaries, calling
+    this function is equivalent to addShaderFromSourceFile().
+
+    \since 5.9
+    \sa addShaderFromSourceFile(), addCacheableShaderFromSourceCode()
+ */
+bool QOpenGLShaderProgram::addCacheableShaderFromSourceFile(QOpenGLShader::ShaderType type, const QString &fileName)
+{
+    Q_D(QOpenGLShaderProgram);
+    if (!init())
+        return false;
+    if (d->isCacheDisabled())
+        return addShaderFromSourceFile(type, fileName);
+
+    QOpenGLProgramBinaryCache::ShaderDesc shader(type);
+    // NB! It could be tempting to defer reading the file contents and just
+    // hash the filename as the cache key, perhaps combined with last-modified
+    // timestamp checks. However, this would raise a number of issues (no
+    // timestamps for files in the resource system; preference for global, not
+    // per-application cache items (where filenames may clash); resource-based
+    // shaders from libraries like Qt Quick; etc.), so just avoid it.
+    QFile f(fileName);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        shader.source = f.readAll();
+        f.close();
+    } else {
+        qWarning("QOpenGLShaderProgram: Unable to open file %s", qPrintable(fileName));
+        return false;
+    }
+    d->binaryProgram.shaders.append(shader);
+    return true;
 }
 
 /*!
@@ -772,26 +1232,25 @@ void QOpenGLShaderProgram::removeAllShaders()
 {
     Q_D(QOpenGLShaderProgram);
     d->removingShaders = true;
-    foreach (QOpenGLShader *shader, d->shaders) {
+    for (QOpenGLShader *shader : qAsConst(d->shaders)) {
         if (d->programGuard && d->programGuard->id()
             && shader && shader->d_func()->shaderGuard)
         {
             d->glfuncs->glDetachShader(d->programGuard->id(), shader->d_func()->shaderGuard->id());
         }
     }
-    foreach (QOpenGLShader *shader, d->anonShaders) {
-        // Delete shader objects that were created anonymously.
-        delete shader;
-    }
+    // Delete shader objects that were created anonymously.
+    qDeleteAll(d->anonShaders);
     d->shaders.clear();
     d->anonShaders.clear();
+    d->binaryProgram = QOpenGLProgramBinaryCache::ProgramDesc();
     d->linked = false;  // Program needs to be relinked.
     d->removingShaders = false;
 }
 
 /*!
     Links together the shaders that were added to this program with
-    addShader().  Returns true if the link was successful or
+    addShader().  Returns \c true if the link was successful or
     false otherwise.  If the link failed, the error messages can
     be retrieved with log().
 
@@ -800,6 +1259,16 @@ void QOpenGLShaderProgram::removeAllShaders()
 
     If the shader program was already linked, calling this
     function again will force it to be re-linked.
+
+    When shaders were added to this program via
+    addCacheableShaderFromSourceCode() or addCacheableShaderFromSourceFile(),
+    program binaries are supported, and a cached binary is available on disk,
+    actual compilation and linking are skipped. Instead, link() will initialize
+    the program with the binary blob via glProgramBinary(). If there is no
+    cached version of the program or it was generated with a different driver
+    version, the shaders will be compiled from source and the program will get
+    linked normally. This allows seamless upgrading of the graphics drivers,
+    without having to worry about potentially incompatible binary formats.
 
     \sa addShader(), log()
 */
@@ -810,12 +1279,17 @@ bool QOpenGLShaderProgram::link()
     if (!program)
         return false;
 
+    if (!d->linkBinaryRecursion && d->shaders.isEmpty() && !d->binaryProgram.shaders.isEmpty())
+        return d->linkBinary();
+
     GLint value;
     if (d->shaders.isEmpty()) {
         // If there are no explicit shaders, then it is possible that the
-        // application added a program binary with glProgramBinaryOES(),
-        // or otherwise populated the shaders itself.  Check to see if the
-        // program is already linked and bail out if so.
+        // application added a program binary with glProgramBinaryOES(), or
+        // otherwise populated the shaders itself. This is also the case when
+        // we are recursively called back from linkBinary() after a successful
+        // glProgramBinary(). Check to see if the program is already linked and
+        // bail out if so.
         value = 0;
         d->glfuncs->glGetProgramiv(program, GL_LINK_STATUS, &value);
         d->linked = (value != 0);
@@ -835,18 +1309,20 @@ bool QOpenGLShaderProgram::link()
         GLint len;
         d->glfuncs->glGetProgramInfoLog(program, value, &len, logbuf);
         d->log = QString::fromLatin1(logbuf);
-        QString name = objectName();
-        if (name.isEmpty())
-            qWarning() << "QOpenGLShader::link:" << d->log;
-        else
-            qWarning() << "QOpenGLShader::link[" << name << "]:" << d->log;
+        if (!d->linked && !d->linkBinaryRecursion) {
+            QString name = objectName();
+            if (name.isEmpty())
+                qWarning("QOpenGLShader::link: %ls", qUtf16Printable(d->log));
+            else
+                qWarning("QOpenGLShader::link[%ls]: %ls", qUtf16Printable(name), qUtf16Printable(d->log));
+        }
         delete [] logbuf;
     }
     return d->linked;
 }
 
 /*!
-    Returns true if this shader program has been linked; false otherwise.
+    Returns \c true if this shader program has been linked; false otherwise.
 
     \sa link()
 */
@@ -872,7 +1348,7 @@ QString QOpenGLShaderProgram::log() const
     Binds this shader program to the active QOpenGLContext and makes
     it the current shader program.  Any previously bound shader program
     is released.  This is equivalent to calling \c{glUseProgram()} on
-    programId().  Returns true if the program was successfully bound;
+    programId().  Returns \c true if the program was successfully bound;
     false otherwise.  If the shader program has not yet been linked,
     or it needs to be re-linked, this function will call link().
 
@@ -1001,8 +1477,7 @@ int QOpenGLShaderProgram::attributeLocation(const char *name) const
     if (d->linked && d->programGuard && d->programGuard->id()) {
         return d->glfuncs->glGetAttribLocation(d->programGuard->id(), name);
     } else {
-        qWarning() << "QOpenGLShaderProgram::attributeLocation(" << name
-                   << "): shader program is not linked";
+        qWarning("QOpenGLShaderProgram::attributeLocation(%s): shader program is not linked", name);
         return -1;
     }
 }
@@ -1265,7 +1740,7 @@ void QOpenGLShaderProgram::setAttributeValue
     Q_D(QOpenGLShaderProgram);
     Q_UNUSED(d);
     if (rows < 1 || rows > 4) {
-        qWarning() << "QOpenGLShaderProgram::setAttributeValue: rows" << rows << "not supported";
+        qWarning("QOpenGLShaderProgram::setAttributeValue: rows %d not supported", rows);
         return;
     }
     if (location != -1) {
@@ -1415,6 +1890,9 @@ void QOpenGLShaderProgram::setAttributeArray
     The setAttributeBuffer() function can be used to set the attribute
     array to an offset within a vertex buffer.
 
+    \note Normalization will be enabled. If this is not desired, call
+    glVertexAttribPointer directly through QOpenGLFunctions.
+
     \sa setAttributeValue(), setUniformValue(), enableAttributeArray()
     \sa disableAttributeArray(), setAttributeBuffer()
 */
@@ -1558,6 +2036,9 @@ void QOpenGLShaderProgram::setAttributeArray
     on the \a location.  Otherwise the value specified with
     setAttributeValue() for \a location will be used.
 
+    \note Normalization will be enabled. If this is not desired, call
+    glVertexAttribPointer directly through QOpenGLFunctions.
+
     \sa setAttributeArray()
 */
 void QOpenGLShaderProgram::setAttributeBuffer
@@ -1567,7 +2048,7 @@ void QOpenGLShaderProgram::setAttributeBuffer
     Q_UNUSED(d);
     if (location != -1) {
         d->glfuncs->glVertexAttribPointer(location, tupleSize, type, GL_TRUE, stride,
-                              reinterpret_cast<const void *>(offset));
+                              reinterpret_cast<const void *>(qintptr(offset)));
     }
 }
 
@@ -1671,8 +2152,7 @@ int QOpenGLShaderProgram::uniformLocation(const char *name) const
     if (d->linked && d->programGuard && d->programGuard->id()) {
         return d->glfuncs->glGetUniformLocation(d->programGuard->id(), name);
     } else {
-        qWarning() << "QOpenGLShaderProgram::uniformLocation(" << name
-                   << "): shader program is not linked";
+        qWarning("QOpenGLShaderProgram::uniformLocation(%s): shader program is not linked", name);
         return -1;
     }
 }
@@ -1761,6 +2241,9 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, GLint value)
     Sets the uniform variable at \a location in the current context to \a value.
     This function should be used when setting sampler values.
 
+    \note This function is not aware of unsigned int support in modern OpenGL
+    versions and therefore treats \a value as a GLint and calls glUniform1i.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(int location, GLuint value)
@@ -1776,6 +2259,9 @@ void QOpenGLShaderProgram::setUniformValue(int location, GLuint value)
 
     Sets the uniform variable called \a name in the current context
     to \a value.  This function should be used when setting sampler values.
+
+    \note This function is not aware of unsigned int support in modern OpenGL
+    versions and therefore treats \a value as a GLint and calls glUniform1i.
 
     \sa setAttributeValue()
 */
@@ -2129,6 +2615,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix2x2& v
     Sets the uniform variable at \a location in the current context
     to a 2x3 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat2x3, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec3.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix2x3& value)
@@ -2144,6 +2634,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix2x3& value
     Sets the uniform variable called \a name in the current context
     to a 2x3 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat2x3, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec3.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix2x3& value)
@@ -2154,6 +2648,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix2x3& v
 /*!
     Sets the uniform variable at \a location in the current context
     to a 2x4 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat2x4, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec4.
 
     \sa setAttributeValue()
 */
@@ -2170,6 +2668,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix2x4& value
     Sets the uniform variable called \a name in the current context
     to a 2x4 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat2x4, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec4.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix2x4& value)
@@ -2180,6 +2682,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix2x4& v
 /*!
     Sets the uniform variable at \a location in the current context
     to a 3x2 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat3x2, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec2.
 
     \sa setAttributeValue()
 */
@@ -2195,6 +2701,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix3x2& value
 
     Sets the uniform variable called \a name in the current context
     to a 3x2 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat3x2, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec2.
 
     \sa setAttributeValue()
 */
@@ -2233,6 +2743,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix3x3& v
     Sets the uniform variable at \a location in the current context
     to a 3x4 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat3x4, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec4.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix3x4& value)
@@ -2248,6 +2762,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix3x4& value
     Sets the uniform variable called \a name in the current context
     to a 3x4 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat3x4, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec4.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix3x4& value)
@@ -2258,6 +2776,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix3x4& v
 /*!
     Sets the uniform variable at \a location in the current context
     to a 4x2 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat4x2, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec2.
 
     \sa setAttributeValue()
 */
@@ -2274,6 +2796,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix4x2& value
     Sets the uniform variable called \a name in the current context
     to a 4x2 matrix \a value.
 
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat4x2, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec2.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix4x2& value)
@@ -2284,6 +2810,10 @@ void QOpenGLShaderProgram::setUniformValue(const char *name, const QMatrix4x2& v
 /*!
     Sets the uniform variable at \a location in the current context
     to a 4x3 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat4x3, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec3.
 
     \sa setAttributeValue()
 */
@@ -2299,6 +2829,10 @@ void QOpenGLShaderProgram::setUniformValue(int location, const QMatrix4x3& value
 
     Sets the uniform variable called \a name in the current context
     to a 4x3 matrix \a value.
+
+    \note This function is not aware of non square matrix support,
+    that is, GLSL types like mat4x3, that is present in modern OpenGL
+    versions. Instead, it treats the uniform as an array of vec3.
 
     \sa setAttributeValue()
 */
@@ -2496,6 +3030,9 @@ void QOpenGLShaderProgram::setUniformValueArray
     context to the \a count elements of \a values.  This overload
     should be used when setting an array of sampler values.
 
+    \note This function is not aware of unsigned int support in modern OpenGL
+    versions and therefore treats \a values as a GLint and calls glUniform1iv.
+
     \sa setAttributeValue()
 */
 void QOpenGLShaderProgram::setUniformValueArray(int location, const GLuint *values, int count)
@@ -2542,7 +3079,7 @@ void QOpenGLShaderProgram::setUniformValueArray(int location, const GLfloat *val
         else if (tupleSize == 4)
             d->glfuncs->glUniform4fv(location, count, values);
         else
-            qWarning() << "QOpenGLShaderProgram::setUniformValue: size" << tupleSize << "not supported";
+            qWarning("QOpenGLShaderProgram::setUniformValue: size %d not supported", tupleSize);
     }
 }
 
@@ -2927,7 +3464,206 @@ void QOpenGLShaderProgram::setUniformValueArray(const char *name, const QMatrix4
 }
 
 /*!
-    Returns true if shader programs written in the OpenGL Shading
+    Returns the hardware limit for how many vertices a geometry shader
+    can output.
+*/
+int QOpenGLShaderProgram::maxGeometryOutputVertices() const
+{
+    GLint n = 0;
+    Q_D(const QOpenGLShaderProgram);
+    d->glfuncs->glGetIntegerv(GL_MAX_GEOMETRY_OUTPUT_VERTICES, &n);
+    return n;
+}
+
+/*!
+    Use this function to specify to OpenGL the number of vertices in
+    a patch to \a count. A patch is a custom OpenGL primitive whose interpretation
+    is entirely defined by the tessellation shader stages. Therefore, calling
+    this function only makes sense when using a QOpenGLShaderProgram
+    containing tessellation stage shaders. When using OpenGL tessellation,
+    the only primitive that can be rendered with \c{glDraw*()} functions is
+    \c{GL_PATCHES}.
+
+    This is equivalent to calling glPatchParameteri(GL_PATCH_VERTICES, count).
+
+    \note This modifies global OpenGL state and is not specific to this
+    QOpenGLShaderProgram instance. You should call this in your render
+    function when needed, as QOpenGLShaderProgram will not apply this for
+    you. This is purely a convenience function.
+
+    \sa patchVertexCount()
+*/
+void QOpenGLShaderProgram::setPatchVertexCount(int count)
+{
+    Q_D(QOpenGLShaderProgram);
+    d->glfuncs->glPatchParameteri(GL_PATCH_VERTICES, count);
+}
+
+/*!
+    Returns the number of vertices per-patch to be used when rendering.
+
+    \note This returns the global OpenGL state value. It is not specific to
+    this QOpenGLShaderProgram instance.
+
+    \sa setPatchVertexCount()
+*/
+int QOpenGLShaderProgram::patchVertexCount() const
+{
+    int patchVertices = 0;
+    Q_D(const QOpenGLShaderProgram);
+    d->glfuncs->glGetIntegerv(GL_PATCH_VERTICES, &patchVertices);
+    return patchVertices;
+}
+
+/*!
+    Sets the default outer tessellation levels to be used by the tessellation
+    primitive generator in the event that the tessellation control shader
+    does not output them to \a levels. For more details on OpenGL and Tessellation
+    shaders see \l{OpenGL Tessellation Shaders}.
+
+    The \a levels argument should be a QVector consisting of 4 floats. Not all
+    of the values make sense for all tessellation modes. If you specify a vector with
+    fewer than 4 elements, the remaining elements will be given a default value of 1.
+
+    \note This modifies global OpenGL state and is not specific to this
+    QOpenGLShaderProgram instance. You should call this in your render
+    function when needed, as QOpenGLShaderProgram will not apply this for
+    you. This is purely a convenience function.
+
+    \note This function is only available with OpenGL >= 4.0 and is not supported
+    with OpenGL ES 3.2.
+
+    \sa defaultOuterTessellationLevels(), setDefaultInnerTessellationLevels()
+*/
+void QOpenGLShaderProgram::setDefaultOuterTessellationLevels(const QVector<float> &levels)
+{
+#ifndef QT_OPENGL_ES_2
+    Q_D(QOpenGLShaderProgram);
+    if (d->tessellationFuncs) {
+        QVector<float> tessLevels = levels;
+
+        // Ensure we have the required 4 outer tessellation levels
+        // Use default of 1 for missing entries (same as spec)
+        const int argCount = 4;
+        if (tessLevels.size() < argCount) {
+            tessLevels.reserve(argCount);
+            for (int i = tessLevels.size(); i < argCount; ++i)
+                tessLevels.append(1.0f);
+        }
+        d->tessellationFuncs->glPatchParameterfv(GL_PATCH_DEFAULT_OUTER_LEVEL, tessLevels.data());
+    }
+#else
+    Q_UNUSED(levels);
+#endif
+}
+
+/*!
+    Returns the default outer tessellation levels to be used by the tessellation
+    primitive generator in the event that the tessellation control shader
+    does not output them. For more details on OpenGL and Tessellation shaders see
+    \l{OpenGL Tessellation Shaders}.
+
+    Returns a QVector of floats describing the outer tessellation levels. The vector
+    will always have four elements but not all of them make sense for every mode
+    of tessellation.
+
+    \note This returns the global OpenGL state value. It is not specific to
+    this QOpenGLShaderProgram instance.
+
+    \note This function is only supported with OpenGL >= 4.0 and will not
+    return valid results with OpenGL ES 3.2.
+
+    \sa setDefaultOuterTessellationLevels(), defaultInnerTessellationLevels()
+*/
+QVector<float> QOpenGLShaderProgram::defaultOuterTessellationLevels() const
+{
+#ifndef QT_OPENGL_ES_2
+    QVector<float> tessLevels(4, 1.0f);
+    Q_D(const QOpenGLShaderProgram);
+    if (d->tessellationFuncs)
+        d->tessellationFuncs->glGetFloatv(GL_PATCH_DEFAULT_OUTER_LEVEL, tessLevels.data());
+    return tessLevels;
+#else
+    return QVector<float>();
+#endif
+}
+
+/*!
+    Sets the default outer tessellation levels to be used by the tessellation
+    primitive generator in the event that the tessellation control shader
+    does not output them to \a levels. For more details on OpenGL and Tessellation shaders see
+    \l{OpenGL Tessellation Shaders}.
+
+    The \a levels argument should be a QVector consisting of 2 floats. Not all
+    of the values make sense for all tessellation modes. If you specify a vector with
+    fewer than 2 elements, the remaining elements will be given a default value of 1.
+
+    \note This modifies global OpenGL state and is not specific to this
+    QOpenGLShaderProgram instance. You should call this in your render
+    function when needed, as QOpenGLShaderProgram will not apply this for
+    you. This is purely a convenience function.
+
+    \note This function is only available with OpenGL >= 4.0 and is not supported
+    with OpenGL ES 3.2.
+
+    \sa defaultInnerTessellationLevels(), setDefaultOuterTessellationLevels()
+*/
+void QOpenGLShaderProgram::setDefaultInnerTessellationLevels(const QVector<float> &levels)
+{
+#ifndef QT_OPENGL_ES_2
+    Q_D(QOpenGLShaderProgram);
+    if (d->tessellationFuncs) {
+        QVector<float> tessLevels = levels;
+
+        // Ensure we have the required 2 inner tessellation levels
+        // Use default of 1 for missing entries (same as spec)
+        const int argCount = 2;
+        if (tessLevels.size() < argCount) {
+            tessLevels.reserve(argCount);
+            for (int i = tessLevels.size(); i < argCount; ++i)
+                tessLevels.append(1.0f);
+        }
+        d->tessellationFuncs->glPatchParameterfv(GL_PATCH_DEFAULT_INNER_LEVEL, tessLevels.data());
+    }
+#else
+    Q_UNUSED(levels);
+#endif
+}
+
+/*!
+    Returns the default inner tessellation levels to be used by the tessellation
+    primitive generator in the event that the tessellation control shader
+    does not output them. For more details on OpenGL and Tessellation shaders see
+    \l{OpenGL Tessellation Shaders}.
+
+    Returns a QVector of floats describing the inner tessellation levels. The vector
+    will always have two elements but not all of them make sense for every mode
+    of tessellation.
+
+    \note This returns the global OpenGL state value. It is not specific to
+    this QOpenGLShaderProgram instance.
+
+    \note This function is only supported with OpenGL >= 4.0 and will not
+    return valid results with OpenGL ES 3.2.
+
+    \sa setDefaultInnerTessellationLevels(), defaultOuterTessellationLevels()
+*/
+QVector<float> QOpenGLShaderProgram::defaultInnerTessellationLevels() const
+{
+#ifndef QT_OPENGL_ES_2
+    QVector<float> tessLevels(2, 1.0f);
+    Q_D(const QOpenGLShaderProgram);
+    if (d->tessellationFuncs)
+        d->tessellationFuncs->glGetFloatv(GL_PATCH_DEFAULT_INNER_LEVEL, tessLevels.data());
+    return tessLevels;
+#else
+    return QVector<float>();
+#endif
+}
+
+
+/*!
+    Returns \c true if shader programs written in the OpenGL Shading
     Language (GLSL) are supported on this system; false otherwise.
 
     The \a context is used to resolve the GLSL extensions.
@@ -2935,16 +3671,11 @@ void QOpenGLShaderProgram::setUniformValueArray(const char *name, const QMatrix4
 */
 bool QOpenGLShaderProgram::hasOpenGLShaderPrograms(QOpenGLContext *context)
 {
-#if !defined(QT_OPENGL_ES_2)
     if (!context)
         context = QOpenGLContext::currentContext();
     if (!context)
         return false;
     return QOpenGLFunctions(context).hasOpenGLFeature(QOpenGLFunctions::Shaders);
-#else
-    Q_UNUSED(context);
-    return true;
-#endif
 }
 
 /*!
@@ -2959,7 +3690,7 @@ void QOpenGLShaderProgram::shaderDestroyed()
 }
 
 /*!
-    Returns true if shader programs of type \a type are supported on
+    Returns \c true if shader programs of type \a type are supported on
     this system; false otherwise.
 
     The \a context is used to resolve the GLSL extensions.
@@ -2972,10 +3703,145 @@ bool QOpenGLShader::hasOpenGLShaders(ShaderType type, QOpenGLContext *context)
     if (!context)
         return false;
 
-    if ((type & ~(Vertex | Fragment)) || type == 0)
+    if ((type & ~(Geometry | Vertex | Fragment | TessellationControl | TessellationEvaluation | Compute)) || type == 0)
         return false;
 
+    if (type & QOpenGLShader::Geometry)
+        return supportsGeometry(context->format());
+    else if (type & (QOpenGLShader::TessellationControl | QOpenGLShader::TessellationEvaluation))
+        return supportsTessellation(context->format());
+    else if (type & QOpenGLShader::Compute)
+        return supportsCompute(context->format());
+
+    // Unconditional support of vertex and fragment shaders implicitly assumes
+    // a minimum OpenGL version of 2.0
     return true;
+}
+
+// While unlikely, one application can in theory use contexts with different versions
+// or profiles. Therefore any version- or extension-specific checks must be done on a
+// per-context basis, not just once per process. QOpenGLSharedResource enables this,
+// although it's once-per-sharing-context-group, not per-context. Still, this should
+// be good enough in practice.
+class QOpenGLProgramBinarySupportCheck : public QOpenGLSharedResource
+{
+public:
+    QOpenGLProgramBinarySupportCheck(QOpenGLContext *context);
+    void invalidateResource() override { }
+    void freeResource(QOpenGLContext *) override { }
+
+    bool isSupported() const { return m_supported; }
+
+private:
+    bool m_supported;
+};
+
+QOpenGLProgramBinarySupportCheck::QOpenGLProgramBinarySupportCheck(QOpenGLContext *context)
+    : QOpenGLSharedResource(context->shareGroup()),
+      m_supported(false)
+{
+    if (QCoreApplication::testAttribute(Qt::AA_DisableShaderDiskCache)) {
+        qCDebug(DBG_SHADER_CACHE, "Shader cache disabled via app attribute");
+        return;
+    }
+    if (qEnvironmentVariableIntValue("QT_DISABLE_SHADER_DISK_CACHE")) {
+        qCDebug(DBG_SHADER_CACHE, "Shader cache disabled via env var");
+        return;
+    }
+
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (ctx) {
+        if (ctx->isOpenGLES()) {
+            qCDebug(DBG_SHADER_CACHE, "OpenGL ES v%d context", ctx->format().majorVersion());
+            if (ctx->format().majorVersion() >= 3)
+                m_supported = true;
+        } else {
+            const bool hasExt = ctx->hasExtension("GL_ARB_get_program_binary");
+            qCDebug(DBG_SHADER_CACHE, "GL_ARB_get_program_binary support = %d", hasExt);
+            if (hasExt)
+                m_supported = true;
+        }
+        if (m_supported) {
+            GLint fmtCount = 0;
+            ctx->functions()->glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &fmtCount);
+            qCDebug(DBG_SHADER_CACHE, "Supported binary format count = %d", fmtCount);
+            m_supported = fmtCount > 0;
+        }
+    }
+    qCDebug(DBG_SHADER_CACHE, "Shader cache supported = %d", m_supported);
+}
+
+class QOpenGLProgramBinarySupportCheckWrapper
+{
+public:
+    QOpenGLProgramBinarySupportCheck *get(QOpenGLContext *context)
+    {
+        return m_resource.value<QOpenGLProgramBinarySupportCheck>(context);
+    }
+
+private:
+    QOpenGLMultiGroupSharedResource m_resource;
+};
+
+bool QOpenGLShaderProgramPrivate::isCacheDisabled() const
+{
+    static QOpenGLProgramBinarySupportCheckWrapper binSupportCheck;
+    return !binSupportCheck.get(QOpenGLContext::currentContext())->isSupported();
+}
+
+bool QOpenGLShaderProgramPrivate::compileCacheable()
+{
+    Q_Q(QOpenGLShaderProgram);
+    for (const QOpenGLProgramBinaryCache::ShaderDesc &shader : qAsConst(binaryProgram.shaders)) {
+        QScopedPointer<QOpenGLShader> s(new QOpenGLShader(shader.type, q));
+        if (!s->compileSourceCode(shader.source)) {
+            log = s->log();
+            return false;
+        }
+        anonShaders.append(s.take());
+        if (!q->addShader(anonShaders.last()))
+            return false;
+    }
+    return true;
+}
+
+bool QOpenGLShaderProgramPrivate::linkBinary()
+{
+    static QOpenGLProgramBinaryCache binCache;
+
+    Q_Q(QOpenGLShaderProgram);
+
+    QCryptographicHash keyBuilder(QCryptographicHash::Sha1);
+    for (const QOpenGLProgramBinaryCache::ShaderDesc &shader : qAsConst(binaryProgram.shaders))
+        keyBuilder.addData(shader.source);
+
+    const QByteArray cacheKey = keyBuilder.result().toHex();
+    if (DBG_SHADER_CACHE().isEnabled(QtDebugMsg))
+        qCDebug(DBG_SHADER_CACHE, "program with %d shaders, cache key %s",
+                binaryProgram.shaders.count(), cacheKey.constData());
+
+    bool needsCompile = true;
+    if (binCache.load(cacheKey, q->programId())) {
+        qCDebug(DBG_SHADER_CACHE, "Program binary received from cache");
+        needsCompile = false;
+    }
+
+    bool needsSave = false;
+    if (needsCompile) {
+        qCDebug(DBG_SHADER_CACHE, "Program binary not in cache, compiling");
+        if (compileCacheable())
+            needsSave = true;
+        else
+            return false;
+    }
+
+    linkBinaryRecursion = true;
+    bool ok = q->link();
+    linkBinaryRecursion = false;
+    if (ok && needsSave)
+        binCache.save(cacheKey, q->programId());
+
+    return ok;
 }
 
 QT_END_NAMESPACE

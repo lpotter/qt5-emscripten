@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -59,16 +46,9 @@ class tst_QHttpSocketEngine : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QHttpSocketEngine();
-    virtual ~tst_QHttpSocketEngine();
-
-
-public slots:
+private slots:
     void initTestCase();
     void init();
-    void cleanup();
-private slots:
     void construction();
     void errorTest_data();
     void errorTest();
@@ -80,6 +60,7 @@ private slots:
     void downloadBigFile();
    // void tcpLoopbackPerformance();
     void passwordAuth();
+    void ensureEofTriggersNotification();
 
 protected slots:
     void tcpSocketNonBlocking_hostFound();
@@ -139,14 +120,6 @@ public slots:
     }
 };
 
-tst_QHttpSocketEngine::tst_QHttpSocketEngine()
-{
-}
-
-tst_QHttpSocketEngine::~tst_QHttpSocketEngine()
-{
-}
-
 void tst_QHttpSocketEngine::initTestCase()
 {
     QVERIFY(QtNetworkSettings::verifyTestNetworkSettings());
@@ -156,10 +129,6 @@ void tst_QHttpSocketEngine::init()
 {
     tmpSocket = 0;
     bytesAvailable = 0;
-}
-
-void tst_QHttpSocketEngine::cleanup()
-{
 }
 
 //---------------------------------------------------------------------------
@@ -172,18 +141,18 @@ void tst_QHttpSocketEngine::construction()
     // Initialize device
     QVERIFY(socketDevice.initialize(QAbstractSocket::TcpSocket, QAbstractSocket::IPv4Protocol));
     QVERIFY(socketDevice.isValid());
-    QVERIFY(socketDevice.protocol() == QAbstractSocket::IPv4Protocol);
-    QVERIFY(socketDevice.socketType() == QAbstractSocket::TcpSocket);
-    QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+    QCOMPARE(socketDevice.protocol(), QAbstractSocket::IPv4Protocol);
+    QCOMPARE(socketDevice.socketType(), QAbstractSocket::TcpSocket);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
    // QVERIFY(socketDevice.socketDescriptor() != -1);
-    QVERIFY(socketDevice.localAddress() == QHostAddress());
-    QVERIFY(socketDevice.localPort() == 0);
-    QVERIFY(socketDevice.peerAddress() == QHostAddress());
-    QVERIFY(socketDevice.peerPort() == 0);
-    QVERIFY(socketDevice.error() == QAbstractSocket::UnknownSocketError);
+    QCOMPARE(socketDevice.localAddress(), QHostAddress());
+    QCOMPARE(socketDevice.localPort(), quint16(0));
+    QCOMPARE(socketDevice.peerAddress(), QHostAddress());
+    QCOMPARE(socketDevice.peerPort(), quint16(0));
+    QCOMPARE(socketDevice.error(), QAbstractSocket::UnknownSocketError);
 
     //QTest::ignoreMessage(QtWarningMsg, "QSocketLayer::bytesAvailable() was called in QAbstractSocket::UnconnectedState");
-    QVERIFY(socketDevice.bytesAvailable() == 0);
+    QCOMPARE(socketDevice.bytesAvailable(), 0);
 
     //QTest::ignoreMessage(QtWarningMsg, "QSocketLayer::hasPendingDatagrams() was called in QAbstractSocket::UnconnectedState");
     QVERIFY(!socketDevice.hasPendingDatagrams());
@@ -307,15 +276,15 @@ void tst_QHttpSocketEngine::simpleConnectToIMAP()
 
     // Initialize device
     QVERIFY(socketDevice.initialize(QAbstractSocket::TcpSocket, QAbstractSocket::IPv4Protocol));
-    QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
 
     socketDevice.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QtNetworkSettings::serverName(), 3128));
 
     QVERIFY(!socketDevice.connectToHost(QtNetworkSettings::serverIP(), 143));
-    QVERIFY(socketDevice.state() == QAbstractSocket::ConnectingState);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::ConnectingState);
     QVERIFY(socketDevice.waitForWrite());
-    QVERIFY(socketDevice.state() == QAbstractSocket::ConnectedState);
-    QVERIFY(socketDevice.peerAddress() == QtNetworkSettings::serverIP());
+    QCOMPARE(socketDevice.state(), QAbstractSocket::ConnectedState);
+    QCOMPARE(socketDevice.peerAddress(), QtNetworkSettings::serverIP());
     QVERIFY(!socketDevice.localAddress().isNull());
     QVERIFY(socketDevice.localPort() > 0);
 
@@ -353,8 +322,8 @@ void tst_QHttpSocketEngine::simpleConnectToIMAP()
     QVERIFY(socketDevice.waitForRead());
     char c;
     QCOMPARE(socketDevice.read(&c, sizeof(c)), (qint64) -1);
-    QVERIFY(socketDevice.error() == QAbstractSocket::RemoteHostClosedError);
-    QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+    QCOMPARE(socketDevice.error(), QAbstractSocket::RemoteHostClosedError);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
 }
 
 //---------------------------------------------------------------------------
@@ -368,14 +337,14 @@ void tst_QHttpSocketEngine::simpleErrorsAndStates()
 
         socketDevice.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QtNetworkSettings::serverName(), 3128));
 
-        QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+        QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
         QVERIFY(!socketDevice.connectToHost(QHostAddress(QtNetworkSettings::serverName()), 8088));
-        QVERIFY(socketDevice.state() == QAbstractSocket::ConnectingState);
+        QCOMPARE(socketDevice.state(), QAbstractSocket::ConnectingState);
         if (socketDevice.waitForWrite(30000)) {
             QVERIFY(socketDevice.state() == QAbstractSocket::ConnectedState ||
                     socketDevice.state() == QAbstractSocket::UnconnectedState);
         } else {
-            QVERIFY(socketDevice.error() == QAbstractSocket::SocketTimeoutError);
+            QCOMPARE(socketDevice.error(), QAbstractSocket::SocketTimeoutError);
         }
     }
 
@@ -389,12 +358,12 @@ void tst_QHttpSocketEngine::tcpLoopbackPerformance()
 
     // Bind to any port on all interfaces
     QVERIFY(server.bind(QHostAddress("0.0.0.0"), 0));
-    QVERIFY(server.state() == QAbstractSocket::BoundState);
+    QCOMPARE(server.state(), QAbstractSocket::BoundState);
     quint16 port = server.localPort();
 
     // Listen for incoming connections
     QVERIFY(server.listen());
-    QVERIFY(server.state() == QAbstractSocket::ListeningState);
+    QCOMPARE(server.state(), QAbstractSocket::ListeningState);
 
     // Initialize a Tcp socket
     QHttpSocketEngine client;
@@ -416,7 +385,7 @@ void tst_QHttpSocketEngine::tcpLoopbackPerformance()
     // socket descriptor from accept(). It's pre-connected.
     QSocketLayer serverSocket;
     QVERIFY(serverSocket.initialize(socketDescriptor));
-    QVERIFY(serverSocket.state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(serverSocket.state(), QAbstractSocket::ConnectedState);
 
     const int messageSize = 1024 * 256;
     QByteArray message1(messageSize, '@');
@@ -552,7 +521,7 @@ void tst_QHttpSocketEngine::tcpSocketNonBlockingTest()
         QFAIL("Timed out");
     }
 
-    QVERIFY(tcpSocketNonBlocking_totalWritten == 8);
+    QCOMPARE(tcpSocketNonBlocking_totalWritten, 8);
 
 
     QTestEventLoop::instance().enterLoop(30);
@@ -577,7 +546,7 @@ void tst_QHttpSocketEngine::tcpSocketNonBlockingTest()
         QFAIL("Timed out");
     }
 
-    QVERIFY(tcpSocketNonBlocking_totalWritten == 10);
+    QCOMPARE(tcpSocketNonBlocking_totalWritten, 10);
 
     // Wait for greeting
     QTestEventLoop::instance().enterLoop(30);
@@ -645,7 +614,7 @@ void tst_QHttpSocketEngine::downloadBigFile()
         QFAIL("Network operation timed out");
 
     QByteArray hostName = QtNetworkSettings::serverName().toLatin1();
-    QVERIFY(tmpSocket->state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(tmpSocket->state(), QAbstractSocket::ConnectedState);
     QVERIFY(tmpSocket->write("GET /qtest/mediumfile HTTP/1.0\r\n") > 0);
     QVERIFY(tmpSocket->write("Host: ") > 0);
     QVERIFY(tmpSocket->write(hostName.data()) > 0);
@@ -657,17 +626,13 @@ void tst_QHttpSocketEngine::downloadBigFile()
     QTime stopWatch;
     stopWatch.start();
 
-#if defined(Q_OS_WINCE)
-    QTestEventLoop::instance().enterLoop(240);
-#else
     QTestEventLoop::instance().enterLoop(60);
-#endif
     if (QTestEventLoop::instance().timeout())
         QFAIL("Network operation timed out");
 
     QVERIFY(bytesAvailable >= 10000000);
 
-    QVERIFY(tmpSocket->state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(tmpSocket->state(), QAbstractSocket::ConnectedState);
 
     qDebug("\t\t%.1fMB/%.1fs: %.1fMB/s",
            bytesAvailable / (1024.0 * 1024.0),
@@ -697,15 +662,15 @@ void tst_QHttpSocketEngine::passwordAuth()
 
     // Initialize device
     QVERIFY(socketDevice.initialize(QAbstractSocket::TcpSocket, QAbstractSocket::IPv4Protocol));
-    QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
 
     socketDevice.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QtNetworkSettings::serverName(), 3128, "qsockstest", "password"));
 
     QVERIFY(!socketDevice.connectToHost(QtNetworkSettings::serverIP(), 143));
-    QVERIFY(socketDevice.state() == QAbstractSocket::ConnectingState);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::ConnectingState);
     QVERIFY(socketDevice.waitForWrite());
-    QVERIFY(socketDevice.state() == QAbstractSocket::ConnectedState);
-    QVERIFY(socketDevice.peerAddress() == QtNetworkSettings::serverIP());
+    QCOMPARE(socketDevice.state(), QAbstractSocket::ConnectedState);
+    QCOMPARE(socketDevice.peerAddress(), QtNetworkSettings::serverIP());
 
     // Wait for the greeting
     QVERIFY(socketDevice.waitForRead());
@@ -741,11 +706,57 @@ void tst_QHttpSocketEngine::passwordAuth()
     QVERIFY(socketDevice.waitForRead());
     char c;
     QVERIFY(socketDevice.read(&c, sizeof(c)) == -1);
-    QVERIFY(socketDevice.error() == QAbstractSocket::RemoteHostClosedError);
-    QVERIFY(socketDevice.state() == QAbstractSocket::UnconnectedState);
+    QCOMPARE(socketDevice.error(), QAbstractSocket::RemoteHostClosedError);
+    QCOMPARE(socketDevice.state(), QAbstractSocket::UnconnectedState);
 }
 
 //----------------------------------------------------------------------------------
+
+void tst_QHttpSocketEngine::ensureEofTriggersNotification()
+{
+    QList<QByteArray> serverData;
+    // Set the handshake and server response data
+    serverData << "HTTP/1.0 200 Connection established\r\n\r\n" << "0";
+    MiniHttpServer server(serverData);
+
+    QTcpSocket socket;
+    connect(&socket, SIGNAL(connected()), SLOT(exitLoopSlot()));
+    socket.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, server.serverAddress().toString(),
+                                  server.serverPort()));
+    socket.connectToHost("0.1.2.3", 12345);
+
+    QTestEventLoop::instance().enterLoop(5);
+    if (QTestEventLoop::instance().timeout())
+        QFAIL("Connect timed out");
+
+    QCOMPARE(socket.state(), QTcpSocket::ConnectedState);
+    // Disable read notification on server response
+    socket.setReadBufferSize(1);
+    socket.putChar(0);
+
+    // Wait for the response
+    connect(&socket, SIGNAL(readyRead()), SLOT(exitLoopSlot()));
+    QTestEventLoop::instance().enterLoop(5);
+    if (QTestEventLoop::instance().timeout())
+        QFAIL("Read timed out");
+
+    QCOMPARE(socket.state(), QTcpSocket::ConnectedState);
+    QCOMPARE(socket.bytesAvailable(), 1);
+    // Trigger a read notification
+    socket.readAll();
+    // Check for pending EOF at input
+    QCOMPARE(socket.bytesAvailable(), 0);
+    QCOMPARE(socket.state(), QTcpSocket::ConnectedState);
+
+    // Try to read EOF
+    connect(&socket, SIGNAL(disconnected()), SLOT(exitLoopSlot()));
+    QTestEventLoop::instance().enterLoop(5);
+    if (QTestEventLoop::instance().timeout())
+        QFAIL("Disconnect timed out");
+
+    // Check that it's closed
+    QCOMPARE(socket.state(), QTcpSocket::UnconnectedState);
+}
 
 QTEST_MAIN(tst_QHttpSocketEngine)
 #include "tst_qhttpsocketengine.moc"

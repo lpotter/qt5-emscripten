@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -60,12 +70,12 @@ static bool createConnection()
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(":memory:");
     if (!db.open()) {
-        QMessageBox::critical(0, qApp->tr("Cannot open database"),
-            qApp->tr("Unable to establish a database connection.\n"
-                     "This example needs SQLite support. Please read "
-                     "the Qt SQL driver documentation for information how "
-                     "to build it.\n\n"
-                     "Click Cancel to exit."), QMessageBox::Cancel);
+        QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
+            QObject::tr("Unable to establish a database connection.\n"
+                        "This example needs SQLite support. Please read "
+                        "the Qt SQL driver documentation for information how "
+                        "to build it.\n\n"
+                        "Click Cancel to exit."), QMessageBox::Cancel);
         return false;
     }
 
@@ -78,55 +88,38 @@ static bool createConnection()
     query.exec("insert into person values(104, 'Roberto', 'Robitaille')");
     query.exec("insert into person values(105, 'Maria', 'Papadopoulos')");
 
-    query.exec("create table offices (id int primary key,"
+    query.exec("create table items (id int primary key,"
                                              "imagefile int,"
-                                             "location varchar(20),"
-                                             "country varchar(20),"
+                                             "itemtype varchar(20),"
                                              "description varchar(100))");
-    query.exec("insert into offices "
-               "values(0, 0, 'Oslo', 'Norway',"
-               "'Oslo is home to more than 500 000 citizens and has a "
-               "lot to offer.It has been called \"The city with the big "
-               "heart\" and this is a nickname we are happy to live up to.')");
-    query.exec("insert into offices "
-               "values(1, 1, 'Brisbane', 'Australia',"
-               "'Brisbane is the capital of Queensland, the Sunshine State, "
-               "where it is beautiful one day, perfect the next.  "
-               "Brisbane is Australia''s 3rd largest city, being home "
-               "to almost 2 million people.')");
-    query.exec("insert into offices "
-               "values(2, 2, 'Redwood City', 'US',"
-               "'You find Redwood City in the heart of the Bay Area "
-               "just north of Silicon Valley. The largest nearby city is "
-               "San Jose which is the third largest city in California "
-               "and the 10th largest in the US.')");
-    query.exec("insert into offices "
-               "values(3, 3, 'Berlin', 'Germany',"
-               "'Berlin, the capital of Germany is dynamic, cosmopolitan "
-               "and creative, allowing for every kind of lifestyle. "
-               "East meets West in the metropolis at the heart of a "
-               "changing Europe.')");
-    query.exec("insert into offices "
-               "values(4, 4, 'Munich', 'Germany',"
-               "'Several technology companies are represented in Munich, "
-               "and the city is often called the \"Bavarian Silicon Valley\". "
-               "The exciting city is also filled with culture, "
-               "art and music. ')");
-    query.exec("insert into offices "
-               "values(5, 5, 'Beijing', 'China',"
-               "'Beijing as a capital city has more than 3000 years of "
-               "history. Today the city counts 12 million citizens, and "
-               "is the political, economic and cultural centre of China.')");
+    query.exec("insert into items "
+               "values(0, 0, 'Qt',"
+               "'Qt is a full development framework with tools designed to "
+               "streamline the creation of stunning applications and  "
+               "amazing user interfaces for desktop, embedded and mobile "
+               "platforms.')");
+    query.exec("insert into items "
+               "values(1, 1, 'Qt Quick',"
+               "'Qt Quick is a collection of techniques designed to help "
+               "developers create intuitive, modern-looking, and fluid "
+               "user interfaces using a CSS & JavaScript like language.')");
+    query.exec("insert into items "
+               "values(2, 2, 'Qt Creator',"
+               "'Qt Creator is a powerful cross-platform integrated "
+               "development environment (IDE), including UI design tools "
+               "and on-device debugging.')");
+    query.exec("insert into items "
+               "values(3, 3, 'Qt Project',"
+               "'The Qt Project governs the open source development of Qt, "
+               "allowing anyone wanting to contribute to join the effort "
+               "through a meritocratic structure of approvers and "
+               "maintainers.')");
 
-    query.exec("create table images (locationid int, file varchar(20))");
-    query.exec("insert into images values(0, 'images/oslo.png')");
-    query.exec("insert into images values(1, 'images/brisbane.png')");
-    query.exec("insert into images values(2, 'images/redwood.png')");
-    query.exec("insert into images values(3, 'images/berlin.png')");
-    query.exec("insert into images values(4, 'images/munich.png')");
-    query.exec("insert into images values(5, 'images/beijing.png')");
-
-
+    query.exec("create table images (itemid int, file varchar(20))");
+    query.exec("insert into images values(0, 'images/qt-logo.png')");
+    query.exec("insert into images values(1, 'images/qt-quick.png')");
+    query.exec("insert into images values(2, 'images/qt-creator.png')");
+    query.exec("insert into images values(3, 'images/qt-project.png')");
 
     return true;
 }

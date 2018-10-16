@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,7 +55,6 @@ QT_BEGIN_NAMESPACE
 
     \ingroup text
     \ingroup shared
-    \mainclass
 
     When Qt displays a string of text encoded in Unicode, it will first convert the Unicode points
     into a list of glyph indexes and a list of positions based on one or more fonts. The Unicode
@@ -162,8 +159,8 @@ QGlyphRun &QGlyphRun::operator=(const QGlyphRun &other)
 */
 
 /*!
-    Compares \a other to this QGlyphRun object. Returns true if the list of glyph indexes,
-    the list of positions and the font are all equal, otherwise returns false.
+    Compares \a other to this QGlyphRun object. Returns \c true if the list of glyph indexes,
+    the list of positions and the font are all equal, otherwise returns \c false.
 */
 bool QGlyphRun::operator==(const QGlyphRun &other) const
 {
@@ -194,8 +191,8 @@ bool QGlyphRun::operator==(const QGlyphRun &other) const
 /*!
     \fn bool QGlyphRun::operator!=(const QGlyphRun &other) const
 
-    Compares \a other to this QGlyphRun object. Returns true if any of the list of glyph
-    indexes, the list of positions or the font are different, otherwise returns false.
+    Compares \a other to this QGlyphRun object. Returns \c true if any of the list of glyph
+    indexes, the list of positions or the font are different, otherwise returns \c false.
 */
 
 /*!
@@ -309,7 +306,7 @@ void QGlyphRun::setRawData(const quint32 *glyphIndexArray, const QPointF *glyphP
 }
 
 /*!
-   Returns true if this QGlyphRun should be painted with an overline decoration.
+   Returns \c true if this QGlyphRun should be painted with an overline decoration.
 
    \sa setOverline(), flags()
 */
@@ -330,7 +327,7 @@ void QGlyphRun::setOverline(bool overline)
 }
 
 /*!
-   Returns true if this QGlyphRun should be painted with an underline decoration.
+   Returns \c true if this QGlyphRun should be painted with an underline decoration.
 
    \sa setUnderline(), flags()
 */
@@ -351,7 +348,7 @@ void QGlyphRun::setUnderline(bool underline)
 }
 
 /*!
-   Returns true if this QGlyphRun should be painted with a strike out decoration.
+   Returns \c true if this QGlyphRun should be painted with a strike out decoration.
 
    \sa setStrikeOut(), flags()
 */
@@ -372,7 +369,7 @@ void QGlyphRun::setStrikeOut(bool strikeOut)
 }
 
 /*!
-  Returns true if this QGlyphRun contains glyphs that are painted from the right to the left.
+  Returns \c true if this QGlyphRun contains glyphs that are painted from the right to the left.
 
   \since 5.0
   \sa setRightToLeft(), flags()
@@ -417,10 +414,7 @@ void QGlyphRun::setFlag(GlyphRunFlag flag, bool enabled)
         return;
 
     detach();
-    if (enabled)
-        d->flags |= flag;
-    else
-        d->flags &= ~flag;
+    d->flags.setFlag(flag, enabled);
 }
 
 /*!
@@ -501,7 +495,7 @@ QRectF QGlyphRun::boundingRect() const
 }
 
 /*!
-  Returns true if the QGlyphRun does not contain any glyphs.
+  Returns \c true if the QGlyphRun does not contain any glyphs.
 
   \since 5.0
 */

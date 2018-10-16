@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,9 +51,8 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qgraphicsscene.h"
-
-#if !defined(QT_NO_GRAPHICSVIEW)
 
 #include "qgraphicssceneevent.h"
 #include "qgraphicsview.h"
@@ -71,6 +68,8 @@
 #include <QtGui/qpalette.h>
 #include <QtWidgets/qstyle.h>
 #include <QtWidgets/qstyleoption.h>
+
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
 
@@ -115,7 +114,10 @@ public:
     quint32 painterStateProtection : 1;
     quint32 sortCacheEnabled : 1; // for compatibility
     quint32 allItemsIgnoreTouchEvents : 1;
-    quint32 padding : 15;
+    quint32 focusOnTouch : 1;
+    quint32 padding : 14;
+
+    qreal minimumRenderSize;
 
     QRectF growingItemsBoundingRect;
 
@@ -157,7 +159,8 @@ public:
     int activationRefCount;
     int childExplicitActivation;
     void setActivePanelHelper(QGraphicsItem *item, bool duringActivationEvent);
-    void setFocusItemHelper(QGraphicsItem *item, Qt::FocusReason focusReason);
+    void setFocusItemHelper(QGraphicsItem *item, Qt::FocusReason focusReason,
+                            bool emitFocusChanged = true);
 
     QList<QGraphicsWidget *> popupWidgets;
     void addPopup(QGraphicsWidget *widget);
@@ -247,7 +250,7 @@ public:
         item->d_ptr->fullUpdatePending = 0;
         item->d_ptr->ignoreVisible = 0;
         item->d_ptr->ignoreOpacity = 0;
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
         QGraphicsEffect::ChangeFlags flags;
         if (item->d_ptr->notifyBoundingRectChanged) {
             flags |= QGraphicsEffect::SourceBoundingRectChanged;
@@ -257,15 +260,15 @@ public:
             flags |= QGraphicsEffect::SourceInvalidated;
             item->d_ptr->notifyInvalidated = 0;
         }
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
         if (recursive) {
             for (int i = 0; i < item->d_ptr->children.size(); ++i)
                 resetDirtyItem(item->d_ptr->children.at(i), recursive);
         }
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
         if (flags && item->d_ptr->graphicsEffect)
             item->d_ptr->graphicsEffect->sourceChanged(flags);
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
     }
 
     inline void ensureSortedTopLevelItems()
@@ -353,7 +356,5 @@ static inline QRectF adjustedItemEffectiveBoundingRect(const QGraphicsItem *item
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_GRAPHICSVIEW
 
 #endif

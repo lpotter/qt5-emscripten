@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,10 +40,13 @@
 #include "qlayout.h"
 
 #include "qapplication.h"
-#include "qdebug.h"
 #include "qlayoutengine_p.h"
+#if QT_CONFIG(menubar)
 #include "qmenubar.h"
+#endif
+#if QT_CONFIG(toolbar)
 #include "qtoolbar.h"
+#endif
 #include "qevent.h"
 #include "qstyle.h"
 #include "qvariant.h"
@@ -76,14 +77,6 @@ inline static QSize toLayoutItemSize(QWidgetPrivate *priv, const QSize &size)
 }
 
 /*!
-   Returns a QVariant storing this QSizePolicy.
-*/
-QSizePolicy::operator QVariant() const
-{
-    return QVariant(QVariant::SizePolicy, this);
-}
-
-/*!
     \class QLayoutItem
     \brief The QLayoutItem class provides an abstract item that a
     QLayout manipulates.
@@ -109,7 +102,7 @@ QSizePolicy::operator QVariant() const
     be expressed using hasHeightForWidth(), heightForWidth(), and
     minimumHeightForWidth(). For more explanation see the \e{Qt
     Quarterly} article
-    \l{http://qt.nokia.com/doc/qq/qq04-height-for-width.html}{Trading
+    \l{http://doc.qt.io/archives/qq/qq04-height-for-width.html}{Trading
     Height for Width}.
 
     \sa QLayout
@@ -150,7 +143,7 @@ QSizePolicy::operator QVariant() const
     \brief The QWidgetItem class is a layout item that represents a widget.
 
     \inmodule QtWidgets
- 
+
     Normally, you don't need to use this class directly. Qt's
     built-in layout managers provide the following functions for
     manipulating widgets in layouts:
@@ -317,6 +310,8 @@ void QLayoutItem::invalidate()
 /*!
     If this item is a QLayout, it is returned as a QLayout; otherwise
     0 is returned. This function provides type-safe casting.
+
+    \sa spacerItem(), widget()
 */
 QLayout * QLayoutItem::layout()
 {
@@ -326,6 +321,8 @@ QLayout * QLayoutItem::layout()
 /*!
     If this item is a QSpacerItem, it is returned as a QSpacerItem;
     otherwise 0 is returned. This function provides type-safe casting.
+
+    \sa layout(), widget()
 */
 QSpacerItem * QLayoutItem::spacerItem()
 {
@@ -349,8 +346,21 @@ QSpacerItem * QSpacerItem::spacerItem()
 }
 
 /*!
-    If this item is a QWidget, it is returned as a QWidget; otherwise
-    0 is returned. This function provides type-safe casting.
+    \fn QSizePolicy QSpacerItem::sizePolicy() const
+    \since 5.5
+
+    Returns the size policy of this item.
+*/
+
+/*!
+    If this item manages a QWidget, returns that widget. Otherwise,
+    \c nullptr is returned.
+
+    \note While the functions layout() and spacerItem() perform casts, this
+    function returns another object: QLayout and QSpacerItem inherit QLayoutItem,
+    while QWidget does not.
+
+    \sa layout(), spacerItem()
 */
 QWidget * QLayoutItem::widget()
 {
@@ -366,8 +376,8 @@ QWidget *QWidgetItem::widget()
 }
 
 /*!
-    Returns true if this layout's preferred height depends on its
-    width; otherwise returns false. The default implementation returns
+    Returns \c true if this layout's preferred height depends on its
+    width; otherwise returns \c false. The default implementation returns
     false.
 
     Reimplement this function in layout managers that support height
@@ -392,8 +402,8 @@ int QLayoutItem::minimumHeightForWidth(int w) const
 
 
 /*!
-    Returns the preferred height for this layout item, given the width
-    \a w.
+    Returns the preferred height for this layout item, given the
+    width, which is not used in this default implementation.
 
     The default implementation returns -1, indicating that the
     preferred height is independent of the width of the item. Using
@@ -446,20 +456,20 @@ void QWidgetItem::setGeometry(const QRect &rect)
     QRect r = !wid->testAttribute(Qt::WA_LayoutUsesWidgetRect)
             ? fromLayoutItemRect(wid->d_func(), rect)
             : rect;
-    const QSize widgetRectSurplus = r.size() - rect.size(); 
+    const QSize widgetRectSurplus = r.size() - rect.size();
 
-    /* 
-       For historical reasons, this code is done using widget rect 
-       coordinates, not layout item rect coordinates. However, 
-       QWidgetItem's sizeHint(), maximumSize(), and heightForWidth() 
-       all work in terms of layout item rect coordinates, so we have to 
-       add or subtract widgetRectSurplus here and there. The code could 
-       be much simpler if we did everything using layout item rect 
-       coordinates and did the conversion right before the call to 
-       QWidget::setGeometry(). 
-     */ 
+    /*
+       For historical reasons, this code is done using widget rect
+       coordinates, not layout item rect coordinates. However,
+       QWidgetItem's sizeHint(), maximumSize(), and heightForWidth()
+       all work in terms of layout item rect coordinates, so we have to
+       add or subtract widgetRectSurplus here and there. The code could
+       be much simpler if we did everything using layout item rect
+       coordinates and did the conversion right before the call to
+       QWidget::setGeometry().
+     */
 
-    QSize s = r.size().boundedTo(maximumSize() + widgetRectSurplus);  
+    QSize s = r.size().boundedTo(maximumSize() + widgetRectSurplus);
     int x = r.x();
     int y = r.y();
     if (align & (Qt::AlignHorizontal_Mask | Qt::AlignVertical_Mask)) {
@@ -474,8 +484,8 @@ void QWidgetItem::setGeometry(const QRect &rect)
             s.setWidth(qMin(s.width(), pref.width()));
         if (align & Qt::AlignVertical_Mask) {
             if (hasHeightForWidth())
-                s.setHeight(qMin(s.height(), 
-                                 heightForWidth(s.width() - widgetRectSurplus.width()) 
+                s.setHeight(qMin(s.height(),
+                                 heightForWidth(s.width() - widgetRectSurplus.width())
                                  + widgetRectSurplus.height()));
             else
                 s.setHeight(qMin(s.height(), pref.height()));
@@ -668,7 +678,7 @@ QSize QWidgetItem::sizeHint() const
 }
 
 /*!
-    Returns true.
+    Returns \c true.
 */
 bool QSpacerItem::isEmpty() const
 {
@@ -676,13 +686,13 @@ bool QSpacerItem::isEmpty() const
 }
 
 /*!
-    Returns true if the widget is hidden; otherwise returns false.
+    Returns \c true if the widget is hidden; otherwise returns \c false.
 
     \sa QWidget::isHidden()
 */
 bool QWidgetItem::isEmpty() const
 {
-    return wid->isHidden() || wid->isWindow();
+    return (wid->isHidden() && !wid->sizePolicy().retainSizeWhenHidden()) || wid->isWindow();
 }
 
 /*!
@@ -761,7 +771,7 @@ QWidgetItemV2::QWidgetItemV2(QWidget *widget)
 QWidgetItemV2::~QWidgetItemV2()
 {
     if (wid) {
-        QWidgetPrivate *wd = wid->d_func();
+        auto *wd = static_cast<QWidgetPrivate *>(QObjectPrivate::get(wid));
         if (wd->widgetItem == this)
             wd->widgetItem = 0;
     }
@@ -831,7 +841,7 @@ int QWidgetItemV2::heightForWidth(int width) const
         const QSize &size = q_cachedHfws[offset % HfwCacheMaxSize];
         if (size.width() == width) {
             if (q_hfwCacheSize == HfwCacheMaxSize)
-                q_firstCachedHfw = offset;
+                q_firstCachedHfw = offset % HfwCacheMaxSize;
             return size.height();
         }
     }
@@ -844,14 +854,5 @@ int QWidgetItemV2::heightForWidth(int width) const
     q_cachedHfws[q_firstCachedHfw] = QSize(width, height);
     return height;
 }
-
-#ifndef QT_NO_DEBUG_STREAM
-QDebug operator<<(QDebug dbg, const QSizePolicy &p)
-{
-    dbg.nospace() << "QSizePolicy(horizontalPolicy = " << p.horizontalPolicy()
-                  << ", verticalPolicy = " << p.verticalPolicy() << ')';
-    return dbg.space();
-}
-#endif
 
 QT_END_NAMESPACE

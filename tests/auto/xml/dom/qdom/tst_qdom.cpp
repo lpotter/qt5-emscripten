@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -127,6 +114,7 @@ private slots:
     void cloneDTD_QTBUG8398() const;
     void DTDNotationDecl();
     void DTDEntityDecl();
+    void QTBUG49113_dontCrashWithNegativeIndex() const;
 
     void cleanupTestCase() const;
 
@@ -143,7 +131,6 @@ private:
     QList<QByteArray> m_testCodecs;
 };
 
-Q_DECLARE_METATYPE(QList<QVariant>)
 
 void tst_QDom::setContent_data()
 {
@@ -727,6 +714,9 @@ void tst_QDom::ownerDocument()
         OWNERDOCUMENT_IMPORTNODE_TEST( QDomEntityReference,         doc2.createEntityReference( "foo" ) );
         OWNERDOCUMENT_IMPORTNODE_TEST( QDomProcessingInstruction,   doc2.createProcessingInstruction( "foo", "bar" ) );
         OWNERDOCUMENT_IMPORTNODE_TEST( QDomText,                    doc2.createTextNode( "foo" ) );
+
+        // QTBUG-12927
+        QVERIFY(doc2.importNode(QDomNode(), deep).isNull());
     }
 }
 
@@ -1049,15 +1039,15 @@ void tst_QDom::browseElements()
     QVERIFY(!bar.isNull());
     QVERIFY(bar.previousSiblingElement("bar").isNull());
     QVERIFY(bar.previousSiblingElement().isNull());
-    QVERIFY(bar.nextSiblingElement("bar").tagName() == "bar");
+    QCOMPARE(bar.nextSiblingElement("bar").tagName(), QLatin1String("bar"));
     QVERIFY(bar.nextSiblingElement("bar").nextSiblingElement("bar").isNull());
 
     QDomElement bop = foo.firstChildElement("bop");
     QVERIFY(!bop.isNull());
-    QVERIFY(bar.nextSiblingElement() == bop);
-    QVERIFY(bop.nextSiblingElement("bop") == foo.lastChildElement("bop"));
-    QVERIFY(bop.previousSiblingElement("bar") == foo.firstChildElement("bar"));
-    QVERIFY(bop.previousSiblingElement("bar") == foo.firstChildElement());
+    QCOMPARE(bar.nextSiblingElement(), bop);
+    QCOMPARE(bop.nextSiblingElement("bop"), foo.lastChildElement("bop"));
+    QCOMPARE(bop.previousSiblingElement("bar"), foo.firstChildElement("bar"));
+    QCOMPARE(bop.previousSiblingElement("bar"), foo.firstChildElement());
 }
 
 void tst_QDom::domNodeMapAndList()
@@ -1685,7 +1675,7 @@ static const QChar umlautName[] =
 
 /*!
   \internal
- 
+
   Write a german umlaut to a QByteArray, via a QTextStream.
  */
 void tst_QDom::germanUmlautToByteArray() const
@@ -1702,12 +1692,12 @@ void tst_QDom::germanUmlautToByteArray() const
     ts.setCodec("UTF-8");
     ts << d.toString();
     buffer.close();
-    
+
     QByteArray baseline("<a");
 
     /* http://www.fileformat.info/info/unicode/char/00FC/index.htm */
-    baseline += 0xC3;
-    baseline += 0xBC;
+    baseline += char(0xC3);
+    baseline += char(0xBC);
     baseline += "b/>\n";
 
     QCOMPARE(data, baseline);
@@ -1715,7 +1705,7 @@ void tst_QDom::germanUmlautToByteArray() const
 
 /*!
   \internal
- 
+
   Write a german umlaut to a QFile, via a QTextStream.
  */
 void tst_QDom::germanUmlautToFile() const
@@ -1728,14 +1718,14 @@ void tst_QDom::germanUmlautToFile() const
 
     QDomDocument d("test");
     d.appendChild(d.createElement(name));
-    QFile file("germanUmlautToFile.xml");
-    QVERIFY(file.open(QIODevice::WriteOnly));
+    QTemporaryFile file;
+    QVERIFY(file.open());
     QTextStream ts(&file);
     ts.setCodec("UTF-8");
     ts << d.toString();
     file.close();
 
-    QFile inFile("germanUmlautToFile.xml");
+    QFile inFile(file.fileName());
     QVERIFY(inFile.open(QIODevice::ReadOnly));
 
     QString baseline(QLatin1String("<!DOCTYPE test>\n<german"));
@@ -1758,15 +1748,15 @@ void tst_QDom::germanUmlautToFile() const
 
 void tst_QDom::setInvalidDataPolicy() const
 {
-    QDomImplementation::setInvalidDataPolicy(QDomImplementation::ReturnNullNode); 
-    QDomDocument doc; 
-    QDomElement elem = doc.createElement("invalid name"); 
+    QDomImplementation::setInvalidDataPolicy(QDomImplementation::ReturnNullNode);
+    QDomDocument doc;
+    QDomElement elem = doc.createElement("invalid name");
     QVERIFY(elem.isNull());
 }
 
 void tst_QDom::crashInSetContent() const
 {
-    QDomImplementation::setInvalidDataPolicy(QDomImplementation::ReturnNullNode); 
+    QDomImplementation::setInvalidDataPolicy(QDomImplementation::ReturnNullNode);
     QDomDocument docImport;
 
     QCOMPARE(docImport.setContent(QLatin1String("<a:>text</a:>"), true), false);
@@ -1775,7 +1765,7 @@ void tst_QDom::crashInSetContent() const
 
 void tst_QDom::doubleNamespaceDeclarations() const
 {
-    QDomDocument doc; 
+    QDomDocument doc;
 
     QString testFile = QFINDTESTDATA("doubleNamespaces.xml");
     if (testFile.isEmpty())
@@ -1783,7 +1773,7 @@ void tst_QDom::doubleNamespaceDeclarations() const
     QFile file(testFile);
     QVERIFY(file.open(QIODevice::ReadOnly));
 
-    QXmlSimpleReader reader; 
+    QXmlSimpleReader reader;
 
     QXmlInputSource source(&file);
     QVERIFY(doc.setContent(&source, &reader));
@@ -1983,6 +1973,14 @@ void tst_QDom::DTDEntityDecl()
     QVERIFY(doctype.namedItem(QString("logo")).isEntity());
     QCOMPARE(doctype.namedItem(QString("logo")).toEntity().systemId(), QString("http://www.w3c.org/logo.gif"));
     QCOMPARE(doctype.namedItem(QString("logo")).toEntity().notationName(), QString("gif"));
+}
+
+void tst_QDom::QTBUG49113_dontCrashWithNegativeIndex() const
+{
+    QDomDocument doc;
+    QDomElement elem = doc.appendChild(doc.createElement("root")).toElement();
+    QDomNode node = elem.attributes().item(-1);
+    QVERIFY(node.isNull());
 }
 
 QTEST_MAIN(tst_QDom)

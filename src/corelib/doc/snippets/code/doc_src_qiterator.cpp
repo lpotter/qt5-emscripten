@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -218,7 +228,7 @@ QMutableListIterator<int> i(list);
 while (i.hasNext()) {
     int val = i.next();
     if (val < -32768 || val > 32767)
-	i.remove();
+        i.remove();
 }
 //! [19]
 
@@ -228,7 +238,7 @@ QMutableLinkedListIterator<int> i(list);
 while (i.hasNext()) {
     int val = i.next();
     if (val < -32768 || val > 32767)
-	i.remove();
+        i.remove();
 }
 //! [20]
 
@@ -238,7 +248,7 @@ QMutableVectorIterator<int> i(vector);
 while (i.hasNext()) {
     int val = i.next();
     if (val < -32768 || val > 32767)
-	i.remove();
+        i.remove();
 }
 //! [21]
 
@@ -248,7 +258,7 @@ QMutableSetIterator<int> i(set);
 while (i.hasNext()) {
     int val = i.next();
     if (val < -32768 || val > 32767)
-	i.remove();
+        i.remove();
 }
 //! [22]
 
@@ -257,7 +267,7 @@ while (i.hasNext()) {
 QMutableListIterator<double> i(list);
 while (i.hasNext()) {
     double val = i.next();
-    i.setValue(sqrt(val));
+    i.setValue(std::sqrt(val));
 }
 //! [23]
 
@@ -266,7 +276,7 @@ while (i.hasNext()) {
 QMutableLinkedListIterator<double> i(list);
 while (i.hasNext()) {
     double val = i.next();
-    i.setValue(sqrt(val));
+    i.setValue(std::sqrt(val));
 }
 //! [24]
 
@@ -275,7 +285,7 @@ while (i.hasNext()) {
 QMutableVectorIterator<double> i(list);
 while (i.hasNext()) {
     double val = i.next();
-    i.setValue(sqrt(val));
+    i.setValue(std::sqrt(val));
 }
 //! [25]
 
@@ -305,7 +315,7 @@ while (i.hasPrevious()) {
 QMapIterator<int, QWidget *> i(map);
 while (i.findNext(widget)) {
     qDebug() << "Found widget " << widget << " under key "
-	     << i.key();
+             << i.key();
 }
 //! [28]
 
@@ -335,7 +345,7 @@ while (i.hasPrevious()) {
 QHashIterator<int, QWidget *> i(hash);
 while (i.findNext(widget)) {
     qDebug() << "Found widget " << widget << " under key "
-	     << i.key();
+             << i.key();
 }
 //! [31]
 
@@ -365,7 +375,7 @@ while (i.hasPrevious()) {
 QMutableMapIterator<int, QWidget *> i(map);
 while (i.findNext(widget)) {
     qDebug() << "Found widget " << widget << " under key "
-	     << i.key();
+             << i.key();
 }
 //! [34]
 
@@ -405,7 +415,7 @@ while (i.hasPrevious()) {
 QMutableHashIterator<int, QWidget *> i(hash);
 while (i.findNext(widget)) {
     qDebug() << "Found widget " << widget << " under key "
-	     << i.key();
+             << i.key();
 }
 //! [38]
 

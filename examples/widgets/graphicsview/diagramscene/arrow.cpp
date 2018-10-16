@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,12 +51,9 @@
 
 #include "arrow.h"
 
-#include <math.h>
-
+#include <qmath.h>
 #include <QPen>
 #include <QPainter>
-
-const qreal Pi = 3.14;
 
 //! [0]
 Arrow::Arrow(DiagramItem *startItem, DiagramItem *endItem, QGraphicsItem *parent)
@@ -110,34 +117,32 @@ void Arrow::paint(QPainter *painter, const QStyleOptionGraphicsItem *,
     QPointF intersectPoint;
     QLineF polyLine;
     for (int i = 1; i < endPolygon.count(); ++i) {
-    p2 = endPolygon.at(i) + myEndItem->pos();
-    polyLine = QLineF(p1, p2);
-    QLineF::IntersectType intersectType =
-        polyLine.intersect(centerLine, &intersectPoint);
-    if (intersectType == QLineF::BoundedIntersection)
-        break;
+        p2 = endPolygon.at(i) + myEndItem->pos();
+        polyLine = QLineF(p1, p2);
+        QLineF::IntersectType intersectType =
+            polyLine.intersect(centerLine, &intersectPoint);
+        if (intersectType == QLineF::BoundedIntersection)
+            break;
         p1 = p2;
     }
 
     setLine(QLineF(intersectPoint, myStartItem->pos()));
 //! [5] //! [6]
 
-    double angle = ::acos(line().dx() / line().length());
-    if (line().dy() >= 0)
-        angle = (Pi * 2) - angle;
+    double angle = std::atan2(-line().dy(), line().dx());
 
-        QPointF arrowP1 = line().p1() + QPointF(sin(angle + Pi / 3) * arrowSize,
-                                        cos(angle + Pi / 3) * arrowSize);
-        QPointF arrowP2 = line().p1() + QPointF(sin(angle + Pi - Pi / 3) * arrowSize,
-                                        cos(angle + Pi - Pi / 3) * arrowSize);
+    QPointF arrowP1 = line().p1() + QPointF(sin(angle + M_PI / 3) * arrowSize,
+                                    cos(angle + M_PI / 3) * arrowSize);
+    QPointF arrowP2 = line().p1() + QPointF(sin(angle + M_PI - M_PI / 3) * arrowSize,
+                                    cos(angle + M_PI - M_PI / 3) * arrowSize);
 
-        arrowHead.clear();
-        arrowHead << line().p1() << arrowP1 << arrowP2;
+    arrowHead.clear();
+    arrowHead << line().p1() << arrowP1 << arrowP2;
 //! [6] //! [7]
-        painter->drawLine(line());
-        painter->drawPolygon(arrowHead);
-        if (isSelected()) {
-            painter->setPen(QPen(myColor, 1, Qt::DashLine));
+    painter->drawLine(line());
+    painter->drawPolygon(arrowHead);
+    if (isSelected()) {
+        painter->setPen(QPen(myColor, 1, Qt::DashLine));
         QLineF myLine = line();
         myLine.translate(0, 4.0);
         painter->drawLine(myLine);

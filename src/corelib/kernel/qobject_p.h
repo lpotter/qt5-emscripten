@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2017 The Qt Company Ltd.
+** Copyright (C) 2013 Olivier Goffart <ogoffart@woboq.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +52,7 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include "QtCore/qobject.h"
 #include "QtCore/qpointer.h"
 #include "QtCore/qsharedpointer.h"
@@ -69,7 +69,7 @@ class QThreadData;
 class QObjectConnectionListVector;
 namespace QtSharedPointer { struct ExternalRefCountData; }
 
-/* for QtTestLib */
+/* for Qt Test */
 struct QSignalSpyCallbackSet
 {
     typedef void (*BeginCallback)(QObject *caller, int signal_or_method_index, void **argv);
@@ -89,10 +89,20 @@ class Q_CORE_EXPORT QAbstractDeclarativeData
 {
 public:
     static void (*destroyed)(QAbstractDeclarativeData *, QObject *);
+    static void (*destroyed_qml1)(QAbstractDeclarativeData *, QObject *);
     static void (*parentChanged)(QAbstractDeclarativeData *, QObject *, QObject *);
     static void (*signalEmitted)(QAbstractDeclarativeData *, QObject *, int, void **);
     static int  (*receivers)(QAbstractDeclarativeData *, const QObject *, int);
     static bool (*isSignalConnected)(QAbstractDeclarativeData *, const QObject *, int);
+    static void (*setWidgetParent)(QObject *, QObject *); // Used by the QML engine to specify parents for widgets. Set by QtWidgets.
+};
+
+// This is an implementation of QAbstractDeclarativeData that is identical with
+// the implementation in QtDeclarative and QtQml for the first bit
+struct QAbstractDeclarativeDataImpl : public QAbstractDeclarativeData
+{
+    quint32 ownedByQml1:1;
+    quint32 unused: 31;
 };
 
 class Q_CORE_EXPORT QObjectPrivate : public QObjectData
@@ -107,7 +117,7 @@ public:
         QVector<QObjectUserData *> userData;
     #endif
         QList<QByteArray> propertyNames;
-        QList<QVariant> propertyValues;
+        QVector<QVariant> propertyValues;
         QVector<int> runningTimers;
         QList<QPointer<QObject> > eventFilters;
         QString objectName;
@@ -135,11 +145,11 @@ public:
         ushort connectionType : 3; // 0 == auto, 1 == direct, 2 == queued, 4 == blocking
         ushort isSlotObject : 1;
         ushort ownArgumentTypes : 1;
-        Connection() : nextConnectionList(0), ref_(2), ownArgumentTypes(true) {
+        Connection() : nextConnectionList(nullptr), ref_(2), ownArgumentTypes(true) {
             //ref_ is 2 for the use in the internal lists, and for the use in QMetaObject::Connection
         }
         ~Connection();
-        int method() const { return method_offset + method_relative; }
+        int method() const { Q_ASSERT(!isSlotObject); return method_offset + method_relative; }
         void ref() { ref_.ref(); }
         void deref() {
             if (!ref_.deref()) {
@@ -150,7 +160,7 @@ public:
     };
     // ConnectionList is a singly-linked list
     struct ConnectionList {
-        ConnectionList() : first(0), last(0) {}
+        ConnectionList() : first(nullptr), last(nullptr) {}
         Connection *first;
         Connection *last;
     };
@@ -188,16 +198,32 @@ public:
     static QObjectPrivate *get(QObject *o) {
         return o->d_func();
     }
+    static const QObjectPrivate *get(const QObject *o) { return o->d_func(); }
 
-    int senderSignalIndex() const;
-    int signalIndex(const char *signalName, const QMetaObject **meta = 0) const;
-    inline bool isSignalConnected(uint signalIdx) const;
+    int signalIndex(const char *signalName, const QMetaObject **meta = nullptr) const;
+    inline bool isSignalConnected(uint signalIdx, bool checkDeclarative = true) const;
+    inline bool isDeclarativeSignalConnected(uint signalIdx) const;
 
     // To allow abitrary objects to call connectNotify()/disconnectNotify() without making
     // the API public in QObject. This is used by QQmlNotifierEndpoint.
     inline void connectNotify(const QMetaMethod &signal);
     inline void disconnectNotify(const QMetaMethod &signal);
 
+    template <typename Func1, typename Func2>
+    static inline QMetaObject::Connection connect(const typename QtPrivate::FunctionPointer<Func1>::Object *sender, Func1 signal,
+                                                  const typename QtPrivate::FunctionPointer<Func2>::Object *receiverPrivate, Func2 slot,
+                                                  Qt::ConnectionType type = Qt::AutoConnection);
+
+    template <typename Func1, typename Func2>
+    static inline bool disconnect(const typename QtPrivate::FunctionPointer<Func1>::Object *sender, Func1 signal,
+                                  const typename QtPrivate::FunctionPointer<Func2>::Object *receiverPrivate, Func2 slot);
+
+    static QMetaObject::Connection connectImpl(const QObject *sender, int signal_index,
+                                               const QObject *receiver, void **slot,
+                                               QtPrivate::QSlotObjectBase *slotObj, Qt::ConnectionType type,
+                                               const int *types, const QMetaObject *senderMetaObject);
+    static QMetaObject::Connection connect(const QObject *sender, int signal_index, QtPrivate::QSlotObjectBase *slotObj, Qt::ConnectionType type);
+    static bool disconnect(const QObject *sender, int signal_index, void **slot);
 public:
     ExtraData *extraData;    // extra data set by the user
     QThreadData *threadData; // id of the thread that owns the object
@@ -209,7 +235,7 @@ public:
     mutable quint32 connectedSignals[2];
 
     union {
-        QObject *currentChildBeingDeleted;
+        QObject *currentChildBeingDeleted; // should only be used when QObjectData::isDeletingChildren is set
         QAbstractDeclarativeData *declarativeData; //extra data used by the declarative module
     };
 
@@ -218,23 +244,27 @@ public:
     QAtomicPointer<QtSharedPointer::ExternalRefCountData> sharedRefcount;
 };
 
+Q_DECLARE_TYPEINFO(QObjectPrivate::ConnectionList, Q_MOVABLE_TYPE);
 
 /*! \internal
 
-  Returns true if the signal with index \a signal_index from object \a sender is connected.
+  Returns \c true if the signal with index \a signal_index from object \a sender is connected.
   Signals with indices above a certain range are always considered connected (see connectedSignals
-  in QObjectPrivate). If a signal spy is installed, all signals are considered connected.
+  in QObjectPrivate).
 
   \a signal_index must be the index returned by QObjectPrivate::signalIndex;
 */
-inline bool QObjectPrivate::isSignalConnected(uint signal_index) const
+inline bool QObjectPrivate::isSignalConnected(uint signal_index, bool checkDeclarative) const
 {
     return signal_index >= sizeof(connectedSignals) * 8
         || (connectedSignals[signal_index >> 5] & (1 << (signal_index & 0x1f))
-        || (declarativeData && QAbstractDeclarativeData::isSignalConnected
-            && QAbstractDeclarativeData::isSignalConnected(declarativeData, q_func(), signal_index))
-        || qt_signal_spy_callback_set.signal_begin_callback
-        || qt_signal_spy_callback_set.signal_end_callback);
+        || (checkDeclarative && isDeclarativeSignalConnected(signal_index)));
+}
+
+inline bool QObjectPrivate::isDeclarativeSignalConnected(uint signal_index) const
+{
+    return declarativeData && QAbstractDeclarativeData::isSignalConnected
+            && QAbstractDeclarativeData::isSignalConnected(declarativeData, q_func(), signal_index);
 }
 
 inline QObjectPrivate::Sender *QObjectPrivate::setCurrentSender(QObject *receiver,
@@ -267,6 +297,76 @@ inline void QObjectPrivate::disconnectNotify(const QMetaMethod &signal)
     q_ptr->disconnectNotify(signal);
 }
 
+namespace QtPrivate {
+template<typename Func, typename Args, typename R> class QPrivateSlotObject : public QSlotObjectBase
+{
+    typedef QtPrivate::FunctionPointer<Func> FuncType;
+    Func function;
+    static void impl(int which, QSlotObjectBase *this_, QObject *r, void **a, bool *ret)
+    {
+        switch (which) {
+            case Destroy:
+                delete static_cast<QPrivateSlotObject*>(this_);
+                break;
+            case Call:
+                FuncType::template call<Args, R>(static_cast<QPrivateSlotObject*>(this_)->function,
+                                                 static_cast<typename FuncType::Object *>(QObjectPrivate::get(r)), a);
+                break;
+            case Compare:
+                *ret = *reinterpret_cast<Func *>(a) == static_cast<QPrivateSlotObject*>(this_)->function;
+                break;
+            case NumOperations: ;
+        }
+    }
+public:
+    explicit QPrivateSlotObject(Func f) : QSlotObjectBase(&impl), function(f) {}
+};
+} //namespace QtPrivate
+
+template <typename Func1, typename Func2>
+inline QMetaObject::Connection QObjectPrivate::connect(const typename QtPrivate::FunctionPointer<Func1>::Object *sender, Func1 signal,
+                                                       const typename QtPrivate::FunctionPointer<Func2>::Object *receiverPrivate, Func2 slot,
+                                                       Qt::ConnectionType type)
+{
+    typedef QtPrivate::FunctionPointer<Func1> SignalType;
+    typedef QtPrivate::FunctionPointer<Func2> SlotType;
+    Q_STATIC_ASSERT_X(QtPrivate::HasQ_OBJECT_Macro<typename SignalType::Object>::Value,
+                      "No Q_OBJECT in the class with the signal");
+
+    //compilation error if the arguments does not match.
+    Q_STATIC_ASSERT_X(int(SignalType::ArgumentCount) >= int(SlotType::ArgumentCount),
+                      "The slot requires more arguments than the signal provides.");
+    Q_STATIC_ASSERT_X((QtPrivate::CheckCompatibleArguments<typename SignalType::Arguments, typename SlotType::Arguments>::value),
+                      "Signal and slot arguments are not compatible.");
+    Q_STATIC_ASSERT_X((QtPrivate::AreArgumentsCompatible<typename SlotType::ReturnType, typename SignalType::ReturnType>::value),
+                      "Return type of the slot is not compatible with the return type of the signal.");
+
+    const int *types = 0;
+    if (type == Qt::QueuedConnection || type == Qt::BlockingQueuedConnection)
+        types = QtPrivate::ConnectionTypes<typename SignalType::Arguments>::types();
+
+    return QObject::connectImpl(sender, reinterpret_cast<void **>(&signal),
+        receiverPrivate->q_ptr, reinterpret_cast<void **>(&slot),
+        new QtPrivate::QPrivateSlotObject<Func2, typename QtPrivate::List_Left<typename SignalType::Arguments, SlotType::ArgumentCount>::Value,
+                                        typename SignalType::ReturnType>(slot),
+        type, types, &SignalType::Object::staticMetaObject);
+}
+
+template <typename Func1, typename Func2>
+bool QObjectPrivate::disconnect(const typename QtPrivate::FunctionPointer< Func1 >::Object* sender, Func1 signal,
+                                const typename QtPrivate::FunctionPointer< Func2 >::Object* receiverPrivate, Func2 slot)
+{
+    typedef QtPrivate::FunctionPointer<Func1> SignalType;
+    typedef QtPrivate::FunctionPointer<Func2> SlotType;
+    Q_STATIC_ASSERT_X(QtPrivate::HasQ_OBJECT_Macro<typename SignalType::Object>::Value,
+                      "No Q_OBJECT in the class with the signal");
+    //compilation error if the arguments does not match.
+    Q_STATIC_ASSERT_X((QtPrivate::CheckCompatibleArguments<typename SignalType::Arguments, typename SlotType::Arguments>::value),
+                      "Signal and slot arguments are not compatible.");
+    return QObject::disconnectImpl(sender, reinterpret_cast<void **>(&signal),
+                          receiverPrivate->q_ptr, reinterpret_cast<void **>(&slot),
+                          &SignalType::Object::staticMetaObject);
+}
 
 Q_DECLARE_TYPEINFO(QObjectPrivate::Connection, Q_MOVABLE_TYPE);
 Q_DECLARE_TYPEINFO(QObjectPrivate::Sender, Q_MOVABLE_TYPE);
@@ -276,12 +376,12 @@ class Q_CORE_EXPORT QMetaCallEvent : public QEvent
 {
 public:
     QMetaCallEvent(ushort method_offset, ushort method_relative, QObjectPrivate::StaticMetaCallFunction callFunction , const QObject *sender, int signalId,
-                   int nargs = 0, int *types = 0, void **args = 0, QSemaphore *semaphore = 0);
+                   int nargs = 0, int *types = nullptr, void **args = nullptr, QSemaphore *semaphore = nullptr);
     /*! \internal
         \a signalId is in the signal index range (see QObjectPrivate::signalIndex()).
     */
     QMetaCallEvent(QtPrivate::QSlotObjectBase *slotObj, const QObject *sender, int signalId,
-                   int nargs = 0, int *types = 0, void **args = 0, QSemaphore *semaphore = 0);
+                   int nargs = 0, int *types = nullptr, void **args = nullptr, QSemaphore *semaphore = nullptr);
 
     ~QMetaCallEvent();
 
@@ -321,7 +421,7 @@ void Q_CORE_EXPORT qDeleteInEventHandler(QObject *o);
 struct QAbstractDynamicMetaObject;
 struct Q_CORE_EXPORT QDynamicMetaObjectData
 {
-    virtual ~QDynamicMetaObjectData() {}
+    virtual ~QDynamicMetaObjectData();
     virtual void objectDestroyed(QObject *) { delete this; }
 
     virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *) = 0;
@@ -330,9 +430,11 @@ struct Q_CORE_EXPORT QDynamicMetaObjectData
 
 struct Q_CORE_EXPORT QAbstractDynamicMetaObject : public QDynamicMetaObjectData, public QMetaObject
 {
-    virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *) { return this; }
+    ~QAbstractDynamicMetaObject();
+
+    virtual QAbstractDynamicMetaObject *toDynamicMetaObject(QObject *) override { return this; }
     virtual int createProperty(const char *, const char *) { return -1; }
-    virtual int metaCall(QObject *, QMetaObject::Call c, int _id, void **a)
+    virtual int metaCall(QObject *, QMetaObject::Call c, int _id, void **a) override
     { return metaCall(c, _id, a); }
     virtual int metaCall(QMetaObject::Call, int _id, void **) { return _id; } // Compat overload
 };

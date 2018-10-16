@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +41,7 @@
 #include <qpaintengine.h>
 #include <qthreadstorage.h>
 
+#include <private/qopenglpaintdevice_p.h>
 #include <private/qobject_p.h>
 #include <private/qopenglcontext_p.h>
 #include <private/qopenglframebufferobject_p.h>
@@ -63,28 +62,48 @@ QT_BEGIN_NAMESPACE
 
     \ingroup painting-3D
 
+    The QOpenGLPaintDevice uses the \b current QOpenGL context to render
+    QPainter draw commands. The context is captured upon construction. It
+    requires support for OpenGL (ES) 2.0 or higher.
+
+    \section1 Performance
+
+    The QOpenGLPaintDevice is almost always hardware accelerated and
+    has the potential of being much faster than software
+    rasterization. However, it is more sensitive to state changes, and
+    therefore requires the drawing commands to be carefully ordered to
+    achieve optimal performance.
+
+    \section1 Antialiasing and Quality
+
+    Antialiasing in the OpenGL paint engine is done using
+    multisampling. Most hardware require significantly more memory to
+    do multisampling and the resulting quality is not on par with the
+    quality of the software paint engine. The OpenGL paint engine's
+    strength lies in its performance, not its visual rendering
+    quality.
+
+    \section1 State Changes
+
     When painting to a QOpenGLPaintDevice using QPainter, the state of
-    the current OpenGL context will be altered by the paint engine to reflect
-    its needs.  Applications should not rely upon the OpenGL state being reset
-    to its original conditions, particularly the current shader program,
-    OpenGL viewport, texture units, and drawing modes.
+    the current OpenGL context will be altered by the paint engine to
+    reflect its needs.  Applications should not rely upon the OpenGL
+    state being reset to its original conditions, particularly the
+    current shader program, OpenGL viewport, texture units, and
+    drawing modes.
+
+    \section1 Mixing QPainter and OpenGL
+
+    When intermixing QPainter and OpenGL, it is important to notify
+    QPainter that the OpenGL state may have been cluttered so it can
+    restore its internal state. This is achieved by calling \l
+    QPainter::beginNativePainting() before starting the OpenGL
+    rendering and calling \l QPainter::endNativePainting() after
+    finishing.
+
+    \sa {OpenGL Window Example}
+
 */
-
-class QOpenGLPaintDevicePrivate
-{
-public:
-    QOpenGLPaintDevicePrivate(const QSize &size);
-
-    QSize size;
-    QOpenGLContext *ctx;
-
-    qreal dpmx;
-    qreal dpmy;
-
-    bool flipped;
-
-    QPaintEngine *engine;
-};
 
 /*!
     Constructs a QOpenGLPaintDevice.
@@ -118,7 +137,15 @@ QOpenGLPaintDevice::QOpenGLPaintDevice(const QSize &size)
     \sa QOpenGLContext::currentContext()
 */
 QOpenGLPaintDevice::QOpenGLPaintDevice(int width, int height)
-    : d_ptr(new QOpenGLPaintDevicePrivate(QSize(width, height)))
+    : QOpenGLPaintDevice(QSize(width, height))
+{
+}
+
+/*!
+    \internal
+ */
+QOpenGLPaintDevice::QOpenGLPaintDevice(QOpenGLPaintDevicePrivate &dd)
+    : d_ptr(&dd)
 {
 }
 
@@ -142,8 +169,13 @@ QOpenGLPaintDevicePrivate::QOpenGLPaintDevicePrivate(const QSize &sz)
     , ctx(QOpenGLContext::currentContext())
     , dpmx(qt_defaultDpiX() * 100. / 2.54)
     , dpmy(qt_defaultDpiY() * 100. / 2.54)
+    , devicePixelRatio(1.0)
     , flipped(false)
     , engine(0)
+{
+}
+
+QOpenGLPaintDevicePrivate::~QOpenGLPaintDevicePrivate()
 {
 }
 
@@ -213,6 +245,14 @@ void QOpenGLPaintDevice::setSize(const QSize &size)
 }
 
 /*!
+    Sets the device pixel ratio for the paint device to \a devicePixelRatio.
+*/
+void QOpenGLPaintDevice::setDevicePixelRatio(qreal devicePixelRatio)
+{
+    d_ptr->devicePixelRatio = devicePixelRatio;
+}
+
+/*!
     \reimp
 */
 
@@ -239,6 +279,11 @@ int QOpenGLPaintDevice::metric(QPaintDevice::PaintDeviceMetric metric) const
         return qRound(d_ptr->dpmx * 0.0254);
     case PdmPhysicalDpiY:
         return qRound(d_ptr->dpmy * 0.0254);
+    case PdmDevicePixelRatio:
+        return d_ptr->devicePixelRatio;
+    case PdmDevicePixelRatioScaled:
+        return d_ptr->devicePixelRatio * QPaintDevice::devicePixelRatioFScale();
+
     default:
         qWarning("QOpenGLPaintDevice::metric() - metric %d not known", metric);
         return 0;
@@ -300,7 +345,7 @@ void QOpenGLPaintDevice::setPaintFlipped(bool flipped)
 }
 
 /*!
-    Returns true if painting is flipped around the Y-axis.
+    Returns \c true if painting is flipped around the Y-axis.
 
     \sa setPaintFlipped()
 */
@@ -311,11 +356,14 @@ bool QOpenGLPaintDevice::paintFlipped() const
 }
 
 /*!
-    This virtual method is provided as a callback to allow re-binding a
-    target frame buffer object when different QOpenGLPaintDevice instances
-    are issuing draw calls alternately on the same OpenGL context.
+    This virtual method is provided as a callback to allow re-binding a target
+    frame buffer object or context when different QOpenGLPaintDevice instances
+    are issuing draw calls alternately.
 
-    QPainter::beginNativePainting will also trigger this method.
+    \l{QPainter::beginNativePainting()}{beginNativePainting()} will also trigger
+    this method.
+
+    The default implementation does nothing.
 */
 void QOpenGLPaintDevice::ensureActiveTarget()
 {

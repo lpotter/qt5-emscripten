@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -30,6 +30,7 @@
 
 /*!
     \group shared
+    \brief How to maximize resource usage by implicit data sharing.
     \title Implicitly Shared Classes
 
     These \l{Qt Core} classes provides a safe and efficient way of sharing and
@@ -70,8 +71,8 @@
     data. The shared data is deleted when the reference count becomes
     zero.
 
-    \keyword deep copy
-    \keyword shallow copy
+    \target deep copy
+    \target shallow copy
 
     When dealing with shared objects, there are two ways of copying an
     object. We usually speak about \e deep and \e shallow copies. A deep
@@ -89,9 +90,12 @@
     of data. Objects can easily be assigned, sent as function arguments,
     and returned from functions.
 
-    Implicit sharing takes place behind the scenes; the programmer
-    does not need to worry about it. Even in multithreaded
-    applications, implicit sharing takes place, as explained in
+    Implicit sharing mostly takes place behind the scenes;
+    the programmer rarely needs to worry about it. However, Qt's
+    container iterators have different behavior than those from
+    the STL. Read \l{Implicit sharing iterator problem}.
+
+    In multithreaded applications, implicit sharing takes place, as explained in
     \l{Thread-Support in Qt Modules#Threads and Implicitly Shared Classes}
     {Threads and Implicitly Shared Classes}.
 
@@ -105,9 +109,10 @@
     greater than one. (This is often called \e {copy-on-write} or
     \e {value semantics}.)
 
-    An implicitly shared class has total control of its internal data. In
+    An implicitly shared class has control of its internal data. In
     any member functions that modify its data, it automatically detaches
-    before modifying the data.
+    before modifying the data. Notice, however, the special case with
+    container iterators; see \l{Implicit sharing iterator problem}.
 
     The QPen class, which uses implicit sharing, detaches from the shared
     data in all member functions that change the internal data.
@@ -133,10 +138,10 @@
     In this example, \c p1 and \c p2 share data until QPainter::begin()
     is called for \c p2, because painting a pixmap will modify it.
 
-    \warning Do not copy an implicitly shared container (QMap,
-    QVector, etc.) while you are iterating over it using an non-const
-    \l{STL-style iterator}.
+    \warning Be careful with copying an implicitly shared container
+    (QMap, QVector, etc.) while you use
+    \l{STL-style iterators}{STL-style iterator}. See \l{Implicit sharing iterator problem}.
 
-    \keyword implicitly shared classes
+    \target implicitly shared classes
     \annotatedlist shared
 */

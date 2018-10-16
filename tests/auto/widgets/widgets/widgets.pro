@@ -16,7 +16,9 @@ SUBDIRS=\
    qdoublespinbox \
    qfocusframe \
    qfontcombobox \
+   qframe \
    qgroupbox \
+   qkeysequenceedit \
    qlabel \
    qlcdnumber \
    qlineedit \
@@ -46,8 +48,11 @@ SUBDIRS=\
    qtoolbutton \
 
 # The following tests depend on private API:
-!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+!qtConfig(private_tests): SUBDIRS -= \
+           qabstractspinbox \
            qcombobox \
            qmainwindow \
            qtextedit \
            qtoolbar \
+
+!winrt:qtConfig(opengl): SUBDIRS += qopenglwidget

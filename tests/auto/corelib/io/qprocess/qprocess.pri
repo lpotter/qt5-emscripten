@@ -4,18 +4,19 @@ SUBPROGRAMS = \
           testProcessEcho2 \
           testProcessEcho3 \
           testProcessEnvironment \
+          testProcessHang \
           testProcessNormal \
           testProcessOutput \
           testProcessDeadWhileReading \
           testProcessEOF \
           testExitCodes \
+          testForwarding \
+          testForwardingHelper \
           testGuiProcess \
           testDetached \
           fileWriterProcess \
           testSetWorkingDirectory \
           testSoftExit
 
-!contains(QMAKE_PLATFORM, wince): SUBPROGRAMS += testForwarding
-
-contains(QT_CONFIG, no-widgets): SUBPROGRAMS -= \
+!qtHaveModule(widgets): SUBPROGRAMS -= \
           testGuiProcess

@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'wateringconfigdialog.ui'
 **
-** Created: Fri Sep 4 10:17:15 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.10.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,16 +10,13 @@
 #define WATERINGCONFIGDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QFrame>
 #include <QtWidgets/QGridLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QSpinBox>
@@ -68,19 +64,25 @@ public:
     void setupUi(QDialog *WateringConfigDialog)
     {
         if (WateringConfigDialog->objectName().isEmpty())
-            WateringConfigDialog->setObjectName(QStringLiteral("WateringConfigDialog"));
+            WateringConfigDialog->setObjectName(QString::fromUtf8("WateringConfigDialog"));
         WateringConfigDialog->resize(334, 550);
         vboxLayout = new QVBoxLayout(WateringConfigDialog);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         gridLayout = new QGridLayout();
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         label_3 = new QLabel(WateringConfigDialog);
-        label_3->setObjectName(QStringLiteral("label_3"));
+        label_3->setObjectName(QString::fromUtf8("label_3"));
 
         gridLayout->addWidget(label_3, 0, 0, 1, 1);
 
         plantComboBox = new QComboBox(WateringConfigDialog);
-        plantComboBox->setObjectName(QStringLiteral("plantComboBox"));
+        plantComboBox->addItem(QString());
+        plantComboBox->addItem(QString());
+        plantComboBox->addItem(QString());
+        plantComboBox->addItem(QString());
+        plantComboBox->addItem(QString());
+        plantComboBox->addItem(QString());
+        plantComboBox->setObjectName(QString::fromUtf8("plantComboBox"));
         QSizePolicy sizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -94,12 +96,12 @@ public:
         gridLayout->addItem(spacerItem, 1, 0, 1, 1);
 
         label_2 = new QLabel(WateringConfigDialog);
-        label_2->setObjectName(QStringLiteral("label_2"));
+        label_2->setObjectName(QString::fromUtf8("label_2"));
 
         gridLayout->addWidget(label_2, 2, 0, 1, 1);
 
         temperatureCheckBox = new QCheckBox(WateringConfigDialog);
-        temperatureCheckBox->setObjectName(QStringLiteral("temperatureCheckBox"));
+        temperatureCheckBox->setObjectName(QString::fromUtf8("temperatureCheckBox"));
 
         gridLayout->addWidget(temperatureCheckBox, 3, 1, 1, 3);
 
@@ -108,7 +110,7 @@ public:
         gridLayout->addItem(spacerItem1, 4, 1, 1, 1);
 
         temperatureSpinBox = new QSpinBox(WateringConfigDialog);
-        temperatureSpinBox->setObjectName(QStringLiteral("temperatureSpinBox"));
+        temperatureSpinBox->setObjectName(QString::fromUtf8("temperatureSpinBox"));
         temperatureSpinBox->setEnabled(false);
         temperatureSpinBox->setMinimum(10);
         temperatureSpinBox->setMaximum(60);
@@ -121,7 +123,7 @@ public:
         gridLayout->addItem(spacerItem2, 4, 3, 1, 1);
 
         rainCheckBox = new QCheckBox(WateringConfigDialog);
-        rainCheckBox->setObjectName(QStringLiteral("rainCheckBox"));
+        rainCheckBox->setObjectName(QString::fromUtf8("rainCheckBox"));
 
         gridLayout->addWidget(rainCheckBox, 5, 1, 1, 3);
 
@@ -130,7 +132,7 @@ public:
         gridLayout->addItem(spacerItem3, 6, 1, 1, 1);
 
         rainSpinBox = new QSpinBox(WateringConfigDialog);
-        rainSpinBox->setObjectName(QStringLiteral("rainSpinBox"));
+        rainSpinBox->setObjectName(QString::fromUtf8("rainSpinBox"));
         rainSpinBox->setEnabled(false);
         rainSpinBox->setMinimum(1);
 
@@ -145,22 +147,22 @@ public:
         gridLayout->addItem(spacerItem5, 7, 2, 1, 1);
 
         label = new QLabel(WateringConfigDialog);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
 
         gridLayout->addWidget(label, 8, 0, 1, 1);
 
         startTimeEdit = new QTimeEdit(WateringConfigDialog);
-        startTimeEdit->setObjectName(QStringLiteral("startTimeEdit"));
+        startTimeEdit->setObjectName(QString::fromUtf8("startTimeEdit"));
 
         gridLayout->addWidget(startTimeEdit, 8, 1, 1, 3);
 
         label_4 = new QLabel(WateringConfigDialog);
-        label_4->setObjectName(QStringLiteral("label_4"));
+        label_4->setObjectName(QString::fromUtf8("label_4"));
 
         gridLayout->addWidget(label_4, 9, 0, 1, 1);
 
         amountSpinBox = new QSpinBox(WateringConfigDialog);
-        amountSpinBox->setObjectName(QStringLiteral("amountSpinBox"));
+        amountSpinBox->setObjectName(QString::fromUtf8("amountSpinBox"));
         amountSpinBox->setMinimum(100);
         amountSpinBox->setMaximum(10000);
         amountSpinBox->setSingleStep(100);
@@ -169,22 +171,26 @@ public:
         gridLayout->addWidget(amountSpinBox, 9, 1, 1, 3);
 
         label_5 = new QLabel(WateringConfigDialog);
-        label_5->setObjectName(QStringLiteral("label_5"));
+        label_5->setObjectName(QString::fromUtf8("label_5"));
 
         gridLayout->addWidget(label_5, 10, 0, 1, 1);
 
         sourceComboBox = new QComboBox(WateringConfigDialog);
-        sourceComboBox->setObjectName(QStringLiteral("sourceComboBox"));
+        sourceComboBox->addItem(QString());
+        sourceComboBox->addItem(QString());
+        sourceComboBox->addItem(QString());
+        sourceComboBox->addItem(QString());
+        sourceComboBox->setObjectName(QString::fromUtf8("sourceComboBox"));
 
         gridLayout->addWidget(sourceComboBox, 10, 1, 1, 3);
 
         label_6 = new QLabel(WateringConfigDialog);
-        label_6->setObjectName(QStringLiteral("label_6"));
+        label_6->setObjectName(QString::fromUtf8("label_6"));
 
         gridLayout->addWidget(label_6, 11, 0, 1, 1);
 
         filterCheckBox = new QCheckBox(WateringConfigDialog);
-        filterCheckBox->setObjectName(QStringLiteral("filterCheckBox"));
+        filterCheckBox->setObjectName(QString::fromUtf8("filterCheckBox"));
 
         gridLayout->addWidget(filterCheckBox, 11, 1, 1, 2);
 
@@ -200,18 +206,18 @@ public:
         vboxLayout->addLayout(gridLayout);
 
         gridLayout1 = new QGridLayout();
-        gridLayout1->setObjectName(QStringLiteral("gridLayout1"));
+        gridLayout1->setObjectName(QString::fromUtf8("gridLayout1"));
         spacerItem8 = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         gridLayout1->addItem(spacerItem8, 0, 1, 1, 1);
 
         helpBrowser = new HelpBrowser(WateringConfigDialog);
-        helpBrowser->setObjectName(QStringLiteral("helpBrowser"));
+        helpBrowser->setObjectName(QString::fromUtf8("helpBrowser"));
 
         gridLayout1->addWidget(helpBrowser, 1, 0, 1, 2);
 
         helpLabel = new QLabel(WateringConfigDialog);
-        helpLabel->setObjectName(QStringLiteral("helpLabel"));
+        helpLabel->setObjectName(QString::fromUtf8("helpLabel"));
 
         gridLayout1->addWidget(helpLabel, 0, 0, 1, 1);
 
@@ -219,14 +225,14 @@ public:
         vboxLayout->addLayout(gridLayout1);
 
         line = new QFrame(WateringConfigDialog);
-        line->setObjectName(QStringLiteral("line"));
+        line->setObjectName(QString::fromUtf8("line"));
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Sunken);
 
         vboxLayout->addWidget(line);
 
         buttonBox = new QDialogButtonBox(WateringConfigDialog);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::NoButton|QDialogButtonBox::Ok);
 
@@ -244,38 +250,34 @@ public:
 
     void retranslateUi(QDialog *WateringConfigDialog)
     {
-        WateringConfigDialog->setWindowTitle(QApplication::translate("WateringConfigDialog", "Watering Configuration", 0));
-        label_3->setText(QApplication::translate("WateringConfigDialog", "Plant:", 0));
-        plantComboBox->clear();
-        plantComboBox->insertItems(0, QStringList()
-         << QApplication::translate("WateringConfigDialog", "Squash", 0)
-         << QApplication::translate("WateringConfigDialog", "Bean", 0)
-         << QApplication::translate("WateringConfigDialog", "Carrot", 0)
-         << QApplication::translate("WateringConfigDialog", "Strawberry", 0)
-         << QApplication::translate("WateringConfigDialog", "Raspberry", 0)
-         << QApplication::translate("WateringConfigDialog", "Blueberry", 0)
-        );
-        label_2->setText(QApplication::translate("WateringConfigDialog", "Water when:", 0));
-        temperatureCheckBox->setText(QApplication::translate("WateringConfigDialog", "Temperature is higher than:", 0));
+        WateringConfigDialog->setWindowTitle(QApplication::translate("WateringConfigDialog", "Watering Configuration", nullptr));
+        label_3->setText(QApplication::translate("WateringConfigDialog", "Plant:", nullptr));
+        plantComboBox->setItemText(0, QApplication::translate("WateringConfigDialog", "Squash", nullptr));
+        plantComboBox->setItemText(1, QApplication::translate("WateringConfigDialog", "Bean", nullptr));
+        plantComboBox->setItemText(2, QApplication::translate("WateringConfigDialog", "Carrot", nullptr));
+        plantComboBox->setItemText(3, QApplication::translate("WateringConfigDialog", "Strawberry", nullptr));
+        plantComboBox->setItemText(4, QApplication::translate("WateringConfigDialog", "Raspberry", nullptr));
+        plantComboBox->setItemText(5, QApplication::translate("WateringConfigDialog", "Blueberry", nullptr));
+
+        label_2->setText(QApplication::translate("WateringConfigDialog", "Water when:", nullptr));
+        temperatureCheckBox->setText(QApplication::translate("WateringConfigDialog", "Temperature is higher than:", nullptr));
         temperatureSpinBox->setSpecialValueText(QString());
-        temperatureSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "C", 0));
-        rainCheckBox->setText(QApplication::translate("WateringConfigDialog", "Rain less than:", 0));
+        temperatureSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "C", nullptr));
+        rainCheckBox->setText(QApplication::translate("WateringConfigDialog", "Rain less than:", nullptr));
         rainSpinBox->setSpecialValueText(QString());
-        rainSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "mm", 0));
-        label->setText(QApplication::translate("WateringConfigDialog", "Starting Time:", 0));
-        label_4->setText(QApplication::translate("WateringConfigDialog", "Amount:", 0));
-        amountSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "l", 0));
-        label_5->setText(QApplication::translate("WateringConfigDialog", "Source:", 0));
-        sourceComboBox->clear();
-        sourceComboBox->insertItems(0, QStringList()
-         << QApplication::translate("WateringConfigDialog", "Foundain", 0)
-         << QApplication::translate("WateringConfigDialog", "River", 0)
-         << QApplication::translate("WateringConfigDialog", "Lake", 0)
-         << QApplication::translate("WateringConfigDialog", "Public Water System", 0)
-        );
-        label_6->setText(QApplication::translate("WateringConfigDialog", "Filter:", 0));
+        rainSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "mm", nullptr));
+        label->setText(QApplication::translate("WateringConfigDialog", "Starting Time:", nullptr));
+        label_4->setText(QApplication::translate("WateringConfigDialog", "Amount:", nullptr));
+        amountSpinBox->setSuffix(QApplication::translate("WateringConfigDialog", "l", nullptr));
+        label_5->setText(QApplication::translate("WateringConfigDialog", "Source:", nullptr));
+        sourceComboBox->setItemText(0, QApplication::translate("WateringConfigDialog", "Foundain", nullptr));
+        sourceComboBox->setItemText(1, QApplication::translate("WateringConfigDialog", "River", nullptr));
+        sourceComboBox->setItemText(2, QApplication::translate("WateringConfigDialog", "Lake", nullptr));
+        sourceComboBox->setItemText(3, QApplication::translate("WateringConfigDialog", "Public Water System", nullptr));
+
+        label_6->setText(QApplication::translate("WateringConfigDialog", "Filter:", nullptr));
         filterCheckBox->setText(QString());
-        helpLabel->setText(QApplication::translate("WateringConfigDialog", "<a href=\"test\">Show Details</a>", 0));
+        helpLabel->setText(QApplication::translate("WateringConfigDialog", "<a href=\"test\">Show Details</a>", nullptr));
     } // retranslateUi
 
 };

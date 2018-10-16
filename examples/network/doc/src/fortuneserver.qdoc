@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,15 +28,16 @@
 /*!
     \example fortuneserver
     \title Fortune Server Example
+    \ingroup examples-network
+    \brief Demonstrates how to create a server for a network service.
 
-    \brief The Fortune Server example shows how to create a server for a simple
-    network service. It is intended to be run alongside the
+    This example is intended to be run alongside the
     \l{fortuneclient}{Fortune Client} example or the
-    \l{blockingfortuneclient}{Blocking Fortune Client} example.
+    \l{blockingfortuneclient}{Blocking Fortune Client Example}.
 
     \image fortuneserver-example.png Screenshot of the Fortune Server example
 
-    This example uses QTcpServer to accept incoming TCP connections, and a
+    It uses QTcpServer to accept incoming TCP connections, and a
     simple QDataStream based data transfer protocol to write a fortune to the
     connecting client (from the \l{fortuneclient}{Fortune Client}
     example), before closing the connection.
@@ -55,7 +56,7 @@
 
     \snippet fortuneserver/server.cpp 2
 
-    Our server generates a list of random fortunes that is can send to
+    Our server generates a list of random fortunes that it can send to
     connecting clients.
 
     \snippet fortuneserver/server.cpp 3
@@ -72,21 +73,12 @@
     using QTcpSocket. First we create a QByteArray and a QDataStream object,
     passing the bytearray to QDataStream's constructor. We then explicitly set
     the protocol version of QDataStream to QDataStream::Qt_4_0 to ensure that
-    we can communicate with clients from future versions of Qt. (See
-    QDataStream::setVersion().)
-
-    \snippet fortuneserver/server.cpp 6
-
-    At the start of our QByteArray, we reserve space for a 16 bit integer that
-    will contain the total size of the data block we are sending. We continue
-    by streaming in a random fortune. Then we seek back to the beginning of
-    the QByteArray, and overwrite the reserved 16 bit integer value with the
-    total size of the array. By doing this, we provide a way for clients to
-    verify how much data they can expect before reading the whole packet.
+    we can communicate with clients from future versions of Qt (see
+    QDataStream::setVersion()). We continue by streaming in a random fortune.
 
     \snippet fortuneserver/server.cpp 7
 
-    We then call QTcpServer::newPendingConnection(), which returns the
+    We then call QTcpServer::nextPendingConnection(), which returns the
     QTcpSocket representing the server side of the connection. By connecting
     QTcpSocket::disconnected() to QObject::deleteLater(), we ensure that the
     socket will be deleted after disconnecting.

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,7 +31,9 @@
 
 #include <QtCore/QTemporaryFile>
 #include <QtCore/QTemporaryDir>
-#include <QtCore/QProcess>
+#if QT_CONFIG(process)
+# include <QtCore/QProcess>
+#endif
 #include <QtCore/QByteArray>
 #include <QtCore/QString>
 #include <QtCore/QFileInfo>
@@ -53,6 +42,7 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QDebug>
 #include <QtCore/QLibraryInfo>
+#include <QtCore/QThread>
 
 #ifndef DEFAULT_MAKESPEC
 # error DEFAULT_MAKESPEC not defined
@@ -62,6 +52,12 @@
 # include <fcntl.h>
 # include <unistd.h>
 #endif
+
+enum {
+    QMakeTimeout = 300000,      // 5 minutes
+    CompileTimeout = 600000,    // 10 minutes
+    RunTimeout = 300000         // 5 minutes
+};
 
 static QString makespec()
 {
@@ -79,6 +75,17 @@ static QString makespec()
 
 QT_BEGIN_NAMESPACE
 namespace QTest {
+#if QT_CONFIG(process)
+    static void ensureStopped(QProcess &process)
+    {
+        if (process.state() == QProcess::Running) {
+            process.terminate();
+            QThread::msleep(20);
+            if (process.state() == QProcess::Running)
+                process.kill();
+        }
+    }
+
     class QExternalProcess: public QProcess
     {
     protected:
@@ -99,6 +106,7 @@ namespace QTest {
         }
 #endif
     };
+#endif // QT_CONFIG(process)
 
     class QExternalTestPrivate
     {
@@ -141,7 +149,7 @@ namespace QTest {
         bool prepareSourceCode(const QByteArray &body);
         bool createProjectFile();
         bool runQmake();
-        bool runMake(Target target);
+        bool runMake(Target target, int timeout);
         bool commonSetup(const QByteArray &body);
     };
 
@@ -353,7 +361,7 @@ namespace QTest {
             "\n"
             "#ifdef Q_OS_WIN\n"
             "#include <windows.h>\n"
-            "#if defined(Q_CC_MSVC) && !defined(Q_OS_WINCE)\n"
+            "#if defined(Q_CC_MSVC)\n"
             "#include <crtdbg.h>\n"
             "#endif\n"
             "static void q_test_setup()\n"
@@ -369,7 +377,7 @@ namespace QTest {
             "#endif\n"
             "int main(int argc, char **argv)\n"
             "{\n"
-            "#if defined(Q_CC_MSVC) && defined(QT_DEBUG) && defined(_DEBUG) && defined(_CRT_ERROR) && !defined(Q_OS_WINCE)\n"
+            "#if defined(Q_CC_MSVC) && defined(QT_DEBUG) && defined(_DEBUG) && defined(_CRT_ERROR)\n"
             "    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, CrtDbgHook);\n"
             "#endif\n";
 
@@ -565,6 +573,7 @@ namespace QTest {
 
     bool QExternalTestPrivate::runQmake()
     {
+#if QT_CONFIG(process)
         if (temporaryDirPath.isEmpty())
             qWarning() << "Temporary directory is expected to be non-empty";
 
@@ -599,18 +608,26 @@ namespace QTest {
             std_err += "qmake: ";
             std_err += qmake.errorString().toLocal8Bit();
         } else {
-            ok = qmake.waitForFinished();
+            ok = qmake.waitForFinished(QMakeTimeout);
             exitCode = qmake.exitCode();
+            if (!ok)
+                QTest::ensureStopped(qmake);
 
             std_out += qmake.readAllStandardOutput();
             std_err += qmake.readAllStandardError();
         }
 
         return ok && exitCode == 0;
+#else // QT_CONFIG(process)
+        return false;
+#endif // QT_CONFIG(process)
     }
 
-    bool QExternalTestPrivate::runMake(Target target)
+    bool QExternalTestPrivate::runMake(Target target, int timeout)
     {
+#if !QT_CONFIG(process)
+        return false;
+#else
         if (temporaryDirPath.isEmpty())
             qWarning() << "Temporary directory is expected to be non-empty";
 
@@ -640,6 +657,7 @@ namespace QTest {
         make.setProcessChannelMode(channelMode);
 
         static const char makes[] =
+            "jom.exe\0" //preferred for visual c++ or mingw
             "nmake.exe\0" //for visual c++
             "mingw32-make.exe\0" //for mingw
             "gmake\0"
@@ -658,14 +676,15 @@ namespace QTest {
         }
 
         make.closeWriteChannel();
-        bool ok = make.waitForFinished(channelMode == QProcess::ForwardedChannels ? -1 : 60000);
+        bool ok = make.waitForFinished(channelMode == QProcess::ForwardedChannels ? -1 : timeout);
         if (!ok)
-            make.terminate();
+            QTest::ensureStopped(make);
         exitCode = make.exitCode();
         std_out += make.readAllStandardOutput();
         std_err += make.readAllStandardError();
 
         return ok;
+#endif // QT_CONFIG(process)
     }
 
     bool QExternalTestPrivate::commonSetup(const QByteArray &body)
@@ -692,7 +711,7 @@ namespace QTest {
         failedStage = QExternalTest::CompilationStage;
         std_out += "\n### --- stdout from make (compilation) --- ###\n";
         std_err += "\n### --- stderr from make (compilation) --- ###\n";
-        return runMake(Compile);
+        return runMake(Compile, CompileTimeout);
     }
 
     bool QExternalTestPrivate::tryLink(const QByteArray &body)
@@ -704,7 +723,7 @@ namespace QTest {
         failedStage = QExternalTest::LinkStage;
         std_out += "\n### --- stdout from make (linking) --- ###\n";
         std_err += "\n### --- stderr from make (linking) --- ###\n";
-        return runMake(Link);
+        return runMake(Link, CompileTimeout);
     }
 
     bool QExternalTestPrivate::tryRun(const QByteArray &body)
@@ -716,7 +735,7 @@ namespace QTest {
         failedStage = QExternalTest::RunStage;
         std_out += "\n### --- stdout from process --- ###\n";
         std_err += "\n### --- stderr from process --- ###\n";
-        return runMake(Run);
+        return runMake(Run, RunTimeout);
     }
 }
 QT_END_NAMESPACE

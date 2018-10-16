@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +30,11 @@
 #include <QtTest/QtTest>
 #include <QtNetwork/QtNetwork>
 #include <qnetworkdiskcache.h>
-#define EXAMPLE_URL "http://user:pass@www.example.com/#foo"
+#include <qrandom.h>
+
+#include <algorithm>
+
+#define EXAMPLE_URL "http://user:pass@localhost:4/#foo"
 //cached objects are organized into these many subdirs
 #define NUM_SUBDIRECTORIES 16
 
@@ -55,12 +46,12 @@ public:
     tst_QNetworkDiskCache();
 
 public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
+    void accessAfterRemoveReadyReadSlot();
+    void setCookieHeaderMetaDataChangedSlot();
 
 private slots:
+    void initTestCase();
+    void cleanupTestCase();
     void qnetworkdiskcache_data();
     void qnetworkdiskcache();
 
@@ -71,6 +62,8 @@ private slots:
     void data();
     void metaData();
     void remove();
+    void accessAfterRemove(); // QTBUG-17400
+    void setCookieHeader(); // QTBUG-41514
     void setCacheDirectory_data();
     void setCacheDirectory();
     void updateMetaData();
@@ -79,13 +72,19 @@ private slots:
 
     void oldCacheVersionFile_data();
     void oldCacheVersionFile();
-    
+
+    void streamVersion_data();
+    void streamVersion();
+
     void sync();
 
     void crashWhenParentingCache();
 
 private:
     QTemporaryDir tempDir;
+    QUrl url; // used by accessAfterRemove(), setCookieHeader()
+    QNetworkDiskCache *diskCache; // used by accessAfterRemove()
+    QNetworkAccessManager *manager; // used by setCookieHeader()
 };
 
 // FIXME same as in tst_qnetworkreply.cpp .. could be unified
@@ -197,16 +196,6 @@ void tst_QNetworkDiskCache::cleanupTestCase()
         workingDir.removeRecursively();
 }
 
-// This will be called before each test function is executed.
-void tst_QNetworkDiskCache::init()
-{
-}
-
-// This will be called after every test function.
-void tst_QNetworkDiskCache::cleanup()
-{
-}
-
 void tst_QNetworkDiskCache::qnetworkdiskcache_data()
 {
 }
@@ -293,6 +282,7 @@ void tst_QNetworkDiskCache::clear()
     // don't delete files that it didn't create
     QTemporaryFile file(cacheDirectory + "/XXXXXX");
     if (file.open()) {
+        file.fileName();    // make sure it exists with a name
         QCOMPARE(countFiles(cacheDirectory).count(), NUM_SUBDIRECTORIES + 3);
         cache.clear();
         QCOMPARE(countFiles(cacheDirectory).count(), NUM_SUBDIRECTORIES + 3);
@@ -365,6 +355,74 @@ void tst_QNetworkDiskCache::remove()
     QCOMPARE(countFiles(cacheDirectory).count(), NUM_SUBDIRECTORIES + 3);
     cache.remove(url);
     QCOMPARE(countFiles(cacheDirectory).count(), NUM_SUBDIRECTORIES + 2);
+}
+
+void tst_QNetworkDiskCache::accessAfterRemove() // QTBUG-17400
+{
+    QByteArray data("HTTP/1.1 200 OK\r\n"
+                    "Content-Length: 1\r\n"
+                    "\r\n"
+                    "a");
+
+    MiniHttpServer server(data);
+
+    QNetworkAccessManager *manager = new QNetworkAccessManager();
+    SubQNetworkDiskCache subCache;
+    subCache.setCacheDirectory(QLatin1String("cacheDir"));
+    diskCache = &subCache;
+    manager->setCache(&subCache);
+
+    url = QUrl("http://127.0.0.1:" + QString::number(server.serverPort()));
+    QNetworkRequest request(url);
+
+    QNetworkReply *reply = manager->get(request);
+    connect(reply, SIGNAL(readyRead()), this, SLOT(accessAfterRemoveReadyReadSlot()));
+    connect(reply, SIGNAL(finished()), &QTestEventLoop::instance(), SLOT(exitLoop()));
+
+    QTestEventLoop::instance().enterLoop(5);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+
+    reply->deleteLater();
+    manager->deleteLater();
+}
+
+void tst_QNetworkDiskCache::accessAfterRemoveReadyReadSlot()
+{
+    diskCache->remove(url); // this used to cause a crash later on
+}
+
+void tst_QNetworkDiskCache::setCookieHeader() // QTBUG-41514
+{
+    SubQNetworkDiskCache *cache = new SubQNetworkDiskCache();
+    url = QUrl("http://localhost:4/cookieTest.html");   // hopefully no one is running an HTTP server on port 4
+    QNetworkCacheMetaData metaData;
+    metaData.setUrl(url);
+
+    QNetworkCacheMetaData::RawHeaderList headers;
+    headers.append(QNetworkCacheMetaData::RawHeader("Set-Cookie", "aaa=bbb"));
+    metaData.setRawHeaders(headers);
+    metaData.setSaveToDisk(true);
+    cache->setupWithOne(tempDir.path(), url, metaData);
+
+    manager = new QNetworkAccessManager();
+    manager->setCache(cache);
+
+    QNetworkRequest request(url);
+    QNetworkReply  *reply = manager->get(request);
+    connect(reply, SIGNAL(metaDataChanged()), this, SLOT(setCookieHeaderMetaDataChangedSlot()));
+    connect(reply, SIGNAL(finished()), &QTestEventLoop::instance(), SLOT(exitLoop()));
+
+    QTestEventLoop::instance().enterLoop(5);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+
+    reply->deleteLater();
+    manager->deleteLater();
+}
+
+void tst_QNetworkDiskCache::setCookieHeaderMetaDataChangedSlot()
+{
+    QList<QNetworkCookie> actualCookieJar = manager->cookieJar()->cookiesForUrl(url);
+    QVERIFY(!actualCookieJar.empty());
 }
 
 void tst_QNetworkDiskCache::setCacheDirectory_data()
@@ -445,7 +503,7 @@ void tst_QNetworkDiskCache::expire()
         if (i % 3 == 0)
             QTest::qWait(2000);
         QNetworkCacheMetaData m;
-        m.setUrl(QUrl("http://www.foo.com/" + QString::number(i)));
+        m.setUrl(QUrl("http://localhost:4/" + QString::number(i)));
         QIODevice *d = cache.prepare(m);
         QString bigString;
         bigString.fill(QLatin1Char('Z'), (1024 * 1024 / 4));
@@ -464,10 +522,10 @@ void tst_QNetworkDiskCache::expire()
             cacheList.append(metaData.url().toString());
         }
     }
-    qSort(cacheList);
+    std::sort(cacheList.begin(), cacheList.end());
     for (int i = 0; i < cacheList.count(); ++i) {
         QString fileName = cacheList[i];
-        QCOMPARE(fileName, QString("http://www.foo.com/%1").arg(i + 6));
+        QCOMPARE(fileName, QLatin1String("http://localhost:4/") + QString::number(i + 6));
     }
 }
 
@@ -490,7 +548,7 @@ void tst_QNetworkDiskCache::oldCacheVersionFile()
         {
         QTemporaryFile file(cache.cacheDirectory() + "/XXXXXX.d");
         file.setAutoRemove(false);
-        QVERIFY(file.open());
+        QVERIFY2(file.open(), qPrintable(file.errorString()));
         QDataStream out(&file);
         out << qint32(0xe8);
         out << qint32(2);
@@ -524,6 +582,74 @@ void tst_QNetworkDiskCache::oldCacheVersionFile()
         QIODevice *device = cache.data(url);
         QVERIFY(!device);
         QVERIFY(!QFile::exists(cacheFile));
+    }
+}
+
+void tst_QNetworkDiskCache::streamVersion_data()
+{
+    QTest::addColumn<int>("version");
+    QTest::newRow("Qt 5.1") << int(QDataStream::Qt_5_1);
+    QDataStream ds;
+    QTest::newRow("current") << ds.version();
+    QTest::newRow("higher than current") << ds.version() + 1;
+}
+
+void tst_QNetworkDiskCache::streamVersion()
+{
+    SubQNetworkDiskCache cache;
+    QUrl url(EXAMPLE_URL);
+    cache.setupWithOne(tempDir.path(), url);
+
+    QString cacheFile;
+    // find the file
+    QStringList files = countFiles(cache.cacheDirectory());
+    foreach (const QString &file, files) {
+        QFileInfo info(file);
+        if (info.isFile()) {
+            cacheFile = file;
+            break;
+        }
+    }
+
+    QFile file(cacheFile);
+    QVERIFY(file.open(QFile::ReadWrite|QIODevice::Truncate));
+    QDataStream out(&file);
+    QFETCH(int, version);
+    if (version < out.version())
+        out.setVersion(version);
+    out << qint32(0xe8);    // cache magic
+    // Following code works only for cache file version 8 and should be updated on version change
+    out << qint32(8);
+    out << qint32(version);
+
+    QNetworkCacheMetaData md;
+    md.setUrl(url);
+    QNetworkCacheMetaData::RawHeader header("content-type", "text/html");
+    QNetworkCacheMetaData::RawHeaderList list;
+    list.append(header);
+    md.setRawHeaders(list);
+    md.setLastModified(QDateTime::currentDateTimeUtc().toOffsetFromUtc(3600));
+    out << md;
+
+    bool compressed = true;
+    out << compressed;
+
+    QByteArray data("Hello World!");
+    out << qCompress(data);
+
+    file.close();
+
+    QNetworkCacheMetaData cachedMetaData = cache.call_fileMetaData(cacheFile);
+    if (version > out.version()) {
+        QVERIFY(!cachedMetaData.isValid());
+        QVERIFY(!QFile::exists(cacheFile));
+    } else {
+        QVERIFY(cachedMetaData.isValid());
+        QVERIFY(QFile::exists(cacheFile));
+        QIODevice *dataDevice = cache.data(url);
+        QVERIFY(dataDevice != 0);
+        QByteArray cachedData = dataDevice->readAll();
+        QCOMPARE(cachedData, data);
     }
 }
 
@@ -568,25 +694,25 @@ public:
 
             if (write) {
                 QNetworkCacheMetaData m;
-                if (qrand() % 2 == 0)
+                if (QRandomGenerator::global()->bounded(2) == 0)
                     m = metaData;
                 else
                     m = metaData2;
 
-                if (qrand() % 20 == 1) {
+                if (QRandomGenerator::global()->bounded(20) == 1) {
                     //qDebug() << "write update";
                     cache.updateMetaData(m);
                     continue;
                 }
 
                 QIODevice *device = cache.prepare(m);
-                if (qrand() % 20 == 1) {
+                if (QRandomGenerator::global()->bounded(20) == 1) {
                     //qDebug() << "write remove";
                     cache.remove(url);
                     continue;
                 }
                 QVERIFY(device);
-                if (qrand() % 2 == 0)
+                if (QRandomGenerator::global()->bounded(2) == 0)
                     device->write(longString);
                 else
                     device->write(longString2);
@@ -615,9 +741,9 @@ public:
                     delete d;
                 }
             }
-            if (qrand() % 5 == 1)
+            if (QRandomGenerator::global()->bounded(5) == 1)
                 cache.remove(url);
-            if (qrand() % 5 == 1)
+            if (QRandomGenerator::global()->bounded(5) == 1)
                 cache.clear();
             sleep(0);
         }
@@ -641,7 +767,10 @@ void tst_QNetworkDiskCache::crashWhenParentingCache()
     QNetworkAccessManager *manager = new QNetworkAccessManager();
     QNetworkDiskCache *diskCache = new QNetworkDiskCache(manager); // parent to qnam!
     // we expect the temp dir to be cleaned at some point anyway
-    diskCache->setCacheDirectory(QString("%1/cacheDir_%2").arg(QDir::tempPath()).arg(QCoreApplication::applicationPid()));
+
+    const QString diskCachePath = QDir::tempPath() + QLatin1String("/cacheDir_")
+        + QString::number(QCoreApplication::applicationPid());
+    diskCache->setCacheDirectory(diskCachePath);
     manager->setCache(diskCache);
 
     QUrl url("http://127.0.0.1:" + QString::number(server.serverPort()));
@@ -663,7 +792,6 @@ void tst_QNetworkDiskCache::sync()
     return;
 
     QTime midnight(0, 0, 0);
-    qsrand(midnight.secsTo(QTime::currentTime()));
     Runner reader(tempDir.path());
     reader.dt = QDateTime::currentDateTime();
     reader.write = false;

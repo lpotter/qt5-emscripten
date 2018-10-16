@@ -1,5 +1,7 @@
 CONFIG += testcase
 TARGET = tst_qcombobox
-QT += widgets widgets-private gui-private core-private testlib
+QT += widgets widgets-private gui-private core-private testlib testlib-private
+DEFINES += QTEST_QPA_MOUSE_HANDLING
 SOURCES  += tst_qcombobox.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+
+TESTDATA += qtlogo.png qtlogoinverted.png

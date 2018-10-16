@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +30,7 @@
 #define QMAKEPARSER_H
 
 #include "qmake_global.h"
+#include "qmakevfs.h"
 #include "proitems.h"
 
 #include <qhash.h>
@@ -58,8 +46,9 @@ class QMAKE_EXPORT QMakeParserHandler
 public:
     enum {
         CategoryMask = 0xf00,
-        WarningMessage = 0x000,
-        ErrorMessage = 0x100,
+        InfoMessage = 0x100,
+        WarningMessage = 0x200,
+        ErrorMessage = 0x300,
 
         SourceMask = 0xf0,
         SourceParser = 0,
@@ -79,6 +68,7 @@ public:
 };
 
 class ProFileCache;
+class QMakeVfs;
 
 class QMAKE_EXPORT QMakeParser
 {
@@ -86,15 +76,31 @@ public:
     // Call this from a concurrency-free context
     static void initialize();
 
-    QMakeParser(ProFileCache *cache, QMakeParserHandler *handler);
+    enum ParseFlag {
+        ParseDefault = 0,
+        ParseUseCache = 1,
+        ParseReportMissing = 4,
+#ifdef PROEVALUATOR_DUAL_VFS
+        ParseCumulative = 8
+#else
+        ParseCumulative = 0
+#endif
+    };
+    Q_DECLARE_FLAGS(ParseFlags, ParseFlag)
+
+    QMakeParser(ProFileCache *cache, QMakeVfs *vfs, QMakeParserHandler *handler);
 
     enum SubGrammar { FullGrammar, TestGrammar, ValueGrammar };
     // fileName is expected to be absolute and cleanPath()ed.
-    ProFile *parsedProFile(const QString &fileName, bool cache = false);
-    ProFile *parsedProBlock(const QString &contents, const QString &name, int line = 0,
+    ProFile *parsedProFile(const QString &fileName, ParseFlags flags = ParseDefault);
+    ProFile *parsedProBlock(const QStringRef &contents, int id, const QString &name, int line = 0,
                             SubGrammar grammar = FullGrammar);
 
-    void discardFileFromCache(const QString &fileName);
+    void discardFileFromCache(int id);
+
+#ifdef PROPARSER_DEBUG
+    static QString formatProBlock(const QString &block);
+#endif
 
 private:
     enum ScopeNesting {
@@ -104,7 +110,7 @@ private:
     };
 
     struct BlockScope {
-        BlockScope() : start(0), braceLevel(0), special(false), inBranch(false), nest(NestNone) {}
+        BlockScope() : start(nullptr), braceLevel(0), special(false), inBranch(false), nest(NestNone) {}
         BlockScope(const BlockScope &other) { *this = other; }
         ushort *start; // Where this block started; store length here
         int braceLevel; // Nesting of braces in scope
@@ -129,8 +135,8 @@ private:
         ushort terminator; // '}' if replace function call is braced, ':' if test function
     };
 
-    bool read(ProFile *pro);
-    bool read(ProFile *pro, const QString &content, int line, SubGrammar grammar);
+    bool readFile(int id, QMakeParser::ParseFlags flags, QString *contents);
+    void read(ProFile *pro, const QStringRef &content, int line, SubGrammar grammar);
 
     ALWAYS_INLINE void putTok(ushort *&tokPtr, ushort tok);
     ALWAYS_INLINE void putBlockLen(ushort *&tokPtr, uint len);
@@ -141,11 +147,15 @@ private:
     ALWAYS_INLINE bool resolveVariable(ushort *xprPtr, int tlen, int needSep, ushort **ptr,
                                        ushort **buf, QString *xprBuff,
                                        ushort **tokPtr, QString *tokBuff,
-                                       const ushort *cur, const QString &in);
+                                       const ushort *cur, const QStringRef &in);
     void finalizeCond(ushort *&tokPtr, ushort *uc, ushort *ptr, int wordCount);
     void finalizeCall(ushort *&tokPtr, ushort *uc, ushort *ptr, int argc);
+    void warnOperator(const char *msg);
+    bool failOperator(const char *msg);
+    bool acceptColon(const char *msg);
+    void putOperator(ushort *&tokPtr);
     void finalizeTest(ushort *&tokPtr);
-    void bogusTest(ushort *&tokPtr);
+    void bogusTest(ushort *&tokPtr, const QString &msg);
     void enterScope(ushort *&tokPtr, bool special, ScopeState state);
     void leaveScope(ushort *&tokPtr);
     void flushCond(ushort *&tokPtr);
@@ -153,7 +163,10 @@ private:
 
     void message(int type, const QString &msg) const;
     void parseError(const QString &msg) const
-            { message(QMakeParserHandler::ParserError, msg); }
+    {
+        message(QMakeParserHandler::ParserError, msg);
+        m_proFile->setOk(false);
+    }
     void languageWarning(const QString &msg) const
             { message(QMakeParserHandler::ParserWarnLanguage, msg); }
     void deprecationWarning(const QString &msg) const
@@ -168,13 +181,14 @@ private:
     int m_markLine; // Put marker for this line
     bool m_inError; // Current line had a parsing error; suppress followup error messages
     bool m_canElse; // Conditionals met on previous line, but no scope was opened
-    bool m_invert; // Pending conditional is negated
+    int m_invert; // Pending conditional is negated
     enum { NoOperator, AndOperator, OrOperator } m_operator; // Pending conditional is ORed/ANDed
 
     QString m_tmp; // Temporary for efficient toQString
 
     ProFileCache *m_cache;
     QMakeParserHandler *m_handler;
+    QMakeVfs *m_vfs;
 
     // This doesn't help gcc 3.3 ...
     template<typename T> friend class QTypeInfo;
@@ -182,14 +196,17 @@ private:
     friend class ProFileCache;
 };
 
+Q_DECLARE_OPERATORS_FOR_FLAGS(QMakeParser::ParseFlags)
+
 class QMAKE_EXPORT ProFileCache
 {
 public:
-    ProFileCache() {}
+    ProFileCache();
     ~ProFileCache();
 
-    void discardFile(const QString &fileName);
-    void discardFiles(const QString &prefix);
+    void discardFile(int id);
+    void discardFile(const QString &fileName, QMakeVfs *vfs);
+    void discardFiles(const QString &prefix, QMakeVfs *vfs);
 
 private:
     struct Entry {
@@ -205,7 +222,7 @@ private:
 #endif
     };
 
-    QHash<QString, Entry> parsed_files;
+    QHash<int, Entry> parsed_files;
 #ifdef PROPARSER_THREAD_SAFE
     QMutex mutex;
 #endif

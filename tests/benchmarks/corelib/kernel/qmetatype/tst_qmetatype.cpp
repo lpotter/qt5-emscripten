@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +40,8 @@ public:
 private slots:
     void typeBuiltin_data();
     void typeBuiltin();
+    void typeBuiltin_QByteArray_data();
+    void typeBuiltin_QByteArray();
     void typeBuiltinNotNormalized_data();
     void typeBuiltinNotNormalized();
     void typeCustom();
@@ -69,16 +58,6 @@ private slots:
     void isRegisteredBuiltin();
     void isRegisteredCustom();
     void isRegisteredNotRegistered();
-
-    void constructCoreType_data();
-    void constructCoreType();
-    void constructCoreTypeStaticLess_data();
-    void constructCoreTypeStaticLess();
-    void constructCoreTypeCopy_data();
-    void constructCoreTypeCopy();
-
-    void constructCustomType_data();
-    void constructCustomType();
 
     void constructInPlace_data();
     void constructInPlace();
@@ -112,6 +91,7 @@ void tst_QMetaType::typeBuiltin_data()
     }
 }
 
+// QMetaType::type(const char *)
 void tst_QMetaType::typeBuiltin()
 {
     QFETCH(QByteArray, typeName);
@@ -119,6 +99,21 @@ void tst_QMetaType::typeBuiltin()
     QBENCHMARK {
         for (int i = 0; i < 100000; ++i)
             QMetaType::type(nm);
+    }
+}
+
+void tst_QMetaType::typeBuiltin_QByteArray_data()
+{
+    typeBuiltin_data();
+}
+
+// QMetaType::type(QByteArray)
+void tst_QMetaType::typeBuiltin_QByteArray()
+{
+    QFETCH(QByteArray, typeName);
+    QBENCHMARK {
+        for (int i = 0; i < 100000; ++i)
+            QMetaType::type(typeName);
     }
 }
 
@@ -250,90 +245,15 @@ void tst_QMetaType::isRegisteredNotRegistered()
     }
 }
 
-void tst_QMetaType::constructCoreType_data()
+void tst_QMetaType::constructInPlace_data()
 {
     QTest::addColumn<int>("typeId");
     for (int i = QMetaType::FirstCoreType; i <= QMetaType::LastCoreType; ++i)
-        QTest::newRow(QMetaType::typeName(i)) << i;
-    // GUI types are tested in tst_QGuiMetaType.
-}
+        if (i != QMetaType::Void)
+            QTest::newRow(QMetaType::typeName(i)) << i;
 
-// Tests how fast QMetaType can default-construct and destroy a Qt
-// core type. The purpose of this benchmark is to measure the overhead
-// of using type id-based creation compared to creating the type
-// directly (i.e. "T *t = new T(); delete t;").
-void tst_QMetaType::constructCoreType()
-{
-    QFETCH(int, typeId);
-    QBENCHMARK {
-        for (int i = 0; i < 100000; ++i) {
-            void *data = QMetaType::create(typeId, (void *)0);
-            QMetaType::destroy(typeId, data);
-        }
-    }
-}
-
-void tst_QMetaType::constructCoreTypeStaticLess_data()
-{
-    constructCoreType_data();
-}
-
-void tst_QMetaType::constructCoreTypeStaticLess()
-{
-    QFETCH(int, typeId);
-    QBENCHMARK {
-        QMetaType type(typeId);
-        for (int i = 0; i < 100000; ++i) {
-            void *data = type.create((void *)0);
-            type.destroy(data);
-        }
-    }
-}
-
-void tst_QMetaType::constructCoreTypeCopy_data()
-{
-    constructCoreType_data();
-}
-
-// Tests how fast QMetaType can copy-construct and destroy a Qt core
-// type. The purpose of this benchmark is to measure the overhead of
-// using type id-based creation compared to creating the type directly
-// (i.e. "T *t = new T(other); delete t;").
-void tst_QMetaType::constructCoreTypeCopy()
-{
-    QFETCH(int, typeId);
-    QVariant other(typeId, (void *)0);
-    const void *copy = other.constData();
-    QBENCHMARK {
-        for (int i = 0; i < 100000; ++i) {
-            void *data = QMetaType::create(typeId, copy);
-            QMetaType::destroy(typeId, data);
-        }
-    }
-}
-
-void tst_QMetaType::constructCustomType_data()
-{
-    QTest::addColumn<int>("typeId");
-
-    QTest::newRow("BigClass") << qMetaTypeId<BigClass>();
-}
-
-void tst_QMetaType::constructCustomType()
-{
-    QFETCH(int, typeId);
-    QBENCHMARK {
-        for (int i = 0; i < 100000; ++i) {
-            void *data = QMetaType::create(typeId, (void *)0);
-            QMetaType::destroy(typeId, data);
-        }
-    }
-}
-
-void tst_QMetaType::constructInPlace_data()
-{
-    constructCoreType_data();
     QTest::newRow("custom") << qMetaTypeId<BigClass>();
+    // GUI types are tested in tst_QGuiMetaType.
 }
 
 void tst_QMetaType::constructInPlace()

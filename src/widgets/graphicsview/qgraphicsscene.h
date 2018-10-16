@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QGRAPHICSSCENE_H
 #define QGRAPHICSSCENE_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qpoint.h>
 #include <QtCore/qrect.h>
@@ -51,12 +50,9 @@
 #include <QtGui/qmatrix.h>
 #include <QtGui/qpen.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
-
-
-#if !defined(QT_NO_GRAPHICSVIEW)
 
 template<typename T> class QList;
 class QFocusEvent;
@@ -109,6 +105,8 @@ class Q_WIDGETS_EXPORT QGraphicsScene : public QObject
     Q_PROPERTY(QFont font READ font WRITE setFont)
     Q_PROPERTY(bool sortCacheEnabled READ isSortCacheEnabled WRITE setSortCacheEnabled)
     Q_PROPERTY(bool stickyFocus READ stickyFocus WRITE setStickyFocus)
+    Q_PROPERTY(qreal minimumRenderSize READ minimumRenderSize WRITE setMinimumRenderSize)
+    Q_PROPERTY(bool focusOnTouch READ focusOnTouch WRITE setFocusOnTouch)
 
 public:
     enum ItemIndexMethod {
@@ -124,9 +122,9 @@ public:
     };
     Q_DECLARE_FLAGS(SceneLayers, SceneLayer)
 
-    QGraphicsScene(QObject *parent = 0);
-    QGraphicsScene(const QRectF &sceneRect, QObject *parent = 0);
-    QGraphicsScene(qreal x, qreal y, qreal width, qreal height, QObject *parent = 0);
+    QGraphicsScene(QObject *parent = nullptr);
+    QGraphicsScene(const QRectF &sceneRect, QObject *parent = nullptr);
+    QGraphicsScene(qreal x, qreal y, qreal width, qreal height, QObject *parent = nullptr);
     virtual ~QGraphicsScene();
 
     QRectF sceneRect() const;
@@ -162,7 +160,7 @@ public:
 #if QT_DEPRECATED_SINCE(5, 0)
     QT_DEPRECATED inline QGraphicsItem *itemAt(const QPointF &position) const {
         QList<QGraphicsItem *> itemsAtPoint = items(position);
-        return itemsAtPoint.isEmpty() ? 0 : itemsAtPoint.first();
+        return itemsAtPoint.isEmpty() ? nullptr : itemsAtPoint.first();
     }
 #endif
     QGraphicsItem *itemAt(const QPointF &pos, const QTransform &deviceTransform) const;
@@ -176,7 +174,7 @@ public:
 #if QT_DEPRECATED_SINCE(5, 0)
     QT_DEPRECATED inline QGraphicsItem *itemAt(qreal x, qreal y) const {
         QList<QGraphicsItem *> itemsAtPoint = items(QPointF(x, y));
-        return itemsAtPoint.isEmpty() ? 0 : itemsAtPoint.first();
+        return itemsAtPoint.isEmpty() ? nullptr : itemsAtPoint.first();
     }
 #endif
     inline QGraphicsItem *itemAt(qreal x, qreal y, const QTransform &deviceTransform) const
@@ -186,6 +184,8 @@ public:
     QPainterPath selectionArea() const;
     void setSelectionArea(const QPainterPath &path, const QTransform &deviceTransform);
     void setSelectionArea(const QPainterPath &path, Qt::ItemSelectionMode mode = Qt::IntersectsItemShape, const QTransform &deviceTransform = QTransform());
+    void setSelectionArea(const QPainterPath &path, Qt::ItemSelectionOperation selectionOperation, Qt::ItemSelectionMode mode = Qt::IntersectsItemShape, const QTransform &deviceTransform = QTransform());
+    // ### Qt6 merge the last 2 functions and add a default: Qt::ItemSelectionOperation selectionOperation = Qt::ReplaceSelection
 
     QGraphicsItemGroup *createItemGroup(const QList<QGraphicsItem *> &items);
     void destroyItemGroup(QGraphicsItemGroup *group);
@@ -199,7 +199,7 @@ public:
     QGraphicsRectItem *addRect(const QRectF &rect, const QPen &pen = QPen(), const QBrush &brush = QBrush());
     QGraphicsTextItem *addText(const QString &text, const QFont &font = QFont());
     QGraphicsSimpleTextItem *addSimpleText(const QString &text, const QFont &font = QFont());
-    QGraphicsProxyWidget *addWidget(QWidget *widget, Qt::WindowFlags wFlags = 0);
+    QGraphicsProxyWidget *addWidget(QWidget *widget, Qt::WindowFlags wFlags = Qt::WindowFlags());
     inline QGraphicsEllipseItem *addEllipse(qreal x, qreal y, qreal w, qreal h, const QPen &pen = QPen(), const QBrush &brush = QBrush())
     { return addEllipse(QRectF(x, y, w, h), pen, brush); }
     inline QGraphicsLineItem *addLine(qreal x1, qreal y1, qreal x2, qreal y2, const QPen &pen = QPen())
@@ -251,6 +251,12 @@ public:
 
     bool sendEvent(QGraphicsItem *item, QEvent *event);
 
+    qreal minimumRenderSize() const;
+    void setMinimumRenderSize(qreal minSize);
+
+    bool focusOnTouch() const;
+    void setFocusOnTouch(bool enabled);
+
 public Q_SLOTS:
     void update(const QRectF &rect = QRectF());
     void invalidate(const QRectF &rect = QRectF(), SceneLayers layers = AllLayers);
@@ -259,8 +265,8 @@ public Q_SLOTS:
     void clear();
 
 protected:
-    bool event(QEvent *event);
-    bool eventFilter(QObject *watched, QEvent *event);
+    bool event(QEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
     virtual void contextMenuEvent(QGraphicsSceneContextMenuEvent *event);
     virtual void dragEnterEvent(QGraphicsSceneDragDropEvent *event);
     virtual void dragMoveEvent(QGraphicsSceneDragDropEvent *event);
@@ -283,15 +289,16 @@ protected:
     virtual void drawItems(QPainter *painter, int numItems,
                            QGraphicsItem *items[],
                            const QStyleOptionGraphicsItem options[],
-                           QWidget *widget = 0);
+                           QWidget *widget = nullptr);
 
 protected Q_SLOTS:
-    bool focusNextPrevChild(bool next);
+    QT6_VIRTUAL bool focusNextPrevChild(bool next);
 
 Q_SIGNALS:
     void changed(const QList<QRectF> &region);
     void sceneRectChanged(const QRectF &rect);
     void selectionChanged();
+    void focusItemChanged(QGraphicsItem *newFocus, QGraphicsItem *oldFocus, Qt::FocusReason reason);
 
 private:
     Q_DECLARE_PRIVATE(QGraphicsScene)
@@ -320,10 +327,6 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QGraphicsScene::SceneLayers)
 
-#endif // QT_NO_GRAPHICSVIEW
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

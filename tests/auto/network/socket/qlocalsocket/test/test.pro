@@ -2,13 +2,7 @@ CONFIG += testcase
 
 DEFINES += QLOCALSERVER_DEBUG
 DEFINES += QLOCALSOCKET_DEBUG
-
-wince* {
-    DEFINES += QT_LOCALSOCKET_TCP
-    DEFINES += SRCDIR=\\\"../\\\"
-} else {
-    DEFINES += SRCDIR=\\\"$$PWD/../\\\"
-}
+DEFINES += SRCDIR=\\\"$$PWD/../\\\"
 
 QT = core network testlib
 
@@ -25,4 +19,3 @@ CONFIG(debug_and_release) {
   DESTDIR = ..
 }
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

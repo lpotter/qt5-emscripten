@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -90,7 +90,7 @@
 
     \snippet cube/mainwidget.cpp 2
 
-    \section1 Loading textures from Qt Resource files
+    \section1 Loading Textures from Qt Resource Files
 
     \c QGLWidget interface implements methods for loading textures from QImage to GL
     texture memory. We still need to use OpenGL provided functions for specifying
@@ -117,7 +117,9 @@
     aren't facing towards screen.
 
     Creating vertex buffer objects and transferring data to them is quite simple using
-    OpenGL provided functions.
+    QOpenGLBuffer. MainWidget makes sure the GeometryEngine instance is created and
+    destroyed with the OpenGL context current. This way we can use OpenGL resources
+    in the constructor and perform proper cleanup in the destructor.
 
     \snippet cube/geometryengine.cpp 0
 
@@ -131,14 +133,14 @@
 
     \snippet cube/geometryengine.cpp 2
 
-    \section1 Perspective projection
+    \section1 Perspective Projection
 
     Using \c QMatrix4x4 helper methods it's really easy to calculate perpective
     projection matrix. This matrix is used to project vertices to screen space.
 
     \snippet cube/mainwidget.cpp 5
 
-    \section1 Orientation of the 3D object
+    \section1 Orientation of the 3D Object
 
     Quaternions are handy way to represent orientation of the 3D object. Quaternions
     involve quite complex mathematics but fortunately all the necessary mathematics

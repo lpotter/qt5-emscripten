@@ -1,5 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qglobal
 QT = core testlib
-SOURCES = tst_qglobal.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+SOURCES = tst_qglobal.cpp qglobal.c

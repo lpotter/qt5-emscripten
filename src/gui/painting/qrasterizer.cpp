@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,12 +46,14 @@
 #include <private/qdatabuffer_p.h>
 #include <private/qdrawhelper_p.h>
 
+#include <algorithm>
+
 QT_BEGIN_NAMESPACE
 
 typedef int Q16Dot16;
 #define Q16Dot16ToFloat(i) ((i)/65536.)
 #define FloatToQ16Dot16(i) (int)((i) * 65536.)
-#define IntToQ16Dot16(i) ((i) << 16)
+#define IntToQ16Dot16(i) ((i) * (1 << 16))
 #define Q16Dot16ToInt(i) ((i) >> 16)
 #define Q16Dot16Factor 65536
 
@@ -326,7 +326,7 @@ void qScanConvert(QScanConverter &d, T allVertical)
         d.m_active.reset();
         return;
     }
-    qSort(d.m_lines.data(), d.m_lines.data() + d.m_lines.size(), QT_PREPEND_NAMESPACE(topOrder));
+    std::sort(d.m_lines.data(), d.m_lines.data() + d.m_lines.size(), QT_PREPEND_NAMESPACE(topOrder));
     int line = 0;
     for (int y = d.m_lines.first().top; y <= d.m_bottom; ++y) {
         for (; line < d.m_lines.size() && d.m_lines.at(line).top == y; ++line) {
@@ -612,7 +612,7 @@ void QScanConverter::mergeLine(QT_FT_Vector a, QT_FT_Vector b)
     int iBottom = qMin(m_bottom, int((b.y - 32 - rounding) >> 6));
 
     if (iTop <= iBottom) {
-        Q16Dot16 aFP = Q16Dot16Factor/2 + (a.x << 10) - rounding;
+        Q16Dot16 aFP = Q16Dot16Factor/2 + (a.x * (1 << 10)) - rounding;
 
         if (b.x == a.x) {
             Line line = { qBound(m_leftFP, aFP, m_rightFP), 0, iTop, iBottom, winding };
@@ -624,7 +624,7 @@ void QScanConverter::mergeLine(QT_FT_Vector a, QT_FT_Vector b)
 
             Q16Dot16 xFP = aFP + Q16Dot16Multiply(slopeFP,
                                                   IntToQ16Dot16(iTop)
-                                                  + Q16Dot16Factor/2 - (a.y << 10));
+                                                  + Q16Dot16Factor/2 - (a.y * (1 << 10)));
 
             if (clip(xFP, iTop, iBottom, slopeFP, m_leftFP, winding))
                 return;
@@ -718,20 +718,39 @@ static inline bool q26Dot6Compare(qreal p1, qreal p2)
     return int((p2  - p1) * 64.) == 0;
 }
 
-static inline qreal qFloorF(qreal v)
-{
-#ifdef QT_USE_MATH_H_FLOATS
-    if (sizeof(qreal) == sizeof(float))
-        return floorf(v);
-    else
-#endif
-        return floor(v);
-}
-
 static inline QPointF snapTo26Dot6Grid(const QPointF &p)
 {
-    return QPointF(qFloorF(p.x() * 64) * (1 / qreal(64)),
-                   qFloorF(p.y() * 64) * (1 / qreal(64)));
+    return QPointF(std::floor(p.x() * 64) * (1 / qreal(64)),
+                   std::floor(p.y() * 64) * (1 / qreal(64)));
+}
+
+/*
+   The rasterize line function relies on some div by zero which should
+   result in +/-inf values. However, when floating point exceptions are
+   enabled, this will cause crashes, so we return high numbers instead.
+   As the returned value is used in further arithmetic, returning
+   FLT_MAX/DBL_MAX will also cause values, so instead return a value
+   that is well outside the int-range.
+ */
+static inline qreal qSafeDivide(qreal x, qreal y)
+{
+    if (y == 0)
+        return x > 0 ? 1e20 : -1e20;
+    return x / y;
+}
+
+/* Conversion to int fails if the value is too large to fit into INT_MAX or
+   too small to fit into INT_MIN, so we need this slightly safer conversion
+   when floating point exceptions are enabled
+ */
+static inline int qSafeFloatToQ16Dot16(qreal x)
+{
+    qreal tmp = x * 65536.;
+    if (tmp > qreal(INT_MAX))
+        return INT_MAX;
+    else if (tmp < qreal(INT_MIN))
+        return -INT_MAX;
+    return int(tmp);
 }
 
 void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width, bool squareCap)
@@ -809,7 +828,7 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
             return;
 
         // adjust width which is given relative to |b - a|
-        width *= sqrt(w0 / w);
+        width *= qSqrt(w0 / w);
     }
 
     QSpanBuffer buffer(d->blend, d->data, d->clipRect);
@@ -850,8 +869,8 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
             const Q16Dot16 iLeft = int(left);
             const Q16Dot16 iRight = int(right);
             const Q16Dot16 leftWidth = IntToQ16Dot16(iLeft + 1)
-                                       - FloatToQ16Dot16(left);
-            const Q16Dot16 rightWidth = FloatToQ16Dot16(right)
+                                       - qSafeFloatToQ16Dot16(left);
+            const Q16Dot16 rightWidth = qSafeFloatToQ16Dot16(right)
                                         - IntToQ16Dot16(iRight);
 
             Q16Dot16 coverage[3];
@@ -885,12 +904,14 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
 
             const Q16Dot16 iTopFP = IntToQ16Dot16(int(pa.y()));
             const Q16Dot16 iBottomFP = IntToQ16Dot16(int(pb.y()));
-            const Q16Dot16 yPa = FloatToQ16Dot16(pa.y());
-            const Q16Dot16 yPb = FloatToQ16Dot16(pb.y());
+            const Q16Dot16 yPa = qSafeFloatToQ16Dot16(pa.y());
+            const Q16Dot16 yPb = qSafeFloatToQ16Dot16(pb.y());
             for (Q16Dot16 yFP = iTopFP; yFP <= iBottomFP; yFP += Q16Dot16Factor) {
                 const Q16Dot16 rowHeight = qMin(yFP + Q16Dot16Factor, yPb)
                                            - qMax(yFP, yPa);
                 const int y = Q16Dot16ToInt(yFP);
+                if (y > d->clipRect.bottom())
+                    break;
                 for (int i = 0; i < n; ++i) {
                     buffer.addSpan(x[i], len[i], y,
                                    Q16Dot16ToInt(Q16Dot16Multiply(rowHeight, coverage[i])));
@@ -944,23 +965,23 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
         const QPointF bottomLeftEdge = bottom - left;
         const QPointF bottomRightEdge = bottom - right;
 
-        const qreal topLeftSlope = topLeftEdge.x() / topLeftEdge.y();
-        const qreal bottomLeftSlope = bottomLeftEdge.x() / bottomLeftEdge.y();
+        const qreal topLeftSlope = qSafeDivide(topLeftEdge.x(), topLeftEdge.y());
+        const qreal bottomLeftSlope = qSafeDivide(bottomLeftEdge.x(), bottomLeftEdge.y());
 
-        const qreal topRightSlope = topRightEdge.x() / topRightEdge.y();
-        const qreal bottomRightSlope = bottomRightEdge.x() / bottomRightEdge.y();
+        const qreal topRightSlope = qSafeDivide(topRightEdge.x(), topRightEdge.y());
+        const qreal bottomRightSlope = qSafeDivide(bottomRightEdge.x(), bottomRightEdge.y());
 
-        const Q16Dot16 topLeftSlopeFP = FloatToQ16Dot16(topLeftSlope);
-        const Q16Dot16 topRightSlopeFP = FloatToQ16Dot16(topRightSlope);
+        const Q16Dot16 topLeftSlopeFP = qSafeFloatToQ16Dot16(topLeftSlope);
+        const Q16Dot16 topRightSlopeFP = qSafeFloatToQ16Dot16(topRightSlope);
 
-        const Q16Dot16 bottomLeftSlopeFP = FloatToQ16Dot16(bottomLeftSlope);
-        const Q16Dot16 bottomRightSlopeFP = FloatToQ16Dot16(bottomRightSlope);
+        const Q16Dot16 bottomLeftSlopeFP = qSafeFloatToQ16Dot16(bottomLeftSlope);
+        const Q16Dot16 bottomRightSlopeFP = qSafeFloatToQ16Dot16(bottomRightSlope);
 
-        const Q16Dot16 invTopLeftSlopeFP = FloatToQ16Dot16(1 / topLeftSlope);
-        const Q16Dot16 invTopRightSlopeFP = FloatToQ16Dot16(1 / topRightSlope);
+        const Q16Dot16 invTopLeftSlopeFP = qSafeFloatToQ16Dot16(qSafeDivide(1, topLeftSlope));
+        const Q16Dot16 invTopRightSlopeFP = qSafeFloatToQ16Dot16(qSafeDivide(1, topRightSlope));
 
-        const Q16Dot16 invBottomLeftSlopeFP = FloatToQ16Dot16(1 / bottomLeftSlope);
-        const Q16Dot16 invBottomRightSlopeFP = FloatToQ16Dot16(1 / bottomRightSlope);
+        const Q16Dot16 invBottomLeftSlopeFP = qSafeFloatToQ16Dot16(qSafeDivide(1, bottomLeftSlope));
+        const Q16Dot16 invBottomRightSlopeFP = qSafeFloatToQ16Dot16(qSafeDivide(1, bottomRightSlope));
 
         if (d->antialiased) {
             const Q16Dot16 iTopFP = IntToQ16Dot16(int(topBound));
@@ -968,16 +989,16 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
             const Q16Dot16 iRightFP = IntToQ16Dot16(int(right.y()));
             const Q16Dot16 iBottomFP = IntToQ16Dot16(int(bottomBound));
 
-            Q16Dot16 leftIntersectAf = FloatToQ16Dot16(top.x() + (int(topBound) - top.y()) * topLeftSlope);
-            Q16Dot16 rightIntersectAf = FloatToQ16Dot16(top.x() + (int(topBound) - top.y()) * topRightSlope);
+            Q16Dot16 leftIntersectAf = qSafeFloatToQ16Dot16(top.x() + (int(topBound) - top.y()) * topLeftSlope);
+            Q16Dot16 rightIntersectAf = qSafeFloatToQ16Dot16(top.x() + (int(topBound) - top.y()) * topRightSlope);
             Q16Dot16 leftIntersectBf = 0;
             Q16Dot16 rightIntersectBf = 0;
 
             if (iLeftFP < iTopFP)
-                leftIntersectBf = FloatToQ16Dot16(left.x() + (int(topBound) - left.y()) * bottomLeftSlope);
+                leftIntersectBf = qSafeFloatToQ16Dot16(left.x() + (int(topBound) - left.y()) * bottomLeftSlope);
 
             if (iRightFP < iTopFP)
-                rightIntersectBf = FloatToQ16Dot16(right.x() + (int(topBound) - right.y()) * bottomRightSlope);
+                rightIntersectBf = qSafeFloatToQ16Dot16(right.x() + (int(topBound) - right.y()) * bottomRightSlope);
 
             Q16Dot16 rowTop, rowBottomLeft, rowBottomRight, rowTopLeft, rowTopRight, rowBottom;
             Q16Dot16 topLeftIntersectAf, topLeftIntersectBf, topRightIntersectAf, topRightIntersectBf;
@@ -985,10 +1006,10 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
 
             int leftMin, leftMax, rightMin, rightMax;
 
-            const Q16Dot16 yTopFP = FloatToQ16Dot16(top.y());
-            const Q16Dot16 yLeftFP = FloatToQ16Dot16(left.y());
-            const Q16Dot16 yRightFP = FloatToQ16Dot16(right.y());
-            const Q16Dot16 yBottomFP = FloatToQ16Dot16(bottom.y());
+            const Q16Dot16 yTopFP = qSafeFloatToQ16Dot16(top.y());
+            const Q16Dot16 yLeftFP = qSafeFloatToQ16Dot16(left.y());
+            const Q16Dot16 yRightFP = qSafeFloatToQ16Dot16(right.y());
+            const Q16Dot16 yBottomFP = qSafeFloatToQ16Dot16(bottom.y());
 
             rowTop = qMax(iTopFP, yTopFP);
             topLeftIntersectAf = leftIntersectAf +
@@ -1006,7 +1027,7 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
 
                 if (yFP == iLeftFP) {
                     const int y = Q16Dot16ToInt(yFP);
-                    leftIntersectBf = FloatToQ16Dot16(left.x() + (y - left.y()) * bottomLeftSlope);
+                    leftIntersectBf = qSafeFloatToQ16Dot16(left.x() + (y - left.y()) * bottomLeftSlope);
                     topLeftIntersectBf = leftIntersectBf + Q16Dot16Multiply(bottomLeftSlopeFP, rowTopLeft - yFP);
                     bottomLeftIntersectAf = leftIntersectAf + Q16Dot16Multiply(topLeftSlopeFP, rowBottomLeft - yFP);
                 } else {
@@ -1016,7 +1037,7 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
 
                 if (yFP == iRightFP) {
                     const int y = Q16Dot16ToInt(yFP);
-                    rightIntersectBf = FloatToQ16Dot16(right.x() + (y - right.y()) * bottomRightSlope);
+                    rightIntersectBf = qSafeFloatToQ16Dot16(right.x() + (y - right.y()) * bottomRightSlope);
                     topRightIntersectBf = rightIntersectBf + Q16Dot16Multiply(bottomRightSlopeFP, rowTopRight - yFP);
                     bottomRightIntersectAf = rightIntersectAf + Q16Dot16Multiply(topRightSlopeFP, rowBottomRight - yFP);
                 } else {
@@ -1135,10 +1156,10 @@ void QRasterizer::rasterizeLine(const QPointF &a, const QPointF &b, qreal width,
             int iBottom = bottom.y() < 0.5f? -1 : int(bottom.y() - 0.5f);
             int iMiddle = qMin(iLeft, iRight);
 
-            Q16Dot16 leftIntersectAf = FloatToQ16Dot16(top.x() + 0.5f + (iTop + 0.5f - top.y()) * topLeftSlope);
-            Q16Dot16 leftIntersectBf = FloatToQ16Dot16(left.x() + 0.5f + (iLeft + 1.5f - left.y()) * bottomLeftSlope);
-            Q16Dot16 rightIntersectAf = FloatToQ16Dot16(top.x() - 0.5f + (iTop + 0.5f - top.y()) * topRightSlope);
-            Q16Dot16 rightIntersectBf = FloatToQ16Dot16(right.x() - 0.5f + (iRight + 1.5f - right.y()) * bottomRightSlope);
+            Q16Dot16 leftIntersectAf = qSafeFloatToQ16Dot16(top.x() + 0.5f + (iTop + 0.5f - top.y()) * topLeftSlope);
+            Q16Dot16 leftIntersectBf = qSafeFloatToQ16Dot16(left.x() + 0.5f + (iLeft + 1.5f - left.y()) * bottomLeftSlope);
+            Q16Dot16 rightIntersectAf = qSafeFloatToQ16Dot16(top.x() - 0.5f + (iTop + 0.5f - top.y()) * topRightSlope);
+            Q16Dot16 rightIntersectBf = qSafeFloatToQ16Dot16(right.x() - 0.5f + (iRight + 1.5f - right.y()) * bottomRightSlope);
 
             int ny;
             int y = iTop;

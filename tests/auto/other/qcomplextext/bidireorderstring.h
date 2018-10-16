@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -119,33 +106,62 @@ const LV logical_visual[] = {
 // LRO: \342\200\255
 // RLO: \342\200\256
 
-    { "override1", "\342\200\256hello\342\200\254", "\342\200\254olleh\342\200\256", QChar::DirL },
+    { "override1", "\342\200\256hello\342\200\254", "\342\200\256olleh\342\200\254", QChar::DirL },
     { "override2", "\342\200\255hello\342\200\254", "\342\200\255hello\342\200\254", QChar::DirL },
     { "override3", "\342\200\255\327\251\327\234\327\225\327\235\342\200\254", "\342\200\255\327\251\327\234\327\225\327\235\342\200\254", QChar::DirL },
-    { "override4", "\342\200\256\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\235\327\225\327\234\327\251\342\200\256", QChar::DirL },
+    { "override4", "\342\200\256\327\251\327\234\327\225\327\235\342\200\254", "\342\200\256\327\235\327\225\327\234\327\251\342\200\254", QChar::DirL },
     { "override5", "\342\200\256hello\342\200\254", "\342\200\254olleh\342\200\256", QChar::DirR },
-    { "override6", "\342\200\255hello\342\200\254", "\342\200\255hello\342\200\254", QChar::DirR },
-    { "override7", "\342\200\255\327\251\327\234\327\225\327\235\342\200\254", "\342\200\255\327\251\327\234\327\225\327\235\342\200\254", QChar::DirR },
+    { "override6", "\342\200\255hello\342\200\254", "\342\200\254hello\342\200\255", QChar::DirR },
+    { "override7", "\342\200\255\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\251\327\234\327\225\327\235\342\200\255", QChar::DirR },
     { "override8", "\342\200\256\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\235\327\225\327\234\327\251\342\200\256", QChar::DirR },
 
-    { "override9", "\327\224\342\200\255\327\251\327\234\342\200\256hello\342\200\254\327\225\327\235\342\200\254", "\342\200\255\327\251\327\234\342\200\254olleh\342\200\256\327\225\327\235\342\200\254\327\224", QChar::DirL },
-    { "override10", "\327\224\342\200\255\327\251\327\234\342\200\256hello\342\200\254\327\225\327\235\342\200\254", "\342\200\255\327\251\327\234\342\200\254olleh\342\200\256\327\225\327\235\342\200\254\327\224", QChar::DirR },
+    { "override9", "\327\224\342\200\255\327\251\327\234\342\200\256hello\342\200\254\327\225\327\235\342\200\254",
+      "\327\251\327\234\342\200\256olleh\342\200\254\327\225\327\235\342\200\255\327\224\342\200\254", QChar::DirL },
+    { "override10", "\327\224\342\200\255\327\251\327\234\342\200\256hello\342\200\254\327\225\327\235\342\200\254",
+      "\342\200\254\327\251\327\234\342\200\256olleh\342\200\254\327\225\327\235\342\200\255\327\224", QChar::DirR },
 
 
     { "embed1", "\342\200\252hello\342\200\254", "\342\200\252hello\342\200\254", QChar::DirL },
-    { "embed2", "\342\200\253hello\342\200\254", "\342\200\254hello\342\200\253", QChar::DirL },
-    { "embed3", "\342\200\252hello\342\200\254", "\342\200\252hello\342\200\254", QChar::DirR },
+    { "embed2", "\342\200\253hello\342\200\254", "\342\200\253hello\342\200\254", QChar::DirL },
+    { "embed3", "\342\200\252hello\342\200\254", "\342\200\254hello\342\200\252", QChar::DirR },
     { "embed4", "\342\200\253hello\342\200\254", "\342\200\254hello\342\200\253", QChar::DirR },
     { "embed5", "\342\200\252\327\251\327\234\327\225\327\235\342\200\254", "\342\200\252\327\235\327\225\327\234\327\251\342\200\254", QChar::DirL },
-    { "embed6", "\342\200\253\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\235\327\225\327\234\327\251\342\200\253", QChar::DirL },
-    { "embed7", "\342\200\252\327\251\327\234\327\225\327\235\342\200\254", "\342\200\252\327\235\327\225\327\234\327\251\342\200\254", QChar::DirR },
+    { "embed6", "\342\200\253\327\251\327\234\327\225\327\235\342\200\254", "\342\200\253\327\235\327\225\327\234\327\251\342\200\254", QChar::DirL },
+    { "embed7", "\342\200\252\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\235\327\225\327\234\327\251\342\200\252", QChar::DirR },
     { "embed8", "\342\200\253\327\251\327\234\327\225\327\235\342\200\254", "\342\200\254\327\235\327\225\327\234\327\251\342\200\253", QChar::DirR },
 
     { "embed9", "\342\200\252x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\252x \327\235\327\225\327\234\327\251 y\342\200\254", QChar::DirL },
-    { "embed10", "\342\200\253x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\254y \327\235\327\225\327\234\327\251 x\342\200\253", QChar::DirL },
-    { "embed11", "\342\200\252x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\252x \327\235\327\225\327\234\327\251 y\342\200\254", QChar::DirR },
+    { "embed10", "\342\200\253x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\253y \327\235\327\225\327\234\327\251 x\342\200\254", QChar::DirL },
+    { "embed11", "\342\200\252x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\254x \327\235\327\225\327\234\327\251 y\342\200\252", QChar::DirR },
     { "embed12", "\342\200\253x \327\251\327\234\327\225\327\235 y\342\200\254", "\342\200\254y \327\235\327\225\327\234\327\251 x\342\200\253", QChar::DirR },
     { "zwsp", "+0\342\200\213f-1", "+0\342\200\213f-1", QChar::DirL },
+
+// Alef: \xD7\x90
+
+    { "bracketpair_1_ltr", "\xD7\x90(\xD7\x90[&a]!)a", "\xD7\x90(\xD7\x90[&a]!)a", QChar::DirL },
+    { "bracketpair_1_rtl", "\xD7\x90(\xD7\x90[&a]!)a", "a(![a&]\xD7\x90)\xD7\x90", QChar::DirR },
+
+    { "bracketpair_2_ltr", "a(\xD7\x90[&a]!)\xD7\x90", "a(\xD7\x90[&a]!)\xD7\x90", QChar::DirL },
+    { "bracketpair_2_rtl", "a(\xD7\x90[&a]!)\xD7\x90", "\xD7\x90(![a&]\xD7\x90)a", QChar::DirR },
+
+    { "bracketpair_3_ltr", "\xD7\x90(a[&\xD7\x90]!)a", "\xD7\x90(a[&\xD7\x90]!)a", QChar::DirL },
+    { "bracketpair_3_rtl", "\xD7\x90(a[&\xD7\x90]!)a", "a(![\xD7\x90&]a)\xD7\x90", QChar::DirR },
+
+    { "bracketpair_4_ltr", "a (a \xD7\x90) \xD7\x90", "a (a \xD7\x90) \xD7\x90", QChar::DirL },
+    { "bracketpair_4_rtl", "a (a \xD7\x90) \xD7\x90", "\xD7\x90 (\xD7\x90 a) a", QChar::DirR },
+
+    { "bracketpair_5_ltr", "\xD7\x90 (a \xD7\x90) a", "\xD7\x90 (a \xD7\x90) a", QChar::DirL },
+    { "bracketpair_5_rtl", "\xD7\x90 (a \xD7\x90) a", "a (\xD7\x90 a) \xD7\x90", QChar::DirR },
+
+    { "bracketpair_6_ltr", "a (\xD7\x90 a) \xD7\x90", "a (\xD7\x90 a) \xD7\x90", QChar::DirL },
+    { "bracketpair_6_rtl", "a (\xD7\x90 a) \xD7\x90", "\xD7\x90 (a \xD7\x90) a", QChar::DirR },
+
+    { "bracketpair_7_ltr", "\xD7\x90\xD7\x90 book(s)", "\xD7\x90\xD7\x90 book(s)", QChar::DirL },
+    { "bracketpair_7_rtl", "\xD7\x90\xD7\x90 book(s)", "book(s) \xD7\x90\xD7\x90", QChar::DirR },
+
+    { "bracketpair_8_ltr", "a \xD7\x90\xD7\x90(\xD7\x90)", "a (\xD7\x90)\xD7\x90\xD7\x90", QChar::DirL },
+    { "bracketpair_8_rtl", "a \xD7\x90\xD7\x90(\xD7\x90)", "(\xD7\x90)\xD7\x90\xD7\x90 a", QChar::DirR },
+
 
     { 0, 0, 0, QChar::DirON }
 };

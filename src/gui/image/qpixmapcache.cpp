@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,22 +73,30 @@ QT_BEGIN_NAMESPACE
     behavior of the QHash and QCache classes.
 
     The cache becomes full when the total size of all pixmaps in the
-    cache exceeds cacheLimit(). The initial cache limit is
-    2048 KB (2 MB) on embedded platforms, 10240 KB (10 MB) on desktop
-    platforms; you can change this by calling setCacheLimit() with the
-    required value.
+    cache exceeds cacheLimit(). The initial cache limit is 10240 KB (10 MB);
+    you can change this by calling setCacheLimit() with the required value.
     A pixmap takes roughly (\e{width} * \e{height} * \e{depth})/8 bytes of
     memory.
 
     The \e{Qt Quarterly} article
-    \l{http://qt.nokia.com/doc/qq/qq12-qpixmapcache.html}{Optimizing
+    \l{http://doc.qt.io/archives/qq/qq12-qpixmapcache.html}{Optimizing
     with QPixmapCache} explains how to use QPixmapCache to speed up
     applications by caching the results of painting.
 
     \sa QCache, QPixmap
 */
 
-static int cache_limit = 10240; // 10 MB cache limit for desktop
+static const int cache_limit_default = 10240; // 10 MB cache limit
+
+static inline int cost(const QPixmap &pixmap)
+{
+    // make sure to do a 64bit calculation
+    const qint64 costKb = static_cast<qint64>(pixmap.width()) *
+            pixmap.height() * pixmap.depth() / (8 * 1024);
+    const qint64 costMax = std::numeric_limits<int>::max();
+    // a small pixmap should have at least a cost of 1(kb)
+    return static_cast<int>(qBound(1LL, costKb, costMax));
+}
 
 /*!
     \class QPixmapCache::Key
@@ -134,7 +140,7 @@ QPixmapCache::Key::~Key()
 /*!
     \internal
 
-    Returns true if this key is the same as the given \a key; otherwise returns
+    Returns \c true if this key is the same as the given \a key; otherwise returns
     false.
 */
 bool QPixmapCache::Key::operator ==(const Key &key) const
@@ -146,6 +152,34 @@ bool QPixmapCache::Key::operator ==(const Key &key) const
     \fn bool QPixmapCache::Key::operator !=(const Key &key) const
     \internal
 */
+
+/*!
+    \fn QPixmapCache::Key::Key(Key &&)
+    \internal
+    \since 5.6
+*/
+
+/*!
+    \fn QPixmapCache::Key &QPixmapCache::Key::operator=(Key &&)
+    \internal
+    \since 5.6
+*/
+
+/*!
+    \fn void QPixmapCache::Key::swap(Key &)
+    \internal
+    \since 5.6
+*/
+
+/*!
+    Returns \c true if there is a cached pixmap associated with this key.
+    Otherwise, if pixmap was flushed, the key is no longer valid.
+    \since 5.7
+*/
+bool QPixmapCache::Key::isValid() const Q_DECL_NOTHROW
+{
+    return d && d->isValid;
+}
 
 /*!
     \internal
@@ -169,7 +203,7 @@ public:
     QPMCache();
     ~QPMCache();
 
-    void timerEvent(QTimerEvent *);
+    void timerEvent(QTimerEvent *) override;
     bool insert(const QString& key, const QPixmap &pixmap, int cost);
     QPixmapCache::Key insert(const QPixmap &pixmap, int cost);
     bool replace(const QPixmapCache::Key &key, const QPixmap &pixmap, int cost);
@@ -189,7 +223,6 @@ public:
 
     static QPixmapCache::KeyData* getKeyData(QPixmapCache::Key *key);
 
-    QList< QPair<QString,QPixmap> > allPixmaps() const;
     bool flushDetachedPixmaps(bool nt);
 
 private:
@@ -214,7 +247,7 @@ uint qHash(const QPixmapCache::Key &k)
 
 QPMCache::QPMCache()
     : QObject(0),
-      QCache<QPixmapCache::Key, QPixmapCacheEntry>(cache_limit * 1024),
+      QCache<QPixmapCache::Key, QPixmapCacheEntry>(cache_limit_default),
       keyArray(0), theid(0), ps(0), keyArraySize(0), freeKey(0), t(false)
 {
 }
@@ -236,7 +269,7 @@ QPMCache::~QPMCache()
   the timer is not restarted when the pixmap becomes unused, but it does
   restart once something else is added (i.e. the cache space is actually needed).
 
-  Returns true if any were removed.
+  Returns \c true if any were removed.
 */
 bool QPMCache::flushDetachedPixmaps(bool nt)
 {
@@ -301,27 +334,23 @@ QPixmap *QPMCache::object(const QPixmapCache::Key &key) const
 
 bool QPMCache::insert(const QString& key, const QPixmap &pixmap, int cost)
 {
-    QPixmapCache::Key cacheKey;
-    QPixmapCache::Key oldCacheKey = cacheKeys.value(key);
+    QPixmapCache::Key &cacheKey = cacheKeys[key];
     //If for the same key we add already a pixmap we should delete it
-    if (oldCacheKey.d) {
-        QCache<QPixmapCache::Key, QPixmapCacheEntry>::remove(oldCacheKey);
-        cacheKeys.remove(key);
-    }
+    if (cacheKey.d)
+        QCache<QPixmapCache::Key, QPixmapCacheEntry>::remove(cacheKey);
 
     //we create a new key the old one has been removed
     cacheKey = createKey();
 
     bool success = QCache<QPixmapCache::Key, QPixmapCacheEntry>::insert(cacheKey, new QPixmapCacheEntry(cacheKey, pixmap), cost);
     if (success) {
-        cacheKeys.insert(key, cacheKey);
         if (!theid) {
             theid = startTimer(flush_time);
             t = false;
         }
     } else {
         //Insertion failed we released the new allocated key
-        releaseKey(cacheKey);
+        cacheKeys.remove(key);
     }
     return success;
 }
@@ -335,9 +364,6 @@ QPixmapCache::Key QPMCache::insert(const QPixmap &pixmap, int cost)
             theid = startTimer(flush_time);
             t = false;
         }
-    } else {
-        //Insertion failed we released the key and return an invalid one
-        releaseKey(cacheKey);
     }
     return cacheKey;
 }
@@ -357,21 +383,19 @@ bool QPMCache::replace(const QPixmapCache::Key &key, const QPixmap &pixmap, int 
             t = false;
         }
         const_cast<QPixmapCache::Key&>(key) = cacheKey;
-    } else {
-        //Insertion failed we released the key
-        releaseKey(cacheKey);
     }
     return success;
 }
 
 bool QPMCache::remove(const QString &key)
 {
-    QPixmapCache::Key cacheKey = cacheKeys.value(key);
+    auto cacheKey = cacheKeys.constFind(key);
     //The key was not in the cache
-    if (!cacheKey.d)
+    if (cacheKey == cacheKeys.constEnd())
         return false;
-    cacheKeys.remove(key);
-    return QCache<QPixmapCache::Key, QPixmapCacheEntry>::remove(cacheKey);
+    const bool result = QCache<QPixmapCache::Key, QPixmapCacheEntry>::remove(cacheKey.value());
+    cacheKeys.erase(cacheKey);
+    return result;
 }
 
 bool QPMCache::remove(const QPixmapCache::Key &key)
@@ -433,20 +457,6 @@ QPixmapCache::KeyData* QPMCache::getKeyData(QPixmapCache::Key *key)
     return key->d;
 }
 
-QList< QPair<QString,QPixmap> > QPMCache::allPixmaps() const
-{
-    QList< QPair<QString,QPixmap> > r;
-    QHash<QString, QPixmapCache::Key>::const_iterator it = cacheKeys.begin();
-    while (it != cacheKeys.end()) {
-        QPixmap *ptr = QCache<QPixmapCache::Key, QPixmapCacheEntry>::object(it.value());
-        if (ptr)
-            r.append(QPair<QString,QPixmap>(it.key(),*ptr));
-        ++it;
-    }
-    return r;
-}
-
-
 Q_GLOBAL_STATIC(QPMCache, pm_cache)
 
 int Q_AUTOTEST_EXPORT q_QPixmapCache_keyHashSize()
@@ -495,7 +505,7 @@ bool QPixmapCache::find(const QString &key, QPixmap& pixmap)
 /*!
     Looks for a cached pixmap associated with the given \a key in the cache.
     If the pixmap is found, the function sets \a pixmap to that pixmap and
-    returns true; otherwise it leaves \a pixmap alone and returns false.
+    returns \c true; otherwise it leaves \a pixmap alone and returns \c false.
 
     \since 4.6
 
@@ -514,7 +524,7 @@ bool QPixmapCache::find(const QString &key, QPixmap* pixmap)
 /*!
     Looks for a cached pixmap associated with the given \a key in the cache.
     If the pixmap is found, the function sets \a pixmap to that pixmap and
-    returns true; otherwise it leaves \a pixmap alone and returns false. If
+    returns \c true; otherwise it leaves \a pixmap alone and returns \c false. If
     the pixmap is not found, it means that the \a key is no longer valid,
     so it will be released for the next insertion.
 
@@ -545,15 +555,15 @@ bool QPixmapCache::find(const Key &key, QPixmap* pixmap)
     The oldest pixmaps (least recently accessed in the cache) are
     deleted when more space is needed.
 
-    The function returns true if the object was inserted into the
-    cache; otherwise it returns false.
+    The function returns \c true if the object was inserted into the
+    cache; otherwise it returns \c false.
 
     \sa setCacheLimit()
 */
 
 bool QPixmapCache::insert(const QString &key, const QPixmap &pixmap)
 {
-    return pm_cache()->insert(key, pixmap, pixmap.width() * pixmap.height() * pixmap.depth() / 8);
+    return pm_cache()->insert(key, pixmap, cost(pixmap));
 }
 
 /*!
@@ -573,13 +583,13 @@ bool QPixmapCache::insert(const QString &key, const QPixmap &pixmap)
 */
 QPixmapCache::Key QPixmapCache::insert(const QPixmap &pixmap)
 {
-    return pm_cache()->insert(pixmap, pixmap.width() * pixmap.height() * pixmap.depth() / 8);
+    return pm_cache()->insert(pixmap, cost(pixmap));
 }
 
 /*!
     Replaces the pixmap associated with the given \a key with the \a pixmap
-    specified. Returns true if the \a pixmap has been correctly inserted into
-    the cache; otherwise returns false.
+    specified. Returns \c true if the \a pixmap has been correctly inserted into
+    the cache; otherwise returns \c false.
 
     \sa setCacheLimit(), insert()
 
@@ -590,36 +600,33 @@ bool QPixmapCache::replace(const Key &key, const QPixmap &pixmap)
     //The key is not valid anymore, a flush happened before probably
     if (!key.d || !key.d->isValid)
         return false;
-    return pm_cache()->replace(key, pixmap, pixmap.width() * pixmap.height() * pixmap.depth() / 8);
+    return pm_cache()->replace(key, pixmap, cost(pixmap));
 }
 
 /*!
     Returns the cache limit (in kilobytes).
 
-    The default cache limit is 2048 KB on embedded platforms, 10240 KB on
-    desktop platforms.
+    The default cache limit is 10240 KB.
 
     \sa setCacheLimit()
 */
 
 int QPixmapCache::cacheLimit()
 {
-    return cache_limit;
+    return pm_cache()->maxCost();
 }
 
 /*!
     Sets the cache limit to \a n kilobytes.
 
-    The default setting is 2048 KB on embedded platforms, 10240 KB on
-    desktop platforms.
+    The default setting is 10240 KB.
 
     \sa cacheLimit()
 */
 
 void QPixmapCache::setCacheLimit(int n)
 {
-    cache_limit = n;
-    pm_cache()->setMaxCost(1024 * cache_limit);
+    pm_cache()->setMaxCost(n);
 }
 
 /*!
@@ -651,7 +658,8 @@ void QPixmapCache::remove(const Key &key)
 void QPixmapCache::clear()
 {
     QT_TRY {
-        pm_cache()->clear();
+        if (pm_cache.exists())
+            pm_cache->clear();
     } QT_CATCH(const std::bad_alloc &) {
         // if we ran out of memory during pm_cache(), it's no leak,
         // so just ignore it.
@@ -668,9 +676,18 @@ int QPixmapCache::totalUsed()
     return (pm_cache()->totalCost()+1023) / 1024;
 }
 
-QList< QPair<QString,QPixmap> > QPixmapCache::allPixmaps()
-{
-    return pm_cache()->allPixmaps();
-}
+/*!
+   \fn QPixmapCache::KeyData::KeyData()
 
+   \internal
+*/
+/*!
+   \fn QPixmapCache::KeyData::KeyData(const KeyData &other)
+   \internal
+*/
+/*!
+   \fn QPixmapCache::KeyData::~KeyData()
+
+   \internal
+*/
 QT_END_NAMESPACE

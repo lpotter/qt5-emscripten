@@ -1,7 +1,7 @@
 /***************************************************************************
 **
-** Copyright (C) 2011 - 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2013 BlackBerry Limited. All rights reserved.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,34 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
+#include "qqnxglobal.h"
 
 #include "qqnxintegration.h"
 #include "qqnxscreeneventthread.h"
@@ -51,22 +51,21 @@
 #include "qqnxabstractvirtualkeyboard.h"
 #include "qqnxservices.h"
 
-#if defined(Q_OS_BLACKBERRY)
-#include "qqnxbpseventfilter.h"
-#include "qqnxnavigatorbps.h"
-#include "qqnxtheme.h"
-#include "qqnxvirtualkeyboardbps.h"
-#elif defined(QQNX_PPS)
+#include "qqnxrasterwindow.h"
+#if !defined(QT_NO_OPENGL)
+#include "qqnxeglwindow.h"
+#endif
+
+#if QT_CONFIG(qqnx_pps)
 #include "qqnxnavigatorpps.h"
+#include "qqnxnavigatoreventnotifier.h"
 #include "qqnxvirtualkeyboardpps.h"
 #endif
 
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
 #  include "qqnxbuttoneventnotifier.h"
-#  include "qqnxnavigatoreventnotifier.h"
 #  include "qqnxclipboard.h"
-
-#  if defined(QQNX_IMF)
+#  if QT_CONFIG(qqnx_imf)
 #    include "qqnxinputcontext_imf.h"
 #  else
 #    include "qqnxinputcontext_noimf.h"
@@ -74,29 +73,25 @@
 #endif
 
 #include "private/qgenericunixfontdatabase_p.h"
-
-#if defined(Q_OS_BLACKBERRY)
-#include "qqnxeventdispatcher_blackberry.h"
-#else
 #include "private/qgenericunixeventdispatcher_p.h"
-#endif
 
 #include <qpa/qplatformwindow.h>
 #include <qpa/qwindowsysteminterface.h>
+
+#include <QtGui/private/qguiapplication_p.h>
 
 #if !defined(QT_NO_OPENGL)
 #include "qqnxglcontext.h"
 #include <QtGui/QOpenGLContext>
 #endif
 
-#include <QtPlatformSupport/private/qsimpledrag_p.h>
+#include <private/qsimpledrag_p.h>
 
 #include <QtCore/QDebug>
-#include <QtCore/QHash>
 
 #include <errno.h>
 
-#ifdef QQNXINTEGRATION_DEBUG
+#if defined(QQNXINTEGRATION_DEBUG)
 #define qIntegrationDebug qDebug
 #else
 #define qIntegrationDebug QT_NO_QDEBUG_MACRO
@@ -104,47 +99,80 @@
 
 QT_BEGIN_NAMESPACE
 
-QQnxWindowMapper QQnxIntegration::ms_windowMapper;
-QMutex QQnxIntegration::ms_windowMapperMutex;
+QQnxIntegration *QQnxIntegration::ms_instance;
 
-QQnxIntegration::QQnxIntegration()
+static inline QQnxIntegration::Options parseOptions(const QStringList &paramList)
+{
+    QQnxIntegration::Options options = QQnxIntegration::NoOptions;
+    if (!paramList.contains(QLatin1String("no-fullscreen"))) {
+        options |= QQnxIntegration::FullScreenApplication;
+    }
+
+    if (paramList.contains(QLatin1String("flush-screen-context"))) {
+        options |= QQnxIntegration::AlwaysFlushScreenContext;
+    }
+
+    if (paramList.contains(QLatin1String("rootwindow"))) {
+        options |= QQnxIntegration::RootWindow;
+    }
+
+    if (!paramList.contains(QLatin1String("disable-EGL_KHR_surfaceless_context"))) {
+        options |= QQnxIntegration::SurfacelessEGLContext;
+    }
+
+    return options;
+}
+
+static inline int getContextCapabilities(const QStringList &paramList)
+{
+    QString contextCapabilitiesPrefix = QStringLiteral("screen-context-capabilities=");
+    int contextCapabilities = SCREEN_APPLICATION_CONTEXT;
+    for (const QString &param : paramList) {
+        if (param.startsWith(contextCapabilitiesPrefix)) {
+            QStringRef value = param.midRef(contextCapabilitiesPrefix.length());
+            bool ok = false;
+            contextCapabilities = value.toInt(&ok, 0);
+            if (!ok)
+                contextCapabilities = SCREEN_APPLICATION_CONTEXT;
+        }
+    }
+    return contextCapabilities;
+}
+
+QQnxIntegration::QQnxIntegration(const QStringList &paramList)
     : QPlatformIntegration()
     , m_screenEventThread(0)
     , m_navigatorEventHandler(new QQnxNavigatorEventHandler())
     , m_virtualKeyboard(0)
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     , m_navigatorEventNotifier(0)
     , m_inputContext(0)
     , m_buttonsNotifier(new QQnxButtonEventNotifier())
 #endif
     , m_services(0)
     , m_fontDatabase(new QGenericUnixFontDatabase())
-#if defined(Q_OS_BLACKBERRY)
-    , m_eventDispatcher(new QQnxEventDispatcherBlackberry())
-    , m_bpsEventFilter(0)
-#else
     , m_eventDispatcher(createUnixEventDispatcher())
-#endif
-    , m_nativeInterface(new QQnxNativeInterface())
+    , m_nativeInterface(new QQnxNativeInterface(this))
     , m_screenEventHandler(new QQnxScreenEventHandler(this))
 #if !defined(QT_NO_CLIPBOARD)
     , m_clipboard(0)
 #endif
     , m_navigator(0)
-#if !defined(QT_NO_DRAGANDDROP)
+#if QT_CONFIG(draganddrop)
     , m_drag(new QSimpleDrag())
 #endif
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    ms_instance = this;
+    m_options = parseOptions(paramList);
+    qIntegrationDebug();
+
     // Open connection to QNX composition manager
-    errno = 0;
-    int result = screen_create_context(&m_screenContext, SCREEN_APPLICATION_CONTEXT);
-    if (result != 0) {
-        qFatal("QQnx: failed to connect to composition manager, errno=%d", errno);
+    if (screen_create_context(&m_screenContext, getContextCapabilities(paramList))) {
+        qFatal("%s - Screen: Failed to create screen context - Error: %s (%i)",
+               Q_FUNC_INFO, strerror(errno), errno);
     }
 
-    // Not on BlackBerry, it has specialized event dispatcher which also handles navigator events
-#if !defined(Q_OS_BLACKBERRY) && defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     // Create/start navigator event notifier
     m_navigatorEventNotifier = new QQnxNavigatorEventNotifier(m_navigatorEventHandler);
 
@@ -155,17 +183,15 @@ QQnxIntegration::QQnxIntegration()
 
 #if !defined(QT_NO_OPENGL)
     // Initialize global OpenGL resources
-    QQnxGLContext::initialize();
+    QQnxGLContext::initializeContext();
 #endif
 
     // Create/start event thread
-#if defined(QQNX_SCREENEVENTTHREAD)
-    m_screenEventThread = new QQnxScreenEventThread(m_screenContext, m_screenEventHandler);
+    m_screenEventThread = new QQnxScreenEventThread(m_screenContext);
+    m_screenEventHandler->setScreenEventThread(m_screenEventThread);
     m_screenEventThread->start();
-#endif
 
-    // Not on BlackBerry, it has specialized event dispatcher which also handles virtual keyboard events
-#if !defined(Q_OS_BLACKBERRY) && defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     // Create/start the keyboard class.
     m_virtualKeyboard = new QQnxVirtualKeyboardPps();
 
@@ -174,9 +200,7 @@ QQnxIntegration::QQnxIntegration()
     QMetaObject::invokeMethod(m_virtualKeyboard, "start", Qt::QueuedConnection);
 #endif
 
-#if defined(Q_OS_BLACKBERRY)
-    m_navigator = new QQnxNavigatorBps();
-#elif defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     m_navigator = new QQnxNavigatorPps();
 #endif
 
@@ -184,41 +208,23 @@ QQnxIntegration::QQnxIntegration()
     if (m_navigator)
         m_services = new QQnxServices(m_navigator);
 
-#if defined(Q_OS_BLACKBERRY)
-    QQnxVirtualKeyboardBps* virtualKeyboardBps = new QQnxVirtualKeyboardBps;
-    m_bpsEventFilter = new QQnxBpsEventFilter(m_navigatorEventHandler,
-            (m_screenEventThread ? 0 : m_screenEventHandler), virtualKeyboardBps);
-    m_bpsEventFilter->installOnEventDispatcher(m_eventDispatcher);
-
-    m_virtualKeyboard = virtualKeyboardBps;
-#endif
-
-    // Create displays for all possible screens (which may not be attached). We have to do this
-    // *after* the call to m_bpsEventFilter->installOnEventDispatcher(m_eventDispatcher). The
-    // reason for this is that we have to be registered for NAVIGATOR events before we create the
-    // QQnxScreen objects, and hence the QQnxRootWindow's. It is when the NAVIGATOR service sees
-    // the window creation that it starts sending us messages which results in a race if we
-    // create the displays first.
     createDisplays();
-
-#if !defined(QQNX_SCREENEVENTTHREAD) && defined(Q_OS_BLACKBERRY)
-    // Register for screen domain events with bps
-    Q_FOREACH (QQnxScreen *screen, m_screens)
-        m_bpsEventFilter->registerForScreenEvents(screen);
-#endif
 
     if (m_virtualKeyboard) {
         // TODO check if we need to do this for all screens or only the primary one
         QObject::connect(m_virtualKeyboard, SIGNAL(heightChanged(int)),
                          primaryDisplay(), SLOT(keyboardHeightChanged(int)));
 
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
         // Set up the input context
-        m_inputContext = new QQnxInputContext(*m_virtualKeyboard);
+        m_inputContext = new QQnxInputContext(this, *m_virtualKeyboard);
+#if QT_CONFIG(qqnx_imf)
+        m_screenEventHandler->addScreenEventFilter(m_inputContext);
+#endif
 #endif
     }
 
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     // delay invocation of start() to the time the event loop is up and running
     // needed to have the QThread internals of the main thread properly initialized
     QMetaObject::invokeMethod(m_buttonsNotifier, "start", Qt::QueuedConnection);
@@ -227,24 +233,13 @@ QQnxIntegration::QQnxIntegration()
 
 QQnxIntegration::~QQnxIntegration()
 {
-    qIntegrationDebug() << Q_FUNC_INFO << "platform plugin shutdown begin";
+    qIntegrationDebug("platform plugin shutdown begin");
     delete m_nativeInterface;
 
-#if !defined(QT_NO_DRAGANDDROP)
+#if QT_CONFIG(draganddrop)
     // Destroy the drag object
     delete m_drag;
 #endif
-
-#if defined(QQNX_PPS)
-    // Destroy the hardware button notifier
-    delete m_buttonsNotifier;
-
-    // Destroy input context
-    delete m_inputContext;
-#endif
-
-    // Destroy the keyboard class.
-    delete m_virtualKeyboard;
 
 #if !defined(QT_NO_CLIPBOARD)
     // Delete the clipboard
@@ -252,22 +247,16 @@ QQnxIntegration::~QQnxIntegration()
 #endif
 
     // Stop/destroy navigator event notifier
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
     delete m_navigatorEventNotifier;
 #endif
     delete m_navigatorEventHandler;
 
-#if defined(QQNX_SCREENEVENTTHREAD)
     // Stop/destroy screen event thread
     delete m_screenEventThread;
-#elif defined(Q_OS_BLACKBERRY)
-    Q_FOREACH (QQnxScreen *screen, m_screens)
-        m_bpsEventFilter->unregisterForScreenEvents(screen);
-#endif
 
-#if defined(Q_OS_BLACKBERRY)
-    delete m_bpsEventFilter;
-#endif
+    // In case the event-dispatcher was never transferred to QCoreApplication
+    delete m_eventDispatcher;
 
     delete m_screenEventHandler;
 
@@ -279,8 +268,19 @@ QQnxIntegration::~QQnxIntegration()
 
 #if !defined(QT_NO_OPENGL)
     // Cleanup global OpenGL resources
-    QQnxGLContext::shutdown();
+    QQnxGLContext::shutdownContext();
 #endif
+
+#if QT_CONFIG(qqnx_pps)
+    // Destroy the hardware button notifier
+    delete m_buttonsNotifier;
+
+    // Destroy input context
+    delete m_inputContext;
+#endif
+
+    // Destroy the keyboard class.
+    delete m_virtualKeyboard;
 
     // Destroy services class
     delete m_services;
@@ -288,16 +288,19 @@ QQnxIntegration::~QQnxIntegration()
     // Destroy navigator interface
     delete m_navigator;
 
-    qIntegrationDebug() << Q_FUNC_INFO << "platform plugin shutdown end";
+    ms_instance = nullptr;
+
+    qIntegrationDebug("platform plugin shutdown end");
 }
 
 bool QQnxIntegration::hasCapability(QPlatformIntegration::Capability cap) const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    qIntegrationDebug();
     switch (cap) {
+    case MultipleWindows:
     case ThreadedPixmaps:
         return true;
-#if defined(QT_OPENGL_ES)
+#if !defined(QT_NO_OPENGL)
     case OpenGL:
     case ThreadedOpenGL:
     case BufferQueueingOpenGL:
@@ -310,35 +313,98 @@ bool QQnxIntegration::hasCapability(QPlatformIntegration::Capability cap) const
 
 QPlatformWindow *QQnxIntegration::createPlatformWindow(QWindow *window) const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    return new QQnxWindow(window, m_screenContext);
+    qIntegrationDebug();
+    QSurface::SurfaceType surfaceType = window->surfaceType();
+    const bool needRootWindow = options() & RootWindow;
+    switch (surfaceType) {
+    case QSurface::RasterSurface:
+        return new QQnxRasterWindow(window, m_screenContext, needRootWindow);
+#if !defined(QT_NO_OPENGL)
+    case QSurface::OpenGLSurface:
+        return new QQnxEglWindow(window, m_screenContext, needRootWindow);
+#endif
+    default:
+        qFatal("QQnxWindow: unsupported window API");
+    }
+    return 0;
 }
 
 QPlatformBackingStore *QQnxIntegration::createPlatformBackingStore(QWindow *window) const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    qIntegrationDebug();
     return new QQnxRasterBackingStore(window);
 }
 
 #if !defined(QT_NO_OPENGL)
 QPlatformOpenGLContext *QQnxIntegration::createPlatformOpenGLContext(QOpenGLContext *context) const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    return new QQnxGLContext(context);
+    qIntegrationDebug();
+
+    // Get color channel sizes from window format
+    QSurfaceFormat format = context->format();
+    int alphaSize = format.alphaBufferSize();
+    int redSize = format.redBufferSize();
+    int greenSize = format.greenBufferSize();
+    int blueSize = format.blueBufferSize();
+
+    // Check if all channels are don't care
+    if (alphaSize == -1 && redSize == -1 && greenSize == -1 && blueSize == -1) {
+        // Set color channels based on depth of window's screen
+        QQnxScreen *screen = static_cast<QQnxScreen*>(context->screen()->handle());
+        int depth = screen->depth();
+        if (depth == 32) {
+            // SCREEN_FORMAT_RGBA8888
+            alphaSize = 8;
+            redSize = 8;
+            greenSize = 8;
+            blueSize = 8;
+        } else {
+            // SCREEN_FORMAT_RGB565
+            alphaSize = 0;
+            redSize = 5;
+            greenSize = 6;
+            blueSize = 5;
+        }
+    } else {
+        // Choose best match based on supported pixel formats
+        if (alphaSize <= 0 && redSize <= 5 && greenSize <= 6 && blueSize <= 5) {
+            // SCREEN_FORMAT_RGB565
+            alphaSize = 0;
+            redSize = 5;
+            greenSize = 6;
+            blueSize = 5;
+        } else {
+            // SCREEN_FORMAT_RGBA8888
+            alphaSize = 8;
+            redSize = 8;
+            greenSize = 8;
+            blueSize = 8;
+        }
+    }
+
+    // Update color channel sizes in window format
+    format.setAlphaBufferSize(alphaSize);
+    format.setRedBufferSize(redSize);
+    format.setGreenBufferSize(greenSize);
+    format.setBlueBufferSize(blueSize);
+    context->setFormat(format);
+
+    QQnxGLContext *ctx = new QQnxGLContext(context->format(), context->shareHandle());
+    return ctx;
 }
 #endif
 
-#if defined(QQNX_PPS)
+#if QT_CONFIG(qqnx_pps)
 QPlatformInputContext *QQnxIntegration::inputContext() const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    qIntegrationDebug();
     return m_inputContext;
 }
 #endif
 
 void QQnxIntegration::moveToScreen(QWindow *window, int screen)
 {
-    qIntegrationDebug() << Q_FUNC_INFO << "w =" << window << ", s =" << screen;
+    qIntegrationDebug() << "w =" << window << ", s =" << screen;
 
     // get platform window used by widget
     QQnxWindow *platformWindow = static_cast<QQnxWindow *>(window->handle());
@@ -350,10 +416,15 @@ void QQnxIntegration::moveToScreen(QWindow *window, int screen)
     platformWindow->setScreen(platformScreen);
 }
 
-QAbstractEventDispatcher *QQnxIntegration::guiThreadEventDispatcher() const
+QAbstractEventDispatcher *QQnxIntegration::createEventDispatcher() const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    return m_eventDispatcher;
+    qIntegrationDebug();
+
+    // We transfer ownersip of the event-dispatcher to QtCoreApplication
+    QAbstractEventDispatcher *eventDispatcher = m_eventDispatcher;
+    m_eventDispatcher = 0;
+
+    return eventDispatcher;
 }
 
 QPlatformNativeInterface *QQnxIntegration::nativeInterface() const
@@ -364,18 +435,17 @@ QPlatformNativeInterface *QQnxIntegration::nativeInterface() const
 #if !defined(QT_NO_CLIPBOARD)
 QPlatformClipboard *QQnxIntegration::clipboard() const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    qIntegrationDebug();
 
-#if defined(QQNX_PPS)
-    if (!m_clipboard) {
+#if QT_CONFIG(qqnx_pps)
+    if (!m_clipboard)
         m_clipboard = new QQnxClipboard;
-    }
 #endif
     return m_clipboard;
 }
 #endif
 
-#if !defined(QT_NO_DRAGANDDROP)
+#if QT_CONFIG(draganddrop)
 QPlatformDrag *QQnxIntegration::drag() const
 {
     return m_drag;
@@ -384,8 +454,8 @@ QPlatformDrag *QQnxIntegration::drag() const
 
 QVariant QQnxIntegration::styleHint(QPlatformIntegration::StyleHint hint) const
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    if (hint == ShowIsFullScreen)
+    qIntegrationDebug();
+    if ((hint == ShowIsFullScreen) && (m_options & FullScreenApplication))
         return true;
 
     return QPlatformIntegration::styleHint(hint);
@@ -396,79 +466,67 @@ QPlatformServices * QQnxIntegration::services() const
     return m_services;
 }
 
-#if defined(Q_OS_BLACKBERRY)
-QStringList QQnxIntegration::themeNames() const
-{
-    return QStringList(QQnxTheme::name());
-}
-
-QPlatformTheme *QQnxIntegration::createPlatformTheme(const QString &name) const
-{
-    qIntegrationDebug() << Q_FUNC_INFO << "name =" << name;
-    if (name == QQnxTheme::name())
-        return new QQnxTheme(m_fontDatabase, m_bpsEventFilter);
-    return QPlatformIntegration::createPlatformTheme(name);
-}
-#endif
-
 QWindow *QQnxIntegration::window(screen_window_t qnxWindow)
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    QMutexLocker locker(&ms_windowMapperMutex);
+    qIntegrationDebug();
+    QMutexLocker locker(&m_windowMapperMutex);
     Q_UNUSED(locker);
-    return ms_windowMapper.value(qnxWindow, 0);
+    return m_windowMapper.value(qnxWindow, 0);
 }
 
 void QQnxIntegration::addWindow(screen_window_t qnxWindow, QWindow *window)
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    QMutexLocker locker(&ms_windowMapperMutex);
+    qIntegrationDebug();
+    QMutexLocker locker(&m_windowMapperMutex);
     Q_UNUSED(locker);
-    ms_windowMapper.insert(qnxWindow, window);
+    m_windowMapper.insert(qnxWindow, window);
 }
 
 void QQnxIntegration::removeWindow(screen_window_t qnxWindow)
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    QMutexLocker locker(&ms_windowMapperMutex);
+    qIntegrationDebug();
+    QMutexLocker locker(&m_windowMapperMutex);
     Q_UNUSED(locker);
-    ms_windowMapper.remove(qnxWindow);
+    m_windowMapper.remove(qnxWindow);
 }
 
 void QQnxIntegration::createDisplays()
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
+    qIntegrationDebug();
     // Query number of displays
-    errno = 0;
-    int displayCount;
-    int result = screen_get_context_property_iv(m_screenContext, SCREEN_PROPERTY_DISPLAY_COUNT, &displayCount);
-    if (result != 0) {
-        qFatal("QQnxIntegration: failed to query display count, errno=%d", errno);
+    int displayCount = 0;
+    int result = screen_get_context_property_iv(m_screenContext, SCREEN_PROPERTY_DISPLAY_COUNT,
+                                                &displayCount);
+    Q_SCREEN_CRITICALERROR(result, "Failed to query display count");
+
+    if (Q_UNLIKELY(displayCount < 1)) {
+        // Never happens, even if there's no display, libscreen returns 1
+        qFatal("QQnxIntegration: displayCount=%d", displayCount);
     }
 
     // Get all displays
-    errno = 0;
     screen_display_t *displays = (screen_display_t *)alloca(sizeof(screen_display_t) * displayCount);
-    result = screen_get_context_property_pv(m_screenContext, SCREEN_PROPERTY_DISPLAYS, (void **)displays);
-    if (result != 0) {
-        qFatal("QQnxIntegration: failed to query displays, errno=%d", errno);
-    }
+    result = screen_get_context_property_pv(m_screenContext, SCREEN_PROPERTY_DISPLAYS,
+                                            (void **)displays);
+    Q_SCREEN_CRITICALERROR(result, "Failed to query displays");
 
-    for (int i=0; i<displayCount; i++) {
-        int isAttached = 0;
-        result = screen_get_display_property_iv(displays[i], SCREEN_PROPERTY_ATTACHED, &isAttached);
-        if (result != 0) {
-            qWarning("QQnxIntegration: failed to query display attachment, errno=%d", errno);
-            isAttached = 1; // assume attached
-        }
+    // If it's primary, we create a QScreen for it even if it's not attached
+    // since Qt will dereference QGuiApplication::primaryScreen()
+    createDisplay(displays[0], /*isPrimary=*/true);
+
+    for (int i=1; i<displayCount; i++) {
+        int isAttached = 1;
+        result = screen_get_display_property_iv(displays[i], SCREEN_PROPERTY_ATTACHED,
+                                                &isAttached);
+        Q_SCREEN_CHECKERROR(result, "Failed to query display attachment");
 
         if (!isAttached) {
-            qIntegrationDebug() << Q_FUNC_INFO << "Skipping non-attached display" << i;
+            qIntegrationDebug("Skipping non-attached display %d", i);
             continue;
         }
 
-        qIntegrationDebug() << Q_FUNC_INFO << "Creating screen for display" << i;
-        createDisplay(displays[i], i==0);
+        qIntegrationDebug("Creating screen for display %d", i);
+        createDisplay(displays[i], /*isPrimary=*/false);
     } // of displays iteration
 }
 
@@ -477,6 +535,7 @@ void QQnxIntegration::createDisplay(screen_display_t display, bool isPrimary)
     QQnxScreen *screen = new QQnxScreen(m_screenContext, display, isPrimary);
     m_screens.append(screen);
     screenAdded(screen);
+    screen->adjustOrientation();
 
     QObject::connect(m_screenEventHandler, SIGNAL(newWindowCreated(void*)),
                      screen, SLOT(newWindowCreated(void*)));
@@ -486,6 +545,8 @@ void QQnxIntegration::createDisplay(screen_display_t display, bool isPrimary)
     QObject::connect(m_navigatorEventHandler, SIGNAL(rotationChanged(int)), screen, SLOT(setRotation(int)));
     QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupActivated(QByteArray)), screen, SLOT(activateWindowGroup(QByteArray)));
     QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupDeactivated(QByteArray)), screen, SLOT(deactivateWindowGroup(QByteArray)));
+    QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupStateChanged(QByteArray,Qt::WindowState)),
+            screen, SLOT(windowGroupStateChanged(QByteArray,Qt::WindowState)));
 }
 
 void QQnxIntegration::removeDisplay(QQnxScreen *screen)
@@ -493,13 +554,15 @@ void QQnxIntegration::removeDisplay(QQnxScreen *screen)
     Q_CHECK_PTR(screen);
     Q_ASSERT(m_screens.contains(screen));
     m_screens.removeAll(screen);
-    screen->deleteLater();
+    destroyScreen(screen);
 }
 
 void QQnxIntegration::destroyDisplays()
 {
-    qIntegrationDebug() << Q_FUNC_INFO;
-    qDeleteAll(m_screens);
+    qIntegrationDebug();
+    Q_FOREACH (QQnxScreen *screen, m_screens) {
+        QPlatformIntegration::destroyScreen(screen);
+    }
     m_screens.clear();
 }
 
@@ -518,9 +581,24 @@ QQnxScreen *QQnxIntegration::primaryDisplay() const
     return m_screens.first();
 }
 
+QQnxIntegration::Options QQnxIntegration::options() const
+{
+    return m_options;
+}
+
+screen_context_t QQnxIntegration::screenContext()
+{
+    return m_screenContext;
+}
+
+QQnxNavigatorEventHandler *QQnxIntegration::navigatorEventHandler()
+{
+    return m_navigatorEventHandler;
+}
+
 bool QQnxIntegration::supportsNavigatorEvents() const
 {
-    // If QQNX_PPS or Q_OS_BLACKBERRY is defined then we have navigator
+    // If QQNX_PPS is defined then we have navigator
     return m_navigator != 0;
 }
 

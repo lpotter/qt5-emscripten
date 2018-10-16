@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,19 +28,23 @@
 /*!
     \example layouts/basiclayouts
     \title Basic Layouts Example
+    \brief Shows how to use the standard layout managers.
 
-    \brief The Basic Layouts example shows how to use the standard layout
-    managers that are available in Qt: QBoxLayout, QGridLayout and
-    QFormLayout.
+    \e{Basic Layouts} shows how to use the standard layout managers that are
+    available in Qt: QBoxLayout, QGridLayout, and QFormLayout.
 
     \image basiclayouts-example.png Screenshot of the Basic Layouts example
 
     The QBoxLayout class lines up widgets horizontally or vertically.
     QHBoxLayout and QVBoxLayout are convenience subclasses of QBoxLayout.
     QGridLayout lays out widgets in cells by dividing the available space
-    into rows and columns. QFormLayout, on the other hand, lays out its
+    into rows and columns. QFormLayout, on the other hand, sets its
     children in a two-column form with labels in the left column and
     input fields in the right column.
+
+    For more information, visit the \l{Layout Management} page.
+
+    \include examples-run.qdocinc
 
     \section1 Dialog Class Definition
 
@@ -48,11 +52,11 @@
 
     The \c Dialog class inherits QDialog. It is a custom widget that
     displays its child widgets using the geometry managers:
-    QHBoxLayout, QVBoxLayout, QGridLayout and QFormLayout.
+    QHBoxLayout, QVBoxLayout, QGridLayout, and QFormLayout.
 
-    We declare four private functions to simplify the class
-    constructor: The \c createMenu(), \c createHorizontalGroupBox(),
-    \c createGridGroupBox() and \c createFormGroupBox() functions create
+    There are four private functions to simplify the class
+    constructor: the \c createMenu(), \c createHorizontalGroupBox(),
+    \c createGridGroupBox(), and \c createFormGroupBox() functions create
     several widgets that the example uses to demonstrate how the layout
     affects their appearances.
 
@@ -63,11 +67,11 @@
     In the constructor, we first use the \c createMenu() function to
     create and populate a menu bar and the \c createHorizontalGroupBox()
     function to create a group box containing four buttons with a
-    horizontal layout. Next we use the \c createGridGroupBox() function
+    horizontal layout. Next, we use the \c createGridGroupBox() function
     to create a group box containing several line edits and a small text
     editor which are displayed in a grid layout. Finally, we use the
     \c createFormGroupBox() function to create a group box with
-    three labels and three input fields: a line edit, a combo box and
+    three labels and three input fields: a line edit, a combo box, and
     a spin box.
 
     \snippet layouts/basiclayouts/dialog.cpp 1
@@ -107,7 +111,7 @@
     \snippet layouts/basiclayouts/dialog.cpp 4
 
     We use the QBoxLayout::addWidget() function to add the widgets to
-    the end of layout. Each widget will get at least its minimum size
+    the end of the layout. Each widget will get at least its minimum size
     and at most its maximum size. It is possible to specify a stretch
     factor in the \l {QBoxLayout::addWidget()}{addWidget()} function,
     and any excess space is shared according to these stretch

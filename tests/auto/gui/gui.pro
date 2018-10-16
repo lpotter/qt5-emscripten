@@ -1,10 +1,19 @@
 TEMPLATE=subdirs
-SUBDIRS=\
+
+SUBDIRS = \
+    kernel
+
+!uikit: SUBDIRS += \
     image \
-    kernel \
     math3d \
     painting \
+    qopenglconfig \
     qopengl \
+    qvulkan \
     text \
     util \
     itemmodels \
+
+!qtConfig(opengl)|winrt: SUBDIRS -= qopengl qopenglconfig
+
+!qtConfig(vulkan): SUBDIRS -= qvulkan

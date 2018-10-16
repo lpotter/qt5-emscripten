@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -73,7 +73,7 @@
 
     This tutorial includes example code for you to edit and integrate into your
     project. The tutorial's source code is located in Qt's
-    \c examples/tutorials/modelview directory.
+    \e examples/widgets/tutorials/modelview directory.
 
     For more detailed information you may also want to look at the
     \l{model-view-programming.html}{reference documentation}
@@ -83,7 +83,7 @@
 
     Model/View is a technology used to separate data from views in widgets that
     handle data sets. Standard widgets are not designed for separating data
-    from views and this is why Qt 4 has two different types of widgets. Both
+    from views and this is why Qt has two different types of widgets. Both
     types of widgets look the same, but they interact with data differently.
 
     \table
@@ -190,14 +190,14 @@
 
     Below are 7 very simple and independent applications that show different
     sides of model/view programming. The source code can be found inside the
-    \c{examples/tutorials/modelview} directory.
+    \c{examples/widgets/tutorials/modelview} directory.
 
     \section2 2.1 A Read Only Table
 
     We start with an application that uses a QTableView to show data. We will
     add editing capabilities later.
 
-    (file source: examples/tutorials/modelview/1_readonly/main.cpp)
+    (file source: examples/widgets/tutorials/modelview/1_readonly/main.cpp)
     \snippet tutorials/modelview/1_readonly/main.cpp Quoting ModelView Tutorial
 
     We have the usual \l {modelview-part2-main-cpp.html}{main()} function:
@@ -218,12 +218,12 @@
     We have a table data set, so let's start with QAbstractTableModel since it
     is easier to use than the more general QAbstractItemModel.
 
-    (file source: examples/tutorials/modelview/1_readonly/mymodel.h)
+    (file source: examples/widgets/tutorials/modelview/1_readonly/mymodel.h)
     \snippet tutorials/modelview/1_readonly/mymodel.h Quoting ModelView Tutorial
 
     QAbstractTableModel requires the implementation of three abstract methods.
 
-    (file source: examples/tutorials/modelview/1_readonly/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/1_readonly/mymodel.cpp)
     \snippet tutorials/modelview/1_readonly/mymodel.cpp Quoting ModelView Tutorial
 
     The number of rows and columns is provided by
@@ -259,7 +259,7 @@
     result shown above. The difference is that this time we use parameter int
     role to return different pieces of information depending on its value.
 
-    (file source: examples/tutorials/modelview/2_formatting/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/2_formatting/mymodel.cpp)
     \snippet tutorials/modelview/2_formatting/mymodel.cpp Quoting ModelView Tutorial
 
     Each formatting property will be requested from the model with a separate
@@ -320,7 +320,7 @@
     We still have a read only table, but this time the content changes every
     second because we are showing the current time.
 
-    (file source: examples/tutorials/modelview/3_changingmodel/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/3_changingmodel/mymodel.cpp)
     \snippet tutorials/modelview/3_changingmodel/mymodel.cpp quoting mymodel_QVariant
 
     Something is missing to make the clock tick. We need to tell the view every
@@ -328,12 +328,12 @@
     this with a timer. In the constructor, we set its interval to 1 second and
     connect its timeout signal.
 
-    (file source: examples/tutorials/modelview/3_changingmodel/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/3_changingmodel/mymodel.cpp)
     \snippet tutorials/modelview/3_changingmodel/mymodel.cpp quoting mymodel_a
 
     Here is the corresponding slot:
 
-    (file source: examples/tutorials/modelview/3_changingmodel/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/3_changingmodel/mymodel.cpp)
     \snippet tutorials/modelview/3_changingmodel/mymodel.cpp quoting mymodel_b
 
     We ask the view to read the data in the top left cell again by emitting the
@@ -349,7 +349,7 @@
     The header content, however, is set via the model, so we reimplement the
     \l{QAbstractItemModel::headerData()}{headerData()} method:
 
-    (file source: examples/tutorials/modelview/4_headers/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/4_headers/mymodel.cpp)
     \snippet tutorials/modelview/4_headers/mymodel.cpp quoting mymodel_c
 
     Note that method \l{QAbstractItemModel::headerData()}{headerData()} also has
@@ -368,7 +368,7 @@
     enabled. This is done by reimplementing the following virtual methods:
     \l{QAbstractItemModel::}{setData()} and \l{QAbstractItemModel::}{flags()}.
 
-    (file source: examples/tutorials/modelview/5_edit/mymodel.h)
+    (file source: examples/widgets/tutorials/modelview/5_edit/mymodel.h)
     \snippet tutorials/modelview/5_edit/mymodel.h Quoting ModelView Tutorial
 
     We use \c the two-dimensional array QString \c m_gridData to store our data.
@@ -377,7 +377,7 @@
     interface. We have also introduced the \c editCompleted() signal, which
     makes it possible to transfer the modified text to the window title.
 
-    (file source: examples/tutorials/modelview/5_edit/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/5_edit/mymodel.cpp)
     \snippet tutorials/modelview/5_edit/mymodel.cpp quoting mymodel_e
 
     \l{QAbstractItemModel::setData()}{setData()} will be called each time the
@@ -388,7 +388,7 @@
     checkbox to be selected, calls would also be made with the role set to
     \l Qt::CheckStateRole.
 
-    (file source: examples/tutorials/modelview/5_edit/mymodel.cpp)
+    (file source: examples/widgets/tutorials/modelview/5_edit/mymodel.cpp)
     \snippet tutorials/modelview/5_edit/mymodel.cpp quoting mymodel_f
 
     Various properties of a cell can be adjusted with
@@ -432,7 +432,7 @@
 
     \image tree_2_with_algorithm.png
 
-    (file source: examples/tutorials/modelview/6_treeview/mainwindow.cpp)
+    (file source: examples/widgets/tutorials/modelview/6_treeview/mainwindow.cpp)
     \snippet tutorials/modelview/6_treeview/mainwindow.cpp Quoting ModelView Tutorial
 
     We simply instantiate a QStandardItemModel and add a couple of
@@ -450,7 +450,7 @@
 
     So let's create a couple of items:
 
-    (file source: examples/tutorials/modelview/7_selections/mainwindow.cpp)
+    (file source: examples/widgets/tutorials/modelview/7_selections/mainwindow.cpp)
     \snippet tutorials/modelview/7_selections/mainwindow.cpp quoting modelview_a
 
     Views manage selections within a separate selection model, which can be
@@ -458,12 +458,12 @@
     retrieve the selection Model in order to connect a slot to its
     \l{QAbstractItemView::}{selectionChanged()} signal.
 
-    (file source: examples/tutorials/modelview/7_selections/mainwindow.cpp)
+    (file source: examples/widgets/tutorials/modelview/7_selections/mainwindow.cpp)
     \snippet tutorials/modelview/7_selections/mainwindow.cpp quoting modelview_b
 
     We get the model index that corresponds to the selection by calling
     \l{QItemSelectionModel::currentIndex()}{treeView->selectionModel()->currentIndex()}
-    and we get the the field's string by using the model index. Then we just
+    and we get the field's string by using the model index. Then we just
     calculate the item's \c hierarchyLevel.  Top level items do not have parents
     and the \l{QAbstractItemModel::}{parent()} method will return a default
     constructed \l{QModelIndex}{QModelIndex()}. This is why we use the
@@ -548,7 +548,7 @@
     the underlying data.  The data can be looked up by calling
     \l{QModelIndex::data()}{index.data()}. The delegate's
     \l{QAbstractItemDelegate::}{sizeHint()} method is used to obtain each
-    star's dimensions, so the the cell will provide enough height and width to
+    star's dimensions, so the cell will provide enough height and width to
     accommodate the stars.
 
     Writing custom delegates is the right choice if you want to show your data
@@ -576,7 +576,7 @@
     problem.
 
     Qt Labs provides software called
-    \l{http://labs.qt.nokia.com/page/Projects/Itemview/Modeltest}{ModelTest},
+    \l{http://wiki.qt.io/Model_Test}{ModelTest},
     which checks models while your programming is running. Every time the model
     is changed, ModelTest scans the model and reports errors with an assert.
     This is especially important for tree models, since their hierarchical
@@ -816,7 +816,7 @@
         \row
             \li  Dir View
             \li  QTreeView
-            \li  QDirModel
+            \li  QFileSystemModel
             \li  Very small example to demonstrate how to assign a model to a view
         \row
             \li  Editable Tree Model

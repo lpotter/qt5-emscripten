@@ -4,9 +4,8 @@ SOURCES       = main.cpp \
 RESOURCES     = systray.qrc
 
 QT += widgets
+requires(qtConfig(combobox))
 
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/desktop/systray
 INSTALLS += target
-
-simulator: warning(This example might not fully work on Simulator platform)

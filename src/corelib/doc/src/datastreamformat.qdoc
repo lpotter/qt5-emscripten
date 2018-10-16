@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -129,7 +129,9 @@
          \li \list
             \li Date (QDate)
             \li Time (QTime)
-            \li The \l{Qt::TimeSpec}{time spec} (quint8)
+            \li The \l{Qt::TimeSpec}{time spec}
+                offsetFromUtc (qint32) if Qt::TimeSpec is offsetFromUtc
+                TimeZone(QTimeZone) if Qt::TimeSpec is TimeZone
             \endlist
     \row \li QEasingCurve
          \li \list
@@ -145,11 +147,19 @@
     \row \li QFont
          \li \list
             \li The family (QString)
-            \li The point size (qint16)
+            \li The style name (QString)
+            \li The point size (double)
+            \li The pixel size (qint32)
             \li The style hint (quint8)
+            \li The style strategy (quint16)
             \li The char set (quint8)
             \li The weight (quint8)
             \li The font bits (quint8)
+            \li The font stretch (quint16)
+            \li The extended font bits (quint8)
+            \li The letter spacing (double)
+            \li The word spacing (double)
+            \li The hinting preference (quint8)
             \endlist
     \row \li QHash<Key, T>
          \li \list
@@ -173,7 +183,7 @@
             \li If the image is null a "null image" marker is saved;
             otherwise the image is saved in PNG or BMP format (depending
             on the stream version). If you want control of the format,
-            stream the image into a QBuffer (using QImageIO) and stream
+            stream the image into a QBuffer (using QImageIOHandler/QImageIOPlugin) and stream
             that.
             \endlist
     \row \li QKeySequence
@@ -369,4 +379,6 @@
             \li The items (T)
             \endlist
     \endtable
+
+    \sa {JSON Support in Qt}
 */

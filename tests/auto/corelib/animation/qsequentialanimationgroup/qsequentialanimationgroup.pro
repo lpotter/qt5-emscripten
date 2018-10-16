@@ -1,5 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qsequentialanimationgroup
 QT = core testlib
 SOURCES = tst_qsequentialanimationgroup.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,12 @@
 #ifndef QTABLEVIEW_H
 #define QTABLEVIEW_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qabstractitemview.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(tableview);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_TABLEVIEW
 
 class QHeaderView;
 class QTableViewPrivate;
@@ -61,16 +57,18 @@ class Q_WIDGETS_EXPORT QTableView : public QAbstractItemView
     Q_PROPERTY(Qt::PenStyle gridStyle READ gridStyle WRITE setGridStyle)
     Q_PROPERTY(bool sortingEnabled READ isSortingEnabled WRITE setSortingEnabled)
     Q_PROPERTY(bool wordWrap READ wordWrap WRITE setWordWrap)
+#if QT_CONFIG(abstractbutton)
     Q_PROPERTY(bool cornerButtonEnabled READ isCornerButtonEnabled WRITE setCornerButtonEnabled)
+#endif
 
 public:
-    explicit QTableView(QWidget *parent = 0);
+    explicit QTableView(QWidget *parent = nullptr);
     ~QTableView();
 
-    void setModel(QAbstractItemModel *model);
-    void setRootIndex(const QModelIndex &index);
-    void setSelectionModel(QItemSelectionModel *selectionModel);
-    void doItemsLayout();
+    void setModel(QAbstractItemModel *model) override;
+    void setRootIndex(const QModelIndex &index) override;
+    void setSelectionModel(QItemSelectionModel *selectionModel) override;
+    void doItemsLayout() override;
 
     QHeaderView *horizontalHeader() const;
     QHeaderView *verticalHeader() const;
@@ -106,12 +104,14 @@ public:
     void setWordWrap(bool on);
     bool wordWrap() const;
 
+#if QT_CONFIG(abstractbutton)
     void setCornerButtonEnabled(bool enable);
     bool isCornerButtonEnabled() const;
+#endif
 
-    QRect visualRect(const QModelIndex &index) const;
-    void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible);
-    QModelIndex indexAt(const QPoint &p) const;
+    QRect visualRect(const QModelIndex &index) const override;
+    void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible) override;
+    QModelIndex indexAt(const QPoint &p) const override;
 
     void setSpan(int row, int column, int rowSpan, int columnSpan);
     int rowSpan(int row, int column) const;
@@ -144,35 +144,37 @@ protected Q_SLOTS:
 
 protected:
     QTableView(QTableViewPrivate &, QWidget *parent);
-    void scrollContentsBy(int dx, int dy);
+    void scrollContentsBy(int dx, int dy) override;
 
-    QStyleOptionViewItem viewOptions() const;
-    void paintEvent(QPaintEvent *e);
+    QStyleOptionViewItem viewOptions() const override;
+    void paintEvent(QPaintEvent *e) override;
 
-    void timerEvent(QTimerEvent *event);
+    void timerEvent(QTimerEvent *event) override;
 
-    int horizontalOffset() const;
-    int verticalOffset() const;
-    QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers);
+    int horizontalOffset() const override;
+    int verticalOffset() const override;
+    QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers) override;
 
-    void setSelection(const QRect &rect, QItemSelectionModel::SelectionFlags command);
-    QRegion visualRegionForSelection(const QItemSelection &selection) const;
-    QModelIndexList selectedIndexes() const;
+    void setSelection(const QRect &rect, QItemSelectionModel::SelectionFlags command) override;
+    QRegion visualRegionForSelection(const QItemSelection &selection) const override;
+    QModelIndexList selectedIndexes() const override;
 
-    void updateGeometries();
+    void updateGeometries() override;
 
-    int sizeHintForRow(int row) const;
-    int sizeHintForColumn(int column) const;
+    QSize viewportSizeHint() const override;
 
-    void verticalScrollbarAction(int action);
-    void horizontalScrollbarAction(int action);
+    int sizeHintForRow(int row) const override;
+    int sizeHintForColumn(int column) const override;
 
-    bool isIndexHidden(const QModelIndex &index) const;
+    void verticalScrollbarAction(int action) override;
+    void horizontalScrollbarAction(int action) override;
+
+    bool isIndexHidden(const QModelIndex &index) const override;
 
     void selectionChanged(const QItemSelection &selected,
-                          const QItemSelection &deselected);
+                          const QItemSelection &deselected) override;
     void currentChanged(const QModelIndex &current,
-                          const QModelIndex &previous);
+                          const QModelIndex &previous) override;
 
 private:
     friend class QAccessibleItemView;
@@ -188,10 +190,6 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_updateSpanRemovedColumns(QModelIndex,int,int))
 };
 
-#endif // QT_NO_TABLEVIEW
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTABLEVIEW_H

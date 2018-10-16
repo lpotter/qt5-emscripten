@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,51 @@
 #include "qvector3d.h"
 #include "qvector2d.h"
 #include "qvector4d.h"
+#include "qmatrix4x4.h"
 #include <QtCore/qdatastream.h>
 #include <QtCore/qmath.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qdebug.h>
+#include <QtCore/qrect.h>
 
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_VECTOR3D
+
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector3D>::value, "QVector3D is supposed to be standard layout");
+Q_STATIC_ASSERT_X(sizeof(QVector3D) == sizeof(float) * 3, "QVector3D is not supposed to have padding at the end");
+
+// QVector3D used to be defined as class QVector3D { float x, y, z; };,
+// now instead it is defined as classs QVector3D { float v[3]; };.
+// Check that binary compatibility is preserved.
+// ### Qt 6: remove all of these checks.
+
+namespace {
+
+struct QVector3DOld
+{
+    float x, y, z;
+};
+
+struct QVector3DNew
+{
+    float v[3];
+};
+
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector3DOld>::value, "Binary compatibility break in QVector3D");
+Q_STATIC_ASSERT_X(std::is_standard_layout<QVector3DNew>::value, "Binary compatibility break in QVector3D");
+
+Q_STATIC_ASSERT_X(sizeof(QVector3DOld) == sizeof(QVector3DNew), "Binary compatibility break in QVector3D");
+
+// requires a constexpr offsetof
+#if !defined(Q_CC_MSVC) || (_MSC_VER >= 1910)
+Q_STATIC_ASSERT_X(offsetof(QVector3DOld, x) == offsetof(QVector3DNew, v) + sizeof(QVector3DNew::v[0]) * 0, "Binary compatibility break in QVector3D");
+Q_STATIC_ASSERT_X(offsetof(QVector3DOld, y) == offsetof(QVector3DNew, v) + sizeof(QVector3DNew::v[0]) * 1, "Binary compatibility break in QVector3D");
+Q_STATIC_ASSERT_X(offsetof(QVector3DOld, z) == offsetof(QVector3DNew, v) + sizeof(QVector3DNew::v[0]) * 2, "Binary compatibility break in QVector3D");
+#endif
+
+
+} // anonymous namespace
 
 /*!
     \class QVector3D
@@ -72,6 +107,14 @@ QT_BEGIN_NAMESPACE
     \fn QVector3D::QVector3D()
 
     Constructs a null vector, i.e. with coordinates (0, 0, 0).
+*/
+
+/*!
+    \fn QVector3D::QVector3D(Qt::Initialization)
+    \since 5.5
+    \internal
+
+    Constructs a vector without initializing the contents.
 */
 
 /*!
@@ -104,9 +147,9 @@ QT_BEGIN_NAMESPACE
 */
 QVector3D::QVector3D(const QVector2D& vector)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = 0.0f;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = 0.0f;
 }
 
 /*!
@@ -117,9 +160,9 @@ QVector3D::QVector3D(const QVector2D& vector)
 */
 QVector3D::QVector3D(const QVector2D& vector, float zpos)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = zpos;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = zpos;
 }
 
 #endif
@@ -134,9 +177,9 @@ QVector3D::QVector3D(const QVector2D& vector, float zpos)
 */
 QVector3D::QVector3D(const QVector4D& vector)
 {
-    xp = vector.xp;
-    yp = vector.yp;
-    zp = vector.zp;
+    v[0] = vector.v[0];
+    v[1] = vector.v[1];
+    v[2] = vector.v[2];
 }
 
 #endif
@@ -144,8 +187,8 @@ QVector3D::QVector3D(const QVector4D& vector)
 /*!
     \fn bool QVector3D::isNull() const
 
-    Returns true if the x, y, and z coordinates are set to 0.0,
-    otherwise returns false.
+    Returns \c true if the x, y, and z coordinates are set to 0.0,
+    otherwise returns \c false.
 */
 
 /*!
@@ -196,6 +239,25 @@ QVector3D::QVector3D(const QVector4D& vector)
     \sa z(), setX(), setY()
 */
 
+/*! \fn float &QVector3D::operator[](int i)
+    \since 5.2
+
+    Returns the component of the vector at index position \a i
+    as a modifiable reference.
+
+    \a i must be a valid index position in the vector (i.e., 0 <= \a i
+    < 3).
+*/
+
+/*! \fn float QVector3D::operator[](int i) const
+    \since 5.2
+
+    Returns the component of the vector at index position \a i.
+
+    \a i must be a valid index position in the vector (i.e., 0 <= \a i
+    < 3).
+*/
+
 /*!
     Returns the normalized unit vector form of this vector.
 
@@ -208,16 +270,16 @@ QVector3D::QVector3D(const QVector4D& vector)
 QVector3D QVector3D::normalized() const
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp);
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]);
     if (qFuzzyIsNull(len - 1.0f)) {
         return *this;
     } else if (!qFuzzyIsNull(len)) {
-        double sqrtLen = sqrt(len);
-        return QVector3D(float(double(xp) / sqrtLen),
-                         float(double(yp) / sqrtLen),
-                         float(double(zp) / sqrtLen));
+        double sqrtLen = std::sqrt(len);
+        return QVector3D(float(double(v[0]) / sqrtLen),
+                         float(double(v[1]) / sqrtLen),
+                         float(double(v[2]) / sqrtLen));
     } else {
         return QVector3D();
     }
@@ -232,17 +294,17 @@ QVector3D QVector3D::normalized() const
 void QVector3D::normalize()
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp);
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]);
     if (qFuzzyIsNull(len - 1.0f) || qFuzzyIsNull(len))
         return;
 
-    len = sqrt(len);
+    len = std::sqrt(len);
 
-    xp = float(double(xp) / len);
-    yp = float(double(yp) / len);
-    zp = float(double(zp) / len);
+    v[0] = float(double(v[0]) / len);
+    v[1] = float(double(v[1]) / len);
+    v[2] = float(double(v[2]) / len);
 }
 
 /*!
@@ -295,11 +357,21 @@ void QVector3D::normalize()
 */
 
 /*!
+    \fn QVector3D &QVector3D::operator/=(const QVector3D &vector)
+    \since 5.5
+
+    Divides the components of this vector by the corresponding
+    components in \a vector.
+
+    \sa operator*=()
+*/
+
+/*!
     Returns the dot product of \a v1 and \a v2.
 */
 float QVector3D::dotProduct(const QVector3D& v1, const QVector3D& v2)
 {
-    return v1.xp * v2.xp + v1.yp * v2.yp + v1.zp * v2.zp;
+    return v1.v[0] * v2.v[0] + v1.v[1] * v2.v[1] + v1.v[2] * v2.v[2];
 }
 
 /*!
@@ -310,9 +382,9 @@ float QVector3D::dotProduct(const QVector3D& v1, const QVector3D& v2)
 */
 QVector3D QVector3D::crossProduct(const QVector3D& v1, const QVector3D& v2)
 {
-    return QVector3D(v1.yp * v2.zp - v1.zp * v2.yp,
-                     v1.zp * v2.xp - v1.xp * v2.zp,
-                     v1.xp * v2.yp - v1.yp * v2.xp);
+    return QVector3D(v1.v[1] * v2.v[2] - v1.v[2] * v2.v[1],
+                     v1.v[2] * v2.v[0] - v1.v[0] * v2.v[2],
+                     v1.v[0] * v2.v[1] - v1.v[1] * v2.v[0]);
 }
 
 /*!
@@ -345,6 +417,82 @@ QVector3D QVector3D::normal
         (const QVector3D& v1, const QVector3D& v2, const QVector3D& v3)
 {
     return crossProduct((v2 - v1), (v3 - v1)).normalized();
+}
+
+/*!
+    \since 5.5
+
+    Returns the window coordinates of this vector initially in object/model
+    coordinates using the model view matrix \a modelView, the projection matrix
+    \a projection and the viewport dimensions \a viewport.
+
+    When transforming from clip to normalized space, a division by the w
+    component on the vector components takes place. To prevent dividing by 0 if
+    w equals to 0, it is set to 1.
+
+    \note the returned y coordinates are in OpenGL orientation. OpenGL expects
+    the bottom to be 0 whereas for Qt top is 0.
+
+    \sa unproject()
+ */
+QVector3D QVector3D::project(const QMatrix4x4 &modelView, const QMatrix4x4 &projection, const QRect &viewport) const
+{
+    QVector4D tmp(*this, 1.0f);
+    tmp = projection * modelView * tmp;
+    if (qFuzzyIsNull(tmp.w()))
+        tmp.setW(1.0f);
+    tmp /= tmp.w();
+
+    tmp = tmp * 0.5f + QVector4D(0.5f, 0.5f, 0.5f, 0.5f);
+    tmp.setX(tmp.x() * viewport.width() + viewport.x());
+    tmp.setY(tmp.y() * viewport.height() + viewport.y());
+
+    return tmp.toVector3D();
+}
+
+/*!
+    \since 5.5
+
+    Returns the object/model coordinates of this vector initially in window
+    coordinates using the model view matrix \a modelView, the projection matrix
+    \a projection and the viewport dimensions \a viewport.
+
+    When transforming from clip to normalized space, a division by the w
+    component of the vector components takes place. To prevent dividing by 0 if
+    w equals to 0, it is set to 1.
+
+    \note y coordinates in \a viewport should use OpenGL orientation. OpenGL
+    expects the bottom to be 0 whereas for Qt top is 0.
+
+    \sa project()
+ */
+QVector3D QVector3D::unproject(const QMatrix4x4 &modelView, const QMatrix4x4 &projection, const QRect &viewport) const
+{
+    QMatrix4x4 inverse = QMatrix4x4( projection * modelView ).inverted();
+
+    QVector4D tmp(*this, 1.0f);
+    tmp.setX((tmp.x() - float(viewport.x())) / float(viewport.width()));
+    tmp.setY((tmp.y() - float(viewport.y())) / float(viewport.height()));
+    tmp = tmp * 2.0f - QVector4D(1.0f, 1.0f, 1.0f, 1.0f);
+
+    QVector4D obj = inverse * tmp;
+    if (qFuzzyIsNull(obj.w()))
+        obj.setW(1.0f);
+    obj /= obj.w();
+    return obj.toVector3D();
+}
+
+/*!
+    \since 5.1
+
+    Returns the distance from this vertex to a point defined by
+    the vertex \a point.
+
+    \sa distanceToPlane(), distanceToLine()
+*/
+float QVector3D::distanceToPoint(const QVector3D& point) const
+{
+    return (*this - point).length();
 }
 
 /*!
@@ -406,7 +554,7 @@ float QVector3D::distanceToLine
     \fn bool operator==(const QVector3D &v1, const QVector3D &v2)
     \relates QVector3D
 
-    Returns true if \a v1 is equal to \a v2; otherwise returns false.
+    Returns \c true if \a v1 is equal to \a v2; otherwise returns \c false.
     This operator uses an exact floating-point comparison.
 */
 
@@ -414,7 +562,7 @@ float QVector3D::distanceToLine
     \fn bool operator!=(const QVector3D &v1, const QVector3D &v2)
     \relates QVector3D
 
-    Returns true if \a v1 is not equal to \a v2; otherwise returns false.
+    Returns \c true if \a v1 is not equal to \a v2; otherwise returns \c false.
     This operator uses an exact floating-point comparison.
 */
 
@@ -489,10 +637,21 @@ float QVector3D::distanceToLine
 */
 
 /*!
+    \fn const QVector3D operator/(const QVector3D &vector, const QVector3D &divisor)
+    \relates QVector3D
+    \since 5.5
+
+    Returns the QVector3D object formed by dividing components of the given
+    \a vector by a respective components of the given \a divisor.
+
+    \sa QVector3D::operator/=()
+*/
+
+/*!
     \fn bool qFuzzyCompare(const QVector3D& v1, const QVector3D& v2)
     \relates QVector3D
 
-    Returns true if \a v1 and \a v2 are equal, allowing for a small
+    Returns \c true if \a v1 and \a v2 are equal, allowing for a small
     fuzziness factor for floating-point comparisons; false otherwise.
 */
 
@@ -505,7 +664,7 @@ float QVector3D::distanceToLine
 */
 QVector2D QVector3D::toVector2D() const
 {
-    return QVector2D(xp, yp);
+    return QVector2D(v[0], v[1]);
 }
 
 #endif
@@ -519,7 +678,7 @@ QVector2D QVector3D::toVector2D() const
 */
 QVector4D QVector3D::toVector4D() const
 {
-    return QVector4D(xp, yp, zp, 0.0f);
+    return QVector4D(v[0], v[1], v[2], 0.0f);
 }
 
 #endif
@@ -558,10 +717,10 @@ QVector3D::operator QVariant() const
 float QVector3D::length() const
 {
     // Need some extra precision if the length is very small.
-    double len = double(xp) * double(xp) +
-                 double(yp) * double(yp) +
-                 double(zp) * double(zp);
-    return float(sqrt(len));
+    double len = double(v[0]) * double(v[0]) +
+                 double(v[1]) * double(v[1]) +
+                 double(v[2]) * double(v[2]);
+    return float(std::sqrt(len));
 }
 
 /*!
@@ -572,16 +731,17 @@ float QVector3D::length() const
 */
 float QVector3D::lengthSquared() const
 {
-    return xp * xp + yp * yp + zp * zp;
+    return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 }
 
 #ifndef QT_NO_DEBUG_STREAM
 
 QDebug operator<<(QDebug dbg, const QVector3D &vector)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QVector3D("
         << vector.x() << ", " << vector.y() << ", " << vector.z() << ')';
-    return dbg.space();
+    return dbg;
 }
 
 #endif

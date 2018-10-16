@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    High-level TrueType driver interface (specification).                */
 /*                                                                         */
-/*  Copyright 1996-2001, 2002 by                                           */
+/*  Copyright 1996-2015 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -27,7 +27,7 @@
 FT_BEGIN_HEADER
 
 
-  FT_EXPORT_VAR( const FT_Driver_ClassRec )  tt_driver_class;
+  FT_DECLARE_DRIVER( tt_driver_class )
 
 
 FT_END_HEADER

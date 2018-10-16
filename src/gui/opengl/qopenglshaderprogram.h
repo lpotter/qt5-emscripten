@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,8 @@
 
 #ifndef QOPENGLSHADERPROGRAM_H
 #define QOPENGLSHADERPROGRAM_H
+
+#include <QtGui/qtguiglobal.h>
 
 #ifndef QT_NO_OPENGL
 
@@ -50,7 +50,12 @@
 #include <QtGui/qvector4d.h>
 #include <QtGui/qmatrix4x4.h>
 
-QT_BEGIN_HEADER
+#if defined(Q_CLANG_QDOC)
+#undef GLint
+typedef int GLint;
+#undef GLfloat
+typedef double GLfloat;
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -65,12 +70,16 @@ class Q_GUI_EXPORT QOpenGLShader : public QObject
 public:
     enum ShaderTypeBit
     {
-        Vertex          = 0x0001,
-        Fragment        = 0x0002
+        Vertex                 = 0x0001,
+        Fragment               = 0x0002,
+        Geometry               = 0x0004,
+        TessellationControl    = 0x0008,
+        TessellationEvaluation = 0x0010,
+        Compute                = 0x0020
     };
     Q_DECLARE_FLAGS(ShaderType, ShaderTypeBit)
 
-    explicit QOpenGLShader(QOpenGLShader::ShaderType type, QObject *parent = 0);
+    explicit QOpenGLShader(QOpenGLShader::ShaderType type, QObject *parent = nullptr);
     virtual ~QOpenGLShader();
 
     QOpenGLShader::ShaderType shaderType() const;
@@ -87,7 +96,7 @@ public:
 
     GLuint shaderId() const;
 
-    static bool hasOpenGLShaders(ShaderType type, QOpenGLContext *context = 0);
+    static bool hasOpenGLShaders(ShaderType type, QOpenGLContext *context = nullptr);
 
 private:
     friend class QOpenGLShaderProgram;
@@ -105,7 +114,7 @@ class Q_GUI_EXPORT QOpenGLShaderProgram : public QObject
 {
     Q_OBJECT
 public:
-    explicit QOpenGLShaderProgram(QObject *parent = 0);
+    explicit QOpenGLShaderProgram(QObject *parent = nullptr);
     virtual ~QOpenGLShaderProgram();
 
     bool addShader(QOpenGLShader *shader);
@@ -117,6 +126,11 @@ public:
     bool addShaderFromSourceCode(QOpenGLShader::ShaderType type, const QString& source);
     bool addShaderFromSourceFile(QOpenGLShader::ShaderType type, const QString& fileName);
 
+    bool addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const char *source);
+    bool addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const QByteArray &source);
+    bool addCacheableShaderFromSourceCode(QOpenGLShader::ShaderType type, const QString &source);
+    bool addCacheableShaderFromSourceFile(QOpenGLShader::ShaderType type, const QString &fileName);
+
     void removeAllShaders();
 
     virtual bool link();
@@ -126,7 +140,20 @@ public:
     bool bind();
     void release();
 
+    bool create();
+
     GLuint programId() const;
+
+    int maxGeometryOutputVertices() const;
+
+    void setPatchVertexCount(int count);
+    int patchVertexCount() const;
+
+    void setDefaultOuterTessellationLevels(const QVector<float> &levels);
+    QVector<float> defaultOuterTessellationLevels() const;
+
+    void setDefaultInnerTessellationLevels(const QVector<float> &levels);
+    QVector<float> defaultInnerTessellationLevels() const;
 
     void bindAttributeLocation(const char *name, int location);
     void bindAttributeLocation(const QByteArray& name, int location);
@@ -279,7 +306,7 @@ public:
     void setUniformValueArray(const char *name, const QMatrix4x3 *values, int count);
     void setUniformValueArray(const char *name, const QMatrix4x4 *values, int count);
 
-    static bool hasOpenGLShaderPrograms(QOpenGLContext *context = 0);
+    static bool hasOpenGLShaderPrograms(QOpenGLContext *context = nullptr);
 
 private Q_SLOTS:
     void shaderDestroyed();
@@ -292,8 +319,6 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QT_NO_OPENGL
 

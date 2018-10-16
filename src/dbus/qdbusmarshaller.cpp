@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -70,55 +68,65 @@ inline QString QDBusMarshaller::currentSignature()
 
 inline void QDBusMarshaller::append(uchar arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_BYTE, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_BYTE, &arg);
 }
 
 inline void QDBusMarshaller::append(bool arg)
 {
     dbus_bool_t cast = arg;
-    qIterAppend(&iterator, ba, DBUS_TYPE_BOOLEAN, &cast);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_BOOLEAN, &cast);
 }
 
 inline void QDBusMarshaller::append(short arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_INT16, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_INT16, &arg);
 }
 
 inline void QDBusMarshaller::append(ushort arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_UINT16, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_UINT16, &arg);
 }
 
 inline void QDBusMarshaller::append(int arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_INT32, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_INT32, &arg);
 }
 
 inline void QDBusMarshaller::append(uint arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_UINT32, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_UINT32, &arg);
 }
 
 inline void QDBusMarshaller::append(qlonglong arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_INT64, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_INT64, &arg);
 }
 
 inline void QDBusMarshaller::append(qulonglong arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_UINT64, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_UINT64, &arg);
 }
 
 inline void QDBusMarshaller::append(double arg)
 {
-    qIterAppend(&iterator, ba, DBUS_TYPE_DOUBLE, &arg);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_DOUBLE, &arg);
 }
 
 void QDBusMarshaller::append(const QString &arg)
 {
     QByteArray data = arg.toUtf8();
     const char *cdata = data.constData();
-    qIterAppend(&iterator, ba, DBUS_TYPE_STRING, &cdata);
+    if (!skipSignature)
+        qIterAppend(&iterator, ba, DBUS_TYPE_STRING, &cdata);
 }
 
 inline void QDBusMarshaller::append(const QDBusObjectPath &arg)
@@ -128,7 +136,8 @@ inline void QDBusMarshaller::append(const QDBusObjectPath &arg)
         error(QLatin1String("Invalid object path passed in arguments"));
     } else {
         const char *cdata = data.constData();
-        qIterAppend(&iterator, ba, DBUS_TYPE_OBJECT_PATH, &cdata);
+        if (!skipSignature)
+            qIterAppend(&iterator, ba, DBUS_TYPE_OBJECT_PATH, &cdata);
     }
 }
 
@@ -139,7 +148,8 @@ inline void QDBusMarshaller::append(const QDBusSignature &arg)
         error(QLatin1String("Invalid signature passed in arguments"));
     } else {
         const char *cdata = data.constData();
-        qIterAppend(&iterator, ba, DBUS_TYPE_SIGNATURE, &cdata);
+        if (!skipSignature)
+            qIterAppend(&iterator, ba, DBUS_TYPE_SIGNATURE, &cdata);
     }
 }
 
@@ -149,14 +159,16 @@ inline void QDBusMarshaller::append(const QDBusUnixFileDescriptor &arg)
     if (!ba && fd == -1) {
         error(QLatin1String("Invalid file descriptor passed in arguments"));
     } else {
-        qIterAppend(&iterator, ba, DBUS_TYPE_UNIX_FD, &fd);
+        if (!skipSignature)
+            qIterAppend(&iterator, ba, DBUS_TYPE_UNIX_FD, &fd);
     }
 }
 
 inline void QDBusMarshaller::append(const QByteArray &arg)
 {
     if (ba) {
-        *ba += DBUS_TYPE_ARRAY_AS_STRING DBUS_TYPE_BYTE_AS_STRING;
+        if (!skipSignature)
+            *ba += DBUS_TYPE_ARRAY_AS_STRING DBUS_TYPE_BYTE_AS_STRING;
         return;
     }
 
@@ -171,7 +183,8 @@ inline void QDBusMarshaller::append(const QByteArray &arg)
 inline bool QDBusMarshaller::append(const QDBusVariant &arg)
 {
     if (ba) {
-        *ba += DBUS_TYPE_VARIANT_AS_STRING;
+        if (!skipSignature)
+            *ba += DBUS_TYPE_VARIANT_AS_STRING;
         return true;
     }
 
@@ -214,7 +227,8 @@ inline bool QDBusMarshaller::append(const QDBusVariant &arg)
 inline void QDBusMarshaller::append(const QStringList &arg)
 {
     if (ba) {
-        *ba += DBUS_TYPE_ARRAY_AS_STRING DBUS_TYPE_STRING_AS_STRING;
+        if (!skipSignature)
+            *ba += DBUS_TYPE_ARRAY_AS_STRING DBUS_TYPE_STRING_AS_STRING;
         return;
     }
 
@@ -296,25 +310,30 @@ void QDBusMarshaller::open(QDBusMarshaller &sub, int code, const char *signature
     sub.ba = ba;
     sub.ok = true;
     sub.capabilities = capabilities;
+    sub.skipSignature = skipSignature;
 
-    if (ba)
-        switch (code) {
-        case DBUS_TYPE_ARRAY:
-            *ba += char(code);
-            *ba += signature;
-            // fall through
+    if (ba) {
+        if (!skipSignature) {
+            switch (code) {
+            case DBUS_TYPE_ARRAY:
+                *ba += char(code);
+                *ba += signature;
+                Q_FALLTHROUGH();
 
-        case DBUS_TYPE_DICT_ENTRY:
-            sub.closeCode = 0;
-            break;
+            case DBUS_TYPE_DICT_ENTRY:
+                sub.closeCode = 0;
+                sub.skipSignature = true;
+                break;
 
-        case DBUS_TYPE_STRUCT:
-            *ba += DBUS_STRUCT_BEGIN_CHAR;
-            sub.closeCode = DBUS_STRUCT_END_CHAR;
-            break;
+            case DBUS_TYPE_STRUCT:
+                *ba += DBUS_STRUCT_BEGIN_CHAR;
+                sub.closeCode = DBUS_STRUCT_END_CHAR;
+                break;
+            }
         }
-    else
+    } else {
         q_dbus_message_iter_open_container(&iterator, code, signature, &sub.iterator);
+    }
 }
 
 QDBusMarshaller *QDBusMarshaller::beginCommon(int code, const char *signature)
@@ -346,7 +365,7 @@ QDBusMarshaller *QDBusMarshaller::endCommon()
 void QDBusMarshaller::close()
 {
     if (ba) {
-        if (closeCode)
+        if (!skipSignature && closeCode)
             *ba += closeCode;
     } else if (parent) {
         q_dbus_message_iter_close_container(&parent->iterator, &iterator);
@@ -476,9 +495,9 @@ bool QDBusMarshaller::appendVariantInternal(const QVariant &arg)
             return true;
 
         default:
-            ;                   // fall through
+            ;
         }
-        // fall through
+        Q_FALLTHROUGH();
 
     case DBUS_TYPE_STRUCT:
     case DBUS_STRUCT_BEGIN_CHAR:
@@ -494,7 +513,7 @@ bool QDBusMarshaller::appendVariantInternal(const QVariant &arg)
             append(qvariant_cast<QDBusUnixFileDescriptor>(arg));
             return true;
         }
-        // fall through
+        Q_FALLTHROUGH();
 
     default:
         qWarning("QDBusMarshaller::appendVariantInternal: Found unknown D-BUS type '%s'",

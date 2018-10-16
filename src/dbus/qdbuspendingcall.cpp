@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +43,7 @@
 
 #include "qdbusconnection_p.h"
 #include "qdbusmetatype_p.h"
+#include "qdbusutil_p.h"
 #include "qcoreapplication.h"
 #include "qcoreevent.h"
 #include <private/qobject_p.h>
@@ -58,7 +58,7 @@ QT_BEGIN_NAMESPACE
     \ingroup shared
     \since 4.5
 
-    \brief The QDBusPendingCall class refers to one pending asynchronous call
+    \brief The QDBusPendingCall class refers to one pending asynchronous call.
 
     A QDBusPendingCall object is a reference to a method call that was
     sent over D-Bus without waiting for a reply. QDBusPendingCall is an
@@ -91,7 +91,7 @@ QT_BEGIN_NAMESPACE
     \since 4.5
 
     \brief The QDBusPendingCallWatcher class provides a convenient way for
-    waiting for asynchronous replies
+    waiting for asynchronous replies.
 
     The QDBusPendingCallWatcher provides the finished() signal that will be
     emitted when a reply arrives.
@@ -187,7 +187,6 @@ bool QDBusPendingCallPrivate::setReplyCallback(QObject *target, const char *memb
 
 void QDBusPendingCallPrivate::setMetaTypes(int count, const int *types)
 {
-    expectedReplyCount = count;
     if (count == 0) {
         expectedReplySignature = QLatin1String(""); // not null
         return;
@@ -197,7 +196,7 @@ void QDBusPendingCallPrivate::setMetaTypes(int count, const int *types)
     sig.reserve(count + count / 2);
     for (int i = 0; i < count; ++i) {
         const char *typeSig = QDBusMetaType::typeToSignature(types[i]);
-        if (!typeSig) {
+        if (Q_UNLIKELY(!typeSig)) {
             qFatal("QDBusPendingReply: type %s is not registered with QtDBus",
                    QMetaType::typeName(types[i]));
         }
@@ -221,7 +220,7 @@ void QDBusPendingCallPrivate::checkReceivedSignature()
         return;                 // no signature to validate against
 
     // can't use startsWith here because a null string doesn't start or end with an empty string
-    if (!replyMessage.signature().indexOf(expectedReplySignature) == 0) {
+    if (replyMessage.signature().indexOf(expectedReplySignature) != 0) {
         QString errorMsg = QLatin1String("Unexpected reply signature: got \"%1\", "
                                          "expected \"%2\"");
         replyMessage = QDBusMessage::createError(
@@ -238,7 +237,7 @@ void QDBusPendingCallPrivate::waitForFinished()
     if (replyMessage.type() != QDBusMessage::InvalidMessage)
         return;                 // already finished
 
-    connection->waitForFinished(this);
+    waitForFinishedCondition.wait(&mutex);
 }
 
 /*!
@@ -256,6 +255,11 @@ QDBusPendingCall::QDBusPendingCall(const QDBusPendingCall &other)
 QDBusPendingCall::QDBusPendingCall(QDBusPendingCallPrivate *dd)
     : d(dd)
 {
+    if (dd) {
+        bool r = dd->ref.deref();
+        Q_ASSERT(r);
+        Q_UNUSED(r);
+    }
 }
 
 /*!
@@ -297,7 +301,7 @@ QDBusPendingCall &QDBusPendingCall::operator=(const QDBusPendingCall &other)
 /*!
     \fn bool QDBusPendingCallWatcher::isFinished() const
 
-    Returns true if the pending call has finished processing and the
+    Returns \c true if the pending call has finished processing and the
     reply has been received.
 
     Note that this function only changes state if you call
@@ -309,8 +313,8 @@ QDBusPendingCall &QDBusPendingCall::operator=(const QDBusPendingCall &other)
 /*!
     \fn bool QDBusPendingReply::isFinished() const
 
-    Returns true if the pending call has finished processing and the
-    reply has been received. If this function returns true, the
+    Returns \c true if the pending call has finished processing and the
+    reply has been received. If this function returns \c true, the
     isError(), error() and reply() methods should return valid
     information.
 
@@ -338,7 +342,7 @@ void QDBusPendingCall::waitForFinished()
 /*!
     \fn bool QDBusPendingReply::isValid() const
 
-    Returns true if the reply contains a normal reply message, false
+    Returns \c true if the reply contains a normal reply message, false
     if it contains anything else.
 
     If the pending call has not finished processing, this function
@@ -355,11 +359,11 @@ bool QDBusPendingCall::isValid() const
 /*!
     \fn bool QDBusPendingReply::isError() const
 
-    Returns true if the reply contains an error message, false if it
+    Returns \c true if the reply contains an error message, false if it
     contains a normal method reply.
 
     If the pending call has not finished processing, this function
-    also returns true.
+    also returns \c true.
 */
 bool QDBusPendingCall::isError() const
 {
@@ -386,7 +390,7 @@ QDBusError QDBusPendingCall::error() const
 
     // not connected, return an error
     QDBusError err = QDBusError(QDBusError::Disconnected,
-                                QLatin1String("Not connected to D-Bus server"));
+                                QDBusUtil::disconnectedErrorMessage());
     return err;
 }
 
@@ -410,7 +414,7 @@ QDBusMessage QDBusPendingCall::reply() const
 }
 
 #if 0
-/*!
+/*
     Sets the slot \a member in object \a target to be called when the
     reply arrives. The slot's parameter list must match the reply
     message's arguments for it to be called.
@@ -420,7 +424,7 @@ QDBusMessage QDBusPendingCall::reply() const
 
     The callback will not be called if the reply is an error message.
 
-    This function returns true if it could set the callback, false
+    This function returns \c true if it could set the callback, false
     otherwise. It is not a guarantee that the callback will be
     called.
 
@@ -469,6 +473,7 @@ QDBusPendingCall QDBusPendingCall::fromCompletedCall(const QDBusMessage &msg)
         msg.type() == QDBusMessage::ReplyMessage) {
         d = new QDBusPendingCallPrivate(QDBusMessage(), 0);
         d->replyMessage = msg;
+        d->ref.store(1);
     }
 
     return QDBusPendingCall(d);

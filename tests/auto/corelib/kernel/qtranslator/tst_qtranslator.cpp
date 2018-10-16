@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,18 +41,19 @@ protected:
 private slots:
     void initTestCase();
 
+    void load_data();
     void load();
-    void load2();
     void threadLoad();
     void testLanguageChange();
     void plural();
     void translate_qm_file_generated_with_msgfmt();
-    void loadFromResource();
     void loadDirectory();
     void dependencies();
+    void translationInThreadWhileInstallingTranslator();
 
 private:
     int languageChangeEventCounter;
+    QSharedPointer<QTemporaryDir> dataDir;
 };
 
 tst_QTranslator::tst_QTranslator()
@@ -76,10 +64,38 @@ tst_QTranslator::tst_QTranslator()
 
 void tst_QTranslator::initTestCase()
 {
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QString sourceDir(":/android_testdata/");
+    QDirIterator it(sourceDir, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+
+        QFileInfo sourceFileInfo = it.fileInfo();
+        if (!sourceFileInfo.isDir()) {
+            QFileInfo destinationFileInfo(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QLatin1Char('/') + sourceFileInfo.filePath().mid(sourceDir.length()));
+
+            if (!destinationFileInfo.exists()) {
+                QVERIFY(QDir().mkpath(destinationFileInfo.path()));
+                QVERIFY(QFile::copy(sourceFileInfo.filePath(), destinationFileInfo.filePath()));
+            }
+        }
+    }
+
+    QDir::setCurrent(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+#endif
+
     // chdir into the directory containing our testdata,
     // to make the code simpler (load testdata via relative paths)
+#ifdef Q_OS_WINRT
+    // ### TODO: Use this for all platforms in 5.7
+    dataDir = QEXTRACTTESTDATA(QStringLiteral("/"));
+    QVERIFY2(!dataDir.isNull(), qPrintable("Could not extract test data"));
+    QVERIFY2(QDir::setCurrent(dataDir->path()), qPrintable("Could not chdir to " + dataDir->path()));
+#else // !Q_OS_WINRT
     QString testdata_dir = QFileInfo(QFINDTESTDATA("hellotr_la.qm")).absolutePath();
     QVERIFY2(QDir::setCurrent(testdata_dir), qPrintable("Could not chdir to " + testdata_dir));
+#endif // !Q_OS_WINRT
+
 }
 
 bool tst_QTranslator::eventFilter(QObject *, QEvent *event)
@@ -89,24 +105,45 @@ bool tst_QTranslator::eventFilter(QObject *, QEvent *event)
     return false;
 }
 
-void tst_QTranslator::load()
+void tst_QTranslator::load_data()
 {
+    QTest::addColumn<QString>("filepath");
+    QTest::addColumn<bool>("isEmpty");
+    QTest::addColumn<QString>("translation");
 
-    QTranslator tor( 0 );
-    tor.load("hellotr_la");
-    QVERIFY(!tor.isEmpty());
-    QCOMPARE(tor.translate("QPushButton", "Hello world!"), QString::fromLatin1("Hallo Welt!"));
+    QTest::newRow("hellotr_la") << "hellotr_la.qm" << false << "Hallo Welt!";
+    QTest::newRow("hellotr_empty") << "hellotr_empty.qm" << true << "";
 }
 
-void tst_QTranslator::load2()
+void tst_QTranslator::load()
 {
-    QTranslator tor( 0 );
-    QFile file("hellotr_la.qm");
-    file.open(QFile::ReadOnly);
-    QByteArray data = file.readAll();
-    tor.load((const uchar *)data.constData(), data.length());
-    QVERIFY(!tor.isEmpty());
-    QCOMPARE(tor.translate("QPushButton", "Hello world!"), QString::fromLatin1("Hallo Welt!"));
+    QFETCH(QString, filepath);
+    QFETCH(bool, isEmpty);
+    QFETCH(QString, translation);
+
+    {
+        QTranslator tor;
+        QVERIFY(tor.load(QFileInfo(filepath).baseName()));
+        QCOMPARE(tor.isEmpty(), isEmpty);
+        QCOMPARE(tor.translate("QPushButton", "Hello world!"), translation);
+    }
+
+    {
+        QFile file(filepath);
+        file.open(QFile::ReadOnly);
+        QByteArray data = file.readAll();
+        QTranslator tor;
+        QVERIFY(tor.load((const uchar *)data.constData(), data.length()));
+        QCOMPARE(tor.isEmpty(), isEmpty);
+        QCOMPARE(tor.translate("QPushButton", "Hello world!"), translation);
+    }
+
+    {
+        QTranslator tor;
+        QVERIFY(tor.load(QString(":/tst_qtranslator/%1").arg(filepath)));
+        QCOMPARE(tor.isEmpty(), isEmpty);
+        QCOMPARE(tor.translate("QPushButton", "Hello world!"), translation);
+    }
 }
 
 class TranslatorThread : public QThread
@@ -117,7 +154,7 @@ class TranslatorThread : public QThread
 
         if (tor.isEmpty())
             qFatal("Could not load translation");
-        if (tor.translate("QPushButton", "Hello world!") !=  QString::fromLatin1("Hallo Welt!"))
+        if (tor.translate("QPushButton", "Hello world!") !=  QLatin1String("Hallo Welt!"))
             qFatal("Test string was not translated correctlys");
     }
 };
@@ -200,10 +237,9 @@ void tst_QTranslator::plural()
     tor.load("hellotr_la");
     QVERIFY(!tor.isEmpty());
     QCoreApplication::installTranslator(&tor);
-    QCoreApplication::Encoding e = QCoreApplication::UnicodeUTF8;
-    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 0), QString::fromLatin1("Hallo 0 Welten!"));
-    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 1), QString::fromLatin1("Hallo 1 Welt!"));
-    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 2), QString::fromLatin1("Hallo 2 Welten!"));
+    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 0), QLatin1String("Hallo 0 Welten!"));
+    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 1), QLatin1String("Hallo 1 Welt!"));
+    QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 2), QLatin1String("Hallo 2 Welten!"));
 }
 
 void tst_QTranslator::translate_qm_file_generated_with_msgfmt()
@@ -224,14 +260,6 @@ void tst_QTranslator::translate_qm_file_generated_with_msgfmt()
     qApp->removeTranslator(&translator);
 }
 
-void tst_QTranslator::loadFromResource()
-{
-    QTranslator tor;
-    tor.load(":/tst_qtranslator/hellotr_la.qm");
-    QVERIFY(!tor.isEmpty());
-    QCOMPARE(tor.translate("QPushButton", "Hello world!"), QString::fromLatin1("Hallo Welt!"));
-}
-
 void tst_QTranslator::loadDirectory()
 {
     QString current_base = QDir::current().dirName();
@@ -249,17 +277,16 @@ void tst_QTranslator::dependencies()
         QTranslator tor;
         tor.load("dependencies_la");
         QVERIFY(!tor.isEmpty());
-        QCOMPARE(tor.translate("QPushButton", "Hello world!"), QString::fromLatin1("Hallo Welt!"));
+        QCOMPARE(tor.translate("QPushButton", "Hello world!"), QLatin1String("Hallo Welt!"));
 
         // plural
         QCoreApplication::installTranslator(&tor);
-        QCoreApplication::Encoding e = QCoreApplication::UnicodeUTF8;
-        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 0), QString::fromLatin1("Hallo 0 Welten!"));
-        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 1), QString::fromLatin1("Hallo 1 Welt!"));
-        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, e, 2), QString::fromLatin1("Hallo 2 Welten!"));
+        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 0), QLatin1String("Hallo 0 Welten!"));
+        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 1), QLatin1String("Hallo 1 Welt!"));
+        QCOMPARE(QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 2), QLatin1String("Hallo 2 Welten!"));
 
         // pick up translation from the file with dependencies
-        QCOMPARE(tor.translate("QPushButton", "It's a small world"), QString::fromLatin1("Es ist eine kleine Welt"));
+        QCOMPARE(tor.translate("QPushButton", "It's a small world"), QLatin1String("Es ist eine kleine Welt"));
     }
 
     {
@@ -269,10 +296,56 @@ void tst_QTranslator::dependencies()
         QByteArray data = file.readAll();
         tor.load((const uchar *)data.constData(), data.length());
         QVERIFY(!tor.isEmpty());
-        QCOMPARE(tor.translate("QPushButton", "Hello world!"), QString::fromLatin1("Hallo Welt!"));
+        QCOMPARE(tor.translate("QPushButton", "Hello world!"), QLatin1String("Hallo Welt!"));
     }
 }
 
+struct TranslateThread : public QThread
+{
+    bool ok = false;
+    QAtomicInt terminate;
+    QMutex startupLock;
+    QWaitCondition runningCondition;
+
+    void run() {
+        bool startSignalled = false;
+
+        while (terminate.load() == 0) {
+            const QString result =  QCoreApplication::translate("QPushButton", "Hello %n world(s)!", 0, 0);
+
+            if (!startSignalled) {
+                QMutexLocker startupLocker(&startupLock);
+                runningCondition.wakeAll();
+                startSignalled = true;
+            }
+
+            ok = (result == QLatin1String("Hallo 0 Welten!"))
+                  || (result == QLatin1String("Hello 0 world(s)!"));
+            if (!ok)
+                break;
+        }
+    }
+};
+
+void tst_QTranslator::translationInThreadWhileInstallingTranslator()
+{
+    TranslateThread thread;
+
+    QMutexLocker startupLocker(&thread.startupLock);
+
+    thread.start();
+
+    thread.runningCondition.wait(&thread.startupLock);
+
+    QTranslator *tor = new QTranslator;
+    tor->load("hellotr_la");
+    QCoreApplication::installTranslator(tor);
+
+    ++thread.terminate;
+
+    QVERIFY(thread.wait());
+    QVERIFY(thread.ok);
+}
 
 QTEST_MAIN(tst_QTranslator)
 #include "tst_qtranslator.moc"

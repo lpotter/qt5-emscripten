@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,37 +48,29 @@
 **
 ****************************************************************************/
 
-#include <QCoreApplication>
-#include <QFile>
-#include <QFileInfo>
-#include <QList>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QSslError>
-#include <QStringList>
-#include <QTimer>
-#include <QUrl>
+#include <QtCore>
+#include <QtNetwork>
 
-#include <stdio.h>
+#include <cstdio>
 
 QT_BEGIN_NAMESPACE
 class QSslError;
 QT_END_NAMESPACE
 
-QT_USE_NAMESPACE
+using namespace std;
 
 class DownloadManager: public QObject
 {
     Q_OBJECT
     QNetworkAccessManager manager;
-    QList<QNetworkReply *> currentDownloads;
+    QVector<QNetworkReply *> currentDownloads;
 
 public:
     DownloadManager();
     void doDownload(const QUrl &url);
-    QString saveFileName(const QUrl &url);
+    static QString saveFileName(const QUrl &url);
     bool saveToDisk(const QString &filename, QIODevice *data);
+    static bool isHttpRedirect(QNetworkReply *reply);
 
 public slots:
     void execute();
@@ -87,8 +89,9 @@ void DownloadManager::doDownload(const QUrl &url)
     QNetworkRequest request(url);
     QNetworkReply *reply = manager.get(request);
 
-#ifndef QT_NO_SSL
-    connect(reply, SIGNAL(sslErrors(QList<QSslError>)), SLOT(sslErrors(QList<QSslError>)));
+#if QT_CONFIG(ssl)
+    connect(reply, SIGNAL(sslErrors(QList<QSslError>)),
+            SLOT(sslErrors(QList<QSslError>)));
 #endif
 
     currentDownloads.append(reply);
@@ -131,6 +134,13 @@ bool DownloadManager::saveToDisk(const QString &filename, QIODevice *data)
     return true;
 }
 
+bool DownloadManager::isHttpRedirect(QNetworkReply *reply)
+{
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    return statusCode == 301 || statusCode == 302 || statusCode == 303
+           || statusCode == 305 || statusCode == 307 || statusCode == 308;
+}
+
 void DownloadManager::execute()
 {
     QStringList args = QCoreApplication::instance()->arguments();
@@ -146,7 +156,7 @@ void DownloadManager::execute()
         return;
     }
 
-    foreach (QString arg, args) {
+    for (const QString &arg : qAsConst(args)) {
         QUrl url = QUrl::fromEncoded(arg.toLocal8Bit());
         doDownload(url);
     }
@@ -154,8 +164,8 @@ void DownloadManager::execute()
 
 void DownloadManager::sslErrors(const QList<QSslError> &sslErrors)
 {
-#ifndef QT_NO_SSL
-    foreach (const QSslError &error, sslErrors)
+#if QT_CONFIG(ssl)
+    for (const QSslError &error : sslErrors)
         fprintf(stderr, "SSL error: %s\n", qPrintable(error.errorString()));
 #else
     Q_UNUSED(sslErrors);
@@ -170,18 +180,24 @@ void DownloadManager::downloadFinished(QNetworkReply *reply)
                 url.toEncoded().constData(),
                 qPrintable(reply->errorString()));
     } else {
-        QString filename = saveFileName(url);
-        if (saveToDisk(filename, reply))
-            printf("Download of %s succeeded (saved to %s)\n",
-                   url.toEncoded().constData(), qPrintable(filename));
+        if (isHttpRedirect(reply)) {
+            fputs("Request was redirected.\n", stderr);
+        } else {
+            QString filename = saveFileName(url);
+            if (saveToDisk(filename, reply)) {
+                printf("Download of %s succeeded (saved to %s)\n",
+                       url.toEncoded().constData(), qPrintable(filename));
+            }
+        }
     }
 
     currentDownloads.removeAll(reply);
     reply->deleteLater();
 
-    if (currentDownloads.isEmpty())
+    if (currentDownloads.isEmpty()) {
         // all downloads finished
         QCoreApplication::instance()->quit();
+    }
 }
 
 int main(int argc, char **argv)

@@ -1,28 +1,30 @@
-# WinCE does not have a platform directory for .prf files, and the
-# win32 directory is searched for .prfs by qmake on WinCE. Ideally
-# there should be a features/wince/opengl.prf which contains the wince
-# block below.
+QT_FOR_CONFIG += gui
 
-wince* {
-    include(../unix/opengl.prf)
-} else {
-    contains(QT_CONFIG, opengles2) {
-#       For Desktop, use the ANGLE library location passed on from configure.
-        INCLUDEPATH += $$QMAKE_INCDIR_OPENGL_ES2
-        CONFIG(debug, debug|release) {
-            QMAKE_LIBDIR += $$QMAKE_LIBDIR_OPENGL_ES2_DEBUG
-            contains(QT_CONFIG, angle) {
-                LIBS += $$QMAKE_LIBS_OPENGL_ES2_DEBUG
-            } else {
-                LIBS += $$QMAKE_LIBS_OPENGL_ES2
-            }
+qtConfig(opengles2) {
+    # Depending on the configuration we use libQtANGLE or libEGL and libGLESv2
+    qtConfig(combined-angle-lib) {
+        QMAKE_LIBS_OPENGL_ES2 = -l$${LIBQTANGLE_NAME} $$QMAKE_LIBS_OPENGL_ES2
+        QMAKE_LIBS_OPENGL_ES2_DEBUG = -l$${LIBQTANGLE_NAME}d $$QMAKE_LIBS_OPENGL_ES2_DEBUG
+    } else {
+        QMAKE_LIBS_OPENGL_ES2 = -l$${LIBEGL_NAME} -l$${LIBGLESV2_NAME} $$QMAKE_LIBS_OPENGL_ES2
+        QMAKE_LIBS_OPENGL_ES2_DEBUG = -l$${LIBEGL_NAME}d -l$${LIBGLESV2_NAME}d $$QMAKE_LIBS_OPENGL_ES2_DEBUG
+    }
+#   For Desktop, use the ANGLE library location passed on from configure.
+    INCLUDEPATH += $$QMAKE_INCDIR_OPENGL_ES2
+    CONFIG(debug, debug|release) {
+        QMAKE_LIBDIR += $$QMAKE_LIBDIR_OPENGL_ES2_DEBUG
+        qtConfig(angle) {
+            LIBS += $$QMAKE_LIBS_OPENGL_ES2_DEBUG
         } else {
             LIBS += $$QMAKE_LIBS_OPENGL_ES2
-            QMAKE_LIBDIR += $$QMAKE_LIBDIR_OPENGL_ES2_RELEASE
         }
-        DEFINES += QT_OPENGL_ES_2 QT_OPENGL_ES_2_ANGLE
-        QT_CONFIG -= opengl
     } else {
+        LIBS += $$QMAKE_LIBS_OPENGL_ES2
+        QMAKE_LIBDIR += $$QMAKE_LIBDIR_OPENGL_ES2_RELEASE
+    }
+    qtConfig(static): DEFINES += GL_APICALL= EGLAPI=
+} else {
+    !qtConfig(dynamicgl) {
         QMAKE_LIBS += $$QMAKE_LIBS_OPENGL
         QMAKE_LFLAGS += $$QMAKE_LFLAGS_OPENGL
     }

@@ -1,9 +1,0 @@
-Qt 4 makes it easier than ever to write multithreaded applications. More
-classes have been made usable from non-GUI threads, and the signals and slots
-mechanism can now be used to communicate between threads.
-
-Additionally, it is now possible to move objects between threads.
-
-
-Documentation for these examples can be found via the Examples
-link in the main Qt documentation.

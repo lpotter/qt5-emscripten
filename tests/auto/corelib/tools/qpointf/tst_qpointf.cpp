@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,6 +62,9 @@ private slots:
     void operator_divide();
     void division();
 
+    void dotProduct_data();
+    void dotProduct();
+
     void operator_unary_plus_data();
     void operator_unary_plus();
 
@@ -86,6 +76,8 @@ private slots:
 
     void toPoint_data();
     void toPoint();
+
+    void compare();
 
 #ifndef QT_NO_DATASTREAM
     void stream_data();
@@ -280,14 +272,37 @@ void tst_QPointF::division()
 {
     {
         QPointF p(1e-14, 1e-14);
-        p = p / sqrt(dot(p, p));
-        qFuzzyCompare(dot(p, p), 1);
+        p = p / std::sqrt(dot(p, p));
+        QCOMPARE(dot(p, p), qreal(1.0));
     }
     {
         QPointF p(1e-14, 1e-14);
-        p /= sqrt(dot(p, p));
-        qFuzzyCompare(dot(p, p), 1);
+        p /= std::sqrt(dot(p, p));
+        QCOMPARE(dot(p, p), qreal(1.0));
     }
+}
+
+void tst_QPointF::dotProduct_data()
+{
+    QTest::addColumn<QPointF>("point1");
+    QTest::addColumn<QPointF>("point2");
+    QTest::addColumn<qreal>("expected");
+
+    QTest::newRow("(0, 0) dot (0, 0)") << QPointF(0, 0) << QPointF(0, 0) << qreal(0);
+    QTest::newRow("(10, 0) dot (0, 10)") << QPointF(10, 0) << QPointF(0, 10)<< qreal(0);
+    QTest::newRow("(0, 10) dot (10, 0)") << QPointF(0, 10) << QPointF(10, 0) << qreal(0);
+    QTest::newRow("(10, 20) dot (-10, -20)") << QPointF(10, 20) << QPointF(-10, -20) << qreal(-500);
+    QTest::newRow("(10.1, 20.2) dot (-10.1, -20.2)") << QPointF(10.1, 20.2) << QPointF(-10.1, -20.2) << qreal(-510.05);
+    QTest::newRow("(-10.1, -20.2) dot (10.1, 20.2)") << QPointF(-10.1, -20.2) << QPointF(10.1, 20.2) << qreal(-510.05);
+}
+
+void tst_QPointF::dotProduct()
+{
+    QFETCH(QPointF, point1);
+    QFETCH(QPointF, point2);
+    QFETCH(qreal, expected);
+
+    QCOMPARE(QPointF::dotProduct(point1, point2), expected);
 }
 
 void tst_QPointF::operator_unary_plus_data()
@@ -399,6 +414,46 @@ void tst_QPointF::stream()
     QCOMPARE(pointFromStream, point);
 }
 #endif
+
+void tst_QPointF::compare()
+{
+    // First test we can scale and maintain difference.
+    QPointF p1(2.0, 2.0);
+    QPointF p2(3.0, 3.0);
+
+    QVERIFY(p1 != p2);
+
+    p1 /= 1e5;
+    p2 /= 1e5;
+
+    QVERIFY(!(p1 == p2));
+
+    p1 /= 1e5;
+    p2 /= 1e5;
+
+    QVERIFY(p1 != p2);
+
+    p1 /= 1e5;
+    p2 /= 1e5;
+
+    QVERIFY(!(p1 == p2));
+
+    p1 /= 2;
+    p2 /= 3;
+
+    QVERIFY(p1 == p2);
+
+    // Test we can compare with zero after inexact math
+    QPointF p3(3.0, 3.0);
+    p3 *= 0.1;
+    p3 /= 3;
+    p3 -= QPointF(0.1, 0.1);
+
+    QVERIFY(p3 == QPointF());
+
+    // Test we can compare one dimension with hard zero
+    QVERIFY(QPointF(1.9543e-14, -32.0) == QPointF(0.0, -32.0));
+}
 
 QTEST_MAIN(tst_QPointF)
 #include "tst_qpointf.moc"

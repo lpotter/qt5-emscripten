@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,81 +10,71 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qwindowspipereader_p.h"
-#include "qwinoverlappedionotifier_p.h"
-#include <qdebug.h>
+#include "qiodevice_p.h"
 #include <qelapsedtimer.h>
-#include <qeventloop.h>
-#include <qtimer.h>
 
 QT_BEGIN_NAMESPACE
+
+QWindowsPipeReader::Overlapped::Overlapped(QWindowsPipeReader *reader)
+    : pipeReader(reader)
+{
+}
+
+void QWindowsPipeReader::Overlapped::clear()
+{
+    ZeroMemory(this, sizeof(OVERLAPPED));
+}
+
 
 QWindowsPipeReader::QWindowsPipeReader(QObject *parent)
     : QObject(parent),
       handle(INVALID_HANDLE_VALUE),
+      overlapped(nullptr),
       readBufferMaxSize(0),
       actualReadBufferSize(0),
+      stopped(true),
       readSequenceStarted(false),
-      emitReadyReadTimer(new QTimer(this)),
+      notifiedCalled(false),
       pipeBroken(false),
-      readyReadEmitted(false)
+      readyReadPending(false),
+      inReadyRead(false)
 {
-    emitReadyReadTimer->setSingleShot(true);
-    connect(emitReadyReadTimer, SIGNAL(timeout()), SIGNAL(readyRead()));
-    dataReadNotifier = new QWinOverlappedIoNotifier(this);
-    connect(dataReadNotifier, &QWinOverlappedIoNotifier::notified, this, &QWindowsPipeReader::notified);
-}
-
-static void qt_cancelIo(HANDLE handle, OVERLAPPED *overlapped)
-{
-    typedef BOOL (WINAPI *PtrCancelIoEx)(HANDLE, LPOVERLAPPED);
-    static PtrCancelIoEx ptrCancelIoEx = 0;
-    if (!ptrCancelIoEx) {
-        HMODULE kernel32 = GetModuleHandleA("kernel32");
-        if (kernel32)
-            ptrCancelIoEx = PtrCancelIoEx(GetProcAddress(kernel32, "CancelIoEx"));
-    }
-    if (ptrCancelIoEx)
-        ptrCancelIoEx(handle, overlapped);
-    else
-        CancelIo(handle);
+    connect(this, &QWindowsPipeReader::_q_queueReadyRead,
+            this, &QWindowsPipeReader::emitPendingReadyRead, Qt::QueuedConnection);
 }
 
 QWindowsPipeReader::~QWindowsPipeReader()
 {
-    if (readSequenceStarted) {
-        qt_cancelIo(handle, &overlapped);
-        dataReadNotifier->waitForNotified(-1, &overlapped);
-    }
+    stop();
+    delete overlapped;
 }
 
 /*!
@@ -95,25 +85,28 @@ void QWindowsPipeReader::setHandle(HANDLE hPipeReadEnd)
     readBuffer.clear();
     actualReadBufferSize = 0;
     handle = hPipeReadEnd;
-    ZeroMemory(&overlapped, sizeof(overlapped));
     pipeBroken = false;
-    readyReadEmitted = false;
-    if (hPipeReadEnd != INVALID_HANDLE_VALUE) {
-        dataReadNotifier->setHandle(hPipeReadEnd);
-        dataReadNotifier->setEnabled(true);
-    }
 }
 
 /*!
     Stops the asynchronous read sequence.
-    This function assumes that the file already has been closed.
-    It does not cancel any I/O operation.
+    If the read sequence is running then the I/O operation is canceled.
  */
 void QWindowsPipeReader::stop()
 {
-    dataReadNotifier->setEnabled(false);
-    readSequenceStarted = false;
-    handle = INVALID_HANDLE_VALUE;
+    stopped = true;
+    if (readSequenceStarted) {
+        overlapped->pipeReader = nullptr;
+        if (!CancelIoEx(handle, overlapped)) {
+            const DWORD dwError = GetLastError();
+            if (dwError != ERROR_NOT_FOUND) {
+                qErrnoWarning(dwError, "QWindowsPipeReader: CancelIoEx on handle %p failed.",
+                              handle);
+            }
+        }
+        overlapped = nullptr;       // The object will be deleted in the I/O callback.
+        readSequenceStarted = false;
+    }
 }
 
 /*!
@@ -125,12 +118,12 @@ qint64 QWindowsPipeReader::bytesAvailable() const
 }
 
 /*!
-    Stops the asynchronous read sequence.
+    Copies at most \c{maxlen} bytes from the internal read buffer to \c{data}.
  */
 qint64 QWindowsPipeReader::read(char *data, qint64 maxlen)
 {
     if (pipeBroken && actualReadBufferSize == 0)
-        return -1;  // signal EOF
+        return 0;  // signal EOF
 
     qint64 readSoFar;
     // If startAsyncRead() has read data, copy it to its destination.
@@ -139,24 +132,15 @@ qint64 QWindowsPipeReader::read(char *data, qint64 maxlen)
         actualReadBufferSize--;
         readSoFar = 1;
     } else {
-        qint64 bytesToRead = qMin(qint64(actualReadBufferSize), maxlen);
-        readSoFar = 0;
-        while (readSoFar < bytesToRead) {
-            const char *ptr = readBuffer.readPointer();
-            int bytesToReadFromThisBlock = qMin(bytesToRead - readSoFar,
-                                                qint64(readBuffer.nextDataBlockSize()));
-            memcpy(data + readSoFar, ptr, bytesToReadFromThisBlock);
-            readSoFar += bytesToReadFromThisBlock;
-            readBuffer.free(bytesToReadFromThisBlock);
-            actualReadBufferSize -= bytesToReadFromThisBlock;
-        }
+        readSoFar = readBuffer.read(data, qMin(actualReadBufferSize, maxlen));
+        actualReadBufferSize -= readSoFar;
     }
 
     if (!pipeBroken) {
-        if (!actualReadBufferSize)
-            emitReadyReadTimer->stop();
-        if (!readSequenceStarted)
+        if (!readSequenceStarted && !stopped)
             startAsyncRead();
+        if (readSoFar == 0)
+            return -2;      // signal EWOULDBLOCK
     }
 
     return readSoFar;
@@ -171,84 +155,9 @@ bool QWindowsPipeReader::canReadLine() const
     \internal
     Will be called whenever the read operation completes.
  */
-void QWindowsPipeReader::notified(DWORD numberOfBytesRead, DWORD errorCode, OVERLAPPED *notifiedOverlapped)
+void QWindowsPipeReader::notified(DWORD errorCode, DWORD numberOfBytesRead)
 {
-    if (&overlapped != notifiedOverlapped)
-        return;
-    if (!completeAsyncRead(numberOfBytesRead, errorCode)) {
-        pipeBroken = true;
-        emit pipeClosed();
-        return;
-    }
-    startAsyncRead();
-    emitReadyReadTimer->stop();
-    readyReadEmitted = true;
-    emit readyRead();
-}
-
-/*!
-    \internal
-    Reads data from the socket into the readbuffer
- */
-void QWindowsPipeReader::startAsyncRead()
-{
-    const DWORD minReadBufferSize = 4096;
-    DWORD bytesToRead = qMax(checkPipeState(), minReadBufferSize);
-    if (pipeBroken)
-        return;
-
-    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - readBuffer.size())) {
-        bytesToRead = readBufferMaxSize - readBuffer.size();
-        if (bytesToRead == 0) {
-            // Buffer is full. User must read data from the buffer
-            // before we can read more from the pipe.
-            return;
-        }
-    }
-
-    char *ptr = readBuffer.reserve(bytesToRead);
-
-    readSequenceStarted = true;
-    if (ReadFile(handle, ptr, bytesToRead, NULL, &overlapped)) {
-        // We get notified by the QWinOverlappedIoNotifier - even in the synchronous case.
-        return;
-    } else {
-        const DWORD dwError = GetLastError();
-        switch (dwError) {
-        case ERROR_IO_PENDING:
-            // This is not an error. We're getting notified, when data arrives.
-            return;
-        case ERROR_MORE_DATA:
-            // This is not an error. The synchronous read succeeded.
-            // We're connected to a message mode pipe and the message
-            // didn't fit into the pipe's system buffer.
-            // We're getting notified by the QWinOverlappedIoNotifier.
-            break;
-        case ERROR_BROKEN_PIPE:
-        case ERROR_PIPE_NOT_CONNECTED:
-            {
-                // It may happen, that the other side closes the connection directly
-                // after writing data. Then we must set the appropriate socket state.
-                readSequenceStarted = false;
-                pipeBroken = true;
-                emit pipeClosed();
-                return;
-            }
-        default:
-            readSequenceStarted = false;
-            emit winError(dwError, QLatin1String("QWindowsPipeReader::startAsyncRead"));
-            return;
-        }
-    }
-}
-
-/*!
-    \internal
-    Sets the correct size of the read buffer after a read operation.
-    Returns false, if an error occurred or the connection dropped.
- */
-bool QWindowsPipeReader::completeAsyncRead(DWORD bytesRead, DWORD errorCode)
-{
+    notifiedCalled = true;
     readSequenceStarted = false;
 
     switch (errorCode) {
@@ -261,17 +170,96 @@ bool QWindowsPipeReader::completeAsyncRead(DWORD bytesRead, DWORD errorCode)
         break;
     case ERROR_BROKEN_PIPE:
     case ERROR_PIPE_NOT_CONNECTED:
-        return false;
+        pipeBroken = true;
+        break;
+    case ERROR_OPERATION_ABORTED:
+        if (stopped)
+            break;
+        Q_FALLTHROUGH();
     default:
-        emit winError(errorCode, QLatin1String("QWindowsPipeReader::completeAsyncRead"));
-        return false;
+        emit winError(errorCode, QLatin1String("QWindowsPipeReader::notified"));
+        pipeBroken = true;
+        break;
     }
 
-    actualReadBufferSize += bytesRead;
+    // After the reader was stopped, the only reason why this function can be called is the
+    // completion of a cancellation. No signals should be emitted, and no new read sequence should
+    // be started in this case.
+    if (stopped)
+        return;
+
+    if (pipeBroken) {
+        emit pipeClosed();
+        return;
+    }
+
+    actualReadBufferSize += numberOfBytesRead;
     readBuffer.truncate(actualReadBufferSize);
-    if (!emitReadyReadTimer->isActive())
-        emitReadyReadTimer->start();
-    return true;
+    startAsyncRead();
+    if (!readyReadPending) {
+        readyReadPending = true;
+        emit _q_queueReadyRead(QWindowsPipeReader::QPrivateSignal());
+    }
+}
+
+/*!
+    \internal
+    Reads data from the pipe into the readbuffer.
+ */
+void QWindowsPipeReader::startAsyncRead()
+{
+    const DWORD minReadBufferSize = 4096;
+    qint64 bytesToRead = qMax(checkPipeState(), minReadBufferSize);
+    if (pipeBroken)
+        return;
+
+    if (readBufferMaxSize && bytesToRead > (readBufferMaxSize - readBuffer.size())) {
+        bytesToRead = readBufferMaxSize - readBuffer.size();
+        if (bytesToRead <= 0) {
+            // Buffer is full. User must read data from the buffer
+            // before we can read more from the pipe.
+            return;
+        }
+    }
+
+    char *ptr = readBuffer.reserve(bytesToRead);
+
+    stopped = false;
+    readSequenceStarted = true;
+    if (!overlapped)
+        overlapped = new Overlapped(this);
+    overlapped->clear();
+    if (!ReadFileEx(handle, ptr, bytesToRead, overlapped, &readFileCompleted)) {
+        readSequenceStarted = false;
+
+        const DWORD dwError = GetLastError();
+        switch (dwError) {
+        case ERROR_BROKEN_PIPE:
+        case ERROR_PIPE_NOT_CONNECTED:
+            // It may happen, that the other side closes the connection directly
+            // after writing data. Then we must set the appropriate socket state.
+            pipeBroken = true;
+            emit pipeClosed();
+            break;
+        default:
+            emit winError(dwError, QLatin1String("QWindowsPipeReader::startAsyncRead"));
+            break;
+        }
+    }
+}
+
+/*!
+    \internal
+    Called when ReadFileEx finished the read operation.
+ */
+void QWindowsPipeReader::readFileCompleted(DWORD errorCode, DWORD numberOfBytesTransfered,
+                                           OVERLAPPED *overlappedBase)
+{
+    Overlapped *overlapped = static_cast<Overlapped *>(overlappedBase);
+    if (overlapped->pipeReader)
+        overlapped->pipeReader->notified(errorCode, numberOfBytesTransfered);
+    else
+        delete overlapped;
 }
 
 /*!
@@ -282,28 +270,69 @@ bool QWindowsPipeReader::completeAsyncRead(DWORD bytesRead, DWORD errorCode)
 DWORD QWindowsPipeReader::checkPipeState()
 {
     DWORD bytes;
-    if (PeekNamedPipe(handle, NULL, 0, NULL, &bytes, NULL)) {
+    if (PeekNamedPipe(handle, nullptr, 0, nullptr, &bytes, nullptr))
         return bytes;
-    } else {
-        if (!pipeBroken) {
-            pipeBroken = true;
-            emit pipeClosed();
-        }
+    if (!pipeBroken) {
+        pipeBroken = true;
+        emit pipeClosed();
     }
     return 0;
 }
 
+bool QWindowsPipeReader::waitForNotification(int timeout)
+{
+    QElapsedTimer t;
+    t.start();
+    notifiedCalled = false;
+    int msecs = timeout;
+    while (SleepEx(msecs == -1 ? INFINITE : msecs, TRUE) == WAIT_IO_COMPLETION) {
+        if (notifiedCalled)
+            return true;
+
+        // Some other I/O completion routine was called. Wait some more.
+        msecs = qt_subtract_from_timeout(timeout, t.elapsed());
+        if (!msecs)
+            break;
+    }
+    return notifiedCalled;
+}
+
+void QWindowsPipeReader::emitPendingReadyRead()
+{
+    if (readyReadPending) {
+        readyReadPending = false;
+        inReadyRead = true;
+        emit readyRead();
+        inReadyRead = false;
+    }
+}
+
 /*!
     Waits for the completion of the asynchronous read operation.
-    Returns true, if we've emitted the readyRead signal.
+    Returns \c true, if we've emitted the readyRead signal (non-recursive case)
+    or readyRead will be emitted by the event loop (recursive case).
  */
 bool QWindowsPipeReader::waitForReadyRead(int msecs)
 {
+    if (readyReadPending) {
+        if (!inReadyRead)
+            emitPendingReadyRead();
+        return true;
+    }
+
     if (!readSequenceStarted)
         return false;
-    readyReadEmitted = false;
-    dataReadNotifier->waitForNotified(msecs, &overlapped);
-    return readyReadEmitted;
+
+    if (!waitForNotification(msecs))
+        return false;
+
+    if (readyReadPending) {
+        if (!inReadyRead)
+            emitPendingReadyRead();
+        return true;
+    }
+
+    return false;
 }
 
 /*!
@@ -315,6 +344,7 @@ bool QWindowsPipeReader::waitForPipeClosed(int msecs)
     QElapsedTimer stopWatch;
     stopWatch.start();
     forever {
+        waitForReadyRead(0);
         checkPipeState();
         if (pipeBroken)
             return true;

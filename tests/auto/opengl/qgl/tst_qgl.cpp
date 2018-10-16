@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +36,9 @@
 #include <qglframebufferobject.h>
 #include <qglcolormap.h>
 #include <qpaintengine.h>
+#include <qopenglfunctions.h>
+#include <qopenglframebufferobject.h>
+#include <qopenglpaintdevice.h>
 
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
@@ -59,6 +49,7 @@
 #include <QtOpenGL/private/qgl_p.h>
 #include <QtGui/private/qimage_p.h>
 #include <QtGui/private/qimagepixmapcleanuphooks_p.h>
+#include <QtGui/private/qopenglextensions_p.h>
 #endif
 
 class tst_QGL : public QObject
@@ -78,13 +69,13 @@ private slots:
     void shareRegister();
     void textureCleanup();
 #endif
-    void graphicsViewClipping();
     void partialGLWidgetUpdates_data();
     void partialGLWidgetUpdates();
     void glWidgetWithAlpha();
     void glWidgetRendering();
     void glFBOSimpleRendering();
     void glFBORendering();
+    void currentFboSync();
     void multipleFBOInterleavedRendering();
     void glFBOUseInGLWidget();
     void glPBufferRendering();
@@ -98,6 +89,8 @@ private slots:
     void destroyFBOAfterContext();
     void threadImages();
     void nullRectCrash();
+    void graphicsViewClipping();
+    void extensions();
 };
 
 tst_QGL::tst_QGL()
@@ -461,113 +454,113 @@ void tst_QGL::getSetCheck()
     QGLFormat format1;
     QGLFormat format2;
 
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
     format1.setDoubleBuffer(false);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setDoubleBuffer(false);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setDepthBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setDepthBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setAccumBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setAccumBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setRedBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setRedBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setGreenBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setGreenBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setBlueBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setBlueBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setAlphaBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setAlphaBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setStencilBufferSize(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setStencilBufferSize(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setSamples(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setSamples(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setSwapInterval(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setSwapInterval(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setPlane(8);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setPlane(8);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setVersion(3, 2);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setVersion(3, 2);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setProfile(QGLFormat::CoreProfile);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setProfile(QGLFormat::CoreProfile);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     format1.setOption(QGL::NoDeprecatedFunctions);
     QVERIFY(!(format1 == format2));
     QVERIFY(format1 != format2);
     format2.setOption(QGL::NoDeprecatedFunctions);
-    QVERIFY(format1 == format2);
+    QCOMPARE(format1, format2);
     QVERIFY(!(format1 != format2));
 
     // Copy constructor and assignment for QGLFormat.
     QGLFormat format3(format1);
     QGLFormat format4;
-    QVERIFY(format1 == format3);
+    QCOMPARE(format1, format3);
     QVERIFY(format1 != format4);
     format4 = format1;
-    QVERIFY(format1 == format4);
+    QCOMPARE(format1, format4);
 
     // Check that modifying a copy doesn't affect the original.
     format3.setRedBufferSize(16);
@@ -586,15 +579,15 @@ void tst_QGL::getSetCheck()
     QCOMPARE(format5.plane(), 3);
 
     // The default format should be the same as QGLFormat().
-    QVERIFY(QGLFormat::defaultFormat() == QGLFormat());
+    QCOMPARE(QGLFormat::defaultFormat(), QGLFormat());
 
     // Modify the default format and check that it was changed.
     QGLFormat::setDefaultFormat(format1);
-    QVERIFY(QGLFormat::defaultFormat() == format1);
+    QCOMPARE(QGLFormat::defaultFormat(), format1);
 
     // Restore the default format.
     QGLFormat::setDefaultFormat(QGLFormat());
-    QVERIFY(QGLFormat::defaultFormat() == QGLFormat());
+    QCOMPARE(QGLFormat::defaultFormat(), QGLFormat());
 
     // Check the default overlay format's expected values.
     QGLFormat overlay(QGLFormat::defaultOverlayFormat());
@@ -620,11 +613,11 @@ void tst_QGL::getSetCheck()
 
     // Modify the default overlay format and check that it was changed.
     QGLFormat::setDefaultOverlayFormat(format1);
-    QVERIFY(QGLFormat::defaultOverlayFormat() == format1);
+    QCOMPARE(QGLFormat::defaultOverlayFormat(), format1);
 
     // Restore the default overlay format.
     QGLFormat::setDefaultOverlayFormat(overlay);
-    QVERIFY(QGLFormat::defaultOverlayFormat() == overlay);
+    QCOMPARE(QGLFormat::defaultOverlayFormat(), overlay);
 
     MyGLContext obj2(obj1);
     // bool QGLContext::windowCreated()
@@ -746,13 +739,14 @@ void tst_QGL::openGLVersionCheck()
     // However, the complicated parts are in openGLVersionFlags(const QString &versionString)
     // tested above
 
-#if defined(QT_OPENGL_ES_1)
-    QVERIFY(QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_ES_Common_Version_1_0);
-#elif defined(QT_OPENGL_ES_2)
+#if defined(QT_OPENGL_ES_2)
     QVERIFY(QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_ES_Version_2_0);
 #else
-    QVERIFY(QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_Version_1_1);
-#endif //defined(QT_OPENGL_ES_1)
+    if (QOpenGLContext::currentContext()->isOpenGLES())
+        QVERIFY(QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_ES_Version_2_0);
+    else
+        QVERIFY(QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_Version_1_1);
+#endif //defined(QT_OPENGL_ES_2)
 }
 #endif //QT_BUILD_INTERNAL
 
@@ -832,10 +826,19 @@ static void fuzzyCompareImages(const QImage &testImage, const QImage &referenceI
 class UnclippedWidget : public QWidget
 {
 public:
+    bool painted;
+
+    UnclippedWidget()
+        : painted(false)
+    {
+    }
+
     void paintEvent(QPaintEvent *)
     {
         QPainter p(this);
         p.fillRect(rect().adjusted(-1000, -1000, 1000, 1000), Qt::black);
+
+        painted = true;
     }
 };
 
@@ -865,7 +868,13 @@ void tst_QGL::graphicsViewClipping()
 
     scene.setSceneRect(view.viewport()->rect());
 
-    QVERIFY(QTest::qWaitForWindowActive(&view));
+    QVERIFY(QTest::qWaitForWindowExposed(view.viewport()->windowHandle()));
+    #ifdef Q_OS_MAC
+        // The black rectangle jumps from the center to the upper left for some reason.
+        QTest::qWait(100);
+    #endif
+
+    QTRY_VERIFY(widget->painted);
 
     QImage image = viewport->grabFrameBuffer();
     QImage expected = image;
@@ -914,8 +923,7 @@ void tst_QGL::partialGLWidgetUpdates()
     widget.setFixedSize(150, 150);
     widget.setAutoFillBackground(autoFillBackground);
     widget.show();
-
-    QTest::qWait(200);
+    QVERIFY(QTest::qWaitForWindowExposed(&widget));
 
     if (widget.format().doubleBuffer() != doubleBufferedContext)
         QSKIP("Platform does not support requested format");
@@ -1043,6 +1051,12 @@ void tst_QGL::glWidgetRendering()
     QVERIFY(w.beginOk);
     QVERIFY(w.engineType == QPaintEngine::OpenGL || w.engineType == QPaintEngine::OpenGL2);
 
+#if defined(Q_OS_QNX)
+    // glReadPixels reads from the back buffer. On QNX the buffer is not preserved
+    // after a buffer swap. This is why we have to swap the buffer explicitly before calling
+    // grabFrameBuffer to retrieve the content of the front buffer.
+    w.swapBuffers();
+#endif
     QImage fb = w.grabFrameBuffer(false);
     qt_opengl_check_test_pattern(fb);
 }
@@ -1063,9 +1077,10 @@ void tst_QGL::glFBOSimpleRendering()
 
     fbo->bind();
 
-    glClearColor(1.0, 0.0, 0.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glFinish();
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+    funcs->glClearColor(1.0, 0.0, 0.0, 1.0);
+    funcs->glClear(GL_COLOR_BUFFER_BIT);
+    funcs->glFinish();
 
     QImage fb = fbo->toImage().convertToFormat(QImage::Format_RGB32);
     QImage reference(fb.size(), QImage::Format_RGB32);
@@ -1083,6 +1098,9 @@ void tst_QGL::glFBOSimpleRendering()
 //       buffer is actually missing. But that's probably ok anyway.
 void tst_QGL::glFBORendering()
 {
+#if defined(Q_OS_QNX)
+    QSKIP("Reading the QGLFramebufferObject is unsupported on this platform");
+#endif
     if (!QGLFramebufferObject::hasOpenGLFramebufferObjects())
         QSKIP("QGLFramebufferObject not supported on this platform");
 
@@ -1115,6 +1133,99 @@ void tst_QGL::glFBORendering()
     qt_opengl_check_test_pattern(fb);
 }
 
+class QOpenGLFramebufferObjectPaintDevice : public QOpenGLPaintDevice
+{
+public:
+    QOpenGLFramebufferObjectPaintDevice(int width, int height)
+        : QOpenGLPaintDevice(width, height)
+        , m_fbo(width, height, QOpenGLFramebufferObject::CombinedDepthStencil)
+    {
+    }
+
+    void ensureActiveTarget()
+    {
+        m_fbo.bind();
+    }
+
+    QImage toImage() const
+    {
+        return m_fbo.toImage();
+    }
+
+private:
+    QOpenGLFramebufferObject m_fbo;
+};
+
+void tst_QGL::currentFboSync()
+{
+    if (!QGLFramebufferObject::hasOpenGLFramebufferObjects())
+        QSKIP("QGLFramebufferObject not supported on this platform");
+
+#if defined(Q_OS_QNX)
+    QSKIP("Reading the QGLFramebufferObject is unsupported on this platform");
+#endif
+
+    QGLWidget glw;
+    glw.makeCurrent();
+
+    // For some reason we offer inter-operatibility between QGL and QOpenGL
+    // paint engines. (?!) Let's check if the two engines can be used to perform
+    // drawing in turns on different targets within the same context.
+
+    {
+        QGLFramebufferObject fbo1(256, 256, QGLFramebufferObject::CombinedDepthStencil);
+
+        QOpenGLFramebufferObjectPaintDevice fbo2(256, 256);
+
+        QImage sourceImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+        QPainter sourcePainter(&sourceImage);
+        qt_opengl_draw_test_pattern(&sourcePainter, 256, 256);
+
+        QPainter fbo1Painter(&fbo1);
+
+        QPainter fbo2Painter(&fbo2);
+        fbo2Painter.drawImage(0, 0, sourceImage);
+        fbo2Painter.end();
+
+        QImage fbo2Image = fbo2.toImage();
+
+        fbo1Painter.drawImage(0, 0, sourceImage);
+        fbo1Painter.end();
+
+        QGLFramebufferObject::bindDefault();
+
+        // Convert the QGLFBO's result since QOpenGLFBO uses a wider
+        // variety of possible return formats.
+        QCOMPARE(fbo1.toImage().convertToFormat(fbo2Image.format()), fbo2Image);
+    }
+
+    {
+        QGLFramebufferObject fbo1(512, 512, QGLFramebufferObject::CombinedDepthStencil);
+
+        QOpenGLFramebufferObjectPaintDevice fbo2(256, 256);
+
+        QImage sourceImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+        QPainter sourcePainter(&sourceImage);
+        qt_opengl_draw_test_pattern(&sourcePainter, 256, 256);
+
+        QPainter fbo2Painter(&fbo2);
+        fbo2Painter.drawImage(0, 0, sourceImage);
+        QImage fbo2Image1 = fbo2.toImage();
+        fbo2Painter.fillRect(0, 0, 256, 256, Qt::white);
+
+        QPainter fbo1Painter(&fbo1);
+        fbo1Painter.drawImage(0, 0, sourceImage);
+        fbo1Painter.end();
+
+        // check that the OpenGL paint engine now knows it needs to sync
+        fbo2Painter.drawImage(0, 0, sourceImage);
+        QImage fbo2Image2 = fbo2.toImage();
+
+        fbo2Painter.end();
+
+        QCOMPARE(fbo2Image1, fbo2Image2);
+    }
+}
 
 // Tests multiple QPainters active on different FBOs at the same time, with
 // interleaving painting. Performance-wise, this is sub-optimal, but it still
@@ -1259,7 +1370,7 @@ protected:
         fboPainter.end();
         fboImage = fbo->toImage();
 
-        widgetPainter.fillRect(-1, -1, width()+2, width()+2, Qt::blue);
+        widgetPainter.fillRect(-1, -1, width()+2, height()+2, Qt::blue);
 
         delete fbo;
     }
@@ -1273,12 +1384,19 @@ void tst_QGL::glFBOUseInGLWidget()
 
     FBOUseInGLWidget w;
     w.resize(100, 100);
-    w.show();
+    w.showNormal();
 
     QVERIFY(QTest::qWaitForWindowExposed(&w));
 
     QVERIFY(w.widgetPainterBeginOk);
     QVERIFY(w.fboPainterBeginOk);
+
+#if defined(Q_OS_QNX)
+    // glReadPixels reads from the back buffer. On QNX the buffer is not preserved
+    // after a buffer swap. This is why we have to swap the buffer explicitly before calling
+    // grabFrameBuffer to retrieve the content of the front buffer
+    w.swapBuffers();
+#endif
 
     QImage widgetFB = w.grabFrameBuffer(false);
     QImage widgetReference(widgetFB.size(), widgetFB.format());
@@ -1294,14 +1412,17 @@ void tst_QGL::glWidgetReparent()
 {
     // Try it as a top-level first:
     GLWidget *widget = new GLWidget;
+    widget->setObjectName(QStringLiteral("glWidget1"));
     widget->setGeometry(0, 0, 200, 30);
     widget->show();
 
     QWidget grandParentWidget;
+    grandParentWidget.setObjectName(QStringLiteral("grandParentWidget"));
     grandParentWidget.setPalette(Qt::blue);
     QVBoxLayout grandParentLayout(&grandParentWidget);
 
     QWidget parentWidget(&grandParentWidget);
+    parentWidget.setObjectName(QStringLiteral("parentWidget"));
     grandParentLayout.addWidget(&parentWidget);
     parentWidget.setPalette(Qt::green);
     parentWidget.setAutoFillBackground(true);
@@ -1333,6 +1454,7 @@ void tst_QGL::glWidgetReparent()
     // Now do pretty much the same thing, but don't show the
     // widget first:
     widget = new GLWidget;
+    widget->setObjectName(QStringLiteral("glWidget2"));
     parentLayout.addWidget(widget);
 
     QVERIFY(QTest::qWaitForWindowExposed(&grandParentWidget));
@@ -1349,11 +1471,11 @@ class RenderPixmapWidget : public QGLWidget
 protected:
     void initializeGL() {
         // Set some gl state:
-        glClearColor(1.0, 0.0, 0.0, 1.0);
+        QOpenGLContext::currentContext()->functions()->glClearColor(1.0, 0.0, 0.0, 1.0);
     }
 
     void paintGL() {
-        glClear(GL_COLOR_BUFFER_BIT);
+        QOpenGLContext::currentContext()->functions()->glClear(GL_COLOR_BUFFER_BIT);
     }
 };
 
@@ -1361,12 +1483,13 @@ void tst_QGL::glWidgetRenderPixmap()
 {
     RenderPixmapWidget *w = new RenderPixmapWidget;
 
-    QPixmap pm = w->renderPixmap(100, 100, false);
+    QSize pmSize = QSize(100, 100);
+    QPixmap pm = w->renderPixmap(pmSize.width(), pmSize.height(), false);
 
     delete w;
 
     QImage fb = pm.toImage().convertToFormat(QImage::Format_RGB32);
-    QImage reference(fb.size(), QImage::Format_RGB32);
+    QImage reference(pmSize, QImage::Format_RGB32);
     reference.fill(0xffff0000);
 
     QFUZZY_COMPARE_IMAGES(fb, reference);
@@ -1387,9 +1510,9 @@ void tst_QGL::colormap()
     QGLColormap cmap1;
     QVERIFY(cmap1.isEmpty());
     QCOMPARE(cmap1.size(), 0);
-    QVERIFY(cmap1.entryRgb(0) == 0);
-    QVERIFY(cmap1.entryRgb(-1) == 0);
-    QVERIFY(cmap1.entryRgb(100) == 0);
+    QCOMPARE(cmap1.entryRgb(0), QRgb(0));
+    QCOMPARE(cmap1.entryRgb(-1), QRgb(0));
+    QCOMPARE(cmap1.entryRgb(100), QRgb(0));
     QVERIFY(!cmap1.entryColor(0).isValid());
     QVERIFY(!cmap1.entryColor(-1).isValid());
     QVERIFY(!cmap1.entryColor(100).isValid());
@@ -1404,7 +1527,7 @@ void tst_QGL::colormap()
     // not to detect when it is empty!
     QVERIFY(cmap1.isEmpty());
     QCOMPARE(cmap1.size(), 256);
-    QVERIFY(cmap1.entryRgb(0) == 0);
+    QCOMPARE(cmap1.entryRgb(0), QRgb(0));
     QVERIFY(cmap1.entryColor(0) == QColor(0, 0, 0, 255));
     QVERIFY(cmap1.entryRgb(56) == qRgb(255, 0, 0));
     QVERIFY(cmap1.entryColor(56) == QColor(255, 0, 0, 255));
@@ -1486,16 +1609,10 @@ void tst_QGL::colormap()
     QVERIFY(cmap4.isEmpty());
     QCOMPARE(cmap4.size(), 256);
     cmap4.setHandle(Qt::HANDLE(42));
-    QVERIFY(cmap4.handle() == Qt::HANDLE(42));
+    QCOMPARE(cmap4.handle(), Qt::HANDLE(42));
     QVERIFY(!cmap4.isEmpty());
     QCOMPARE(cmap4.size(), 256);
 }
-
-#ifndef QT_OPENGL_ES
-#define DEFAULT_FORMAT GL_RGBA8
-#else
-#define DEFAULT_FORMAT GL_RGBA
-#endif
 
 #ifndef GL_TEXTURE_3D
 #define GL_TEXTURE_3D 0x806F
@@ -1510,9 +1627,15 @@ void tst_QGL::fboFormat()
     // Check the initial conditions.
     QGLFramebufferObjectFormat format1;
     QCOMPARE(format1.samples(), 0);
-    QVERIFY(format1.attachment() == QGLFramebufferObject::NoAttachment);
+    QCOMPARE(format1.attachment(), QGLFramebufferObject::NoAttachment);
     QCOMPARE(int(format1.textureTarget()), int(GL_TEXTURE_2D));
-    QCOMPARE(int(format1.internalTextureFormat()), int(DEFAULT_FORMAT));
+    int expectedFormat =
+#ifdef QT_OPENGL_ES_2
+        GL_RGBA;
+#else
+        QOpenGLContext::openGLModuleType() != QOpenGLContext::LibGL ? GL_RGBA : GL_RGBA8;
+#endif
+    QCOMPARE(int(format1.internalTextureFormat()), expectedFormat);
 
     // Modify the values and re-check.
     format1.setSamples(8);
@@ -1520,7 +1643,7 @@ void tst_QGL::fboFormat()
     format1.setTextureTarget(GL_TEXTURE_3D);
     format1.setInternalTextureFormat(GL_RGB16);
     QCOMPARE(format1.samples(), 8);
-    QVERIFY(format1.attachment() == QGLFramebufferObject::CombinedDepthStencil);
+    QCOMPARE(format1.attachment(), QGLFramebufferObject::CombinedDepthStencil);
     QCOMPARE(int(format1.textureTarget()), int(GL_TEXTURE_3D));
     QCOMPARE(int(format1.internalTextureFormat()), int(GL_RGB16));
 
@@ -1528,12 +1651,12 @@ void tst_QGL::fboFormat()
     QGLFramebufferObjectFormat format2(format1);
     QGLFramebufferObjectFormat format3;
     QCOMPARE(format2.samples(), 8);
-    QVERIFY(format2.attachment() == QGLFramebufferObject::CombinedDepthStencil);
+    QCOMPARE(format2.attachment(), QGLFramebufferObject::CombinedDepthStencil);
     QCOMPARE(int(format2.textureTarget()), int(GL_TEXTURE_3D));
     QCOMPARE(int(format2.internalTextureFormat()), int(GL_RGB16));
     format3 = format1;
     QCOMPARE(format3.samples(), 8);
-    QVERIFY(format3.attachment() == QGLFramebufferObject::CombinedDepthStencil);
+    QCOMPARE(format3.attachment(), QGLFramebufferObject::CombinedDepthStencil);
     QCOMPARE(int(format3.textureTarget()), int(GL_TEXTURE_3D));
     QCOMPARE(int(format3.internalTextureFormat()), int(GL_RGB16));
 
@@ -1541,7 +1664,7 @@ void tst_QGL::fboFormat()
     format2.setSamples(9);
     format3.setTextureTarget(GL_TEXTURE_2D);
     QCOMPARE(format1.samples(), 8);
-    QVERIFY(format1.attachment() == QGLFramebufferObject::CombinedDepthStencil);
+    QCOMPARE(format1.attachment(), QGLFramebufferObject::CombinedDepthStencil);
     QCOMPARE(int(format1.textureTarget()), int(GL_TEXTURE_3D));
     QCOMPARE(int(format1.internalTextureFormat()), int(GL_RGB16));
 
@@ -1549,56 +1672,68 @@ void tst_QGL::fboFormat()
     QGLFramebufferObjectFormat format1c;
     QGLFramebufferObjectFormat format2c;
 
-    QVERIFY(format1c == format2c);
+    QCOMPARE(format1c, format2c);
     QVERIFY(!(format1c != format2c));
     format1c.setSamples(8);
     QVERIFY(!(format1c == format2c));
     QVERIFY(format1c != format2c);
     format2c.setSamples(8);
-    QVERIFY(format1c == format2c);
+    QCOMPARE(format1c, format2c);
     QVERIFY(!(format1c != format2c));
 
     format1c.setAttachment(QGLFramebufferObject::CombinedDepthStencil);
     QVERIFY(!(format1c == format2c));
     QVERIFY(format1c != format2c);
     format2c.setAttachment(QGLFramebufferObject::CombinedDepthStencil);
-    QVERIFY(format1c == format2c);
+    QCOMPARE(format1c, format2c);
     QVERIFY(!(format1c != format2c));
 
     format1c.setTextureTarget(GL_TEXTURE_3D);
     QVERIFY(!(format1c == format2c));
     QVERIFY(format1c != format2c);
     format2c.setTextureTarget(GL_TEXTURE_3D);
-    QVERIFY(format1c == format2c);
+    QCOMPARE(format1c, format2c);
     QVERIFY(!(format1c != format2c));
 
     format1c.setInternalTextureFormat(GL_RGB16);
     QVERIFY(!(format1c == format2c));
     QVERIFY(format1c != format2c);
     format2c.setInternalTextureFormat(GL_RGB16);
-    QVERIFY(format1c == format2c);
+    QCOMPARE(format1c, format2c);
     QVERIFY(!(format1c != format2c));
 
     QGLFramebufferObjectFormat format3c(format1c);
     QGLFramebufferObjectFormat format4c;
-    QVERIFY(format1c == format3c);
+    QCOMPARE(format1c, format3c);
     QVERIFY(!(format1c != format3c));
-    format3c.setInternalTextureFormat(DEFAULT_FORMAT);
+    format3c.setInternalTextureFormat(
+#ifdef QT_OPENGL_ES_2
+        GL_RGBA
+#else
+        QOpenGLContext::openGLModuleType() != QOpenGLContext::LibGL ? GL_RGBA : GL_RGBA8
+#endif
+        );
     QVERIFY(!(format1c == format3c));
     QVERIFY(format1c != format3c);
 
     format4c = format1c;
-    QVERIFY(format1c == format4c);
+    QCOMPARE(format1c, format4c);
     QVERIFY(!(format1c != format4c));
-    format4c.setInternalTextureFormat(DEFAULT_FORMAT);
+    format4c.setInternalTextureFormat(
+#ifdef QT_OPENGL_ES_2
+        GL_RGBA
+#else
+        QOpenGLContext::openGLModuleType() != QOpenGLContext::LibGL ? GL_RGBA : GL_RGBA8
+#endif
+        );
     QVERIFY(!(format1c == format4c));
     QVERIFY(format1c != format4c);
 }
 
 void tst_QGL::testDontCrashOnDanglingResources()
 {
-    // We have a number of Q_GLOBAL_STATICS inside the QtOpenGL
-    // library. This test is verify that we don't crash as a result of
+    // We have a number of Q_GLOBAL_STATICS inside the Qt OpenGL
+    // module. This test is verify that we don't crash as a result of
     // them calling into libgl on application shutdown.
     QWidget *widget = new UnclippedWidget();
     widget->show();
@@ -1629,11 +1764,12 @@ protected:
     void paintEvent(QPaintEvent*)
     {
         // clear the stencil with junk
-        glStencilMask(0xFFFF);
-        glClearStencil(0xFFFF);
-        glDisable(GL_STENCIL_TEST);
-        glDisable(GL_SCISSOR_TEST);
-        glClear(GL_STENCIL_BUFFER_BIT);
+        QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
+        funcs->glStencilMask(0xFFFF);
+        funcs->glClearStencil(0xFFFF);
+        funcs->glDisable(GL_STENCIL_TEST);
+        funcs->glDisable(GL_SCISSOR_TEST);
+        funcs->glClear(GL_STENCIL_BUFFER_BIT);
 
         QPainter painter(this);
         paint(&painter);
@@ -1653,6 +1789,12 @@ void tst_QGL::replaceClipping()
     glw.paint(&referencePainter);
     referencePainter.end();
 
+#if defined(Q_OS_QNX)
+    // glReadPixels reads from the back buffer. On QNX the buffer is not preserved
+    // after a buffer swap. This is why we have to swap the buffer explicitly before calling
+    // grabFrameBuffer to retrieve the content of the front buffer
+    glw.swapBuffers();
+#endif
     const QImage widgetFB = glw.grabFrameBuffer(false).convertToFormat(QImage::Format_RGB32);
 
     // Sample pixels in a grid pattern which avoids false failures due to
@@ -1755,7 +1897,7 @@ void tst_QGL::clipTest()
 {
     ClipTestGLWidget glw;
     glw.resize(220, 220);
-    glw.show();
+    glw.showNormal();
 
     QVERIFY(QTest::qWaitForWindowExposed(&glw));
 
@@ -1764,6 +1906,12 @@ void tst_QGL::clipTest()
     glw.paint(&referencePainter);
     referencePainter.end();
 
+#if defined(Q_OS_QNX)
+    // glReadPixels reads from the back buffer. On QNX the buffer is not preserved
+    // after a buffer swap. This is why we have to swap the buffer explicitly before calling
+    // grabFrameBuffer to retrieve the content of the front buffer
+    glw.swapBuffers();
+#endif
     const QImage widgetFB = glw.grabFrameBuffer(false).convertToFormat(QImage::Format_RGB32);
 
     // Sample pixels in a grid pattern which avoids false failures due to
@@ -1797,7 +1945,7 @@ void tst_QGL::destroyFBOAfterContext()
     delete glw;
 
     // The handle should now be zero.
-    QVERIFY(fbo->handle() == 0);
+    QVERIFY(!fbo->handle());
     QVERIFY(!fbo->isValid());
 
     delete fbo;
@@ -1834,14 +1982,14 @@ void tst_QGL::shareRegister()
 
     // Create a guard for the first context.
     QOpenGLSharedResourceGuard guard(glw1->context()->contextHandle());
-    QVERIFY(guard.id() == 0);
+    QCOMPARE(guard.id(), 0);
     guard.setId(3);
-    QVERIFY(guard.id() == 3);
+    QCOMPARE(guard.id(), 3);
 
     // Request a tst_QGLResource object for the first context.
     tst_QGLResource *res1 = qt_shared_test()->value(glw1->context()->contextHandle());
     QVERIFY(res1);
-    QVERIFY(qt_shared_test()->value(glw1->context()->contextHandle()) == res1);
+    QCOMPARE(qt_shared_test()->value(glw1->context()->contextHandle()), res1);
 
     // Create another context that shares with the first.
     QVERIFY(!glw1->isSharing());
@@ -1855,12 +2003,12 @@ void tst_QGL::shareRegister()
     QVERIFY(glw1->context() != glw2->context());
 
     // Check that the first context's resource is also on the second.
-    QVERIFY(qt_shared_test()->value(glw1->context()) == res1);
-    QVERIFY(qt_shared_test()->value(glw2->context()) == res1);
+    QCOMPARE(qt_shared_test()->value(glw1->context()), res1);
+    QCOMPARE(qt_shared_test()->value(glw2->context()), res1);
 
     // Guard should still be the same.
-    QVERIFY(guard.context() == glw1->context());
-    QVERIFY(guard.id() == 3);
+    QCOMPARE(guard.context(), glw1->context());
+    QCOMPARE(guard.id(), 3);
 
     // Check the sharing relationships.
     QVERIFY(QGLContext::areSharing(glw1->context(), glw1->context()));
@@ -1882,9 +2030,9 @@ void tst_QGL::shareRegister()
     // Request a resource to the third context.
     tst_QGLResource *res3 = qt_shared_test()->value(glw3->context());
     QVERIFY(res3);
-    QVERIFY(qt_shared_test()->value(glw1->context()) == res1);
-    QVERIFY(qt_shared_test()->value(glw2->context()) == res1);
-    QVERIFY(qt_shared_test()->value(glw3->context()) == res3);
+    QCOMPARE(qt_shared_test()->value(glw1->context()), res1);
+    QCOMPARE(qt_shared_test()->value(glw2->context()), res1);
+    QCOMPARE(qt_shared_test()->value(glw3->context()), res3);
 
     // Check the sharing relationships again.
     QVERIFY(QGLContext::areSharing(glw1->context(), glw1->context()));
@@ -1903,8 +2051,8 @@ void tst_QGL::shareRegister()
     QVERIFY(!QGLContext::areSharing(0, 0));
 
     // Shared guard should still be the same.
-    QVERIFY(guard.context() == glw1->context());
-    QVERIFY(guard.id() == 3);
+    QCOMPARE(guard.context(), glw1->context());
+    QCOMPARE(guard.id(), 3);
 
     // Delete the first context.
     delete glw1;
@@ -1914,14 +2062,14 @@ void tst_QGL::shareRegister()
 
     // The first context's resource should transfer to the second context.
     QCOMPARE(tst_QGLResource::deletions, 0);
-    QVERIFY(qt_shared_test()->value(glw2->context()) == res1);
-    QVERIFY(qt_shared_test()->value(glw3->context()) == res3);
+    QCOMPARE(qt_shared_test()->value(glw2->context()), res1);
+    QCOMPARE(qt_shared_test()->value(glw3->context()), res3);
 
     // Shared guard should now be the second context, with the id the same.
-    QVERIFY(guard.context() == glw2->context());
-    QVERIFY(guard.id() == 3);
-    QVERIFY(guard3.context() == glw3->context());
-    QVERIFY(guard3.id() == 5);
+    QCOMPARE(guard.context(), glw2->context());
+    QCOMPARE(guard.id(), 3);
+    QCOMPARE(guard3.context(), glw3->context());
+    QCOMPARE(guard3.id(), 5);
 
     // Clean up and check that the resources are properly deleted.
     delete glw2;
@@ -1963,26 +2111,27 @@ void tst_QGL::qglContextDefaultBindTexture()
     QVERIFY(QImagePixmapCleanupHooks::isImageCached(*boundImage));
     QVERIFY(QImagePixmapCleanupHooks::isPixmapCached(*boundPixmap));
 
+    QOpenGLFunctions *funcs = QOpenGLContext::currentContext()->functions();
     // Make sure the texture IDs returned are valid:
-    QCOMPARE((bool)glIsTexture(boundImageTextureId), GL_TRUE);
-    QCOMPARE((bool)glIsTexture(boundPixmapTextureId), GL_TRUE);
+    QCOMPARE(funcs->glIsTexture(boundImageTextureId), GLboolean(GL_TRUE));
+    QCOMPARE(funcs->glIsTexture(boundPixmapTextureId), GLboolean(GL_TRUE));
 
     // Make sure the textures are still valid after we delete the image/pixmap:
     // Also check that although the textures are left intact, the cache entries are removed:
     delete boundImage;
     boundImage = 0;
-    QCOMPARE((bool)glIsTexture(boundImageTextureId), GL_TRUE);
+    QCOMPARE(funcs->glIsTexture(boundImageTextureId), GLboolean(GL_TRUE));
     QCOMPARE(QGLTextureCache::instance()->size(), startCacheItemCount+1);
     delete boundPixmap;
     boundPixmap = 0;
-    QCOMPARE((bool)glIsTexture(boundPixmapTextureId), GL_TRUE);
+    QCOMPARE(funcs->glIsTexture(boundPixmapTextureId), GLboolean(GL_TRUE));
     QCOMPARE(QGLTextureCache::instance()->size(), startCacheItemCount);
 
     // Finally, make sure QGLContext::deleteTexture deletes the texture IDs:
     ctx->deleteTexture(boundImageTextureId);
     ctx->deleteTexture(boundPixmapTextureId);
-    QCOMPARE((bool)glIsTexture(boundImageTextureId), GL_FALSE);
-    QCOMPARE((bool)glIsTexture(boundPixmapTextureId), GL_FALSE);
+    QCOMPARE(funcs->glIsTexture(boundImageTextureId), GLboolean(GL_FALSE));
+    QCOMPARE(funcs->glIsTexture(boundPixmapTextureId), GLboolean(GL_FALSE));
 }
 #endif
 
@@ -1992,6 +2141,7 @@ void tst_QGL::textureCleanup()
     QGLWidget w;
     w.resize(200,200);
     w.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
     w.makeCurrent();
 
     // Test pixmaps which have been loaded via QPixmapCache are removed from the texture cache
@@ -2322,6 +2472,44 @@ void tst_QGL::nullRectCrash()
     fboPainter.drawRect(QRectF());
 
     fboPainter.end();
+}
+
+void tst_QGL::extensions()
+{
+    QGLWidget glw;
+    glw.makeCurrent();
+
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    QVERIFY(ctx);
+    QOpenGLFunctions *funcs = ctx->functions();
+    QVERIFY(funcs);
+    QSurfaceFormat format = ctx->format();
+
+#ifdef QT_BUILD_INTERNAL
+    QOpenGLExtensions *exts = static_cast<QOpenGLExtensions *>(funcs);
+    QOpenGLExtensions::OpenGLExtensions allExts = exts->openGLExtensions();
+    // Mipmapping is always available in GL2/GLES2+. Verify this.
+    if (format.majorVersion() >= 2)
+        QVERIFY(allExts.testFlag(QOpenGLExtensions::GenerateMipmap));
+#endif
+
+    // Now look for some features should always be available in a given version.
+    QOpenGLFunctions::OpenGLFeatures allFeatures = funcs->openGLFeatures();
+    QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Multitexture));
+    if (format.majorVersion() >= 2) {
+        QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Shaders));
+        QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Buffers));
+        QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Multisample));
+        QVERIFY(!ctx->isOpenGLES() || allFeatures.testFlag(QOpenGLFunctions::Framebuffers));
+        QVERIFY(allFeatures.testFlag(QOpenGLFunctions::NPOTTextures)
+                && allFeatures.testFlag(QOpenGLFunctions::NPOTTextureRepeat));
+        if (ctx->isOpenGLES()) {
+            QVERIFY(!allFeatures.testFlag(QOpenGLFunctions::FixedFunctionPipeline));
+            QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Framebuffers));
+        }
+    }
+    if (format.majorVersion() >= 3)
+        QVERIFY(allFeatures.testFlag(QOpenGLFunctions::Framebuffers));
 }
 
 QTEST_MAIN(tst_QGL)

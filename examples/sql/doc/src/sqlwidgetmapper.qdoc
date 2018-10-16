@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -33,7 +33,7 @@
     \brief The SQL Widget Mapper example shows how to use a map information from a
     database to widgets on a form.
 
-    \image sql-widget-mapper.png
+    \borderedimage sql-widget-mapper.png
 
     In the \l{Combo Widget Mapper Example}, we showed how to use a named
     mapping between a widget mapper and a QComboBox widget with a special
@@ -74,7 +74,7 @@
     including values for the address types that correspond to the address
     types are stored in a separate table.
 
-    \image widgetmapper-sql-mapping-table.png
+    \borderedimage widgetmapper-sql-mapping-table.png
 
     We create an "addresstype" table containing the identifiers used in the
     "person" table and the corresponding strings:
@@ -93,7 +93,7 @@
     used wherever the "typeid" is presented to the user. (See the
     QSqlRelationalTableModel::setRelation() documentation for details.)
 
-    \image widgetmapper-sql-mapping.png
+    \borderedimage widgetmapper-sql-mapping.png
 
     The constructor of the \c Window class can be explained in three parts.
     In the first part, we set up the model used to hold the data, then we set

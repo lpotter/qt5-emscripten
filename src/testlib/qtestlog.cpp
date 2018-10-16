@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,10 +43,26 @@
 #include <QtTest/private/qtestresult_p.h>
 #include <QtTest/private/qabstracttestlogger_p.h>
 #include <QtTest/private/qplaintestlogger_p.h>
+#include <QtTest/private/qcsvbenchmarklogger_p.h>
 #include <QtTest/private/qxunittestlogger_p.h>
 #include <QtTest/private/qxmltestlogger_p.h>
+#include <QtTest/private/qteamcitylogger_p.h>
+#include <QtTest/private/qtaptestlogger_p.h>
+#if defined(HAVE_XCTEST)
+#include <QtTest/private/qxctestlogger_p.h>
+#endif
+
+#if defined(Q_OS_DARWIN)
+#include <QtTest/private/qappletestlogger_p.h>
+#endif
+
 #include <QtCore/qatomic.h>
 #include <QtCore/qbytearray.h>
+#include <QtCore/QElapsedTimer>
+#include <QtCore/QVariant>
+#if QT_CONFIG(regularexpression)
+#include <QtCore/QRegularExpression>
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -76,27 +90,20 @@ static void saveCoverageTool(const char * appname, bool testfailed, bool install
 #endif
 }
 
-//
-// declare deprecated API from qlogging.h locally
-// (we can't use qInstallMessageHandler because it would break
-// tests that (still) rely on qInstallMsgHandler.)
-//
-typedef void (*QtMsgHandler)(QtMsgType, const char *);
-Q_CORE_EXPORT QtMsgHandler qInstallMsgHandler(QtMsgHandler);
+static QElapsedTimer elapsedFunctionTime;
+static QElapsedTimer elapsedTotalTime;
 
 namespace QTest {
 
     int fails = 0;
     int passes = 0;
     int skips = 0;
+    int blacklists = 0;
 
     struct IgnoreResultList
     {
-        inline IgnoreResultList(QtMsgType tp, const char *message)
-            : type(tp), next(0)
-        { msg = qstrdup(message); }
-        inline ~IgnoreResultList()
-        { delete [] msg; }
+        inline IgnoreResultList(QtMsgType tp, const QVariant &patternIn)
+            : type(tp), pattern(patternIn), next(0) {}
 
         static inline void clearList(IgnoreResultList *&list)
         {
@@ -107,8 +114,47 @@ namespace QTest {
             }
         }
 
+        static void append(IgnoreResultList *&list, QtMsgType type, const QVariant &patternIn)
+        {
+            QTest::IgnoreResultList *item = new QTest::IgnoreResultList(type, patternIn);
+
+            if (!list) {
+                list = item;
+                return;
+            }
+            IgnoreResultList *last = list;
+            for ( ; last->next; last = last->next) ;
+            last->next = item;
+        }
+
+        static bool stringsMatch(const QString &expected, const QString &actual)
+        {
+            if (expected == actual)
+                return true;
+
+            // ignore an optional whitespace at the end of str
+            // (the space was added automatically by ~QDebug() until Qt 5.3,
+            //  so autotests still might expect it)
+            if (expected.endsWith(QLatin1Char(' ')))
+                return actual == expected.leftRef(expected.length() - 1);
+
+            return false;
+        }
+
+        inline bool matches(QtMsgType tp, const QString &message) const
+        {
+            return tp == type
+                   && (pattern.type() == QVariant::String ?
+                       stringsMatch(pattern.toString(), message) :
+#if QT_CONFIG(regularexpression)
+                       pattern.toRegularExpression().match(message).hasMatch());
+#else
+                       false);
+#endif
+        }
+
         QtMsgType type;
-        char *msg;
+        QVariant pattern;
         IgnoreResultList *next;
     };
 
@@ -170,6 +216,11 @@ namespace QTest {
             FOREACH_LOGGER(logger->leaveTestFunction());
         }
 
+        static void enterTestData(QTestData *data)
+        {
+            FOREACH_LOGGER(logger->enterTestData(data));
+        }
+
         static void addIncident(QAbstractTestLogger::IncidentTypes type, const char *description,
                                 const char *file = 0, int line = 0)
         {
@@ -181,7 +232,13 @@ namespace QTest {
             FOREACH_LOGGER(logger->addBenchmarkResult(result));
         }
 
-        static void addMessage(QAbstractTestLogger::MessageTypes type, const char *message,
+        static void addMessage(QtMsgType type, const QMessageLogContext &context,
+                               const QString &message)
+        {
+            FOREACH_LOGGER(logger->addMessage(type, context, message));
+        }
+
+        static void addMessage(QAbstractTestLogger::MessageTypes type, const QString &message,
                                const char *file = 0, int line = 0)
         {
             FOREACH_LOGGER(logger->addMessage(type, message, file, line));
@@ -212,14 +269,16 @@ namespace QTest {
     static int maxWarnings = 2002;
     static bool installedTestCoverage = true;
 
-    static QtMsgHandler oldMessageHandler;
+    static QtMessageHandler oldMessageHandler;
 
-    static bool handleIgnoredMessage(QtMsgType type, const char *msg)
+    static bool handleIgnoredMessage(QtMsgType type, const QString &message)
     {
+        if (!ignoreResultList)
+            return false;
         IgnoreResultList *last = 0;
         IgnoreResultList *list = ignoreResultList;
         while (list) {
-            if (list->type == type && strcmp(msg, list->msg) == 0) {
+            if (list->matches(type, message)) {
                 // remove the item from the list
                 if (last)
                     last->next = list->next;
@@ -238,26 +297,20 @@ namespace QTest {
         return false;
     }
 
-// don't warn about qInstallMsgHandler
-#if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 406) && !defined(Q_CC_INTEL)
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
-    static void messageHandler(QtMsgType type, const char *msg)
+    static void messageHandler(QtMsgType type, const QMessageLogContext & context, const QString &message)
     {
         static QBasicAtomicInt counter = Q_BASIC_ATOMIC_INITIALIZER(QTest::maxWarnings);
 
-        if (!msg || QTest::TestLoggers::loggerCount() == 0) {
+        if (QTest::TestLoggers::loggerCount() == 0) {
             // if this goes wrong, something is seriously broken.
-            qInstallMsgHandler(oldMessageHandler);
-            QTEST_ASSERT(msg);
+            qInstallMessageHandler(oldMessageHandler);
             QTEST_ASSERT(QTest::TestLoggers::loggerCount() != 0);
         }
 
-        if (handleIgnoredMessage(type, msg))
+        if (handleIgnoredMessage(type, message)) {
             // the message is expected, so just swallow it.
             return;
+        }
 
         if (type != QtFatalMsg) {
             if (counter.load() <= 0)
@@ -265,24 +318,15 @@ namespace QTest {
 
             if (!counter.deref()) {
                 QTest::TestLoggers::addMessage(QAbstractTestLogger::QSystem,
-                        "Maximum amount of warnings exceeded. Use -maxwarnings to override.");
+                        QStringLiteral("Maximum amount of warnings exceeded. Use -maxwarnings to override."));
                 return;
             }
         }
 
-        switch (type) {
-        case QtDebugMsg:
-            QTest::TestLoggers::addMessage(QAbstractTestLogger::QDebug, msg);
-            break;
-        case QtCriticalMsg:
-            QTest::TestLoggers::addMessage(QAbstractTestLogger::QSystem, msg);
-            break;
-        case QtWarningMsg:
-            QTest::TestLoggers::addMessage(QAbstractTestLogger::QWarning, msg);
-            break;
-        case QtFatalMsg:
-            QTest::TestLoggers::addMessage(QAbstractTestLogger::QFatal, msg);
-            /* Right now, we're inside the custom message handler and we're
+        QTest::TestLoggers::addMessage(type, context, message);
+
+        if (type == QtFatalMsg) {
+             /* Right now, we're inside the custom message handler and we're
              * being qt_message_output in qglobal.cpp. After we return from
              * this function, it will proceed with calling exit() and abort()
              * and hence crash. Therefore, we call these logging functions such
@@ -290,23 +334,25 @@ namespace QTest {
             QTestResult::addFailure("Received a fatal error.", "Unknown file", 0);
             QTestLog::leaveTestFunction();
             QTestLog::stopLogging();
-            break;
         }
     }
-
-#if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 406) && !defined(Q_CC_INTEL)
-# pragma GCC diagnostic pop
-#endif
 }
 
 void QTestLog::enterTestFunction(const char* function)
 {
+    elapsedFunctionTime.restart();
     if (printAvailableTags)
         return;
 
     QTEST_ASSERT(function);
 
     QTest::TestLoggers::enterTestFunction(function);
+}
+
+void QTestLog::enterTestData(QTestData *data)
+{
+    QTEST_ASSERT(data);
+    QTest::TestLoggers::enterTestData(data);
 }
 
 int QTestLog::unhandledIgnoreMessages()
@@ -330,11 +376,17 @@ void QTestLog::leaveTestFunction()
 
 void QTestLog::printUnhandledIgnoreMessages()
 {
-    char msg[1024];
+    QString message;
     QTest::IgnoreResultList *list = QTest::ignoreResultList;
     while (list) {
-        qsnprintf(msg, 1024, "Did not receive message: \"%s\"", list->msg);
-        QTest::TestLoggers::addMessage(QAbstractTestLogger::Info, msg);
+        if (list->pattern.type() == QVariant::String) {
+            message = QStringLiteral("Did not receive message: \"") + list->pattern.toString() + QLatin1Char('"');
+        } else {
+#if QT_CONFIG(regularexpression)
+            message = QStringLiteral("Did not receive any message matching: \"") + list->pattern.toRegularExpression().pattern() + QLatin1Char('"');
+#endif
+        }
+        QTest::TestLoggers::addMessage(QAbstractTestLogger::Info, message);
 
         list = list->next;
     }
@@ -384,6 +436,25 @@ void QTestLog::addXPass(const char *msg, const char *file, int line)
     QTest::TestLoggers::addIncident(QAbstractTestLogger::XPass, msg, file, line);
 }
 
+void QTestLog::addBPass(const char *msg)
+{
+    QTEST_ASSERT(msg);
+
+    ++QTest::blacklists;
+
+    QTest::TestLoggers::addIncident(QAbstractTestLogger::BlacklistedPass, msg);
+}
+
+void QTestLog::addBFail(const char *msg, const char *file, int line)
+{
+    QTEST_ASSERT(msg);
+    QTEST_ASSERT(file);
+
+    ++QTest::blacklists;
+
+    QTest::TestLoggers::addIncident(QAbstractTestLogger::BlacklistedFail, msg, file, line);
+}
+
 void QTestLog::addSkip(const char *msg, const char *file, int line)
 {
     QTEST_ASSERT(msg);
@@ -391,7 +462,7 @@ void QTestLog::addSkip(const char *msg, const char *file, int line)
 
     ++QTest::skips;
 
-    QTest::TestLoggers::addMessage(QAbstractTestLogger::Skip, msg, file, line);
+    QTest::TestLoggers::addMessage(QAbstractTestLogger::Skip, QString::fromUtf8(msg), file, line);
 }
 
 void QTestLog::addBenchmarkResult(const QBenchmarkResult &result)
@@ -401,17 +472,19 @@ void QTestLog::addBenchmarkResult(const QBenchmarkResult &result)
 
 void QTestLog::startLogging()
 {
+    elapsedTotalTime.start();
+    elapsedFunctionTime.start();
     QTest::TestLoggers::startLogging();
-    QTest::oldMessageHandler = qInstallMsgHandler(QTest::messageHandler);
+    QTest::oldMessageHandler = qInstallMessageHandler(QTest::messageHandler);
 }
 
 void QTestLog::stopLogging()
 {
-    qInstallMsgHandler(QTest::oldMessageHandler);
+    qInstallMessageHandler(QTest::oldMessageHandler);
     QTest::TestLoggers::stopLogging();
     QTest::TestLoggers::destroyLoggers();
     QTest::loggerUsingStdout = false;
-    saveCoverageTool(QTestResult::currentAppname(), failCount() != 0, QTestLog::installedTestCoverage());
+    saveCoverageTool(QTestResult::currentAppName(), failCount() != 0, QTestLog::installedTestCoverage());
 }
 
 void QTestLog::addLogger(LogMode mode, const char *filename)
@@ -426,6 +499,9 @@ void QTestLog::addLogger(LogMode mode, const char *filename)
     case QTestLog::Plain:
         logger = new QPlainTestLogger(filename);
         break;
+    case QTestLog::CSV:
+        logger = new QCsvBenchmarkLogger(filename);
+        break;
     case QTestLog::XML:
         logger = new QXmlTestLogger(QXmlTestLogger::Complete, filename);
         break;
@@ -435,7 +511,27 @@ void QTestLog::addLogger(LogMode mode, const char *filename)
     case QTestLog::XunitXML:
         logger = new QXunitTestLogger(filename);
         break;
+    case QTestLog::TeamCity:
+        logger = new QTeamCityLogger(filename);
+        break;
+    case QTestLog::TAP:
+        logger = new QTapTestLogger(filename);
+        break;
+#if defined(HAVE_XCTEST)
+    case QTestLog::XCTest:
+        logger = new QXcodeTestLogger;
+        break;
+#endif
     }
+
+#if defined(QT_USE_APPLE_UNIFIED_LOGGING)
+    // Logger that also feeds messages to AUL. It needs to wrap the existing
+    // logger, as it needs to be able to short circuit the existing logger
+    // in case AUL prints to stderr.
+    if (QAppleTestLogger::debugLoggingEnabled())
+        logger = new QAppleTestLogger(logger);
+#endif
+
     QTEST_ASSERT(logger);
     QTest::TestLoggers::addLogger(logger);
 }
@@ -455,14 +551,14 @@ void QTestLog::warn(const char *msg, const char *file, int line)
     QTEST_ASSERT(msg);
 
     if (QTest::TestLoggers::loggerCount() > 0)
-        QTest::TestLoggers::addMessage(QAbstractTestLogger::Warn, msg, file, line);
+        QTest::TestLoggers::addMessage(QAbstractTestLogger::Warn, QString::fromUtf8(msg), file, line);
 }
 
 void QTestLog::info(const char *msg, const char *file, int line)
 {
     QTEST_ASSERT(msg);
 
-    QTest::TestLoggers::addMessage(QAbstractTestLogger::Info, msg, file, line);
+    QTest::TestLoggers::addMessage(QAbstractTestLogger::Info, QString::fromUtf8(msg), file, line);
 }
 
 void QTestLog::setVerboseLevel(int level)
@@ -479,17 +575,17 @@ void QTestLog::ignoreMessage(QtMsgType type, const char *msg)
 {
     QTEST_ASSERT(msg);
 
-    QTest::IgnoreResultList *item = new QTest::IgnoreResultList(type, msg);
-
-    QTest::IgnoreResultList *list = QTest::ignoreResultList;
-    if (!list) {
-        QTest::ignoreResultList = item;
-        return;
-    }
-    while (list->next)
-        list = list->next;
-    list->next = item;
+    QTest::IgnoreResultList::append(QTest::ignoreResultList, type, QString::fromLocal8Bit(msg));
 }
+
+#if QT_CONFIG(regularexpression)
+void QTestLog::ignoreMessage(QtMsgType type, const QRegularExpression &expression)
+{
+    QTEST_ASSERT(expression.isValid());
+
+    QTest::IgnoreResultList::append(QTest::ignoreResultList, type, QVariant(expression));
+}
+#endif // QT_CONFIG(regularexpression)
 
 void QTestLog::setMaxWarnings(int m)
 {
@@ -518,6 +614,16 @@ int QTestLog::skipCount()
     return QTest::skips;
 }
 
+int QTestLog::blacklistCount()
+{
+    return QTest::blacklists;
+}
+
+int QTestLog::totalCount()
+{
+    return passCount() + failCount() + skipCount() + blacklistCount();
+}
+
 void QTestLog::resetCounters()
 {
     QTest::passes = 0;
@@ -533,6 +639,16 @@ void QTestLog::setInstalledTestCoverage(bool installed)
 bool QTestLog::installedTestCoverage()
 {
     return QTest::installedTestCoverage;
+}
+
+qint64 QTestLog::nsecsTotalTime()
+{
+    return elapsedTotalTime.nsecsElapsed();
+}
+
+qint64 QTestLog::nsecsFunctionTime()
+{
+    return elapsedFunctionTime.nsecsElapsed();
 }
 
 QT_END_NAMESPACE

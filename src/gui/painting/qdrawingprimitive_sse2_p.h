@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,9 +40,12 @@
 #ifndef QDRAWINGPRIMITIVE_SSE2_P_H
 #define QDRAWINGPRIMITIVE_SSE2_P_H
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <private/qsimd_p.h>
+#include "qdrawhelper_p.h"
+#include "qrgba64_p.h"
 
-#ifdef QT_COMPILER_SUPPORTS_SSE2
+#ifdef __SSE2__
 
 //
 //  W A R N I N G
@@ -171,23 +172,15 @@ QT_BEGIN_NAMESPACE
 \
     /* First, get dst aligned. */ \
     ALIGNMENT_PROLOGUE_16BYTES(dst, x, length) { \
-        uint s = src[x]; \
-        if (s >= 0xff000000) \
-            dst[x] = s; \
-        else if (s != 0) \
-            dst[x] = s + BYTE_MUL(dst[x], qAlpha(~s)); \
+        blend_pixel(dst[x], src[x]); \
     } \
 \
     for (; x < length-3; x += 4) { \
-        const __m128i srcVector = _mm_loadu_si128((__m128i *)&src[x]); \
+        const __m128i srcVector = _mm_loadu_si128((const __m128i *)&src[x]); \
         BLEND_SOURCE_OVER_ARGB32_SSE2_helper(dst, srcVector, nullVector, half, one, colorMask, alphaMask) \
     } \
-    for (; x < length; ++x) { \
-        uint s = src[x]; \
-        if (s >= 0xff000000) \
-            dst[x] = s; \
-        else if (s != 0) \
-            dst[x] = s + BYTE_MUL(dst[x], qAlpha(~s)); \
+    SIMD_EPILOGUE(x, length, 3) { \
+        blend_pixel(dst[x], src[x]); \
     } \
 }
 
@@ -207,15 +200,11 @@ QT_BEGIN_NAMESPACE
     int x = 0; \
 \
     ALIGNMENT_PROLOGUE_16BYTES(dst, x, length) { \
-        quint32 s = src[x]; \
-        if (s != 0) { \
-            s = BYTE_MUL(s, const_alpha); \
-            dst[x] = s + BYTE_MUL(dst[x], qAlpha(~s)); \
-        } \
+        blend_pixel(dst[x], src[x], const_alpha); \
     } \
 \
     for (; x < length-3; x += 4) { \
-        __m128i srcVector = _mm_loadu_si128((__m128i *)&src[x]); \
+        __m128i srcVector = _mm_loadu_si128((const __m128i *)&src[x]); \
         if (_mm_movemask_epi8(_mm_cmpeq_epi32(srcVector, nullVector)) != 0xffff) { \
             BYTE_MUL_SSE2(srcVector, srcVector, constAlphaVector, colorMask, half); \
 \
@@ -231,17 +220,97 @@ QT_BEGIN_NAMESPACE
             _mm_store_si128((__m128i *)&dst[x], result); \
         } \
     } \
-    for (; x < length; ++x) { \
-        quint32 s = src[x]; \
-        if (s != 0) { \
-            s = BYTE_MUL(s, const_alpha); \
-            dst[x] = s + BYTE_MUL(dst[x], qAlpha(~s)); \
-        } \
+    SIMD_EPILOGUE(x, length, 3) { \
+        blend_pixel(dst[x], src[x], const_alpha); \
     } \
 }
 
 QT_END_NAMESPACE
 
-#endif // QT_COMPILER_SUPPORTS_SSE2
+#endif // __SSE2__
+
+QT_BEGIN_NAMESPACE
+#if QT_COMPILER_SUPPORTS_HERE(SSE4_1)
+QT_FUNCTION_TARGET(SSE2)
+Q_ALWAYS_INLINE void reciprocal_mul_ss(__m128 &ia, const __m128 a, float mul)
+{
+    ia = _mm_rcp_ss(a); // Approximate 1/a
+    // Improve precision of ia using Newton-Raphson
+    ia = _mm_sub_ss(_mm_add_ss(ia, ia), _mm_mul_ss(ia, _mm_mul_ss(ia, a)));
+    ia = _mm_mul_ss(ia, _mm_set_ss(mul));
+    ia = _mm_shuffle_ps(ia, ia, _MM_SHUFFLE(0,0,0,0));
+}
+
+QT_FUNCTION_TARGET(SSE4_1)
+inline QRgb qUnpremultiply_sse4(QRgb p)
+{
+    const uint alpha = qAlpha(p);
+    if (alpha == 255)
+        return p;
+    if (alpha == 0)
+        return 0;
+    const __m128 va = _mm_set1_ps(alpha);
+    __m128 via;
+    reciprocal_mul_ss(via, va, 255.0f); // Approximate 1/a
+    __m128i vl = _mm_cvtepu8_epi32(_mm_cvtsi32_si128(p));
+    vl = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(vl), via));
+    vl = _mm_packus_epi32(vl, vl);
+    vl = _mm_insert_epi16(vl, alpha, 3);
+    vl = _mm_packus_epi16(vl, vl);
+    return _mm_cvtsi128_si32(vl);
+}
+
+template<enum QtPixelOrder PixelOrder>
+QT_FUNCTION_TARGET(SSE4_1)
+inline uint qConvertArgb32ToA2rgb30_sse4(QRgb p)
+{
+    const uint alpha = qAlpha(p);
+    if (alpha == 255)
+        return qConvertRgb32ToRgb30<PixelOrder>(p);
+    if (alpha == 0)
+        return 0;
+    Q_CONSTEXPR float mult = 1023.0f / (255 >> 6);
+    const uint newalpha = (alpha >> 6);
+    const __m128 va = _mm_set1_ps(alpha);
+    __m128 via;
+    reciprocal_mul_ss(via, va, mult * newalpha);
+    __m128i vl = _mm_cvtsi32_si128(p);
+    vl = _mm_cvtepu8_epi32(vl);
+    vl = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(vl), via));
+    vl = _mm_packus_epi32(vl, vl);
+    uint rgb30 = (newalpha << 30);
+    rgb30 |= ((uint)_mm_extract_epi16(vl, 1)) << 10;
+    if (PixelOrder == PixelOrderRGB) {
+        rgb30 |= ((uint)_mm_extract_epi16(vl, 2)) << 20;
+        rgb30 |= ((uint)_mm_extract_epi16(vl, 0));
+    } else {
+        rgb30 |= ((uint)_mm_extract_epi16(vl, 0)) << 20;
+        rgb30 |= ((uint)_mm_extract_epi16(vl, 2));
+    }
+    return rgb30;
+}
+
+template<enum QtPixelOrder PixelOrder>
+QT_FUNCTION_TARGET(SSE4_1)
+inline uint qConvertRgba64ToRgb32_sse4(QRgba64 p)
+{
+    if (p.isTransparent())
+        return 0;
+    __m128i vl = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(&p));
+    if (!p.isOpaque()) {
+        const __m128 va = _mm_set1_ps(p.alpha());
+        __m128 via;
+        reciprocal_mul_ss(via, va, 65535.0f);
+        vl = _mm_unpacklo_epi16(vl, _mm_setzero_si128());
+        vl = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(vl) , via));
+        vl = _mm_packus_epi32(vl, vl);
+        vl = _mm_insert_epi16(vl, p.alpha(), 3);
+    }
+    if (PixelOrder == PixelOrderBGR)
+        vl = _mm_shufflelo_epi16(vl, _MM_SHUFFLE(3, 0, 1, 2));
+    return toArgb32(vl);
+}
+#endif
+QT_END_NAMESPACE
 
 #endif // QDRAWINGPRIMITIVE_SSE2_P_H

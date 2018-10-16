@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,6 @@
 
 #include "qpagesetupdialog.h"
 
-#ifndef QT_NO_PRINTDIALOG
 #include <qapplication.h>
 
 #include "../kernel/qprintengine_win_p.h"
@@ -82,7 +79,7 @@ int QPageSetupDialog::exec()
     // we need a temp DEVMODE struct if we don't have a global DEVMODE
     HGLOBAL hDevMode = 0;
     int devModeSize = 0;
-    if (!ep->globalDevMode) {
+    if (!engine->globalDevMode()) {
         devModeSize = sizeof(DEVMODE) + ep->devMode->dmDriverExtra;
         hDevMode = GlobalAlloc(GHND, devModeSize);
         if (hDevMode) {
@@ -92,69 +89,70 @@ int QPageSetupDialog::exec()
         }
         psd.hDevMode = hDevMode;
     } else {
-        psd.hDevMode = ep->devMode;
+        psd.hDevMode = engine->globalDevMode();
     }
 
-    HGLOBAL *tempDevNames = ep->createDevNames();
+    HGLOBAL *tempDevNames = engine->createGlobalDevNames();
     psd.hDevNames = tempDevNames;
 
     QWidget *parent = parentWidget();
     parent = parent ? parent->window() : QApplication::activeWindow();
     Q_ASSERT(!parent ||parent->testAttribute(Qt::WA_WState_Created));
 
-    QWindow *parentWindow = parent->windowHandle();
+    QWindow *parentWindow = parent ? parent->windowHandle() : 0;
     psd.hwndOwner = parentWindow ? (HWND)QGuiApplication::platformNativeInterface()->nativeResourceForWindow("handle", parentWindow) : 0;
 
     psd.Flags = PSD_MARGINS;
-    double multiplier = 1;
-    switch (QLocale::system().measurementSystem()) {
-    case QLocale::MetricSystem:
-        psd.Flags |= PSD_INHUNDREDTHSOFMILLIMETERS;
-        multiplier = 1;
+    QPageLayout layout = d->printer->pageLayout();
+    switch (layout.units()) {
+    case QPageLayout::Millimeter:
+    case QPageLayout::Inch:
         break;
-    case QLocale::ImperialSystem:
-    case QLocale::ImperialUKSystem:
-        psd.Flags |= PSD_INTHOUSANDTHSOFINCHES;
-        multiplier = 25.4/10;
+    case QPageLayout::Point:
+    case QPageLayout::Pica:
+    case QPageLayout::Didot:
+    case QPageLayout::Cicero:
+        layout.setUnits(QLocale::system().measurementSystem() == QLocale::MetricSystem ? QPageLayout::Millimeter
+                                                                                       : QPageLayout::Inch);
         break;
     }
-
-    QRect marginRect = ep->getPageMargins();
-    psd.rtMargin.left   = marginRect.left()   / multiplier;
-    psd.rtMargin.top    = marginRect.top()    / multiplier;
-    psd.rtMargin.right  = marginRect.width()  / multiplier;;
-    psd.rtMargin.bottom = marginRect.height() / multiplier;;
+    qreal multiplier = 1.0;
+    if (layout.units() == QPageLayout::Millimeter) {
+        psd.Flags |= PSD_INHUNDREDTHSOFMILLIMETERS;
+        multiplier = 100.0;
+    } else { // QPageLayout::Inch)
+        psd.Flags |= PSD_INTHOUSANDTHSOFINCHES;
+        multiplier = 1000.0;
+    }
+    psd.rtMargin.left   = layout.margins().left() * multiplier;
+    psd.rtMargin.top    = layout.margins().top() * multiplier;
+    psd.rtMargin.right  = layout.margins().right() * multiplier;
+    psd.rtMargin.bottom = layout.margins().bottom() * multiplier;
 
     QDialog::setVisible(true);
     bool result = PageSetupDlg(&psd);
     QDialog::setVisible(false);
     if (result) {
-        ep->readDevnames(psd.hDevNames);
-        ep->readDevmode(psd.hDevMode);
-
-        QRect theseMargins = QRect(psd.rtMargin.left   * multiplier,
-                                   psd.rtMargin.top    * multiplier,
-                                   psd.rtMargin.right  * multiplier,
-                                   psd.rtMargin.bottom * multiplier);
-
-        if (theseMargins != marginRect) {
-            ep->setPageMargins(psd.rtMargin.left   * multiplier,
-                               psd.rtMargin.top    * multiplier,
-                               psd.rtMargin.right  * multiplier,
-                               psd.rtMargin.bottom * multiplier);
-        }
-
-        ep->updateCustomPaperSize();
+        engine->setGlobalDevMode(psd.hDevNames, psd.hDevMode);
+        const QMarginsF margins(psd.rtMargin.left, psd.rtMargin.top, psd.rtMargin.right, psd.rtMargin.bottom);
+        d->printer->setPageMargins(margins / multiplier, layout.units());
 
         // copy from our temp DEVMODE struct
-        if (!ep->globalDevMode && hDevMode) {
+        if (!engine->globalDevMode() && hDevMode) {
+            // Make sure memory is allocated
+            if (ep->ownsDevMode && ep->devMode)
+                free(ep->devMode);
+            ep->devMode = (DEVMODE *) malloc(devModeSize);
+            ep->ownsDevMode = true;
+
+            // Copy
             void *src = GlobalLock(hDevMode);
             memcpy(ep->devMode, src, devModeSize);
             GlobalUnlock(hDevMode);
         }
     }
 
-    if (!ep->globalDevMode && hDevMode)
+    if (!engine->globalDevMode() && hDevMode)
         GlobalFree(hDevMode);
     GlobalFree(tempDevNames);
     done(result);
@@ -169,4 +167,3 @@ void QPageSetupDialog::setVisible(bool visible)
 }
 
 QT_END_NAMESPACE
-#endif

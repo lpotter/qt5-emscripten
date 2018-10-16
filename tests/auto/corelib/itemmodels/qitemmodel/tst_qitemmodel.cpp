@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,6 +43,9 @@
 class tst_QItemModel : public QObject
 {
     Q_OBJECT
+
+public:
+    tst_QItemModel();
 
 public slots:
     void init();
@@ -131,6 +121,11 @@ private:
     // insert() recursive
     bool insertRecursively;
 };
+
+tst_QItemModel::tst_QItemModel()
+{
+    qRegisterMetaType<QAbstractItemModel::LayoutChangeHint>();
+}
 
 void tst_QItemModel::init()
 {
@@ -359,7 +354,7 @@ void tst_QItemModel::index()
     // Make sure that the same index is always returned
     QModelIndex a = currentModel->index(0,0);
     QModelIndex b = currentModel->index(0,0);
-    QVERIFY(a == b);
+    QCOMPARE(a, b);
 
     // index is tested more extensivly more later in checkChildren(),
     // but this catches the big mistakes
@@ -423,7 +418,7 @@ void checkChildren(QAbstractItemModel *currentModel, const QModelIndex &parent, 
             // Make sure we get the same index if we request it twice in a row
             QModelIndex a = currentModel->index(r, c, parent);
             QModelIndex b = currentModel->index(r, c, parent);
-            QVERIFY(a == b);
+            QCOMPARE(a, b);
 
             {
                 const QModelIndex sibling = currentModel->sibling( r, c, topLeftChild );
@@ -433,9 +428,17 @@ void checkChildren(QAbstractItemModel *currentModel, const QModelIndex &parent, 
                 const QModelIndex sibling = topLeftChild.sibling( r, c );
                 QVERIFY( index == sibling );
             }
+            if (r == topLeftChild.row()) {
+                const QModelIndex sibling = topLeftChild.siblingAtColumn( c );
+                QVERIFY( index == sibling );
+            }
+            if (c == topLeftChild.column()) {
+                const QModelIndex sibling = topLeftChild.siblingAtRow( r );
+                QVERIFY( index == sibling );
+            }
 
             // Some basic checking on the index that is returned
-            QVERIFY(index.model() == currentModel);
+            QCOMPARE(index.model(), currentModel);
             QCOMPARE(index.row(), r);
             QCOMPARE(index.column(), c);
             QCOMPARE(currentModel->data(index, Qt::DisplayRole).isValid(), true);
@@ -478,7 +481,7 @@ void tst_QItemModel::parent()
     currentModel = testModels->createModel(modelType);
     QVERIFY(currentModel);
 
-    // Make sure the model wont crash and will return an invalid QModelIndex
+    // Make sure the model won't crash and will return an invalid QModelIndex
     // when asked for the parent of an invalid index.
     QCOMPARE(currentModel->parent(QModelIndex()), QModelIndex());
 
@@ -537,9 +540,6 @@ void tst_QItemModel::data()
 
     // A valid index should have a valid qvariant data
     QVERIFY(currentModel->index(0,0).isValid());
-
-    // shouldn't be able to set data on an invalid index
-    QCOMPARE(currentModel->setData(QModelIndex(), "foo", Qt::DisplayRole), false);
 
     // General Purpose roles
     QVariant variant = currentModel->data(currentModel->index(0,0), Qt::ToolTipRole);
@@ -608,9 +608,8 @@ void tst_QItemModel::setData()
     QFETCH(QString, modelType);
     currentModel = testModels->createModel(modelType);
     QVERIFY(currentModel);
-    QSignalSpy spy(currentModel, SIGNAL(dataChanged(QModelIndex,QModelIndex)));
+    QSignalSpy spy(currentModel, &QAbstractItemModel::dataChanged);
     QVERIFY(spy.isValid());
-    QCOMPARE(currentModel->setData(QModelIndex(), QVariant()), false);
     QCOMPARE(spy.count(), 0);
 
     QFETCH(bool, isEmpty);
@@ -670,7 +669,7 @@ void tst_QItemModel::setHeaderData()
     QVERIFY(index.isValid());
 
     qRegisterMetaType<Qt::Orientation>("Qt::Orientation");
-    QSignalSpy spy(currentModel, SIGNAL(headerDataChanged(Qt::Orientation,int,int)));
+    QSignalSpy spy(currentModel, &QAbstractItemModel::headerDataChanged);
     QVERIFY(spy.isValid());
 
     QString text = "Index private pointers should always be the same";
@@ -711,7 +710,7 @@ void tst_QItemModel::sort()
     QVERIFY(currentModel->hasChildren(topIndex));
     QModelIndex index = currentModel->index(0, 0, topIndex);
     QVERIFY(index.isValid());
-    QSignalSpy spy(currentModel, SIGNAL(layoutChanged()));
+    QSignalSpy spy(currentModel, &QAbstractItemModel::layoutChanged);
     QVERIFY(spy.isValid());
     for (int i=-1; i < 10; ++i){
         currentModel->sort(i);
@@ -849,12 +848,12 @@ void tst_QItemModel::remove()
 
     // When a row or column is removed there should be two signals.
     // Watch to make sure they are emitted and get the row/column count when they do get emitted by connecting them to a slot
-    QSignalSpy columnsAboutToBeRemovedSpy(currentModel, SIGNAL(columnsAboutToBeRemoved(QModelIndex,int,int)));
-    QSignalSpy rowsAboutToBeRemovedSpy(currentModel, SIGNAL(rowsAboutToBeRemoved(QModelIndex,int,int)));
-    QSignalSpy columnsRemovedSpy(currentModel, SIGNAL(columnsRemoved(QModelIndex,int,int)));
-    QSignalSpy rowsRemovedSpy(currentModel, SIGNAL(rowsRemoved(QModelIndex,int,int)));
-    QSignalSpy modelResetSpy(currentModel, SIGNAL(modelReset()));
-    QSignalSpy modelLayoutChangedSpy(currentModel, SIGNAL(layoutChanged()));
+    QSignalSpy columnsAboutToBeRemovedSpy(currentModel, &QAbstractItemModel::columnsAboutToBeRemoved);
+    QSignalSpy rowsAboutToBeRemovedSpy(currentModel, &QAbstractItemModel::rowsAboutToBeRemoved);
+    QSignalSpy columnsRemovedSpy(currentModel, &QAbstractItemModel::columnsRemoved);
+    QSignalSpy rowsRemovedSpy(currentModel, &QAbstractItemModel::rowsRemoved);
+    QSignalSpy modelResetSpy(currentModel, &QAbstractItemModel::modelReset);
+    QSignalSpy modelLayoutChangedSpy(currentModel, &QAbstractItemModel::layoutChanged);
 
     QVERIFY(columnsAboutToBeRemovedSpy.isValid());
     QVERIFY(rowsAboutToBeRemovedSpy.isValid());
@@ -1191,12 +1190,12 @@ void tst_QItemModel::insert()
 
     // When a row or column is inserted there should be two signals.
     // Watch to make sure they are emitted and get the row/column count when they do get emitted by connecting them to a slot
-    QSignalSpy columnsAboutToBeInsertedSpy(currentModel, SIGNAL(columnsAboutToBeInserted(QModelIndex,int,int)));
-    QSignalSpy rowsAboutToBeInsertedSpy(currentModel, SIGNAL(rowsAboutToBeInserted(QModelIndex,int,int)));
-    QSignalSpy columnsInsertedSpy(currentModel, SIGNAL(columnsInserted(QModelIndex,int,int)));
-    QSignalSpy rowsInsertedSpy(currentModel, SIGNAL(rowsInserted(QModelIndex,int,int)));
-    QSignalSpy modelResetSpy(currentModel, SIGNAL(modelReset()));
-    QSignalSpy modelLayoutChangedSpy(currentModel, SIGNAL(layoutChanged()));
+    QSignalSpy columnsAboutToBeInsertedSpy(currentModel, &QAbstractItemModel::columnsAboutToBeInserted);
+    QSignalSpy rowsAboutToBeInsertedSpy(currentModel, &QAbstractItemModel::rowsAboutToBeInserted);
+    QSignalSpy columnsInsertedSpy(currentModel, &QAbstractItemModel::columnsInserted);
+    QSignalSpy rowsInsertedSpy(currentModel, &QAbstractItemModel::rowsInserted);
+    QSignalSpy modelResetSpy(currentModel, &QAbstractItemModel::modelReset);
+    QSignalSpy modelLayoutChangedSpy(currentModel, &QAbstractItemModel::layoutChanged);
 
     QVERIFY(columnsAboutToBeInsertedSpy.isValid());
     QVERIFY(rowsAboutToBeInsertedSpy.isValid());

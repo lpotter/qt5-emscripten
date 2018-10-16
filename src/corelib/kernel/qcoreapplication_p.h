@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,7 +54,13 @@
 #include "QtCore/qcoreapplication.h"
 #include "QtCore/qtranslator.h"
 #include "QtCore/qsettings.h"
+#ifndef QT_NO_QOBJECT
 #include "private/qobject_p.h"
+#endif
+
+#ifdef Q_OS_MACOS
+#include "private/qcore_mac_p.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -64,7 +68,10 @@ typedef QList<QTranslator*> QTranslatorList;
 
 class QAbstractEventDispatcher;
 
-class Q_CORE_EXPORT QCoreApplicationPrivate : public QObjectPrivate
+class Q_CORE_EXPORT QCoreApplicationPrivate
+#ifndef QT_NO_QOBJECT
+    : public QObjectPrivate
+#endif
 {
     Q_DECLARE_PUBLIC(QCoreApplication)
 
@@ -77,22 +84,31 @@ public:
     QCoreApplicationPrivate(int &aargc,  char **aargv, uint flags);
     ~QCoreApplicationPrivate();
 
-    bool sendThroughApplicationEventFilters(QObject *, QEvent *);
-    bool sendThroughObjectEventFilters(QObject *, QEvent *);
-    bool notify_helper(QObject *, QEvent *);
+    void init();
 
     QString appName() const;
+    QString appVersion() const;
+
+#ifdef Q_OS_DARWIN
+    static QString infoDictionaryStringProperty(const QString &propertyName);
+#endif
+
+    static void initLocale();
+
+    static bool checkInstance(const char *method);
+
+#ifndef QT_NO_QOBJECT
+    bool sendThroughApplicationEventFilters(QObject *, QEvent *);
+    static bool sendThroughObjectEventFilters(QObject *, QEvent *);
+    static bool notify_helper(QObject *, QEvent *);
+    static inline void setEventSpontaneous(QEvent *e, bool spontaneous) { e->spont = spontaneous; }
+
     virtual void createEventDispatcher();
+    virtual void eventDispatcherReady();
     static void removePostedEvent(QEvent *);
 #ifdef Q_OS_WIN
     static void removePostedTimerEvent(QObject *object, int timerId);
 #endif
-
-#ifdef Q_OS_MAC
-    static QString macMenuBarName();
-#endif
-
-    static void initLocale();
 
     QAtomicInt quitLockRef;
     void ref();
@@ -102,40 +118,50 @@ public:
     }
     void maybeQuit();
 
-    static QThread *theMainThread;
+    static QBasicAtomicPointer<QThread> theMainThread;
     static QThread *mainThread();
-    static bool checkInstance(const char *method);
+    static bool threadRequiresCoreApplication();
+
     static void sendPostedEvents(QObject *receiver, int event_type, QThreadData *data);
 
-#if !defined (QT_NO_DEBUG) || defined (QT_MAC_FRAMEWORK_BUILD)
-    void checkReceiverThread(QObject *receiver);
-#endif
+    static void checkReceiverThread(QObject *receiver);
+    void cleanupThreadData();
+#endif // QT_NO_QOBJECT
+
     int &argc;
     char **argv;
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     int origArgc;
     char **origArgv; // store unmodified arguments for QCoreApplication::arguments()
 #endif
     void appendApplicationPathToLibraryPaths(void);
-    void cleanupThreadData();
 
 #ifndef QT_NO_TRANSLATION
     QTranslatorList translators;
+    QReadWriteLock translateMutex;
+    static bool isTranslatorInstalled(QTranslator *translator);
 #endif
-    uint application_type;
+
+    QCoreApplicationPrivate::Type application_type;
+
+    QString cachedApplicationDirPath;
+    static QString *cachedApplicationFilePath;
+    static void setApplicationFilePath(const QString &path);
+    static inline void clearApplicationFilePath() { delete cachedApplicationFilePath; cachedApplicationFilePath = 0; }
+
+#ifndef QT_NO_QOBJECT
+    void execCleanup();
 
     bool in_exec;
     bool aboutToQuitEmitted;
     bool threadData_clean;
-    QString cachedApplicationDirPath;
-    QString cachedApplicationFilePath;
-
-    static bool isTranslatorInstalled(QTranslator *translator);
 
     static QAbstractEventDispatcher *eventDispatcher;
     static bool is_app_running;
     static bool is_app_closing;
+#endif
 
+    static bool setuidAllowed;
     static uint attribs;
     static inline bool testAttribute(uint flag) { return attribs & (1 << flag); }
     static int app_compile_version;
@@ -143,6 +169,10 @@ public:
     void processCommandLineArguments();
     QString qmljs_debug_arguments; // a string containing arguments for js/qml debugging.
     inline QString qmljsDebugArgumentsString() { return qmljs_debug_arguments; }
+
+#ifdef QT_NO_QOBJECT
+    QCoreApplication *q_ptr;
+#endif
 };
 
 QT_END_NAMESPACE

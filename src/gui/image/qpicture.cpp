@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,6 +56,8 @@
 #include "qpixmap.h"
 #include "qregion.h"
 #include "qdebug.h"
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -107,8 +107,16 @@ void qt_format_text(const QFont &fnt, const QRectF &_r,
     \sa QMovie
 */
 
+/*!
+    \fn QPicture &QPicture::operator=(QPicture &&other)
+
+    Move-assigns \a other to this QPicture instance.
+
+    \since 5.2
+*/
+
 const char  *qt_mfhdr_tag = "QPIC"; // header tag
-static const quint16 mfhdr_maj = 11; // major version #
+static const quint16 mfhdr_maj = QDataStream::Qt_DefaultCompiledVersion; // major version #
 static const quint16 mfhdr_min = 0; // minor version #
 
 /*!
@@ -181,7 +189,7 @@ int QPicture::devType() const
 /*!
     \fn bool QPicture::isNull() const
 
-    Returns true if the picture contains no data; otherwise returns
+    Returns \c true if the picture contains no data; otherwise returns
     false.
 */
 
@@ -246,7 +254,7 @@ void QPicture::setData(const char* data, uint size)
 
 /*!
     Loads a picture from the file specified by \a fileName and returns
-    true if successful; otherwise invalidates the picture and returns false.
+    true if successful; otherwise invalidates the picture and returns \c false.
 
     Please note that the \a format parameter has been deprecated and
     will have no effect.
@@ -294,7 +302,7 @@ bool QPicture::load(QIODevice *dev, const char *format)
 
 /*!
     Saves a picture to the file specified by \a fileName and returns
-    true if successful; otherwise returns false.
+    true if successful; otherwise returns \c false.
 
     Please note that the \a format parameter has been deprecated and
     will have no effect.
@@ -396,8 +404,8 @@ void QPicture::setBoundingRect(const QRect &r)
 }
 
 /*!
-    Replays the picture using \a painter, and returns true if
-    successful; otherwise returns false.
+    Replays the picture using \a painter, and returns \c true if
+    successful; otherwise returns \c false.
 
     This function does exactly the same as QPainter::drawPicture()
     with (x, y) = (0, 0).
@@ -448,8 +456,8 @@ public:
     QFakeDevice() { dpi_x = qt_defaultDpiX(); dpi_y = qt_defaultDpiY(); }
     void setDpiX(int dpi) { dpi_x = dpi; }
     void setDpiY(int dpi) { dpi_y = dpi; }
-    QPaintEngine *paintEngine() const { return 0; }
-    int metric(PaintDeviceMetric m) const
+    QPaintEngine *paintEngine() const override { return 0; }
+    int metric(PaintDeviceMetric m) const override
     {
         switch(m) {
             case PdmPhysicalDpiX:
@@ -956,6 +964,12 @@ int QPicture::metric(PaintDeviceMetric m) const
         case PdmDepth:
             val = 24;
             break;
+        case PdmDevicePixelRatio:
+            val = 1;
+            break;
+        case PdmDevicePixelRatioScaled:
+            val = 1 * QPaintDevice::devicePixelRatioFScale();
+            break;
         default:
             val = 0;
             qWarning("QPicture::metric: Invalid metric command");
@@ -1180,6 +1194,7 @@ QT_BEGIN_INCLUDE_NAMESPACE
 #include "qpictureformatplugin.h"
 QT_END_INCLUDE_NAMESPACE
 
+#if QT_DEPRECATED_SINCE(5, 10)
 /*!
     \obsolete
 
@@ -1192,7 +1207,12 @@ QT_END_INCLUDE_NAMESPACE
 
 const char* QPicture::pictureFormat(const QString &fileName)
 {
-    return QPictureIO::pictureFormat(fileName);
+    const QByteArray format = QPictureIO::pictureFormat(fileName);
+    // This function returns a const char * from a QByteArray.
+    // Double check that the QByteArray is not detached, otherwise
+    // we would return a dangling pointer.
+    Q_ASSERT(!format.isDetached());
+    return format;
 }
 
 /*!
@@ -1208,10 +1228,12 @@ QList<QByteArray> QPicture::inputFormats()
     return QPictureIO::inputFormats();
 }
 
-static QStringList qToStringList(const QList<QByteArray> arr)
+static QStringList qToStringList(const QList<QByteArray> &arr)
 {
     QStringList list;
-    for (int i = 0; i < arr.count(); ++i)
+    const int count = arr.count();
+    list.reserve(count);
+    for (int i = 0; i < count; ++i)
         list.append(QString::fromLatin1(arr.at(i)));
     return list;
 }
@@ -1263,6 +1285,7 @@ QList<QByteArray> QPicture::outputFormats()
 {
     return QPictureIO::outputFormats();
 }
+#endif // QT_DEPRECATED_SINCE(5, 10)
 
 /*****************************************************************************
   QPictureIO member functions
@@ -1278,6 +1301,7 @@ QList<QByteArray> QPicture::outputFormats()
 
     \ingroup painting
     \ingroup io
+    \inmodule QtGui
 
     QPictureIO contains a QIODevice object that is used for picture data
     I/O. The programmer can install new picture file formats in addition
@@ -1356,7 +1380,7 @@ void QPictureIO::init()
 QPictureIO::~QPictureIO()
 {
     if (d->parameters)
-        delete [] (char*)d->parameters;
+        delete [] d->parameters;
     delete d;
 }
 
@@ -1397,7 +1421,6 @@ Q_GLOBAL_STATIC(QPHList, pictureHandlers)
 
 void qt_init_picture_plugins()
 {
-#ifndef QT_NO_LIBRARY
     typedef QMultiMap<int, QString> PluginKeyMap;
     typedef PluginKeyMap::const_iterator PluginKeyMapConstIterator;
 
@@ -1412,7 +1435,6 @@ void qt_init_picture_plugins()
         if (QPictureFormatPlugin *format = qobject_cast<QPictureFormatPlugin*>(loader.instance(it.key())))
             format->installIOHandler(it.value());
     }
-#endif
 }
 
 static void cleanup()
@@ -1665,7 +1687,7 @@ const char *QPictureIO::parameters() const
 void QPictureIO::setParameters(const char *parameters)
 {
     if (d->parameters)
-        delete [] (char*)d->parameters;
+        delete [] d->parameters;
     d->parameters = qstrdup(parameters);
 }
 
@@ -1736,7 +1758,7 @@ QByteArray QPictureIO::pictureFormat(const QString &fileName)
     Make sure that \a d is at the right position in the device (for
     example, at the beginning of the file).
 
-    \sa QIODevice::at()
+    \sa QIODevice::pos()
 */
 
 QByteArray QPictureIO::pictureFormat(QIODevice *d)
@@ -1794,7 +1816,7 @@ QList<QByteArray> QPictureIO::inputFormats()
                 result.append(p->format);
         }
     }
-    qSort(result);
+    std::sort(result.begin(), result.end());
 
     return result;
 }
@@ -1822,8 +1844,8 @@ QList<QByteArray> QPictureIO::outputFormats()
 
 
 /*!
-    Reads an picture into memory and returns true if the picture was
-    successfully read; otherwise returns false.
+    Reads an picture into memory and returns \c true if the picture was
+    successfully read; otherwise returns \c false.
 
     Before reading an picture you must set an IO device or a file name.
     If both an IO device and a file name have been set, the IO device
@@ -1895,8 +1917,8 @@ bool QPictureIO::read()
 
 
 /*!
-    Writes an picture to an IO device and returns true if the picture was
-    successfully written; otherwise returns false.
+    Writes an picture to an IO device and returns \c true if the picture was
+    successfully written; otherwise returns \c false.
 
     Before writing an picture you must set an IO device or a file name.
     If both an IO device and a file name have been set, the IO device

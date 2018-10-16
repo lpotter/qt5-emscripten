@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,6 +55,10 @@
     directory entry. Here's how to iterate over all the entries sequentially:
 
     \snippet code/src_corelib_io_qdiriterator.cpp 0
+
+    Here's how to find and read all files filtered by name, recursively:
+
+    \snippet code/src_corelib_io_qdiriterator.cpp 1
 
     The next() function returns the path to the next directory entry and
     advances the iterator. You can also call filePath() to get the current
@@ -206,6 +208,8 @@ void QDirIteratorPrivate::pushDirectory(const QFileInfo &fileInfo)
         QFileSystemIterator *it = new QFileSystemIterator(fileInfo.d_ptr->fileEntry,
             filters, nameFilters, iteratorFlags);
         nativeIterators << it;
+#else
+        qWarning("Qt was built with -no-feature-filesystemiterator: no files/plugins will be found!");
 #endif
     }
 }
@@ -256,6 +260,7 @@ void QDirIteratorPrivate::advance()
 
                 if (entryMatches(nextEntry.fileName(), info))
                     return;
+                nextMetaData = QFileSystemMetaData();
             }
 
             nativeIterators.pop();
@@ -308,7 +313,7 @@ void QDirIteratorPrivate::checkAndPushDirectory(const QFileInfo &fileInfo)
     This convenience function implements the iterator's filtering logics and
     applies then to the current directory entry.
 
-    It returns true if the current entry matches the filters (i.e., the
+    It returns \c true if the current entry matches the filters (i.e., the
     current entry will be returned as part of the directory iteration);
     otherwise, false is returned.
 */
@@ -476,8 +481,8 @@ QDirIterator::~QDirIterator()
 
 /*!
     Advances the iterator to the next entry, and returns the file path of this
-    new entry. If hasNext() returns false, this function does nothing, and
-    returns a null QString.
+    new entry. If hasNext() returns \c false, this function does nothing, and
+    returns an empty QString.
 
     You can call fileName() or filePath() to get the current entry file name
     or path, or fileInfo() to get a QFileInfo for the current entry.
@@ -491,7 +496,7 @@ QString QDirIterator::next()
 }
 
 /*!
-    Returns true if there is at least one more entry in the directory;
+    Returns \c true if there is at least one more entry in the directory;
     otherwise, false is returned.
 
     \sa next(), fileName(), filePath(), fileInfo()

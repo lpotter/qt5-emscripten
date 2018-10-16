@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -76,14 +63,7 @@ protected:
 class tst_QButtonGroup : public QObject
 {
 Q_OBJECT
-public:
-    tst_QButtonGroup();
 
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
 private slots:
     void arrowKeyNavigation();
     void exclusive();
@@ -98,27 +78,6 @@ private slots:
     void task209485_removeFromGroupInEventHandler_data();
     void task209485_removeFromGroupInEventHandler();
 };
-
-tst_QButtonGroup::tst_QButtonGroup()
-{
-}
-
-
-void tst_QButtonGroup::initTestCase()
-{
-}
-
-void tst_QButtonGroup::cleanupTestCase()
-{
-}
-
-void tst_QButtonGroup::init()
-{
-}
-
-void tst_QButtonGroup::cleanup()
-{
-}
 
 QT_BEGIN_NAMESPACE
 extern bool Q_GUI_EXPORT qt_tab_all_widgets();
@@ -332,13 +291,13 @@ void tst_QButtonGroup::testSignals()
 
     int expectedId = -2;
 
-    QVERIFY(clickedIdSpy.takeFirst().at(0).toInt() == expectedId);
+    QCOMPARE(clickedIdSpy.takeFirst().at(0).toInt(), expectedId);
     QCOMPARE(pressedSpy.count(), 1);
     QCOMPARE(pressedIdSpy.count(), 1);
-    QVERIFY(pressedIdSpy.takeFirst().at(0).toInt() == expectedId);
+    QCOMPARE(pressedIdSpy.takeFirst().at(0).toInt(), expectedId);
     QCOMPARE(releasedSpy.count(), 1);
     QCOMPARE(releasedIdSpy.count(), 1);
-    QVERIFY(releasedIdSpy.takeFirst().at(0).toInt() == expectedId);
+    QCOMPARE(releasedIdSpy.takeFirst().at(0).toInt(), expectedId);
 
     clickedSpy.clear();
     clickedIdSpy.clear();
@@ -352,13 +311,33 @@ void tst_QButtonGroup::testSignals()
 
     QCOMPARE(clickedSpy.count(), 1);
     QCOMPARE(clickedIdSpy.count(), 1);
-    QVERIFY(clickedIdSpy.takeFirst().at(0).toInt() == 23);
+    QCOMPARE(clickedIdSpy.takeFirst().at(0).toInt(), 23);
     QCOMPARE(pressedSpy.count(), 1);
     QCOMPARE(pressedIdSpy.count(), 1);
-    QVERIFY(pressedIdSpy.takeFirst().at(0).toInt() == 23);
+    QCOMPARE(pressedIdSpy.takeFirst().at(0).toInt(), 23);
     QCOMPARE(releasedSpy.count(), 1);
     QCOMPARE(releasedIdSpy.count(), 1);
-    QVERIFY(releasedIdSpy.takeFirst().at(0).toInt() == 23);
+    QCOMPARE(releasedIdSpy.takeFirst().at(0).toInt(), 23);
+
+
+    QSignalSpy toggledSpy(&buttons, SIGNAL(buttonToggled(QAbstractButton*, bool)));
+    QSignalSpy toggledIdSpy(&buttons, SIGNAL(buttonToggled(int, bool)));
+
+    pb1.setCheckable(true);
+    pb2.setCheckable(true);
+    pb1.toggle();
+    QCOMPARE(toggledSpy.count(), 1);
+    QCOMPARE(toggledIdSpy.count(), 1);
+
+    pb2.toggle();
+    QCOMPARE(toggledSpy.count(), 3);     // equals 3 since pb1 and pb2 are both toggled
+    QCOMPARE(toggledIdSpy.count(), 3);
+
+    pb1.setCheckable(false);
+    pb2.setCheckable(false);
+    pb1.toggle();
+    QCOMPARE(toggledSpy.count(), 3);
+    QCOMPARE(toggledIdSpy.count(), 3);
 }
 
 void tst_QButtonGroup::task106609()
@@ -415,25 +394,25 @@ void tst_QButtonGroup::checkedButton()
     buttons.addButton(&pb1);
     buttons.addButton(&pb2, 23);
 
-    QVERIFY(buttons.checkedButton() == 0);
+    QVERIFY(!buttons.checkedButton());
     pb1.setChecked(true);
-    QVERIFY(buttons.checkedButton() == &pb1);
+    QCOMPARE(buttons.checkedButton(), &pb1);
     pb2.setChecked(true);
-    QVERIFY(buttons.checkedButton() == &pb2);
+    QCOMPARE(buttons.checkedButton(), &pb2);
     pb2.setChecked(false);
-    QVERIFY(buttons.checkedButton() == &pb1);
+    QCOMPARE(buttons.checkedButton(), &pb1);
     pb1.setChecked(false);
-    QVERIFY(buttons.checkedButton() == 0);
+    QVERIFY(!buttons.checkedButton());
 
     buttons.setExclusive(true);
-    QVERIFY(buttons.checkedButton() == 0);
+    QVERIFY(!buttons.checkedButton());
     pb1.setChecked(true);
-    QVERIFY(buttons.checkedButton() == &pb1);
+    QCOMPARE(buttons.checkedButton(), &pb1);
     pb2.setChecked(true);
-    QVERIFY(buttons.checkedButton() == &pb2);
+    QCOMPARE(buttons.checkedButton(), &pb2);
     // checked button cannot be unchecked
     pb2.setChecked(false);
-    QVERIFY(buttons.checkedButton() == &pb2);
+    QCOMPARE(buttons.checkedButton(), &pb2);
 }
 
 class task209485_ButtonDeleter : public QObject
@@ -511,9 +490,9 @@ void tst_QButtonGroup::autoIncrementId()
 
     radio1->setChecked(true);
 
-    QVERIFY(buttons->id(radio1) == -2);
-    QVERIFY(buttons->id(radio2) == -3);
-    QVERIFY(buttons->id(radio3) == -4);
+    QCOMPARE(buttons->id(radio1), -2);
+    QCOMPARE(buttons->id(radio2), -3);
+    QCOMPARE(buttons->id(radio3), -4);
 
     dlg.show();
 }

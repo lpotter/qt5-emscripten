@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,30 +40,30 @@
 #ifndef QWINDOWSDRAG_H
 #define QWINDOWSDRAG_H
 
+#include "qwindowscombase.h"
 #include "qwindowsinternalmimedata.h"
 
 #include <qpa/qplatformdrag.h>
-#include <QtGui/QPixmap>
+#include <QtGui/qpixmap.h>
+#include <QtGui/qdrag.h>
 
 struct IDropTargetHelper;
 
 QT_BEGIN_NAMESPACE
+
+class QPlatformScreen;
+
 class QWindowsDropMimeData : public QWindowsInternalMimeData {
 public:
-    QWindowsDropMimeData() {}
-    virtual IDataObject *retrieveDataObject() const;
+    QWindowsDropMimeData() = default;
+    IDataObject *retrieveDataObject() const override;
 };
 
-class QWindowsOleDropTarget : public IDropTarget
+class QWindowsOleDropTarget : public QWindowsComBase<IDropTarget>
 {
 public:
     explicit QWindowsOleDropTarget(QWindow *w);
-    virtual ~QWindowsOleDropTarget();
-
-    // IUnknown methods
-    STDMETHOD(QueryInterface)(REFIID riid, void FAR* FAR* ppvObj);
-    STDMETHOD_(ULONG, AddRef)(void);
-    STDMETHOD_(ULONG, Release)(void);
+    ~QWindowsOleDropTarget() override;
 
     // IDropTarget methods
     STDMETHOD(DragEnter)(LPDATAOBJECT pDataObj, DWORD grfKeyState, POINTL pt, LPDWORD pdwEffect);
@@ -74,15 +72,13 @@ public:
     STDMETHOD(Drop)(LPDATAOBJECT pDataObj, DWORD grfKeyState, POINTL pt, LPDWORD pdwEffect);
 
 private:
-    inline QWindow *findDragOverWindow(const POINTL &pt) const;
     void handleDrag(QWindow *window, DWORD grfKeyState, const QPoint &, LPDWORD pdwEffect);
 
-    ULONG m_refs;
     QWindow *const m_window;
     QRect m_answerRect;
     QPoint m_lastPoint;
-    DWORD m_chosenEffect;
-    DWORD m_lastKeyState;
+    DWORD m_chosenEffect = 0;
+    DWORD m_lastKeyState = 0;
 };
 
 class QWindowsDrag : public QPlatformDrag
@@ -91,11 +87,11 @@ public:
     QWindowsDrag();
     virtual ~QWindowsDrag();
 
-    virtual QMimeData *platformDropData() { return &m_dropData; }
-
-    virtual Qt::DropAction drag(QDrag *drag);
+    Qt::DropAction drag(QDrag *drag) override;
 
     static QWindowsDrag *instance();
+    void cancelDrag() override { QWindowsDrag::m_canceled = true; }
+    static bool isCanceled() { return QWindowsDrag::m_canceled; }
 
     IDataObject *dropDataObject() const             { return m_dropDataObject; }
     void setDropDataObject(IDataObject *dataObject) { m_dropDataObject = dataObject; }
@@ -104,18 +100,13 @@ public:
 
     IDropTargetHelper* dropHelper();
 
-    QPixmap defaultCursor(Qt::DropAction action) const;
-
 private:
+    static bool m_canceled;
+
     QWindowsDropMimeData m_dropData;
-    IDataObject *m_dropDataObject;
+    IDataObject *m_dropDataObject = nullptr;
 
-    IDropTargetHelper* m_cachedDropTargetHelper;
-
-    mutable QPixmap m_copyDragCursor;
-    mutable QPixmap m_moveDragCursor;
-    mutable QPixmap m_linkDragCursor;
-    mutable QPixmap m_ignoreDragCursor;
+    IDropTargetHelper* m_cachedDropTargetHelper = nullptr;
 };
 
 QT_END_NAMESPACE

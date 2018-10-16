@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,12 +41,13 @@
 #define QSORTFILTERPROXYMODEL_H
 
 #include <QtCore/qabstractproxymodel.h>
-
-#ifndef QT_NO_SORTFILTERPROXYMODEL
-
 #include <QtCore/qregexp.h>
 
-QT_BEGIN_HEADER
+#if QT_CONFIG(regularexpression)
+# include <QtCore/qregularexpression.h>
+#endif
+
+QT_REQUIRE_CONFIG(sortfilterproxymodel);
 
 QT_BEGIN_NAMESPACE
 
@@ -64,6 +63,9 @@ class Q_CORE_EXPORT QSortFilterProxyModel : public QAbstractProxyModel
 
     Q_OBJECT
     Q_PROPERTY(QRegExp filterRegExp READ filterRegExp WRITE setFilterRegExp)
+#if QT_CONFIG(regularexpression)
+    Q_PROPERTY(QRegularExpression filterRegularExpression READ filterRegularExpression WRITE setFilterRegularExpression)
+#endif
     Q_PROPERTY(int filterKeyColumn READ filterKeyColumn WRITE setFilterKeyColumn)
     Q_PROPERTY(bool dynamicSortFilter READ dynamicSortFilter WRITE setDynamicSortFilter)
     Q_PROPERTY(Qt::CaseSensitivity filterCaseSensitivity READ filterCaseSensitivity WRITE setFilterCaseSensitivity)
@@ -71,21 +73,25 @@ class Q_CORE_EXPORT QSortFilterProxyModel : public QAbstractProxyModel
     Q_PROPERTY(bool isSortLocaleAware READ isSortLocaleAware WRITE setSortLocaleAware)
     Q_PROPERTY(int sortRole READ sortRole WRITE setSortRole)
     Q_PROPERTY(int filterRole READ filterRole WRITE setFilterRole)
+    Q_PROPERTY(bool recursiveFilteringEnabled READ isRecursiveFilteringEnabled WRITE setRecursiveFilteringEnabled)
 
 public:
-    explicit QSortFilterProxyModel(QObject *parent = 0);
+    explicit QSortFilterProxyModel(QObject *parent = nullptr);
     ~QSortFilterProxyModel();
 
-    void setSourceModel(QAbstractItemModel *sourceModel);
+    void setSourceModel(QAbstractItemModel *sourceModel) override;
 
-    QModelIndex mapToSource(const QModelIndex &proxyIndex) const;
-    QModelIndex mapFromSource(const QModelIndex &sourceIndex) const;
+    QModelIndex mapToSource(const QModelIndex &proxyIndex) const override;
+    QModelIndex mapFromSource(const QModelIndex &sourceIndex) const override;
 
-    QItemSelection mapSelectionToSource(const QItemSelection &proxySelection) const;
-    QItemSelection mapSelectionFromSource(const QItemSelection &sourceSelection) const;
+    QItemSelection mapSelectionToSource(const QItemSelection &proxySelection) const override;
+    QItemSelection mapSelectionFromSource(const QItemSelection &sourceSelection) const override;
 
     QRegExp filterRegExp() const;
-    void setFilterRegExp(const QRegExp &regExp);
+
+#if QT_CONFIG(regularexpression)
+    QRegularExpression filterRegularExpression() const;
+#endif
 
     int filterKeyColumn() const;
     void setFilterKeyColumn(int column);
@@ -111,71 +117,79 @@ public:
     int filterRole() const;
     void setFilterRole(int role);
 
+    bool isRecursiveFilteringEnabled() const;
+    void setRecursiveFilteringEnabled(bool recursive);
+
 public Q_SLOTS:
     void setFilterRegExp(const QString &pattern);
+    void setFilterRegExp(const QRegExp &regExp);
+#if QT_CONFIG(regularexpression)
+    void setFilterRegularExpression(const QString &pattern);
+    void setFilterRegularExpression(const QRegularExpression &regularExpression);
+#endif
     void setFilterWildcard(const QString &pattern);
     void setFilterFixedString(const QString &pattern);
-    void clear();
+#if QT_DEPRECATED_SINCE(5, 11)
+    QT_DEPRECATED_X("Use QSortFilterProxyModel::invalidate") void clear();
+#endif
     void invalidate();
 
 protected:
     virtual bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const;
     virtual bool filterAcceptsColumn(int source_column, const QModelIndex &source_parent) const;
-    virtual bool lessThan(const QModelIndex &left, const QModelIndex &right) const;
+    virtual bool lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const;
 
-    void filterChanged();
+#if QT_DEPRECATED_SINCE(5, 11)
+    QT_DEPRECATED_X("Use QSortFilterProxyModel::invalidateFilter") void filterChanged();
+#endif
     void invalidateFilter();
 
 public:
-#ifdef Q_NO_USING_KEYWORD
-    inline QObject *parent() const { return QObject::parent(); }
-#else
     using QObject::parent;
-#endif
 
-    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
-    QModelIndex parent(const QModelIndex &child) const;
-    QModelIndex sibling(int row, int column, const QModelIndex &idx) const;
+    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex &child) const override;
+    QModelIndex sibling(int row, int column, const QModelIndex &idx) const override;
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const;
-    bool hasChildren(const QModelIndex &parent = QModelIndex()) const;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    bool hasChildren(const QModelIndex &parent = QModelIndex()) const override;
 
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
 
-    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
     bool setHeaderData(int section, Qt::Orientation orientation,
-            const QVariant &value, int role = Qt::EditRole);
+            const QVariant &value, int role = Qt::EditRole) override;
 
-    QMimeData *mimeData(const QModelIndexList &indexes) const;
+    QMimeData *mimeData(const QModelIndexList &indexes) const override;
     bool dropMimeData(const QMimeData *data, Qt::DropAction action,
-                      int row, int column, const QModelIndex &parent);
+                      int row, int column, const QModelIndex &parent) override;
 
-    bool insertRows(int row, int count, const QModelIndex &parent = QModelIndex());
-    bool insertColumns(int column, int count, const QModelIndex &parent = QModelIndex());
-    bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex());
-    bool removeColumns(int column, int count, const QModelIndex &parent = QModelIndex());
+    bool insertRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
+    bool insertColumns(int column, int count, const QModelIndex &parent = QModelIndex()) override;
+    bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
+    bool removeColumns(int column, int count, const QModelIndex &parent = QModelIndex()) override;
 
-    void fetchMore(const QModelIndex &parent);
-    bool canFetchMore(const QModelIndex &parent) const;
-    Qt::ItemFlags flags(const QModelIndex &index) const;
+    void fetchMore(const QModelIndex &parent) override;
+    bool canFetchMore(const QModelIndex &parent) const override;
+    Qt::ItemFlags flags(const QModelIndex &index) const override;
 
-    QModelIndex buddy(const QModelIndex &index) const;
+    QModelIndex buddy(const QModelIndex &index) const override;
     QModelIndexList match(const QModelIndex &start, int role,
                           const QVariant &value, int hits = 1,
                           Qt::MatchFlags flags =
-                          Qt::MatchFlags(Qt::MatchStartsWith|Qt::MatchWrap)) const;
-    QSize span(const QModelIndex &index) const;
-    void sort(int column, Qt::SortOrder order = Qt::AscendingOrder);
+                          Qt::MatchFlags(Qt::MatchStartsWith|Qt::MatchWrap)) const override;
+    QSize span(const QModelIndex &index) const override;
+    void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
 
-    QStringList mimeTypes() const;
-    Qt::DropActions supportedDropActions() const;
+    QStringList mimeTypes() const override;
+    Qt::DropActions supportedDropActions() const override;
 private:
     Q_DECLARE_PRIVATE(QSortFilterProxyModel)
     Q_DISABLE_COPY(QSortFilterProxyModel)
 
-    Q_PRIVATE_SLOT(d_func(), void _q_sourceDataChanged(const QModelIndex &source_top_left, const QModelIndex &source_bottom_right))
+    Q_PRIVATE_SLOT(d_func(), void _q_sourceDataChanged(const QModelIndex &source_top_left, const QModelIndex &source_bottom_right, const QVector<int> &roles))
     Q_PRIVATE_SLOT(d_func(), void _q_sourceHeaderDataChanged(Qt::Orientation orientation, int start, int end))
     Q_PRIVATE_SLOT(d_func(), void _q_sourceAboutToBeReset())
     Q_PRIVATE_SLOT(d_func(), void _q_sourceReset())
@@ -197,9 +211,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
-
-#endif // QT_NO_SORTFILTERPROXYMODEL
 
 #endif // QSORTFILTERPROXYMODEL_H

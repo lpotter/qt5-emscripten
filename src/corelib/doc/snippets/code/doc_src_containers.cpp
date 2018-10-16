@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -156,10 +166,9 @@ for (i = list.begin(); i != list.end(); ++i)
 QList<QString> list;
 list << "A" << "B" << "C" << "D";
 
-QList<QString>::iterator i = list.end();
-while (i != list.begin()) {
-    --i;
-    *i = (*i).toLower();
+QList<QString>::reverse_iterator i;
+for (i = list.rbegin(); i != list.rend(); ++i)
+    *i = i->toLower();
 }
 //! [11]
 
@@ -176,7 +185,7 @@ QMap<int, int> map;
 ...
 QMap<int, int>::const_iterator i;
 for (i = map.constBegin(); i != map.constEnd(); ++i)
-    qDebug() << i.key() << ":" << i.value();
+    qDebug() << i.key() << ':' << i.value();
 //! [13]
 
 
@@ -236,7 +245,7 @@ foreach (const QString &str, list) {
 QMap<QString, int> map;
 ...
 foreach (const QString &str, map.keys())
-    qDebug() << str << ":" << map.value(str);
+    qDebug() << str << ':' << map.value(str);
 //! [19]
 
 
@@ -245,7 +254,7 @@ QMultiMap<QString, int> map;
 ...
 foreach (const QString &str, map.uniqueKeys()) {
     foreach (int i, map.values(str))
-        qDebug() << str << ":" << i;
+        qDebug() << str << ':' << i;
 }
 //! [20]
 
@@ -273,3 +282,33 @@ QString onlyLetters(const QString &in)
     return out;
 }
 //! [23]
+
+//! [24]
+QVector<int> a, b;
+a.resize(100000); // make a big vector filled with 0.
+
+QVector<int>::iterator i = a.begin();
+// WRONG way of using the iterator i:
+b = a;
+/*
+    Now we should be careful with iterator i since it will point to shared data
+    If we do *i = 4 then we would change the shared instance (both vectors)
+    The behavior differs from STL containers. Avoid doing such things in Qt.
+*/
+
+a[0] = 5;
+/*
+    Container a is now detached from the shared data,
+    and even though i was an iterator from the container a, it now works as an iterator in b.
+    Here the situation is that (*i) == 0.
+*/
+
+b.clear(); // Now the iterator i is completely invalid.
+
+int j = *i; // Undefined behavior!
+/*
+    The data from b (which i pointed to) is gone.
+    This would be well-defined with STL containers (and (*i) == 5),
+    but with QVector this is likely to crash.
+*/
+//! [24]

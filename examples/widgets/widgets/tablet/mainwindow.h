@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -44,10 +54,7 @@
 #include <QMainWindow>
 
 QT_BEGIN_NAMESPACE
-class QAction;
-class QActionGroup;
-class QMenu;
-class QStatusBar;
+class QColorDialog;
 QT_END_NAMESPACE
 class TabletCanvas;
 
@@ -60,53 +67,21 @@ public:
     MainWindow(TabletCanvas *canvas);
 
 private slots:
-    void brushColorAct();
-    void alphaActionTriggered(QAction *action);
-    void lineWidthActionTriggered(QAction *action);
-    void saturationActionTriggered(QAction *action);
-    void saveAct();
-    void loadAct();
-    void aboutAct();
+    void setBrushColor();
+    void setAlphaValuator(QAction *action);
+    void setLineWidthValuator(QAction *action);
+    void setSaturationValuator(QAction *action);
+    void setEventCompression(bool compress);
+    bool save();
+    void load();
+    void clear();
+    void about();
 
 private:
-    void createActions();
     void createMenus();
 
-    TabletCanvas *myCanvas;
-
-    QAction *brushColorAction;
-    QActionGroup *brushActionGroup;
-
-    QActionGroup *alphaChannelGroup;
-    QAction *alphaChannelPressureAction;
-    QAction *alphaChannelTiltAction;
-    QAction *noAlphaChannelAction;
-
-    QActionGroup *colorSaturationGroup;
-    QAction *colorSaturationVTiltAction;
-    QAction *colorSaturationHTiltAction;
-    QAction *colorSaturationPressureAction;
-    QAction *noColorSaturationAction;
-
-    QActionGroup *lineWidthGroup;
-    QAction *lineWidthPressureAction;
-    QAction *lineWidthTiltAction;
-    QAction *lineWidthFixedAction;
-
-    QAction *exitAction;
-    QAction *saveAction;
-    QAction *loadAction;
-
-    QAction *aboutAction;
-    QAction *aboutQtAction;
-
-    QMenu *fileMenu;
-    QMenu *brushMenu;
-    QMenu *tabletMenu;
-    QMenu *helpMenu;
-    QMenu *colorSaturationMenu;
-    QMenu *lineWidthMenu;
-    QMenu *alphaChannelMenu;
+    TabletCanvas *m_canvas;
+    QColorDialog *m_colorDialog;
 };
 //! [0]
 

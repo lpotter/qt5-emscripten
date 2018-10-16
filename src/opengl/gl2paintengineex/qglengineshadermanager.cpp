@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtOpenGL module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +47,8 @@
 #if defined(QT_DEBUG)
 #include <QMetaEnum>
 #endif
+
+#include <algorithm>
 
 // #define QT_GL_SHARED_SHADER_DEBUG
 
@@ -68,13 +68,13 @@ public:
         delete m_shaders;
     }
 
-    void invalidateResource()
+    void invalidateResource() override
     {
         delete m_shaders;
         m_shaders = 0;
     }
 
-    void freeResource(QOpenGLContext *)
+    void freeResource(QOpenGLContext *) override
     {
     }
 
@@ -163,7 +163,10 @@ QGLEngineSharedShaders::QGLEngineSharedShaders(const QGLContext* context)
         code[NonPremultipliedImageSrcFragmentShader] = qglslNonPremultipliedImageSrcFragmentShader;
         code[CustomImageSrcFragmentShader] = qglslCustomSrcFragmentShader; // Calls "customShader", which must be appended
         code[SolidBrushSrcFragmentShader] = qglslSolidBrushSrcFragmentShader;
-        code[TextureBrushSrcFragmentShader] = qglslTextureBrushSrcFragmentShader;
+        if (!context->contextHandle()->isOpenGLES())
+            code[TextureBrushSrcFragmentShader] = qglslTextureBrushSrcFragmentShader_desktop;
+        else
+            code[TextureBrushSrcFragmentShader] = qglslTextureBrushSrcFragmentShader_ES;
         code[TextureBrushSrcWithPatternFragmentShader] = qglslTextureBrushSrcWithPatternFragmentShader;
         code[PatternBrushSrcFragmentShader] = qglslPatternBrushSrcFragmentShader;
         code[LinearGradientBrushSrcFragmentShader] = qglslLinearGradientBrushSrcFragmentShader;
@@ -193,7 +196,7 @@ QGLEngineSharedShaders::QGLEngineSharedShaders(const QGLContext* context)
 #if defined(QT_DEBUG)
         // Check that all the elements have been filled:
         for (int i = 0; i < TotalSnippetCount; ++i) {
-            if (qShaderSnippets[i] == 0) {
+            if (Q_UNLIKELY(!qShaderSnippets[i])) {
                 qFatal("Shader snippet for %s (#%d) is missing!",
                        snippetNameStr(SnippetName(i)).constData(), i);
             }
@@ -242,11 +245,11 @@ QGLEngineSharedShaders::QGLEngineSharedShaders(const QGLContext* context)
 
     simpleShaderProg->link();
 
-    if (simpleShaderProg->isLinked()) {
+    if (Q_UNLIKELY(!simpleShaderProg->isLinked())) {
+        qCritical("Errors linking simple shader: %s", qPrintable(simpleShaderProg->log()));
+    } else {
         if (!inCache)
             simpleShaderCache.store(simpleShaderProg, context);
-    } else {
-        qCritical("Errors linking simple shader: %s", qPrintable(simpleShaderProg->log()));
     }
 
     // Compile the blit shader:
@@ -283,11 +286,11 @@ QGLEngineSharedShaders::QGLEngineSharedShaders(const QGLContext* context)
     }
 
     blitShaderProg->link();
-    if (blitShaderProg->isLinked()) {
+    if (Q_UNLIKELY(!blitShaderProg->isLinked())) {
+        qCritical("Errors linking blit shader: %s", qPrintable(blitShaderProg->log()));
+    } else {
         if (!inCache)
             blitShaderCache.store(blitShaderProg, context);
-    } else {
-        qCritical("Errors linking blit shader: %s", qPrintable(blitShaderProg->log()));
     }
 
 #ifdef QT_GL_SHARED_SHADER_DEBUG
@@ -330,7 +333,7 @@ QByteArray QGLEngineSharedShaders::snippetNameStr(SnippetName name)
 QGLEngineShaderProg *QGLEngineSharedShaders::findProgramInCache(const QGLEngineShaderProg &prog)
 {
     for (int i = 0; i < cachedPrograms.size(); ++i) {
-        QGLEngineShaderProg *cachedProg = cachedPrograms[i];
+        QGLEngineShaderProg *cachedProg = cachedPrograms.at(i);
         if (*cachedProg == prog) {
             // Move the program to the top of the list as a poor-man's cache algo
             cachedPrograms.move(i, 0);
@@ -429,11 +432,10 @@ QGLEngineShaderProg *QGLEngineSharedShaders::findProgramInCache(const QGLEngineS
             if (!inCache)
                 shaderCache.store(newProg->program, QGLContext::currentContext());
         } else {
-            QLatin1String none("none");
-            QLatin1String br("\n");
             QString error;
             error = QLatin1String("Shader program failed to link,");
 #if defined(QT_DEBUG)
+            QLatin1String br("\n");
             error += QLatin1String("\n  Shaders Used:\n");
             for (int i = 0; i < newProg->program->shaders().count(); ++i) {
                 QGLShader *shader = newProg->program->shaders().at(i);
@@ -472,15 +474,16 @@ QGLEngineShaderProg *QGLEngineSharedShaders::findProgramInCache(const QGLEngineS
 
 void QGLEngineSharedShaders::cleanupCustomStage(QGLCustomShaderStage* stage)
 {
-    // Remove any shader programs which has this as the custom shader src:
-    for (int i = 0; i < cachedPrograms.size(); ++i) {
-        QGLEngineShaderProg *cachedProg = cachedPrograms[i];
+    auto hasStageAsCustomShaderSouce = [stage](QGLEngineShaderProg *cachedProg) -> bool {
         if (cachedProg->customStageSource == stage->source()) {
             delete cachedProg;
-            cachedPrograms.removeAt(i);
-            i--;
+            return true;
         }
-    }
+        return false;
+    };
+    cachedPrograms.erase(std::remove_if(cachedPrograms.begin(), cachedPrograms.end(),
+                                        hasStageAsCustomShaderSouce),
+                         cachedPrograms.end());
 }
 
 
@@ -513,7 +516,7 @@ GLuint QGLEngineShaderManager::getUniformLocation(Uniform id)
     if (uniformLocations.isEmpty())
         uniformLocations.fill(GLuint(-1), NumUniforms);
 
-    static const char *uniformNames[] = {
+    static const char *const uniformNames[] = {
         "imageTexture",
         "patternColor",
         "globalOpacity",
@@ -531,7 +534,8 @@ GLuint QGLEngineShaderManager::getUniformLocation(Uniform id)
         "invertedTextureSize",
         "brushTransform",
         "brushTexture",
-        "matrix"
+        "matrix",
+        "translateZ"
     };
 
     if (uniformLocations.at(id) == GLuint(-1))
@@ -654,7 +658,7 @@ QGLShaderProgram* QGLEngineShaderManager::blitProgram()
 
 
 // Select & use the correct shader program using the current state.
-// Returns true if program needed changing.
+// Returns \c true if program needed changing.
 bool QGLEngineShaderManager::useCorrectShaderProg()
 {
     if (!shaderProgNeedsChanging)

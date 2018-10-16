@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,8 +73,6 @@ public:
 
     bool begin(QPaintDevice *pdev);
     bool end();
-    static CGColorSpaceRef macGenericColorSpace();
-    static CGColorSpaceRef macDisplayColorSpace(const QWidget *widget = 0);
 
     void updateState(const QPaintEngineState &state);
 
@@ -122,18 +118,12 @@ public:
     void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode)
     { QPaintEngine::drawPolygon(points, pointCount, mode); }
 
-    bool supportsTransformations(qreal, const QTransform &) const { return true; };
-
 protected:
     friend class QMacPrintEngine;
     friend class QMacPrintEnginePrivate;
     QCoreGraphicsPaintEngine(QPaintEnginePrivate &dptr);
 
 private:
-    static bool m_postRoutineRegistered;
-    static CGColorSpaceRef m_genericColorSpace;
-    static QHash<CGDirectDisplayID, CGColorSpaceRef> m_displayColorSpaceHash;
-    static void cleanUpMacColorSpaces();
     Q_DISABLE_COPY(QCoreGraphicsPaintEngine)
 };
 
@@ -145,7 +135,7 @@ class QCoreGraphicsPaintEnginePrivate : public QPaintEnginePrivate
     Q_DECLARE_PUBLIC(QCoreGraphicsPaintEngine)
 public:
     QCoreGraphicsPaintEnginePrivate()
-        : hd(0), shading(0), stackCount(0), complexXForm(false), disabledSmoothFonts(false)
+        : hd(nullptr), shading(nullptr), stackCount(0), complexXForm(false), disabledSmoothFonts(false)
     {
     }
 
@@ -174,8 +164,8 @@ public:
 
     //internal functions
     enum { CGStroke=0x01, CGEOFill=0x02, CGFill=0x04 };
-    void drawPath(uchar ops, CGMutablePathRef path = 0);
-    void setClip(const QRegion *rgn=0);
+    void drawPath(uchar ops, CGMutablePathRef path = nullptr);
+    void setClip(const QRegion *rgn = nullptr);
     void resetClip();
     void setFillBrush(const QPointF &origin=QPoint());
     void setStrokePen(const QPen &pen);
@@ -184,7 +174,7 @@ public:
     float penOffset();
     QPointF devicePixelSize(CGContextRef context);
     float adjustPenWidth(float penWidth);
-    inline void setTransform(const QTransform *matrix=0)
+    inline void setTransform(const QTransform *matrix = nullptr)
     {
         CGContextConcatCTM(hd, CGAffineTransformInvert(CGContextGetCTM(hd)));
         CGAffineTransform xform = orig_xform;
@@ -209,45 +199,6 @@ inline void QCoreGraphicsPaintEnginePrivate::restoreGraphicsState()
     Q_ASSERT(stackCount >= 0);
     CGContextRestoreGState(hd);
 }
-
-class QMacQuartzPaintDevice : public QPaintDevice
-{
-public:
-    QMacQuartzPaintDevice(CGContextRef cg, int width, int height, int bytesPerLine)
-        : mCG(cg), mWidth(width), mHeight(height), mBytesPerLine(bytesPerLine)
-    { }
-    int devType() const { return QInternal::MacQuartz; }
-    CGContextRef cgContext() const { return mCG; }
-    int metric(PaintDeviceMetric metric) const {
-        switch (metric) {
-        case PdmWidth:
-            return mWidth;
-        case PdmHeight:
-            return mHeight;
-        case PdmWidthMM:
-            return (qt_defaultDpiX() * mWidth) / 2.54;
-        case PdmHeightMM:
-            return (qt_defaultDpiY() * mHeight) / 2.54;
-        case PdmNumColors:
-            return 0;
-        case PdmDepth:
-            return 32;
-        case PdmDpiX:
-        case PdmPhysicalDpiX:
-            return qt_defaultDpiX();
-        case PdmDpiY:
-        case PdmPhysicalDpiY:
-            return qt_defaultDpiY();
-        }
-        return 0;
-    }
-    QPaintEngine *paintEngine() const { qWarning("This function should never be called."); return 0; }
-private:
-    CGContextRef mCG;
-    int mWidth;
-    int mHeight;
-    int mBytesPerLine;
-};
 
 QT_END_NAMESPACE
 

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,13 @@
 #ifndef QBOXLAYOUT_H
 #define QBOXLAYOUT_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qlayout.h>
 #ifdef QT_INCLUDE_COMPAT
 #include <QtWidgets/qwidget.h>
 #endif
 
 #include <limits.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -64,7 +61,7 @@ public:
     enum Direction { LeftToRight, RightToLeft, TopToBottom, BottomToTop,
                      Down = TopToBottom, Up = BottomToTop };
 
-    explicit QBoxLayout(Direction, QWidget *parent = 0);
+    explicit QBoxLayout(Direction, QWidget *parent = nullptr);
 
     ~QBoxLayout();
 
@@ -74,15 +71,15 @@ public:
     void addSpacing(int size);
     void addStretch(int stretch = 0);
     void addSpacerItem(QSpacerItem *spacerItem);
-    void addWidget(QWidget *, int stretch = 0, Qt::Alignment alignment = 0);
+    void addWidget(QWidget *, int stretch = 0, Qt::Alignment alignment = Qt::Alignment());
     void addLayout(QLayout *layout, int stretch = 0);
     void addStrut(int);
-    void addItem(QLayoutItem *);
+    void addItem(QLayoutItem *) override;
 
     void insertSpacing(int index, int size);
     void insertStretch(int index, int stretch = 0);
     void insertSpacerItem(int index, QSpacerItem *spacerItem);
-    void insertWidget(int index, QWidget *widget, int stretch = 0, Qt::Alignment alignment = 0);
+    void insertWidget(int index, QWidget *widget, int stretch = 0, Qt::Alignment alignment = Qt::Alignment());
     void insertLayout(int index, QLayout *layout, int stretch = 0);
     void insertItem(int index, QLayoutItem *);
 
@@ -94,20 +91,20 @@ public:
     void setStretch(int index, int stretch);
     int stretch(int index) const;
 
-    QSize sizeHint() const;
-    QSize minimumSize() const;
-    QSize maximumSize() const;
+    QSize sizeHint() const override;
+    QSize minimumSize() const override;
+    QSize maximumSize() const override;
 
-    bool hasHeightForWidth() const;
-    int heightForWidth(int) const;
-    int minimumHeightForWidth(int) const;
+    bool hasHeightForWidth() const override;
+    int heightForWidth(int) const override;
+    int minimumHeightForWidth(int) const override;
 
-    Qt::Orientations expandingDirections() const;
-    void invalidate();
-    QLayoutItem *itemAt(int) const;
-    QLayoutItem *takeAt(int);
-    int count() const;
-    void setGeometry(const QRect&);
+    Qt::Orientations expandingDirections() const override;
+    void invalidate() override;
+    QLayoutItem *itemAt(int) const override;
+    QLayoutItem *takeAt(int) override;
+    int count() const override;
+    void setGeometry(const QRect&) override;
 
 private:
     Q_DISABLE_COPY(QBoxLayout)
@@ -140,7 +137,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QBOXLAYOUT_H

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,12 +31,29 @@
 #include "../../kernel/qsqldatabase/tst_databases.h"
 #include <QtSql>
 #include <QtSql/private/qsqltablemodel_p.h>
+#include <QThread>
 
-const QString test(qTableName("test", __FILE__)),
-                   test2(qTableName("test2", __FILE__)),
-                   test3(qTableName("test3", __FILE__));
+const QString test(qTableName("test", __FILE__, QSqlDatabase())),
+                   test2(qTableName("test2", __FILE__, QSqlDatabase())),
+                   test3(qTableName("test3", __FILE__, QSqlDatabase()));
 
-Q_DECLARE_METATYPE(QModelIndex)
+// In order to catch when the warning message occurs, indicating that the database belongs to another
+// thread, we have to install our own message handler. To ensure that the test reporting still happens
+// as before, we call the originating one.
+//
+// For now, this is only called inside the modelInAnotherThread() test
+QtMessageHandler oldHandler = nullptr;
+
+void sqlTableModelMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    if (type == QtWarningMsg &&
+        msg == "QSqlDatabasePrivate::database: requested database does not "
+               "belong to the calling thread.") {
+        QFAIL("Requested database does not belong to the calling thread.");
+    }
+    if (oldHandler)
+        oldHandler(type, context, msg);
+}
 
 class tst_QSqlTableModel : public QObject
 {
@@ -84,6 +88,8 @@ private slots:
     void insertColumns();
     void submitAll_data() { generic_data(); }
     void submitAll();
+    void setData_data()  { generic_data(); }
+    void setData();
     void setRecord_data()  { generic_data(); }
     void setRecord();
     void setRecordReimpl_data()  { generic_data(); }
@@ -98,6 +104,8 @@ private slots:
     void insertRecord();
     void insertMultiRecords_data() { generic_data(); }
     void insertMultiRecords();
+    void insertWithAutoColumn_data() { generic_data_with_strategies("QSQLITE"); }
+    void insertWithAutoColumn();
     void removeRow_data() { generic_data(); }
     void removeRow();
     void removeRows_data() { generic_data(); }
@@ -106,6 +114,8 @@ private slots:
     void removeInsertedRow();
     void removeInsertedRows_data() { generic_data(); }
     void removeInsertedRows();
+    void revert_data() { generic_data_with_strategies("QSQLITE"); }
+    void revert();
     void isDirty_data() { generic_data_with_strategies(); }
     void isDirty();
     void setFilter_data() { generic_data(); }
@@ -124,6 +134,7 @@ private slots:
 
     void sqlite_bigTable_data() { generic_data("QSQLITE"); }
     void sqlite_bigTable();
+    void modelInAnotherThread();
 
     // bug specific tests
     void insertRecordBeforeSelect_data() { generic_data(); }
@@ -152,8 +163,7 @@ private:
 
 tst_QSqlTableModel::tst_QSqlTableModel()
 {
-    qRegisterMetaType<QModelIndex>("QModelIndex");
-    dbs.open();
+    QVERIFY(dbs.open());
 }
 
 tst_QSqlTableModel::~tst_QSqlTableModel()
@@ -164,26 +174,27 @@ void tst_QSqlTableModel::dropTestTables()
 {
     for (int i = 0; i < dbs.dbNames.count(); ++i) {
         QSqlDatabase db = QSqlDatabase::database(dbs.dbNames.at(i));
+        QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
         QSqlQuery q(db);
-        if(tst_Databases::isPostgreSQL(db))
+        if (dbType == QSqlDriver::PostgreSQL)
             QVERIFY_SQL( q, exec("set client_min_messages='warning'"));
 
         QStringList tableNames;
         tableNames << test
                    << test2
                    << test3
-                   << qTableName("test4", __FILE__)
-                   << qTableName("emptytable", __FILE__)
-                   << qTableName("bigtable", __FILE__)
-                   << qTableName("foo", __FILE__)
-                   << qTableName("pktest", __FILE__);
+                   << qTableName("test4", __FILE__, db)
+                   << qTableName("emptytable", __FILE__, db)
+                   << qTableName("bigtable", __FILE__, db)
+                   << qTableName("foo", __FILE__, db)
+                   << qTableName("pktest", __FILE__, db);
         if (testWhiteSpaceNames(db.driverName()))
-            tableNames << qTableName("qtestw hitespace", db.driver());
+            tableNames << qTableName("qtestw hitespace", db);
 
         tst_Databases::safeDropTables(db, tableNames);
 
         if (db.driverName().startsWith("QPSQL")) {
-            q.exec("DROP SCHEMA " + qTableName("testschema", __FILE__) + " CASCADE");
+            q.exec("DROP SCHEMA " + qTableName("testschema", __FILE__, db) + " CASCADE");
         }
     }
 }
@@ -192,6 +203,7 @@ void tst_QSqlTableModel::createTestTables()
 {
     for (int i = 0; i < dbs.dbNames.count(); ++i) {
         QSqlDatabase db = QSqlDatabase::database(dbs.dbNames.at(i));
+        QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
         QSqlQuery q(db);
 
         QVERIFY_SQL( q, exec("create table " + test + "(id int, name varchar(20), title int)"));
@@ -200,20 +212,20 @@ void tst_QSqlTableModel::createTestTables()
 
         QVERIFY_SQL( q, exec("create table " + test3 + "(id int, random varchar(20), randomtwo varchar(20))"));
 
-        if(!tst_Databases::isSqlServer(db))
-            QVERIFY_SQL( q, exec("create table " + qTableName("test4", __FILE__) + "(column1 varchar(50), column2 varchar(50), column3 varchar(50))"));
+        if (dbType != QSqlDriver::MSSqlServer)
+            QVERIFY_SQL(q, exec("create table " + qTableName("test4", __FILE__, db) + "(column1 varchar(50), column2 varchar(50), column3 varchar(50))"));
         else
-            QVERIFY_SQL( q, exec("create table " + qTableName("test4", __FILE__) + "(column1 varchar(50), column2 varchar(50) NULL, column3 varchar(50))"));
+            QVERIFY_SQL(q, exec("create table " + qTableName("test4", __FILE__, db) + "(column1 varchar(50), column2 varchar(50) NULL, column3 varchar(50))"));
 
 
-        QVERIFY_SQL( q, exec("create table " + qTableName("emptytable", __FILE__) + "(id int)"));
+        QVERIFY_SQL(q, exec("create table " + qTableName("emptytable", __FILE__, db) + "(id int)"));
 
         if (testWhiteSpaceNames(db.driverName())) {
-            QString qry = "create table " + qTableName("qtestw hitespace", db.driver()) + " ("+ db.driver()->escapeIdentifier("a field", QSqlDriver::FieldName) + " int)";
+            QString qry = "create table " + qTableName("qtestw hitespace", db) + " ("+ db.driver()->escapeIdentifier("a field", QSqlDriver::FieldName) + " int)";
             QVERIFY_SQL( q, exec(qry));
         }
 
-        QVERIFY_SQL( q, exec("create table "+qTableName("pktest", __FILE__)+"(id int not null primary key, a varchar(20))"));
+        QVERIFY_SQL(q, exec("create table " + qTableName("pktest", __FILE__, db) + "(id int not null primary key, a varchar(20))"));
     }
 }
 
@@ -282,7 +294,11 @@ void tst_QSqlTableModel::init()
 
 void tst_QSqlTableModel::cleanup()
 {
-    repopulateTestTables();
+    recreateTestTables();
+    if (oldHandler) {
+        qInstallMessageHandler(oldHandler);
+        oldHandler = nullptr;
+    }
 }
 
 void tst_QSqlTableModel::select()
@@ -339,7 +355,7 @@ void tst_QSqlTableModel::selectRow()
     QSqlDatabase db = QSqlDatabase::database(dbName);
     CHECK_DATABASE(db);
 
-    QString tbl = qTableName("pktest", __FILE__);
+    QString tbl = qTableName("pktest", __FILE__, db);
     QSqlQuery q(db);
     q.exec("DELETE FROM " + tbl);
     q.exec("INSERT INTO " + tbl + " (id, a) VALUES (0, 'a')");
@@ -367,6 +383,8 @@ void tst_QSqlTableModel::selectRow()
     q.exec("UPDATE " + tbl + " SET a = 'Qt' WHERE id = 1");
     QCOMPARE(model.data(idx).toString(), QString("b"));
     model.selectRow(1);
+    if (tst_Databases::getDatabaseType(db) == QSqlDriver::PostgreSQL)
+        QEXPECT_FAIL("", "Currently broken for PostgreSQL due to case sensitivity problems - see QTBUG-65788", Abort);
     QCOMPARE(model.data(idx).toString(), QString("Qt"));
 
     // Check if selectRow() refreshes a changed row.
@@ -399,7 +417,7 @@ void tst_QSqlTableModel::selectRowOverride()
     QSqlDatabase db = QSqlDatabase::database(dbName);
     CHECK_DATABASE(db);
 
-    QString tbl = qTableName("pktest", __FILE__);
+    QString tbl = qTableName("pktest", __FILE__, db);
     QSqlQuery q(db);
     q.exec("DELETE FROM " + tbl);
     q.exec("INSERT INTO " + tbl + " (id, a) VALUES (0, 'a')");
@@ -423,6 +441,8 @@ void tst_QSqlTableModel::selectRowOverride()
     // both rows should have changed
     QCOMPARE(model.data(idx).toString(), QString("Qt"));
     idx = model.index(2, 1);
+    if (tst_Databases::getDatabaseType(db) == QSqlDriver::PostgreSQL)
+        QEXPECT_FAIL("", "Currently broken for PostgreSQL due to case sensitivity problems - see QTBUG-65788", Abort);
     QCOMPARE(model.data(idx).toString(), QString("Qt"));
 
     q.exec("DELETE FROM " + tbl);
@@ -501,6 +521,77 @@ void tst_QSqlTableModel::insertColumns()
     QCOMPARE(model.data(model.index(3, 3)), QVariant());
     QCOMPARE(model.data(model.index(3, 4)), QVariant());
     QCOMPARE(model.data(model.index(3, 5)), QVariant());
+}
+
+void tst_QSqlTableModel::setData()
+{
+    QFETCH(QString, dbName);
+    QSqlDatabase db = QSqlDatabase::database(dbName);
+    CHECK_DATABASE(db);
+
+    QSqlTableModel model(0, db);
+    model.setEditStrategy(QSqlTableModel::OnManualSubmit);
+    model.setTable(test);
+    model.setSort(0, Qt::AscendingOrder);
+    QVERIFY_SQL(model, select());
+
+    //  initial state
+    QModelIndex idx = model.index(0, 0);
+    QVariant val = model.data(idx);
+    QVERIFY(val == int(1));
+    QVERIFY(!val.isNull());
+    QFAIL_SQL(model, isDirty());
+
+    // change 1 to 0
+    idx = model.index(0, 0);
+    QVERIFY_SQL(model, setData(idx, int(0)));
+    val = model.data(idx);
+    QVERIFY(val == int(0));
+    QVERIFY(!val.isNull());
+    QVERIFY_SQL(model, isDirty(idx));
+    QVERIFY_SQL(model, submitAll());
+
+    // change 0 to NULL
+    idx = model.index(0, 0);
+    QVERIFY_SQL(model, setData(idx, QVariant(QVariant::Int)));
+    val = model.data(idx);
+    QCOMPARE(val, QVariant(QVariant::Int));
+    QVERIFY(val.isNull());
+    QVERIFY_SQL(model, isDirty(idx));
+    QVERIFY_SQL(model, submitAll());
+
+    // change NULL to 0
+    idx = model.index(0, 0);
+    QVERIFY_SQL(model, setData(idx, int(0)));
+    val = model.data(idx);
+    QVERIFY(val == int(0));
+    QVERIFY(!val.isNull());
+    QVERIFY_SQL(model, isDirty(idx));
+    QVERIFY_SQL(model, submitAll());
+
+    // ignore unchanged 0 to 0
+    idx = model.index(0, 0);
+    QVERIFY_SQL(model, setData(idx, int(0)));
+    val = model.data(idx);
+    QVERIFY(val == int(0));
+    QVERIFY(!val.isNull());
+    QFAIL_SQL(model, isDirty(idx));
+
+    // pending INSERT
+    QVERIFY_SQL(model, insertRow(0));
+    // initial state
+    idx = model.index(0, 0);
+    QSqlRecord rec = model.record(0);
+    QCOMPARE(rec.value(0), QVariant(QVariant::Int));
+    QVERIFY(rec.isNull(0));
+    QVERIFY(!rec.isGenerated(0));
+    // unchanged value, but causes column to be included in INSERT
+    QVERIFY_SQL(model, setData(idx, QVariant(QVariant::Int)));
+    rec = model.record(0);
+    QCOMPARE(rec.value(0), QVariant(QVariant::Int));
+    QVERIFY(rec.isNull(0));
+    QVERIFY(rec.isGenerated(0));
+    QVERIFY_SQL(model, submitAll());
 }
 
 void tst_QSqlTableModel::setRecord()
@@ -752,7 +843,7 @@ void tst_QSqlTableModel::insertRowFailure()
     CHECK_DATABASE(db);
 
     QSqlTableModel model(0, db);
-    model.setTable(qTableName("pktest", __FILE__));
+    model.setTable(qTableName("pktest", __FILE__, db));
     model.setEditStrategy(submitpolicy);
 
     QSqlRecord values = model.record();
@@ -762,6 +853,9 @@ void tst_QSqlTableModel::insertRowFailure()
     values.setGenerated(1, true);
 
     // populate 1 row
+    const QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
+    if (dbType == QSqlDriver::PostgreSQL && submitpolicy != QSqlTableModel::OnManualSubmit)
+        QEXPECT_FAIL("", "Currently broken for PostgreSQL due to case sensitivity problems - see QTBUG-65788", Abort);
     QVERIFY_SQL(model, insertRecord(0, values));
     QVERIFY_SQL(model, submitAll());
     QVERIFY_SQL(model, select());
@@ -805,6 +899,8 @@ void tst_QSqlTableModel::insertRowFailure()
     // restore empty table
     model.revertAll();
     QVERIFY_SQL(model, removeRow(0));
+    if (dbType == QSqlDriver::PostgreSQL)
+        QEXPECT_FAIL("", "Currently broken for PostgreSQL due to case sensitivity problems - see QTBUG-65788", Abort);
     QVERIFY_SQL(model, submitAll());
     QVERIFY_SQL(model, select());
     QCOMPARE(model.rowCount(), 0);
@@ -890,6 +986,72 @@ void tst_QSqlTableModel::insertMultiRecords()
     QCOMPARE(model.data(model.index(5, 0)).toInt(), 44);
     QCOMPARE(model.data(model.index(5, 1)).toString(), QString("gunnar"));
     QCOMPARE(model.data(model.index(5, 2)).toInt(), 1);
+}
+
+void tst_QSqlTableModel::insertWithAutoColumn()
+{
+    QFETCH(QString, dbName);
+    QFETCH(int, submitpolicy_i);
+    QSqlTableModel::EditStrategy submitpolicy = (QSqlTableModel::EditStrategy) submitpolicy_i;
+    QSqlDatabase db = QSqlDatabase::database(dbName);
+    CHECK_DATABASE(db);
+
+    QString tbl = qTableName("autoColumnTest", __FILE__, db);
+    QSqlQuery q(db);
+    q.exec("DROP TABLE " + tbl);
+    QVERIFY_SQL(q, exec("CREATE TABLE " + tbl + "(id INTEGER PRIMARY KEY AUTOINCREMENT, val TEXT)"));
+
+    QSqlTableModel model(0, db);
+    model.setTable(tbl);
+    model.setSort(0, Qt::AscendingOrder);
+    model.setEditStrategy(submitpolicy);
+
+    QVERIFY_SQL(model, select());
+    QCOMPARE(model.rowCount(), 0);
+
+    // For insertRow/insertRows, we have to touch at least one column
+    // or else the generated flag won't be set, which would lead to
+    // an empty column list in the INSERT statement, which generally
+    // does not work.
+    if (submitpolicy != QSqlTableModel::OnManualSubmit) {
+        for (int id = 1; id <= 2; ++id) {
+            QVERIFY_SQL(model, insertRow(0));
+            QVERIFY_SQL(model, setData(model.index(0, 1), QString("foo")));
+            QVERIFY_SQL(model, submit());
+            QCOMPARE(model.data(model.index(0, 0)).toInt(), id);
+        }
+    } else {
+        QVERIFY_SQL(model, insertRows(0, 2));
+        QVERIFY_SQL(model, setData(model.index(0, 1), QString("foo")));
+        QVERIFY_SQL(model, setData(model.index(1, 1), QString("foo")));
+    }
+
+    QCOMPARE(model.rowCount(), 2);
+
+    QSqlRecord rec = db.record(tbl);
+    QVERIFY(rec.field(0).isAutoValue());
+    rec.setGenerated(0, false);
+
+    QVERIFY_SQL(model, insertRecord(0, rec));
+    if (submitpolicy != QSqlTableModel::OnManualSubmit)
+        QCOMPARE(model.data(model.index(0, 0)).toInt(), 3);
+
+    QCOMPARE(model.rowCount(), 3);
+
+    if (submitpolicy != QSqlTableModel::OnManualSubmit) {
+        // Rows updated in original positions after previous submits.
+        QCOMPARE(model.data(model.index(0, 0)).toInt(), 3);
+        QCOMPARE(model.data(model.index(1, 0)).toInt(), 2);
+        QCOMPARE(model.data(model.index(2, 0)).toInt(), 1);
+    } else {
+        // Manual submit is followed by requery.
+        QVERIFY_SQL(model, submitAll());
+        QCOMPARE(model.data(model.index(0, 0)).toInt(), 1);
+        QCOMPARE(model.data(model.index(1, 0)).toInt(), 2);
+        QCOMPARE(model.data(model.index(2, 0)).toInt(), 3);
+    }
+
+    QVERIFY_SQL(q, exec("DROP TABLE " + tbl));
 }
 
 void tst_QSqlTableModel::submitAll()
@@ -1001,8 +1163,8 @@ void tst_QSqlTableModel::removeRows()
     QVERIFY_SQL(model, removeRows(0, 1));
     QVERIFY_SQL(model, removeRows(1, 1));
     QCOMPARE(beforeDeleteSpy.count(), 2);
-    QVERIFY(beforeDeleteSpy.at(0).at(0).toInt() == 0);
-    QVERIFY(beforeDeleteSpy.at(1).at(0).toInt() == 1);
+    QCOMPARE(beforeDeleteSpy.at(0).at(0).toInt(), 0);
+    QCOMPARE(beforeDeleteSpy.at(1).at(0).toInt(), 1);
     // deleted rows shown as empty until select
     QCOMPARE(model.rowCount(), 3);
     QCOMPARE(model.data(model.index(0, 1)).toString(), QString(""));
@@ -1037,11 +1199,11 @@ void tst_QSqlTableModel::removeRows()
     QCOMPARE(headerDataChangedSpy.at(1).at(1).toInt(), 0);
     QCOMPARE(headerDataChangedSpy.at(1).at(2).toInt(), 0);
     QCOMPARE(model.rowCount(), 3);
-    QVERIFY(beforeDeleteSpy.count() == 0);
+    QCOMPARE(beforeDeleteSpy.count(), 0);
     QVERIFY(model.submitAll());
-    QVERIFY(beforeDeleteSpy.count() == 2);
-    QVERIFY(beforeDeleteSpy.at(0).at(0).toInt() == 0);
-    QVERIFY(beforeDeleteSpy.at(1).at(0).toInt() == 1);
+    QCOMPARE(beforeDeleteSpy.count(), 2);
+    QCOMPARE(beforeDeleteSpy.at(0).at(0).toInt(), 0);
+    QCOMPARE(beforeDeleteSpy.at(1).at(0).toInt(), 1);
     QCOMPARE(model.rowCount(), 1);
     QCOMPARE(model.data(model.index(0, 1)).toString(), QString("vohi"));
 }
@@ -1227,6 +1389,83 @@ void tst_QSqlTableModel::removeInsertedRows()
     QCOMPARE(model.rowCount(), 2);
     QCOMPARE(model.data(model.index(0, 1)).toString(), QString("harry"));
     QCOMPARE(model.data(model.index(1, 1)).toString(), QString("vohi"));
+}
+
+void tst_QSqlTableModel::revert()
+{
+    QFETCH(QString, dbName);
+    QFETCH(int, submitpolicy_i);
+    QSqlTableModel::EditStrategy submitpolicy = (QSqlTableModel::EditStrategy) submitpolicy_i;
+    QSqlDatabase db = QSqlDatabase::database(dbName);
+    CHECK_DATABASE(db);
+
+    QString tblA = qTableName("revertATest", __FILE__, db);
+    QString tblB = qTableName("revertBTest", __FILE__, db);
+    QSqlQuery q(db);
+    q.exec("PRAGMA foreign_keys = ON;");
+    q.exec("DROP TABLE " + tblB);
+    q.exec("DROP TABLE " + tblA);
+    QVERIFY_SQL(q, exec("CREATE TABLE " + tblA + "(a INT PRIMARY KEY)"));
+    QVERIFY_SQL(q, exec("CREATE TABLE " + tblB + "(b INT PRIMARY KEY, FOREIGN KEY (b) REFERENCES " + tblA + " (a))"));
+    QVERIFY_SQL(q, exec("INSERT INTO " + tblA + "(a) VALUES (1)"));
+    QVERIFY_SQL(q, exec("INSERT INTO " + tblB + "(b) VALUES (1)"));
+    if (q.exec("UPDATE " + tblA + " SET a = -1"))
+        QSKIP("database does not enforce foreign key constraints, skipping test");
+
+    QSqlTableModel model(0, db);
+    model.setTable(tblA);
+    model.setSort(0, Qt::AscendingOrder);
+    model.setEditStrategy(submitpolicy);
+
+    QVERIFY_SQL(model, select());
+    QCOMPARE(model.rowCount(), 1);
+    QFAIL_SQL(model, isDirty());
+
+    // don't crash if there is no change
+    model.revert();
+
+    // UPDATE
+    // invalid value makes submit fail leaving pending update in cache
+    const QModelIndex idx = model.index(0, 0);
+    if (submitpolicy == QSqlTableModel::OnFieldChange)
+        QFAIL_SQL(model, setData(idx, int(-1)));
+    else
+        QVERIFY_SQL(model, setData(idx, int(-1)));
+    QVERIFY_SQL(model, isDirty(idx));
+    model.revert();
+    if (submitpolicy != QSqlTableModel::OnManualSubmit)
+        QFAIL_SQL(model, isDirty(idx));
+    else
+        QVERIFY_SQL(model, isDirty(idx));
+
+    // INSERT
+    QVERIFY_SQL(model, select());
+    // insertRow() does not submit leaving pending insert in cache
+    QVERIFY_SQL(model, insertRow(0));
+    QCOMPARE(model.rowCount(), 2);
+    QVERIFY_SQL(model, isDirty());
+    model.revert();
+    if (submitpolicy != QSqlTableModel::OnManualSubmit)
+        QFAIL_SQL(model, isDirty());
+    else
+        QVERIFY_SQL(model, isDirty());
+
+    // DELETE
+    QVERIFY_SQL(model, select());
+    // foreign key makes submit fail leaving pending delete in cache
+    if (submitpolicy == QSqlTableModel::OnManualSubmit)
+        QVERIFY_SQL(model, removeRow(0));
+    else
+        QFAIL_SQL(model, removeRow(0));
+    QVERIFY_SQL(model, isDirty());
+    model.revert();
+    if (submitpolicy != QSqlTableModel::OnManualSubmit)
+        QFAIL_SQL(model, isDirty());
+    else
+        QVERIFY_SQL(model, isDirty());
+
+    q.exec("DROP TABLE " + tblB);
+    q.exec("DROP TABLE " + tblA);
 }
 
 void tst_QSqlTableModel::isDirty()
@@ -1428,13 +1667,21 @@ void tst_QSqlTableModel::emptyTable()
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 0);
 
-    model.setTable(qTableName("emptytable", __FILE__));
+    model.setTable(qTableName("emptytable", __FILE__, db));
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 1);
 
     QVERIFY_SQL(model, select());
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 1);
+
+    // QTBUG-29108: check correct horizontal header for empty query with pending insert
+    QCOMPARE(model.headerData(0, Qt::Horizontal).toString(), QString("id"));
+    model.setEditStrategy(QSqlTableModel::OnManualSubmit);
+    model.insertRow(0);
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.headerData(0, Qt::Horizontal).toString(), QString("id"));
+    model.revertAll();
 }
 
 void tst_QSqlTableModel::tablesAndSchemas()
@@ -1444,9 +1691,9 @@ void tst_QSqlTableModel::tablesAndSchemas()
     CHECK_DATABASE(db);
 
     QSqlQuery q(db);
-    q.exec("DROP SCHEMA " + qTableName("testschema", __FILE__) + " CASCADE");
-    QVERIFY_SQL( q, exec("create schema " + qTableName("testschema", __FILE__)));
-    QString tableName = qTableName("testschema", __FILE__) + '.' + qTableName("testtable", __FILE__);
+    q.exec("DROP SCHEMA " + qTableName("testschema", __FILE__, db) + " CASCADE");
+    QVERIFY_SQL( q, exec("create schema " + qTableName("testschema", __FILE__, db)));
+    QString tableName = qTableName("testschema", __FILE__, db) + '.' + qTableName("testtable", __FILE__, db);
     QVERIFY_SQL( q, exec("create table " + tableName + "(id int)"));
     QVERIFY_SQL( q, exec("insert into " + tableName + " values(1)"));
     QVERIFY_SQL( q, exec("insert into " + tableName + " values(2)"));
@@ -1467,7 +1714,7 @@ void tst_QSqlTableModel::whitespaceInIdentifiers()
     if (!testWhiteSpaceNames(db.driverName()))
         QSKIP("DBMS doesn't support whitespaces in identifiers");
 
-    QString tableName = qTableName("qtestw hitespace", db.driver());
+    QString tableName = qTableName("qtestw hitespace", db);
 
     QSqlTableModel model(0, db);
     model.setTable(tableName);
@@ -1479,16 +1726,17 @@ void tst_QSqlTableModel::primaryKeyOrder()
     QFETCH(QString, dbName);
     QSqlDatabase db = QSqlDatabase::database(dbName);
     CHECK_DATABASE(db);
+    QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
 
     QSqlQuery q(db);
 
-    if(tst_Databases::isPostgreSQL(db))
+    if (dbType == QSqlDriver::PostgreSQL)
         QVERIFY_SQL( q, exec("set client_min_messages='warning'"));
 
-    QVERIFY_SQL( q, exec("create table "+qTableName("foo", __FILE__)+"(a varchar(20), id int not null primary key, b varchar(20))"));
+    QVERIFY_SQL(q, exec("create table " + qTableName("foo", __FILE__, db) + "(a varchar(20), id int not null primary key, b varchar(20))"));
 
     QSqlTableModel model(0, db);
-    model.setTable(qTableName("foo", __FILE__));
+    model.setTable(qTableName("foo", __FILE__, db));
 
     QSqlIndex pk = model.primaryKey();
     QCOMPARE(pk.count(), 1);
@@ -1557,7 +1805,7 @@ void tst_QSqlTableModel::sqlite_bigTable()
     QFETCH(QString, dbName);
     QSqlDatabase db = QSqlDatabase::database(dbName);
     CHECK_DATABASE(db);
-    const QString bigtable(qTableName("bigtable", __FILE__));
+    const QString bigtable(qTableName("bigtable", __FILE__, db));
 
     bool hasTransactions = db.driver()->hasFeature(QSqlDriver::Transactions);
     if (hasTransactions) QVERIFY(db.transaction());
@@ -1639,7 +1887,7 @@ void tst_QSqlTableModel::submitAllOnInvalidTable()
 
     // setTable returns a void, so the error can only be caught by
     // manually checking lastError(). ### Qt5: This should be changed!
-    model.setTable(qTableName("invalidTable", __FILE__));
+    model.setTable(qTableName("invalidTable", __FILE__, db));
     QCOMPARE(model.lastError().type(), QSqlError::StatementError);
 
     // This will give us an empty record which is expected behavior
@@ -1739,6 +1987,7 @@ void tst_QSqlTableModel::sqlite_attachedDatabase()
     QCOMPARE(model.rowCount(), 1);
     QCOMPARE(model.data(model.index(0, 0), Qt::DisplayRole).toInt(), 3);
     QCOMPARE(model.data(model.index(0, 1), Qt::DisplayRole).toString(), QLatin1String("main"));
+    attachedDb.close();
 }
 
 
@@ -1749,7 +1998,7 @@ void tst_QSqlTableModel::tableModifyWithBlank()
     CHECK_DATABASE(db);
 
     QSqlTableModel model(0, db);
-    model.setTable(qTableName("test4", __FILE__));
+    model.setTable(qTableName("test4", __FILE__, db));
     model.select();
 
     //generate a time stamp for the test. Add one second to the current time to make sure
@@ -1760,12 +2009,14 @@ void tst_QSqlTableModel::tableModifyWithBlank()
     //Should be equivalent to QSqlQuery INSERT INTO... command)
     QVERIFY_SQL(model, insertRow(0));
     QVERIFY_SQL(model, setData(model.index(0,0),timeString));
+    if (tst_Databases::getDatabaseType(db) == QSqlDriver::PostgreSQL)
+        QEXPECT_FAIL("", "Currently broken for PostgreSQL due to case sensitivity problems - see QTBUG-65788", Abort);
     QVERIFY_SQL(model, submitAll());
 
     //set a filter on the table so the only record we get is the one we just made
     //I could just do another setData command, but I want to make sure the TableModel
     //matches exactly what is stored in the database
-    model.setFilter("column1='"+timeString+"'"); //filter to get just the newly entered row
+    model.setFilter("column1='" + timeString + QLatin1Char('\'')); //filter to get just the newly entered row
     QVERIFY_SQL(model, select());
 
     //Make sure we only get one record, and that it is the one we just made
@@ -1870,6 +2121,30 @@ void tst_QSqlTableModel::invalidFilterAndHeaderData()
 
     QVariant v = model.headerData(0, Qt::Horizontal, Qt::SizeHintRole);
     QVERIFY(!v.isValid());
+}
+
+class SqlThread : public QThread
+{
+public:
+    SqlThread() : QThread() {}
+    void run()
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "non-default-connection");
+        QSqlTableModel stm(nullptr, db);
+        isDone = true;
+    }
+    bool isDone = false;
+};
+
+void tst_QSqlTableModel::modelInAnotherThread()
+{
+    oldHandler = qInstallMessageHandler(sqlTableModelMessageHandler);
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    CHECK_DATABASE(db);
+    SqlThread t;
+    t.start();
+    QTRY_VERIFY(t.isDone);
+    QVERIFY(t.isFinished());
 }
 
 QTEST_MAIN(tst_QSqlTableModel)

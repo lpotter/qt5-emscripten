@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +32,8 @@
 #include <qtcpserver.h>
 #include <qtcpsocket.h>
 #include <QtTest/QtTest>
+#include <QtCore/qatomic.h>
+#include <QtCore/qsemaphore.h>
 #include <qfile.h>
 #include <qstring.h>
 #include <qdir.h>
@@ -60,26 +49,29 @@ class XmlServer : public QThread
 {
     Q_OBJECT
 public:
-    XmlServer();
-    bool quit_soon;
+    XmlServer(QObject *parent = 0) : QThread(parent) {}
+
+    QSemaphore threadStarted;
+    bool listening = false;
+    QAtomicInt quitSoon;
 
 protected:
     virtual void run();
 };
 
-XmlServer::XmlServer()
-{
-    quit_soon = false;
-}
-
-#define CHUNK_SIZE 1
+#define CHUNK_SIZE 2048
 
 void XmlServer::run()
 {
     QTcpServer srv;
 
-    if (!srv.listen(QHostAddress::Any, TEST_PORT))
+    listening = srv.listen(QHostAddress::Any, TEST_PORT);
+    threadStarted.release();
+
+    if (!listening) {
+        qWarning() << "Failed to listen on" << TEST_PORT << srv.errorString();
         return;
+    }
 
     for (;;) {
         srv.waitForNewConnection(100);
@@ -108,14 +100,13 @@ void XmlServer::run()
 
             QByteArray data = file.readAll();
             for (int i = 0; i < data.size();) {
-//                sock->putChar(data.at(i));
                 int cnt = qMin(CHUNK_SIZE, data.size() - i);
                 sock->write(data.constData() + i, cnt);
                 i += cnt;
                 sock->flush();
                 QTest::qSleep(1);
 
-                if (quit_soon) {
+                if (quitSoon.loadAcquire()) {
                     sock->abort();
                     break;
                 }
@@ -125,7 +116,7 @@ void XmlServer::run()
             delete sock;
         }
 
-        if (quit_soon)
+        if (quitSoon.loadAcquire())
             break;
     }
 
@@ -137,17 +128,17 @@ class tst_QXmlSimpleReader : public QObject
     Q_OBJECT
 
     public:
-	tst_QXmlSimpleReader();
-	~tst_QXmlSimpleReader();
+        tst_QXmlSimpleReader();
+        ~tst_QXmlSimpleReader();
 
     private slots:
         void initTestCase();
-	void testGoodXmlFile();
-	void testGoodXmlFile_data();
-	void testBadXmlFile();
-	void testBadXmlFile_data();
-	void testIncrementalParsing();
-	void testIncrementalParsing_data();
+        void testGoodXmlFile();
+        void testGoodXmlFile_data();
+        void testBadXmlFile();
+        void testBadXmlFile_data();
+        void testIncrementalParsing();
+        void testIncrementalParsing_data();
         void setDataQString();
         void inputFromQIODevice();
         void inputFromString();
@@ -160,6 +151,7 @@ class tst_QXmlSimpleReader : public QObject
         void reportNamespace() const;
         void reportNamespace_data() const;
         void roundtripWithNamespaces() const;
+        void dtdRecursionLimit();
 
     private:
         static QDomDocument fromByteArray(const QString &title, const QByteArray &ba, bool *ok);
@@ -167,17 +159,14 @@ class tst_QXmlSimpleReader : public QObject
         QString prefix;
 };
 
-tst_QXmlSimpleReader::tst_QXmlSimpleReader()
+tst_QXmlSimpleReader::tst_QXmlSimpleReader() : server(new XmlServer(this))
 {
-    server = new XmlServer();
-    server->setParent(this);
     server->start();
-    QTest::qSleep(1000);
 }
 
 tst_QXmlSimpleReader::~tst_QXmlSimpleReader()
 {
-    server->quit_soon = true;
+    server->quitSoon.storeRelease(1);
     server->wait();
 }
 
@@ -272,13 +261,14 @@ static QStringList findXmlFiles(QString dir_name)
 {
     QStringList result;
 
+    dir_name = QFINDTESTDATA(dir_name);
     QDir dir(dir_name);
     QFileInfoList file_list = dir.entryInfoList(QStringList("*.xml"), QDir::Files, QDir::Name);
 
     QFileInfoList::const_iterator it = file_list.begin();
     for (; it != file_list.end(); ++it) {
-	const QFileInfo &file_info = *it;
-	result.append(file_info.filePath());
+        const QFileInfo &file_info = *it;
+        result.append(file_info.filePath());
     }
 
     return result;
@@ -288,21 +278,21 @@ static QStringList findXmlFiles(QString dir_name)
 void tst_QXmlSimpleReader::testGoodXmlFile_data()
 {
     const char * const good_data_dirs[] = {
-	"xmldocs/valid/sa",
-	"xmldocs/valid/not-sa",
-	"xmldocs/valid/ext-sa",
-	0
+        "xmldocs/valid/sa",
+        "xmldocs/valid/not-sa",
+        "xmldocs/valid/ext-sa",
+        0
     };
     const char * const *d = good_data_dirs;
 
     QStringList good_file_list;
     for (; *d != 0; ++d)
-	good_file_list += findXmlFiles(*d);
+        good_file_list += findXmlFiles(*d);
 
     QTest::addColumn<QString>("file_name");
     QStringList::const_iterator it = good_file_list.begin();
     for (; it != good_file_list.end(); ++it)
-	QTest::newRow((*it).toLatin1()) << *it;
+        QTest::newRow((*it).toLatin1()) << *it;
 }
 
 void tst_QXmlSimpleReader::testGoodXmlFile()
@@ -315,9 +305,7 @@ void tst_QXmlSimpleReader::testGoodXmlFile()
     QVERIFY(file.open(QIODevice::ReadOnly));
     Parser parser;
 
-//    static int i = 0;
-//    qWarning("Test nr: " + QString::number(i)); ++i;
-    QEXPECT_FAIL("xmldocs/valid/sa/089.xml", "", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/valid/sa/089.xml").toLocal8Bit().constData(), "a form feed character is not accepted in XML", Continue);
     QVERIFY(parser.parseFile(&file));
 
     QFile ref_file(file_name + ".ref");
@@ -326,26 +314,25 @@ void tst_QXmlSimpleReader::testGoodXmlFile()
     ref_stream.setCodec("UTF-8");
     QString ref_file_contents = ref_stream.readAll();
 
-    QEXPECT_FAIL("xmldocs/valid/sa/089.xml", "", Continue);
     QCOMPARE(parser.result(), ref_file_contents);
 }
 
 void tst_QXmlSimpleReader::testBadXmlFile_data()
 {
     const char * const bad_data_dirs[] = {
-	"xmldocs/not-wf/sa",
-	0
+        "xmldocs/not-wf/sa",
+        0
     };
     const char * const *d = bad_data_dirs;
 
     QStringList bad_file_list;
     for (; *d != 0; ++d)
-	bad_file_list += findXmlFiles(*d);
+        bad_file_list += findXmlFiles(*d);
 
     QTest::addColumn<QString>("file_name");
     QStringList::const_iterator it = bad_file_list.begin();
     for (; it != bad_file_list.end(); ++it)
-	QTest::newRow((*it).toLatin1()) << *it;
+        QTest::newRow((*it).toLatin1()) << *it;
 }
 
 void tst_QXmlSimpleReader::testBadXmlFile()
@@ -355,53 +342,46 @@ void tst_QXmlSimpleReader::testBadXmlFile()
     QVERIFY(file.open(QIODevice::ReadOnly));
     Parser parser;
 
-//    static int i = 0;
-//    qWarning("Test nr: " + QString::number(++i));
-    QEXPECT_FAIL("xmldocs/not-wf/sa/030.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/031.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/032.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/033.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/038.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/072.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/073.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/074.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/076.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/077.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/078.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/085.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/086.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/087.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/101.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/102.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/104.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/116.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/117.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/119.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/122.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/132.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/142.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/143.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/144.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/145.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/146.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/160.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/162.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/166.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/167.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/168.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/169.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/170.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/171.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/172.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/173.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/174.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/175.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/177.xml", "", Abort);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/180.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/181.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/182.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/185.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/186.xml", "", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/030.xml").toLocal8Bit().constData(), "a form feed character is not accepted in XML", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/031.xml").toLocal8Bit().constData(), "a form feed character is not accepted in a processing instruction", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/032.xml").toLocal8Bit().constData(), "a form feed character is not accepted in a comment", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/033.xml").toLocal8Bit().constData(), "overlong sequence - small latin letter d should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/038.xml").toLocal8Bit().constData(), "attribute x redefined; should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/072.xml").toLocal8Bit().constData(), "entity foo not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/073.xml").toLocal8Bit().constData(), "entity f not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/074.xml").toLocal8Bit().constData(), "entity e is not well-formed (</foo><foo>)", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/076.xml").toLocal8Bit().constData(), "entity foo is not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/077.xml").toLocal8Bit().constData(), "entity bar is not defined within the definition of entity foo", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/078.xml").toLocal8Bit().constData(), "entity foo not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/085.xml").toLocal8Bit().constData(), "Unfinished Public or System Id", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/086.xml").toLocal8Bit().constData(), "Unfinished Public or System Id", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/087.xml").toLocal8Bit().constData(), "Unfinished Public or System Id", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/101.xml").toLocal8Bit().constData(), "Invalid XML encoding name (space before utf-8)", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/102.xml").toLocal8Bit().constData(), "Invalid version specification (1.0 followed by space)", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/104.xml").toLocal8Bit().constData(), "Premature end of data in tag foo", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/116.xml").toLocal8Bit().constData(), "Invalid decimal value", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/117.xml").toLocal8Bit().constData(), "No name", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/119.xml").toLocal8Bit().constData(), "No name", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/122.xml").toLocal8Bit().constData(), "; expected in declaration of element", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/132.xml").toLocal8Bit().constData(), "; expected in declaration of element", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/142.xml").toLocal8Bit().constData(), "Invalid value '0'", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/143.xml").toLocal8Bit().constData(), "Invalid value '31'", Continue);
+
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/144.xml").toLocal8Bit().constData(), "noncharacter code 0xFFFF should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/145.xml").toLocal8Bit().constData(), "surrogate code point 0xD800 should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/146.xml").toLocal8Bit().constData(), "code point out-of-range 0x110000 (must be < 0x10FFFE)", Abort);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/160.xml").toLocal8Bit().constData(), "Parameter references forbidden in internal subset", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/162.xml").toLocal8Bit().constData(), "Parameter references forbidden in internal subset", Continue);
+
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/168.xml").toLocal8Bit().constData(), "Surrogate code point 0xEDA080 should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/169.xml").toLocal8Bit().constData(), "Surrogate code point 0xEDB080 should be rejected", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/170.xml").toLocal8Bit().constData(), "Code point 0xF7808080 should be rejected", Continue);
+
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/180.xml").toLocal8Bit().constData(), "Entity e is not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/181.xml").toLocal8Bit().constData(), "Unregistered error message", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/182.xml").toLocal8Bit().constData(), "Comment not terminated", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/185.xml").toLocal8Bit().constData(), "Entity e not defined", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/186.xml").toLocal8Bit().constData(), "Attributes constructs error", Continue);
 
     QVERIFY(!parser.parseFile(&file));
 
@@ -411,12 +391,7 @@ void tst_QXmlSimpleReader::testBadXmlFile()
     ref_stream.setCodec("UTF-8");
     QString ref_file_contents = ref_stream.readAll();
 
-    QEXPECT_FAIL("xmldocs/not-wf/sa/144.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/145.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/146.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/167.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/166.xml", "", Continue);
-    QEXPECT_FAIL("xmldocs/not-wf/sa/170.xml", "", Continue);
+    QEXPECT_FAIL(QFINDTESTDATA("xmldocs/not-wf/sa/145.xml").toLocal8Bit().constData(), "Surrogate code point 0xD800 should be rejected", Continue);
 
     QCOMPARE(parser.result(), ref_file_contents);
 }
@@ -427,31 +402,37 @@ void tst_QXmlSimpleReader::testIncrementalParsing_data()
     QTest::addColumn<int>("chunkSize");
 
     const char * const good_data_dirs[] = {
-	"xmldocs/valid/sa",
-	"xmldocs/valid/not-sa",
-	"xmldocs/valid/ext-sa",
-	0
+        "xmldocs/valid/sa",
+        "xmldocs/valid/not-sa",
+        "xmldocs/valid/ext-sa",
+        0
     };
     const char * const *d = good_data_dirs;
 
     QStringList good_file_list;
     for (; *d != 0; ++d)
-	good_file_list += findXmlFiles(*d);
+        good_file_list += findXmlFiles(*d);
 
     for (int i=1; i<10; ++i) {
-	QStringList::const_iterator it = good_file_list.begin();
-	for (; it != good_file_list.end(); ++it) {
-	    if ( *it == "xmldocs/valid/sa/089.xml" )
-		continue;// TODO: fails at the moment -- don't bother
-	    if ( i==1 && (
-			*it == "xmldocs/valid/sa/049.xml" ||
-			*it == "xmldocs/valid/sa/050.xml" ||
-			*it == "xmldocs/valid/sa/051.xml" ||
-			*it == "xmldocs/valid/sa/052.xml" ) ) {
-		continue; // TODO: fails at the moment -- don't bother
-	    }
-	    QTest::newRow(QString("%1 %2").arg(*it).arg(i).toLatin1()) << *it << i;
-	}
+        QStringList::const_iterator it = good_file_list.begin();
+        const QString skip49 = QFINDTESTDATA("xmldocs/valid/sa/049.xml");
+        const QString skip50 = QFINDTESTDATA("xmldocs/valid/sa/050.xml");
+        const QString skip51 = QFINDTESTDATA("xmldocs/valid/sa/051.xml");
+        const QString skip52 = QFINDTESTDATA("xmldocs/valid/sa/052.xml");
+        const QString skip89 = QFINDTESTDATA("xmldocs/valid/sa/089.xml");
+
+        for (; it != good_file_list.end(); ++it) {
+            if ( *it == skip89 )
+                continue;// TODO: fails at the moment -- don't bother
+            if ( i==1 && (
+                        *it == skip49 ||
+                        *it == skip50 ||
+                        *it == skip51 ||
+                        *it == skip52 ) ) {
+                continue; // TODO: fails at the moment -- don't bother
+            }
+            QTest::newRow(QString("%1 %2").arg(*it).arg(i).toLatin1()) << *it << i;
+        }
     }
 }
 
@@ -473,7 +454,7 @@ void tst_QXmlSimpleReader::testIncrementalParsing()
             first = false;
         } else {
             QVERIFY(parser.parseContinue());
-	}
+        }
     }
     // detect end of document
     QVERIFY(parser.parseContinue());
@@ -581,17 +562,29 @@ void tst_QXmlSimpleReader::inputFromSocket_data()
 void tst_QXmlSimpleReader::inputFromSocket()
 {
     QFETCH(QString, file_name);
+#ifdef Q_OS_WINRT
+    QSKIP("WinRT does not support connecting to localhost");
+#endif
+
+    if (!server->threadStarted.tryAcquire(1, 15000)) {
+        // If something is wrong with QThreads, it's not a reason to fail
+        // XML-test, we are not testing QThread here after all!
+        QSKIP("XmlServer/thread has not started yet");
+    }
+
+    // Subsequent runs should be able to acquire the semaphore.
+    server->threadStarted.release(1);
+
+    if (!server->listening) {
+        // Again, QTcpServer is not the subject of this test!
+        QSKIP("QTcpServer::listen failed, bailing out");
+    }
 
     QTcpSocket sock;
     sock.connectToHost(QHostAddress::LocalHost, TEST_PORT);
-
-    const bool connectionSuccess = sock.waitForConnected();
-    if(!connectionSuccess) {
-	 QTextStream out(stderr);
-	 out << "QTcpSocket::errorString()" << sock.errorString();
-    }
-
-    QVERIFY(connectionSuccess);
+    QVERIFY2(sock.waitForConnected(),
+             qPrintable(QStringLiteral("Cannot connect on port ") + QString::number(TEST_PORT)
+                        + QStringLiteral(": ") + sock.errorString()));
 
     sock.write(file_name.toLocal8Bit() + "\n");
     QVERIFY(sock.waitForBytesWritten());
@@ -767,6 +760,63 @@ void tst_QXmlSimpleReader::roundtripWithNamespaces() const
         QCOMPARE(expected, one.toByteArray().constData());
         QCOMPARE(one.toByteArray(2).constData(), two.toByteArray(2).constData());
         QCOMPARE(two.toByteArray(2).constData(), two.toByteArray(2).constData());
+    }
+}
+
+class TestHandler : public QXmlDefaultHandler
+{
+public:
+    TestHandler() :
+        recursionCount(0)
+    {
+    }
+
+    bool internalEntityDecl(const QString &name, const QString &value)
+    {
+        ++recursionCount;
+        return QXmlDefaultHandler::internalEntityDecl(name, value);
+    }
+
+    int recursionCount;
+};
+
+void tst_QXmlSimpleReader::dtdRecursionLimit()
+{
+    QFile file(QFINDTESTDATA("xmldocs/2-levels-nested-dtd.xml"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QXmlSimpleReader xmlReader;
+    {
+        QXmlInputSource source(&file);
+        TestHandler handler;
+        xmlReader.setDeclHandler(&handler);
+        xmlReader.setErrorHandler(&handler);
+        QVERIFY(!xmlReader.parse(&source));
+    }
+
+    file.close();
+    file.setFileName(QFINDTESTDATA("xmldocs/1-levels-nested-dtd.xml"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    {
+        QXmlInputSource source(&file);
+        TestHandler handler;
+        xmlReader.setDeclHandler(&handler);
+        xmlReader.setErrorHandler(&handler);
+        QVERIFY(!xmlReader.parse(&source));
+        // The error wasn't because of the recursion limit being reached,
+        // it was because the document is not valid.
+        QVERIFY(handler.recursionCount < 2);
+    }
+
+    file.close();
+    file.setFileName(QFINDTESTDATA("xmldocs/internal-entity-polynomial-attribute.xml"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    {
+        QXmlInputSource source(&file);
+        TestHandler handler;
+        xmlReader.setDeclHandler(&handler);
+        xmlReader.setErrorHandler(&handler);
+        QVERIFY(!xmlReader.parse(&source));
+        QCOMPARE(handler.recursionCount, 2);
     }
 }
 

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -143,8 +130,8 @@ void tst_QTextOdfWriter::testWriteParagraph_data()
         "<text:p text:style-name=\"p1\"><text:span text:style-name=\"c0\">foobar <text:s text:c=\"2\"/>word<text:tab/>tab x</text:span></text:p>";
     QTest::newRow("misc2") << "\t     \tFoo" <<
         "<text:p text:style-name=\"p1\"><text:span text:style-name=\"c0\"><text:tab/> <text:s text:c=\"4\"/><text:tab/>Foo</text:span></text:p>";
-    QTest::newRow("linefeed") << QString("line1%1line2").arg(QChar(0x2028)) <<
-        "<text:p text:style-name=\"p1\"><text:span text:style-name=\"c0\">line1<text:line-break/>line2</text:span></text:p>";
+    QTest::newRow("linefeed") << (QStringLiteral("line1") + QChar(0x2028) + QStringLiteral("line2")) <<
+        "<text:p text:style-name=\"p1\"><text:span text:style-name=\"c0\">line1<text:tab/><text:line-break/>line2</text:span></text:p>";
     QTest::newRow("spaces") << "The quick brown fox jumped over the lazy dog" <<
         "<text:p text:style-name=\"p1\"><text:span text:style-name=\"c0\">The quick brown fox jumped over the lazy dog</text:span></text:p>";
 }
@@ -391,7 +378,7 @@ void tst_QTextOdfWriter::testWriteTable()
     odfWriter->writeFrame(*xmlWriter, document->rootFrame());
     QString xml = QString::fromLatin1(
         "<text:p text:style-name=\"p1\"/>"
-        "<table:table>"
+        "<table:table table:style-name=\"Table2\">"
             "<table:table-column table:number-columns-repeated=\"3\"/>"
             "<table:table-row>"
                 "<table:table-cell table:style-name=\"T3\">"

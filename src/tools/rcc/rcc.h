@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,14 +48,14 @@ class RCCResourceLibrary
     RCCResourceLibrary &operator=(const RCCResourceLibrary &);
 
 public:
-    RCCResourceLibrary();
+    RCCResourceLibrary(quint8 formatVersion);
     ~RCCResourceLibrary();
 
-    bool output(QIODevice &out, QIODevice &errorDevice);
+    bool output(QIODevice &outDevice, QIODevice &tempDevice, QIODevice &errorDevice);
 
-    bool readFiles(bool ignoreErrors, QIODevice &errorDevice);
+    bool readFiles(bool listMode, QIODevice &errorDevice);
 
-    enum Format { Binary, C_Code };
+    enum Format { Binary, C_Code, Pass1, Pass2 };
     void setFormat(Format f) { m_format = f; }
     Format format() const { return m_format; }
 
@@ -87,6 +74,9 @@ public:
     void setInitName(const QString &name) { m_initName = name; }
     QString initName() const { return m_initName; }
 
+    void setOutputName(const QString &name) { m_outputName = name; }
+    QString outputName() const { return m_outputName; }
+
     void setCompressLevel(int c) { m_compressLevel = c; }
     int compressLevel() const { return m_compressLevel; }
 
@@ -95,11 +85,13 @@ public:
 
     void setResourceRoot(const QString &root) { m_resourceRoot = root; }
     QString resourceRoot() const { return m_resourceRoot; }
-    
+
     void setUseNameSpace(bool v) { m_useNameSpace = v; }
     bool useNameSpace() const { return m_useNameSpace; }
-    
+
     QStringList failedResources() const { return m_failedResources; }
+
+    int formatVersion() const { return m_formatVersion; }
 
 private:
     struct Strings {
@@ -117,7 +109,7 @@ private:
     void reset();
     bool addFile(const QString &alias, const RCCFileInfo &file);
     bool interpretResourceFile(QIODevice *inputDevice, const QString &file,
-        QString currentPath = QString(), bool ignoreErrors = false);
+        QString currentPath = QString(), bool listMode = false);
     bool writeHeader();
     bool writeDataBlobs();
     bool writeDataNames();
@@ -128,6 +120,7 @@ private:
     void writeHex(quint8 number);
     void writeNumber2(quint16 number);
     void writeNumber4(quint32 number);
+    void writeNumber8(quint64 number);
     void writeChar(char c) { m_out.append(c); }
     void writeByteArray(const QByteArray &);
     void write(const char *, int len);
@@ -137,6 +130,7 @@ private:
     QStringList m_fileNames;
     QString m_resourceRoot;
     QString m_initName;
+    QString m_outputName;
     Format m_format;
     bool m_verbose;
     int m_compressLevel;
@@ -147,7 +141,9 @@ private:
     bool m_useNameSpace;
     QStringList m_failedResources;
     QIODevice *m_errorDevice;
+    QIODevice *m_outDevice;
     QByteArray m_out;
+    quint8 m_formatVersion;
 };
 
 QT_END_NAMESPACE

@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Copyright (C) 2018 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,15 +30,24 @@
 
 void loadInvalidUtf8Rows()
 {
-    QTest::newRow("1char") << QByteArray("\x80");
-    QTest::newRow("2chars-1") << QByteArray("\xC2\xC0");
-    QTest::newRow("2chars-2") << QByteArray("\xC3\xDF");
-    QTest::newRow("2chars-3") << QByteArray("\xC7\xF0");
-    QTest::newRow("3chars-1") << QByteArray("\xE0\xA0\xC0");
-    QTest::newRow("3chars-2") << QByteArray("\xE0\xC0\xA0");
-    QTest::newRow("4chars-1") << QByteArray("\xF0\x90\x80\xC0");
-    QTest::newRow("4chars-2") << QByteArray("\xF0\x90\xC0\x80");
-    QTest::newRow("4chars-3") << QByteArray("\xF0\xC0\x80\x80");
+    // Wrong continuations
+    QTest::newRow("bad-continuation-1char") << QByteArray("\x80");
+    QTest::newRow("bad-continuation-2chars-1") << QByteArray("\xC2\xC0");
+    QTest::newRow("bad-continuation-2chars-2") << QByteArray("\xC3\xDF");
+    QTest::newRow("bad-continuation-2chars-3") << QByteArray("\xC7\xF0");
+    QTest::newRow("bad-continuation-3chars-1") << QByteArray("\xE0\xA0\xC0");
+    QTest::newRow("bad-continuation-3chars-2") << QByteArray("\xE0\xC0\xA0");
+    QTest::newRow("bad-continuation-4chars-1") << QByteArray("\xF0\x90\x80\xC0");
+    QTest::newRow("bad-continuation-4chars-2") << QByteArray("\xF0\x90\xC0\x80");
+    QTest::newRow("bad-continuation-4chars-3") << QByteArray("\xF0\xC0\x80\x80");
+
+    // Too short
+    QTest::newRow("too-short-2chars") << QByteArray("\xC2");
+    QTest::newRow("too-short-3chars-1") << QByteArray("\xE0");
+    QTest::newRow("too-short-3chars-2") << QByteArray("\xE0\xA0");
+    QTest::newRow("too-short-4chars-1") << QByteArray("\xF0");
+    QTest::newRow("too-short-4chars-2") << QByteArray("\xF0\x90");
+    QTest::newRow("too-short-4chars-3") << QByteArray("\xF0\x90\x80");
 
     // Surrogate pairs must now be present either
     // U+D800:        1101   10 0000   00 0000
@@ -98,10 +95,10 @@ void loadInvalidUtf8Rows()
     // overlong 6: xxxx:xxz0 xz00:0000 xz00:0000 xz00:0000 xz00:0001 xz00:0001
     QTest::newRow("overlong-1-6") << QByteArray("\xFC\x80\x80\x80\x81\x81");
 
-    // NBSP: U+00A0:                                             10    00 0000
+    // U+0080:                                                    10   00 0000
     // proper encoding:                                    xxz0:0010 xz00:0000
     // overlong 3:                               xxxz:0000 xz00:0010 xz00:0000
-    QTest::newRow("overlong-2-3") << QByteArray("\xC0\x82\x80");
+    QTest::newRow("overlong-2-3") << QByteArray("\xE0\x82\x80");
     // overlong 4:                     xxxx:z000 xz00:0000 xz00:0010 xz00:0000
     QTest::newRow("overlong-2-4") << QByteArray("\xF0\x80\x82\x80");
     // overlong 5:           xxxx:xz00 xz00:0000 xz00:0000 xz00:0010 xz00:0000
@@ -129,8 +126,8 @@ void loadInvalidUtf8Rows()
 
 void loadNonCharactersRows()
 {
-    // Unicode has a couple of "non-characters" that one can use internally,
-    // but are not allowed to be used for text interchange.
+    // Unicode has a couple of "non-characters" that one can use internally
+    // These characters are allowed for text-interchange (see http://www.unicode.org/versions/corrigendum9.html)
     //
     // Those are the last two entries each Unicode Plane (U+FFFE, U+FFFF,
     // U+1FFFE, U+1FFFF, etc.) as well as the entries between U+FDD0 and

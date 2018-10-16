@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +41,7 @@
 #include "qlayout_p.h"
 
 #include <qlist.h>
-#include <qwidget.h>
+#include "private/qwidget_p.h"
 #include "private/qlayoutengine_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -53,10 +51,28 @@ class QStackedLayoutPrivate : public QLayoutPrivate
     Q_DECLARE_PUBLIC(QStackedLayout)
 public:
     QStackedLayoutPrivate() : index(-1), stackingMode(QStackedLayout::StackOne) {}
+    QLayoutItem* replaceAt(int index, QLayoutItem *newitem) override;
     QList<QLayoutItem *> list;
     int index;
     QStackedLayout::StackingMode stackingMode;
 };
+
+QLayoutItem* QStackedLayoutPrivate::replaceAt(int idx, QLayoutItem *newitem)
+{
+    Q_Q(QStackedLayout);
+    if (idx < 0 || idx >= list.size() || !newitem)
+        return 0;
+    QWidget *wdg = newitem->widget();
+    if (Q_UNLIKELY(!wdg)) {
+        qWarning("QStackedLayout::replaceAt: Only widgets can be added");
+        return 0;
+    }
+    QLayoutItem *orgitem = list.at(idx);
+    list.replace(idx, newitem);
+    if (idx == index)
+        q->setCurrentIndex(index);
+    return orgitem;
+}
 
 /*!
     \class QStackedLayout
@@ -127,11 +143,6 @@ public:
     layout. The widget's \a index is passed as parameter.
 
     \sa removeWidget()
-*/
-
-/*!
-    \fn QWidget *QStackedLayout::widget()
-    \internal
 */
 
 /*!
@@ -240,14 +251,10 @@ QLayoutItem *QStackedLayout::itemAt(int index) const
 // Code that enables proper handling of the case that takeAt() is
 // called somewhere inside QObject destructor (can't call hide()
 // on the object then)
-
-class QtFriendlyLayoutWidget : public QWidget
+static bool qt_wasDeleted(const QWidget *w)
 {
-public:
-    inline bool wasDeleted() const { return d_ptr->wasDeleted; }
-};
-
-static bool qt_wasDeleted(const QWidget *w) { return static_cast<const QtFriendlyLayoutWidget*>(w)->wasDeleted(); }
+    return QObjectPrivate::get(w)->wasDeleted;
+}
 
 
 /*!
@@ -300,7 +307,9 @@ void QStackedLayout::setCurrentIndex(int index)
         parent->setUpdatesEnabled(false);
     }
 
-    QWidget *fw = parent ? parent->window()->focusWidget() : 0;
+    QPointer<QWidget> fw = parent ? parent->window()->focusWidget() : 0;
+    const bool focusWasOnOldPage = fw && (prev && prev->isAncestorOf(fw));
+
     if (prev) {
         prev->clearFocus();
         if (d->stackingMode == StackOne)
@@ -315,24 +324,25 @@ void QStackedLayout::setCurrentIndex(int index)
     // was somewhere on the outgoing widget.
 
     if (parent) {
-        if (fw && (prev && prev->isAncestorOf(fw))) { // focus was on old page
+        if (focusWasOnOldPage) {
             // look for the best focus widget we can find
             if (QWidget *nfw = next->focusWidget())
                 nfw->setFocus();
             else {
                 // second best: first child widget in the focus chain
-                QWidget *i = fw;
-                while ((i = i->nextInFocusChain()) != fw) {
-                    if (((i->focusPolicy() & Qt::TabFocus) == Qt::TabFocus)
-                        && !i->focusProxy() && i->isVisibleTo(next) && i->isEnabled()
-                        && next->isAncestorOf(i)) {
-                        i->setFocus();
-                        break;
+                if (QWidget *i = fw) {
+                    while ((i = i->nextInFocusChain()) != fw) {
+                        if (((i->focusPolicy() & Qt::TabFocus) == Qt::TabFocus)
+                            && !i->focusProxy() && i->isVisibleTo(next) && i->isEnabled()
+                            && next->isAncestorOf(i)) {
+                            i->setFocus();
+                            break;
+                        }
                     }
+                    // third best: incoming widget
+                    if (i == fw )
+                        next->setFocus();
                 }
-                // third best: incoming widget
-                if (i == fw )
-                    next->setFocus();
             }
         }
     }
@@ -359,7 +369,7 @@ int QStackedLayout::currentIndex() const
 void QStackedLayout::setCurrentWidget(QWidget *widget)
 {
     int index = indexOf(widget);
-    if (index == -1) {
+    if (Q_UNLIKELY(index == -1)) {
         qWarning("QStackedLayout::setCurrentWidget: Widget %p not contained in stack", widget);
         return;
     }
@@ -412,12 +422,12 @@ int QStackedLayout::count() const
 void QStackedLayout::addItem(QLayoutItem *item)
 {
     QWidget *widget = item->widget();
-    if (widget) {
-        addWidget(widget);
-        delete item;
-    } else {
+    if (Q_UNLIKELY(!widget)) {
         qWarning("QStackedLayout::addItem: Only widgets can be added");
+        return;
     }
+    addWidget(widget);
+    delete item;
 }
 
 /*!
@@ -582,3 +592,5 @@ void QStackedLayout::setStackingMode(StackingMode stackingMode)
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qstackedlayout.cpp"

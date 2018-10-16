@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,7 +55,7 @@ QT_BEGIN_NAMESPACE
   X bitmap image read/write functions
  *****************************************************************************/
 
-static inline int hex2byte(register char *p)
+static inline int hex2byte(char *p)
 {
     return ((isdigit((uchar) *p) ? *p - '0' : toupper((uchar) *p) - 'A' + 10) << 4) |
            (isdigit((uchar) *(p+1)) ? *(p+1) - '0' : toupper((uchar) *(p+1)) - 'A' + 10);
@@ -103,7 +101,7 @@ static bool read_xbm_header(QIODevice *device, int& w, int& h)
     // "#define .._height <num>"
     readBytes = device->readLine(buf, buflen);
     if (readBytes <= 0)
-	return false;
+        return false;
     buf[readBytes - 1] = '\0';
 
     sbuf = QString::fromLatin1(buf);
@@ -126,17 +124,18 @@ static bool read_xbm_body(QIODevice *device, int w, int h, QImage *outImage)
 
     qint64 readBytes = 0;
 
+    char *p;
+
     // scan for database
-    for (;;) {
+    do {
         if ((readBytes = device->readLine(buf, buflen)) <= 0) {
             // end of file
             return false;
         }
 
         buf[readBytes] = '\0';
-        if (QByteArray::fromRawData(buf, readBytes).contains("0x"))
-            break;
-    }
+        p = strstr(buf, "0x");
+    } while (!p);
 
     if (outImage->size() != QSize(w, h) || outImage->format() != QImage::Format_MonoLSB) {
         *outImage = QImage(w, h, QImage::Format_MonoLSB);
@@ -144,13 +143,14 @@ static bool read_xbm_body(QIODevice *device, int w, int h, QImage *outImage)
             return false;
     }
 
+    outImage->fill(Qt::color0);       // in case the image data does not cover the full image
+
     outImage->setColorCount(2);
     outImage->setColor(0, qRgb(255,255,255));        // white
     outImage->setColor(1, qRgb(0,0,0));                // black
 
     int           x = 0, y = 0;
     uchar *b = outImage->scanLine(0);
-    char  *p = buf + QByteArray::fromRawData(buf, readBytes).indexOf("0x");
     w = (w+7)/8;                                // byte width
 
     while (y < h) {                                // for all encoded bytes...
@@ -165,7 +165,8 @@ static bool read_xbm_body(QIODevice *device, int w, int h, QImage *outImage)
         } else {                                // read another line
             if ((readBytes = device->readLine(buf,buflen)) <= 0)        // EOF ==> truncated image
                 break;
-            p = buf + QByteArray::fromRawData(buf, readBytes).indexOf("0x");
+            buf[readBytes] = '\0';
+            p = strstr(buf, "0x");
         }
     }
 
@@ -183,9 +184,9 @@ static bool read_xbm_image(QIODevice *device, QImage *outImage)
 static bool write_xbm_image(const QImage &sourceImage, QIODevice *device, const QString &fileName)
 {
     QImage image = sourceImage;
-    int	       w = image.width();
-    int	       h = image.height();
-    int	       i;
+    int        w = image.width();
+    int        h = image.height();
+    int        i;
     QString    s = fileName; // get file base name
     int        msize = s.length() + 100;
     char *buf = new char[msize];
@@ -203,22 +204,22 @@ static bool write_xbm_image(const QImage &sourceImage, QIODevice *device, const 
     bool invert = qGray(image.color(0)) < qGray(image.color(1));
     char hexrep[16];
     for (i=0; i<10; i++)
-	hexrep[i] = '0' + i;
+        hexrep[i] = '0' + i;
     for (i=10; i<16; i++)
-	hexrep[i] = 'a' -10 + i;
+        hexrep[i] = 'a' -10 + i;
     if (invert) {
-	char t;
-	for (i=0; i<8; i++) {
-	    t = hexrep[15-i];
-	    hexrep[15-i] = hexrep[i];
-	    hexrep[i] = t;
-	}
+        char t;
+        for (i=0; i<8; i++) {
+            t = hexrep[15-i];
+            hexrep[15-i] = hexrep[i];
+            hexrep[i] = t;
+        }
     }
     int bcnt = 0;
-    register char *p = buf;
+    char *p = buf;
     int bpl = (w+7)/8;
     for (int y = 0; y < h; ++y) {
-        uchar *b = image.scanLine(y);
+        const uchar *b = image.constScanLine(y);
         for (i = 0; i < bpl; ++i) {
             *p++ = '0'; *p++ = 'x';
             *p++ = hexrep[*b >> 4];
@@ -240,7 +241,7 @@ static bool write_xbm_image(const QImage &sourceImage, QIODevice *device, const 
             }
         }
     }
-#if defined(_MSC_VER) && _MSC_VER >= 1400
+#ifdef Q_CC_MSVC
     strcpy_s(p, sizeof(" };\n"), " };\n");
 #else
     strcpy(p, " };\n");
@@ -302,7 +303,7 @@ bool QXbmHandler::read(QImage *image)
 {
     if (state == Error)
         return false;
-    
+
     if (state == Ready && !readHeader()) {
         state = Error;
         return false;

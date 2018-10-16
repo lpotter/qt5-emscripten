@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,37 +10,37 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qopengltexturecache_p.h"
-#include <private/qopenglcontext_p.h>
+#include "qopengltextureuploader_p.h"
+#include <qmath.h>
+#include <qopenglfunctions.h>
 #include <private/qimagepixmapcleanuphooks_p.h>
 #include <qpa/qplatformpixmap.h>
 
@@ -105,7 +105,7 @@ QOpenGLTextureCache::~QOpenGLTextureCache()
 {
 }
 
-GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QPixmap &pixmap)
+GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QPixmap &pixmap, QOpenGLTextureUploader::BindOptions options)
 {
     if (pixmap.isNull())
         return 0;
@@ -115,20 +115,20 @@ GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QPixmap &
     // A QPainter is active on the image - take the safe route and replace the texture.
     if (!pixmap.paintingActive()) {
         QOpenGLCachedTexture *entry = m_cache.object(key);
-        if (entry) {
-            glBindTexture(GL_TEXTURE_2D, entry->id());
+        if (entry && entry->options() == options) {
+            context->functions()->glBindTexture(GL_TEXTURE_2D, entry->id());
             return entry->id();
         }
     }
 
-    GLuint id = bindTexture(context, key, pixmap.toImage());
+    GLuint id = bindTexture(context, key, pixmap.toImage(), options);
     if (id > 0)
         QImagePixmapCleanupHooks::enableCleanupHooks(pixmap);
 
     return id;
 }
 
-GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QImage &image)
+GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QImage &image, QOpenGLTextureUploader::BindOptions options)
 {
     if (image.isNull())
         return 0;
@@ -138,54 +138,33 @@ GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, const QImage &i
     // A QPainter is active on the image - take the safe route and replace the texture.
     if (!image.paintingActive()) {
         QOpenGLCachedTexture *entry = m_cache.object(key);
-        if (entry) {
-            glBindTexture(GL_TEXTURE_2D, entry->id());
+        if (entry && entry->options() == options) {
+            context->functions()->glBindTexture(GL_TEXTURE_2D, entry->id());
             return entry->id();
         }
     }
 
-    GLuint id = bindTexture(context, key, image);
+    QImage img = image;
+    if (!context->functions()->hasOpenGLFeature(QOpenGLFunctions::NPOTTextures))
+        options |= QOpenGLTextureUploader::PowerOfTwoBindOption;
+
+    GLuint id = bindTexture(context, key, img, options);
     if (id > 0)
         QImagePixmapCleanupHooks::enableCleanupHooks(image);
 
     return id;
 }
 
-static inline void qgl_byteSwapImage(QImage &img)
-{
-    const int width = img.width();
-    const int height = img.height();
-
-    if (QSysInfo::ByteOrder == QSysInfo::LittleEndian)
-    {
-        for (int i = 0; i < height; ++i) {
-            uint *p = (uint *) img.scanLine(i);
-            for (int x = 0; x < width; ++x)
-                p[x] = ((p[x] << 16) & 0xff0000) | ((p[x] >> 16) & 0xff) | (p[x] & 0xff00ff00);
-        }
-    } else {
-        for (int i = 0; i < height; ++i) {
-            uint *p = (uint *) img.scanLine(i);
-            for (int x = 0; x < width; ++x)
-                p[x] = (p[x] << 8) | (p[x] >> 24);
-        }
-    }
-}
-
-GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, qint64 key, const QImage &image)
+GLuint QOpenGLTextureCache::bindTexture(QOpenGLContext *context, qint64 key, const QImage &image, QOpenGLTextureUploader::BindOptions options)
 {
     GLuint id;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    QOpenGLFunctions *funcs = context->functions();
+    funcs->glGenTextures(1, &id);
+    funcs->glBindTexture(GL_TEXTURE_2D, id);
 
-    QImage tx = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    int cost = QOpenGLTextureUploader::textureImage(GL_TEXTURE_2D, image, options);
 
-    qgl_byteSwapImage(tx);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tx.width(), tx.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, const_cast<const QImage &>(tx).bits());
-
-    int cost = tx.width() * tx.height() * 4 / 1024;
-    m_cache.insert(key, new QOpenGLCachedTexture(id, context), cost);
+    m_cache.insert(key, new QOpenGLCachedTexture(id, options, context), cost / 1024);
 
     return id;
 }
@@ -206,12 +185,12 @@ void QOpenGLTextureCache::freeResource(QOpenGLContext *)
     Q_ASSERT(false); // the texture cache lives until the context group disappears
 }
 
-static void freeTexture(QOpenGLFunctions *, GLuint id)
+static void freeTexture(QOpenGLFunctions *funcs, GLuint id)
 {
-    glDeleteTextures(1, &id);
+    funcs->glDeleteTextures(1, &id);
 }
 
-QOpenGLCachedTexture::QOpenGLCachedTexture(GLuint id, QOpenGLContext *context)
+QOpenGLCachedTexture::QOpenGLCachedTexture(GLuint id, QOpenGLTextureUploader::BindOptions options, QOpenGLContext *context) : m_options(options)
 {
     m_resource = new QOpenGLSharedResourceGuard(context, id, freeTexture);
 }

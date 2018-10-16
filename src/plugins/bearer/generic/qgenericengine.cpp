@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,34 +10,35 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+
+// see comment in ../platformdefs_win.h.
+#define WIN32_LEAN_AND_MEAN 1
 
 #include "qgenericengine.h"
 #include "../qnetworksession_impl.h"
@@ -52,14 +53,34 @@
 #include <QtCore/qdebug.h>
 #include <QtCore/private/qcoreapplication_p.h>
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN32)
+// PMIB_TCPTABLE2 is only available since Vista
+#if _WIN32_WINNT < 0x0601
+#  undef _WIN32_WINNT
+#  define _WIN32_WINNT 0x0601
+#endif // _WIN32_WINNT < 0x0601
 #include "../platformdefs_win.h"
+#include <iphlpapi.h>
 #endif
 
-#ifdef Q_OS_WINCE
-typedef ULONG NDIS_OID, *PNDIS_OID;
-#include <nuiouser.h>
-#endif
+#ifdef Q_OS_WINRT
+#include <qfunctions_winrt.h>
+
+#include <wrl.h>
+#include <windows.foundation.h>
+#include <windows.foundation.collections.h>
+#include <windows.networking.connectivity.h>
+
+using namespace Microsoft::WRL;
+using namespace Microsoft::WRL::Wrappers;
+using namespace ABI::Windows::Foundation;
+using namespace ABI::Windows::Foundation::Collections;
+using namespace ABI::Windows::Networking;
+using namespace ABI::Windows::Networking::Connectivity;
+#endif // Q_OS_WINRT
+
+// needed as interface is used as parameter name in qGetInterfaceType
+#undef interface
 
 #ifdef Q_OS_LINUX
 #include <sys/socket.h>
@@ -69,107 +90,136 @@ typedef ULONG NDIS_OID, *PNDIS_OID;
 #include <unistd.h>
 #endif
 
-#ifndef QT_NO_BEARERMANAGEMENT
-
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_NETWORKINTERFACE
 static QNetworkConfiguration::BearerType qGetInterfaceType(const QString &interface)
 {
-#if defined(Q_OS_WIN)
-    DWORD bytesWritten;
-    NDIS_MEDIUM medium;
-    NDIS_PHYSICAL_MEDIUM physicalMedium;
-
-#ifdef Q_OS_WINCE
-    NDISUIO_QUERY_OID nicGetOid;
-    HANDLE handle = CreateFile((PTCHAR)NDISUIO_DEVICE_NAME, 0,
-                               FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-#else
-    unsigned long oid;
-    HANDLE handle = CreateFile((TCHAR *)QString::fromLatin1("\\\\.\\%1").arg(interface).utf16(), 0,
-                               FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-#endif
-    if (handle == INVALID_HANDLE_VALUE)
+#if defined(Q_OS_WIN32)
+    // QNetworkInterface::name returns a more friendly name on Windows. That name is not
+    // accepted as an identifier for CreateFile so we have to obtain the Luid.
+    std::wstring buf = interface.toStdWString();
+    if (buf.size() == 0)
         return QNetworkConfiguration::BearerUnknown;
 
-    bytesWritten = 0;
+    NET_LUID luid;
+    NETIO_STATUS status = ConvertInterfaceNameToLuidW(buf.c_str(), &luid);
+    if (status != NO_ERROR)
+        return QNetworkConfiguration::BearerUnknown;
 
-#ifdef Q_OS_WINCE
-    ZeroMemory(&nicGetOid, sizeof(NDISUIO_QUERY_OID));
-    nicGetOid.Oid = OID_GEN_MEDIA_SUPPORTED;
-    nicGetOid.ptcDeviceName = (PTCHAR)interface.utf16();
-    bool result = DeviceIoControl(handle, IOCTL_NDISUIO_QUERY_OID_VALUE, &nicGetOid, sizeof(nicGetOid),
-                                  &nicGetOid, sizeof(nicGetOid), &bytesWritten, 0);
-#else
-    oid = OID_GEN_MEDIA_SUPPORTED;
-    bool result = DeviceIoControl(handle, IOCTL_NDIS_QUERY_GLOBAL_STATS, &oid, sizeof(oid),
-                                  &medium, sizeof(medium), &bytesWritten, 0);
+    switch (luid.Info.IfType) {
+    case IF_TYPE_ETHERNET_CSMACD:
+    case IF_TYPE_ISO88025_TOKENRING:
+    case IF_TYPE_PPP:
+    case IF_TYPE_SOFTWARE_LOOPBACK:
+        return QNetworkConfiguration::BearerEthernet;
+    case IF_TYPE_IEEE80211:
+        return QNetworkConfiguration::BearerWLAN;
+    case IF_TYPE_ATM:
+    case IF_TYPE_IEEE1394:
+    case IF_TYPE_OTHER:
+    case IF_TYPE_TUNNEL:
+        return QNetworkConfiguration::BearerUnknown;
+    default:
+#ifdef BEARER_MANAGEMENT_DEBUG
+        qDebug() << "Interface Type" << luid.Info.IfType;
 #endif
-    if (!result) {
-        CloseHandle(handle);
         return QNetworkConfiguration::BearerUnknown;
     }
+    return QNetworkConfiguration::BearerUnknown;
 
-    bytesWritten = 0;
-
-#ifdef Q_OS_WINCE
-    medium = NDIS_MEDIUM( *(LPDWORD)nicGetOid.Data );
-
-    ZeroMemory(&nicGetOid, sizeof(NDISUIO_QUERY_OID));
-    nicGetOid.Oid = OID_GEN_PHYSICAL_MEDIUM;
-    nicGetOid.ptcDeviceName = (PTCHAR)interface.utf16();
-
-    result = DeviceIoControl(handle, IOCTL_NDISUIO_QUERY_OID_VALUE, &nicGetOid, sizeof(nicGetOid),
-                             &nicGetOid, sizeof(nicGetOid), &bytesWritten, 0);
-
-    physicalMedium = NDIS_PHYSICAL_MEDIUM( *(LPDWORD)nicGetOid.Data );
-#else
-    oid = OID_GEN_PHYSICAL_MEDIUM;
-    result = DeviceIoControl(handle, IOCTL_NDIS_QUERY_GLOBAL_STATS, &oid, sizeof(oid),
-                             &physicalMedium, sizeof(physicalMedium), &bytesWritten, 0);
-#endif
-
-    if (!result) {
-        CloseHandle(handle);
-
-        if (medium == NdisMedium802_3)
-            return QNetworkConfiguration::BearerEthernet;
-        else
-            return QNetworkConfiguration::BearerUnknown;
-    }
-
-    CloseHandle(handle);
-
-    if (medium == NdisMedium802_3) {
-        switch (physicalMedium) {
-        case NdisPhysicalMediumWirelessLan:
-            return QNetworkConfiguration::BearerWLAN;
-        case NdisPhysicalMediumBluetooth:
-            return QNetworkConfiguration::BearerBluetooth;
-        case NdisPhysicalMediumWiMax:
-            return QNetworkConfiguration::BearerWiMAX;
-        default:
-#ifdef BEARER_MANAGEMENT_DEBUG
-            qDebug() << "Physical Medium" << physicalMedium;
-#endif
-            return QNetworkConfiguration::BearerEthernet;
-        }
-    }
-
-#ifdef BEARER_MANAGEMENT_DEBUG
-    qDebug() << medium << physicalMedium;
-#endif
 #elif defined(Q_OS_LINUX)
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
 
     ifreq request;
-    strncpy(request.ifr_name, interface.toLocal8Bit().data(), sizeof(request.ifr_name));
+    strncpy(request.ifr_name, interface.toLocal8Bit().data(), sizeof(request.ifr_name) - 1);
+    request.ifr_name[sizeof(request.ifr_name) - 1] = '\0';
     int result = ioctl(sock, SIOCGIFHWADDR, &request);
     close(sock);
 
     if (result >= 0 && request.ifr_hwaddr.sa_family == ARPHRD_ETHER)
         return QNetworkConfiguration::BearerEthernet;
+#elif defined(Q_OS_WINRT)
+    ComPtr<INetworkInformationStatics> networkInfoStatics;
+    HRESULT hr = GetActivationFactory(HString::MakeReference(RuntimeClass_Windows_Networking_Connectivity_NetworkInformation).Get(), &networkInfoStatics);
+    Q_ASSERT_SUCCEEDED(hr);
+    ComPtr<IVectorView<ConnectionProfile *>> connectionProfiles;
+    hr = networkInfoStatics->GetConnectionProfiles(&connectionProfiles);
+    Q_ASSERT_SUCCEEDED(hr);
+    if (!connectionProfiles)
+        return QNetworkConfiguration::BearerUnknown;
+
+    unsigned int size;
+    hr = connectionProfiles->get_Size(&size);
+    Q_ASSERT_SUCCEEDED(hr);
+    for (unsigned int i = 0; i < size; ++i) {
+        ComPtr<IConnectionProfile> profile;
+        hr = connectionProfiles->GetAt(i, &profile);
+        Q_ASSERT_SUCCEEDED(hr);
+
+        ComPtr<INetworkAdapter> adapter;
+        hr = profile->get_NetworkAdapter(&adapter);
+        // Indicates that no internet connection is available/the device is in airplane mode
+        if (hr == E_INVALIDARG)
+            return QNetworkConfiguration::BearerUnknown;
+        Q_ASSERT_SUCCEEDED(hr);
+        GUID id;
+        hr = adapter->get_NetworkAdapterId(&id);
+        Q_ASSERT_SUCCEEDED(hr);
+        OLECHAR adapterName[39]={0};
+        int length = StringFromGUID2(id, adapterName, 39);
+        // "length - 1" as we have to remove the null terminator from it in order to compare
+        if (!length
+                || QString::fromRawData(reinterpret_cast<const QChar *>(adapterName), length - 1) != interface)
+            continue;
+
+        ComPtr<IConnectionProfile2> profile2;
+        hr = profile.As(&profile2);
+        Q_ASSERT_SUCCEEDED(hr);
+        boolean isWLan;
+        hr = profile2->get_IsWlanConnectionProfile(&isWLan);
+        Q_ASSERT_SUCCEEDED(hr);
+        if (isWLan)
+            return QNetworkConfiguration::BearerWLAN;
+
+        boolean isWWan;
+        hr = profile2->get_IsWwanConnectionProfile(&isWWan);
+        Q_ASSERT_SUCCEEDED(hr);
+        if (isWWan) {
+            ComPtr<IWwanConnectionProfileDetails> details;
+            hr = profile2->get_WwanConnectionProfileDetails(&details);
+            Q_ASSERT_SUCCEEDED(hr);
+            WwanDataClass dataClass;
+            hr = details->GetCurrentDataClass(&dataClass);
+            Q_ASSERT_SUCCEEDED(hr);
+            switch (dataClass) {
+            case WwanDataClass_Edge:
+            case WwanDataClass_Gprs:
+                return QNetworkConfiguration::Bearer2G;
+            case WwanDataClass_Umts:
+                return QNetworkConfiguration::BearerWCDMA;
+            case WwanDataClass_LteAdvanced:
+                return QNetworkConfiguration::BearerLTE;
+            case WwanDataClass_Hsdpa:
+            case WwanDataClass_Hsupa:
+                return QNetworkConfiguration::BearerHSPA;
+            case WwanDataClass_Cdma1xRtt:
+            case WwanDataClass_Cdma3xRtt:
+            case WwanDataClass_CdmaUmb:
+                return QNetworkConfiguration::BearerCDMA2000;
+            case WwanDataClass_Cdma1xEvdv:
+            case WwanDataClass_Cdma1xEvdo:
+            case WwanDataClass_Cdma1xEvdoRevA:
+            case WwanDataClass_Cdma1xEvdoRevB:
+                return QNetworkConfiguration::BearerEVDO;
+            case WwanDataClass_Custom:
+            case WwanDataClass_None:
+            default:
+                return QNetworkConfiguration::BearerUnknown;
+            }
+        }
+        return QNetworkConfiguration::BearerEthernet;
+    }
 #else
     Q_UNUSED(interface);
 #endif
@@ -250,9 +300,11 @@ void QGenericEngine::doRequestUpdate()
         if (interface.flags() & QNetworkInterface::IsLoopBack)
             continue;
 
+#ifndef Q_OS_WINRT
         // ignore WLAN interface handled in separate engine
         if (qGetInterfaceType(interface.name()) == QNetworkConfiguration::BearerWLAN)
             continue;
+#endif
 
         uint identifier;
         if (interface.index())
@@ -392,5 +444,3 @@ bool QGenericEngine::requiresPolling() const
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_BEARERMANAGEMENT

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -92,6 +91,12 @@ static const char propertiesInterfaceXml[] =
     "      <arg name=\"values\" type=\"a{sv}\" direction=\"out\"/>\n"
     "      <annotation name=\"org.qtproject.QtDBus.QtTypeName.Out0\" value=\"QVariantMap\"/>\n"
     "    </method>\n"
+    "    <signal name=\"PropertiesChanged\">\n"
+    "      <arg name=\"interface_name\" type=\"s\" direction=\"out\"/>\n"
+    "      <arg name=\"changed_properties\" type=\"a{sv}\" direction=\"out\"/>\n"
+    "      <annotation name=\"org.qtproject.QtDBus.QtTypeName.Out1\" value=\"QVariantMap\"/>\n"
+    "      <arg name=\"invalidated_properties\" type=\"as\" direction=\"out\"/>\n"
+    "    </signal>\n"
     "  </interface>\n";
 
 static const char peerInterfaceXml[] =
@@ -111,8 +116,7 @@ static QString generateSubObjectXml(QObject *object)
     for ( ; it != end; ++it) {
         QString name = (*it)->objectName();
         if (!name.isEmpty() && QDBusUtil::isValidPartOfObjectPath(name))
-            retval += QString::fromLatin1("  <node name=\"%1\"/>\n")
-                      .arg(name);
+            retval += QLatin1String("  <node name=\"") + name + QLatin1String("\"/>\n");
     }
     return retval;
 }
@@ -136,7 +140,7 @@ QString qDBusIntrospectObject(const QDBusConnectionPrivate::ObjectTreeNode &node
             // create XML for the object itself
             const QMetaObject *mo = node.obj->metaObject();
             for ( ; mo != &QObject::staticMetaObject; mo = mo->superClass())
-                xml_data += qDBusGenerateMetaObjectXml(QString(), mo, mo->superClass(),
+                xml_data += qDBusGenerateMetaObjectXml(node.interfaceName, mo, mo->superClass(),
                                                        node.flags);
         }
 
@@ -187,8 +191,7 @@ QString qDBusIntrospectObject(const QDBusConnectionPrivate::ObjectTreeNode &node
             node.children.constEnd();
         for ( ; it != end; ++it)
             if (it->obj || !it->children.isEmpty())
-                xml_data += QString::fromLatin1("  <node name=\"%1\"/>\n")
-                            .arg(it->name);
+                xml_data += QLatin1String("  <node name=\"") + it->name + QLatin1String("\"/>\n");
     }
 
     xml_data += QLatin1String("</node>\n");
@@ -201,8 +204,7 @@ static inline QDBusMessage interfaceNotFoundError(const QDBusMessage &msg, const
 {
     return msg.createErrorReply(QDBusError::UnknownInterface,
                                 QString::fromLatin1("Interface %1 was not found in object %2")
-                                .arg(interface_name)
-                                .arg(msg.path()));
+                                .arg(interface_name, msg.path()));
 }
 
 static inline QDBusMessage
@@ -368,6 +370,9 @@ static int writeProperty(QObject *obj, const QByteArray &property_name, QVariant
         value = other;
     }
 
+    if (mp.userType() == qMetaTypeId<QDBusVariant>())
+        value = QVariant::fromValue(QDBusVariant(value));
+
     // the property type here should match
     return mp.write(obj, value) ? PropertyWriteSuccess : PropertyWriteFailed;
 }
@@ -402,7 +407,7 @@ QDBusMessage qDBusPropertySet(const QDBusConnectionPrivate::ObjectTreeNode &node
             QDBusAdaptorConnector::AdaptorMap::ConstIterator it;
             it = std::lower_bound(connector->adaptors.constBegin(), connector->adaptors.constEnd(),
                                   interface_name);
-            if (it != connector->adaptors.end() && interface_name == QLatin1String(it->interface)) {
+            if (it != connector->adaptors.cend() && interface_name == QLatin1String(it->interface)) {
                 return propertyWriteReply(msg, interface_name, property_name,
                                           writeProperty(it->adaptor, property_name, value));
             }

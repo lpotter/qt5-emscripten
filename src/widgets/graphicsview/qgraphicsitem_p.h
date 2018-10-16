@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qgraphicsitem.h"
 #include "qset.h"
 #include "qpixmapcache.h"
@@ -60,12 +59,9 @@
 #include "qgraphicstransform.h"
 #include <private/qgraphicstransform_p.h>
 
-#include <private/qgraphicseffect_p.h>
-#include <qgraphicseffect.h>
-
 #include <QtCore/qpoint.h>
 
-#if !defined(QT_NO_GRAPHICSVIEW)
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
 
@@ -172,80 +168,12 @@ public:
         AncestorHandlesChildEvents = 0x1,
         AncestorClipsChildren = 0x2,
         AncestorIgnoresTransformations = 0x4,
-        AncestorFiltersChildEvents = 0x8
+        AncestorFiltersChildEvents = 0x8,
+        AncestorContainsChildren = 0x10
     };
 
-    inline QGraphicsItemPrivate()
-        : z(0),
-        opacity(1.),
-        scene(0),
-        parent(0),
-        transformData(0),
-        graphicsEffect(0),
-        index(-1),
-        siblingIndex(-1),
-        itemDepth(-1),
-        focusProxy(0),
-        subFocusItem(0),
-        focusScopeItem(0),
-        imHints(Qt::ImhNone),
-        panelModality(QGraphicsItem::NonModal),
-        acceptedMouseButtons(0x1f),
-        visible(1),
-        explicitlyHidden(0),
-        enabled(1),
-        explicitlyDisabled(0),
-        selected(0),
-        acceptsHover(0),
-        acceptDrops(0),
-        isMemberOfGroup(0),
-        handlesChildEvents(0),
-        itemDiscovered(0),
-        hasCursor(0),
-        ancestorFlags(0),
-        cacheMode(0),
-        hasBoundingRegionGranularity(0),
-        isWidget(0),
-        dirty(0),
-        dirtyChildren(0),
-        localCollisionHack(0),
-        inSetPosHelper(0),
-        needSortChildren(0),
-        allChildrenDirty(0),
-        fullUpdatePending(0),
-        dirtyChildrenBoundingRect(1),
-        flags(0),
-        paintedViewBoundingRectsNeedRepaint(0),
-        dirtySceneTransform(1),
-        geometryChanged(1),
-        inDestructor(0),
-        isObject(0),
-        ignoreVisible(0),
-        ignoreOpacity(0),
-        acceptTouchEvents(0),
-        acceptedTouchBeginEvent(0),
-        filtersDescendantEvents(0),
-        sceneTransformTranslateOnly(0),
-        notifyBoundingRectChanged(0),
-        notifyInvalidated(0),
-        mouseSetsFocus(1),
-        explicitActivate(0),
-        wantsActive(0),
-        holesInSiblingIndex(0),
-        sequentialOrdering(1),
-        updateDueToGraphicsEffect(0),
-        scenePosDescendants(0),
-        pendingPolish(0),
-        mayHaveChildWithGraphicsEffect(0),
-        isDeclarativeItem(0),
-        sendParentChangeNotification(0),
-        globalStackingOrder(-1),
-        q_ptr(0)
-    {
-    }
-
-    inline virtual ~QGraphicsItemPrivate()
-    { }
+    QGraphicsItemPrivate();
+    virtual ~QGraphicsItemPrivate();
 
     static const QGraphicsItemPrivate *get(const QGraphicsItem *item)
     {
@@ -262,6 +190,7 @@ public:
     void updateAncestorFlags();
     void setIsMemberOfGroup(bool enabled);
     void remapItemPos(QEvent *event, QGraphicsItem *item);
+    QTransform genericMapFromSceneTransform(const QWidget *viewport = nullptr) const;
     QPointF genericMapFromScene(const QPointF &pos, const QWidget *viewport) const;
     inline bool itemIsUntransformable() const
     {
@@ -286,13 +215,13 @@ public:
                               bool ignoreDirtyBit = false, bool ignoreOpacity = false) const;
     virtual void transformChanged() {}
     int depth() const;
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
     enum InvalidateReason {
         OpacityChanged
     };
     void invalidateParentGraphicsEffectsRecursively();
     void invalidateChildGraphicsEffectsRecursively(InvalidateReason reason);
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
     void invalidateDepthRecursively();
     void resolveDepth();
     void addChild(QGraphicsItem *child);
@@ -317,7 +246,7 @@ public:
     virtual void resolvePalette(uint inheritedMask)
     {
         for (int i = 0; i < children.size(); ++i)
-            children.at(i)->d_ptr->resolveFont(inheritedMask);
+            children.at(i)->d_ptr->resolvePalette(inheritedMask);
     }
 
     virtual bool isProxyWidget() const;
@@ -360,7 +289,8 @@ public:
     }
 
     struct ExtraStruct {
-        ExtraStruct(Extra type, QVariant value)
+        ExtraStruct() {} // for QVector, don't use
+        ExtraStruct(Extra type, const QVariant &value)
             : type(type), value(value)
         { }
 
@@ -371,7 +301,7 @@ public:
         { return type < extra; }
     };
 
-    QList<ExtraStruct> extras;
+    QVector<ExtraStruct> extras;
 
     QGraphicsItemCache *maybeExtraItemCache() const;
     QGraphicsItemCache *extraItemCache() const;
@@ -544,7 +474,7 @@ public:
     quint32 handlesChildEvents : 1;
     quint32 itemDiscovered : 1;
     quint32 hasCursor : 1;
-    quint32 ancestorFlags : 4;
+    quint32 ancestorFlags : 5;
     quint32 cacheMode : 2;
     quint32 hasBoundingRegionGranularity : 1;
     quint32 isWidget : 1;
@@ -555,10 +485,9 @@ public:
     quint32 needSortChildren : 1;
     quint32 allChildrenDirty : 1;
     quint32 fullUpdatePending : 1;
-    quint32 dirtyChildrenBoundingRect : 1;
 
     // Packed 32 bits
-    quint32 flags : 19;
+    quint32 flags : 20;
     quint32 paintedViewBoundingRectsNeedRepaint : 1;
     quint32 dirtySceneTransform : 1;
     quint32 geometryChanged : 1;
@@ -571,9 +500,11 @@ public:
     quint32 filtersDescendantEvents : 1;
     quint32 sceneTransformTranslateOnly : 1;
     quint32 notifyBoundingRectChanged : 1;
-    quint32 notifyInvalidated : 1;
-
+#ifdef Q_OS_WASM
+    unsigned char :0; //this aligns 64bit field for wasm see QTBUG-65259
+#endif
     // New 32 bits
+    quint32 notifyInvalidated : 1;
     quint32 mouseSetsFocus : 1;
     quint32 explicitActivate : 1;
     quint32 wantsActive : 1;
@@ -585,12 +516,14 @@ public:
     quint32 mayHaveChildWithGraphicsEffect : 1;
     quint32 isDeclarativeItem : 1;
     quint32 sendParentChangeNotification : 1;
-    quint32 padding : 21;
+    quint32 dirtyChildrenBoundingRect : 1;
+    quint32 padding : 19;
 
     // Optional stacking order
     int globalStackingOrder;
     QGraphicsItem *q_ptr;
 };
+Q_DECLARE_TYPEINFO(QGraphicsItemPrivate::ExtraStruct, Q_MOVABLE_TYPE);
 
 struct QGraphicsItemPrivate::TransformData
 {
@@ -657,7 +590,7 @@ struct QGraphicsItemPaintInfo
     quint32 drawItem : 1;
 };
 
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
 class QGraphicsItemEffectSourcePrivate : public QGraphicsEffectSourcePrivate
 {
 public:
@@ -665,28 +598,28 @@ public:
         : QGraphicsEffectSourcePrivate(), item(i), info(0)
     {}
 
-    inline void detach()
+    void detach() override
     {
         item->d_ptr->graphicsEffect = 0;
         item->prepareGeometryChange();
     }
 
-    inline const QGraphicsItem *graphicsItem() const
+    const QGraphicsItem *graphicsItem() const override
     { return item; }
 
-    inline const QWidget *widget() const
+    const QWidget *widget() const override
     { return 0; }
 
-    inline void update() {
+    void update() override {
         item->d_ptr->updateDueToGraphicsEffect = true;
         item->update();
         item->d_ptr->updateDueToGraphicsEffect = false;
     }
 
-    inline void effectBoundingRectChanged()
+    void effectBoundingRectChanged() override
     { item->prepareGeometryChange(); }
 
-    inline bool isPixmap() const
+    bool isPixmap() const override
     {
         return item->type() == QGraphicsPixmapItem::Type
                && !(item->flags() & QGraphicsItem::ItemIsSelectable)
@@ -694,10 +627,10 @@ public:
             //|| (item->d_ptr->isObject && qobject_cast<QDeclarativeImage *>(q_func()));
     }
 
-    inline const QStyleOption *styleOption() const
+    const QStyleOption *styleOption() const override
     { return info ? info->option : 0; }
 
-    inline QRect deviceRect() const
+    QRect deviceRect() const override
     {
         if (!info || !info->widget) {
             qWarning("QGraphicsEffectSource::deviceRect: Not yet implemented, lacking device context");
@@ -706,21 +639,21 @@ public:
         return info->widget->rect();
     }
 
-    QRectF boundingRect(Qt::CoordinateSystem system) const;
-    void draw(QPainter *);
+    QRectF boundingRect(Qt::CoordinateSystem system) const override;
+    void draw(QPainter *) override;
     QPixmap pixmap(Qt::CoordinateSystem system,
                    QPoint *offset,
-                   QGraphicsEffect::PixmapPadMode mode) const;
+                   QGraphicsEffect::PixmapPadMode mode) const override;
     QRect paddedEffectRect(Qt::CoordinateSystem system, QGraphicsEffect::PixmapPadMode mode, const QRectF &sourceRect, bool *unpadded = 0) const;
 
     QGraphicsItem *item;
     QGraphicsItemPaintInfo *info;
     QTransform lastEffectTransform;
 };
-#endif //QT_NO_GRAPHICSEFFECT
+#endif // QT_CONFIG(graphicseffect)
 
 /*!
-    Returns true if \a item1 is on top of \a item2.
+    Returns \c true if \a item1 is on top of \a item2.
     The items don't need to be siblings.
 
     \internal
@@ -774,7 +707,7 @@ inline bool qt_closestItemFirst(const QGraphicsItem *item1, const QGraphicsItem 
 }
 
 /*!
-    Returns true if \a item2 is on top of \a item1.
+    Returns \c true if \a item2 is on top of \a item1.
     The items don't need to be siblings.
 
     \internal
@@ -851,7 +784,7 @@ inline bool QGraphicsItemPrivate::insertionOrder(QGraphicsItem *a, QGraphicsItem
 inline void QGraphicsItemPrivate::markParentDirty(bool updateBoundingRect)
 {
     QGraphicsItemPrivate *parentp = this;
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
     if (updateBoundingRect && parentp->graphicsEffect && !parentp->inSetPosHelper) {
         parentp->notifyInvalidated = 1;
         static_cast<QGraphicsItemEffectSourcePrivate *>(parentp->graphicsEffect->d_func()
@@ -867,7 +800,7 @@ inline void QGraphicsItemPrivate::markParentDirty(bool updateBoundingRect)
             // ### Only do this if the parent's effect applies to the entire subtree.
             parentp->notifyBoundingRectChanged = 1;
         }
-#ifndef QT_NO_GRAPHICSEFFECT
+#if QT_CONFIG(graphicseffect)
         if (parentp->graphicsEffect) {
             if (updateBoundingRect) {
                 static_cast<QGraphicsItemEffectSourcePrivate *>(parentp->graphicsEffect->d_func()
@@ -884,7 +817,5 @@ inline void QGraphicsItemPrivate::markParentDirty(bool updateBoundingRect)
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_GRAPHICSVIEW
 
 #endif

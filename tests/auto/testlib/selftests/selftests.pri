@@ -8,12 +8,15 @@ SUBPROGRAMS = \
      benchliboptions \
      benchlibtickcounter \
      benchlibwalltime \
+     blacklisted \
      cmptest \
      commandlinedata \
      counting \
      crashes \
      datatable \
      datetime \
+     deleteLater \
+     deleteLater_noApp \
      differentexec \
      exceptionthrow \
      expectfail \
@@ -24,9 +27,12 @@ SUBPROGRAMS = \
      findtestdata \
      float \
      globaldata \
+     keyboard \
      longstring \
      maxwarnings \
+     mouse \
      multiexec \
+     pairdiagnostics \
      printdatatags \
      printdatatagswithglobaltags \
      qexecstringlist \
@@ -39,7 +45,12 @@ SUBPROGRAMS = \
      sleep \
      strcmp \
      subtest \
+     tuplediagnostics \
      verbose1 \
      verbose2 \
+     verifyexceptionthrown \
      warnings \
      xunit
+
+INCLUDEPATH += ../../../../shared/
+HEADERS += ../../../../shared/emulationdetector.h

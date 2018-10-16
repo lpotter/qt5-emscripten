@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -59,39 +46,12 @@ private slots:
     void parseMultipleCookies();
 };
 
-QT_BEGIN_NAMESPACE
-
-namespace QTest {
-    template<>
-    char *toString(const QNetworkCookie &cookie)
-    {
-        return qstrdup(cookie.toRawForm());
-    }
-
-    template<>
-    char *toString(const QList<QNetworkCookie> &list)
-    {
-        QString result = "QList(";
-        bool first = true;
-        foreach (QNetworkCookie cookie, list) {
-            if (!first)
-                result += ", ";
-            first = false;
-            result += QString::fromLatin1("QNetworkCookie(%1)").arg(QLatin1String(cookie.toRawForm()));
-        }
-
-        return qstrdup(result.append(')').toLocal8Bit());
-    }
-}
-
-QT_END_NAMESPACE
-
 void tst_QNetworkCookie::getterSetter()
 {
     QNetworkCookie cookie;
     QNetworkCookie otherCookie;
 
-    QVERIFY(cookie == otherCookie);
+    QCOMPARE(cookie, otherCookie);
     QCOMPARE(cookie, otherCookie);
     QVERIFY(!(cookie != otherCookie));
 
@@ -141,7 +101,7 @@ void tst_QNetworkCookie::getterSetter()
     cookie.setSecure(false);
     QVERIFY(!cookie.isSecure());
 
-    QVERIFY(cookie == otherCookie);
+    QCOMPARE(cookie, otherCookie);
 }
 
 void tst_QNetworkCookie::parseSingleCookie_data()
@@ -256,17 +216,17 @@ void tst_QNetworkCookie::parseSingleCookie_data()
     QTest::newRow("path-with-utf8-2") << "a=b;path=/R%C3%A9sum%C3%A9" << cookie;
 
     cookie.setPath(QString());
-    cookie.setDomain("qt.nokia.com");
-    QTest::newRow("plain-domain1") << "a=b;domain=qt.nokia.com" << cookie;
-    QTest::newRow("plain-domain2") << "a=b; domain=qt.nokia.com " << cookie;
-    QTest::newRow("plain-domain3") << "a=b;domain=QT.NOKIA.COM" << cookie;
-    QTest::newRow("plain-domain4") << "a=b;DOMAIN = QT.NOKIA.COM" << cookie;
+    cookie.setDomain("qt-project.org");
+    QTest::newRow("plain-domain1") << "a=b;domain=qt-project.org" << cookie;
+    QTest::newRow("plain-domain2") << "a=b; domain=qt-project.org " << cookie;
+    QTest::newRow("plain-domain3") << "a=b;domain=QT-PROJECT.ORG" << cookie;
+    QTest::newRow("plain-domain4") << "a=b;DOMAIN = QT-PROJECT.ORG" << cookie;
 
-    cookie.setDomain(".qt.nokia.com");
-    QTest::newRow("dot-domain1") << "a=b;domain=.qt.nokia.com" << cookie;
-    QTest::newRow("dot-domain2") << "a=b; domain=.qt.nokia.com" << cookie;
-    QTest::newRow("dot-domain3") << "a=b; domain=.QT.NOKIA.COM" << cookie;
-    QTest::newRow("dot-domain4") << "a=b; Domain = .QT.NOKIA.COM" << cookie;
+    cookie.setDomain(".qt-project.org");
+    QTest::newRow("dot-domain1") << "a=b;domain=.qt-project.org" << cookie;
+    QTest::newRow("dot-domain2") << "a=b; domain=.qt-project.org" << cookie;
+    QTest::newRow("dot-domain3") << "a=b; domain=.QT-PROJECT.ORG" << cookie;
+    QTest::newRow("dot-domain4") << "a=b; Domain = .QT-PROJECT.ORG" << cookie;
 
     cookie.setDomain(QString::fromUtf8(".d\303\270gn\303\245pent.troll.no"));
     QTest::newRow("idn-domain1") << "a=b;domain=.xn--dgnpent-gxa2o.troll.no" << cookie;
@@ -274,20 +234,20 @@ void tst_QNetworkCookie::parseSingleCookie_data()
     QTest::newRow("idn-domain3") << "a=b;domain=.XN--DGNPENT-GXA2O.TROLL.NO" << cookie;
     QTest::newRow("idn-domain4") << QString::fromUtf8("a=b;domain=.D\303\230GN\303\205PENT.troll.NO") << cookie;
 
-    cookie.setDomain(".qt.nokia.com");
+    cookie.setDomain(".qt-project.org");
     cookie.setPath("/");
-    QTest::newRow("two-fields") << "a=b;domain=.qt.nokia.com;path=/" << cookie;
-    QTest::newRow("two-fields2") << "a=b; domain=.qt.nokia.com; path=/" << cookie;
-    QTest::newRow("two-fields3") << "a=b;   domain=.qt.nokia.com ; path=/ " << cookie;
-    QTest::newRow("two-fields4") << "a=b;path=/; domain=.qt.nokia.com" << cookie;
-    QTest::newRow("two-fields5") << "a=b; path=/  ;   domain=.qt.nokia.com" << cookie;
-    QTest::newRow("two-fields6") << "a=b; path= /  ;   domain =.qt.nokia.com" << cookie;
+    QTest::newRow("two-fields") << "a=b;domain=.qt-project.org;path=/" << cookie;
+    QTest::newRow("two-fields2") << "a=b; domain=.qt-project.org; path=/" << cookie;
+    QTest::newRow("two-fields3") << "a=b;   domain=.qt-project.org ; path=/ " << cookie;
+    QTest::newRow("two-fields4") << "a=b;path=/; domain=.qt-project.org" << cookie;
+    QTest::newRow("two-fields5") << "a=b; path=/  ;   domain=.qt-project.org" << cookie;
+    QTest::newRow("two-fields6") << "a=b; path= /  ;   domain =.qt-project.org" << cookie;
 
     cookie.setSecure(true);
-    QTest::newRow("three-fields") << "a=b;domain=.qt.nokia.com;path=/;secure" << cookie;
-    QTest::newRow("three-fields2") << "a=b;secure;path=/;domain=.qt.nokia.com" << cookie;
-    QTest::newRow("three-fields3") << "a=b;secure;domain=.qt.nokia.com; path=/" << cookie;
-    QTest::newRow("three-fields4") << "a = b;secure;domain=.qt.nokia.com; path=/" << cookie;
+    QTest::newRow("three-fields") << "a=b;domain=.qt-project.org;path=/;secure" << cookie;
+    QTest::newRow("three-fields2") << "a=b;secure;path=/;domain=.qt-project.org" << cookie;
+    QTest::newRow("three-fields3") << "a=b;secure;domain=.qt-project.org; path=/" << cookie;
+    QTest::newRow("three-fields4") << "a = b;secure;domain=.qt-project.org; path=/" << cookie;
 
     cookie = QNetworkCookie();
     cookie.setName("a");
@@ -468,7 +428,7 @@ void tst_QNetworkCookie::parseSingleCookie_data()
     cookie.setExpirationDate(QDateTime(QDate(2010, 2, 3), QTime(0, 0), Qt::UTC));
     QTest::newRow("ambiguousd-2") << "a=b;expires=2/3/10 0:0" << cookie;
 
-    // FYI If you try these in Firefox it wont set a cookie for the following two string
+    // FYI If you try these in Firefox it won't set a cookie for the following two string
     // because 03 is turned into the year at which point it is expired
     cookie.setExpirationDate(QDateTime(QDate(2003, 2, 10), QTime(0, 0), Qt::UTC));
     QTest::newRow("ambiguousd-3") << "a=b;expires=2/10/3 0:0" << cookie;
@@ -575,9 +535,9 @@ void tst_QNetworkCookie::parseSingleCookie_data()
     QTest::newRow("expires+path") << "a=b; expires=Wed, 09-Nov-1999 23:12:40 GMT; path=/" << cookie;
     QTest::newRow("path+expires") << "a=b; path=/;expires=Wed, 09-Nov-1999 23:12:40 GMT " << cookie;
 
-    cookie.setDomain(".qt.nokia.com");
-    QTest::newRow("full") << "a=b; domain=.qt.nokia.com;expires=Wed, 09-Nov-1999 23:12:40 GMT;path=/" << cookie;
-    QTest::newRow("full2") << "a=b;path=/; expires=Wed, 09-Nov-1999 23:12:40 GMT ;domain=.qt.nokia.com" << cookie;
+    cookie.setDomain(".qt-project.org");
+    QTest::newRow("full") << "a=b; domain=.qt-project.org;expires=Wed, 09-Nov-1999 23:12:40 GMT;path=/" << cookie;
+    QTest::newRow("full2") << "a=b;path=/; expires=Wed, 09-Nov-1999 23:12:40 GMT ;domain=.qt-project.org" << cookie;
 
     // cookies obtained from the network:
     cookie = QNetworkCookie("__siteid", "1");

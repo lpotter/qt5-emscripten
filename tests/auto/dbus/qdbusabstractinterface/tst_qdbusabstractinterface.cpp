@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,18 +35,19 @@
 #include <QtDBus>
 
 #include "interface.h"
-#include "pinger.h"
+#include "pinger_interface.h"
 
 static const char serviceName[] = "org.qtproject.autotests.qpinger";
 static const char objectPath[] = "/org/qtproject/qpinger";
 static const char *interfaceName = serviceName;
 
-typedef QSharedPointer<com::trolltech::QtDBus::Pinger> Pinger;
+typedef QSharedPointer<org::qtproject::QtDBus::Pinger> Pinger;
 
 class tst_QDBusAbstractInterface: public QObject
 {
     Q_OBJECT
     Interface targetObj;
+    QString peerAddress;
 
     Pinger getPinger(QString service = "", const QString &path = "/")
     {
@@ -67,15 +56,15 @@ class tst_QDBusAbstractInterface: public QObject
             return Pinger();
         if (service.isEmpty() && !service.isNull())
             service = con.baseService();
-        return Pinger(new com::trolltech::QtDBus::Pinger(service, path, con));
+        return Pinger::create(service, path, con);
     }
 
-    Pinger getPingerPeer(const QString &path = "/")
+    Pinger getPingerPeer(const QString &path = "/", const QString &service = "")
     {
         QDBusConnection con = QDBusConnection("peer");
         if (!con.isConnected())
             return Pinger();
-        return Pinger(new com::trolltech::QtDBus::Pinger("", path, con));
+        return Pinger::create(service, path, con);
     }
 
     void resetServer()
@@ -89,6 +78,7 @@ public:
 
 private slots:
     void initTestCase();
+    void cleanupTestCase();
 
     void init();
     void cleanup();
@@ -159,6 +149,11 @@ private slots:
 
     void followSignal();
 
+    void connectDisconnect_data();
+    void connectDisconnect();
+    void connectDisconnectPeer_data();
+    void connectDisconnectPeer();
+
     void createErrors_data();
     void createErrors();
 
@@ -192,10 +187,23 @@ private slots:
     void directPropertyReadErrorsPeer();
     void directPropertyWriteErrorsPeer_data();
     void directPropertyWriteErrorsPeer();
+
+    void validity_data();
+    void validity();
+
 private:
     QProcess proc;
 };
 
+class SignalReceiver : public QObject
+{
+    Q_OBJECT
+public:
+    int callCount;
+    SignalReceiver() : callCount(0) {}
+public slots:
+    void receive() { ++callCount; }
+};
 
 tst_QDBusAbstractInterface::tst_QDBusAbstractInterface()
 {
@@ -213,24 +221,21 @@ void tst_QDBusAbstractInterface::initTestCase()
     QDBusConnection con = QDBusConnection::sessionBus();
     QVERIFY(con.isConnected());
     con.registerObject("/", &targetObj, QDBusConnection::ExportScriptableContents);
-}
-
-void tst_QDBusAbstractInterface::init()
-{
-    QDBusConnection con = QDBusConnection::sessionBus();
-    QVERIFY(con.isConnected());
 
     // verify service isn't registered by something else
     // (e.g. a left over qpinger from a previous test run)
     QVERIFY(!con.interface()->isServiceRegistered(serviceName));
 
     // start peer server
-    #ifdef Q_OS_WIN
-    proc.start("qpinger");
-    #else
-    proc.start("./qpinger/qpinger");
-    #endif
-    QVERIFY(proc.waitForStarted());
+#ifdef Q_OS_WIN
+#  define EXE ".exe"
+#else
+#  define EXE ""
+#endif
+    proc.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    proc.start(QFINDTESTDATA("qpinger/qpinger" EXE));
+    QVERIFY2(proc.waitForStarted(), qPrintable(proc.errorString()));
+    QVERIFY(proc.waitForReadyRead());
 
     // verify service is now registered
     QTRY_VERIFY(con.interface()->isServiceRegistered(serviceName));
@@ -238,37 +243,43 @@ void tst_QDBusAbstractInterface::init()
     // get peer server address
     QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "address");
     QDBusMessage rpl = con.call(req);
-    QVERIFY(rpl.type() == QDBusMessage::ReplyMessage);
-    QString address = rpl.arguments().at(0).toString();
+    QCOMPARE(rpl.type(), QDBusMessage::ReplyMessage);
+    peerAddress = rpl.arguments().at(0).toString();
+}
+
+void tst_QDBusAbstractInterface::cleanupTestCase()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "quit");
+    QDBusConnection::sessionBus().call(msg);
+    proc.waitForFinished(200);
+    proc.close();
+}
+
+void tst_QDBusAbstractInterface::init()
+{
+    QDBusConnection con = QDBusConnection::sessionBus();
+    QVERIFY(con.isConnected());
 
     // connect to peer server
-    QDBusConnection peercon = QDBusConnection::connectToPeer(address, "peer");
+    QDBusConnection peercon = QDBusConnection::connectToPeer(peerAddress, "peer");
     QVERIFY(peercon.isConnected());
 
-    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "isConnected");
+    QDBusMessage req2 = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "waitForConnected");
     QDBusMessage rpl2 = con.call(req2);
-    QVERIFY(rpl2.type() == QDBusMessage::ReplyMessage);
-    QVERIFY(rpl2.arguments().at(0).toBool());
+    QVERIFY2(rpl2.type() == QDBusMessage::ReplyMessage, rpl2.errorMessage().toLatin1());
 }
 
 void tst_QDBusAbstractInterface::cleanup()
 {
     QDBusConnection::disconnectFromPeer("peer");
 
-    // Kill peer, resetting the object exported by a separate process
-    proc.terminate();
-    QVERIFY(proc.waitForFinished() || proc.state() == QProcess::NotRunning);
-
     // Reset the object exported by this process
     targetObj.m_stringProp = QString();
     targetObj.m_variantProp = QDBusVariant();
     targetObj.m_complexProp = RegisteredType();
 
-    // Wait until the service is certainly not registered
-    QDBusConnection con = QDBusConnection::sessionBus();
-    if (con.isConnected()) {
-        QTRY_VERIFY(!con.interface()->isServiceRegistered(serviceName));
-    }
+    QDBusMessage resetCall = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "reset");
+    QCOMPARE(QDBusConnection::sessionBus().call(resetCall).type(), QDBusMessage::ReplyMessage);
 }
 
 void tst_QDBusAbstractInterface::makeVoidCall()
@@ -290,14 +301,22 @@ void tst_QDBusAbstractInterface::makeStringCall()
     QCOMPARE(r.value(), targetObj.stringMethod());
 }
 
+static QHash<QString, QVariant> complexMethodArgs()
+{
+    QHash<QString, QVariant> args;
+    args.insert("arg1", "Hello world");
+    args.insert("arg2", 12345);
+    return args;
+}
+
 void tst_QDBusAbstractInterface::makeComplexCall()
 {
     Pinger p = getPinger();
     QVERIFY2(p, "Not connected to D-Bus");
 
-    QDBusReply<RegisteredType> r = p->complexMethod();
+    QDBusReply<RegisteredType> r = p->complexMethod(complexMethodArgs());
     QVERIFY(r.isValid());
-    QCOMPARE(r.value(), targetObj.complexMethod());
+    QCOMPARE(r.value(), targetObj.complexMethod(complexMethodArgs()));
 }
 
 void tst_QDBusAbstractInterface::makeMultiOutCall()
@@ -338,9 +357,9 @@ void tst_QDBusAbstractInterface::makeComplexCallPeer()
     Pinger p = getPingerPeer();
     QVERIFY2(p, "Not connected to D-Bus");
 
-    QDBusReply<RegisteredType> r = p->complexMethod();
+    QDBusReply<RegisteredType> r = p->complexMethod(complexMethodArgs());
     QVERIFY(r.isValid());
-    QCOMPARE(r.value(), targetObj.complexMethod());
+    QCOMPARE(r.value(), targetObj.complexMethod(complexMethodArgs()));
 }
 
 void tst_QDBusAbstractInterface::makeMultiOutCallPeer()
@@ -383,10 +402,10 @@ void tst_QDBusAbstractInterface::makeAsyncComplexCall()
     Pinger p = getPinger();
     QVERIFY2(p, "Not connected to D-Bus");
 
-    QDBusPendingReply<RegisteredType> r = p->complexMethod();
+    QDBusPendingReply<RegisteredType> r = p->complexMethod(complexMethodArgs());
     r.waitForFinished();
     QVERIFY(r.isValid());
-    QCOMPARE(r.value(), targetObj.complexMethod());
+    QCOMPARE(r.value(), targetObj.complexMethod(complexMethodArgs()));
 }
 
 void tst_QDBusAbstractInterface::makeAsyncMultiOutCall()
@@ -418,7 +437,7 @@ void tst_QDBusAbstractInterface::makeAsyncStringCallPeer()
     QVERIFY2(p, "Not connected to D-Bus");
 
     QDBusMessage reply = p->call(QDBus::BlockWithGui, QLatin1String("voidMethod"));
-    QVERIFY(reply.type() == QDBusMessage::ReplyMessage);
+    QCOMPARE(reply.type(), QDBusMessage::ReplyMessage);
 
     QDBusPendingReply<QString> r = p->stringMethod();
     r.waitForFinished();
@@ -431,10 +450,10 @@ void tst_QDBusAbstractInterface::makeAsyncComplexCallPeer()
     Pinger p = getPingerPeer();
     QVERIFY2(p, "Not connected to D-Bus");
 
-    QDBusPendingReply<RegisteredType> r = p->complexMethod();
+    QDBusPendingReply<RegisteredType> r = p->complexMethod(complexMethodArgs());
     r.waitForFinished();
     QVERIFY(r.isValid());
-    QCOMPARE(r.value(), targetObj.complexMethod());
+    QCOMPARE(r.value(), targetObj.complexMethod(complexMethodArgs()));
 }
 
 void tst_QDBusAbstractInterface::makeAsyncMultiOutCallPeer()
@@ -533,7 +552,7 @@ void tst_QDBusAbstractInterface::callWithTimeout()
     }
 
     // Now using generated code
-    com::trolltech::QtDBus::Pinger p(server_serviceName, server_objectPath, QDBusConnection::sessionBus());
+    org::qtproject::QtDBus::Pinger p(server_serviceName, server_objectPath, QDBusConnection::sessionBus());
     {
         // Call with no timeout
         QDBusReply<int> reply = p.sleepMethod(100);
@@ -599,7 +618,7 @@ void tst_QDBusAbstractInterface::complexPropRead()
 
     RegisteredType expectedValue = targetObj.m_complexProp = RegisteredType("This is a test");
     QVariant v = p->property("complexProp");
-    QVERIFY(v.userType() == qMetaTypeId<RegisteredType>());
+    QCOMPARE(v.userType(), qMetaTypeId<RegisteredType>());
     QCOMPARE(v.value<RegisteredType>(), targetObj.m_complexProp);
 }
 
@@ -671,7 +690,7 @@ void tst_QDBusAbstractInterface::complexPropReadPeer()
 
     RegisteredType expectedValue = RegisteredType("This is a test");
     QVariant v = p->property("complexProp");
-    QVERIFY(v.userType() == qMetaTypeId<RegisteredType>());
+    QCOMPARE(v.userType(), qMetaTypeId<RegisteredType>());
     QCOMPARE(v.value<RegisteredType>(), expectedValue);
 }
 
@@ -838,8 +857,8 @@ void tst_QDBusAbstractInterface::getVoidSignal()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s.at(0).size() == 0);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s.at(0).size(), 0);
 }
 
 void tst_QDBusAbstractInterface::getStringSignal_data()
@@ -863,8 +882,8 @@ void tst_QDBusAbstractInterface::getStringSignal()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s[0].size() == 1);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s[0].size(), 1);
     QCOMPARE(s[0][0].userType(), int(QVariant::String));
     QCOMPARE(s[0][0].toString(), expectedValue);
 }
@@ -890,8 +909,8 @@ void tst_QDBusAbstractInterface::getComplexSignal()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s[0].size() == 1);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s[0].size(), 1);
     QCOMPARE(s[0][0].userType(), qMetaTypeId<RegisteredType>());
     QCOMPARE(s[0][0].value<RegisteredType>(), expectedValue);
 }
@@ -919,8 +938,8 @@ void tst_QDBusAbstractInterface::getVoidSignalPeer()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s.at(0).size() == 0);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s.at(0).size(), 0);
 }
 
 void tst_QDBusAbstractInterface::getStringSignalPeer_data()
@@ -945,8 +964,8 @@ void tst_QDBusAbstractInterface::getStringSignalPeer()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s[0].size() == 1);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s[0].size(), 1);
     QCOMPARE(s[0][0].userType(), int(QVariant::String));
     QCOMPARE(s[0][0].toString(), expectedValue);
 }
@@ -973,8 +992,8 @@ void tst_QDBusAbstractInterface::getComplexSignalPeer()
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    QVERIFY(s.size() == 1);
-    QVERIFY(s[0].size() == 1);
+    QCOMPARE(s.size(), 1);
+    QCOMPARE(s[0].size(), 1);
     QCOMPARE(s[0][0].userType(), qMetaTypeId<RegisteredType>());
     QCOMPARE(s[0][0].value<RegisteredType>(), expectedValue);
 }
@@ -989,8 +1008,14 @@ void tst_QDBusAbstractInterface::followSignal()
     QVERIFY(!con.interface()->isServiceRegistered(serviceToFollow));
     Pinger control = getPinger("");
 
-    // we need to connect the signal somewhere in order for D-Bus to enable the rules
-    QTestEventLoop::instance().connect(p.data(), SIGNAL(voidSignal()), SLOT(exitLoop()));
+    // connect our test signal
+    // FRAGILE CODE AHEAD:
+    // Connection order is important: we connect the control first because that
+    // needs to be delivered last, to ensure that we don't exitLoop() before
+    // the signal delivery to QSignalSpy is posted to the current thread. That
+    // happens because QDBusConnectionPrivate runs in a separate thread and
+    // uses a QMultiHash and insertMulti prepends to the list of items with the
+    // same key.
     QTestEventLoop::instance().connect(control.data(), SIGNAL(voidSignal()), SLOT(exitLoop()));
     QSignalSpy s(p.data(), SIGNAL(voidSignal()));
 
@@ -1016,22 +1041,88 @@ void tst_QDBusAbstractInterface::followSignal()
 
     // now the signal must have been received:
     QCOMPARE(s.size(), 1);
-    QVERIFY(s.at(0).size() == 0);
-    s.clear();
+    QCOMPARE(s.at(0).size(), 0);
 
-    // disconnect the signal
-    disconnect(p.data(), SIGNAL(voidSignal()), &QTestEventLoop::instance(), 0);
+    // cleanup:
+    con.interface()->unregisterService(serviceToFollow);
+}
 
-    // emit the signal again:
+void tst_QDBusAbstractInterface::connectDisconnect_data()
+{
+    QTest::addColumn<int>("connectCount");
+    QTest::addColumn<int>("disconnectCount");
+
+    // we don't actually need multiple disconnects
+    // QObject::disconnect() disconnects all matching rules
+    // we'd have to use QMetaObject::disconnectOne if we wanted just one
+    QTest::newRow("null") << 0 << 0;
+    QTest::newRow("connect-disconnect") << 1 << 1;
+    QTest::newRow("connect-disconnect-wildcard") << 1 << -1;
+    QTest::newRow("connect-twice") << 2 << 0;
+    QTest::newRow("connect-twice-disconnect") << 2 << 1;
+    QTest::newRow("connect-twice-disconnect-wildcard") << 2 << -1;
+}
+
+void tst_QDBusAbstractInterface::connectDisconnect()
+{
+    QFETCH(int, connectCount);
+    QFETCH(int, disconnectCount);
+
+    Pinger p = getPinger();
+    QVERIFY2(p, "Not connected to D-Bus");
+
+    // connect the exitLoop slot first
+    // if the disconnect() below does something weird, we'll get a timeout
+    QTestEventLoop::instance().connect(p.data(), SIGNAL(voidSignal()), SLOT(exitLoop()));
+
+    SignalReceiver sr;
+    for (int i = 0; i < connectCount; ++i)
+        sr.connect(p.data(), SIGNAL(voidSignal()), SLOT(receive()));
+    if (disconnectCount)
+        QObject::disconnect(p.data(), disconnectCount > 0 ? SIGNAL(voidSignal()) : 0, &sr, SLOT(receive()));
+
     emit targetObj.voidSignal();
     QTestEventLoop::instance().enterLoop(2);
     QVERIFY(!QTestEventLoop::instance().timeout());
 
-    // and now it mustn't have been received
-    QVERIFY(s.isEmpty());
+    if (disconnectCount != 0)
+        QCOMPARE(sr.callCount, 0);
+    else
+        QCOMPARE(sr.callCount, connectCount);
+}
 
-    // cleanup:
-    con.interface()->unregisterService(serviceToFollow);
+void tst_QDBusAbstractInterface::connectDisconnectPeer_data()
+{
+    connectDisconnect_data();
+}
+
+void tst_QDBusAbstractInterface::connectDisconnectPeer()
+{
+    QFETCH(int, connectCount);
+    QFETCH(int, disconnectCount);
+
+    Pinger p = getPingerPeer();
+    QVERIFY2(p, "Not connected to D-Bus");
+
+    // connect the exitLoop slot first
+    // if the disconnect() below does something weird, we'll get a timeout
+    QTestEventLoop::instance().connect(p.data(), SIGNAL(voidSignal()), SLOT(exitLoop()));
+
+    SignalReceiver sr;
+    for (int i = 0; i < connectCount; ++i)
+        sr.connect(p.data(), SIGNAL(voidSignal()), SLOT(receive()));
+    if (disconnectCount)
+        QObject::disconnect(p.data(), disconnectCount > 0 ? SIGNAL(voidSignal()) : 0, &sr, SLOT(receive()));
+
+    QDBusMessage req = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, "voidSignal");
+    QVERIFY(QDBusConnection::sessionBus().send(req));
+    QTestEventLoop::instance().enterLoop(2);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+
+    if (disconnectCount != 0)
+        QCOMPARE(sr.callCount, 0);
+    else
+        QCOMPARE(sr.callCount, connectCount);
 }
 
 void tst_QDBusAbstractInterface::createErrors_data()
@@ -1299,6 +1390,24 @@ void tst_QDBusAbstractInterface::directPropertyWriteErrorsPeer()
         QCOMPARE(int(p->lastError().type()), int(QDBusError::NoError));
     p->setStringProp("");
     QTEST(p->lastError().name(), "errorName");
+}
+
+void tst_QDBusAbstractInterface::validity_data()
+{
+    QTest::addColumn<QString>("service");
+
+    QTest::newRow("null-service") << "";
+    QTest::newRow("ignored-service") << "org.example.anyservice";
+}
+
+void tst_QDBusAbstractInterface::validity()
+{
+    /* Test case for QTBUG-32374 */
+    QFETCH(QString, service);
+    Pinger p = getPingerPeer("/", service);
+    QVERIFY2(p, "Not connected to D-Bus");
+
+    QVERIFY(p->isValid());
 }
 
 QTEST_MAIN(tst_QDBusAbstractInterface)

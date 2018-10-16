@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,17 +43,11 @@ class tst_QAbstractButton : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QAbstractButton();
-    virtual ~tst_QAbstractButton();
-
-
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
     void init();
-    void cleanup();
-private slots:
+
     void setAutoRepeat_data();
     void setAutoRepeat();
 
@@ -87,6 +68,7 @@ private slots:
     void shortcutEvents();
     void stopRepeatTimer();
 
+    void mouseReleased(); // QTBUG-53244
 #ifdef QT_KEYPAD_NAVIGATION
     void keyNavigation();
 #endif
@@ -155,14 +137,6 @@ private:
     }
 };
 
-tst_QAbstractButton::tst_QAbstractButton()
-{
-}
-
-tst_QAbstractButton::~tst_QAbstractButton()
-{
-}
-
 void tst_QAbstractButton::initTestCase()
 {
     testWidget = new MyButton(0);
@@ -194,10 +168,6 @@ void tst_QAbstractButton::init()
     press_count = 0;
     release_count = 0;
     click_count = 0;
-}
-
-void tst_QAbstractButton::cleanup()
-{
 }
 
 void tst_QAbstractButton::resetValues()
@@ -291,9 +261,9 @@ void tst_QAbstractButton::setAutoRepeat()
         QTest::qWait(REPEAT_DELAY);
         QVERIFY(testWidget->isDown());
         QTest::keyRelease(testWidget, Qt::Key_Space);
-        QVERIFY(release_count == press_count);
-        QVERIFY(toggle_count == 0);
-        QVERIFY(press_count == click_count);
+        QCOMPARE(release_count, press_count);
+        QCOMPARE(toggle_count, uint(0));
+        QCOMPARE(press_count, click_count);
         QVERIFY(click_count > 1);
         break;
     case 4:
@@ -419,7 +389,7 @@ void tst_QAbstractButton::setIcon()
 
     QPixmap p2( test2_xpm );
     for ( int a = 0; a<5; a++ )
-	testWidget->setIcon( p2 );
+        testWidget->setIcon( p2 );
 
     QCOMPARE( testWidget->icon().pixmap(12, 8), p2 );
 
@@ -490,6 +460,12 @@ void tst_QAbstractButton::toggled()
 
     QTest::mouseRelease( testWidget, Qt::LeftButton );
     QVERIFY( click_count == 1 );
+
+    testWidget->setCheckable(true);
+    testWidget->toggle();
+    testWidget->toggle();
+    QCOMPARE(int(toggle_count), 2);
+    testWidget->setCheckable(false);
 }
 
 void tst_QAbstractButton::setShortcut()
@@ -497,14 +473,9 @@ void tst_QAbstractButton::setShortcut()
     QKeySequence seq( Qt::Key_A );
     testWidget->setShortcut( seq );
     QApplication::setActiveWindow(testWidget);
-
+    testWidget->activateWindow();
     // must be active to get shortcuts
-    for (int i = 0; !testWidget->isActiveWindow() && i < 100; ++i) {
-       testWidget->activateWindow();
-       QApplication::instance()->processEvents();
-       QTest::qWait(100);
-    }
-    QVERIFY(testWidget->isActiveWindow());
+    QVERIFY(QTest::qWaitForWindowActive(testWidget));
 
     QTest::keyClick( testWidget, 'A' );
     QTest::qWait(300);                      // Animate click takes time
@@ -532,9 +503,7 @@ void tst_QAbstractButton::animateClick()
     QVERIFY( testWidget->isDown() );
     qApp->processEvents();
     QVERIFY( testWidget->isDown() );
-    QTest::qWait(200);
-    qApp->processEvents();
-    QVERIFY( !testWidget->isDown() );
+    QTRY_VERIFY( !testWidget->isDown() );
 }
 
 void tst_QAbstractButton::shortcutEvents()
@@ -588,6 +557,37 @@ void tst_QAbstractButton::stopRepeatTimer()
     QCOMPARE(button.timerEventCount(), 0);
 }
 
+void tst_QAbstractButton::mouseReleased() // QTBUG-53244
+{
+    MyButton button(nullptr);
+    button.setObjectName("button");
+    button.setGeometry(0, 0, 20, 20);
+    QSignalSpy spyPress(&button, &QAbstractButton::pressed);
+    QSignalSpy spyRelease(&button, &QAbstractButton::released);
+
+    QTest::mousePress(&button, Qt::LeftButton);
+    QCOMPARE(spyPress.count(), 1);
+    QCOMPARE(button.isDown(), true);
+    QCOMPARE(spyRelease.count(), 0);
+
+    QTest::mouseClick(&button, Qt::RightButton);
+    QCOMPARE(spyPress.count(), 1);
+    QCOMPARE(button.isDown(), true);
+    QCOMPARE(spyRelease.count(), 0);
+
+    QPointF posOutOfWidget = QPointF(30, 30);
+    QMouseEvent me(QEvent::MouseMove,
+                     posOutOfWidget, Qt::NoButton,
+                     Qt::MouseButtons(Qt::LeftButton),
+                     Qt::NoModifier); // mouse press and move
+
+    qApp->sendEvent(&button, &me);
+    // should emit released signal once mouse is dragging out of boundary
+    QCOMPARE(spyPress.count(), 1);
+    QCOMPARE(button.isDown(), false);
+    QCOMPARE(spyRelease.count(), 1);
+}
+
 #ifdef QT_KEYPAD_NAVIGATION
 void tst_QAbstractButton::keyNavigation()
 {
@@ -607,7 +607,7 @@ void tst_QAbstractButton::keyNavigation()
     widget.show();
     qApp->setActiveWindow(&widget);
     widget.activateWindow();
-    QTest::qWait(30);
+    QVERIFY(QTest::qWaitForWindowActive(&widget));
 
     buttons[1][1]->setFocus();
     QTest::qWait(400);

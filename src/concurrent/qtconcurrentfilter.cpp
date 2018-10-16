@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,44 +10,37 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 /*!
-    \headerfile <QtConcurrentFilter>
+    \page qtconcurrentfilter.html
     \title Concurrent Filter and Filter-Reduce
     \ingroup thread
-
-    \brief The <QtConcurrentFilter> header provides concurrent Filter and
-    Filter-Reduce.
-
-    These functions are a part of the \l {Concurrent Programming}{Qt Concurrent} framework.
 
     The QtConcurrent::filter(), QtConcurrent::filtered() and
     QtConcurrent::filteredReduced() functions filter items in a sequence such
@@ -55,6 +48,8 @@
     sequence in-place, QtConcurrent::filtered() returns a new sequence
     containing the filtered content, and QtConcurrent::filteredReduced()
     returns a single result.
+
+    These functions are a part of the \l {Qt Concurrent} framework.
 
     Each of the above functions have a blocking variant that returns the final
     result instead of a QFuture. You use them in the same way as the
@@ -75,7 +70,7 @@
 
     \snippet code/src_concurrent_qtconcurrentfilter.cpp 0
 
-    T must match the type stored in the sequence. The function returns true if
+    T must match the type stored in the sequence. The function returns \c true if
     the item should be kept, false if it should be discarded.
 
     This example shows how to keep strings that are all lower-case from a
@@ -147,22 +142,23 @@
     \section2 Using Function Objects
 
     QtConcurrent::filter(), QtConcurrent::filtered(), and
-    QtConcurrent::filteredReduced() accept function objects, which can be used to
-    add state to a function call. The result_type typedef must define the 
+    QtConcurrent::filteredReduced() accept function objects
+    for the filter function. These function objects can be used to
+    add state to a function call. The result_type typedef must define the
     result type of the function call operator:
 
     \snippet code/src_concurrent_qtconcurrentfilter.cpp 13
 
-    \section2 Using Bound Function Arguments
+    For the reduce function, function objects are not directly
+    supported. Function objects can, however, be used
+    when the type of the reduction result is explicitly specified:
 
-    Note that Qt does not provide support for bound functions. This is
-    provided by 3rd party libraries like
-    \l{http://www.boost.org/libs/bind/bind.html}{Boost} or
-    \l{http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1836.pdf}
-    {C++ TR1 Library Extensions}.
+    \snippet code/src_concurrent_qtconcurrentfilter.cpp 14
+
+    \section2 Wrapping Functions that Take Multiple Arguments
 
     If you want to use a filter function takes more than one argument, you can
-    use boost::bind() or std::tr1::bind() to transform it onto a function that
+    use a lambda function or \c std::bind() to transform it onto a function that
     takes one argument.
 
     As an example, we use QString::contains():
@@ -175,56 +171,90 @@
     use QString::contains() with QtConcurrent::filtered() we have to provide a
     value for the \e regexp argument:
 
-    \snippet code/src_concurrent_qtconcurrentfilter.cpp 10
-
-    The return value from boost::bind() is a function object (functor) with
-    the following signature:
-
-    \snippet code/src_concurrent_qtconcurrentfilter.cpp 11
-
-    This matches what QtConcurrent::filtered() expects, and the complete
-    example becomes:
-
     \snippet code/src_concurrent_qtconcurrentfilter.cpp 12
 */
 
 /*!
-    \fn QFuture<void> QtConcurrent::filter(Sequence &sequence, FilterFunction filterFunction)
-    \relates <QtConcurrentFilter>
-
-    Calls \a filterFunction once for each item in \a sequence. If
-    \a filterFunction returns true, the item is kept in \a sequence;
-    otherwise, the item is removed from \a sequence.
+  \class QtConcurrent::qValueType
+  \inmodule QtConcurrent
+  \internal
 */
 
 /*!
-    \fn QFuture<T> QtConcurrent::filtered(const Sequence &sequence, FilterFunction filterFunction)
-    \relates <QtConcurrentFilter>
+  \class QtConcurrent::qValueType<const T*>
+  \inmodule QtConcurrent
+  \internal
+*/
+
+
+/*!
+  \class QtConcurrent::qValueType<T*>
+  \inmodule QtConcurrent
+  \internal
+*/
+
+/*!
+  \class QtConcurrent::FilterKernel
+  \inmodule QtConcurrent
+  \internal
+*/
+
+/*!
+  \class QtConcurrent::FilteredReducedKernel
+  \inmodule QtConcurrent
+  \internal
+*/
+
+/*!
+  \class QtConcurrent::FilteredEachKernel
+  \inmodule QtConcurrent
+  \internal
+*/
+
+/*!
+  \fn [QtConcurrent-1] template <typename Sequence, typename KeepFunctor, typename ReduceFunctor> ThreadEngineStarter<void> QtConcurrent::filterInternal(Sequence &sequence, KeepFunctor keep, ReduceFunctor reduce)
+  \internal
+*/
+
+/*!
+    \fn template <typename Sequence, typename KeepFunctor> QFuture<void> QtConcurrent::filter(Sequence &sequence, KeepFunctor filterFunction)
+
+    Calls \a filterFunction once for each item in \a sequence. If
+    \a filterFunction returns \c true, the item is kept in \a sequence;
+    otherwise, the item is removed from \a sequence.
+
+    \sa {Concurrent Filter and Filter-Reduce}
+*/
+
+/*!
+    \fn template <typename Sequence, typename KeepFunctor> QFuture<Sequence::value_type> QtConcurrent::filtered(const Sequence &sequence, KeepFunctor filterFunction)
 
     Calls \a filterFunction once for each item in \a sequence and returns a
-    new Sequence of kept items. If \a filterFunction returns true, a copy of
+    new Sequence of kept items. If \a filterFunction returns \c true, a copy of
     the item is put in the new Sequence. Otherwise, the item will \e not
     appear in the new Sequence.
+
+    \sa {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-    \fn QFuture<T> QtConcurrent::filtered(ConstIterator begin, ConstIterator end, FilterFunction filterFunction)
-    \relates <QtConcurrentFilter>
+    \fn template <typename Iterator, typename KeepFunctor> QFuture<typename QtConcurrent::qValueType<Iterator>::value_type> QtConcurrent::filtered(Iterator begin, Iterator end, KeepFunctor filterFunction)
 
     Calls \a filterFunction once for each item from \a begin to \a end and
-    returns a new Sequence of kept items. If \a filterFunction returns true, a
+    returns a new Sequence of kept items. If \a filterFunction returns \c true, a
     copy of the item is put in the new Sequence. Otherwise, the item will
     \e not appear in the new Sequence.
+
+    \sa {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-    \fn QFuture<T> QtConcurrent::filteredReduced(const Sequence &sequence, FilterFunction filterFunction, ReduceFunction reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
-    \relates <QtConcurrentFilter>
+    \fn template <typename ResultType, typename Sequence, typename KeepFunctor, typename ReduceFunctor> QFuture<ResultType> QtConcurrent::filteredReduced(const Sequence &sequence, KeepFunctor filterFunction, ReduceFunctor reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
 
     Calls \a filterFunction once for each item in \a sequence. If
-    \a filterFunction returns true for an item, that item is then passed to
+    \a filterFunction returns \c true for an item, that item is then passed to
     \a reduceFunction. In other words, the return value is the result of
-    \a reduceFunction for each item where \a filterFunction returns true.
+    \a reduceFunction for each item where \a filterFunction returns \c true.
 
     Note that while \a filterFunction is called concurrently, only one thread
     at a time will call \a reduceFunction. The order in which \a reduceFunction
@@ -232,16 +262,17 @@
     QtConcurrent::UnorderedReduce. If \a reduceOptions is
     QtConcurrent::OrderedReduce, \a reduceFunction is called in the order of
     the original sequence.
+
+    \sa {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-    \fn QFuture<T> QtConcurrent::filteredReduced(ConstIterator begin, ConstIterator end, FilterFunction filterFunction, ReduceFunction reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
-    \relates <QtConcurrentFilter>
+    \fn template <typename ResultType, typename Iterator, typename KeepFunctor, typename ReduceFunctor> QFuture<ResultType> QtConcurrent::filteredReduced(Iterator begin, Iterator end, KeepFunctor filterFunction, ReduceFunctor reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
 
     Calls \a filterFunction once for each item from \a begin to \a end. If
-    \a filterFunction returns true for an item, that item is then passed to
+    \a filterFunction returns \c true for an item, that item is then passed to
     \a reduceFunction. In other words, the return value is the result of
-    \a reduceFunction for each item where \a filterFunction returns true.
+    \a reduceFunction for each item where \a filterFunction returns \c true.
 
     Note that while \a filterFunction is called concurrently, only one thread
     at a time will call \a reduceFunction. The order in which
@@ -249,52 +280,56 @@
     QtConcurrent::UnorderedReduce. If \a reduceOptions is
     QtConcurrent::OrderedReduce, the \a reduceFunction is called in the order
     of the original sequence.
+
+    \sa {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-  \fn void QtConcurrent::blockingFilter(Sequence &sequence, FilterFunction filterFunction)
+  \fn template <typename Sequence, typename KeepFunctor> void QtConcurrent::blockingFilter(Sequence &sequence, KeepFunctor filterFunction)
 
   Calls \a filterFunction once for each item in \a sequence. If
-  \a filterFunction returns true, the item is kept in \a sequence;
+  \a filterFunction returns \c true, the item is kept in \a sequence;
   otherwise, the item is removed from \a sequence.
 
   \note This function will block until all items in the sequence have been processed.
+
+  \sa {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-  \fn Sequence QtConcurrent::blockingFiltered(const Sequence &sequence, FilterFunction filterFunction)
+  \fn template <typename Sequence, typename KeepFunctor> Sequence QtConcurrent::blockingFiltered(const Sequence &sequence, KeepFunctor filterFunction)
 
   Calls \a filterFunction once for each item in \a sequence and returns a
-  new Sequence of kept items. If \a filterFunction returns true, a copy of
+  new Sequence of kept items. If \a filterFunction returns \c true, a copy of
   the item is put in the new Sequence. Otherwise, the item will \e not
   appear in the new Sequence.
 
   \note This function will block until all items in the sequence have been processed.
 
-  \sa filtered()
+  \sa filtered(), {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-  \fn Sequence QtConcurrent::blockingFiltered(ConstIterator begin, ConstIterator end, FilterFunction filterFunction)
+  \fn template <typename OutputSequence, typename Iterator, typename KeepFunctor> OutputSequence QtConcurrent::blockingFiltered(Iterator begin, Iterator end, KeepFunctor filterFunction)
 
   Calls \a filterFunction once for each item from \a begin to \a end and
-  returns a new Sequence of kept items. If \a filterFunction returns true, a
+  returns a new Sequence of kept items. If \a filterFunction returns \c true, a
   copy of the item is put in the new Sequence. Otherwise, the item will
   \e not appear in the new Sequence.
 
   \note This function will block until the iterator reaches the end of the
   sequence being processed.
 
-  \sa filtered()
+  \sa filtered(), {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-  \fn T QtConcurrent::blockingFilteredReduced(const Sequence &sequence, FilterFunction filterFunction, ReduceFunction reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
+  \fn template <typename ResultType, typename Sequence, typename KeepFunctor, typename ReduceFunctor> ResultType QtConcurrent::blockingFilteredReduced(const Sequence &sequence, KeepFunctor filterFunction, ReduceFunctor reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
 
   Calls \a filterFunction once for each item in \a sequence. If
-  \a filterFunction returns true for an item, that item is then passed to
+  \a filterFunction returns \c true for an item, that item is then passed to
   \a reduceFunction. In other words, the return value is the result of
-  \a reduceFunction for each item where \a filterFunction returns true.
+  \a reduceFunction for each item where \a filterFunction returns \c true.
 
   Note that while \a filterFunction is called concurrently, only one thread
   at a time will call \a reduceFunction. The order in which \a reduceFunction
@@ -305,16 +340,16 @@
 
   \note This function will block until all items in the sequence have been processed.
 
-  \sa filteredReduced()
+  \sa filteredReduced(), {Concurrent Filter and Filter-Reduce}
 */
 
 /*!
-  \fn T QtConcurrent::blockingFilteredReduced(ConstIterator begin, ConstIterator end, FilterFunction filterFunction, ReduceFunction reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
+  \fn template <typename ResultType, typename Iterator, typename KeepFunctor, typename ReduceFunctor> ResultType QtConcurrent::blockingFilteredReduced(Iterator begin, Iterator end, KeepFunctor filterFunction, ReduceFunctor reduceFunction, QtConcurrent::ReduceOptions reduceOptions)
 
   Calls \a filterFunction once for each item from \a begin to \a end. If
-  \a filterFunction returns true for an item, that item is then passed to
+  \a filterFunction returns \c true for an item, that item is then passed to
   \a reduceFunction. In other words, the return value is the result of
-  \a reduceFunction for each item where \a filterFunction returns true.
+  \a reduceFunction for each item where \a filterFunction returns \c true.
 
   Note that while \a filterFunction is called concurrently, only one thread
   at a time will call \a reduceFunction. The order in which
@@ -326,5 +361,26 @@
   \note This function will block until the iterator reaches the end of the
   sequence being processed.
 
-  \sa filteredReduced()
+  \sa filteredReduced(), {Concurrent Filter and Filter-Reduce}
 */
+
+/*!
+  \fn [QtConcurrent-2] ThreadEngineStarter<typename qValueType<Iterator>::value_type> QtConcurrent::startFiltered(Iterator begin, Iterator end, KeepFunctor functor)
+  \internal
+*/
+
+/*!
+  \fn [QtConcurrent-3] ThreadEngineStarter<typename Sequence::value_type> QtConcurrent::startFiltered(const Sequence &sequence, KeepFunctor functor)
+  \internal
+*/
+
+/*!
+  \fn [QtConcurrent-4] ThreadEngineStarter<ResultType> QtConcurrent::startFilteredReduced(const Sequence & sequence, MapFunctor mapFunctor, ReduceFunctor reduceFunctor, ReduceOptions options)
+  \internal
+*/
+
+/*!
+  \fn [QtConcurrent-5] ThreadEngineStarter<ResultType> QtConcurrent::startFilteredReduced(Iterator begin, Iterator end, MapFunctor mapFunctor, ReduceFunctor reduceFunctor, ReduceOptions options)
+  \internal
+*/
+

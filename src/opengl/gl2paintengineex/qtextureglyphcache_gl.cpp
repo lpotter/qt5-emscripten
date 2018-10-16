@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtOpenGL module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,20 +39,25 @@
 
 #include "qtextureglyphcache_gl_p.h"
 #include "qpaintengineex_opengl2_p.h"
+#include "qglfunctions.h"
 #include "private/qglengineshadersource_p.h"
 
 QT_BEGIN_NAMESPACE
 
 
-QBasicAtomicInt qgltextureglyphcache_serial_number = Q_BASIC_ATOMIC_INITIALIZER(1);
+static int next_qgltextureglyphcache_serial_number()
+{
+    static QBasicAtomicInt serial = Q_BASIC_ATOMIC_INITIALIZER(0);
+    return 1 + serial.fetchAndAddRelaxed(1);
+}
 
-QGLTextureGlyphCache::QGLTextureGlyphCache(QFontEngineGlyphCache::Type type, const QTransform &matrix)
-    : QImageTextureGlyphCache(type, matrix)
+QGLTextureGlyphCache::QGLTextureGlyphCache(QFontEngine::GlyphFormat format, const QTransform &matrix)
+    : QImageTextureGlyphCache(format, matrix)
     , m_textureResource(0)
     , pex(0)
     , m_blitProgram(0)
     , m_filterMode(Nearest)
-    , m_serialNumber(qgltextureglyphcache_serial_number.fetchAndAddRelaxed(1))
+    , m_serialNumber(next_qgltextureglyphcache_serial_number())
 {
 #ifdef QT_GL_TEXTURE_GLYPH_CACHE_DEBUG
     qDebug(" -> QGLTextureGlyphCache() %p for context %p.", this, QOpenGLContext::currentContext());
@@ -84,6 +87,8 @@ QGLTextureGlyphCache::~QGLTextureGlyphCache()
     qDebug(" -> ~QGLTextureGlyphCache() %p.", this);
 #endif
     delete m_blitProgram;
+    if (m_textureResource)
+        m_textureResource->free();
 }
 
 void QGLTextureGlyphCache::createTextureData(int width, int height)
@@ -93,6 +98,7 @@ void QGLTextureGlyphCache::createTextureData(int width, int height)
         qWarning("QGLTextureGlyphCache::createTextureData: Called with no context");
         return;
     }
+    QOpenGLFunctions *funcs = ctx->contextHandle()->functions();
 
     // create in QImageTextureGlyphCache baseclass is meant to be called
     // only to create the initial image and does not preserve the content,
@@ -114,28 +120,28 @@ void QGLTextureGlyphCache::createTextureData(int width, int height)
     if (!m_textureResource)
         m_textureResource = new QGLGlyphTexture(ctx);
 
-    glGenTextures(1, &m_textureResource->m_texture);
-    glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
+    funcs->glGenTextures(1, &m_textureResource->m_texture);
+    funcs->glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
 
     m_textureResource->m_width = width;
     m_textureResource->m_height = height;
 
-    if (m_type == QFontEngineGlyphCache::Raster_RGBMask) {
+    if (m_format == QFontEngine::Format_A32) {
         QVarLengthArray<uchar> data(width * height * 4);
         for (int i = 0; i < data.size(); ++i)
             data[i] = 0;
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, &data[0]);
+        funcs->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, &data[0]);
     } else {
         QVarLengthArray<uchar> data(width * height);
         for (int i = 0; i < data.size(); ++i)
             data[i] = 0;
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, &data[0]);
+        funcs->glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, &data[0]);
     }
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     m_filterMode = Nearest;
 }
 
@@ -146,6 +152,7 @@ void QGLTextureGlyphCache::resizeTextureData(int width, int height)
         qWarning("QGLTextureGlyphCache::resizeTextureData: Called with no context");
         return;
     }
+    QOpenGLFunctions *funcs = ctx->contextHandle()->functions();
 
     int oldWidth = m_textureResource->m_width;
     int oldHeight = m_textureResource->m_height;
@@ -162,42 +169,44 @@ void QGLTextureGlyphCache::resizeTextureData(int width, int height)
     if (!QGLFramebufferObject::hasOpenGLFramebufferObjects() || ctx->d_ptr->workaround_brokenFBOReadBack) {
         QImageTextureGlyphCache::resizeTextureData(width, height);
         Q_ASSERT(image().depth() == 8);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, oldHeight, GL_ALPHA, GL_UNSIGNED_BYTE, image().constBits());
-        glDeleteTextures(1, &oldTexture);
+        funcs->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, oldHeight, GL_ALPHA, GL_UNSIGNED_BYTE, image().constBits());
+        funcs->glDeleteTextures(1, &oldTexture);
         return;
     }
 
     // ### the QTextureGlyphCache API needs to be reworked to allow
     // ### resizeTextureData to fail
 
-    glBindFramebuffer(GL_FRAMEBUFFER, m_textureResource->m_fbo);
+    ctx->d_ptr->refreshCurrentFbo();
+
+    funcs->glBindFramebuffer(GL_FRAMEBUFFER, m_textureResource->m_fbo);
 
     GLuint tmp_texture;
-    glGenTextures(1, &tmp_texture);
-    glBindTexture(GL_TEXTURE_2D, tmp_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, oldWidth, oldHeight, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    funcs->glGenTextures(1, &tmp_texture);
+    funcs->glBindTexture(GL_TEXTURE_2D, tmp_texture);
+    funcs->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, oldWidth, oldHeight, 0,
+                        GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    funcs->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     m_filterMode = Nearest;
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                           GL_TEXTURE_2D, tmp_texture, 0);
+    funcs->glBindTexture(GL_TEXTURE_2D, 0);
+    funcs->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                  GL_TEXTURE_2D, tmp_texture, 0);
 
-    glActiveTexture(GL_TEXTURE0 + QT_IMAGE_TEXTURE_UNIT);
-    glBindTexture(GL_TEXTURE_2D, oldTexture);
+    funcs->glActiveTexture(GL_TEXTURE0 + QT_IMAGE_TEXTURE_UNIT);
+    funcs->glBindTexture(GL_TEXTURE_2D, oldTexture);
 
     if (pex != 0)
         pex->transferMode(BrushDrawingMode);
 
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_BLEND);
+    funcs->glDisable(GL_STENCIL_TEST);
+    funcs->glDisable(GL_DEPTH_TEST);
+    funcs->glDisable(GL_SCISSOR_TEST);
+    funcs->glDisable(GL_BLEND);
 
-    glViewport(0, 0, oldWidth, oldHeight);
+    funcs->glViewport(0, 0, oldWidth, oldHeight);
 
     QGLShaderProgram *blitProgram = 0;
     if (pex == 0) {
@@ -232,8 +241,8 @@ void QGLTextureGlyphCache::resizeTextureData(int width, int height)
             m_blitProgram->link();
         }
 
-        glVertexAttribPointer(QT_VERTEX_COORDS_ATTR, 2, GL_FLOAT, GL_FALSE, 0, m_vertexCoordinateArray);
-        glVertexAttribPointer(QT_TEXTURE_COORDS_ATTR, 2, GL_FLOAT, GL_FALSE, 0, m_textureCoordinateArray);
+        funcs->glVertexAttribPointer(QT_VERTEX_COORDS_ATTR, 2, GL_FLOAT, GL_FALSE, 0, m_vertexCoordinateArray);
+        funcs->glVertexAttribPointer(QT_TEXTURE_COORDS_ATTR, 2, GL_FLOAT, GL_FALSE, 0, m_textureCoordinateArray);
 
         m_blitProgram->bind();
         m_blitProgram->enableAttributeArray(int(QT_VERTEX_COORDS_ATTR));
@@ -252,21 +261,21 @@ void QGLTextureGlyphCache::resizeTextureData(int width, int height)
 
     blitProgram->setUniformValue("imageTexture", QT_IMAGE_TEXTURE_UNIT);
 
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    funcs->glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-    glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
+    funcs->glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
 
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, oldWidth, oldHeight);
+    funcs->glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, oldWidth, oldHeight);
 
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                              GL_RENDERBUFFER, 0);
-    glDeleteTextures(1, &tmp_texture);
-    glDeleteTextures(1, &oldTexture);
+    funcs->glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                     GL_RENDERBUFFER, 0);
+    funcs->glDeleteTextures(1, &tmp_texture);
+    funcs->glDeleteTextures(1, &oldTexture);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx->d_ptr->current_fbo);
+    funcs->glBindFramebuffer(GL_FRAMEBUFFER, ctx->d_ptr->current_fbo);
 
     if (pex != 0) {
-        glViewport(0, 0, pex->width, pex->height);
+        funcs->glViewport(0, 0, pex->width, pex->height);
         pex->updateClipScissorTest();
     }
 }
@@ -278,16 +287,17 @@ void QGLTextureGlyphCache::fillTexture(const Coord &c, glyph_t glyph, QFixed sub
         qWarning("QGLTextureGlyphCache::fillTexture: Called with no context");
         return;
     }
+    QOpenGLFunctions *funcs = ctx->contextHandle()->functions();
 
     if (!QGLFramebufferObject::hasOpenGLFramebufferObjects() || ctx->d_ptr->workaround_brokenFBOReadBack) {
         QImageTextureGlyphCache::fillTexture(c, glyph, subPixelPosition);
 
-        glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
+        funcs->glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
         const QImage &texture = image();
         const uchar *bits = texture.constBits();
         bits += c.y * texture.bytesPerLine() + c.x;
         for (int i=0; i<c.h; ++i) {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y + i, c.w, 1, GL_ALPHA, GL_UNSIGNED_BYTE, bits);
+            funcs->glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y + i, c.w, 1, GL_ALPHA, GL_UNSIGNED_BYTE, bits);
             bits += texture.bytesPerLine();
         }
         return;
@@ -304,29 +314,38 @@ void QGLTextureGlyphCache::fillTexture(const Coord &c, glyph_t glyph, QFixed sub
             for (int x = 0; x < maskWidth; ++x)
                 src[x] = -src[x]; // convert 0 and 1 into 0 and 255
         }
-    } else if (mask.format() == QImage::Format_RGB32) {
+    } else if (mask.depth() == 32) {
         // Make the alpha component equal to the average of the RGB values.
         // This is needed when drawing sub-pixel antialiased text on translucent targets.
         for (int y = 0; y < maskHeight; ++y) {
             quint32 *src = (quint32 *) mask.scanLine(y);
             for (int x = 0; x < maskWidth; ++x) {
-                uchar r = src[x] >> 16;
-                uchar g = src[x] >> 8;
-                uchar b = src[x];
-                quint32 avg = (quint32(r) + quint32(g) + quint32(b) + 1) / 3; // "+1" for rounding.
-                src[x] = (src[x] & 0x00ffffff) | (avg << 24);
+                int r = qRed(src[x]);
+                int g = qGreen(src[x]);
+                int b = qBlue(src[x]);
+                int avg;
+                if (mask.format() == QImage::Format_RGB32)
+                    avg = (r + g + b + 1) / 3; // "+1" for rounding.
+                else // Format_ARGB_Premultiplied
+                    avg = qAlpha(src[x]);
+                if (ctx->contextHandle()->isOpenGLES()) {
+                    // swizzle the bits to accommodate for the GL_RGBA upload.
+                    src[x] = (avg << 24) | (r << 0) | (g << 8) | (b << 16);
+                } else {
+                    src[x] = (src[x] & 0x00ffffff) | (avg << 24);
+                }
             }
         }
     }
 
-    glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
-    if (mask.format() == QImage::Format_RGB32) {
-#if defined(QT_OPENGL_ES_2)
-        // ###TODO Ensure extension is actually present on ES2
-        glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y, maskWidth, maskHeight, GL_BGRA_EXT, GL_UNSIGNED_BYTE, mask.bits());
-#else
-        glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y, maskWidth, maskHeight, GL_BGRA, GL_UNSIGNED_BYTE, mask.bits());
+    funcs->glBindTexture(GL_TEXTURE_2D, m_textureResource->m_texture);
+    if (mask.depth() == 32) {
+        GLenum format = GL_RGBA;
+#if !defined(QT_OPENGL_ES_2)
+        if (!ctx->contextHandle()->isOpenGLES())
+            format = GL_BGRA;
 #endif
+        funcs->glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y, maskWidth, maskHeight, format, GL_UNSIGNED_BYTE, mask.bits());
     } else {
         // glTexSubImage2D() might cause some garbage to appear in the texture if the mask width is
         // not a multiple of four bytes. The bug appeared on a computer with 32-bit Windows Vista
@@ -339,16 +358,16 @@ void QGLTextureGlyphCache::fillTexture(const Coord &c, glyph_t glyph, QFixed sub
 
         if (!ctx->d_ptr->workaround_brokenAlphaTexSubImage_init) {
             // don't know which driver versions exhibit this bug, so be conservative for now
-            const QByteArray vendorString(reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
+            const QByteArray vendorString(reinterpret_cast<const char*>(funcs->glGetString(GL_VENDOR)));
             ctx->d_ptr->workaround_brokenAlphaTexSubImage = vendorString.indexOf("NVIDIA") >= 0;
             ctx->d_ptr->workaround_brokenAlphaTexSubImage_init = true;
         }
 
         if (ctx->d_ptr->workaround_brokenAlphaTexSubImage) {
             for (int i = 0; i < maskHeight; ++i)
-                glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y + i, maskWidth, 1, GL_ALPHA, GL_UNSIGNED_BYTE, mask.scanLine(i));
+                funcs->glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y + i, maskWidth, 1, GL_ALPHA, GL_UNSIGNED_BYTE, mask.scanLine(i));
         } else {
-            glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y, maskWidth, maskHeight, GL_ALPHA, GL_UNSIGNED_BYTE, mask.bits());
+            funcs->glTexSubImage2D(GL_TEXTURE_2D, 0, c.x, c.y, maskWidth, maskHeight, GL_ALPHA, GL_UNSIGNED_BYTE, mask.bits());
         }
     }
 }

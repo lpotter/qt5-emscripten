@@ -1,49 +1,33 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "cppwritedeclaration.h"
-#include "cppwriteicondeclaration.h"
 #include "cppwriteinitialization.h"
-#include "cppwriteiconinitialization.h"
-#include "cppextractimages.h"
 #include "driver.h"
 #include "ui4.h"
 #include "uic.h"
@@ -56,71 +40,29 @@
 QT_BEGIN_NAMESPACE
 
 namespace {
-    void openNameSpaces(const QStringList &namespaceList, QTextStream &output) {
-        if (namespaceList.empty())
-            return;
-        const QStringList::const_iterator cend = namespaceList.constEnd();
-        for (QStringList::const_iterator it = namespaceList.constBegin(); it != cend; ++it) {
-            if (!it->isEmpty()) {
-                output << "namespace " << *it << " {\n";
-            }
+    void openNameSpaces(const QStringList &namespaceList, QTextStream &output)
+    {
+        for (const QString &n : namespaceList) {
+            if (!n.isEmpty())
+                output << "namespace " << n << " {\n";
         }
     }
 
     void closeNameSpaces(const QStringList &namespaceList, QTextStream &output) {
-        if (namespaceList.empty())
-            return;
-
-        QListIterator<QString> it(namespaceList);
-        it.toBack();
-        while (it.hasPrevious()) {
-            const QString ns = it.previous();
-            if (!ns.isEmpty()) {
-                output << "} // namespace " << ns << "\n";
-            }
+        for (auto it = namespaceList.rbegin(), end = namespaceList.rend(); it != end; ++it) {
+            if (!it->isEmpty())
+                output << "} // namespace " << *it << "\n";
         }
-    }
-
-    void writeScriptContextClass(const QString &indent, QTextStream &str) {
-         str << indent << "class ScriptContext\n"
-             << indent << "{\n"
-             << indent << "public:\n"
-             << indent << "    void run(const QString &script, QWidget *widget, const QWidgetList &childWidgets)\n"
-             << indent << "    {\n"
-             << indent << "        QScriptValue widgetObject =  scriptEngine.newQObject(widget);\n"
-             << indent << "        QScriptValue childWidgetArray = scriptEngine.newArray (childWidgets.size());\n"
-             << indent << "        for (int i = 0; i < childWidgets.size(); i++)\n"
-             << indent << "               childWidgetArray.setProperty(i, scriptEngine.newQObject(childWidgets[i]));\n"
-             << indent << "        QScriptContext *ctx = scriptEngine.pushContext();\n"
-             << indent << "        ctx ->activationObject().setProperty(QLatin1String(\"widget\"), widgetObject);\n"
-             << indent << "        ctx ->activationObject().setProperty(QLatin1String(\"childWidgets\"), childWidgetArray);\n\n"
-             << indent << "        scriptEngine.evaluate(script);\n"
-             << indent << "        if (scriptEngine.hasUncaughtException ()) {\n"
-             << indent << "            qWarning() << \"An exception occurred at line \" << scriptEngine.uncaughtExceptionLineNumber()\n"
-             << indent << "                       << \" of the script for \" << widget->objectName() << \": \" << engineError() << '\\n'\n"
-             << indent << "                       << script;\n"
-             << indent << "        }\n\n"
-             << indent << "        scriptEngine.popContext();\n"
-             << indent << "    }\n\n"
-             << indent << "private:\n"
-             << indent << "    QString engineError()\n"
-             << indent << "    {\n"
-             << indent << "        QScriptValue error = scriptEngine.evaluate(\"Error\");\n"
-             << indent << "        return error.toString();\n"
-             << indent << "    }\n\n"
-             << indent << "    QScriptEngine scriptEngine;\n"
-             << indent << "};\n\n";
     }
 }
 
 namespace CPP {
 
-WriteDeclaration::WriteDeclaration(Uic *uic, bool activateScripts)  :
+WriteDeclaration::WriteDeclaration(Uic *uic)  :
     m_uic(uic),
     m_driver(uic->driver()),
     m_output(uic->output()),
-    m_option(uic->option()),
-    m_activateScripts(activateScripts)
+    m_option(uic->option())
 {
 }
 
@@ -129,8 +71,7 @@ void WriteDeclaration::acceptUI(DomUI *node)
     QString qualifiedClassName = node->elementClass() + m_option.postfix;
     QString className = qualifiedClassName;
 
-    QString varName = m_driver->findOrInsertWidget(node->elementWidget());
-    QString widgetClassName = node->elementWidget()->attributeClass();
+    m_driver->findOrInsertWidget(node->elementWidget());
 
     QString exportMacro = node->elementExportMacro();
     if (!exportMacro.isEmpty())
@@ -163,13 +104,9 @@ void WriteDeclaration::acceptUI(DomUI *node)
            << "public:\n";
 
     const QStringList connections = m_uic->databaseInfo()->connections();
-    for (int i=0; i<connections.size(); ++i) {
-        const QString connection = connections.at(i);
-
-        if (connection == QLatin1String("(default)"))
-            continue;
-
-        m_output << m_option.indent << "QSqlDatabase " << connection << "Connection;\n";
+    for (const QString &connection : connections) {
+        if (connection != QLatin1String("(default)"))
+            m_output << m_option.indent << "QSqlDatabase " << connection << "Connection;\n";
     }
 
     TreeWalker::acceptWidget(node->elementWidget());
@@ -178,29 +115,7 @@ void WriteDeclaration::acceptUI(DomUI *node)
 
     m_output << "\n";
 
-    WriteInitialization(m_uic, m_activateScripts).acceptUI(node);
-
-    if (node->elementImages()) {
-        if (m_option.extractImages) {
-            ExtractImages(m_uic->option()).acceptUI(node);
-        } else {
-            m_output << "\n"
-                << "protected:\n"
-                << m_option.indent << "enum IconID\n"
-                << m_option.indent << "{\n";
-            WriteIconDeclaration(m_uic).acceptUI(node);
-
-            m_output << m_option.indent << m_option.indent << "unknown_ID\n"
-                << m_option.indent << "};\n";
-
-            WriteIconInitialization(m_uic).acceptUI(node);
-        }
-    }
-
-    if (m_activateScripts) {
-        m_output << "\nprivate:\n\n";
-        writeScriptContextClass(m_option.indent, m_output);
-    }
+    WriteInitialization(m_uic).acceptUI(node);
 
     m_output << "};\n\n";
 

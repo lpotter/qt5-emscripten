@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,8 +43,6 @@
 #include "qlocalsocket_p.h"
 #include "qnet_unix_p.h"
 #include "qtemporarydir.h"
-
-#ifndef QT_NO_LOCALSERVER
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -93,18 +89,19 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
     }
     serverName = requestedServerName;
 
-    QString tempPath;
+    QByteArray encodedTempPath;
+    const QByteArray encodedFullServerName = QFile::encodeName(fullServerName);
     QScopedPointer<QTemporaryDir> tempDir;
 
     // Check any of the flags
     if (socketOptions & QLocalServer::WorldAccessOption) {
-        tempDir.reset(new QTemporaryDir(fullServerName));
+        QFileInfo serverNameFileInfo(fullServerName);
+        tempDir.reset(new QTemporaryDir(serverNameFileInfo.absolutePath() + QLatin1Char('/')));
         if (!tempDir->isValid()) {
             setError(QLatin1String("QLocalServer::listen"));
             return false;
         }
-        tempPath = tempDir->path();
-        tempPath += QLatin1Char('/') + requestedServerName;
+        encodedTempPath = QFile::encodeName(tempDir->path() + QLatin1String("/s"));
     }
 
     // create the unix socket
@@ -118,30 +115,23 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
     // Construct the unix address
     struct ::sockaddr_un addr;
     addr.sun_family = PF_UNIX;
-    if (sizeof(addr.sun_path) < (uint)fullServerName.toLatin1().size() + 1) {
+    if (sizeof(addr.sun_path) < (uint)encodedFullServerName.size() + 1) {
         setError(QLatin1String("QLocalServer::listen"));
         closeServer();
         return false;
     }
 
     if (socketOptions & QLocalServer::WorldAccessOption) {
-        if (sizeof(addr.sun_path) < (uint)tempPath.toLatin1().size() + 1) {
+        if (sizeof(addr.sun_path) < (uint)encodedTempPath.size() + 1) {
             setError(QLatin1String("QLocalServer::listen"));
             closeServer();
             return false;
         }
-        ::memcpy(addr.sun_path, tempPath.toLatin1().data(),
-                 tempPath.toLatin1().size() + 1);
-
-        if (-1 == ::fchmod(listenSocket, 0)) {
-            setError(QLatin1String("QLocalServer::listen"));
-            closeServer();
-            return false;
-        }
-
+        ::memcpy(addr.sun_path, encodedTempPath.constData(),
+                 encodedTempPath.size() + 1);
     } else {
-        ::memcpy(addr.sun_path, fullServerName.toLatin1().data(),
-                 fullServerName.toLatin1().size() + 1);
+        ::memcpy(addr.sun_path, encodedFullServerName.constData(),
+                 encodedFullServerName.size() + 1);
     }
 
     // bind
@@ -168,30 +158,28 @@ bool QLocalServerPrivate::listen(const QString &requestedServerName)
     }
 
     if (socketOptions & QLocalServer::WorldAccessOption) {
-            mode_t mode = 000;
+        mode_t mode = 000;
 
-            if (socketOptions & QLocalServer::UserAccessOption) {
-                mode |= S_IRWXU;
-            }
-            if (socketOptions & QLocalServer::GroupAccessOption) {
-                mode |= S_IRWXG;
-            }
-            if (socketOptions & QLocalServer::OtherAccessOption) {
-                mode |= S_IRWXO;
-            }
+        if (socketOptions & QLocalServer::UserAccessOption)
+            mode |= S_IRWXU;
 
-            if (mode) {
-                if (-1 == ::chmod(tempPath.toLatin1(), mode)) {
-                    setError(QLatin1String("QLocalServer::listen"));
-                    closeServer();
-                    return false;
-                }
-            }
-            if (-1 == ::rename(tempPath.toLatin1(), fullServerName.toLatin1())){
-                setError(QLatin1String("QLocalServer::listen"));
-                closeServer();
-                return false;
-            }
+        if (socketOptions & QLocalServer::GroupAccessOption)
+            mode |= S_IRWXG;
+
+        if (socketOptions & QLocalServer::OtherAccessOption)
+            mode |= S_IRWXO;
+
+        if (::chmod(encodedTempPath.constData(), mode) == -1) {
+            setError(QLatin1String("QLocalServer::listen"));
+            closeServer();
+            return false;
+        }
+
+        if (::rename(encodedTempPath.constData(), encodedFullServerName.constData()) == -1) {
+            setError(QLatin1String("QLocalServer::listen"));
+            closeServer();
+            return false;
+        }
     }
 
     Q_ASSERT(!socketNotifier);
@@ -225,7 +213,7 @@ bool QLocalServerPrivate::listen(qintptr socketDescriptor)
         QString name = QString::fromLatin1(addr.sun_path);
         if (!name.isEmpty()) {
             fullServerName = name;
-            serverName = fullServerName.mid(fullServerName.lastIndexOf(QLatin1String("/"))+1);
+            serverName = fullServerName.mid(fullServerName.lastIndexOf(QLatin1Char('/')) + 1);
             if (serverName.isEmpty()) {
                 serverName = fullServerName;
             }
@@ -293,24 +281,28 @@ void QLocalServerPrivate::_q_onNewConnection()
 
 void QLocalServerPrivate::waitForNewConnection(int msec, bool *timedOut)
 {
-    fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(listenSocket, &readfds);
+    pollfd pfd = qt_make_pollfd(listenSocket, POLLIN);
 
-    timeval timeout;
-    timeout.tv_sec = msec / 1000;
-    timeout.tv_usec = (msec % 1000) * 1000;
+    switch (qt_poll_msecs(&pfd, 1, msec)) {
+    case 0:
+        if (timedOut)
+            *timedOut = true;
 
-    int result = -1;
-    result = qt_safe_select(listenSocket + 1, &readfds, 0, 0, (msec == -1) ? 0 : &timeout);
-    if (-1 == result) {
+        return;
+        break;
+    default:
+        if ((pfd.revents & POLLNVAL) == 0) {
+            _q_onNewConnection();
+            return;
+        }
+
+        errno = EBADF;
+        Q_FALLTHROUGH();
+    case -1:
         setError(QLatin1String("QLocalServer::waitForNewConnection"));
         closeServer();
+        break;
     }
-    if (result > 0)
-        _q_onNewConnection();
-    if (timedOut)
-        *timedOut = (result == 0);
 }
 
 void QLocalServerPrivate::setError(const QString &function)
@@ -347,5 +339,3 @@ void QLocalServerPrivate::setError(const QString &function)
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_LOCALSERVER

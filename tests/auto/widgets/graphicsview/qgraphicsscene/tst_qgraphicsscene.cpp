@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,9 +28,6 @@
 
 
 #include <QtTest/QtTest>
-#if defined(Q_OS_WINCE)
-#include <ceconfig.h>
-#endif
 
 #include <QtGui>
 #include <QtWidgets>
@@ -54,7 +38,7 @@
 #include "../../../shared/platforminputcontext.h"
 #include <private/qinputmethod_p.h>
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
 #include <windows.h>
 #define Q_CHECK_PAINTEVENTS \
     if (::SwitchDesktop(::GetThreadDesktop(::GetCurrentThreadId())) == 0) \
@@ -63,12 +47,8 @@
 #define Q_CHECK_PAINTEVENTS
 #endif
 
-Q_DECLARE_METATYPE(QList<int>)
-Q_DECLARE_METATYPE(QList<QRectF>)
-Q_DECLARE_METATYPE(QMatrix)
+Q_DECLARE_METATYPE(Qt::FocusReason)
 Q_DECLARE_METATYPE(QPainterPath)
-Q_DECLARE_METATYPE(QPointF)
-Q_DECLARE_METATYPE(QRectF)
 Q_DECLARE_METATYPE(Qt::AspectRatioMode)
 Q_DECLARE_METATYPE(Qt::ItemSelectionMode)
 
@@ -120,7 +100,7 @@ class HoverItem : public QGraphicsRectItem
 public:
     HoverItem()
         : QGraphicsRectItem(QRectF(-10, -10, 20, 20)), isHovered(false)
-    { setAcceptsHoverEvents(true); }
+    { setAcceptHoverEvents(true); }
 
     bool isHovered;
 
@@ -187,7 +167,6 @@ class tst_QGraphicsScene : public QObject
 {
     Q_OBJECT
 public slots:
-    void initTestCase();
     void cleanup();
 
 private slots:
@@ -231,7 +210,7 @@ private slots:
     void mouseEventPropagation_focus();
     void mouseEventPropagation_doubleclick();
     void mouseEventPropagation_mouseMove();
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     void dragAndDrop_simple();
     void dragAndDrop_disabledOrInvisible();
     void dragAndDrop_propagate();
@@ -239,12 +218,14 @@ private slots:
     void render_data();
     void render();
     void renderItemsWithNegativeWidthOrHeight();
+#ifndef QT_NO_CONTEXTMENU
     void contextMenuEvent();
     void contextMenuEvent_ItemIgnoresTransformations();
+#endif
     void update();
     void update2();
     void views();
-    void event();
+    void testEvent();
     void eventsToDisabledItems();
     void exposedRect();
     void tabFocus_emptyScene();
@@ -254,6 +235,7 @@ private slots:
     void style();
     void sorting_data();
     void sorting();
+    void insertionOrder();
     void changedSignal_data();
     void changedSignal();
     void stickyFocus_data();
@@ -270,6 +252,9 @@ private slots:
     void siblingIndexAlwaysValid();
     void removeFullyTransparentItem();
     void zeroScale();
+    void focusItemChangedSignal();
+    void minimumRenderSize();
+    void focusOnTouch();
 
     // task specific tests below me
     void task139710_bspTreeCrash();
@@ -283,14 +268,8 @@ private slots:
     void taskQT_3674_doNotCrash();
     void taskQTBUG_15977_renderWithDeviceCoordinateCache();
     void taskQTBUG_16401_focusItem();
+    void taskQTBUG_42915_focusNextPrevChild();
 };
-
-void tst_QGraphicsScene::initTestCase()
-{
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
 
 void tst_QGraphicsScene::cleanup()
 {
@@ -310,9 +289,14 @@ void tst_QGraphicsScene::construction()
     QVERIFY(scene.items(QPainterPath()).isEmpty());
     QTest::ignoreMessage(QtWarningMsg, "QGraphicsScene::collidingItems: cannot find collisions for null item");
     QVERIFY(scene.collidingItems(0).isEmpty());
-    QVERIFY(!scene.itemAt(QPointF()));
+    QVERIFY(scene.items(QPointF()).isEmpty());
     QVERIFY(scene.selectedItems().isEmpty());
     QVERIFY(!scene.focusItem());
+}
+
+static inline const QGraphicsItem *itemAt(const QGraphicsScene &scene, qreal x, qreal y)
+{
+    return scene.items(QPointF(x, y)).value(0, nullptr);
 }
 
 void tst_QGraphicsScene::sceneRect()
@@ -327,8 +311,8 @@ void tst_QGraphicsScene::sceneRect()
     item->setPos(-5, -5);
     QCOMPARE(sceneRectChanged.count(), 0);
 
-    QCOMPARE(scene.itemAt(0, 0), item);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), item);
+    QVERIFY(scene.items(QPointF(10, 10)).isEmpty());
     QCOMPARE(sceneRectChanged.count(), 0);
     QCOMPARE(scene.sceneRect(), QRectF(-5, -5, 10, 10));
     QCOMPARE(sceneRectChanged.count(), 1);
@@ -343,8 +327,8 @@ void tst_QGraphicsScene::sceneRect()
     QCOMPARE(sceneRectChanged.count(), 3);
     QCOMPARE(sceneRectChanged.last().at(0).toRectF(), scene.sceneRect());
 
-    QCOMPARE(scene.itemAt(0, 0), item);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), item);
+    QVERIFY(scene.items(QPointF(10, 10)).isEmpty());
     QCOMPARE(scene.sceneRect(), QRectF(-100, -100, 10, 10));
     item->setPos(10, 10);
     QCOMPARE(scene.sceneRect(), QRectF(-100, -100, 10, 10));
@@ -353,8 +337,8 @@ void tst_QGraphicsScene::sceneRect()
 
     scene.setSceneRect(QRectF());
 
-    QCOMPARE(scene.itemAt(10, 10), item);
-    QCOMPARE(scene.itemAt(20, 20), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 10, 10), item);
+    QVERIFY(scene.items(QPointF(20, 20)).isEmpty());
     QCOMPARE(sceneRectChanged.count(), 4);
     QCOMPARE(scene.sceneRect(), QRectF(-5, -5, 25, 25));
     QCOMPARE(sceneRectChanged.count(), 5);
@@ -383,7 +367,7 @@ void tst_QGraphicsScene::itemIndexMethod()
         for (int x = minX; x < maxX; x += 100) {
             QGraphicsItem *item = scene.addRect(QRectF(0, 0, 10, 10));
             item->setPos(x, y);
-            QCOMPARE(scene.itemAt(x, y), item);
+            QCOMPARE(itemAt(scene, x, y), item);
             items << item;
         }
     }
@@ -391,7 +375,7 @@ void tst_QGraphicsScene::itemIndexMethod()
     int n = 0;
     for (int y = minY; y < maxY; y += 100) {
         for (int x = minX; x < maxX; x += 100)
-            QCOMPARE(scene.itemAt(x, y), items.at(n++));
+            QCOMPARE(itemAt(scene, x, y), items.at(n++));
     }
 
     scene.setItemIndexMethod(QGraphicsScene::NoIndex);
@@ -400,7 +384,7 @@ void tst_QGraphicsScene::itemIndexMethod()
     n = 0;
     for (int y = minY; y < maxY; y += 100) {
         for (int x = minX; x < maxX; x += 100)
-            QCOMPARE(scene.itemAt(x, y), items.at(n++));
+            QCOMPARE(itemAt(scene, x, y), items.at(n++));
     }
 
     scene.setItemIndexMethod(QGraphicsScene::BspTreeIndex);
@@ -409,7 +393,7 @@ void tst_QGraphicsScene::itemIndexMethod()
     n = 0;
     for (int y = minY; y < maxY; y += 100) {
         for (int x = minX; x < maxX; x += 100)
-            QCOMPARE(scene.itemAt(x, y), items.at(n++));
+            QCOMPARE(itemAt(scene, x, y), items.at(n++));
     }
 }
 
@@ -448,7 +432,7 @@ void tst_QGraphicsScene::items()
                 items << scene.addRect(QRectF(0, 0, 10, 10));
         }
         QCOMPARE(scene.items().size(), items.size());
-        scene.itemAt(0, 0); // trigger indexing
+        itemAt(scene, 0, 0); // trigger indexing
 
         scene.removeItem(items.at(5));
         delete items.at(5);
@@ -467,8 +451,8 @@ void tst_QGraphicsScene::items()
         QList<QGraphicsItem *> items;
         items<<l1<<l2;
         QCOMPARE(scene.items().size(), items.size());
-        QVERIFY(scene.items(-1, -1, 2, 2).contains(l1));
-        QVERIFY(scene.items(-1, -1, 2, 2).contains(l2));
+        QVERIFY(scene.items(QRectF(-1, -1, 2, 2)).contains(l1));
+        QVERIFY(scene.items(QRectF(-1, -1, 2, 2)).contains(l2));
     }
 }
 
@@ -731,7 +715,7 @@ void tst_QGraphicsScene::items_QRectF_2()
     QGraphicsItem *item = scene.addEllipse(ellipseRect);
 
     QCOMPARE(!scene.items(sceneRect, selectionMode).isEmpty(), contained);
-    item->rotate(45);
+    item->setTransform(QTransform().rotate(45), true);
     QCOMPARE(!scene.items(sceneRect, selectionMode).isEmpty(), containedRotated);
 }
 
@@ -1094,19 +1078,19 @@ void tst_QGraphicsScene::addItem()
         QTRY_VERIFY(view.repaints > 0);
         view.repaints = 0;
 
-        QCOMPARE(scene.itemAt(0, 0), path);
+        QCOMPARE(itemAt(scene, 0, 0), path);
 
         QGraphicsItem *path2 = new QGraphicsEllipseItem(QRectF(-10, -10, 20, 20));
         path2->setPos(100, 100);
 
-        QCOMPARE(scene.itemAt(0, 0), path);
-        QCOMPARE(scene.itemAt(100, 100), (QGraphicsItem *)0);
+        QCOMPARE(itemAt(scene, 0, 0), path);
+        QVERIFY(scene.items(QPointF(100, 100)).isEmpty());
         scene.addItem(path2);
 
         // Adding an item should always issue a repaint.
         QTRY_VERIFY(view.repaints > 0);
 
-        QCOMPARE(scene.itemAt(100, 100), path2);
+        QCOMPARE(itemAt(scene, 100, 100), path2);
     }
     {
         // 2) Create scene, then item, then add item
@@ -1118,8 +1102,8 @@ void tst_QGraphicsScene::addItem()
         path2->setPos(100, 100);
         scene.addItem(path2);
 
-        QCOMPARE(scene.itemAt(0, 0), path);
-        QCOMPARE(scene.itemAt(100, 100), path2);
+        QCOMPARE(itemAt(scene, 0, 0), path);
+        QCOMPARE(itemAt(scene, 100, 100), path2);
     }
 }
 
@@ -1132,15 +1116,15 @@ void tst_QGraphicsScene::addEllipse()
     QCOMPARE(ellipse->pen(), QPen(Qt::red));
     QCOMPARE(ellipse->brush(), QBrush(Qt::blue));
     QCOMPARE(ellipse->rect(), QRectF(-10, -10, 20, 20));
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)ellipse);
-    QCOMPARE(scene.itemAt(-10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(-9.9, 0), (QGraphicsItem *)ellipse);
-    QCOMPARE(scene.itemAt(-10, 10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(0, -9.9), (QGraphicsItem *)ellipse);
-    QCOMPARE(scene.itemAt(0, 9.9), (QGraphicsItem *)ellipse);
-    QCOMPARE(scene.itemAt(10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(9.9, 0), (QGraphicsItem *)ellipse);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), (QGraphicsItem *)ellipse);
+    QVERIFY(scene.items(QPointF(-10, -10)).isEmpty());
+    QCOMPARE(itemAt(scene, -9.9, 0), (QGraphicsItem *)ellipse);
+    QVERIFY(scene.items(QPointF(-10, 10)).isEmpty());
+    QCOMPARE(itemAt(scene, 0, -9.9), (QGraphicsItem *)ellipse);
+    QCOMPARE(itemAt(scene, 0, 9.9), (QGraphicsItem *)ellipse);
+    QVERIFY(scene.items(QPointF(10, -10)).isEmpty());
+    QCOMPARE(itemAt(scene, 9.9, 0), (QGraphicsItem *)ellipse);
+    QVERIFY(scene.items(QPointF(10, 10)).isEmpty());
 }
 
 void tst_QGraphicsScene::addLine()
@@ -1153,15 +1137,15 @@ void tst_QGraphicsScene::addLine()
     QCOMPARE(line->pos(), QPointF());
     QCOMPARE(line->pen(), pen);
     QCOMPARE(line->line(), QLineF(-10, -10, 20, 20));
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)line);
-    QCOMPARE(scene.itemAt(-10, -10), (QGraphicsItem *)line);
-    QCOMPARE(scene.itemAt(-9.9, 0), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(-10, 10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(0, -9.9), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(0, 9.9), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(9.9, 0), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)line);
+    QCOMPARE(itemAt(scene, 0, 0), (QGraphicsItem *)line);
+    QCOMPARE(itemAt(scene, -10, -10), (QGraphicsItem *)line);
+    QVERIFY(scene.items(QPointF(-9.9, 0)).isEmpty());
+    QVERIFY(scene.items(QPointF(-10, 10)).isEmpty());
+    QVERIFY(scene.items(QPointF(0, -9.9)).isEmpty());
+    QVERIFY(scene.items(QPointF(0, 9.9)).isEmpty());
+    QVERIFY(scene.items(QPointF(10, -10)).isEmpty());
+    QVERIFY(scene.items(QPointF(9.9, 0)).isEmpty());
+    QCOMPARE(itemAt(scene, 10, 10), (QGraphicsItem *)line);
 }
 
 void tst_QGraphicsScene::addPath()
@@ -1179,27 +1163,27 @@ void tst_QGraphicsScene::addPath()
 
     path->setPen(QPen(Qt::red, 0));
 
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(-9.9, 0), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(9.9, 0), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(0, -9.9), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(0, 9.9), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(0, 30), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(-9.9, 30), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(9.9, 30), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(0, 20.1), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(0, 39.9), (QGraphicsItem *)path);
-    QCOMPARE(scene.itemAt(-10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(-10, 10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(-10, 20), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10, 20), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, -9.9, 0), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 9.9, 0), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 0, -9.9), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 0, 9.9), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 0, 30), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, -9.9, 30), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 9.9, 30), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 0, 20.1), (QGraphicsItem *)path);
+    QCOMPARE(itemAt(scene, 0, 39.9), (QGraphicsItem *)path);
+    QVERIFY(scene.items(QPointF(-10, -10)).isEmpty());
+    QVERIFY(scene.items(QPointF(10, -10)).isEmpty());
+    QVERIFY(scene.items(QPointF(-10, 10)).isEmpty());
+    QVERIFY(scene.items(QPointF(10, 10)).isEmpty());
+    QVERIFY(scene.items(QPointF(-10, 20)).isEmpty());
+    QVERIFY(scene.items(QPointF(10, 20)).isEmpty());
 if (sizeof(qreal) != sizeof(double))
     QWARN("Skipping test because of rounding errors when qreal != double");
 else
-    QCOMPARE(scene.itemAt(-10, 30), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(10.1, 30), (QGraphicsItem *)0);
+    QVERIFY(scene.items(QPointF(-10, 30)).isEmpty());
+    QVERIFY(scene.items(QPointF(10.1, 30)).isEmpty());
 }
 
 void tst_QGraphicsScene::addPixmap()
@@ -1210,16 +1194,17 @@ void tst_QGraphicsScene::addPixmap()
 
     QCOMPARE(pixmap->pos(), QPointF());
     QCOMPARE(pixmap->pixmap(), pix);
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)pixmap);
-    QCOMPARE(scene.itemAt(pix.width() - 1, 0), (QGraphicsItem *)pixmap);
-    QCOMPARE(scene.itemAt(0, pix.height() - 1), (QGraphicsItem *)pixmap);
-    QCOMPARE(scene.itemAt(pix.width() - 1, pix.height() - 1), (QGraphicsItem *)pixmap);
-    QCOMPARE(scene.itemAt(-1, -1), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(pix.width() - 1, -1), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(-1, pix.height() - 1), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(pix.width(), pix.height()), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(0, pix.height()), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(pix.width(), 0), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), (QGraphicsItem *)pixmap);
+    QCOMPARE(itemAt(scene, pix.width() - 1, 0), (QGraphicsItem *)pixmap);
+    QCOMPARE(itemAt(scene, 0, pix.height() - 1), (QGraphicsItem *)pixmap);
+    QCOMPARE(itemAt(scene, pix.width() - 1, pix.height() - 1), (QGraphicsItem *)pixmap);
+
+    QVERIFY(scene.items(QPointF(-1, -1)).isEmpty());
+    QVERIFY(scene.items(QPointF(pix.width() - 1, -1)).isEmpty());
+    QVERIFY(scene.items(QPointF(-1, pix.height() - 1)).isEmpty());
+    QVERIFY(scene.items(QPointF(pix.width(), pix.height())).isEmpty());
+    QVERIFY(scene.items(QPointF(0, pix.height())).isEmpty());
+    QVERIFY(scene.items(QPointF(pix.width(), 0)).isEmpty());
 }
 
 void tst_QGraphicsScene::addRect()
@@ -1234,15 +1219,15 @@ void tst_QGraphicsScene::addRect()
 
     rect->setPen(QPen(Qt::red, 0));
 
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(-10, -10), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(-9.9, 0), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(-10, 10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(0, -9.9), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(0, 9.9), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(10, -10), (QGraphicsItem *)0);
-    QCOMPARE(scene.itemAt(9.9, 0), (QGraphicsItem *)rect);
-    QCOMPARE(scene.itemAt(10, 10), (QGraphicsItem *)0);
+    QCOMPARE(itemAt(scene, 0, 0), (QGraphicsItem *)rect);
+    QCOMPARE(itemAt(scene, -10, -10), (QGraphicsItem *)rect);
+    QCOMPARE(itemAt(scene, -9.9, 0), (QGraphicsItem *)rect);
+    QVERIFY(scene.items(QPointF(-10, 10)).isEmpty());
+    QCOMPARE(itemAt(scene, 0, -9.9), (QGraphicsItem *)rect);
+    QCOMPARE(itemAt(scene, 0, 9.9), (QGraphicsItem *)rect);
+    QVERIFY(scene.items(QPointF(10, -10)).isEmpty());
+    QCOMPARE(itemAt(scene, 9.9, 0), (QGraphicsItem *)rect);
+    QVERIFY(scene.items(QPointF(10, 10)).isEmpty());
 }
 
 void tst_QGraphicsScene::addText()
@@ -1256,19 +1241,19 @@ void tst_QGraphicsScene::addText()
 
 void tst_QGraphicsScene::removeItem()
 {
-#if defined(Q_OS_WINCE) && !defined(GWES_ICONCURS)
+#if defined(Q_OS_ANDROID)
     QSKIP("No mouse cursor support");
 #endif
     QGraphicsScene scene;
     QGraphicsItem *item = scene.addRect(QRectF(0, 0, 10, 10));
-    QCOMPARE(scene.itemAt(0, 0), item); // forces indexing
+    QCOMPARE(itemAt(scene, 0, 0), item); // forces indexing
     scene.removeItem(item);
-    QCOMPARE(scene.itemAt(0, 0), (QGraphicsItem *)0);
+    QVERIFY(scene.items(QPointF(0, 0)).isEmpty());
     delete item;
 
     QGraphicsItem *item2 = scene.addRect(QRectF(0, 0, 10, 10));
     item2->setFlag(QGraphicsItem::ItemIsSelectable);
-    QCOMPARE(scene.itemAt(0, 0), item2);
+    QCOMPARE(itemAt(scene, 0, 0), item2);
 
     // Removing a selected item
     QVERIFY(scene.selectedItems().isEmpty());
@@ -1291,33 +1276,16 @@ void tst_QGraphicsScene::removeItem()
     view.show();
     QApplication::setActiveWindow(&view);
     QVERIFY(QTest::qWaitForWindowActive(&view));
-    QTest::mouseMove(view.viewport(), QPoint(-1, -1));
-    {
-        QMouseEvent moveEvent(QEvent::MouseMove, view.mapFromScene(hoverItem->scenePos() + QPointF(20, 20)), Qt::NoButton, 0, 0);
-        QApplication::sendEvent(view.viewport(), &moveEvent);
-    }
-    qApp->processEvents(); // update
-    qApp->processEvents(); // draw
-    QVERIFY(!hoverItem->isHovered);
+    QTest::mouseMove(view.windowHandle(), view.mapFromScene(hoverItem->scenePos() + QPointF(20, 20)));
+    QTRY_VERIFY(!hoverItem->isHovered);
 
-    {
-        QTest::qWait(250);
-        QTest::mouseMove(view.viewport(), view.mapFromScene(hoverItem->scenePos()), Qt::NoButton);
-        QTest::qWait(10);
-        QMouseEvent moveEvent(QEvent::MouseMove, view.mapFromScene(hoverItem->scenePos()), Qt::NoButton, 0, 0);
-        QApplication::sendEvent(view.viewport(), &moveEvent);
-    }
-    qApp->processEvents(); // update
-    qApp->processEvents(); // draw
-    QVERIFY(hoverItem->isHovered);
+    QTest::mouseMove(view.windowHandle(), view.mapFromScene(hoverItem->scenePos()));
+    QTRY_VERIFY(hoverItem->isHovered);
 
     scene.removeItem(hoverItem);
-    hoverItem->setAcceptsHoverEvents(false);
+    hoverItem->setAcceptHoverEvents(false);
     scene.addItem(hoverItem);
-    qApp->processEvents(); // <- delayed update is called
-    qApp->processEvents(); // <- scene schedules pending update
-    qApp->processEvents(); // <- pending update is sent to view
-    QVERIFY(!hoverItem->isHovered);
+    QTRY_VERIFY(!hoverItem->isHovered);
 }
 
 void tst_QGraphicsScene::focusItem()
@@ -1540,10 +1508,10 @@ void tst_QGraphicsScene::mouseGrabberItem()
             QCOMPARE(scene.mouseGrabberItem(), topMostItem);
 
             // Geometrical changes should not affect the mouse grabber.
-            item->setZValue(rand() % 500);
-            item2->setZValue(rand() % 500);
-            item->setPos(rand() % 50000, rand() % 50000);
-            item2->setPos(rand() % 50000, rand() % 50000);
+            item->setZValue(QRandomGenerator::global()->bounded(500));
+            item2->setZValue(QRandomGenerator::global()->bounded(500));
+            item->setPos(QRandomGenerator::global()->bounded(50000), QRandomGenerator::global()->bounded(50000));
+            item2->setPos(QRandomGenerator::global()->bounded(50000), QRandomGenerator::global()->bounded(50000));
         }
 
         QGraphicsSceneMouseEvent releaseEvent(QEvent::GraphicsSceneMouseRelease);
@@ -1572,22 +1540,22 @@ void tst_QGraphicsScene::mouseGrabberItem()
     QApplication::sendEvent(&scene, &moveEvent);
     QCOMPARE(scene.mouseGrabberItem(), item);
     item->setVisible(false);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QApplication::sendEvent(&scene, &pressEvent);
     QCOMPARE(scene.mouseGrabberItem(), item2);
     item2->setVisible(false);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QApplication::sendEvent(&scene, &moveEvent);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     item2->setVisible(true);
     QApplication::sendEvent(&scene, &moveEvent);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QApplication::sendEvent(&scene, &pressEvent);
     QApplication::sendEvent(&scene, &moveEvent);
     QCOMPARE(scene.mouseGrabberItem(), item2);
     scene.removeItem(item2);
     delete item2;
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 }
 
 void tst_QGraphicsScene::hoverEvents_siblings()
@@ -1610,11 +1578,7 @@ void tst_QGraphicsScene::hoverEvents_siblings()
 
     QGraphicsView view(&scene);
     view.setRenderHint(QPainter::Antialiasing, true);
-#if defined(Q_OS_WINCE)
-    view.setMinimumSize(230, 200);
-#else
     view.setMinimumSize(400, 300);
-#endif
     view.rotate(10);
     view.scale(1.7, 1.7);
     view.show();
@@ -1683,11 +1647,7 @@ void tst_QGraphicsScene::hoverEvents_parentChild()
 
     QGraphicsView view(&scene);
     view.setRenderHint(QPainter::Antialiasing, true);
-#if defined(Q_OS_WINCE)
-    view.setMinimumSize(230, 200);
-#else
     view.setMinimumSize(400, 300);
-#endif
     view.rotate(10);
     view.scale(1.7, 1.7);
     view.show();
@@ -1798,7 +1758,7 @@ void tst_QGraphicsScene::createItemGroup()
 
     // These share no common parent
     group = scene.createItemGroup(children3);
-    QCOMPARE(group->parentItem(), (QGraphicsItem *)0);
+    QCOMPARE(group->parentItem(), nullptr);
     scene.destroyItemGroup(group);
 
     // Make children3 children of parent3
@@ -1827,7 +1787,7 @@ void tst_QGraphicsScene::createItemGroup()
     scene.destroyItemGroup(group);
 
     QGraphicsItemGroup *emptyGroup = scene.createItemGroup(QList<QGraphicsItem *>());
-    QCOMPARE(emptyGroup->children(), QList<QGraphicsItem *>());
+    QVERIFY(emptyGroup->childItems().isEmpty());
     QVERIFY(!emptyGroup->parentItem());
     QCOMPARE(emptyGroup->scene(), &scene);
 }
@@ -1927,7 +1887,7 @@ void tst_QGraphicsScene::mouseEventPropagation()
     QCOMPARE(c->eventTypes.size(), 0);
     QCOMPARE(b->eventTypes.size(), 0);
     QCOMPARE(a->eventTypes.size(), 0);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     d->setAcceptedMouseButtons(Qt::RightButton);
 
@@ -1968,7 +1928,7 @@ void tst_QGraphicsScene::mouseEventPropagation()
     QCOMPARE(c->eventTypes.at(5), QEvent::UngrabMouse);
     QCOMPARE(b->eventTypes.size(), 0);
     QCOMPARE(a->eventTypes.size(), 0);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     // Disabled items eat events. c should not get this.
     d->setEnabled(false);
@@ -1980,7 +1940,7 @@ void tst_QGraphicsScene::mouseEventPropagation()
     QCOMPARE(c->eventTypes.size(), 6);
     QCOMPARE(b->eventTypes.size(), 0);
     QCOMPARE(a->eventTypes.size(), 0);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     // Send a left press. This goes to c.
     pressEvent.setButton(Qt::LeftButton);
@@ -2166,7 +2126,7 @@ void tst_QGraphicsScene::mouseEventPropagation_mouseMove()
 {
     Scene scene;
     scene.addRect(QRectF(5, 0, 12, 12));
-    scene.addRect(QRectF(15, 0, 12, 12))->setAcceptsHoverEvents(true);
+    scene.addRect(QRectF(15, 0, 12, 12))->setAcceptHoverEvents(true);
     for (int i = 0; i < 30; ++i) {
         QGraphicsSceneMouseEvent event(QEvent::GraphicsSceneMouseMove);
         event.setScenePos(QPointF(i, 5));
@@ -2245,7 +2205,7 @@ private:
     }
 };
 
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 void tst_QGraphicsScene::dragAndDrop_simple()
 {
     DndTester *item = new DndTester(QRectF(-10, -10, 20, 20));
@@ -2647,8 +2607,7 @@ void tst_QGraphicsScene::render()
     scene.render(&painter, targetRect, sourceRect, aspectRatioMode);
     painter.end();
 
-    const QString renderPath = QLatin1String(SRCDIR) + "/testData/render";
-    QString fileName = renderPath + QString("/%1.png").arg(QTest::currentDataTag());
+    QString fileName = QFINDTESTDATA(QString("/testData/render/%1.png").arg(QTest::currentDataTag()));
     QImage original(fileName);
     QVERIFY(!original.isNull());
 
@@ -2699,6 +2658,10 @@ void tst_QGraphicsScene::render()
 
 void tst_QGraphicsScene::renderItemsWithNegativeWidthOrHeight()
 {
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED) || defined(Q_OS_WINRT)
+    QSKIP("Test only works on platforms with resizable windows");
+#endif
+
     QGraphicsScene scene(0, 0, 150, 150);
 
     // Add item with negative width.
@@ -2732,6 +2695,7 @@ void tst_QGraphicsScene::renderItemsWithNegativeWidthOrHeight()
     QCOMPARE(actual, expected);
 }
 
+#ifndef QT_NO_CONTEXTMENU
 void tst_QGraphicsScene::contextMenuEvent()
 {
     QGraphicsScene scene;
@@ -2773,6 +2737,10 @@ protected:
 
 void tst_QGraphicsScene::contextMenuEvent_ItemIgnoresTransformations()
 {
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QSKIP("Test fails on some Android devices (QTBUG-44430)");
+#endif
+
     QGraphicsScene scene(0, 0, 200, 200);
     ContextMenuItem *item = new ContextMenuItem;
     item->setFlag(QGraphicsItem::ItemIgnoresTransformations);
@@ -2814,6 +2782,7 @@ void tst_QGraphicsScene::contextMenuEvent_ItemIgnoresTransformations()
         QVERIFY(!event.isAccepted());
     }
 }
+#endif // QT_NO_CONTEXTMENU
 
 void tst_QGraphicsScene::update()
 {
@@ -2826,7 +2795,7 @@ void tst_QGraphicsScene::update()
     rect->setPos(-100, -100);
 
     // This function forces indexing
-    scene.itemAt(0, 0);
+    itemAt(scene, 0, 0);
 
     qRegisterMetaType<QList<QRectF> >("QList<QRectF>");
     QSignalSpy spy(&scene, SIGNAL(changed(QList<QRectF>)));
@@ -2835,7 +2804,7 @@ void tst_QGraphicsScene::update()
     scene.update();
 
     // This function forces a purge, which will post an update signal
-    scene.itemAt(0, 0);
+    itemAt(scene, 0, 0);
 
     // This will process the pending update
     QApplication::instance()->processEvents();
@@ -2914,7 +2883,7 @@ protected:
     }
 };
 
-void tst_QGraphicsScene::event()
+void tst_QGraphicsScene::testEvent()
 {
     // Test that QGraphicsScene properly propagates events to QObject.
     CustomScene scene;
@@ -3140,7 +3109,6 @@ void tst_QGraphicsScene::tabFocus_sceneWithFocusableItems()
 
     // Check that everyone loses focus when the widget is hidden.
     widget.hide();
-    QTest::qWait(15);
     QTRY_VERIFY(!view->hasFocus());
     QVERIFY(!view->viewport()->hasFocus());
     QVERIFY(!scene.hasFocus());
@@ -3283,10 +3251,11 @@ void tst_QGraphicsScene::tabFocus_sceneWithNestedFocusWidgets()
     FocusWidget *widget1_1 = new FocusWidget;
     FocusWidget *widget1_2 = new FocusWidget;
     widget1_1->setParentItem(widget1);
-    widget1_1->scale(0.5, 0.5);
+    const QTransform scale(QTransform::fromScale(0.5, 0.5));
+    widget1_1->setTransform(scale, true);
     widget1_1->setPos(0, widget1->boundingRect().height() / 2);
     widget1_2->setParentItem(widget1);
-    widget1_2->scale(0.5, 0.5);
+    widget1_2->setTransform(scale, true);
     widget1_2->setPos(widget1->boundingRect().width() / 2, widget1->boundingRect().height() / 2);
 
     FocusWidget *widget2 = new FocusWidget;
@@ -3455,7 +3424,7 @@ void tst_QGraphicsScene::task139710_bspTreeCrash()
         // add 1000 more items - the BSP tree is now resized
         for (int i = 0; i < 1000; ++i) {
             QGraphicsRectItem *item = scene.addRect(QRectF(0, 0, 200, 200));
-            item->setPos(qrand() % 10000, qrand() % 10000);
+            item->setPos(QRandomGenerator::global()->bounded(10000), QRandomGenerator::global()->bounded(10000));
         }
 
         // trigger delayed item indexing for the first 1000 items
@@ -3464,7 +3433,7 @@ void tst_QGraphicsScene::task139710_bspTreeCrash()
         // add 1000 more items - the BSP tree is now resized
         for (int i = 0; i < 1000; ++i) {
             QGraphicsRectItem *item = scene.addRect(QRectF(0, 0, 200, 200));
-            item->setPos(qrand() % 10000, qrand() % 10000);
+            item->setPos(QRandomGenerator::global()->bounded(10000), QRandomGenerator::global()->bounded(10000));
         }
 
         // get items from the BSP tree and use them. there was junk in the tree
@@ -3518,6 +3487,8 @@ void tst_QGraphicsScene::task160653_selectionChanged()
 
     QSignalSpy spy(&scene, SIGNAL(selectionChanged()));
     QGraphicsView view(&scene);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowActive(&view));
     QTest::mouseClick(
         view.viewport(), Qt::LeftButton, 0, view.mapFromScene(scene.items().first()->scenePos()));
     QCOMPARE(spy.count(), 1);
@@ -3544,7 +3515,7 @@ void tst_QGraphicsScene::task250680_childClip()
     QVERIFY(QPathCompare::comparePaths(rect->clipPath().simplified(), path));
 
     QCOMPARE(scene.items(QRectF(320, 240, 5, 5)).size(), 2);
-    rect->rotate(45);
+    rect->setTransform(QTransform().rotate(45), true);
     QCOMPARE(scene.items(QRectF(320, 240, 5, 5)).size(), 2);
 }
 
@@ -3572,15 +3543,15 @@ void tst_QGraphicsScene::sorting()
     QGraphicsRectItem *c_2_1 = new QGraphicsRectItem(0, 0, 30, 30, c_2);
     QGraphicsRectItem *c_2_1_1 = new QGraphicsRectItem(0, 0, 20, 20, c_2_1);
     QGraphicsRectItem *c_2_2 = new QGraphicsRectItem(0, 0, 30, 30, c_2);
-    t_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_1_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_1_1_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_1_2->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_2->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_2_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_2_1_1->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
-    c_2_2->setBrush(QColor(qrand() % 256, qrand() % 256, qrand() % 256));
+    t_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_1_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_1_1_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_1_2->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_2->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_2_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_2_1_1->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
+    c_2_2->setBrush(QColor(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256)));
 
     c_1->setPos(23, 18);
     c_1_1->setPos(24, 28);
@@ -3623,24 +3594,60 @@ void tst_QGraphicsScene::sorting()
     // view.show();
 
     qDebug() << "items: {";
-    foreach (QGraphicsItem *item, scene.items(32, 31, 4, 55))
+    foreach (QGraphicsItem *item, scene.items(QRectF(32, 31, 4, 55)))
         qDebug() << "\t" << item->data(0).toString();
     qDebug() << "}";
 
-    QCOMPARE(scene.items(32, 31, 4, 55),
+    QCOMPARE(scene.items(QRectF(32, 31, 4, 55)),
              QList<QGraphicsItem *>()
              << c_1_2 << c_1_1_1 << c_1 << t_1);
-    QCOMPARE(scene.items(-53, 47, 136, 3),
+    QCOMPARE(scene.items(QRectF(-53, 47, 136, 3)),
              QList<QGraphicsItem *>()
              << c_2_2 << c_2_1 << c_2 << c_1_2 << c_1_1 << c_1 << t_1);
-    QCOMPARE(scene.items(-23, 79, 104, 3),
+    QCOMPARE(scene.items(QRectF(-23, 79, 104, 3)),
              QList<QGraphicsItem *>()
              << c_2_1_1 << c_1_1_1);
-    QCOMPARE(scene.items(-26, -3, 92, 79),
+    QCOMPARE(scene.items(QRectF(-26, -3, 92, 79)),
              QList<QGraphicsItem *>()
              << c_2_2 << c_2_1_1 << c_2_1 << c_2
              << c_1_2 << c_1_1_1 << c_1_1 << c_1
              << t_1);
+}
+
+void tst_QGraphicsScene::insertionOrder()
+{
+    QGraphicsScene scene;
+    const int numItems = 5;
+    QList<QGraphicsItem*> items;
+
+    for (int i = 0; i < numItems; ++i) {
+        QGraphicsRectItem* item = new QGraphicsRectItem(i * 20, i * 20, 200, 200);
+        item->setData(0, i);
+        items.append(item);
+        scene.addItem(item);
+    }
+
+    {
+        QList<QGraphicsItem*> itemList = scene.items();
+        QCOMPARE(itemList.count(), numItems);
+        for (int i = 0; i < itemList.count(); ++i) {
+            QCOMPARE(numItems-1-i, itemList.at(i)->data(0).toInt());
+        }
+    }
+
+    for (int i = 0; i < items.size(); ++i)
+    {
+        scene.removeItem(items.at(i));
+        scene.addItem(items.at(i));
+    }
+
+    {
+        QList<QGraphicsItem*> itemList = scene.items();
+        QCOMPARE(itemList.count(), numItems);
+        for (int i = 0; i < itemList.count(); ++i) {
+            QCOMPARE(numItems-1-i, itemList.at(i)->data(0).toInt());
+        }
+    }
 }
 
 class ChangedListener : public QObject
@@ -3887,11 +3894,11 @@ void tst_QGraphicsScene::initialFocus_data()
     QTest::addColumn<bool>("shouldHaveFocus");
 
     QTest::newRow("inactive scene, normal item") << false << false << false << false;
-    QTest::newRow("inactive scene, panel item") << false << false << true << false;
+    QTest::newRow("inactive scene, panel item") << false << false << true << true;
     QTest::newRow("inactive scene, normal item, explicit focus") << false << true << false << true;
     QTest::newRow("inactive scene, panel, explicit focus") << false << true << true << true;
     QTest::newRow("active scene, normal item") << true << false << false << false;
-    QTest::newRow("active scene, panel item") << true << false << true << false;
+    QTest::newRow("active scene, panel item") << true << false << true << true;
     QTest::newRow("active scene, normal item, explicit focus") << true << true << false << true;
     QTest::newRow("active scene, panel, explicit focus") << true << true << true << true;
 }
@@ -4002,6 +4009,10 @@ void tst_QGraphicsScene::polishItems2()
 
 void tst_QGraphicsScene::isActive()
 {
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QSKIP("Fails on Android (QTBUG-44430)");
+#endif
+
     QGraphicsScene scene1;
     QVERIFY(!scene1.isActive());
     QGraphicsScene scene2;
@@ -4045,7 +4056,6 @@ void tst_QGraphicsScene::isActive()
         QVERIFY(!scene2.hasFocus());
 
         toplevel1.hide();
-        QTest::qWait(50);
         QTRY_VERIFY(!scene1.isActive());
         QTRY_VERIFY(!scene2.isActive());
         QVERIFY(!scene1.hasFocus());
@@ -4075,6 +4085,7 @@ void tst_QGraphicsScene::isActive()
 
 
     {
+        const QRect availableGeometry = QGuiApplication::primaryScreen()->availableGeometry();
         QWidget toplevel2;
         QHBoxLayout *layout = new QHBoxLayout;
         toplevel2.setLayout(layout);
@@ -4088,12 +4099,13 @@ void tst_QGraphicsScene::isActive()
         QVERIFY(!scene1.hasFocus());
         QVERIFY(!scene2.hasFocus());
 
+        toplevel2.move(availableGeometry.topLeft() + QPoint(50, 50));
         toplevel2.show();
         QApplication::setActiveWindow(&toplevel2);
         QVERIFY(QTest::qWaitForWindowActive(&toplevel2));
         QCOMPARE(QApplication::activeWindow(), &toplevel2);
 
-        QVERIFY(scene1.isActive());
+        QTRY_VERIFY(scene1.isActive());
         QVERIFY(!scene2.isActive());
         QVERIFY(scene1.hasFocus());
         QVERIFY(!scene2.hasFocus());
@@ -4136,6 +4148,7 @@ void tst_QGraphicsScene::isActive()
         QVERIFY(!scene2.hasFocus());
 
         QGraphicsView topLevelView;
+        topLevelView.move(availableGeometry.topLeft() + QPoint(500, 50));
         topLevelView.show();
         QApplication::setActiveWindow(&topLevelView);
         topLevelView.setFocus();
@@ -4361,13 +4374,12 @@ void tst_QGraphicsScene::taskQT657_paintIntoCacheWithTransparentParts()
 
     QGraphicsProxyWidget *proxy = scene->addWidget(w);
     proxy->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-    proxy->rotate(15);
+    proxy->setTransform(QTransform().rotate(15), true);
 
     view->show();
     QVERIFY(QTest::qWaitForWindowExposed(view));
     view->repaints = 0;
     proxy->update(10, 10, 10, 10);
-    QTest::qWait(50);
     QTRY_VERIFY(view->repaints > 0);
 
     QPixmap pix;
@@ -4407,13 +4419,12 @@ void tst_QGraphicsScene::taskQTBUG_7863_paintIntoCacheWithTransparentParts()
 
         scene->addItem(backItem);
         rectItem->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
-        backItem->rotate(15);
+        backItem->setTransform(QTransform().rotate(15), true);
 
         view->show();
         QVERIFY(QTest::qWaitForWindowExposed(view));
         view->repaints = 0;
         rectItem->update(10, 10, 10, 10);
-        QTest::qWait(50);
         QTRY_VERIFY(view->repaints > 0);
 
         QPixmap pix;
@@ -4449,13 +4460,12 @@ void tst_QGraphicsScene::taskQTBUG_7863_paintIntoCacheWithTransparentParts()
 
         scene->addItem(rectItem);
         rectItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
-        rectItem->rotate(15);
+        rectItem->setTransform(QTransform().rotate(15), true);
 
         view->show();
         QVERIFY(QTest::qWaitForWindowExposed(view));
         view->repaints = 0;
         rectItem->update(10, 10, 10, 10);
-        QTest::qWait(50);
         QTRY_VERIFY(view->repaints > 0);
 
         QPixmap pix;
@@ -4490,13 +4500,12 @@ void tst_QGraphicsScene::taskQTBUG_7863_paintIntoCacheWithTransparentParts()
 
         scene->addItem(rectItem);
         rectItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
-        rectItem->rotate(15);
+        rectItem->setTransform(QTransform().rotate(15), true);
 
         view->show();
         QVERIFY(QTest::qWaitForWindowExposed(view));
         view->repaints = 0;
         rectItem->update(10, 10, 10, 10);
-        QTest::qWait(50);
         QTRY_VERIFY(view->repaints > 0);
 
         QPixmap pix;
@@ -4565,6 +4574,226 @@ void tst_QGraphicsScene::zeroScale()
     QTRY_COMPARE(cl.changes.count(), 2);
 }
 
+void tst_QGraphicsScene::focusItemChangedSignal()
+{
+    qRegisterMetaType<QGraphicsItem *>("QGraphicsItem *");
+    qRegisterMetaType<Qt::FocusReason>("Qt::FocusReason");
+
+    QGraphicsScene scene;
+    QSignalSpy spy(&scene, SIGNAL(focusItemChanged(QGraphicsItem *, QGraphicsItem *, Qt::FocusReason)));
+    QVERIFY(spy.isValid());
+    QCOMPARE(spy.count(), 0);
+    scene.setFocus();
+    QCOMPARE(spy.count(), 0);
+    QEvent activateEvent(QEvent::WindowActivate);
+    qApp->sendEvent(&scene, &activateEvent);
+    QCOMPARE(spy.count(), 0);
+
+    QGraphicsRectItem *topLevelItem1 = new QGraphicsRectItem;
+    topLevelItem1->setFlag(QGraphicsItem::ItemIsFocusable);
+    scene.addItem(topLevelItem1);
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(!topLevelItem1->hasFocus());
+
+    QGraphicsRectItem *topLevelItem2 = new QGraphicsRectItem;
+    topLevelItem2->setFlag(QGraphicsItem::ItemIsFocusable);
+    topLevelItem2->setFocus();
+    QVERIFY(!topLevelItem2->hasFocus());
+    scene.addItem(topLevelItem2);
+    QCOMPARE(spy.count(), 1);
+    QList<QVariant> arguments = spy.takeFirst();
+    QCOMPARE(arguments.size(), 3);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)topLevelItem2);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), nullptr);
+    QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::OtherFocusReason);
+    QVERIFY(topLevelItem2->hasFocus());
+
+    scene.clearFocus();
+    QCOMPARE(spy.count(), 1);
+    arguments = spy.takeFirst();
+    QCOMPARE(arguments.size(), 3);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), nullptr);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)topLevelItem2);
+    QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::OtherFocusReason);
+
+    scene.setFocus(Qt::MenuBarFocusReason);
+    QCOMPARE(spy.count(), 1);
+    arguments = spy.takeFirst();
+    QCOMPARE(arguments.size(), 3);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)topLevelItem2);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), nullptr);
+    QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::MenuBarFocusReason);
+
+    for (int i = 0; i < 3; ++i) {
+        topLevelItem1->setFocus(Qt::TabFocusReason);
+        arguments = spy.takeFirst();
+        QCOMPARE(arguments.size(), 3);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)topLevelItem1);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)topLevelItem2);
+        QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::TabFocusReason);
+
+        topLevelItem2->setFocus(Qt::TabFocusReason);
+        arguments = spy.takeFirst();
+        QCOMPARE(arguments.size(), 3);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)topLevelItem2);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)topLevelItem1);
+        QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::TabFocusReason);
+    }
+
+    // The following two are unexpected, but fixing this (i.e., losing and gaining focus
+    // when the scene activation changes) breaks quite a few tests so leave this fix
+    // for some future release. See QTBUG-28346.
+    QEvent deactivateEvent(QEvent::WindowDeactivate);
+    qApp->sendEvent(&scene, &deactivateEvent);
+    QEXPECT_FAIL("", "QTBUG-28346", Continue);
+    QCOMPARE(spy.count(), 1);
+    qApp->sendEvent(&scene, &activateEvent);
+    QEXPECT_FAIL("", "QTBUG-28346", Continue);
+    QCOMPARE(spy.count(), 1);
+
+    QGraphicsRectItem *panel1 = new QGraphicsRectItem;
+    panel1->setFlags(QGraphicsItem::ItemIsPanel | QGraphicsItem::ItemIsFocusable);
+    panel1->setFocus();
+    scene.addItem(panel1);
+    QCOMPARE(spy.count(), 1);
+    arguments = spy.takeFirst();
+    QCOMPARE(arguments.size(), 3);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)panel1);
+    QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)topLevelItem2);
+    QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::ActiveWindowFocusReason);
+
+    QGraphicsRectItem *panel2 = new QGraphicsRectItem;
+    panel2->setFlags(QGraphicsItem::ItemIsPanel | QGraphicsItem::ItemIsFocusable);
+    scene.addItem(panel2);
+    QCOMPARE(spy.count(), 0);
+
+    for (int i = 0; i < 3; ++i) {
+        scene.setActivePanel(panel2);
+        QCOMPARE(spy.count(), 1);
+        arguments = spy.takeFirst();
+        QCOMPARE(arguments.size(), 3);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)panel2);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)panel1);
+        QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::ActiveWindowFocusReason);
+
+        scene.setActivePanel(panel1);
+        QCOMPARE(spy.count(), 1);
+        arguments = spy.takeFirst();
+        QCOMPARE(arguments.size(), 3);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(0)), (QGraphicsItem *)panel1);
+        QCOMPARE(qvariant_cast<QGraphicsItem *>(arguments.at(1)), (QGraphicsItem *)panel2);
+        QCOMPARE(qvariant_cast<Qt::FocusReason>(arguments.at(2)), Qt::ActiveWindowFocusReason);
+    }
+
+}
+
+class ItemCountsPaintCalls : public QGraphicsRectItem
+{
+public:
+    ItemCountsPaintCalls(const QRectF & rect, QGraphicsItem *parent = 0)
+        : QGraphicsRectItem(rect, parent), repaints(0) {}
+    void paint ( QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget = 0 )
+    {
+        QGraphicsRectItem::paint(painter, option, widget);
+        ++repaints;
+    }
+    int repaints;
+};
+
+void tst_QGraphicsScene::minimumRenderSize()
+{
+    Q_CHECK_PAINTEVENTS
+
+    ItemCountsPaintCalls *bigParent = new ItemCountsPaintCalls(QRectF(0,0,100,100));
+    ItemCountsPaintCalls *smallChild = new ItemCountsPaintCalls(QRectF(0,0,10,10), bigParent);
+    ItemCountsPaintCalls *smallerGrandChild = new ItemCountsPaintCalls(QRectF(0,0,1,1), smallChild);
+    QGraphicsScene scene;
+    scene.addItem(bigParent);
+
+    CustomView view;
+    view.setScene(&scene);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    qApp->processEvents();
+
+    // Initially, everything should be repainted the same number of times
+    int viewRepaints = 0;
+    QTRY_VERIFY(view.repaints > viewRepaints);
+    viewRepaints = view.repaints;
+
+    QCOMPARE(viewRepaints, bigParent->repaints);
+    QCOMPARE(viewRepaints, smallChild->repaints);
+    QCOMPARE(viewRepaints, smallerGrandChild->repaints);
+
+    // Setting a minimum render size should cause a repaint
+    scene.setMinimumRenderSize(0.5);
+    qApp->processEvents();
+
+    QTRY_VERIFY(view.repaints > viewRepaints);
+    viewRepaints = view.repaints;
+
+    QCOMPARE(viewRepaints, bigParent->repaints);
+    QCOMPARE(viewRepaints, smallChild->repaints);
+    QCOMPARE(viewRepaints, smallerGrandChild->repaints);
+
+    // Scaling should cause a repaint of big items only.
+    view.scale(0.1, 0.1);
+    qApp->processEvents();
+
+    QTRY_VERIFY(view.repaints > viewRepaints);
+    viewRepaints = view.repaints;
+
+    QCOMPARE(viewRepaints, bigParent->repaints);
+    QCOMPARE(viewRepaints, smallChild->repaints);
+    QVERIFY(smallChild->repaints > smallerGrandChild->repaints);
+
+    // Scaling further should cause even fewer items to be repainted
+    view.scale(0.1, 0.1); // Stacks with previous scale
+    qApp->processEvents();
+
+    QTRY_VERIFY(view.repaints > viewRepaints);
+    viewRepaints = view.repaints;
+
+    QCOMPARE(viewRepaints, bigParent->repaints);
+    QVERIFY(bigParent->repaints > smallChild->repaints);
+    QVERIFY(smallChild->repaints > smallerGrandChild->repaints);
+}
+
+void tst_QGraphicsScene::focusOnTouch()
+{
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    scene.setSceneRect(0, 0, 100, 100);
+    QGraphicsRectItem *rect = scene.addRect(0, 0, 100, 100);
+    rect->setFlag(QGraphicsItem::ItemIsFocusable, true);
+
+    view.show();
+    QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
+
+    QVERIFY(!rect->hasFocus());
+
+    scene.setFocusOnTouch(false);
+
+    QTouchDevice device;
+    device.setType(QTouchDevice::TouchPad);
+    QList<QTouchEvent::TouchPoint> touchPoints;
+    QTouchEvent::TouchPoint point;
+    point.setScenePos(QPointF(10, 10));
+    point.setState(Qt::TouchPointPressed);
+    touchPoints.append(point);
+    QTouchEvent event(QEvent::TouchBegin, &device, Qt::NoModifier, Qt::TouchPointStates(),
+                      touchPoints);
+
+    QApplication::sendEvent(&scene, &event);
+
+    QVERIFY(!rect->hasFocus());
+    scene.setFocusOnTouch(true);
+
+    QApplication::sendEvent(&scene, &event);
+    QVERIFY(rect->hasFocus());
+}
+
 void tst_QGraphicsScene::taskQTBUG_15977_renderWithDeviceCoordinateCache()
 {
     QGraphicsScene scene;
@@ -4615,6 +4844,30 @@ void tst_QGraphicsScene::taskQTBUG_16401_focusItem()
     QVERIFY(!scene.focusItem());
     QApplication::sendEvent(&view, &focusIn);
     QVERIFY(!scene.focusItem());
+}
+
+void tst_QGraphicsScene::taskQTBUG_42915_focusNextPrevChild()
+{
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    scene.setSceneRect(1, 1, 198, 198);
+    view.setFocus();
+
+    QGraphicsWidget *widget1 = new QGraphicsWidget();
+    QGraphicsRectItem *rect1 = new QGraphicsRectItem(-50, -50, 100, 100, widget1);
+    rect1->setBrush(Qt::blue);
+    scene.addItem(widget1);
+    widget1->setPos(100, 100);
+    widget1->setFlags(QGraphicsItem::ItemIsPanel);
+
+    QGraphicsWidget *widget2 = new QGraphicsWidget(widget1);
+    widget2->setFocusPolicy(Qt::NoFocus);
+
+    view.show();
+    QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
+
+    QTest::keyEvent(QTest::Click, &view, Qt::Key_Tab);
 }
 
 QTEST_MAIN(tst_QGraphicsScene)

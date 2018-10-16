@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,43 +10,48 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 /*!
     \module QtGui
-    \title Qt GUI C++ API
+    \title Qt GUI C++ Classes
     \ingroup modules
+    \qtvariable gui
 
     \brief The Qt GUI module provides the basic enablers for graphical
     applications written with Qt.
 
     The Qt GUI module provides classes for windowing system
-    integration, event handling, OpenGL and OpenGL ES integration, 2D
-    graphics, imaging, fonts and typography. These classes are used
-    internally by Qt's user interface technologies and can also be
-    used directly, for instance to write applications using low-level
-    OpenGL ES graphics APIs.
+    integration, event handling, OpenGL and OpenGL ES integration,
+    Vulkan integration, 2D graphics, imaging, fonts and typography.
+    These classes are used internally by Qt's user interface technologies
+    and can also be used directly, for instance to write applications using
+    low-level OpenGL ES graphics APIs.
 
     To include the definitions of the module's classes, use the
     following directive:
 
     \snippet code/doc_src_qtgui.pro 0
 
-    See the \l {Qt GUI} page for more details.
+    \if !defined(qtforpython)
+    If you use \l qmake to build your projects, \l{Qt GUI} is included by
+    default. To disable Qt GUI, add the following line to your \c .pro file:
 
+    \snippet code/doc_src_qtgui.pro 1
+    \endif
 */
 
 /*!
@@ -62,16 +67,21 @@
 
     For application developers writing user interfaces, Qt provides
     higher level API's, like Qt Quick, that are much more suitable
-    than the enablers found in the Qt GUI module. 
+    than the enablers found in the Qt GUI module.
 
-    \section1 Getting started
+    \section1 Getting Started
 
     To include the definitions of the module's classes, use the
     following directive:
 
     \snippet code/doc_src_qtgui.pro 0
 
+    \if !defined(qtforpython)
+    If you use \l qmake to build your projects, Qt GUI is included by
+    default. To disable Qt GUI, add the following line to your \c .pro file:
 
+    \snippet code/doc_src_qtgui.pro 1
+    \endif
 
     \section1 Application Windows
 
@@ -115,22 +125,40 @@
 
 
 
-    \section1 OpenGL and OpenGL ES integration
+    \section1 OpenGL and OpenGL ES Integration
 
-    QWindow supports rendering using desktop OpenGL, OpenGL ES 1.1 and
-    OpenGL ES 2.0, depending on what the platform supports. OpenGL
-    rendering is enabled by setting the QWindow's surface type to
-    QSurface::OpenGLSurface, choosing the format attributes with
-    QSurfaceFormat, and then creating a QOpenGLContext to manage
-    the native OpenGL context. In addition, Qt has QOpenGLPaintDevice,
-    which enables the use of OpenGL accelerated QPainter rendering, as well as
-    convenience classes that simplify the writing of OpenGL code and hides the
-    complexities of extension handling and the differences between OpenGL ES 2
-    and desktop OpenGL. The convenience classes include QOpenGLFunctions that
-    lets an application use all the OpenGL ES 2 functions on desktop OpenGL
-    without having to manually resolve the OpenGL function pointers and some
-    classes that wrap native OpenGL resources in a simpler Qt API:
-    QOpenGLBuffer, QOpenGLFramebufferObject, and QOpenGLShaderProgram.
+    QWindow supports rendering using OpenGL and OpenGL ES, depending
+    on what the platform supports. OpenGL rendering is enabled by
+    setting the QWindow's surface type to QSurface::OpenGLSurface,
+    choosing the format attributes with QSurfaceFormat, and then
+    creating a QOpenGLContext to manage the native OpenGL context. In
+    addition, Qt has QOpenGLPaintDevice, which enables the use of
+    OpenGL accelerated QPainter rendering, as well as convenience
+    classes that simplify the writing of OpenGL code and hides the
+    complexities of extension handling and the differences between
+    OpenGL ES 2 and desktop OpenGL. The convenience classes include
+    QOpenGLFunctions that lets an application use all the OpenGL ES 2
+    functions on desktop OpenGL without having to manually resolve the
+    OpenGL function pointers, thus allowing cross-platform development
+    of applications targeting mobile or embedded devices, and some
+    classes that wrap native OpenGL functionality in a simpler Qt API:
+
+    \list
+    \li QOpenGLBuffer
+    \li QOpenGLFramebufferObject
+    \li QOpenGLShaderProgram
+    \li QOpenGLTexture
+    \li QOpenGLDebugLogger
+    \li QOpenGLTimerQuery
+    \li QOpenGLVertexArrayObject
+    \endlist
+
+    Finally, in order to provide better support for the newer versions
+    (3.0 and higher) of OpenGL, a versioned function wrapper mechanism
+    is also available: The QOpenGLFunction_N_N family of classes
+    expose all the functions in a given OpenGL version and profile,
+    allowing easy development of desktop applications relying on
+    modern, desktop-only OpenGL features.
 
     For more information, see the \l {OpenGL Window Example}.
 
@@ -140,31 +168,57 @@
 
     A \l {QWindow} created with the \l {QSurface::OpenGLSurface} can
     be used in combination with \l QPainter and \l QOpenGLPaintDevice
-    to have OpenGL hardware accellerated 2D graphics, by sacrificing
+    to have OpenGL hardware accelerated 2D graphics, by sacrificing
     some of the visual quality.
 
 
 
-    \section1 Qt GUI prior to Qt 5.0
+    \section1 Vulkan Integration
 
-    Prior to Qt 5.0, the Qt GUI library was the monolithic container
-    for all things relating to graphical user interfaces in Qt, and
-    included the Qt widget set, the item views, the graphics view
-    framework and also printing. Starting Qt 5, these classes have
-    been moved to the QtWidgets library. Printing has been
-    moved to the QtPrintSupport library.  Please note that these
-    libraries can be excluded from a Qt installation.
+    Qt 5.10 added support for \l {Vulkan}. This requires
+    the presence of the \l{LunarG Vulkan SDK}.
 
-    QtGui now contains only a small set of enablers, which are generally
-    useful for all graphical applications.
+    On Windows, the SDK sets the environment variable \c {VULKAN_SDK},
+    which will be detected by the \c {configure} script.
+
+    On Android, Vulkan headers were added in API level 24 of the NDK.
+
+    Relevant classes:
+
+    \list
+    \li QVulkanDeviceFunctions
+    \li QVulkanExtension
+    \li QVulkanFunctions
+    \li QVulkanInfoVector
+    \li QVulkanInstance
+    \li QVulkanWindow
+    \li QVulkanWindowRenderer
+    \endlist
+
+    For more information, see the \l{Hello Vulkan Widget Example}
+    and the \l {Hello Vulkan Window Example}.
 
     \section1 Drag and Drop
 
     More info in \l{Drag and Drop}
 
+    \section1 Licenses and Attributions
+
+    Qt GUI is available under commercial licenses from \l{The Qt Company}.
+    In addition, it is available under free software licenses. Since Qt 5.4,
+    these free software licenses are
+    \l{GNU Lesser General Public License, version 3}, or
+    the \l{GNU General Public License, version 2}.
+    See \l{Qt Licensing} for further details.
+
+    Furthermore, Qt GUI in Qt \QtVersion may contain third-party
+    modules under following permissive licenses:
+
+    \generatelist{groupsbymodule attributions-qtgui}
+
     \section1 Reference
     \list
-    \li \l{Qt GUI C++ API}
+    \li \l{Qt GUI C++ Classes}
         \list
         \li \l{Event Classes}
         \li \l{Painting Classes}
@@ -172,11 +226,3 @@
         \endlist
     \endlist
  */
-
-/*!
-    \group events
-    \title Event Classes
-    \ingroup groups
-
-    \brief Classes that provide UI and input events.
-*/

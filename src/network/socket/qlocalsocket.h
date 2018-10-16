@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,15 +40,13 @@
 #ifndef QLOCALSOCKET_H
 #define QLOCALSOCKET_H
 
+#include <QtNetwork/qtnetworkglobal.h>
 #include <QtCore/qiodevice.h>
 #include <QtNetwork/qabstractsocket.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(localserver);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_LOCALSOCKET
 
 class QLocalSocketPrivate;
 
@@ -83,21 +79,24 @@ public:
         ClosingState = QAbstractSocket::ClosingState
     };
 
-    QLocalSocket(QObject *parent = 0);
+    QLocalSocket(QObject *parent = nullptr);
     ~QLocalSocket();
 
+    void connectToServer(OpenMode openMode = ReadWrite);
     void connectToServer(const QString &name, OpenMode openMode = ReadWrite);
     void disconnectFromServer();
 
+    void setServerName(const QString &name);
     QString serverName() const;
     QString fullServerName() const;
 
     void abort();
-    virtual bool isSequential() const;
-    virtual qint64 bytesAvailable() const;
-    virtual qint64 bytesToWrite() const;
-    virtual bool canReadLine() const;
-    virtual void close();
+    virtual bool isSequential() const override;
+    virtual qint64 bytesAvailable() const override;
+    virtual qint64 bytesToWrite() const override;
+    virtual bool canReadLine() const override;
+    virtual bool open(OpenMode openMode = ReadWrite) override;
+    virtual void close() override;
     LocalSocketError error() const;
     bool flush();
     bool isValid() const;
@@ -110,10 +109,10 @@ public:
     qintptr socketDescriptor() const;
 
     LocalSocketState state() const;
-    bool waitForBytesWritten(int msecs = 30000);
+    bool waitForBytesWritten(int msecs = 30000) override;
     bool waitForConnected(int msecs = 30000);
     bool waitForDisconnected(int msecs = 30000);
-    bool waitForReadyRead(int msecs = 30000);
+    bool waitForReadyRead(int msecs = 30000) override;
 
 Q_SIGNALS:
     void connected();
@@ -122,8 +121,8 @@ Q_SIGNALS:
     void stateChanged(QLocalSocket::LocalSocketState socketState);
 
 protected:
-    virtual qint64 readData(char*, qint64);
-    virtual qint64 writeData(const char*, qint64);
+    virtual qint64 readData(char*, qint64) override;
+    virtual qint64 writeData(const char*, qint64) override;
 
 private:
     Q_DISABLE_COPY(QLocalSocket)
@@ -148,10 +147,6 @@ Q_NETWORK_EXPORT QDebug operator<<(QDebug, QLocalSocket::LocalSocketError);
 Q_NETWORK_EXPORT QDebug operator<<(QDebug, QLocalSocket::LocalSocketState);
 #endif
 
-#endif // QT_NO_LOCALSOCKET
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLOCALSOCKET_H

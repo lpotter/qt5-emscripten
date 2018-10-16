@@ -1,14 +1,7 @@
 CONFIG += testcase
 
-# This is temporary to start running the test as part of normal CI.
-CONFIG += insignificant_test # QTBUG-27732
-
-include($$QT_SOURCE_TREE/src/platformsupport/linuxaccessibility/linuxaccessibility.pri)
-
 TARGET = tst_qaccessibilitylinux
 SOURCES += tst_qaccessibilitylinux.cpp
 
-CONFIG += gui
-
-QT += gui gui-private widgets dbus testlib
+QT += gui-private widgets dbus testlib accessibility_support-private linuxaccessibility_support-private
 

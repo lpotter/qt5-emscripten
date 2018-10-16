@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,19 +39,16 @@
 
 #include "qdbusservicewatcher.h"
 #include "qdbusconnection.h"
-#include "qdbus_symbols_p.h"
+#include "qdbusutil_p.h"
 
 #include <QStringList>
 
 #include <private/qobject_p.h>
+#include <private/qdbusconnection_p.h>
 
 #ifndef QT_NO_DBUS
 
 QT_BEGIN_NAMESPACE
-
-Q_GLOBAL_STATIC_WITH_ARGS(QString, busService, (QLatin1String(DBUS_SERVICE_DBUS)))
-Q_GLOBAL_STATIC_WITH_ARGS(QString, busInterface, (QLatin1String(DBUS_INTERFACE_DBUS)))
-Q_GLOBAL_STATIC_WITH_ARGS(QString, signalName, (QLatin1String("NameOwnerChanged")))
 
 class QDBusServiceWatcherPrivate: public QObjectPrivate
 {
@@ -71,7 +66,6 @@ public:
     void _q_serviceOwnerChanged(const QString &, const QString &, const QString &);
     void setConnection(const QStringList &services, const QDBusConnection &c, QDBusServiceWatcher::WatchMode watchMode);
 
-    QStringList matchArgsForService(const QString &service);
     void addService(const QString &service);
     void removeService(const QString &service);
 };
@@ -90,7 +84,7 @@ void QDBusServiceWatcherPrivate::setConnection(const QStringList &s, const QDBus
 {
     if (connection.isConnected()) {
         // remove older rules
-        foreach (const QString &s, servicesWatched)
+        for (const QString &s : qAsConst(servicesWatched))
             removeService(s);
     }
 
@@ -100,45 +94,23 @@ void QDBusServiceWatcherPrivate::setConnection(const QStringList &s, const QDBus
 
     if (connection.isConnected()) {
         // add new rules
-        foreach (const QString &s, servicesWatched)
+        for (const QString &s : qAsConst(servicesWatched))
             addService(s);
     }
 }
 
-QStringList QDBusServiceWatcherPrivate::matchArgsForService(const QString &service)
-{
-    QStringList matchArgs;
-    matchArgs << service;
-
-    switch (watchMode) {
-    case QDBusServiceWatcher::WatchForOwnerChange:
-        break;
-
-    case QDBusServiceWatcher::WatchForRegistration:
-        matchArgs << QString::fromLatin1("", 0);
-        break;
-
-    case QDBusServiceWatcher::WatchForUnregistration:
-        matchArgs << QString() << QString::fromLatin1("", 0);
-        break;
-    }
-    return matchArgs;
-}
-
 void QDBusServiceWatcherPrivate::addService(const QString &service)
 {
-    QStringList matchArgs = matchArgsForService(service);
-    connection.connect(*busService(), QString(), *busInterface(), *signalName(),
-                       matchArgs, QString(), q_func(),
-                       SLOT(_q_serviceOwnerChanged(QString,QString,QString)));
+    QDBusConnectionPrivate *d = QDBusConnectionPrivate::d(connection);
+    if (d && d->shouldWatchService(service))
+        d->watchService(service, watchMode, q_func(), SLOT(_q_serviceOwnerChanged(QString,QString,QString)));
 }
 
 void QDBusServiceWatcherPrivate::removeService(const QString &service)
 {
-    QStringList matchArgs = matchArgsForService(service);
-    connection.disconnect(*busService(), QString(), *busInterface(), *signalName(),
-                          matchArgs, QString(), q_func(),
-                          SLOT(_q_serviceOwnerChanged(QString,QString,QString)));
+    QDBusConnectionPrivate *d = QDBusConnectionPrivate::d(connection);
+    if (d && d->shouldWatchService(service))
+        d->unwatchService(service, watchMode, q_func(), SLOT(_q_serviceOwnerChanged(QString,QString,QString)));
 }
 
 /*!
@@ -322,7 +294,7 @@ void QDBusServiceWatcher::addWatchedService(const QString &newService)
     still be signals pending delivery about \a service. Those signals will
     still be emitted whenever the D-Bus messages are processed.
 
-    This function returns true if any services were removed.
+    This function returns \c true if any services were removed.
 */
 bool QDBusServiceWatcher::removeWatchedService(const QString &service)
 {

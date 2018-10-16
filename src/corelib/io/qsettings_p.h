@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -68,6 +66,10 @@ QT_BEGIN_NAMESPACE
 
 #ifndef Q_OS_WIN
 #define QT_QSETTINGS_ALWAYS_CASE_SENSITIVE_AND_FORGET_ORIGINAL_KEY_ORDER
+#endif
+
+#if defined(Q_OS_WINRT)
+#define QT_QTSETTINGS_FORGET_ORIGINAL_KEY_ORDER
 #endif
 
 // used in testing framework
@@ -107,6 +109,8 @@ private:
 };
 #endif
 
+Q_DECLARE_TYPEINFO(QSettingsKey, Q_MOVABLE_TYPE);
+
 typedef QMap<QSettingsKey, QByteArray> UnparsedSettingsMap;
 typedef QMap<QSettingsKey, QVariant> ParsedSettingsMap;
 
@@ -131,6 +135,7 @@ public:
     int num;
     int maxNum;
 };
+Q_DECLARE_TYPEINFO(QSettingsGroup, Q_MOVABLE_TYPE);
 
 inline QString QSettingsGroup::toString() const
 {
@@ -215,7 +220,7 @@ public:
                                         const QString &organization, const QString &application);
     static QSettingsPrivate *create(const QString &fileName, QSettings::Format format);
 
-    static void processChild(QString key, ChildSpec spec, QMap<QString, QString> &result);
+    static void processChild(QStringRef key, ChildSpec spec, QStringList &result);
 
     // Variant streaming functions
     static QStringList variantListToStringList(const QVariantList &l);
@@ -233,24 +238,6 @@ public:
                                        QTextCodec *codec);
     static QStringList splitArgs(const QString &s, int idx);
 
-    /*
-    The numeric values of these enums define their search order. For example,
-    F_User | F_Organization is searched before F_System | F_Application,
-    because their values are respectively 1 and 2.
-    */
-    enum {
-#if !defined(Q_OS_BLACKBERRY)
-        F_Application = 0x0,
-        F_Organization = 0x1,
-        F_User = 0x0,
-        F_System = 0x2,
-        NumConfFiles = 4
-#else
-        SandboxConfFile = 0,
-        NumConfFiles = 1
-#endif
-    };
-
     QSettings::Format format;
     QSettings::Scope scope;
     QString organizationName;
@@ -260,9 +247,9 @@ public:
 protected:
     QStack<QSettingsGroup> groupStack;
     QString groupPrefix;
-    int spec;
     bool fallbacks;
     bool pendingChanges;
+    bool atomicSyncOnly = true;
     mutable QSettings::Status status;
 };
 
@@ -274,19 +261,19 @@ public:
     QConfFileSettingsPrivate(const QString &fileName, QSettings::Format format);
     ~QConfFileSettingsPrivate();
 
-    void remove(const QString &key);
-    void set(const QString &key, const QVariant &value);
-    bool get(const QString &key, QVariant *value) const;
+    void remove(const QString &key) override;
+    void set(const QString &key, const QVariant &value) override;
+    bool get(const QString &key, QVariant *value) const override;
 
-    QStringList children(const QString &prefix, ChildSpec spec) const;
+    QStringList children(const QString &prefix, ChildSpec spec) const override;
 
-    void clear();
-    void sync();
-    void flush();
-    bool isWritable() const;
-    QString fileName() const;
+    void clear() override;
+    void sync() override;
+    void flush() override;
+    bool isWritable() const override;
+    QString fileName() const override;
 
-    static bool readIniFile(const QByteArray &data, UnparsedSettingsMap *unparsedIniSections);
+    bool readIniFile(const QByteArray &data, UnparsedSettingsMap *unparsedIniSections);
     static bool readIniSection(const QSettingsKey &section, const QByteArray &data,
                                ParsedSettingsMap *settingsMap, QTextCodec *codec);
     static bool readIniLine(const QByteArray &data, int &dataPos, int &lineStart, int &lineLen,
@@ -295,16 +282,16 @@ public:
 private:
     void initFormat();
     void initAccess();
-    void syncConfFile(int confFileNo);
+    void syncConfFile(QConfFile *confFile);
     bool writeIniFile(QIODevice &device, const ParsedSettingsMap &map);
 #ifdef Q_OS_MAC
-    bool readPlistFile(const QString &fileName, ParsedSettingsMap *map) const;
-    bool writePlistFile(const QString &fileName, const ParsedSettingsMap &map) const;
+    bool readPlistFile(const QByteArray &data, ParsedSettingsMap *map) const;
+    bool writePlistFile(QIODevice &file, const ParsedSettingsMap &map) const;
 #endif
     void ensureAllSectionsParsed(QConfFile *confFile) const;
     void ensureSectionParsed(QConfFile *confFile, const QSettingsKey &key) const;
 
-    QScopedSharedPointer<QConfFile> confFiles[NumConfFiles];
+    QVector<QConfFile *> confFiles;
     QSettings::ReadFunc readFunc;
     QSettings::WriteFunc writeFunc;
     QString extension;

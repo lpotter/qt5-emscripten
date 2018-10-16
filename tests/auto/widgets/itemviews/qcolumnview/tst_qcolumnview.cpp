@@ -1,57 +1,44 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-
+#include "../../../../shared/fakedirmodel.h"
 #include <QtTest/QtTest>
-#include <qstandarditemmodel.h>
+#include <QtTest/private/qtesthelpers_p.h>
 #include <qitemdelegate.h>
 #include <qcolumnview.h>
 #include <private/qcolumnviewgrip_p.h>
 #include <private/qfilesystemmodel_p.h>
-#include <qdirmodel.h>
 #include <qstringlistmodel.h>
 #include <qdebug.h>
 #include <qitemdelegate.h>
 #include <qscrollbar.h>
 #include <private/qcolumnview_p.h>
+#include <qscreen.h>
 
 #define ANIMATION_DELAY 300
 
@@ -60,13 +47,10 @@ class tst_QColumnView : public QObject {
 
 public:
     tst_QColumnView();
-    virtual ~tst_QColumnView();
-
-public Q_SLOTS:
-    void init();
-    void cleanup();
 
 private slots:
+    void initTestCase();
+    void init();
     void rootIndex();
     void grips();
     void isIndexHidden();
@@ -106,6 +90,10 @@ private slots:
 
 protected slots:
     void setPreviewWidget();
+
+private:
+    QStandardItemModel m_fakeDirModel;
+    QModelIndex m_fakeDirHomeIndex;
 };
 
 class TreeModel : public QStandardItemModel
@@ -116,12 +104,14 @@ public:
         for (int j = 0; j < 10; ++j) {
             QStandardItem *parentItem = invisibleRootItem();
             for (int i = 0; i < 10; ++i) {
-                QStandardItem *item = new QStandardItem(QString("item %0").arg(i));
+                const QString iS =  QString::number(i);
+                const QString itemText = QLatin1String("item ") + iS;
+                QStandardItem *item = new QStandardItem(itemText);
                 parentItem->appendRow(item);
-                QStandardItem *item2 = new QStandardItem(QString("item %0").arg(i));
+                QStandardItem *item2 = new QStandardItem(itemText);
                 parentItem->appendRow(item2);
-                item2->appendRow(new QStandardItem(QString("item %0").arg(i)));
-                parentItem->appendRow(new QStandardItem(QString("file %0").arg(i)));
+                item2->appendRow(new QStandardItem(itemText));
+                parentItem->appendRow(new QStandardItem(QLatin1String("file ") + iS));
                 parentItem = item;
             }
         }
@@ -165,7 +155,8 @@ public:
         QColumnView::setSelection(rect, command);
     }
 
-    QRegion visualRegionForSelection(QItemSelection selection){
+    // visualRegionForSelection() is protected in QColumnView.
+    QRegion getVisualRegionForSelection(const QItemSelection &selection){
         return QColumnView::visualRegionForSelection(selection);
     }
 protected:
@@ -180,22 +171,19 @@ protected:
 
 tst_QColumnView::tst_QColumnView()
 {
+    QStandardItem *homeItem = populateFakeDirModel(&m_fakeDirModel);
+    m_fakeDirHomeIndex = m_fakeDirModel.indexFromItem(homeItem);
 }
 
-tst_QColumnView::~tst_QColumnView()
+void tst_QColumnView::initTestCase()
 {
+    QVERIFY(m_fakeDirHomeIndex.isValid());
+    QVERIFY(m_fakeDirModel.rowCount(m_fakeDirHomeIndex) > 1); // Needs some entries in 'home'.
 }
 
 void tst_QColumnView::init()
 {
     qApp->setLayoutDirection(Qt::LeftToRight);
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
-
-void tst_QColumnView::cleanup()
-{
 }
 
 void tst_QColumnView::rootIndex()
@@ -266,8 +254,7 @@ void tst_QColumnView::rootIndex()
 void tst_QColumnView::grips()
 {
     QColumnView view;
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     QCOMPARE(view.resizeGripsVisible(), true);
 
     view.setResizeGripsVisible(true);
@@ -288,7 +275,7 @@ void tst_QColumnView::grips()
         for (int i = 0 ; i < list.count(); ++i) {
             if (QAbstractItemView *view = qobject_cast<QAbstractItemView*>(list.at(i))) {
                 if (view->isVisible())
-                    QVERIFY(view->cornerWidget() == 0);
+                    QVERIFY(!view->cornerWidget());
             }
         }
     }
@@ -302,8 +289,7 @@ void tst_QColumnView::isIndexHidden()
     ColumnView view;
     QModelIndex idx;
     QCOMPARE(view.IsIndexHidden(idx), false);
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     QCOMPARE(view.IsIndexHidden(idx), false);
 }
 
@@ -311,22 +297,20 @@ void tst_QColumnView::indexAt()
 {
     QColumnView view;
     QCOMPARE(view.indexAt(QPoint(0,0)), QModelIndex());
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
 
-    QModelIndex home = model.index(QDir::homePath());
-    QModelIndex homeFile = model.index(0, 0, home);
+    QModelIndex homeFile = m_fakeDirModel.index(0, 0, m_fakeDirHomeIndex);
     if (!homeFile.isValid())
         return;
-    view.setRootIndex(home);
+    view.setRootIndex(m_fakeDirHomeIndex);
     QRect rect = view.visualRect(QModelIndex());
     QVERIFY(!rect.isValid());
     rect = view.visualRect(homeFile);
     QVERIFY(rect.isValid());
 
     QModelIndex child;
-    for (int i = 0; i < model.rowCount(home); ++i) {
-        child = model.index(i, 0, home);
+    for (int i = 0; i < m_fakeDirModel.rowCount(m_fakeDirHomeIndex); ++i) {
+        child = m_fakeDirModel.index(i, 0, m_fakeDirHomeIndex);
         rect = view.visualRect(child);
         QVERIFY(rect.isValid());
         if (i > 0)
@@ -339,8 +323,8 @@ void tst_QColumnView::indexAt()
         QTest::qWait(200);
 
         // test that the second row doesn't start at 0
-        if (model.rowCount(child) > 0) {
-            child = model.index(0, 0, child);
+        if (m_fakeDirModel.rowCount(child) > 0) {
+            child = m_fakeDirModel.index(0, 0, child);
             QVERIFY(child.isValid());
             rect = view.visualRect(child);
             QVERIFY(rect.isValid());
@@ -361,9 +345,9 @@ void tst_QColumnView::scrollContentsBy_data()
 void tst_QColumnView::scrollContentsBy()
 {
     QFETCH(bool, reverse);
-    if (reverse)
-        qApp->setLayoutDirection(Qt::RightToLeft);
     ColumnView view;
+    if (reverse)
+        view.setLayoutDirection(Qt::RightToLeft);
     view.ScrollContentsBy(-1, -1);
     view.ScrollContentsBy(0, 0);
 
@@ -390,12 +374,16 @@ void tst_QColumnView::scrollTo()
 {
     QFETCH(bool, reverse);
     QFETCH(bool, giveFocus);
-    if (reverse)
-        qApp->setLayoutDirection(Qt::RightToLeft);
     QWidget topLevel;
+    if (reverse)
+        topLevel.setLayoutDirection(Qt::RightToLeft);
     ColumnView view(&topLevel);
     view.resize(200, 200);
     topLevel.show();
+    topLevel.activateWindow();
+    QTestPrivate::centerOnScreen(&topLevel);
+    QVERIFY(QTest::qWaitForWindowActive(&topLevel));
+
     view.scrollTo(QModelIndex(), QAbstractItemView::EnsureVisible);
     QCOMPARE(view.HorizontalOffset(), 0);
 
@@ -418,12 +406,15 @@ void tst_QColumnView::scrollTo()
     QWidget w;
     w.show();
 
+    QCOMPARE(view.HorizontalOffset(), 0);
     if (giveFocus)
         view.setFocus(Qt::OtherFocusReason);
     else
         view.clearFocus();
 
+    QCOMPARE(view.HorizontalOffset(), 0);
     qApp->processEvents();
+    QCOMPARE(view.HorizontalOffset(), 0);
     QTRY_COMPARE(view.hasFocus(), giveFocus);
     // scroll to the right
     int level = 0;
@@ -439,6 +430,8 @@ void tst_QColumnView::scrollTo()
         if (level >= 2) {
             if (!reverse) {
                 QTRY_VERIFY(view.HorizontalOffset() < 0);
+                qDebug() << "last=" << last
+                             << " ; HorizontalOffset= " << view.HorizontalOffset();
                 QTRY_VERIFY(last > view.HorizontalOffset());
             } else {
                 QTRY_VERIFY(view.HorizontalOffset() > 0);
@@ -456,10 +449,15 @@ void tst_QColumnView::scrollTo()
         view.scrollTo(index, QAbstractItemView::EnsureVisible);
         index = index.parent();
         if (start != level) {
-            if (!reverse)
+            if (!reverse) {
                 QTRY_VERIFY(last < view.HorizontalOffset());
-            else
+            } else {
+                if (last <= view.HorizontalOffset()) {
+                    qDebug() << "Test failure. last=" << last
+                             << " ; HorizontalOffset= " << view.HorizontalOffset();
+                }
                 QTRY_VERIFY(last > view.HorizontalOffset());
+            }
         }
         level--;
         last = view.HorizontalOffset();
@@ -488,57 +486,57 @@ void tst_QColumnView::moveCursor_data()
 void tst_QColumnView::moveCursor()
 {
     QFETCH(bool, reverse);
-    if (reverse)
-        qApp->setLayoutDirection(Qt::RightToLeft);
     ColumnView view;
-
+    if (reverse)
+        view.setLayoutDirection(Qt::RightToLeft);
     // don't crash
     view.MoveCursor(ColumnView::MoveUp, Qt::NoModifier);
 
     // don't do anything
     QCOMPARE(view.MoveCursor(ColumnView::MoveEnd, Qt::NoModifier), QModelIndex());
 
-    QDirModel model;
-    view.setModel(&model);
-    QModelIndex home = model.index(QDir::homePath());
+    view.setModel(&m_fakeDirModel);
     QModelIndex ci = view.currentIndex();
     QCOMPARE(view.MoveCursor(ColumnView::MoveUp, Qt::NoModifier), QModelIndex());
     QCOMPARE(view.MoveCursor(ColumnView::MoveDown, Qt::NoModifier), QModelIndex());
 
     // left at root
-    view.setCurrentIndex(model.index(0,0));
+    view.setCurrentIndex(m_fakeDirModel.index(0,0));
     ColumnView::PublicCursorAction action = reverse ? ColumnView::MoveRight : ColumnView::MoveLeft;
-    QCOMPARE(view.MoveCursor(action, Qt::NoModifier), model.index(0,0));
+    QCOMPARE(view.MoveCursor(action, Qt::NoModifier), m_fakeDirModel.index(0,0));
 
     // left shouldn't move up
     int i = 0;
-    ci = model.index(0, 0);
-    while (i < model.rowCount() - 1 && !model.hasChildren(ci))
-        ci = model.index(++i, 0);
-    QVERIFY(model.hasChildren(ci));
+    ci = m_fakeDirModel.index(0, 0);
+    while (i < m_fakeDirModel.rowCount() - 1 && !m_fakeDirModel.hasChildren(ci))
+        ci = m_fakeDirModel.index(++i, 0);
+    QVERIFY(m_fakeDirModel.hasChildren(ci));
     view.setCurrentIndex(ci);
     action = reverse ? ColumnView::MoveRight : ColumnView::MoveLeft;
     QCOMPARE(view.MoveCursor(action, Qt::NoModifier), ci);
 
     // now move to the left (i.e. move over one column)
-    view.setCurrentIndex(home);
-    QCOMPARE(view.MoveCursor(action, Qt::NoModifier), home.parent());
+    view.setCurrentIndex(m_fakeDirHomeIndex);
+    QCOMPARE(view.MoveCursor(action, Qt::NoModifier), m_fakeDirHomeIndex.parent());
 
     // right
     action = reverse ? ColumnView::MoveLeft : ColumnView::MoveRight;
     view.setCurrentIndex(ci);
     QModelIndex mc = view.MoveCursor(action, Qt::NoModifier);
-    QCOMPARE(mc, model.index(0,0, ci));
+    QCOMPARE(mc, m_fakeDirModel.index(0,0, ci));
 
-    // next one should move down
-    QModelIndex idx = model.index(0, 0, ci);
-    while (model.hasChildren(idx) && model.rowCount(ci) > idx.row() + 1)
+    // for empty directories (no way to go 'right'), next one should move down
+    QModelIndex idx = m_fakeDirModel.index(0, 0, ci);
+    const int rowCount = m_fakeDirModel.rowCount(ci);
+    while (m_fakeDirModel.hasChildren(idx) && rowCount > idx.row() + 1) {
         idx = idx.sibling(idx.row() + 1, idx.column());
+    }
+    static const char error[]  = "This test requires an empty directory followed by another directory.";
+    QVERIFY2(idx.isValid(), error);
+    QVERIFY2(!m_fakeDirModel.hasChildren(idx), error);
+    QVERIFY2(idx.row() + 1 < rowCount, error);
     view.setCurrentIndex(idx);
     mc = view.MoveCursor(action, Qt::NoModifier);
-#ifdef Q_OS_MAC
-    QEXPECT_FAIL("", "QTBUG-23697", Continue);
-#endif
     QCOMPARE(mc, idx.sibling(idx.row() + 1, idx.column()));
 }
 
@@ -547,20 +545,18 @@ void tst_QColumnView::selectAll()
     ColumnView view;
     view.selectAll();
 
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     view.selectAll();
     QVERIFY(view.selectionModel()->selectedIndexes().count() >= 0);
 
-    QModelIndex home = model.index(QDir::homePath());
-    view.setCurrentIndex(home);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
     view.selectAll();
     QVERIFY(view.selectionModel()->selectedIndexes().count() > 0);
 
     QModelIndex file;
-    for (int i = 0; i < model.rowCount(home); ++i)
-        if (!model.hasChildren(model.index(i, 0, home))) {
-            file = model.index(i, 0, home);
+    for (int i = 0; i < m_fakeDirModel.rowCount(m_fakeDirHomeIndex); ++i)
+        if (!m_fakeDirModel.hasChildren(m_fakeDirModel.index(i, 0, m_fakeDirHomeIndex))) {
+            file = m_fakeDirModel.index(i, 0, m_fakeDirHomeIndex);
             break;
         }
     view.setCurrentIndex(file);
@@ -568,30 +564,26 @@ void tst_QColumnView::selectAll()
     QVERIFY(view.selectionModel()->selectedIndexes().count() > 0);
 
     view.setCurrentIndex(QModelIndex());
-    QVERIFY(view.selectionModel()->selectedIndexes().count() == 0);
+    QCOMPARE(view.selectionModel()->selectedIndexes().count(), 0);
 }
 
 void tst_QColumnView::clicked()
 {
     ColumnView view;
 
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     view.resize(800,300);
     view.show();
 
-    QModelIndex home = model.index(QDir::homePath());
-    QVERIFY(home.isValid());
-    view.setCurrentIndex(home);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
     QTest::qWait(ANIMATION_DELAY);
 
-    QModelIndex parent = home.parent();
+    QModelIndex parent = m_fakeDirHomeIndex.parent();
     QVERIFY(parent.isValid());
 
-    qRegisterMetaType<QModelIndex>("QModelIndex");
     QSignalSpy clickedSpy(&view, SIGNAL(clicked(QModelIndex)));
 
-    QPoint localPoint = view.visualRect(home).center();
+    QPoint localPoint = view.visualRect(m_fakeDirHomeIndex).center();
     QTest::mouseClick(view.viewport(), Qt::LeftButton, 0, localPoint);
     QCOMPARE(clickedSpy.count(), 1);
     qApp->processEvents();
@@ -601,7 +593,7 @@ void tst_QColumnView::clicked()
 
     for (int i = 0; i < view.createdColumns.count(); ++i) {
         QAbstractItemView *column = view.createdColumns.at(i);
-        if (column && column->selectionModel() && (column->rootIndex() == home))
+        if (column && column->selectionModel() && (column->rootIndex() == m_fakeDirHomeIndex))
                 QVERIFY(column->selectionModel()->selectedIndexes().isEmpty());
     }
 }
@@ -609,13 +601,11 @@ void tst_QColumnView::clicked()
 void tst_QColumnView::selectedColumns()
 {
     ColumnView view;
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     view.resize(800,300);
     view.show();
 
-    QModelIndex home = model.index(QDir::homePath());
-    view.setCurrentIndex(home);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
 
     QTest::qWait(ANIMATION_DELAY);
 
@@ -623,7 +613,7 @@ void tst_QColumnView::selectedColumns()
         QAbstractItemView *column = view.createdColumns.at(i);
         if (!column)
             continue;
-        if (!column->rootIndex().isValid() || column->rootIndex() == home)
+        if (!column->rootIndex().isValid() || column->rootIndex() == m_fakeDirHomeIndex)
             continue;
         QTRY_VERIFY(column->currentIndex().isValid());
     }
@@ -640,15 +630,13 @@ void tst_QColumnView::setSelection()
 void tst_QColumnView::setSelectionModel()
 {
     ColumnView view;
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     view.show();
 
-    QModelIndex home = model.index(QDir::homePath());
-    view.setCurrentIndex(home);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
     QTest::qWait(ANIMATION_DELAY);
 
-    QItemSelectionModel *selectionModel = new QItemSelectionModel(&model);
+    QItemSelectionModel *selectionModel = new QItemSelectionModel(&m_fakeDirModel);
     view.setSelectionModel(selectionModel);
 
     bool found = false;
@@ -665,23 +653,14 @@ void tst_QColumnView::visualRegionForSelection()
 {
     ColumnView view;
     QItemSelection emptyItemSelection;
-    QCOMPARE(QRegion(), view.visualRegionForSelection(emptyItemSelection));
+    QCOMPARE(QRegion(), view.getVisualRegionForSelection(emptyItemSelection));
 
     // a region that isn't empty
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
 
-    // On Windows CE the home directory might actually be empty.
-#ifndef Q_OS_WINCE
-    QString location = QDir::homePath();
-#else
-    QString location = QLatin1String("/Windows");
-#endif
 
-    QModelIndex home = model.index(location);
-    QVERIFY(model.rowCount(home) > 1);
-    QItemSelection itemSelection(model.index(0, 0, home), model.index(model.rowCount(home) - 1, 0, home));
-    QVERIFY(QRegion() != view.visualRegionForSelection(itemSelection));
+    QItemSelection itemSelection(m_fakeDirModel.index(0, 0, m_fakeDirHomeIndex), m_fakeDirModel.index(m_fakeDirModel.rowCount(m_fakeDirHomeIndex) - 1, 0, m_fakeDirHomeIndex));
+    QVERIFY(QRegion() != view.getVisualRegionForSelection(itemSelection));
 }
 
 void tst_QColumnView::moveGrip_basic()
@@ -714,9 +693,9 @@ void tst_QColumnView::moveGrip_data()
 void tst_QColumnView::moveGrip()
 {
     QFETCH(bool, reverse);
-    if (reverse)
-        qApp->setLayoutDirection(Qt::RightToLeft);
     QWidget topLevel;
+    if (reverse)
+        topLevel.setLayoutDirection(Qt::RightToLeft);
     ColumnView view(&topLevel);
     TreeModel model;
     view.setModel(&model);
@@ -724,7 +703,7 @@ void tst_QColumnView::moveGrip()
     view.setCurrentIndex(home);
     view.resize(640, 200);
     topLevel.show();
-    QTest::qWait(ANIMATION_DELAY);
+    QVERIFY(QTest::qWaitForWindowActive(&topLevel));
 
     int columnNum = view.createdColumns.count() - 2;
     QVERIFY(columnNum >= 0);
@@ -786,15 +765,15 @@ void tst_QColumnView::gripMoved()
 void tst_QColumnView::preview()
 {
     QColumnView view;
-    QCOMPARE(view.previewWidget(), (QWidget*)0);
+    QCOMPARE(view.previewWidget(), nullptr);
     TreeModel model;
     view.setModel(&model);
-    QCOMPARE(view.previewWidget(), (QWidget*)0);
+    QCOMPARE(view.previewWidget(), nullptr);
     QModelIndex home = model.index(0, 0);
     QVERIFY(home.isValid());
     QVERIFY(model.hasChildren(home));
     view.setCurrentIndex(home);
-    QCOMPARE(view.previewWidget(), (QWidget*)0);
+    QCOMPARE(view.previewWidget(), nullptr);
 
     QModelIndex file;
     QVERIFY(model.rowCount(home) > 0);
@@ -853,10 +832,8 @@ void tst_QColumnView::sizes()
     view.setColumnWidths(newSizes);
     QCOMPARE(view.columnWidths(), visibleSizes);
 
-    QDirModel model;
-    view.setModel(&model);
-    QModelIndex home = model.index(QDir::homePath());
-    view.setCurrentIndex(home);
+    view.setModel(&m_fakeDirModel);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
 
     QList<int> postSizes = view.columnWidths().mid(0, newSizes.count());
     QCOMPARE(postSizes, newSizes.mid(0, postSizes.count()));
@@ -877,8 +854,7 @@ void tst_QColumnView::rowDelegate()
     QItemDelegate *d = new QItemDelegate;
     view.setItemDelegateForRow(3, d);
 
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     for (int i = 0; i < view.createdColumns.count(); ++i) {
         QAbstractItemView *column = view.createdColumns.at(i);
         QCOMPARE(column->itemDelegateForRow(3), (QAbstractItemDelegate*)d);
@@ -890,13 +866,11 @@ void tst_QColumnView::resize()
 {
     QWidget topLevel;
     ColumnView view(&topLevel);
-    QDirModel model;
-    view.setModel(&model);
+    view.setModel(&m_fakeDirModel);
     view.resize(200, 200);
 
     topLevel.show();
-    QModelIndex home = model.index(QDir::homePath()).parent();
-    view.setCurrentIndex(home);
+    view.setCurrentIndex(m_fakeDirHomeIndex);
     QTest::qWait(ANIMATION_DELAY);
     view.resize(200, 300);
     QTest::qWait(ANIMATION_DELAY);
@@ -960,7 +934,6 @@ void tst_QColumnView::parentCurrentIndex()
     QVERIFY(second.isValid());
     QVERIFY(third.isValid());
     view.setCurrentIndex(third);
-    QTest::qWait(ANIMATION_DELAY);
     QTRY_COMPARE(view.createdColumns[0]->currentIndex(), first);
     QTRY_COMPARE(view.createdColumns[1]->currentIndex(), second);
     QTRY_COMPARE(view.createdColumns[2]->currentIndex(), third);
@@ -972,12 +945,13 @@ void tst_QColumnView::parentCurrentIndex()
     QVERIFY(second.isValid());
     QVERIFY(third.isValid());
     view.setCurrentIndex(third);
-    QTest::qWait(ANIMATION_DELAY);
     QTRY_COMPARE(view.createdColumns[0]->currentIndex(), first);
     QTRY_COMPARE(view.createdColumns[1]->currentIndex(), second);
 
+#ifndef Q_OS_WINRT
     // The next two lines should be removed when QTBUG-22707 is resolved.
     QEXPECT_FAIL("", "QTBUG-22707", Abort);
+#endif
     QVERIFY(view.createdColumns[2]);
 
     QTRY_COMPARE(view.createdColumns[2]->currentIndex(), third);
@@ -1025,13 +999,14 @@ void tst_QColumnView::dynamicModelChanges()
     ColumnView view;
     view.setModel(&model);
     view.setItemDelegate(&delegate);
+    QTestPrivate::centerOnScreen(&view);
     view.show();
 
     QStandardItem *item = new QStandardItem(QLatin1String("item"));
     model.appendRow(item);
 
-    QTest::qWait(200); //let the time for painting to occur
-    QCOMPARE(delegate.paintedIndexes.count(), 1);
+    QVERIFY(QTest::qWaitForWindowExposed(&view)); //let the time for painting to occur
+    QTRY_COMPARE(delegate.paintedIndexes.count(), 1);
     QCOMPARE(*delegate.paintedIndexes.begin(), model.index(0,0));
 
 

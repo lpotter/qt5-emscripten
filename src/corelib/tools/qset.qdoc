@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -96,45 +96,35 @@
 */
 
 /*!
-    \fn QSet::QSet()
+    \fn template <class T> QSet<T>::QSet()
 
     Constructs an empty set.
 
     \sa clear()
 */
 
-/*!
-    \fn QSet::QSet(const QSet<T> &other)
+/*! \fn template <class T> QSet<T>::QSet(std::initializer_list<T> list)
+    \since 5.1
 
-    Constructs a copy of \a other.
+    Constructs a set with a copy of each of the elements in the
+    initializer list \a list.
 
-    This operation occurs in \l{constant time}, because QSet is
-    \l{implicitly shared}. This makes returning a QSet from a
-    function very fast. If a shared instance is modified, it will be
-    copied (copy-on-write), and this takes \l{linear time}.
-
-    \sa operator=()
+    This function is only available if the program is being
+    compiled in C++11 mode.
 */
 
 /*!
-    \fn QSet<T> &QSet::operator=(const QSet<T> &other)
-
-    Assigns the \a other set to this set and returns a reference to
-    this set.  
-*/
-
-/*!
-    \fn void QSet::swap(QSet<T> &other)
+    \fn template <class T> void QSet<T>::swap(QSet<T> &other)
 
     Swaps set \a other with this set. This operation is very fast and
     never fails.
 */
 
 /*!
-    \fn bool QSet::operator==(const QSet<T> &other) const
+    \fn template <class T> bool QSet<T>::operator==(const QSet<T> &other) const
 
-    Returns true if the \a other set is equal to this set; otherwise
-    returns false.
+    Returns \c true if the \a other set is equal to this set; otherwise
+    returns \c false.
 
     Two sets are considered equal if they contain the same elements.
 
@@ -144,10 +134,10 @@
 */
 
 /*!
-    \fn bool QSet::operator!=(const QSet<T> &other) const
+    \fn template <class T> bool QSet<T>::operator!=(const QSet<T> &other) const
 
-    Returns true if the \a other set is not equal to this set; otherwise
-    returns false.
+    Returns \c true if the \a other set is not equal to this set; otherwise
+    returns \c false.
 
     Two sets are considered equal if they contain the same elements.
 
@@ -157,7 +147,7 @@
 */
 
 /*!
-    \fn int QSet::size() const
+    \fn template <class T> int QSet<T>::size() const
 
     Returns the number of items in the set.
 
@@ -165,16 +155,16 @@
 */
 
 /*!
-    \fn bool QSet::isEmpty() const
+    \fn template <class T> bool QSet<T>::isEmpty() const
 
-    Returns true if the set contains no elements; otherwise returns
+    Returns \c true if the set contains no elements; otherwise returns
     false.
 
     \sa size()
 */
 
 /*!
-    \fn int QSet::capacity() const
+    \fn template <class T> int QSet<T>::capacity() const
 
     Returns the number of buckets in the set's internal hash
     table.
@@ -187,7 +177,7 @@
     \sa reserve(), squeeze()
 */
 
-/*! \fn void QSet::reserve(int size)
+/*! \fn template <class T> void QSet<T>::reserve(int size)
 
     Ensures that the set's internal hash table consists of at
     least \a size buckets.
@@ -211,7 +201,7 @@
 */
 
 /*!
-    \fn void QSet::squeeze()
+    \fn template <class T> void QSet<T>::squeeze()
 
     Reduces the size of the set's internal hash table to save
     memory.
@@ -224,7 +214,7 @@
 */
 
 /*!
-    \fn void QSet::detach()
+    \fn template <class T> void QSet<T>::detach()
 
     \internal
 
@@ -234,23 +224,23 @@
     \sa isDetached()
 */
 
-/*! \fn bool QSet::isDetached() const
+/*! \fn template <class T> bool QSet<T>::isDetached() const
 
     \internal
 
-    Returns true if the set's internal data isn't shared with any
-    other set object; otherwise returns false.
+    Returns \c true if the set's internal data isn't shared with any
+    other set object; otherwise returns \c false.
 
     \sa detach()
 */
 
 /*!
-    \fn void QSet::setSharable(bool sharable)
+    \fn template <class T> void QSet<T>::setSharable(bool sharable)
     \internal
 */
 
 /*!
-    \fn void QSet::clear()
+    \fn template <class T> void QSet<T>::clear()
 
     Removes all elements from the set.
 
@@ -258,17 +248,17 @@
 */
 
 /*!
-    \fn bool QSet::remove(const T &value)
+    \fn template <class T> bool QSet<T>::remove(const T &value)
 
     Removes any occurrence of item \a value from the set. Returns
-    true if an item was actually removed; otherwise returns false.
+    true if an item was actually removed; otherwise returns \c false.
 
     \sa contains(), insert()
 */
 
 /*!
-    \fn QSet::iterator QSet::erase(iterator pos)
-    \since 4.2
+    \fn template <class T> QSet<T>::iterator QSet<T>::erase(const_iterator pos)
+    \since 5.7
 
     Removes the item at the iterator position \a pos from the set, and
     returns an iterator positioned at the next item in the set.
@@ -280,7 +270,13 @@
     \sa remove(), find()
 */
 
-/*! \fn QSet::const_iterator QSet::find(const T &value) const
+/*!
+    \fn template <class T> QSet<T>::iterator QSet<T>::erase(iterator pos)
+    \since 4.2
+    \overload
+*/
+
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::find(const T &value) const
     \since 4.2
 
     Returns a const iterator positioned at the item \a value in the
@@ -290,16 +286,16 @@
     \sa constFind(), contains()
 */
 
-/*! \fn QSet::iterator QSet::find(const T &value)
+/*! \fn template <class T> QSet<T>::iterator QSet<T>::find(const T &value)
     \since 4.2
     \overload
 
     Returns a non-const iterator positioned at the item \a value in
     the set. If the set contains no item \a value, the function
-    returns end(). 
+    returns end().
 */
 
-/*! \fn QSet::const_iterator QSet::constFind(const T &value) const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::constFind(const T &value) const
     \since 4.2
 
     Returns a const iterator positioned at the item \a value in the
@@ -310,88 +306,134 @@
 */
 
 /*!
-    \fn bool QSet::contains(const T &value) const
+    \fn template <class T> bool QSet<T>::contains(const T &value) const
 
-    Returns true if the set contains item \a value; otherwise returns
+    Returns \c true if the set contains item \a value; otherwise returns
     false.
 
     \sa insert(), remove(), find()
 */
 
 /*!
-    \fn bool QSet::contains(const QSet<T> &other) const
+    \fn template <class T> bool QSet<T>::contains(const QSet<T> &other) const
     \since 4.6
 
-    Returns true if the set contains all items from the \a other set;
-    otherwise returns false.
+    Returns \c true if the set contains all items from the \a other set;
+    otherwise returns \c false.
 
     \sa insert(), remove(), find()
 */
 
-/*! \fn QSet::const_iterator QSet::begin() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::begin() const
 
-    Returns a const \l{STL-style iterator} positioned at the first
+    Returns a const \l{STL-style iterators}{STL-style iterator} positioned at the first
     item in the set.
 
     \sa constBegin(), end()
 */
 
-/*! \fn QSet::iterator QSet::begin()
+/*! \fn template <class T> QSet<T>::iterator QSet<T>::begin()
     \since 4.2
     \overload
 
-    Returns a non-const \l{STL-style iterator} positioned at the first
-    item in the set.  
+    Returns a non-const \l{STL-style iterators}{STL-style iterator} positioned at the first
+    item in the set.
 */
 
-/*! \fn QSet::const_iterator QSet::cbegin() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::cbegin() const
     \since 5.0
 
-    Returns a const \l{STL-style iterator} positioned at the first
+    Returns a const \l{STL-style iterators}{STL-style iterator} positioned at the first
     item in the set.
 
     \sa begin(), cend()
 */
 
-/*! \fn QSet::const_iterator QSet::constBegin() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::constBegin() const
 
-    Returns a const \l{STL-style iterator} positioned at the first
+    Returns a const \l{STL-style iterators}{STL-style iterator} positioned at the first
     item in the set.
 
     \sa begin(), constEnd()
 */
 
-/*! \fn QSet::const_iterator QSet::end() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::end() const
 
-    Returns a const \l{STL-style iterator} positioned at the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} positioned at the imaginary
     item after the last item in the set.
 
     \sa constEnd(), begin()
 */
 
-/*! \fn QSet::iterator QSet::end()
+/*! \fn template <class T> QSet<T>::iterator QSet<T>::end()
     \since 4.2
     \overload
 
-    Returns a non-const \l{STL-style iterator} pointing to the
+    Returns a non-const \l{STL-style iterators}{STL-style iterator} pointing to the
     imaginary item after the last item in the set.
 */
 
-/*! \fn QSet::const_iterator QSet::cend() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::cend() const
     \since 5.0
 
-    Returns a const \l{STL-style iterator} pointing to the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
     item after the last item in the set.
 
     \sa cbegin(), end()
 */
 
-/*! \fn QSet::const_iterator QSet::constEnd() const
+/*! \fn template <class T> QSet<T>::const_iterator QSet<T>::constEnd() const
 
-    Returns a const \l{STL-style iterator} pointing to the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
     item after the last item in the set.
 
     \sa constBegin(), end()
+*/
+
+/*! \fn template <class T> QSet<T>::reverse_iterator QSet<T>::rbegin()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    item in the set, in reverse order.
+
+    \sa begin(), crbegin(), rend()
+*/
+
+/*! \fn template <class T> QSet<T>::const_reverse_iterator QSet<T>::rbegin() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn template <class T> QSet<T>::const_reverse_iterator QSet<T>::crbegin() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    item in the set, in reverse order.
+
+    \sa begin(), rbegin(), rend()
+*/
+
+/*! \fn template <class T> QSet<T>::reverse_iterator QSet<T>::rend()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to one past
+    the last item in the set, in reverse order.
+
+    \sa end(), crend(), rbegin()
+*/
+
+/*! \fn template <class T> QSet<T>::const_reverse_iterator QSet<T>::rend() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn template <class T> QSet<T>::const_reverse_iterator QSet<T>::crend() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to one
+    past the last item in the set, in reverse order.
+
+    \sa end(), rend(), rbegin()
 */
 
 /*!
@@ -455,8 +497,40 @@
     Typedef for T. Provided for STL compatibility.
 */
 
+/*! \typedef QSet::reverse_iterator
+    \since 5.6
+
+    The QSet::reverse_iterator typedef provides an STL-style non-const
+    reverse iterator for QSet.
+
+    It is simply a typedef for \c{std::reverse_iterator<QSet::iterator>}.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
+
+    \sa QSet::rbegin(), QSet::rend(), QSet::const_reverse_iterator, QSet::iterator
+*/
+
+/*! \typedef QSet::const_reverse_iterator
+    \since 5.6
+
+    The QSet::const_reverse_iterator typedef provides an STL-style const
+    reverse iterator for QSet.
+
+    It is simply a typedef for \c{std::reverse_iterator<QSet::const_iterator>}.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
+
+    \sa QSet::rbegin(), QSet::rend(), QSet::reverse_iterator, QSet::const_iterator
+*/
+
 /*!
-    \fn QSet::const_iterator QSet::insert(const T &value)
+    \fn template <class T> QSet<T>::insert(const T &value)
 
     Inserts item \a value into the set, if \a value isn't already
     in the set, and returns an iterator pointing at the inserted
@@ -466,7 +540,7 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::unite(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::unite(const QSet<T> &other)
 
     Each item in the \a other set that isn't already in this set is
     inserted into this set. A reference to this set is returned.
@@ -475,40 +549,50 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::intersect(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::intersect(const QSet<T> &other)
 
     Removes all items from this set that are not contained in the
     \a other set. A reference to this set is returned.
 
-    \sa operator&=(), unite(), subtract()
+    \sa intersects(), operator&=(), unite(), subtract()
 */
 
 /*!
-    \fn QSet<T> &QSet::subtract(const QSet<T> &other)
+    \fn template <class T> bool QSet<T>::intersects(const QSet<T> &other) const
+    \since 5.6
 
-    Removes all items from  this set that are contained in the 
+    Returns \c true if this set has at least one item in common with
+    \a other.
+
+    \sa contains(), intersect()
+*/
+
+/*!
+    \fn template <class T> QSet<T> &QSet<T>::subtract(const QSet<T> &other)
+
+    Removes all items from  this set that are contained in the
     \a other set. Returns a reference to this set.
 
     \sa operator-=(), unite(), intersect()
 */
 
 /*!
-    \fn bool QSet::empty() const
+    \fn template <class T> bool QSet<T>::empty() const
 
-    Returns true if the set is empty. This function is provided
-    for STL compatibility. It is equivalent to isEmpty().  
+    Returns \c true if the set is empty. This function is provided
+    for STL compatibility. It is equivalent to isEmpty().
 */
 
 /*!
-    \fn bool QSet::count() const
+    \fn template <class T> bool QSet<T>::count() const
 
     Same as size().
 */
 
 /*!
-    \fn QSet<T> &QSet::operator<<(const T &value)
-    \fn QSet<T> &QSet::operator+=(const T &value)
-    \fn QSet<T> &QSet::operator|=(const T &value)
+    \fn template <class T> QSet<T> &QSet<T>::operator<<(const T &value)
+    \fn template <class T> QSet<T> &QSet<T>::operator+=(const T &value)
+    \fn template <class T> QSet<T> &QSet<T>::operator|=(const T &value)
 
     Inserts a new item \a value and returns a reference to the set.
     If \a value already exists in the set, the set is left unchanged.
@@ -517,9 +601,9 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::operator-=(const T &value)
+    \fn template <class T> QSet<T> &QSet<T>::operator-=(const T &value)
 
-    Removes the occurrence of item \a value from the set, if 
+    Removes the occurrence of item \a value from the set, if
     it is found, and returns a reference to the set. If the
     \a value is not contained the set, nothing is removed.
 
@@ -527,8 +611,8 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::operator|=(const QSet<T> &other)
-    \fn QSet<T> &QSet::operator+=(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::operator|=(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::operator+=(const QSet<T> &other)
 
     Same as unite(\a other).
 
@@ -536,7 +620,7 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::operator&=(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::operator&=(const QSet<T> &other)
 
     Same as intersect(\a other).
 
@@ -544,17 +628,17 @@
 */
 
 /*!
-    \fn QSet<T> &QSet::operator&=(const T &value)
+    \fn template <class T> QSet<T> &QSet<T>::operator&=(const T &value)
 
     \overload
 
     Same as intersect(\e{other}), if we consider \e{other} to be a set
-    that contains the singleton \a value.  
+    that contains the singleton \a value.
 */
 
 
 /*!
-    \fn QSet<T> &QSet::operator-=(const QSet<T> &other)
+    \fn template <class T> QSet<T> &QSet<T>::operator-=(const QSet<T> &other)
 
     Same as subtract(\a{other}).
 
@@ -562,17 +646,17 @@
 */
 
 /*!
-    \fn QSet<T> QSet::operator|(const QSet<T> &other) const
-    \fn QSet<T> QSet::operator+(const QSet<T> &other) const
+    \fn template <class T> QSet<T> QSet<T>::operator|(const QSet<T> &other) const
+    \fn template <class T> QSet<T> QSet<T>::operator+(const QSet<T> &other) const
 
-    Returns a new QSet that is the union of this set and the 
+    Returns a new QSet that is the union of this set and the
     \a other set.
 
     \sa unite(), operator|=(), operator&(), operator-()
 */
 
 /*!
-    \fn QSet<T> QSet::operator&(const QSet<T> &other) const
+    \fn template <class T> QSet<T> QSet<T>::operator&(const QSet<T> &other) const
 
     Returns a new QSet that is the intersection of this set and the
     \a other set.
@@ -581,7 +665,7 @@
 */
 
 /*!
-    \fn QSet<T> QSet::operator-(const QSet<T> &other) const
+    \fn template <class T> QSet<T> QSet<T>::operator-(const QSet<T> &other) const
 
     Returns a new QSet that is the set difference of this set and
     the \a other set, i.e., this set - \a other set.
@@ -611,9 +695,6 @@
     unless you need to change the QSet through the iterator. Const
     iterators are slightly faster, and can improve code readability.
 
-    QSet\<T\>::iterator allows you to iterate over a QSet\<T\> and
-    modify it as you go (using QSet::erase()). However, 
-
     The default QSet::iterator constructor creates an uninitialized
     iterator. You must initialize it using a function like
     QSet::begin(), QSet::end(), or QSet::insert() before you can
@@ -633,8 +714,12 @@
 
     \snippet code/doc_src_qset.cpp 10
 
-    Multiple iterators can be used on the same set. However, you may
-    not attempt to modify the container while iterating on it.
+    Multiple iterators can be used on the same set.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
 
     \sa QSet::const_iterator, QMutableSetIterator
 */
@@ -672,15 +757,17 @@
 
     \snippet code/doc_src_qset.cpp 12
 
-    Multiple iterators can be used on the same set. However, you may
-    not attempt to modify the container while iterating on it.
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
 
     \sa QSet::iterator, QSetIterator
 */
 
 /*!
-    \fn QSet::iterator::iterator()
-    \fn QSet::const_iterator::const_iterator()
+    \fn template <class T> QSet<T>::iterator::iterator()
+    \fn template <class T> QSet<T>::const_iterator::const_iterator()
 
     Constructs an uninitialized iterator.
 
@@ -691,9 +778,9 @@
     \sa QSet::begin(), QSet::end()
 */
 
-/*! 
-    \fn QSet::iterator::iterator(typename Hash::iterator i)
-    \fn QSet::const_iterator::const_iterator(typename Hash::const_iterator i)
+/*!
+    \fn template <class T> QSet<T>::iterator::iterator(typename Hash::iterator i)
+    \fn template <class T> QSet<T>::const_iterator::const_iterator(typename Hash::const_iterator i)
 
     \internal
 */
@@ -735,14 +822,14 @@
 */
 
 /*!
-    \fn QSet::iterator::iterator(const iterator &other)
-    \fn QSet::const_iterator::const_iterator(const const_iterator &other)
+    \fn template <class T> QSet<T>::iterator::iterator(const iterator &other)
+    \fn template <class T> QSet<T>::const_iterator::const_iterator(const const_iterator &other)
 
     Constructs a copy of \a other.
 */
 
 /*!
-    \fn QSet::const_iterator::const_iterator(const iterator &other)
+    \fn template <class T> QSet<T>::const_iterator::const_iterator(const iterator &other)
     \since 4.2
     \overload
 
@@ -750,15 +837,15 @@
 */
 
 /*!
-    \fn QSet::iterator &QSet::iterator::operator=(const iterator &other)
-    \fn QSet::const_iterator &QSet::const_iterator::operator=(const const_iterator &other)
+    \fn template <class T> QSet<T>::iterator &QSet<T>::iterator::operator=(const iterator &other)
+    \fn template <class T> QSet<T>::const_iterator &QSet<T>::const_iterator::operator=(const const_iterator &other)
 
     Assigns \a other to this iterator.
 */
 
 /*!
-    \fn const T &QSet::iterator::operator*() const
-    \fn const T &QSet::const_iterator::operator*() const
+    \fn template <class T> const T &QSet<T>::iterator::operator*() const
+    \fn template <class T> const T &QSet<T>::const_iterator::operator*() const
 
     Returns a reference to the current item.
 
@@ -766,8 +853,8 @@
 */
 
 /*!
-    \fn const T *QSet::iterator::operator->() const
-    \fn const T *QSet::const_iterator::operator->() const
+    \fn template <class T> const T *QSet<T>::iterator::operator->() const
+    \fn template <class T> const T *QSet<T>::const_iterator::operator->() const
 
     Returns a pointer to the current item.
 
@@ -775,49 +862,49 @@
 */
 
 /*!
-    \fn bool QSet::iterator::operator==(const iterator &other) const
-    \fn bool QSet::const_iterator::operator==(const const_iterator &other) const
+    \fn template <class T> bool QSet<T>::iterator::operator==(const iterator &other) const
+    \fn template <class T> bool QSet<T>::const_iterator::operator==(const const_iterator &other) const
 
-    Returns true if \a other points to the same item as this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to the same item as this
+    iterator; otherwise returns \c false.
 
     \sa operator!=()
 */
 
 /*!
-    \fn bool QSet::iterator::operator==(const const_iterator &other) const
-    \fn bool QSet::iterator::operator!=(const const_iterator &other) const
+    \fn template <class T> bool QSet<T>::iterator::operator==(const const_iterator &other) const
+    \fn template <class T> bool QSet<T>::iterator::operator!=(const const_iterator &other) const
 
     \overload
 */
 
 /*!
-    \fn bool QSet::iterator::operator!=(const iterator &other) const
-    \fn bool QSet::const_iterator::operator!=(const const_iterator &other) const
+    \fn template <class T> bool QSet<T>::iterator::operator!=(const iterator &other) const
+    \fn template <class T> bool QSet<T>::const_iterator::operator!=(const const_iterator &other) const
 
-    Returns true if \a other points to a different item than this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to a different item than this
+    iterator; otherwise returns \c false.
 
     \sa operator==()
 */
 
 /*!
-    \fn QSet::iterator &QSet::iterator::operator++()
-    \fn QSet::const_iterator &QSet::const_iterator::operator++()
+    \fn template <class T> QSet<T>::iterator &QSet<T>::iterator::operator++()
+    \fn template <class T> QSet<T>::const_iterator &QSet<T>::const_iterator::operator++()
 
     The prefix ++ operator (\c{++it}) advances the iterator to the
     next item in the set and returns an iterator to the new current
     item.
 
-    Calling this function on QSet::constEnd() leads to
+    Calling this function on QSet<T>::constEnd() leads to
     undefined results.
 
     \sa operator--()
 */
 
 /*!
-    \fn QSet::iterator QSet::iterator::operator++(int)
-    \fn QSet::const_iterator QSet::const_iterator::operator++(int)
+    \fn template <class T> QSet<T>::iterator QSet<T>::iterator::operator++(int)
+    \fn template <class T> QSet<T>::const_iterator QSet<T>::const_iterator::operator++(int)
 
     \overload
 
@@ -827,8 +914,8 @@
 */
 
 /*!
-    \fn QSet::iterator &QSet::iterator::operator--()
-    \fn QSet::const_iterator &QSet::const_iterator::operator--()
+    \fn template <class T> QSet<T>::iterator &QSet<T>::iterator::operator--()
+    \fn template <class T> QSet<T>::const_iterator &QSet<T>::const_iterator::operator--()
 
     The prefix -- operator (\c{--it}) makes the preceding item
     current and returns an iterator to the new current item.
@@ -840,8 +927,8 @@
 */
 
 /*!
-    \fn QSet::iterator QSet::iterator::operator--(int)
-    \fn QSet::const_iterator QSet::const_iterator::operator--(int)
+    \fn template <class T> QSet<T>::iterator QSet<T>::iterator::operator--(int)
+    \fn template <class T> QSet<T>::const_iterator QSet<T>::const_iterator::operator--(int)
 
     \overload
 
@@ -850,8 +937,8 @@
 */
 
 /*!
-    \fn QSet::iterator QSet::iterator::operator+(int j) const
-    \fn QSet::const_iterator QSet::const_iterator::operator+(int j) const
+    \fn template <class T> QSet<T>::iterator QSet<T>::iterator::operator+(int j) const
+    \fn template <class T> QSet<T>::const_iterator QSet<T>::const_iterator::operator+(int j) const
 
     Returns an iterator to the item at \a j positions forward from
     this iterator. (If \a j is negative, the iterator goes backward.)
@@ -862,8 +949,8 @@
 */
 
 /*!
-    \fn QSet::iterator QSet::iterator::operator-(int j) const
-    \fn QSet::const_iterator QSet::const_iterator::operator-(int j) const
+    \fn template <class T> QSet<T>::iterator QSet<T>::iterator::operator-(int j) const
+    \fn template <class T> QSet<T>::const_iterator QSet<T>::const_iterator::operator-(int j) const
 
     Returns an iterator to the item at \a j positions backward from
     this iterator. (If \a j is negative, the iterator goes forward.)
@@ -874,8 +961,8 @@
 */
 
 /*!
-    \fn QSet::iterator &QSet::iterator::operator+=(int j)
-    \fn QSet::const_iterator &QSet::const_iterator::operator+=(int j)
+    \fn template <class T> QSet<T>::iterator &QSet<T>::iterator::operator+=(int j)
+    \fn template <class T> QSet<T>::const_iterator &QSet<T>::const_iterator::operator+=(int j)
 
     Advances the iterator by \a j items. (If \a j is negative, the
     iterator goes backward.)
@@ -886,8 +973,8 @@
 */
 
 /*!
-    \fn QSet::iterator &QSet::iterator::operator-=(int j)
-    \fn QSet::const_iterator &QSet::const_iterator::operator-=(int j)
+    \fn template <class T> QSet<T>::iterator &QSet<T>::iterator::operator-=(int j)
+    \fn template <class T> QSet<T>::const_iterator &QSet<T>::const_iterator::operator-=(int j)
 
     Makes the iterator go back by \a j items. (If \a j is negative,
     the iterator goes forward.)
@@ -897,7 +984,7 @@
     \sa operator+=(), operator-()
 */
 
-/*! \fn QList<T> QSet<T>::toList() const
+/*! \fn template <class T> QList<T> QSet<T>::toList() const
 
     Returns a new QList containing the elements in the set. The
     order of the elements in the QList is undefined.
@@ -909,7 +996,7 @@
     \sa fromList(), QList::fromSet()
 */
 
-/*! \fn QList<T> QSet<T>::values() const
+/*! \fn template <class T> QList<T> QSet<T>::values() const
 
     Returns a new QList containing the elements in the set. The
     order of the elements in the QList is undefined.
@@ -920,7 +1007,7 @@
 */
 
 
-/*! \fn QSet<T> QSet<T>::fromList(const QList<T> &list)
+/*! \fn template <class T> QSet<T> QSet<T>::fromList(const QList<T> &list)
 
     Returns a new QSet object containing the data contained in \a
     list. Since QSet doesn't allow duplicates, the resulting QSet
@@ -935,7 +1022,7 @@
 */
 
 /*!
-    \fn QDataStream &operator<<(QDataStream &out, const QSet<T> &set)
+    \fn template <class T> QDataStream &operator<<(QDataStream &out, const QSet<T> &set)
     \relates QSet
 
     Writes the \a set to stream \a out.
@@ -946,7 +1033,7 @@
 */
 
 /*!
-    \fn QDataStream &operator>>(QDataStream &in, QSet<T> &set)
+    \fn template <class T> QDataStream &operator>>(QDataStream &in, QSet<T> &set)
     \relates QSet
 
     Reads a set from stream \a in into \a set.
@@ -954,4 +1041,15 @@
     This function requires the value type to implement \c operator>>().
 
     \sa{Serializing Qt Data Types}{Format of the QDataStream operators}
+*/
+
+/*!
+    \fn template <class T> uint qHash(const QSet<T> &key, uint seed = 0)
+    \relates QHash
+    \since 5.5
+
+    Returns the hash value for the \a key, using \a seed to seed the calculation.
+
+    The hash value is independent of the order of elements in \a key, that is, sets
+    that contain the same elements hash to the same value.
 */

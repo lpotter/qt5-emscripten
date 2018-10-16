@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2018 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,15 +41,16 @@
 #include "qplatformdefs.h"
 
 #include "qplugin.h"
+#include "qcoreapplication.h"
 #include "qpluginloader.h"
 #include <qfileinfo.h>
-#include "qlibrary_p.h"
+#include "qfactoryloader_p.h"
 #include "qdebug.h"
 #include "qdir.h"
 
-#ifndef QT_NO_LIBRARY
-
 QT_BEGIN_NAMESPACE
+
+#if QT_CONFIG(library)
 
 /*!
     \class QPluginLoader
@@ -106,6 +106,33 @@ QT_BEGIN_NAMESPACE
 */
 
 /*!
+    \class QStaticPlugin
+    \inmodule QtCore
+    \since 5.2
+
+    \brief QStaticPlugin is a struct containing a reference to a
+    static plugin instance together with its meta data.
+
+    \sa QPluginLoader, {How to Create Qt Plugins}
+*/
+
+/*!
+    \fn QObject *QStaticPlugin::instance()
+
+    Returns the plugin instance.
+
+    \sa QPluginLoader::staticInstances()
+*/
+
+/*!
+    \fn const char *QStaticPlugin::rawMetaData()
+
+    Returns the raw meta data for the plugin.
+
+    \sa metaData(), Q_PLUGIN_METADATA()
+*/
+
+/*!
     Constructs a plugin loader with the given \a parent.
 */
 QPluginLoader::QPluginLoader(QObject *parent)
@@ -119,7 +146,7 @@ QPluginLoader::QPluginLoader(QObject *parent)
 
     To be loadable, the file's suffix must be a valid suffix for a
     loadable library in accordance with the platform, e.g. \c .so on
-    Unix, - \c .dylib on Mac OS X, and \c .dll on Windows. The suffix
+    Unix, - \c .dylib on \macos and iOS, and \c .dll on Windows. The suffix
     can be verified with QLibrary::isLibrary().
 
     \sa setFileName()
@@ -128,6 +155,7 @@ QPluginLoader::QPluginLoader(const QString &fileName, QObject *parent)
     : QObject(parent), d(0), did_load(false)
 {
     setFileName(fileName);
+    setLoadHints(QLibrary::PreventUnloadHint);
 }
 
 /*!
@@ -191,8 +219,8 @@ QJsonObject QPluginLoader::metaData() const
 }
 
 /*!
-    Loads the plugin and returns true if the plugin was loaded
-    successfully; otherwise returns false. Since instance() always
+    Loads the plugin and returns \c true if the plugin was loaded
+    successfully; otherwise returns \c false. Since instance() always
     calls this function before resolving any symbols it is not
     necessary to call it explicitly. In some situations you might want
     the plugin loaded in advance, in which case you would use this
@@ -214,8 +242,8 @@ bool QPluginLoader::load()
 
 
 /*!
-    Unloads the plugin and returns true if the plugin could be
-    unloaded; otherwise returns false.
+    Unloads the plugin and returns \c true if the plugin could be
+    unloaded; otherwise returns \c false.
 
     This happens automatically on application termination, so you
     shouldn't normally need to call this function.
@@ -241,7 +269,7 @@ bool QPluginLoader::unload()
 }
 
 /*!
-    Returns true if the plugin is loaded; otherwise returns false.
+    Returns \c true if the plugin is loaded; otherwise returns \c false.
 
     \sa load()
  */
@@ -250,14 +278,67 @@ bool QPluginLoader::isLoaded() const
     return d && d->pHnd && d->instance;
 }
 
+#if defined(QT_SHARED)
+static QString locatePlugin(const QString& fileName)
+{
+    const bool isAbsolute = QDir::isAbsolutePath(fileName);
+    if (isAbsolute) {
+        QFileInfo fi(fileName);
+        if (fi.isFile()) {
+            return fi.canonicalFilePath();
+        }
+    }
+    QStringList prefixes = QLibraryPrivate::prefixes_sys();
+    prefixes.prepend(QString());
+    QStringList suffixes = QLibraryPrivate::suffixes_sys(QString());
+    suffixes.prepend(QString());
+
+    // Split up "subdir/filename"
+    const int slash = fileName.lastIndexOf(QLatin1Char('/'));
+    const QStringRef baseName = fileName.midRef(slash + 1);
+    const QStringRef basePath = isAbsolute ? QStringRef() : fileName.leftRef(slash + 1); // keep the '/'
+
+    const bool debug = qt_debug_component();
+
+    QStringList paths;
+    if (isAbsolute) {
+        paths.append(fileName.left(slash)); // don't include the '/'
+    } else {
+        paths = QCoreApplication::libraryPaths();
+        paths.prepend(QStringLiteral(".")); // search in current dir first
+    }
+
+    for (const QString &path : qAsConst(paths)) {
+        for (const QString &prefix : qAsConst(prefixes)) {
+            for (const QString &suffix : qAsConst(suffixes)) {
+                const QString fn = path + QLatin1Char('/') + basePath + prefix + baseName + suffix;
+                if (debug)
+                    qDebug() << "Trying..." << fn;
+                if (QFileInfo(fn).isFile())
+                    return fn;
+            }
+        }
+    }
+    if (debug)
+        qDebug() << fileName << "not found";
+    return QString();
+}
+#endif
+
 /*!
     \property QPluginLoader::fileName
     \brief the file name of the plugin
 
-    To be loadable, the file's suffix must be a valid suffix for a
-    loadable library in accordance with the platform, e.g. \c .so on
-    Unix, \c .dylib on Mac OS X, and \c .dll on Windows. The suffix
-    can be verified with QLibrary::isLibrary().
+    We recommend omitting the file's suffix in the file name, since
+    QPluginLoader will automatically look for the file with the appropriate
+    suffix (see QLibrary::isLibrary()).
+
+    When loading the plugin, QPluginLoader searches in the current directory and
+    in all plugin locations specified by QCoreApplication::libraryPaths(),
+    unless the file name has an absolute path. After loading the plugin
+    successfully, fileName() returns the fully-qualified file name of
+    the plugin, including the full path to the plugin if one was given
+    in the constructor or passed to setFileName().
 
     If the file name does not exist, it will not be set. This property
     will then contain an empty string.
@@ -269,21 +350,18 @@ bool QPluginLoader::isLoaded() const
 void QPluginLoader::setFileName(const QString &fileName)
 {
 #if defined(QT_SHARED)
-    QLibrary::LoadHints lh;
+    QLibrary::LoadHints lh = QLibrary::PreventUnloadHint;
     if (d) {
-        lh = d->loadHints;
+        lh = d->loadHints();
         d->release();
         d = 0;
         did_load = false;
     }
 
-    QString fn = QFileInfo(fileName).canonicalFilePath();
+    const QString fn = locatePlugin(fileName);
 
-    d = QLibraryPrivate::findOrCreate(fn);
-    d->loadHints = lh;
-    if (fn.isEmpty())
-        d->errorString = QLibrary::tr("The shared library was not found.");
-    else
+    d = QLibraryPrivate::findOrCreate(fn, QString(), lh);
+    if (!fn.isEmpty())
         d->updatePluginState();
 
 #else
@@ -312,16 +390,13 @@ QString QPluginLoader::errorString() const
     return (!d || d->errorString.isEmpty()) ? tr("Unknown error") : d->errorString;
 }
 
-typedef QVector<QStaticPlugin> StaticPluginList;
-Q_GLOBAL_STATIC(StaticPluginList, staticPluginList)
-
 /*! \since 4.4
 
     \property QPluginLoader::loadHints
     \brief Give the load() function some hints on how it should behave.
 
     You can give hints on how the symbols in the plugin are
-    resolved. By default, none of the hints are set.
+    resolved. By default since Qt 5.7, QLibrary::PreventUnloadHint is set.
 
     See the documentation of QLibrary::loadHints for a complete
     description of how this property works.
@@ -335,24 +410,25 @@ void QPluginLoader::setLoadHints(QLibrary::LoadHints loadHints)
         d = QLibraryPrivate::findOrCreate(QString());   // ugly, but we need a d-ptr
         d->errorString.clear();
     }
-    d->loadHints = loadHints;
+    d->setLoadHints(loadHints);
 }
 
 QLibrary::LoadHints QPluginLoader::loadHints() const
 {
-    if (!d) {
-        QPluginLoader *that = const_cast<QPluginLoader *>(this);
-        that->d = QLibraryPrivate::findOrCreate(QString());   // ugly, but we need a d-ptr
-        that->d->errorString.clear();
-    }
-    return d->loadHints;
+    return d ? d->loadHints() : QLibrary::LoadHints();
 }
+
+#endif // QT_CONFIG(library)
+
+typedef QVector<QStaticPlugin> StaticPluginList;
+Q_GLOBAL_STATIC(StaticPluginList, staticPluginList)
 
 /*!
     \relates QPluginLoader
     \since 5.0
 
-    Registers the given \a plugin with the plugin loader.
+    Registers the \a plugin specified with the plugin loader, and is used
+    by Q_IMPORT_PLUGIN().
 */
 void Q_CORE_EXPORT qRegisterStaticPluginFunction(QStaticPlugin plugin)
 {
@@ -362,20 +438,29 @@ void Q_CORE_EXPORT qRegisterStaticPluginFunction(QStaticPlugin plugin)
 /*!
     Returns a list of static plugin instances (root components) held
     by the plugin loader.
+    \sa staticPlugins()
 */
 QObjectList QPluginLoader::staticInstances()
 {
     QObjectList instances;
     const StaticPluginList *plugins = staticPluginList();
     if (plugins) {
-        for (int i = 0; i < plugins->size(); ++i)
+        const int numPlugins = plugins->size();
+        instances.reserve(numPlugins);
+        for (int i = 0; i < numPlugins; ++i)
             instances += plugins->at(i).instance();
     }
     return instances;
 }
 
-
-QVector<QStaticPlugin> QLibraryPrivate::staticPlugins()
+/*!
+    Returns a list of QStaticPlugins held by the plugin
+    loader. The function is similar to \l staticInstances()
+    with the addition that a QStaticPlugin also contains
+    meta data information.
+    \sa staticInstances()
+*/
+QVector<QStaticPlugin> QPluginLoader::staticPlugins()
 {
     StaticPluginList *plugins = staticPluginList();
     if (plugins)
@@ -383,6 +468,28 @@ QVector<QStaticPlugin> QLibraryPrivate::staticPlugins()
     return QVector<QStaticPlugin>();
 }
 
+/*!
+    Returns a the meta data for the plugin as a QJsonObject.
+
+    \sa rawMetaData()
+*/
+QJsonObject QStaticPlugin::metaData() const
+{
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    // the data is already loaded, so this doesn't matter
+    qsizetype rawMetaDataSize = INT_MAX;
+    const char *ptr = rawMetaData();
+#else
+    auto ptr = static_cast<const char *>(rawMetaData);
+#endif
+
+    QString errMsg;
+    QJsonDocument doc = qJsonFromRawLibraryMetaData(ptr, rawMetaDataSize, &errMsg);
+    Q_ASSERT(doc.isObject());
+    Q_ASSERT(errMsg.isEmpty());
+    return doc.object();
+}
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_LIBRARY
+#include "moc_qpluginloader.cpp"

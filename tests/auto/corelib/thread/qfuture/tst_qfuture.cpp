@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,13 +34,20 @@
 #include <qfuture.h>
 #include <qfuturewatcher.h>
 #include <qresultstore.h>
+#include <qthreadpool.h>
 #include <qexception.h>
+#include <qrandom.h>
 #include <private/qfutureinterface_p.h>
 
 // COM interface macro.
 #if defined(Q_OS_WIN) && defined(interface)
 #  undef interface
 #endif
+
+struct ResultStoreInt : QtPrivate::ResultStoreBase
+{
+    ~ResultStoreInt() { clear<int>(); }
+};
 
 class tst_QFuture: public QObject
 {
@@ -80,6 +74,7 @@ private slots:
     void exceptions();
     void nestedExceptions();
 #endif
+    void nonGlobalThreadPool();
 };
 
 void tst_QFuture::resultStore()
@@ -89,17 +84,17 @@ void tst_QFuture::resultStore()
     int int2 = 2;
 
     {
-        QtPrivate::ResultStore<int> store;
-        QVERIFY(store.begin() == store.end());
-        QVERIFY(store.resultAt(0) == store.end());
-        QVERIFY(store.resultAt(1) == store.end());
+        ResultStoreInt store;
+        QCOMPARE(store.begin(), store.end());
+        QCOMPARE(store.resultAt(0), store.end());
+        QCOMPARE(store.resultAt(1), store.end());
     }
 
 
     {
-        QtPrivate::ResultStoreBase store;
-        store.addResult(-1, &int0); // note to self: adding a pointer to the stack here is ok since
-        store.addResult(1, &int1);  // ResultStoreBase does not take ownership, only ResultStore<> does.
+        ResultStoreInt store;
+        store.addResult(-1, &int0);
+        store.addResult(1, &int1);
         QtPrivate::ResultIteratorBase it = store.begin();
         QCOMPARE(it.resultIndex(), 0);
         QVERIFY(it == store.begin());
@@ -119,12 +114,12 @@ void tst_QFuture::resultStore()
     QVector<int> vec1 = QVector<int>() << 4 << 5;
 
     {
-        QtPrivate::ResultStoreBase store;
-        store.addResults(-1, &vec0, 2, 2);
-        store.addResults(-1, &vec1, 2, 2);
+        ResultStoreInt store;
+        store.addResults(-1, &vec0, 2);
+        store.addResults(-1, &vec1, 2);
         QtPrivate::ResultIteratorBase it = store.begin();
         QCOMPARE(it.resultIndex(), 0);
-        QVERIFY(it == store.begin());
+        QCOMPARE(it, store.begin());
         QVERIFY(it != store.end());
 
         ++it;
@@ -139,12 +134,12 @@ void tst_QFuture::resultStore()
         QCOMPARE(it.resultIndex(), 3);
 
         ++it;
-        QVERIFY(it == store.end());
+        QCOMPARE(it, store.end());
     }
     {
-        QtPrivate::ResultStoreBase store;
+        ResultStoreInt store;
         store.addResult(-1, &int0);
-        store.addResults(-1, &vec1, 2, 2);
+        store.addResults(-1, &vec1, 2);
         store.addResult(-1, &int1);
 
         QtPrivate::ResultIteratorBase it = store.begin();
@@ -173,7 +168,7 @@ void tst_QFuture::resultStore()
         QCOMPARE(store.resultAt(4), store.end());
     }
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(-1, &int0);
         store.addResults(-1, &vec0);
         store.addResult(-1, &int1);
@@ -197,36 +192,36 @@ void tst_QFuture::resultStore()
         ++it;
         QVERIFY(it == store.end());
 
-        QCOMPARE(store.resultAt(0).value(), int0);
-        QCOMPARE(store.resultAt(1).value(), vec0[0]);
-        QCOMPARE(store.resultAt(2).value(), vec0[1]);
-        QCOMPARE(store.resultAt(3).value(), int1);
+        QCOMPARE(store.resultAt(0).value<int>(), int0);
+        QCOMPARE(store.resultAt(1).value<int>(), vec0[0]);
+        QCOMPARE(store.resultAt(2).value<int>(), vec0[1]);
+        QCOMPARE(store.resultAt(3).value<int>(), int1);
     }
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(-1, &int0);
         store.addResults(-1, &vec0);
         store.addResult(200, &int1);
 
-        QCOMPARE(store.resultAt(0).value(), int0);
-        QCOMPARE(store.resultAt(1).value(), vec0[0]);
-        QCOMPARE(store.resultAt(2).value(), vec0[1]);
-        QCOMPARE(store.resultAt(200).value(), int1);
+        QCOMPARE(store.resultAt(0).value<int>(), int0);
+        QCOMPARE(store.resultAt(1).value<int>(), vec0[0]);
+        QCOMPARE(store.resultAt(2).value<int>(), vec0[1]);
+        QCOMPARE(store.resultAt(200).value<int>(), int1);
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(1, &int1);
         store.addResult(0, &int0);
         store.addResult(-1, &int2);
 
-        QCOMPARE(store.resultAt(0).value(), int0);
-        QCOMPARE(store.resultAt(1).value(), int1);
-        QCOMPARE(store.resultAt(2).value(), int2);
+        QCOMPARE(store.resultAt(0).value<int>(), int0);
+        QCOMPARE(store.resultAt(1).value<int>(), int1);
+        QCOMPARE(store.resultAt(2).value<int>(), int2);
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         QCOMPARE(store.contains(0), false);
         QCOMPARE(store.contains(1), false);
         QCOMPARE(store.contains(INT_MAX), false);
@@ -234,7 +229,7 @@ void tst_QFuture::resultStore()
 
     {
         // Test filter mode, where "gaps" in the result array aren't allowed.
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
 
         store.addResult(0, &int0);
@@ -243,13 +238,13 @@ void tst_QFuture::resultStore()
         store.addResult(2, &int2); // add result at index 2
         QCOMPARE(store.contains(2), false); // but 1 is missing, so this 2 won't be reported yet.
 
-        store.addResult(1, &int1); 
+        store.addResult(1, &int1);
         QCOMPARE(store.contains(1), true);
         QCOMPARE(store.contains(2), true); // 2 should be visible now.
 
-        store.addResult(4, &int0); 
-        store.addResult(5, &int0); 
-        store.addResult(7, &int0); 
+        store.addResult(4, &int0);
+        store.addResult(5, &int0);
+        store.addResult(7, &int0);
         QCOMPARE(store.contains(4), false);
         QCOMPARE(store.contains(5), false);
         QCOMPARE(store.contains(7), false);
@@ -268,14 +263,14 @@ void tst_QFuture::resultStore()
 
     {
         // test canceled results
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
 
         store.addResult(0, &int0);
         QCOMPARE(store.contains(0), true);
-        
+
         store.addResult(2, &int0);
-        QCOMPARE(store.contains(2), false);       
+        QCOMPARE(store.contains(2), false);
 
         store.addCanceledResult(1); // report no result at 1
 
@@ -289,7 +284,7 @@ void tst_QFuture::resultStore()
         store.addResult(6, &int0);
         store.addResult(7, &int0);
         QCOMPARE(store.contains(3), false);
- 
+
         store.addCanceledResult(4);
         store.addCanceledResult(5);
 
@@ -305,16 +300,16 @@ void tst_QFuture::resultStore()
 
     {
         // test addResult return value
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
 
         store.addResult(0, &int0);
         QCOMPARE(store.count(), 1); // result 0 becomes available
         QCOMPARE(store.contains(0), true);
-        
+
         store.addResult(2, &int0);
         QCOMPARE(store.count(), 1);
-        QCOMPARE(store.contains(2), false);       
+        QCOMPARE(store.contains(2), false);
 
         store.addCanceledResult(1);
         QCOMPARE(store.count(), 2); // result 2 is renamed to 1 and becomes available
@@ -332,7 +327,7 @@ void tst_QFuture::resultStore()
         store.addResult(7, &int0);
         QCOMPARE(store.count(), 3);
         QCOMPARE(store.contains(3), false);
- 
+
         store.addCanceledResult(4);
         store.addCanceledResult(5);
         QCOMPARE(store.count(), 5); // 6 and 7 is renamed to 3 and 4 and becomes available
@@ -347,13 +342,13 @@ void tst_QFuture::resultStore()
         QCOMPARE(store.contains(6), false);
         QCOMPARE(store.contains(7), false);
     }
-    
+
     {
         // test resultCount in non-filtered mode. It should always be possible
         // to iterate through the results 0 to resultCount.
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(0, &int0);
-        
+
         QCOMPARE(store.count(), 1);
 
         store.addResult(2, &int0);
@@ -365,7 +360,7 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(2, &int0);
         QCOMPARE(store.count(), 0);
 
@@ -377,7 +372,7 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(2, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -389,7 +384,7 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(2, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -397,7 +392,7 @@ void tst_QFuture::resultStore()
         QCOMPARE(store.count(), 4);
     }
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
@@ -409,7 +404,7 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
@@ -422,30 +417,30 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
-        store.addCanceledResults(0, 3);
+        store.addCanceledResults<int>(0, 3);
         QCOMPARE(store.count(), 2);
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResults(3, &vec1);
         QCOMPARE(store.count(), 0);
 
-        store.addCanceledResults(0, 3);
+        store.addCanceledResults<int>(0, 3);
         QCOMPARE(store.count(), 2);  // results at 3 and 4 become available at index 0, 1
 
-        store.addResult(5, &int0); 
+        store.addResult(5, &int0);
         QCOMPARE(store.count(), 3);// result 5 becomes available at index 2
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.addResult(1, &int0);
         store.addResult(3, &int0);
         store.addResults(6, &vec0);
@@ -460,7 +455,7 @@ void tst_QFuture::resultStore()
     }
 
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addResult(1, &int0);
         store.addResult(3, &int0);
@@ -476,7 +471,7 @@ void tst_QFuture::resultStore()
 
         store.addCanceledResult(0);
         store.addCanceledResult(2);
-        store.addCanceledResults(4, 2);
+        store.addCanceledResults<int>(4, 2);
 
         QCOMPARE(store.contains(0), true);
         QCOMPARE(store.contains(1), true);
@@ -488,7 +483,7 @@ void tst_QFuture::resultStore()
         QCOMPARE(store.contains(7), false);
     }
     {
-        QtPrivate::ResultStore<int> store;
+        ResultStoreInt store;
         store.setFilterMode(true);
         store.addCanceledResult(0);
         QCOMPARE(store.contains(0), false);
@@ -654,7 +649,7 @@ void tst_QFuture::cancel()
 
         result.reportStarted();
         f = result.future();
-        QVERIFY(f.isCanceled() == false);
+        QVERIFY(!f.isCanceled());
         result.reportCanceled();
         QVERIFY(f.isCanceled());
         result.reportFinished();
@@ -669,14 +664,14 @@ void tst_QFuture::cancel()
         QFutureInterface<void> result;
 
         QFuture<void> f;
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
         result.reportStarted();
         f = result.future();
 
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
-        QVERIFY(result.isCanceled() == false);
+        QVERIFY(!result.isCanceled());
         f.cancel();
 
         QVERIFY(result.isCanceled());
@@ -689,12 +684,12 @@ void tst_QFuture::cancel()
         QFutureInterface<void> result;
 
         QFuture<void> f;
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
         result.reportStarted();
         f = result.future();
 
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
         result.reportFinished();
 
@@ -811,12 +806,12 @@ void tst_QFuture::indexedResults()
     {
         QFutureInterface<QChar> Interface;
         QFuture<QChar> f;
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
         Interface.reportStarted();
         f = Interface.future();
 
-        QVERIFY(f.isStarted() == true);
+        QVERIFY(f.isStarted());
 
         QChar result;
 
@@ -1018,14 +1013,16 @@ void tst_QFuture::iterators()
         QFuture<int>::const_iterator i1 = f.begin(), i2 = i1 + 1;
         QFuture<int>::const_iterator c1 = i1, c2 = c1 + 1;
 
-        QVERIFY(i1 == i1);
-        QVERIFY(i1 == c1);
-        QVERIFY(c1 == i1);
-        QVERIFY(c1 == c1);
-        QVERIFY(i2 == i2);
-        QVERIFY(i2 == c2);
-        QVERIFY(c2 == i2);
-        QVERIFY(c2 == c2);
+        QCOMPARE(i1, i1);
+        QCOMPARE(i1, c1);
+        QCOMPARE(c1, i1);
+        QCOMPARE(c1, c1);
+        QCOMPARE(i2, i2);
+        QCOMPARE(i2, c2);
+        QCOMPARE(c2, i2);
+        QCOMPARE(c2, c2);
+        QCOMPARE(1 + i1, i1 + 1);
+        QCOMPARE(1 + c1, c1 + 1);
 
         QVERIFY(i1 != i2);
         QVERIFY(i1 != c2);
@@ -1067,14 +1064,16 @@ void tst_QFuture::iterators()
         QFuture<QString>::const_iterator i1 = f.begin(), i2 = i1 + 1;
         QFuture<QString>::const_iterator c1 = i1, c2 = c1 + 1;
 
-        QVERIFY(i1 == i1);
-        QVERIFY(i1 == c1);
-        QVERIFY(c1 == i1);
-        QVERIFY(c1 == c1);
-        QVERIFY(i2 == i2);
-        QVERIFY(i2 == c2);
-        QVERIFY(c2 == i2);
-        QVERIFY(c2 == c2);
+        QCOMPARE(i1, i1);
+        QCOMPARE(i1, c1);
+        QCOMPARE(c1, i1);
+        QCOMPARE(c1, c1);
+        QCOMPARE(i2, i2);
+        QCOMPARE(i2, c2);
+        QCOMPARE(c2, i2);
+        QCOMPARE(c2, c2);
+        QCOMPARE(1 + i1, i1 + 1);
+        QCOMPARE(1 + c1, c1 + 1);
 
         QVERIFY(i1 != i2);
         QVERIFY(i1 != c2);
@@ -1112,9 +1111,9 @@ void tst_QFuture::iterators()
         for (int i = 0; i < resultCount; ++i) {
             e.reportResult(i);
         }
-    
+
         e.reportFinished();
-    
+
         {
             QFutureIterator<int> it(f);
             QFutureIterator<int> it2(it);
@@ -1122,7 +1121,7 @@ void tst_QFuture::iterators()
 
         {
             QFutureIterator<int> it(f);
-    
+
             for (int i = 0; i < resultCount - 1; ++i) {
                 QVERIFY(it.hasNext());
                 QCOMPARE(it.peekNext(), i);
@@ -1132,14 +1131,14 @@ void tst_QFuture::iterators()
             QVERIFY(it.hasNext());
             QCOMPARE(it.peekNext(), resultCount - 1);
             QCOMPARE(it.next(), resultCount - 1);
-            QVERIFY(it.hasNext() == false);
+            QVERIFY(!it.hasNext());
         }
 
         {
             QFutureIterator<int> it(f);
             QVERIFY(it.hasNext());
             it.toBack();
-            QVERIFY(it.hasNext() == false);
+            QVERIFY(!it.hasNext());
             it.toFront();
             QVERIFY(it.hasNext());
         }
@@ -1198,20 +1197,18 @@ void tst_QFuture::pause()
     Interface.reportStarted();
     QFuture<void> f = Interface.future();
 
-    QVERIFY(Interface.isPaused() == false);
+    QVERIFY(!Interface.isPaused());
     f.pause();
-    QVERIFY(Interface.isPaused() == true);
+    QVERIFY(Interface.isPaused());
     f.resume();
-    QVERIFY(Interface.isPaused() == false);
+    QVERIFY(!Interface.isPaused());
     f.togglePaused();
-    QVERIFY(Interface.isPaused() == true);
+    QVERIFY(Interface.isPaused());
     f.togglePaused();
-    QVERIFY(Interface.isPaused() == false);
+    QVERIFY(!Interface.isPaused());
 
     Interface.reportFinished();
 }
-
-const int resultCount = 1000;
 
 class ResultObject : public QObject
 {
@@ -1234,13 +1231,13 @@ void tst_QFuture::throttling()
         i.reportStarted();
         QFuture<void> f = i.future();
 
-        QVERIFY(i.isThrottled() == false);
+        QVERIFY(!i.isThrottled());
 
         i.setThrottled(true);
         QVERIFY(i.isThrottled());
 
         i.setThrottled(false);
-        QVERIFY(i.isThrottled() == false);
+        QVERIFY(!i.isThrottled());
 
         i.setThrottled(true);
         QVERIFY(i.isThrottled());
@@ -1311,8 +1308,8 @@ QFuture<int> createExceptionResultFuture()
 class DerivedException : public QException
 {
 public:
-    void raise() const Q_DECL_OVERRIDE { throw *this; }
-    DerivedException *clone() const Q_DECL_OVERRIDE { return new DerivedException(*this); }
+    void raise() const override { throw *this; }
+    DerivedException *clone() const override { return new DerivedException(*this); }
 };
 
 QFuture<void> createDerivedExceptionFuture()
@@ -1445,6 +1442,53 @@ void tst_QFuture::nestedExceptions()
 }
 
 #endif // QT_NO_EXCEPTIONS
+
+void tst_QFuture::nonGlobalThreadPool()
+{
+    static Q_CONSTEXPR int Answer = 42;
+
+    struct UselessTask : QRunnable, QFutureInterface<int>
+    {
+        QFuture<int> start(QThreadPool *pool)
+        {
+            setRunnable(this);
+            setThreadPool(pool);
+            reportStarted();
+            QFuture<int> f = future();
+            pool->start(this);
+            return f;
+        }
+
+        void run() override
+        {
+            const int ms = 100 + (QRandomGenerator::global()->bounded(100) - 100/2);
+            QThread::msleep(ms);
+            reportResult(Answer);
+            reportFinished();
+        }
+    };
+
+    QThreadPool pool;
+
+    const int numTasks = QThread::idealThreadCount();
+
+    QVector<QFuture<int> > futures;
+    futures.reserve(numTasks);
+
+    for (int i = 0; i < numTasks; ++i)
+        futures.push_back((new UselessTask)->start(&pool));
+
+    QVERIFY(!pool.waitForDone(0)); // pool is busy (meaning our tasks did end up executing there)
+
+    QVERIFY(pool.waitForDone(10000)); // max sleep time in UselessTask::run is 150ms, so 10s should be enough
+                                      // (and the call returns as soon as all tasks finished anyway, so the
+                                      // maximum wait time only matters when the test fails)
+
+    Q_FOREACH (const QFuture<int> &future, futures) {
+        QVERIFY(future.isFinished());
+        QCOMPARE(future.result(), Answer);
+    }
+}
 
 QTEST_MAIN(tst_QFuture)
 #include "tst_qfuture.moc"

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,32 +40,36 @@
 #include "qapplication.h"
 #include "qbitmap.h"
 #include "qdesktopwidget.h"
-#include "qdialog.h"
+#include <private/qdesktopwidget_p.h>
+#if QT_CONFIG(dialog)
 #include <private/qdialog_p.h>
+#endif
 #include "qdrawutil.h"
 #include "qevent.h"
 #include "qfontmetrics.h"
-#include "qmenu.h"
 #include "qstylepainter.h"
 #include "qpixmap.h"
 #include "qpointer.h"
 #include "qpushbutton.h"
 #include "qstyle.h"
 #include "qstyleoption.h"
+#if QT_CONFIG(toolbar)
 #include "qtoolbar.h"
+#endif
 #include "qdebug.h"
 #include "qlayoutitem.h"
+#if QT_CONFIG(dialogbuttonbox)
 #include "qdialogbuttonbox.h"
-#ifdef Q_WS_MAC
-#include "private/qmacstyle_mac_p.h"
-#include "private/qmacstyle_mac_p_p.h"
-#endif // Q_WS_MAC
+#endif
 
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
 #endif
 
+#if QT_CONFIG(menu)
+#include "qmenu.h"
 #include "private/qmenu_p.h"
+#endif
 #include "private/qpushbutton_p.h"
 
 QT_BEGIN_NAMESPACE
@@ -79,6 +81,8 @@ QT_BEGIN_NAMESPACE
 
     \ingroup basicwidgets
     \inmodule QtWidgets
+
+    \image windows-pushbutton.png
 
     The push button, or command button, is perhaps the most commonly
     used widget in any graphical user interface. Push (click) a button
@@ -151,6 +155,11 @@ QT_BEGIN_NAMESPACE
     button is probably not what you want. When in doubt, use a tool
     button.
 
+    \note On \macos when a push button's width becomes smaller than 50 or
+    its height becomes smaller than 30, the button's corners are
+    changed from round to square. Use the setMinimumSize()
+    function to prevent this behavior.
+
     A variation of a command button is a menu button. These provide
     not just one command, but several, since when they are clicked
     they pop up a menu of options. Use the method setMenu() to
@@ -159,20 +168,6 @@ QT_BEGIN_NAMESPACE
     Other classes of buttons are option buttons (see QRadioButton) and
     check boxes (see QCheckBox).
 
-    \table 100%
-    \row \li \inlineimage macintosh-pushbutton.png Screenshot of a Macintosh style push button
-         \li A push button shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-
-         Note that when a button's width becomes smaller than 50 or
-         its height becomes smaller than 30, the button's corners are
-         changed from round to square. Use the setMinimumSize()
-         function to prevent this behavior.
-
-    \row \li \inlineimage windowsxp-pushbutton.png Screenshot of a Windows XP style push button
-         \li A push button shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
-    \row \li \inlineimage fusion-pushbutton.png Screenshot of a Fusion style push button
-         \li A push button shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \endtable
 
     In Qt, the QAbstractButton base class provides most of the modes
     and other API, and QPushButton provides GUI logic.
@@ -256,11 +251,9 @@ QPushButton::QPushButton(QWidget *parent)
 */
 
 QPushButton::QPushButton(const QString &text, QWidget *parent)
-    : QAbstractButton(*new QPushButtonPrivate, parent)
+    : QPushButton(parent)
 {
-    Q_D(QPushButton);
     setText(text);
-    d->init();
 }
 
 
@@ -272,12 +265,10 @@ QPushButton::QPushButton(const QString &text, QWidget *parent)
 
 */
 QPushButton::QPushButton(const QIcon& icon, const QString &text, QWidget *parent)
-    : QAbstractButton(*new QPushButtonPrivate, parent)
+    : QPushButton(*new QPushButtonPrivate, parent)
 {
-    Q_D(QPushButton);
     setText(text);
     setIcon(icon);
-    d->init();
 }
 
 /*! \internal
@@ -296,6 +287,7 @@ QPushButton::~QPushButton()
 {
 }
 
+#if QT_CONFIG(dialog)
 QDialog *QPushButtonPrivate::dialogParent() const
 {
     Q_Q(const QPushButton);
@@ -307,6 +299,7 @@ QDialog *QPushButtonPrivate::dialogParent() const
     }
     return 0;
 }
+#endif
 
 /*!
     Initialize \a option with the values from this QPushButton. This method is useful
@@ -325,7 +318,7 @@ void QPushButton::initStyleOption(QStyleOptionButton *option) const
     option->features = QStyleOptionButton::None;
     if (d->flat)
         option->features |= QStyleOptionButton::Flat;
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
     if (d->menu)
         option->features |= QStyleOptionButton::HasMenu;
 #endif
@@ -370,10 +363,12 @@ void QPushButton::setDefault(bool enable)
     if (d->defaultButton == enable)
         return;
     d->defaultButton = enable;
+#if QT_CONFIG(dialog)
     if (d->defaultButton) {
         if (QDialog *dlg = d->dialogParent())
             dlg->d_func()->setMainDefault(this);
     }
+#endif
     update();
 #ifndef QT_NO_ACCESSIBILITY
     QAccessible::State s;
@@ -406,8 +401,7 @@ QSize QPushButton::sizeHint() const
     initStyleOption(&opt);
 
     // calculate contents size...
-#ifndef QT_NO_ICON
-
+#if !defined(QT_NO_ICON) && QT_CONFIG(dialogbuttonbox)
     bool showButtonBoxIcons = qobject_cast<QDialogButtonBox*>(parentWidget())
                           && style()->styleHint(QStyle::SH_DialogButtonBox_ButtonsHaveIcons);
 
@@ -421,7 +415,7 @@ QSize QPushButton::sizeHint() const
     QString s(text());
     bool empty = s.isEmpty();
     if (empty)
-        s = QString::fromLatin1("XXXX");
+        s = QStringLiteral("XXXX");
     QFontMetrics fm = fontMetrics();
     QSize sz = fm.size(Qt::TextShowMnemonic, s);
     if(!empty || !w)
@@ -429,7 +423,7 @@ QSize QPushButton::sizeHint() const
     if(!empty || !h)
         h = qMax(h, sz.height());
     opt.rect.setSize(QSize(w, h)); // PM_MenuButtonIndicator depends on the height
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
     if (menu())
         w += style()->pixelMetric(QStyle::PM_MenuButtonIndicator, &opt, this);
 #endif
@@ -469,7 +463,7 @@ void QPushButton::keyPressEvent(QKeyEvent *e)
             click();
             break;
         }
-        // fall through
+        Q_FALLTHROUGH();
     default:
         QAbstractButton::keyPressEvent(e);
     }
@@ -483,9 +477,11 @@ void QPushButton::focusInEvent(QFocusEvent *e)
     Q_D(QPushButton);
     if (e->reason() != Qt::PopupFocusReason && autoDefault() && !d->defaultButton) {
         d->defaultButton = true;
+#if QT_CONFIG(dialog)
         QDialog *dlg = qobject_cast<QDialog*>(window());
         if (dlg)
             dlg->d_func()->setDefault(this);
+#endif
     }
     QAbstractButton::focusInEvent(e);
 }
@@ -497,21 +493,23 @@ void QPushButton::focusOutEvent(QFocusEvent *e)
 {
     Q_D(QPushButton);
     if (e->reason() != Qt::PopupFocusReason && autoDefault() && d->defaultButton) {
+#if QT_CONFIG(dialog)
         QDialog *dlg = qobject_cast<QDialog*>(window());
         if (dlg)
             dlg->d_func()->setDefault(0);
         else
             d->defaultButton = false;
+#endif
     }
 
     QAbstractButton::focusOutEvent(e);
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
     if (d->menu && d->menu->isVisible())        // restore pressed status
         setDown(true);
 #endif
 }
 
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
 /*!
     Associates the popup menu \a menu with this push button. This
     turns the button into a menu button, which in some styles will
@@ -520,7 +518,8 @@ void QPushButton::focusOutEvent(QFocusEvent *e)
     Ownership of the menu is \e not transferred to the push button.
 
     \image fusion-pushbutton-menu.png Screenshot of a Fusion style push button with popup menu.
-    A push button with popup menus shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
+    A push button with popup menus shown in the \l{Qt Widget Gallery}
+    {Fusion widget style}.
 
     \sa menu()
 */
@@ -599,7 +598,7 @@ QPoint QPushButtonPrivate::adjustedMenuPosition()
     Q_Q(QPushButton);
 
     bool horizontal = true;
-#if !defined(QT_NO_TOOLBAR)
+#if QT_CONFIG(toolbar)
     QToolBar *tb = qobject_cast<QToolBar*>(parent);
     if (tb && tb->orientation() == Qt::Vertical)
         horizontal = false;
@@ -613,25 +612,27 @@ QPoint QPushButtonPrivate::adjustedMenuPosition()
     QPoint globalPos = q->mapToGlobal(rect.topLeft());
     int x = globalPos.x();
     int y = globalPos.y();
+    const QRect availableGeometry = QDesktopWidgetPrivate::availableGeometry(q);
     if (horizontal) {
-        if (globalPos.y() + rect.height() + menuSize.height() <= QApplication::desktop()->availableGeometry(q).height()) {
+        if (globalPos.y() + rect.height() + menuSize.height() <= availableGeometry.bottom()) {
             y += rect.height();
-        } else {
+        } else if (globalPos.y() - menuSize.height() >= availableGeometry.y()) {
             y -= menuSize.height();
         }
         if (q->layoutDirection() == Qt::RightToLeft)
             x += rect.width() - menuSize.width();
     } else {
-        if (globalPos.x() + rect.width() + menu->sizeHint().width() <= QApplication::desktop()->availableGeometry(q).width())
+        if (globalPos.x() + rect.width() + menu->sizeHint().width() <= availableGeometry.right()) {
             x += rect.width();
-        else
+        } else if (globalPos.x() - menuSize.width() >= availableGeometry.x()) {
             x -= menuSize.width();
+        }
     }
 
     return QPoint(x,y);
 }
 
-#endif // QT_NO_MENU
+#endif // QT_CONFIG(menu)
 
 void QPushButtonPrivate::resetLayoutItemMargins()
 {
@@ -647,7 +648,7 @@ void QPushButton::setFlat(bool flat)
     if (d->flat == flat)
         return;
     d->flat = flat;
-	d->resetLayoutItemMargins();
+    d->resetLayoutItemMargins();
     d->sizeHint = QSize();
     update();
     updateGeometry();
@@ -664,25 +665,27 @@ bool QPushButton::event(QEvent *e)
 {
     Q_D(QPushButton);
     if (e->type() == QEvent::ParentChange) {
+#if QT_CONFIG(dialog)
         if (QDialog *dialog = d->dialogParent()) {
             if (d->defaultButton)
                 dialog->d_func()->setMainDefault(this);
         }
+#endif
     } else if (e->type() == QEvent::StyleChange
 #ifdef Q_OS_MAC
                || e->type() == QEvent::MacSizeChange
 #endif
                ) {
-		d->resetLayoutItemMargins();
-		updateGeometry();
+        d->resetLayoutItemMargins();
+        updateGeometry();
     } else if (e->type() == QEvent::PolishRequest) {
         updateGeometry();
     }
     return QAbstractButton::event(e);
 }
 
-#ifdef Q_WS_MAC
-/*! \reimp */
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
+/* \reimp */
 bool QPushButton::hitButton(const QPoint &pos) const
 {
     QStyleOptionButton opt;
@@ -710,7 +713,7 @@ bool QPushButtonPrivate::hitButton(const QPoint &pos)
                       q->rect().height() - QMacStylePrivate::PushButtonBottomOffset);
     return roundedRect.contains(pos);
 }
-#endif // Q_WS_MAC
+#endif
 
 
 QT_END_NAMESPACE

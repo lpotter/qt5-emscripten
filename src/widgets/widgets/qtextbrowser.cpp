@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,6 @@
 
 #include "qtextbrowser.h"
 #include "qtextedit_p.h"
-
-#ifndef QT_NO_TEXTBROWSER
 
 #include <qstack.h>
 #include <qapplication.h>
@@ -54,7 +50,9 @@
 #include <qtextcodec.h>
 #include <qpainter.h>
 #include <qdir.h>
+#if QT_CONFIG(whatsthis)
 #include <qwhatsthis.h>
+#endif
 #include <qtextobject.h>
 #include <qdesktopservices.h>
 
@@ -101,7 +99,7 @@ public:
 
 
     HistoryEntry createHistoryEntry() const;
-    void restoreHistoryEntry(const HistoryEntry entry);
+    void restoreHistoryEntry(const HistoryEntry &entry);
 
     QStack<HistoryEntry> stack;
     QStack<HistoryEntry> forwardStack;
@@ -137,7 +135,7 @@ public:
     void setSource(const QUrl &url);
 
     // re-imlemented from QTextEditPrivate
-    virtual QUrl resolveUrl(const QUrl &url) const;
+    virtual QUrl resolveUrl(const QUrl &url) const override;
     inline QUrl resolveUrl(const QString &url) const
     { return resolveUrl(QUrl(url)); }
 
@@ -147,21 +145,31 @@ public:
     int lastKeypadScrollValue;
 #endif
 };
+Q_DECLARE_TYPEINFO(QTextBrowserPrivate::HistoryEntry, Q_MOVABLE_TYPE);
 
 QString QTextBrowserPrivate::findFile(const QUrl &name) const
 {
     QString fileName;
-    if (name.scheme() == QLatin1String("qrc"))
+    if (name.scheme() == QLatin1String("qrc")) {
         fileName = QLatin1String(":/") + name.path();
-    else if (name.scheme().isEmpty())
+    } else if (name.scheme().isEmpty()) {
         fileName = name.path();
-    else
-        fileName = name.toLocalFile();
+    } else {
+#if defined(Q_OS_ANDROID)
+        if (name.scheme() == QLatin1String("assets"))
+            fileName = QLatin1String("assets:") + name.path();
+        else
+#endif
+            fileName = name.toLocalFile();
+    }
+
+    if (fileName.isEmpty())
+        return fileName;
 
     if (QFileInfo(fileName).isAbsolute())
         return fileName;
 
-    foreach (QString path, searchPaths) {
+    for (QString path : qAsConst(searchPaths)) {
         if (!path.endsWith(QLatin1Char('/')))
             path.append(QLatin1Char('/'));
         path.append(fileName);
@@ -217,13 +225,14 @@ void QTextBrowserPrivate::_q_activateAnchor(const QString &href)
     textOrSourceChanged = false;
 
 #ifndef QT_NO_DESKTOPSERVICES
-    if ((openExternalLinks
-         && url.scheme() != QLatin1String("file")
-         && url.scheme() != QLatin1String("qrc")
-         && !url.isRelative())
-        || (url.isRelative() && !currentURL.isRelative()
-            && currentURL.scheme() != QLatin1String("file")
-            && currentURL.scheme() != QLatin1String("qrc"))) {
+    bool isFileScheme =
+            url.scheme() == QLatin1String("file")
+#if defined(Q_OS_ANDROID)
+            || url.scheme() == QLatin1String("assets")
+#endif
+            || url.scheme() == QLatin1String("qrc");
+    if ((openExternalLinks && !isFileScheme && !url.isRelative())
+        || (url.isRelative() && !currentURL.isRelative() && !isFileScheme)) {
         QDesktopServices::openUrl(url);
         return;
     }
@@ -289,19 +298,19 @@ void QTextBrowserPrivate::setSource(const QUrl &url)
             QTextCodec *codec = Qt::codecForHtml(ba);
             txt = codec->toUnicode(ba);
 #else
-	    txt = data.toString();
+            txt = data.toString();
 #endif
         }
-        if (txt.isEmpty())
+        if (Q_UNLIKELY(txt.isEmpty()))
             qWarning("QTextBrowser: No document for %s", url.toString().toLatin1().constData());
 
         if (q->isVisible()) {
-            QString firstTag = txt.left(txt.indexOf(QLatin1Char('>')) + 1);
+            const QStringRef firstTag = txt.leftRef(txt.indexOf(QLatin1Char('>')) + 1);
             if (firstTag.startsWith(QLatin1String("<qt")) && firstTag.contains(QLatin1String("type")) && firstTag.contains(QLatin1String("detail"))) {
 #ifndef QT_NO_CURSOR
                 QApplication::restoreOverrideCursor();
 #endif
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
                 QWhatsThis::showText(QCursor::pos(), txt, q);
 #endif
                 return;
@@ -554,7 +563,7 @@ QTextBrowserPrivate::HistoryEntry QTextBrowserPrivate::createHistoryEntry() cons
     return entry;
 }
 
-void QTextBrowserPrivate::restoreHistoryEntry(const HistoryEntry entry)
+void QTextBrowserPrivate::restoreHistoryEntry(const HistoryEntry &entry)
 {
     setSource(entry.url);
     hbar->setValue(entry.hpos);
@@ -636,14 +645,14 @@ void QTextBrowserPrivate::restoreHistoryEntry(const HistoryEntry entry)
     \property QTextBrowser::readOnly
     \brief whether the text browser is read-only
 
-    By default, this property is true.
+    By default, this property is \c true.
 */
 
 /*!
     \property QTextBrowser::undoRedoEnabled
     \brief whether the text browser supports undo/redo operations
 
-    By default, this property is false.
+    By default, this property is \c false.
 */
 
 void QTextBrowserPrivate::init()
@@ -653,6 +662,7 @@ void QTextBrowserPrivate::init()
 #ifndef QT_NO_CURSOR
     viewport->setCursor(oldCursor);
 #endif
+    q->setAttribute(Qt::WA_InputMethodEnabled, !q->isReadOnly());
     q->setUndoRedoEnabled(false);
     viewport->setMouseTracking(true);
     QObject::connect(q->document(), SIGNAL(contentsChanged()), q, SLOT(_q_documentModified()));
@@ -1082,6 +1092,8 @@ QVariant QTextBrowser::loadResource(int /*type*/, const QUrl &name)
 
     QByteArray data;
     QString fileName = d->findFile(d->resolveUrl(name));
+    if (fileName.isEmpty())
+        return QVariant();
     QFile f(fileName);
     if (f.open(QFile::ReadOnly)) {
         data = f.readAll();
@@ -1096,7 +1108,7 @@ QVariant QTextBrowser::loadResource(int /*type*/, const QUrl &name)
 /*!
     \since 4.2
 
-    Returns true if the text browser can go backward in the document history
+    Returns \c true if the text browser can go backward in the document history
     using backward().
 
     \sa backwardAvailable(), backward()
@@ -1110,7 +1122,7 @@ bool QTextBrowser::isBackwardAvailable() const
 /*!
     \since 4.2
 
-    Returns true if the text browser can go forward in the document history
+    Returns \c true if the text browser can go forward in the document history
     using forward().
 
     \sa forwardAvailable(), forward()
@@ -1135,7 +1147,7 @@ void QTextBrowser::clearHistory()
     d->forwardStack.clear();
     if (!d->stack.isEmpty()) {
         QTextBrowserPrivate::HistoryEntry historyEntry = d->stack.top();
-        d->stack.resize(0);
+        d->stack.clear();
         d->stack.push(historyEntry);
         d->home = historyEntry.url;
     }
@@ -1261,5 +1273,3 @@ bool QTextBrowser::event(QEvent *e)
 QT_END_NAMESPACE
 
 #include "moc_qtextbrowser.cpp"
-
-#endif // QT_NO_TEXTBROWSER

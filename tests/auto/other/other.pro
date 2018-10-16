@@ -1,63 +1,67 @@
 TEMPLATE=subdirs
+QT_FOR_CONFIG += gui-private
+
 SUBDIRS=\
-   # atwrapper \ # QTBUG-19452
-   baselineexample \
-   collections \
    compiler \
-   exceptionsafety \
-   # exceptionsafety_objects \    # QObjectPrivate is not safe
    gestures \
-   headersclean \
    lancelot \
    languagechange \
    macgui \
-   macnativeevents \
+   #macnativeevents \
    macplist \
-   modeltest \
    networkselftest \
    qaccessibility \
-   qaccessibilitylinux \
+   # qaccessibilitylinux \ # QTBUG-44434
+   qaccessibilitymac \
    qcomplextext \
    qfocusevent \
    qnetworkaccessmanager_and_qprogressdialog \
-   qobjectperformance \
    qobjectrace \
    qsharedpointer_and_qwidget \
+   qprocess_and_guieventloop \
    qtokenautomaton \
-   windowsmobile \
+   toolsupport \
 
-contains(QT_CONFIG, no-widgets): SUBDIRS -= \
-   baselineexample \
+!qtHaveModule(gui): SUBDIRS -= \
+   qcomplextext \
+   qprocess_and_guieventloop \
+
+!qtHaveModule(widgets): SUBDIRS -= \
    gestures \
-   headersclean \
    lancelot \
    languagechange \
-   modeltest \
    qaccessibility \
-   qcomplextext \
    qfocusevent \
    qnetworkaccessmanager_and_qprogressdialog \
    qsharedpointer_and_qwidget \
    windowsmobile \
    qaccessibility \
    qaccessibilitylinux \
+   qaccessibilitymac \
 
-testcocoon: SUBDIRS -= headersclean
+winrt|!qtHaveModule(network): SUBDIRS -= \
+   lancelot \
+   networkselftest \
+   qnetworkaccessmanager_and_qprogressdialog \
 
 cross_compile: SUBDIRS -= \
    atwrapper \
    compiler
 
-wince*|!contains(QT_CONFIG, accessibility): SUBDIRS -= qaccessibility
+winrt|!qtConfig(accessibility): SUBDIRS -= qaccessibility
 
-!contains(QT_CONFIG, accessibility)|!contains(QT_CONFIG, xcb): SUBDIRS -= qaccessibilitylinux
+!qtConfig(accessibility-atspi-bridge): SUBDIRS -= qaccessibilitylinux
+
+!qtConfig(process): SUBDIRS -= qprocess_and_guieventloop
 
 !mac: SUBDIRS -= \
            macgui \
            macnativeevents \
-           macplist
+           macplist \
+           qaccessibilitymac
 
-!embedded|wince*: SUBDIRS -= \
+!embedded: SUBDIRS -= \
            qdirectpainter
 
-!linux*-g++*:SUBDIRS -= exceptionsafety_objects
+android: SUBDIRS += \
+    android

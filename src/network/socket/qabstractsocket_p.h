@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,11 +51,11 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include "QtNetwork/qabstractsocket.h"
 #include "QtCore/qbytearray.h"
 #include "QtCore/qlist.h"
 #include "QtCore/qtimer.h"
-#include "private/qringbuffer_p.h"
 #include "private/qiodevice_p.h"
 #include "private/qabstractsocketengine_p.h"
 #include "qnetworkproxy.h"
@@ -73,20 +71,25 @@ public:
     QAbstractSocketPrivate();
     virtual ~QAbstractSocketPrivate();
 
+    // from QIODevicePrivate
+    qint64 skip(qint64 maxSize) override;
+
     // from QAbstractSocketEngineReceiver
-    inline void readNotification() { canReadNotification(); }
-    inline void writeNotification() { canWriteNotification(); }
-    inline void exceptionNotification() {}
-    inline void closeNotification() { canCloseNotification(); }
-    void connectionNotification();
+    inline void readNotification() override { canReadNotification(); }
+    inline void writeNotification() override { canWriteNotification(); }
+    inline void exceptionNotification() override {}
+    inline void closeNotification() override { canCloseNotification(); }
+    void connectionNotification() override;
 #ifndef QT_NO_NETWORKPROXY
-    inline void proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator) {
+    inline void proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator) override {
         Q_Q(QAbstractSocket);
         q->proxyAuthenticationRequired(proxy, authenticator);
     }
 #endif
 
-    bool canReadNotification();
+    virtual bool bind(const QHostAddress &address, quint16 port, QAbstractSocket::BindMode mode);
+
+    virtual bool canReadNotification();
     bool canWriteNotification();
     void canCloseNotification();
 
@@ -95,17 +98,11 @@ public:
     void _q_startConnecting(const QHostInfo &hostInfo);
     void _q_testConnection();
     void _q_abortConnectionAttempt();
-    void _q_forceDisconnect();
-
-    bool readSocketNotifierCalled;
-    bool readSocketNotifierState;
-    bool readSocketNotifierStateSet;
 
     bool emittedReadyRead;
     bool emittedBytesWritten;
 
     bool abortCalled;
-    bool closeCalled;
     bool pendingClose;
 
     QAbstractSocket::PauseModes pauseMode;
@@ -134,29 +131,32 @@ public:
     inline void resolveProxy(quint16 port) { resolveProxy(QString(), port); }
 
     void resetSocketLayer();
-    bool flush();
+    virtual bool flush();
 
     bool initSocketLayer(QAbstractSocket::NetworkLayerProtocol protocol);
+    virtual void configureCreatedSocket();
     void startConnectingByName(const QString &host);
     void fetchConnectionParameters();
-    void setupSocketNotifiers();
     bool readFromSocket();
+    virtual bool writeToSocket();
+    void emitReadyRead(int channel = 0);
+    void emitBytesWritten(qint64 bytes, int channel = 0);
+
+    void setError(QAbstractSocket::SocketError errorCode, const QString &errorString);
+    void setErrorAndEmit(QAbstractSocket::SocketError errorCode, const QString &errorString);
 
     qint64 readBufferMaxSize;
-    QRingBuffer writeBuffer;
-
     bool isBuffered;
-    int blockingTimeout;
+    bool hasPendingData;
 
     QTimer *connectTimer;
-    QTimer *disconnectTimer;
-    int connectTimeElapsed;
 
     int hostLookupId;
 
     QAbstractSocket::SocketType socketType;
     QAbstractSocket::SocketState state;
 
+    // Must be kept in sync with QIODevicePrivate::errorString.
     QAbstractSocket::SocketError socketError;
 
     QAbstractSocket::NetworkLayerProtocol preferredNetworkLayerProtocol;

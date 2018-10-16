@@ -1,53 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include "../../../../../src/corelib/tools/qalgorithms.h"
 #include <QtTest/QtTest>
 
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <iterator>
 #include <algorithm>
 #include <qalgorithms.h>
 #include <QStringList>
 #include <QString>
+#include <QRandomGenerator>
 #include <QVector>
 
 #define Q_TEST_PERFORMANCE 0
@@ -78,10 +68,48 @@ private slots:
     void qCountContainer() const;
     void binaryFindOnLargeContainer() const;
 
-#if Q_TEST_PERFORMANCE
+    void popCount08_data() { popCount_data_impl(sizeof(quint8 )); }
+    void popCount16_data() { popCount_data_impl(sizeof(quint16)); }
+    void popCount32_data() { popCount_data_impl(sizeof(quint32)); }
+    void popCount64_data() { popCount_data_impl(sizeof(quint64)); }
+    void popCount08()      { popCount_impl<quint8 >(); }
+    void popCount16()      { popCount_impl<quint16>(); }
+    void popCount32()      { popCount_impl<quint32>(); }
+    void popCount64()      { popCount_impl<quint64>(); }
+
+    void countTrailing08_data() { countTrailing_data_impl(sizeof(quint8 )); }
+    void countTrailing16_data() { countTrailing_data_impl(sizeof(quint16)); }
+    void countTrailing32_data() { countTrailing_data_impl(sizeof(quint32)); }
+    void countTrailing64_data() { countTrailing_data_impl(sizeof(quint64)); }
+    void countTrailing08()      { countTrailing_impl<quint8 >(); }
+    void countTrailing16()      { countTrailing_impl<quint16>(); }
+    void countTrailing32()      { countTrailing_impl<quint32>(); }
+    void countTrailing64()      { countTrailing_impl<quint64>(); }
+
+    void countLeading08_data() { countLeading_data_impl(sizeof(quint8 )); }
+    void countLeading16_data() { countLeading_data_impl(sizeof(quint16)); }
+    void countLeading32_data() { countLeading_data_impl(sizeof(quint32)); }
+    void countLeading64_data() { countLeading_data_impl(sizeof(quint64)); }
+    void countLeading08()      { countLeading_impl<quint8 >(); }
+    void countLeading16()      { countLeading_impl<quint16>(); }
+    void countLeading32()      { countLeading_impl<quint32>(); }
+    void countLeading64()      { countLeading_impl<quint64>(); }
+
 private:
+#if Q_TEST_PERFORMANCE
     void performance();
 #endif
+    void popCount_data_impl(size_t sizeof_T_Int);
+    template <typename T_Int>
+    void popCount_impl();
+
+    void countTrailing_data_impl(size_t sizeof_T_Int);
+    template <typename T_Int>
+    void countTrailing_impl();
+
+    void countLeading_data_impl(size_t sizeof_T_Int);
+    template <typename T_Int>
+    void countLeading_impl();
 };
 
 class TestInt
@@ -106,7 +134,7 @@ QVector<DataType> generateData(QString dataSetType, const int length)
     QVector<DataType> container;
     if (dataSetType == "Random") {
         for (int i = 0; i < length; ++i)
-            container.append(rand());
+            container.append(QRandomGenerator::global()->generate());
     } else if (dataSetType == "Ascending") {
         for (int i = 0; i < length; ++i)
             container.append(i);
@@ -280,24 +308,24 @@ void tst_QAlgorithms::swap()
     {
         QString a = "1", b = "2";
         qSwap(a, b);
-        QVERIFY(a == "2");
-        QVERIFY(b == "1");
+        QCOMPARE(a, QLatin1String("2"));
+        QCOMPARE(b, QLatin1String("1"));
 
         qSwap(a, a);
-        QVERIFY(a == "2");
-        QVERIFY(b == "1");
+        QCOMPARE(a, QLatin1String("2"));
+        QCOMPARE(b, QLatin1String("1"));
 
         qSwap(b, b);
-        QVERIFY(a == "2");
-        QVERIFY(b == "1");
+        QCOMPARE(a, QLatin1String("2"));
+        QCOMPARE(b, QLatin1String("1"));
 
         qSwap(a, b);
-        QVERIFY(a == "1");
-        QVERIFY(b == "2");
+        QCOMPARE(a, QLatin1String("1"));
+        QCOMPARE(b, QLatin1String("2"));
 
         qSwap(b, a);
-        QVERIFY(a == "2");
-        QVERIFY(b == "1");
+        QCOMPARE(a, QLatin1String("2"));
+        QCOMPARE(b, QLatin1String("1"));
     }
 
     {
@@ -396,7 +424,6 @@ void tst_QAlgorithms::sortedList()
     QCOMPARE(list.at(5), 8);
 }
 
-Q_DECLARE_METATYPE(QList<int>)
 
 void tst_QAlgorithms::test_qLowerBound_data()
 {
@@ -615,7 +642,6 @@ void tst_QAlgorithms::stableSortTest()
     }
 }
 
-Q_DECLARE_METATYPE(QVector<int>)
 
 void tst_QAlgorithms::stableSortCorrectnessTest_data()
 {
@@ -836,6 +862,12 @@ void tst_QAlgorithms::qCountContainer() const
 class RAI
 {
   public:
+    typedef int difference_type;
+    typedef int value_type;
+    typedef std::random_access_iterator_tag iterator_category;
+    typedef int *pointer;
+    typedef int &reference;
+
     RAI(int searched = 5, int hidePos = 4, int len = 10)
         : curPos_(0)
         , length_(len)
@@ -1007,6 +1039,152 @@ void tst_QAlgorithms::binaryFindOnLargeContainer() const
 
   RAI foundIt = qBinaryFind(rai.begin(), rai.end(), 5);
   QCOMPARE(foundIt.pos(), 1073987655);
+}
+
+// alternative implementation of qPopulationCount for comparison:
+static Q_DECL_CONSTEXPR const uint bitsSetInNibble[] = {
+    0, 1, 1, 2, 1, 2, 2, 3,
+    1, 2, 2, 3, 2, 3, 3, 4,
+};
+Q_STATIC_ASSERT(sizeof bitsSetInNibble / sizeof *bitsSetInNibble == 16);
+
+static Q_DECL_CONSTEXPR uint bitsSetInByte(quint8 byte)
+{
+    return bitsSetInNibble[byte & 0xF] + bitsSetInNibble[byte >> 4];
+}
+static Q_DECL_CONSTEXPR uint bitsSetInShort(quint16 word)
+{
+    return bitsSetInByte(word & 0xFF) + bitsSetInByte(word >> 8);
+}
+static Q_DECL_CONSTEXPR uint bitsSetInInt(quint32 word)
+{
+    return bitsSetInShort(word & 0xFFFF) + bitsSetInShort(word >> 16);
+}
+static Q_DECL_CONSTEXPR uint bitsSetInInt64(quint64 word)
+{
+    return bitsSetInInt(word & 0xFFFFFFFF) + bitsSetInInt(word >> 32);
+}
+
+
+void tst_QAlgorithms::popCount_data_impl(size_t sizeof_T_Int)
+{
+    using namespace QTest;
+    addColumn<quint64>("input");
+    addColumn<uint>("expected");
+
+    for (uint i = 0; i < UCHAR_MAX; ++i) {
+        const uchar byte = static_cast<uchar>(i);
+        const uint bits = bitsSetInByte(byte);
+        const quint64 value = static_cast<quint64>(byte);
+        const quint64 input = value << ((i % sizeof_T_Int) * 8U);
+        QTest::addRow("0x%016llx", input) << input << bits;
+    }
+
+    // and some random ones:
+    if (sizeof_T_Int >= 8)
+        for (size_t i = 0; i < 1000; ++i) {
+            const quint64 input = QRandomGenerator::global()->generate64();
+            QTest::addRow("0x%016llx", input) << input << bitsSetInInt64(input);
+        }
+        else if (sizeof_T_Int >= 2)
+            for (size_t i = 0; i < 1000 ; ++i) {
+                const quint32 input = QRandomGenerator::global()->generate();
+                if (sizeof_T_Int >= 4)
+                    QTest::addRow("0x%08x", input) << quint64(input) << bitsSetInInt(input);
+                else
+                    QTest::addRow("0x%04x", quint16(input & 0xFFFF)) << quint64(input & 0xFFFF) << bitsSetInShort(input & 0xFFFF);
+            }
+}
+
+template <typename T_Int>
+void tst_QAlgorithms::popCount_impl()
+{
+    QFETCH(quint64, input);
+    QFETCH(uint, expected);
+
+    const T_Int value = static_cast<T_Int>(input);
+
+    QCOMPARE(qPopulationCount(value), expected);
+}
+
+void tst_QAlgorithms::countTrailing_data_impl(size_t sizeof_T_Int)
+{
+    using namespace QTest;
+    addColumn<quint64>("input");
+    addColumn<uint>("expected");
+
+    int nibs = sizeof_T_Int*2;
+
+    newRow(("0x"+QByteArray::number(0,16).rightJustified(nibs,'0')).constData()) << Q_UINT64_C(0) << uint(sizeof_T_Int*8);
+    for (uint i = 0; i < sizeof_T_Int*8; ++i) {
+        const quint64 input = Q_UINT64_C(1) << i;
+        newRow(("0x"+QByteArray::number(input,16).rightJustified(nibs,'0')).constData()) << input << i;
+    }
+
+    quint64 type_mask;
+    if (sizeof_T_Int>=8)
+        type_mask = ~Q_UINT64_C(0);
+    else
+        type_mask = (Q_UINT64_C(1) << (sizeof_T_Int*8))-1;
+
+    // and some random ones:
+    for (uint i = 0; i < sizeof_T_Int*8; ++i) {
+        for (uint j = 0; j < sizeof_T_Int*3; ++j) {  // 3 is arbitrary
+            const quint64 r = QRandomGenerator::global()->generate64();
+            const quint64 b = Q_UINT64_C(1) << i;
+            const quint64 mask = ((~(b-1)) ^ b) & type_mask;
+            const quint64 input = (r&mask) | b;
+            newRow(("0x"+QByteArray::number(input,16).rightJustified(nibs,'0')).constData()) << input << i;
+        }
+    }
+}
+
+template <typename T_Int>
+void tst_QAlgorithms::countTrailing_impl()
+{
+    QFETCH(quint64, input);
+    QFETCH(uint, expected);
+
+    const T_Int value = static_cast<T_Int>(input);
+
+    QCOMPARE(qCountTrailingZeroBits(value), expected);
+}
+
+void tst_QAlgorithms::countLeading_data_impl(size_t sizeof_T_Int)
+{
+    using namespace QTest;
+    addColumn<quint64>("input");
+    addColumn<uint>("expected");
+
+    int nibs = sizeof_T_Int*2;
+
+    newRow(("0x"+QByteArray::number(0,16).rightJustified(nibs,'0')).constData()) << Q_UINT64_C(0) << uint(sizeof_T_Int*8);
+    for (uint i = 0; i < sizeof_T_Int*8; ++i) {
+        const quint64 input = Q_UINT64_C(1) << i;
+        newRow(("0x"+QByteArray::number(input,16).rightJustified(nibs,'0')).constData()) << input << uint(sizeof_T_Int*8-i-1);
+    }
+
+    // and some random ones:
+    for (uint i = 0; i < sizeof_T_Int*8; ++i) {
+        for (uint j = 0; j < sizeof_T_Int*3; ++j) {  // 3 is arbitrary
+            const quint64 r = QRandomGenerator::global()->generate64();
+            const quint64 b = Q_UINT64_C(1) << i;
+            const quint64 mask = b-1;
+            const quint64 input = (r&mask) | b;
+            newRow(("0x"+QByteArray::number(input,16).rightJustified(nibs,'0')).constData()) << input << uint(sizeof_T_Int*8-i-1);
+        }
+    }
+}
+
+template <typename T_Int>
+void tst_QAlgorithms::countLeading_impl()
+{
+    QFETCH(quint64, input);
+    QFETCH(uint, expected);
+
+    const T_Int value = static_cast<T_Int>(input);
+
+    QCOMPARE(qCountLeadingZeroBits(value), expected);
 }
 
 QTEST_APPLESS_MAIN(tst_QAlgorithms)

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the FOO module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -60,6 +47,7 @@ class tst_QAbstractFileEngine
 {
     Q_OBJECT
 public slots:
+    void initTestCase();
     void cleanupTestCase();
 
 private slots:
@@ -72,6 +60,8 @@ private slots:
     void mounting();
 private:
     QStringList filesForRemoval;
+    QSharedPointer<QTemporaryDir> m_currentDir;
+    QString m_previousCurrent;
 };
 
 class ReferenceFileEngine
@@ -351,8 +341,10 @@ public:
         if (file) {
             QMutexLocker lock(&file->mutex);
             switch (time) {
-                case CreationTime:
-                    return file->creation;
+                case BirthTime:
+                    return file->birth;
+                case MetadataChangeTime:
+                    return file->change;
                 case ModificationTime:
                     return file->modification;
                 case AccessTime:
@@ -361,6 +353,13 @@ public:
         }
 
         return QDateTime();
+    }
+
+    bool setFileTime(const QDateTime &newDate, FileTime time)
+    {
+        Q_UNUSED(newDate);
+        Q_UNUSED(time);
+        return false;
     }
 
     void setFileName(const QString &file)
@@ -459,7 +458,7 @@ protected:
 
         uint userId, groupId;
         QAbstractFileEngine::FileFlags fileFlags;
-        QDateTime creation, modification, access;
+        QDateTime birth, change, modification, access;
 
         QByteArray content;
     };
@@ -476,7 +475,7 @@ protected:
         if (create) {
             QSharedPointer<File> &p = fileSystem[fileName_];
             if (p.isNull())
-                p = QSharedPointer<File>(new File);
+                p = QSharedPointer<File>::create();
             return p;
         }
 
@@ -571,6 +570,14 @@ class FileEngineHandler
     }
 };
 
+void tst_QAbstractFileEngine::initTestCase()
+{
+    m_previousCurrent = QDir::currentPath();
+    m_currentDir = QSharedPointer<QTemporaryDir>::create();
+    QVERIFY2(!m_currentDir.isNull(), qPrintable("Could not create current directory."));
+    QDir::setCurrent(m_currentDir->path());
+}
+
 void tst_QAbstractFileEngine::cleanupTestCase()
 {
     bool failed = false;
@@ -584,6 +591,8 @@ void tst_QAbstractFileEngine::cleanupTestCase()
         }
 
     QVERIFY(!failed);
+
+    QDir::setCurrent(m_previousCurrent);
 }
 
 void tst_QAbstractFileEngine::customHandler()

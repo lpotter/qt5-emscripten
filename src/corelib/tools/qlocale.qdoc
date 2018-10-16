@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -92,27 +92,7 @@
     \note For the current keyboard input locale take a look at
     QInputMethod::locale().
 
-    QLocale's data is based on Common Locale Data Repository v22.1.
-
-    The double-to-string and string-to-double conversion functions are
-    covered by the following licenses:
-
-    \legalese
-    Copyright (c) 1991 by AT&T.
-
-    Permission to use, copy, modify, and distribute this software for any
-    purpose without fee is hereby granted, provided that this entire notice
-    is included in all copies of any software which is or includes a copy
-    or modification of this software and in all copies of the supporting
-    documentation for such software.
-
-    THIS SOFTWARE IS BEING PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED
-    WARRANTY.  IN PARTICULAR, NEITHER THE AUTHOR NOR AT&T MAKES ANY
-    REPRESENTATION OR WARRANTY OF ANY KIND CONCERNING THE MERCHANTABILITY
-    OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
-
-    This product includes software developed by the University of
-    California, Berkeley and its contributors.
+    QLocale's data is based on Common Locale Data Repository v33.1.
 
     \sa QString::arg(), QString::toInt(), QString::toDouble(),
     QInputMethod::locale()
@@ -130,6 +110,7 @@
     \value Afan Obsolete, please use Oromo
     \value Afar
     \value Afrikaans
+    \value Akoose Since Qt 5.3
     \value Albanian
     \value Amharic
     \value Arabic
@@ -215,6 +196,7 @@
     \value Rundi
     \value Kurundi Obsolete, please use Rundi
     \value Kwanyama
+    \value Lakota Since Qt 5.3
     \value Lao
     \value Latin
     \value Latvian
@@ -272,6 +254,7 @@
     \value Slovenian
     \value Somali
     \value Spanish
+    \value StandardMoroccanTamazight Since Qt 5.3
     \value Sundanese
     \value Swahili
     \value Swedish
@@ -289,7 +272,8 @@
     \value Turkish
     \value Turkmen
     \value Twi Obsolete, please use Akan
-    \value Uigur
+    \value Uighur
+    \value Uigur Obsolete, please use Uighur
     \value Ukrainian
     \value Urdu
     \value Uzbek
@@ -401,6 +385,104 @@
     \value Kako
     \value Meta
     \value Ngiemboon
+    \value Aragonese
+    \value Akkadian
+    \value AncientEgyptian
+    \value AncientGreek
+    \value Aramaic
+    \value Balinese
+    \value Bamun
+    \value BatakToba
+    \value Buginese
+    \value Buhid
+    \value Carian
+    \value Chakma
+    \value ClassicalMandaic
+    \value Coptic
+    \value Dogri
+    \value EasternCham
+    \value EasternKayah
+    \value Etruscan
+    \value Gothic
+    \value Hanunoo
+    \value Ingush
+    \value LargeFloweryMiao
+    \value Lepcha
+    \value Limbu
+    \value Lisu
+    \value Lu
+    \value Lycian
+    \value Lydian
+    \value Mandingo
+    \value Manipuri
+    \value Meroitic
+    \value NorthernThai
+    \value OldIrish
+    \value OldNorse
+    \value OldPersian
+    \value OldTurkish
+    \value Pahlavi
+    \value Parthian
+    \value Phoenician
+    \value PrakritLanguage
+    \value Rejang
+    \value Sabaean
+    \value Samaritan
+    \value Santali
+    \value Saurashtra
+    \value Sora
+    \value Sylheti
+    \value Tagbanwa
+    \value TaiDam
+    \value TaiNua
+    \value Ugaritic
+    \value Mapuche Since Qt 5.5
+    \value CentralKurdish Since Qt 5.5
+    \value LowerSorbian Since Qt 5.5
+    \value UpperSorbian Since Qt 5.5
+    \value Kenyang Since Qt 5.5
+    \value Mohawk Since Qt 5.5
+    \value Nko Since Qt 5.5
+    \value Prussian Since Qt 5.5
+    \value Kiche Since Qt 5.5
+    \value SouthernSami Since Qt 5.5
+    \value LuleSami Since Qt 5.5
+    \value InariSami Since Qt 5.5
+    \value SkoltSami Since Qt 5.5
+    \value Warlpiri Since Qt 5.5
+    \value ManichaeanMiddlePersian Since Qt 5.5
+    \value Mende Since Qt 5.5
+    \value AncientNorthArabian Since Qt 5.5
+    \value LinearA Since Qt 5.5
+    \value HmongNjua Since Qt 5.5
+    \value Ho Since Qt 5.5
+    \value Lezghian Since Qt 5.5
+    \value Bassa Since Qt 5.5
+    \value Mono Since Qt 5.5
+    \value TedimChin Since Qt 5.5
+    \value Maithili Since Qt 5.5
+    \value LowerSorbian Since Qt 5.5
+    \value UpperSorbian Since Qt 5.5
+    \value Ahom Since Qt 5.7
+    \value AmericanSignLanguage Since Qt 5.7
+    \value ArdhamagadhiPrakrit Since Qt 5.7
+    \value Bhojpuri Since Qt 5.7
+    \value Cantonese Since Qt 5.7
+    \value HieroglyphicLuwian Since Qt 5.7
+    \value LiteraryChinese Since Qt 5.7
+    \value Mazanderani Since Qt 5.7
+    \value Mru Since Qt 5.7
+    \value Newari Since Qt 5.7
+    \value NorthernLuri Since Qt 5.7
+    \value Osage Since Qt 5.7
+    \value Palauan Since Qt 5.7
+    \value Papiamento Since Qt 5.7
+    \value Saraiki Since Qt 5.7
+    \value Tangut Since Qt 5.7
+    \value TokelauLanguage Since Qt 5.7
+    \value TokPisin Since Qt 5.7
+    \value TuvaluLanguage Since Qt 5.7
+    \value UncodedLanguages Since Qt 5.7
     \omitvalue LastLanguage
 
     \sa language(), languageToString()
@@ -450,6 +532,7 @@
     \value Cambodia
     \value Cameroon
     \value Canada
+    \value CanaryIslands
     \value CapeVerde
     \value CaymanIslands
     \value CentralAfricanRepublic
@@ -457,6 +540,7 @@
     \value Chile
     \value China
     \value ChristmasIsland
+    \value ClippertonIsland
     \value CocosIslands
     \value Colombia
     \value Comoros
@@ -483,6 +567,8 @@
     \value Eritrea
     \value Estonia
     \value Ethiopia
+    \value EuropeanUnion Since Qt 5.7
+    \value Europe Since Qt 5.12
     \value FalklandIslands
     \value FaroeIslands
     \value Fiji
@@ -503,6 +589,7 @@
     \value Guadeloupe
     \value Guam
     \value Guatemala
+    \value Guernsey
     \value Guinea
     \value GuineaBissau
     \value Guyana
@@ -529,9 +616,12 @@
     \value SouthKorea
     \value DemocraticRepublicOfKorea Obsolete, please use NorthKorea
     \value RepublicOfKorea Obsolete, please use SouthKorea
+    \value Kosovo
     \value Kuwait
     \value Kyrgyzstan
     \value Laos
+    \value LatinAmerica
+    \value LatinAmericaAndTheCaribbean Obsolete, please use LatinAmerica
     \value Latvia
     \value Lebanon
     \value Lesotho
@@ -576,6 +666,7 @@
     \value NorthernMarianaIslands
     \value Norway
     \value Oman
+    \value OutlyingOceania Since Qt 5.7
     \value Pakistan
     \value Palau
     \value PalestinianTerritories
@@ -628,14 +719,16 @@
     \value Tanzania
     \value Thailand
     \value Togo
-    \value Tokelau
+    \value TokelauCountry
+    \value Tokelau Obsolete, please use TokelauCountry
     \value Tonga
     \value TrinidadAndTobago
     \value Tunisia
     \value Turkey
     \value Turkmenistan
     \value TurksAndCaicosIslands
-    \value Tuvalu
+    \value TuvaluCountry
+    \value Tuvalu Obsolete, please use TuvaluCountry
     \value Uganda
     \value Ukraine
     \value UnitedArabEmirates
@@ -647,11 +740,12 @@
     \value Vanuatu
     \value VaticanCityState
     \value Venezuela
-    \value VietNam
+    \value Vietnam
     \value BritishVirginIslands
     \value UnitedStatesVirginIslands
     \value WallisAndFutunaIslands
     \value WesternSahara
+    \value World Since Qt 5.12
     \value Yemen
     \value Zambia
     \value Zimbabwe
@@ -659,7 +753,6 @@
     \value Serbia
     \value SaintBarthelemy
     \value SaintMartin
-    \value LatinAmericaAndTheCaribbean
     \value AscensionIsland
     \value AlandIslands
     \value DiegoGarcia
@@ -682,43 +775,149 @@
     This enumerated type is used to specify a script.
 
     \value AnyScript
+    \value AdlamScript Since Qt 5.7
+    \value AhomScript Since Qt 5.7
+    \value AnatolianHieroglyphsScript Since Qt 5.7
     \value ArabicScript
+    \value ArmenianScript
+    \value AvestanScript
+    \value BalineseScript
+    \value BamumScript
+    \value BassaVahScript Since Qt 5.5
+    \value BatakScript
+    \value BengaliScript
+    \value BhaiksukiScript Since Qt 5.7
+    \value BopomofoScript
+    \value BrahmiScript
+    \value BrailleScript
+    \value BugineseScript
+    \value BuhidScript
+    \value CanadianAboriginalScript
+    \value CarianScript
+    \value CaucasianAlbanianScript Since Qt 5.5
+    \value ChakmaScript
+    \value ChamScript
+    \value CherokeeScript
+    \value CopticScript
+    \value CypriotScript
     \value CyrillicScript
     \value DeseretScript
-    \value GurmukhiScript
-    \value SimplifiedHanScript same as SimplifiedChineseScript
-    \value SimplifiedChineseScript same as SimplifiedHanScript
-    \value TraditionalHanScript same as TraditionalChineseScript
-    \value TraditionalChineseScript same as TraditionalHanScript
-    \value LatinScript
-    \value MongolianScript
-    \value TifinaghScript
-    \value ArmenianScript
-    \value BengaliScript
-    \value CherokeeScript
     \value DevanagariScript
+    \value DuployanScript Since Qt 5.5
+    \value EgyptianHieroglyphsScript
+    \value ElbasanScript Since Qt 5.5
     \value EthiopicScript
+    \value FraserScript
     \value GeorgianScript
+    \value GlagoliticScript
+    \value GothicScript
+    \value GranthaScript Since Qt 5.5
     \value GreekScript
     \value GujaratiScript
+    \value GurmukhiScript
+    \value HanScript
+    \value HangulScript
+    \value HanunooScript
+    \value HanWithBopomofoScript Since Qt 5.7
+    \value HatranScript Since Qt 5.7
     \value HebrewScript
+    \value HiraganaScript
+    \value ImperialAramaicScript
+    \value InscriptionalPahlaviScript
+    \value InscriptionalParthianScript
+    \value JamoScript Since Qt 5.7
     \value JapaneseScript
-    \value KhmerScript
+    \value JavaneseScript
+    \value KaithiScript
     \value KannadaScript
+    \value KatakanaScript
+    \value KayahLiScript
+    \value KharoshthiScript
+    \value KhmerScript
+    \value KhojkiScript Since Qt 5.5
+    \value KhudawadiScript Since Qt 5.5
     \value KoreanScript
+    \value LannaScript
     \value LaoScript
+    \value LatinScript
+    \value LepchaScript
+    \value LimbuScript
+    \value LinearAScript Since Qt 5.5
+    \value LinearBScript
+    \value LycianScript
+    \value LydianScript
+    \value MahajaniScript Since Qt 5.5
     \value MalayalamScript
+    \value MandaeanScript
+    \value ManichaeanScript Since Qt 5.5
+    \value MarchenScript Since Qt 5.7
+    \value MeiteiMayekScript
+    \value MendeKikakuiScript Since Qt 5.5
+    \value MeroiticScript
+    \value MeroiticCursiveScript
+    \value ModiScript Since Qt 5.5
+    \value MongolianScript
+    \value MroScript Since Qt 5.5
+    \value MultaniScript Since Qt 5.7
     \value MyanmarScript
+    \value NabataeanScript Since Qt 5.5
+    \value NkoScript
+    \value NewaScript Since Qt 5.7
+    \value NewTaiLueScript
+    \value OghamScript
+    \value OlChikiScript
+    \value OldItalicScript
+    \value OldHungarianScript Since Qt 5.7
+    \value OldNorthArabianScript Since Qt 5.5
+    \value OldPermicScript Since Qt 5.5
+    \value OldPersianScript
+    \value OldSouthArabianScript
     \value OriyaScript
+    \value OrkhonScript
+    \value OsageScript Since Qt 5.7
+    \value OsmanyaScript
+    \value PahawhHmongScript Since Qt 5.5
+    \value PalmyreneScript Since Qt 5.5
+    \value PauCinHauScript Since Qt 5.5
+    \value PhagsPaScript
+    \value PhoenicianScript
+    \value PollardPhoneticScript
+    \value PsalterPahlaviScript Since Qt 5.5
+    \value RejangScript
+    \value RunicScript
+    \value SamaritanScript
+    \value SaurashtraScript
+    \value SharadaScript
+    \value ShavianScript
+    \value SiddhamScript Since Qt 5.5
+    \value SignWritingScript Since Qt 5.7
+    \value SimplifiedHanScript same as SimplifiedChineseScript
+    \value SimplifiedChineseScript same as SimplifiedHanScript
+    \value SinhalaScript
+    \value SoraSompengScript
+    \value CuneiformScript
+    \value SundaneseScript
+    \value SylotiNagriScript
+    \value SyriacScript
+    \value TagalogScript
+    \value TagbanwaScript
+    \value TaiLeScript
+    \value TaiVietScript
+    \value TakriScript
     \value TamilScript
+    \value TangutScript Since Qt 5.7
     \value TeluguScript
     \value ThaanaScript
     \value ThaiScript
     \value TibetanScript
-    \value SinhalaScript
-    \value SyriacScript
+    \value TifinaghScript
+    \value TirhutaScript Since Qt 5.5
+    \value TraditionalHanScript same as TraditionalChineseScript
+    \value TraditionalChineseScript same as TraditionalHanScript
+    \value UgariticScript
+    \value VaiScript
+    \value VarangKshitiScript Since Qt 5.5
     \value YiScript
-    \value VaiiScript
     \omitvalue LastScript
 
     \sa script(), scriptToString(), languageToString()
@@ -743,6 +942,8 @@
     locale doesn't support narrow names, so you should avoid using it
     for date formatting. Also, for the system locale this format is
     the same as ShortFormat.
+
+    \sa QDateTime::toString(), QDate::toString(), QTime::toString()
 */
 
 /*!
@@ -752,14 +953,50 @@
     conversions. They can be retrieved with numberOptions() and set with
     setNumberOptions().
 
+    \value DefaultNumberOptions This option represents the default behavior, with
+            group separators, with one leading zero in single digit exponents, and
+            without trailing zeroes after the decimal dot.
     \value OmitGroupSeparator If this option is set, the number-to-string functions
             will not insert group separators in their return values. The default
             is to insert group separators.
     \value RejectGroupSeparator If this option is set, the string-to-number functions
             will fail if they encounter group separators in their input. The default
             is to accept numbers containing correctly placed group separators.
+    \value OmitLeadingZeroInExponent If this option is set, the number-to-string
+            functions will not pad exponents with zeroes when printing floating point
+            numbers in scientific notation. The default is to add one leading zero to
+            single digit exponents.
+    \value RejectLeadingZeroInExponent If this option is set, the string-to-number
+            functions will fail if they encounter an exponent padded with zeroes when
+            parsing a floating point number in scientific notation. The default is to
+            accept such padding.
+    \value IncludeTrailingZeroesAfterDot If this option is set, the number-to-string
+            functions will pad numbers with zeroes to the requested precision in "g"
+            or "most concise" mode, even if the number of significant digits is lower
+            than the requested precision. The default is to omit trailing zeroes.
+    \value RejectTrailingZeroesAfterDot If this option is set, the string-to-number
+            functions will fail if they encounter trailing zeroes after the decimal
+            dot when parsing a number in scientific or decimal representation. The
+            default is to accept trailing zeroes.
 
     \sa setNumberOptions(), numberOptions()
+*/
+
+/*!
+    \enum QLocale::FloatingPointPrecisionOption
+
+    This enum defines constants that can be given as precision to QString::number(),
+    QByteArray::number(), and QLocale::toString() when converting floats or doubles,
+    in order to express a variable number of digits as precision.
+
+    \value FloatingPointShortest The conversion algorithm will try to find the
+            shortest accurate representation for the given number. "Accurate" means
+            that you get the exact same number back from an inverse conversion on
+            the generated string representation.
+
+    \sa toString(), QString, QByteArray
+
+    \since 5.7
 */
 
 /*!
@@ -782,15 +1019,15 @@
 /*!
     \fn bool QLocale::operator==(const QLocale &other) const
 
-    Returns true if the QLocale object is the same as the \a other
-    locale specified; otherwise returns false.
+    Returns \c true if the QLocale object is the same as the \a other
+    locale specified; otherwise returns \c false.
 */
 
 /*!
     \fn bool QLocale::operator!=(const QLocale &other) const
 
-    Returns true if the QLocale object is not the same as the \a other
-    locale specified; otherwise returns false.
+    Returns \c true if the QLocale object is not the same as the \a other
+    locale specified; otherwise returns \c false.
 */
 
 /*!
@@ -871,6 +1108,8 @@
   \value ListToSeparatedString a string that represents a join of a given QStringList with a locale-defined separator.
   \value NativeLanguageName a string that represents the name of the native language.
   \value NativeCountryName a string that represents the name of the native country.
+
+  \sa FormatType
 */
 
 /*!

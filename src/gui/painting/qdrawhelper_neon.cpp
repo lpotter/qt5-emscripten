@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,50 +10,47 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include <private/qdrawhelper_p.h>
+#include <private/qdrawhelper_neon_p.h>
 #include <private/qblendfunctions_p.h>
 #include <private/qmath_p.h>
 
-#ifdef QT_COMPILER_SUPPORTS_NEON
+#ifdef __ARM_NEON__
 
-#include <private/qdrawhelper_neon_p.h>
 #include <private/qpaintengine_raster_p.h>
-#include <arm_neon.h>
 
 QT_BEGIN_NAMESPACE
 
-void qt_memfill32_neon(quint32 *dest, quint32 value, int count)
+void qt_memfill32(quint32 *dest, quint32 value, int count)
 {
     const int epilogueSize = count % 16;
+#if !defined(Q_PROCESSOR_ARM_64)
     if (count >= 16) {
         quint32 *const neonEnd = dest + count - epilogueSize;
         register uint32x4_t valueVector1 asm ("q0") = vdupq_n_u32(value);
@@ -68,6 +65,22 @@ void qt_memfill32_neon(quint32 *dest, quint32 value, int count)
             );
         }
     }
+#else
+    if (count >= 16) {
+        quint32 *const neonEnd = dest + count - epilogueSize;
+        register uint32x4_t valueVector1 asm ("v0") = vdupq_n_u32(value);
+        register uint32x4_t valueVector2 asm ("v1") = valueVector1;
+        while (dest != neonEnd) {
+            asm volatile (
+                "st2     { v0.4s, v1.4s }, [%[DST]], #32 \n\t"
+                "st2     { v0.4s, v1.4s }, [%[DST]], #32 \n\t"
+                : [DST]"+r" (dest)
+                : [VALUE1]"w"(valueVector1), [VALUE2]"w"(valueVector2)
+                : "memory"
+            );
+        }
+    }
+#endif
 
     switch (epilogueSize)
     {
@@ -128,6 +141,7 @@ static inline uint16x8_t qvsource_over_u16(uint16x8_t src16, uint16x8_t dst16, u
     return vaddq_u16(src16, qvbyte_mul_u16(dst16, alpha16, half));
 }
 
+#if defined(ENABLE_PIXMAN_DRAWHELPERS)
 extern "C" void
 pixman_composite_over_8888_0565_asm_neon (int32_t   w,
                                           int32_t   h,
@@ -174,7 +188,6 @@ pixman_composite_src_0565_0565_asm_neon (int32_t   w,
                                          int32_t   dst_stride,
                                          uint16_t *src,
                                          int32_t   src_stride);
-
 // qblendfunctions.cpp
 void qt_blend_argb32_on_rgb16_const_alpha(uchar *destPixels, int dbpl,
                                           const uchar *srcPixels, int sbpl,
@@ -213,6 +226,7 @@ void qt_blend_rgb16_on_rgb16(uchar *dst, int dbpl,
                              const uchar *src, int sbpl,
                              int w, int h,
                              int const_alpha);
+
 
 template <int N>
 static inline void scanLineBlit16(quint16 *dst, quint16 *src, int dstride)
@@ -339,11 +353,16 @@ void qt_blend_argb32_on_rgb16_neon(uchar *destPixels, int dbpl,
 
     pixman_composite_over_8888_0565_asm_neon(w, h, dst, dbpl / 2, src, sbpl / 4);
 }
+#endif
 
 void qt_blend_argb32_on_argb32_scanline_neon(uint *dest, const uint *src, int length, uint const_alpha)
 {
     if (const_alpha == 255) {
+#if defined(ENABLE_PIXMAN_DRAWHELPERS)
         pixman_composite_scanline_over_asm_neon(length, dest, src);
+#else
+        qt_blend_argb32_on_argb32_neon((uchar *)dest, 4 * length, (uchar *)src, 4 * length, length, 1, 256);
+#endif
     } else {
         qt_blend_argb32_on_argb32_neon((uchar *)dest, 4 * length, (uchar *)src, 4 * length, length, 1, (const_alpha * 256) / 255);
     }
@@ -359,7 +378,51 @@ void qt_blend_argb32_on_argb32_neon(uchar *destPixels, int dbpl,
     uint16x8_t half = vdupq_n_u16(0x80);
     uint16x8_t full = vdupq_n_u16(0xff);
     if (const_alpha == 256) {
+#if defined(ENABLE_PIXMAN_DRAWHELPERS)
         pixman_composite_over_8888_8888_asm_neon(w, h, (uint32_t *)destPixels, dbpl / 4, (uint32_t *)srcPixels, sbpl / 4);
+#else
+        for (int y=0; y<h; ++y) {
+            int x = 0;
+            for (; x < w-3; x += 4) {
+                if (src[x] | src[x+1] | src[x+2] | src[x+3]) {
+                    uint32x4_t src32 = vld1q_u32((uint32_t *)&src[x]);
+                    uint32x4_t dst32 = vld1q_u32((uint32_t *)&dst[x]);
+
+                    const uint8x16_t src8 = vreinterpretq_u8_u32(src32);
+                    const uint8x16_t dst8 = vreinterpretq_u8_u32(dst32);
+
+                    const uint8x8_t src8_low = vget_low_u8(src8);
+                    const uint8x8_t dst8_low = vget_low_u8(dst8);
+
+                    const uint8x8_t src8_high = vget_high_u8(src8);
+                    const uint8x8_t dst8_high = vget_high_u8(dst8);
+
+                    const uint16x8_t src16_low = vmovl_u8(src8_low);
+                    const uint16x8_t dst16_low = vmovl_u8(dst8_low);
+
+                    const uint16x8_t src16_high = vmovl_u8(src8_high);
+                    const uint16x8_t dst16_high = vmovl_u8(dst8_high);
+
+                    const uint16x8_t result16_low = qvsource_over_u16(src16_low, dst16_low, half, full);
+                    const uint16x8_t result16_high = qvsource_over_u16(src16_high, dst16_high, half, full);
+
+                    const uint32x2_t result32_low = vreinterpret_u32_u8(vmovn_u16(result16_low));
+                    const uint32x2_t result32_high = vreinterpret_u32_u8(vmovn_u16(result16_high));
+
+                    vst1q_u32((uint32_t *)&dst[x], vcombine_u32(result32_low, result32_high));
+                }
+            }
+            for (; x<w; ++x) {
+                uint s = src[x];
+                if (s >= 0xff000000)
+                    dst[x] = s;
+                else if (s != 0)
+                    dst[x] = s + BYTE_MUL(dst[x], qAlpha(~s));
+            }
+            dst = (quint32 *)(((uchar *) dst) + dbpl);
+            src = (const quint32 *)(((const uchar *) src) + sbpl);
+        }
+#endif
     } else if (const_alpha != 0) {
         const_alpha = (const_alpha * 255) >> 8;
         uint16x8_t const_alpha16 = vdupq_n_u16(const_alpha);
@@ -460,8 +523,6 @@ void qt_blend_rgb32_on_rgb32_neon(uchar *destPixels, int dbpl,
                     vst1q_u32((uint32_t *)&dst[x], vcombine_u32(result32_low, result32_high));
                 }
                 for (; x<w; ++x) {
-                    uint s = src[x];
-                    s = BYTE_MUL(s, const_alpha);
                     dst[x] = INTERPOLATE_PIXEL_255(src[x], const_alpha, dst[x], one_minus_const_alpha);
                 }
                 dst = (quint32 *)(((uchar *) dst) + dbpl);
@@ -473,18 +534,31 @@ void qt_blend_rgb32_on_rgb32_neon(uchar *destPixels, int dbpl,
     }
 }
 
+#if defined(ENABLE_PIXMAN_DRAWHELPERS)
+extern void qt_alphamapblit_quint16(QRasterBuffer *rasterBuffer,
+                                    int x, int y, const QRgba64 &color,
+                                    const uchar *map,
+                                    int mapWidth, int mapHeight, int mapStride,
+                                    const QClipData *clip, bool useGammaCorrection);
+
 void qt_alphamapblit_quint16_neon(QRasterBuffer *rasterBuffer,
-                                  int x, int y, quint32 color,
+                                  int x, int y, const QRgba64 &color,
                                   const uchar *bitmap,
                                   int mapWidth, int mapHeight, int mapStride,
-                                  const QClipData *)
+                                  const QClipData *clip, bool useGammaCorrection)
 {
+    if (clip || useGammaCorrection) {
+        qt_alphamapblit_quint16(rasterBuffer, x, y, color, bitmap, mapWidth, mapHeight, mapStride, clip, useGammaCorrection);
+        return;
+    }
+
     quint16 *dest = reinterpret_cast<quint16*>(rasterBuffer->scanLine(y)) + x;
     const int destStride = rasterBuffer->bytesPerLine() / sizeof(quint16);
 
     uchar *mask = const_cast<uchar *>(bitmap);
+    const uint c = color.toArgb32();
 
-    pixman_composite_over_n_8_0565_asm_neon(mapWidth, mapHeight, dest, destStride, color, 0, mask, mapStride);
+    pixman_composite_over_n_8_0565_asm_neon(mapWidth, mapHeight, dest, destStride, c, 0, mask, mapStride);
 }
 
 extern "C" void blend_8_pixels_rgb16_on_rgb16_neon(quint16 *dst, const quint16 *src, int const_alpha);
@@ -539,7 +613,7 @@ Blend_on_RGB16_SourceAndConstAlpha_Neon_create(BlendFunc blender, int const_alph
 }
 
 void qt_scale_image_argb32_on_rgb16_neon(uchar *destPixels, int dbpl,
-                                         const uchar *srcPixels, int sbpl,
+                                         const uchar *srcPixels, int sbpl, int srch,
                                          const QRectF &targetRect,
                                          const QRectF &sourceRect,
                                          const QRect &clip,
@@ -548,19 +622,19 @@ void qt_scale_image_argb32_on_rgb16_neon(uchar *destPixels, int dbpl,
     if (const_alpha == 0)
         return;
 
-    qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl, targetRect, sourceRect, clip,
+    qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl, srch, targetRect, sourceRect, clip,
         Blend_on_RGB16_SourceAndConstAlpha_Neon_create<quint32>(blend_8_pixels_argb32_on_rgb16_neon, const_alpha));
 }
 
 void qt_scale_image_rgb16_on_rgb16(uchar *destPixels, int dbpl,
-                                   const uchar *srcPixels, int sbpl,
+                                   const uchar *srcPixels, int sbpl, int srch,
                                    const QRectF &targetRect,
                                    const QRectF &sourceRect,
                                    const QRect &clip,
                                    int const_alpha);
 
 void qt_scale_image_rgb16_on_rgb16_neon(uchar *destPixels, int dbpl,
-                                        const uchar *srcPixels, int sbpl,
+                                        const uchar *srcPixels, int sbpl, int srch,
                                         const QRectF &targetRect,
                                         const QRectF &sourceRect,
                                         const QRect &clip,
@@ -570,11 +644,11 @@ void qt_scale_image_rgb16_on_rgb16_neon(uchar *destPixels, int dbpl,
         return;
 
     if (const_alpha == 256) {
-        qt_scale_image_rgb16_on_rgb16(destPixels, dbpl, srcPixels, sbpl, targetRect, sourceRect, clip, const_alpha);
+        qt_scale_image_rgb16_on_rgb16(destPixels, dbpl, srcPixels, sbpl, srch, targetRect, sourceRect, clip, const_alpha);
         return;
     }
 
-    qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl, targetRect, sourceRect, clip,
+    qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl, srch, targetRect, sourceRect, clip,
         Blend_on_RGB16_SourceAndConstAlpha_Neon_create<quint16>(blend_8_pixels_rgb16_on_rgb16_neon, const_alpha));
 }
 
@@ -712,6 +786,7 @@ void QT_FASTCALL qt_destStoreRGB16_neon(QRasterBuffer *rasterBuffer, int x, int 
             data[i + j] = dstBuffer[j];
     }
 }
+#endif
 
 void QT_FASTCALL comp_func_solid_SourceOver_neon(uint *destPixels, int length, uint color, uint const_alpha)
 {
@@ -751,7 +826,7 @@ void QT_FASTCALL comp_func_solid_SourceOver_neon(uint *destPixels, int length, u
             vst1q_u32(&dst[x], colorPlusBlendedPixels);
         }
 
-        for (;x < length; ++x)
+        SIMD_EPILOGUE(x, length, 3)
             destPixels[x] = color + BYTE_MUL(destPixels[x], minusAlphaOfColor);
     }
 }
@@ -763,16 +838,13 @@ void QT_FASTCALL comp_func_Plus_neon(uint *dst, const uint *src, int length, uin
         uint *const neonEnd = end - 3;
 
         while (dst < neonEnd) {
-            asm volatile (
-                "vld2.8     { d0, d1 }, [%[SRC]] !\n\t"
-                "vld2.8     { d2, d3 }, [%[DST]]\n\t"
-                "vqadd.u8 q0, q0, q1\n\t"
-                "vst2.8     { d0, d1 }, [%[DST]] !\n\t"
-                : [DST]"+r" (dst), [SRC]"+r" (src)
-                :
-                : "memory", "d0", "d1", "d2", "d3", "q0", "q1"
-            );
-        }
+            uint8x16_t vs = vld1q_u8((const uint8_t*)src);
+            const uint8x16_t vd = vld1q_u8((uint8_t*)dst);
+            vs = vqaddq_u8(vs, vd);
+            vst1q_u8((uint8_t*)dst, vs);
+            src += 4;
+            dst += 4;
+        };
 
         while (dst != end) {
             *dst = comp_func_Plus_one_pixel(*dst, *src);
@@ -806,11 +878,12 @@ void QT_FASTCALL comp_func_Plus_neon(uint *dst, const uint *src, int length, uin
             vst1q_u32((uint32_t *)&dst[x], vcombine_u32(result32_low, result32_high));
         }
 
-        for (; x < length; ++x)
+        SIMD_EPILOGUE(x, length, 3)
             dst[x] = comp_func_Plus_one_pixel_const_alpha(dst[x], src[x], const_alpha, one_minus_const_alpha);
     }
 }
 
+#if defined(ENABLE_PIXMAN_DRAWHELPERS)
 static const int tileSize = 32;
 
 extern "C" void qt_rotate90_16_neon(quint16 *dst, const quint16 *src, int sstride, int dstride, int count);
@@ -954,6 +1027,7 @@ void qt_memrotate270_16_neon(const uchar *srcPixels, int w, int h,
         }
     }
 }
+#endif
 
 class QSimdNeon
 {
@@ -964,6 +1038,7 @@ public:
     union Vect_buffer_i { Int32x4 v; int i[4]; };
     union Vect_buffer_f { Float32x4 v; float f[4]; };
 
+    static inline Float32x4 v_dup(double x) { return vdupq_n_f32(float(x)); }
     static inline Float32x4 v_dup(float x) { return vdupq_n_f32(x); }
     static inline Int32x4 v_dup(int x) { return vdupq_n_s32(x); }
     static inline Int32x4 v_dup(uint x) { return vdupq_n_s32(x); }
@@ -992,10 +1067,228 @@ public:
 const uint * QT_FASTCALL qt_fetch_radial_gradient_neon(uint *buffer, const Operator *op, const QSpanData *data,
                                                        int y, int x, int length)
 {
-    return qt_fetch_radial_gradient_template<QRadialFetchSimd<QSimdNeon> >(buffer, op, data, y, x, length);
+    return qt_fetch_radial_gradient_template<QRadialFetchSimd<QSimdNeon>,uint>(buffer, op, data, y, x, length);
 }
+
+extern void QT_FASTCALL qt_convert_rgb888_to_rgb32_neon(quint32 *dst, const uchar *src, int len);
+
+const uint * QT_FASTCALL qt_fetchUntransformed_888_neon(uint *buffer, const Operator *, const QSpanData *data,
+                                                       int y, int x, int length)
+{
+    const uchar *line = data->texture.scanLine(y) + x * 3;
+    qt_convert_rgb888_to_rgb32_neon(buffer, line, length);
+    return buffer;
+}
+
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+static inline uint32x4_t vrgba2argb(uint32x4_t srcVector)
+{
+#if defined(Q_PROCESSOR_ARM_64)
+    const uint8x16_t rgbaMask  = { 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15};
+#else
+    const uint8x8_t rgbaMask  = { 2, 1, 0, 3, 6, 5, 4, 7 };
+#endif
+#if defined(Q_PROCESSOR_ARM_64)
+    srcVector = vreinterpretq_u32_u8(vqtbl1q_u8(vreinterpretq_u8_u32(srcVector), rgbaMask));
+#else
+    // no vqtbl1q_u8, so use two vtbl1_u8
+    const uint8x8_t low = vtbl1_u8(vreinterpret_u8_u32(vget_low_u32(srcVector)), rgbaMask);
+    const uint8x8_t high = vtbl1_u8(vreinterpret_u8_u32(vget_high_u32(srcVector)), rgbaMask);
+    srcVector = vcombine_u32(vreinterpret_u32_u8(low), vreinterpret_u32_u8(high));
+#endif
+    return srcVector;
+}
+
+template<bool RGBA>
+static inline void convertARGBToARGB32PM_neon(uint *buffer, const uint *src, int count)
+{
+    int i = 0;
+    const uint8x8_t shuffleMask = { 3, 3, 3, 3, 7, 7, 7, 7};
+    const uint32x4_t blendMask = vdupq_n_u32(0xff000000);
+
+    for (; i < count - 3; i += 4) {
+        uint32x4_t srcVector = vld1q_u32(src + i);
+        uint32x4_t alphaVector = vshrq_n_u32(srcVector, 24);
+#if defined(Q_PROCESSOR_ARM_64)
+        uint32_t alphaSum = vaddvq_u32(alphaVector);
+#else
+        // no vaddvq_u32
+        uint32x2_t tmp = vpadd_u32(vget_low_u32(alphaVector), vget_high_u32(alphaVector));
+        uint32_t alphaSum = vget_lane_u32(vpadd_u32(tmp, tmp), 0);
+#endif
+        if (alphaSum) {
+            if (alphaSum != 255 * 4) {
+                if (RGBA)
+                    srcVector = vrgba2argb(srcVector);
+                const uint8x8_t s1 = vreinterpret_u8_u32(vget_low_u32(srcVector));
+                const uint8x8_t s2 = vreinterpret_u8_u32(vget_high_u32(srcVector));
+                const uint8x8_t alpha1 = vtbl1_u8(s1, shuffleMask);
+                const uint8x8_t alpha2 = vtbl1_u8(s2, shuffleMask);
+                uint16x8_t src1 = vmull_u8(s1, alpha1);
+                uint16x8_t src2 = vmull_u8(s2, alpha2);
+                src1 = vsraq_n_u16(src1, src1, 8);
+                src2 = vsraq_n_u16(src2, src2, 8);
+                const uint8x8_t d1 = vrshrn_n_u16(src1, 8);
+                const uint8x8_t d2 = vrshrn_n_u16(src2, 8);
+                const uint32x4_t d = vbslq_u32(blendMask, srcVector, vreinterpretq_u32_u8(vcombine_u8(d1, d2)));
+                vst1q_u32(buffer + i, d);
+            } else {
+                if (RGBA)
+                    vst1q_u32(buffer + i, vrgba2argb(srcVector));
+                else if (buffer != src)
+                    vst1q_u32(buffer + i, srcVector);
+            }
+        } else {
+            vst1q_u32(buffer + i, vdupq_n_u32(0));
+        }
+    }
+
+    SIMD_EPILOGUE(i, count, 3) {
+        uint v = qPremultiply(src[i]);
+        buffer[i] = RGBA ? RGBA2ARGB(v) : v;
+    }
+}
+
+static inline float32x4_t reciprocal_mul_ps(float32x4_t a, float mul)
+{
+    float32x4_t ia = vrecpeq_f32(a); // estimate 1/a
+    ia = vmulq_f32(vrecpsq_f32(a, ia), vmulq_n_f32(ia, mul)); // estimate improvement step * mul
+    return ia;
+}
+
+template<bool RGBA, bool RGBx>
+static inline void convertARGBFromARGB32PM_neon(uint *buffer, const uint *src, int count)
+{
+    int i = 0;
+    const uint32x4_t alphaMask = vdupq_n_u32(0xff000000);
+
+    for (; i < count - 3; i += 4) {
+        uint32x4_t srcVector = vld1q_u32(src + i);
+        uint32x4_t alphaVector = vshrq_n_u32(srcVector, 24);
+#if defined(Q_PROCESSOR_ARM_64)
+        uint32_t alphaSum = vaddvq_u32(alphaVector);
+#else
+        // no vaddvq_u32
+        uint32x2_t tmp = vpadd_u32(vget_low_u32(alphaVector), vget_high_u32(alphaVector));
+        uint32_t alphaSum = vget_lane_u32(vpadd_u32(tmp, tmp), 0);
+#endif
+        if (alphaSum) {
+            if (alphaSum != 255 * 4) {
+                if (RGBA)
+                    srcVector = vrgba2argb(srcVector);
+                const float32x4_t a = vcvtq_f32_u32(alphaVector);
+                const float32x4_t ia = reciprocal_mul_ps(a, 255.0f);
+                // Convert 4x(4xU8) to 4x(4xF32)
+                uint16x8_t tmp1 = vmovl_u8(vget_low_u8(vreinterpretq_u8_u32(srcVector)));
+                uint16x8_t tmp3 = vmovl_u8(vget_high_u8(vreinterpretq_u8_u32(srcVector)));
+                float32x4_t src1 = vcvtq_f32_u32(vmovl_u16(vget_low_u16(tmp1)));
+                float32x4_t src2 = vcvtq_f32_u32(vmovl_u16(vget_high_u16(tmp1)));
+                float32x4_t src3 = vcvtq_f32_u32(vmovl_u16(vget_low_u16(tmp3)));
+                float32x4_t src4 = vcvtq_f32_u32(vmovl_u16(vget_high_u16(tmp3)));
+                src1 = vmulq_lane_f32(src1, vget_low_f32(ia), 0);
+                src2 = vmulq_lane_f32(src2, vget_low_f32(ia), 1);
+                src3 = vmulq_lane_f32(src3, vget_high_f32(ia), 0);
+                src4 = vmulq_lane_f32(src4, vget_high_f32(ia), 1);
+                // Convert 4x(4xF32) back to 4x(4xU8) (over a 8.1 fixed point format to get rounding)
+                tmp1 = vcombine_u16(vrshrn_n_u32(vcvtq_n_u32_f32(src1, 1), 1),
+                                    vrshrn_n_u32(vcvtq_n_u32_f32(src2, 1), 1));
+                tmp3 = vcombine_u16(vrshrn_n_u32(vcvtq_n_u32_f32(src3, 1), 1),
+                                    vrshrn_n_u32(vcvtq_n_u32_f32(src4, 1), 1));
+                uint32x4_t dstVector = vreinterpretq_u32_u8(vcombine_u8(vmovn_u16(tmp1), vmovn_u16(tmp3)));
+                // Overwrite any undefined results from alpha==0 with zeros:
+#if defined(Q_PROCESSOR_ARM_64)
+                uint32x4_t srcVectorAlphaMask = vceqzq_u32(alphaVector);
+#else
+                uint32x4_t srcVectorAlphaMask = vceqq_u32(alphaVector, vdupq_n_u32(0));
+#endif
+                dstVector = vbicq_u32(dstVector, srcVectorAlphaMask);
+                // Restore or mask alpha values:
+                if (RGBx)
+                    dstVector = vorrq_u32(alphaMask, dstVector);
+                else
+                    dstVector = vbslq_u32(alphaMask, srcVector, dstVector);
+                vst1q_u32(&buffer[i], dstVector);
+            } else {
+                // 4xAlpha==255, no change except if we are doing RGBA->ARGB:
+                if (RGBA)
+                    vst1q_u32(&buffer[i], vrgba2argb(srcVector));
+                else if (buffer != src)
+                    vst1q_u32(&buffer[i], srcVector);
+            }
+        } else {
+            // 4xAlpha==0, always zero, except if output is RGBx:
+            if (RGBx)
+                vst1q_u32(&buffer[i], alphaMask);
+            else
+                vst1q_u32(&buffer[i], vdupq_n_u32(0));
+        }
+    }
+
+    SIMD_EPILOGUE(i, count, 3) {
+        uint v = qUnpremultiply(src[i]);
+        if (RGBx)
+            v = 0xff000000 | v;
+        if (RGBA)
+            v = ARGB2RGBA(v);
+        buffer[i] = v;
+    }
+}
+
+void QT_FASTCALL convertARGB32ToARGB32PM_neon(uint *buffer, int count, const QVector<QRgb> *)
+{
+    convertARGBToARGB32PM_neon<false>(buffer, buffer, count);
+}
+
+void QT_FASTCALL convertRGBA8888ToARGB32PM_neon(uint *buffer, int count, const QVector<QRgb> *)
+{
+    convertARGBToARGB32PM_neon<true>(buffer, buffer, count);
+}
+
+const uint *QT_FASTCALL fetchARGB32ToARGB32PM_neon(uint *buffer, const uchar *src, int index, int count,
+                                                   const QVector<QRgb> *, QDitherInfo *)
+{
+    convertARGBToARGB32PM_neon<false>(buffer, reinterpret_cast<const uint *>(src) + index, count);
+    return buffer;
+}
+
+const uint *QT_FASTCALL fetchRGBA8888ToARGB32PM_neon(uint *buffer, const uchar *src, int index, int count,
+                                                     const QVector<QRgb> *, QDitherInfo *)
+{
+    convertARGBToARGB32PM_neon<true>(buffer, reinterpret_cast<const uint *>(src) + index, count);
+    return buffer;
+}
+
+void QT_FASTCALL storeRGB32FromARGB32PM_neon(uchar *dest, const uint *src, int index, int count,
+                                             const QVector<QRgb> *, QDitherInfo *)
+{
+    uint *d = reinterpret_cast<uint *>(dest) + index;
+    convertARGBFromARGB32PM_neon<false,true>(d, src, count);
+}
+
+void QT_FASTCALL storeARGB32FromARGB32PM_neon(uchar *dest, const uint *src, int index, int count,
+                                              const QVector<QRgb> *, QDitherInfo *)
+{
+    uint *d = reinterpret_cast<uint *>(dest) + index;
+    convertARGBFromARGB32PM_neon<false,false>(d, src, count);
+}
+
+void QT_FASTCALL storeRGBA8888FromARGB32PM_neon(uchar *dest, const uint *src, int index, int count,
+                                                const QVector<QRgb> *, QDitherInfo *)
+{
+    uint *d = reinterpret_cast<uint *>(dest) + index;
+    convertARGBFromARGB32PM_neon<true,false>(d, src, count);
+}
+
+void QT_FASTCALL storeRGBXFromARGB32PM_neon(uchar *dest, const uint *src, int index, int count,
+                                            const QVector<QRgb> *, QDitherInfo *)
+{
+    uint *d = reinterpret_cast<uint *>(dest) + index;
+    convertARGBFromARGB32PM_neon<true,true>(d, src, count);
+}
+
+#endif // Q_BYTE_ORDER == Q_LITTLE_ENDIAN
 
 QT_END_NAMESPACE
 
-#endif // QT_COMPILER_SUPPORTS_NEON
+#endif // __ARM_NEON__
 

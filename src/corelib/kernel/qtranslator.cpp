@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -51,10 +49,10 @@
 #include "qcoreapplication.h"
 #include "qcoreapplication_p.h"
 #include "qdatastream.h"
+#include "qendian.h"
 #include "qfile.h"
 #include "qmap.h"
 #include "qalgorithms.h"
-#include "qhash.h"
 #include "qtranslator_p.h"
 #include "qlocale.h"
 #include "qendian.h"
@@ -94,13 +92,15 @@ static const uchar magic[MagicLength] = {
     0xcd, 0x21, 0x1c, 0xbf, 0x60, 0xa1, 0xbd, 0xdd
 };
 
-static bool match(const uchar* found, const char* target, uint len)
+static inline QString dotQmLiteral() { return QStringLiteral(".qm"); }
+
+static bool match(const uchar *found, uint foundLen, const char *target, uint targetLen)
 {
     // catch the case if \a found has a zero-terminating symbol and \a len includes it.
     // (normalize it to be without the zero-terminating symbol)
-    if (len > 0 && found[len-1] == '\0')
-        --len;
-    return (memcmp(found, target, len) == 0 && target[len] == '\0');
+    if (foundLen > 0 && found[foundLen-1] == '\0')
+        --foundLen;
+    return ((targetLen == foundLen) && memcmp(found, target, foundLen) == 0);
 }
 
 static void elfHash_continue(const char *name, uint &h)
@@ -281,6 +281,7 @@ static uint numerusHelper(int n, const uchar *rules, uint rulesSize)
     }
 
     Q_ASSERT(false);
+    return 0;
 }
 
 class QTranslatorPrivate : public QObjectPrivate
@@ -343,10 +344,10 @@ public:
 
     The most common use of QTranslator is to: load a translation
     file, install it using QCoreApplication::installTranslator(), and use
-    it via QObject::tr(). Here's the \c main() function from the
-    \l{linguist/hellotr}{Hello tr()} example:
+    it via QObject::tr(). Here's an example \c main() function using the
+    QTranslator:
 
-    \snippet linguist/hellotr/main.cpp 2
+    \snippet hellotrmain.cpp 0
 
     Note that the translator must be created \e before the
     application's widgets.
@@ -431,12 +432,11 @@ QTranslator::~QTranslator()
 
     Loads \a filename + \a suffix (".qm" if the \a suffix is not
     specified), which may be an absolute file name or relative to \a
-    directory. Returns true if the translation is successfully loaded;
-    otherwise returns false.
+    directory. Returns \c true if the translation is successfully loaded;
+    otherwise returns \c false.
 
-    If \a directory is not specified, the directory of the
-    application's executable is used (i.e., as
-    \l{QCoreApplication::}{applicationDirPath()}).
+    If \a directory is not specified, the current directory is used
+    (i.e., as \l{QDir::}{currentPath()}).
 
     The previous contents of this translator object are discarded.
 
@@ -465,6 +465,12 @@ QTranslator::~QTranslator()
     \li \c /opt/foolib/foo.qm
     \li \c /opt/foolib/foo
     \endlist
+
+    Usually, it is better to use the QTranslator::load(const QLocale &,
+    const QString &, const QString &, const QString &, const QString &)
+    function instead, because it uses \l{QLocale::uiLanguages()} and not simply
+    the locale name, which refers to the formatting of dates and numbers and not
+    necessarily the UI language.
 */
 
 bool QTranslator::load(const QString & filename, const QString & directory,
@@ -481,15 +487,15 @@ bool QTranslator::load(const QString & filename, const QString & directory,
             prefix += QLatin1Char('/');
     }
 
-    QString fname = filename;
+    const QString suffixOrDotQM = suffix.isNull() ? dotQmLiteral() : suffix;
+    QStringRef fname(&filename);
     QString realname;
-    QString delims;
-    delims = search_delimiters.isNull() ? QString::fromLatin1("_.") : search_delimiters;
+    const QString delims = search_delimiters.isNull() ? QStringLiteral("_.") : search_delimiters;
 
     for (;;) {
         QFileInfo fi;
 
-        realname = prefix + fname + (suffix.isNull() ? QString::fromLatin1(".qm") : suffix);
+        realname = prefix + fname + suffixOrDotQM;
         fi.setFile(realname);
         if (fi.isReadable() && fi.isFile())
             break;
@@ -522,12 +528,12 @@ bool QTranslatorPrivate::do_load(const QString &realname, const QString &directo
     QTranslatorPrivate *d = this;
     bool ok = false;
 
-    if (realname.startsWith(':')) {
+    if (realname.startsWith(QLatin1Char(':'))) {
         // If the translation is in a non-compressed resource file, the data is already in
         // memory, so no need to use QFile to copy it again.
         Q_ASSERT(!d->resource);
         d->resource = new QResource(realname);
-        if (resource->isValid() && !resource->isCompressed() && resource->size() > MagicLength
+        if (resource->isValid() && !resource->isCompressed() && resource->size() >= MagicLength
                 && !memcmp(resource->data(), magic, MagicLength)) {
             d->unmapLength = resource->size();
             d->unmapPointer = reinterpret_cast<char *>(const_cast<uchar *>(resource->data()));
@@ -547,7 +553,7 @@ bool QTranslatorPrivate::do_load(const QString &realname, const QString &directo
             return false;
 
         qint64 fileSize = file.size();
-        if (fileSize <= MagicLength || quint32(-1) <= fileSize)
+        if (fileSize < MagicLength || quint32(-1) <= fileSize)
             return false;
 
         {
@@ -616,6 +622,13 @@ bool QTranslatorPrivate::do_load(const QString &realname, const QString &directo
     return false;
 }
 
+Q_NEVER_INLINE
+static bool is_readable_file(const QString &name)
+{
+    const QFileInfo fi(name);
+    return fi.isReadable() && fi.isFile();
+}
+
 static QString find_translation(const QLocale & locale,
                                 const QString & filename,
                                 const QString & prefix,
@@ -628,9 +641,11 @@ static QString find_translation(const QLocale & locale,
         if (!path.isEmpty() && !path.endsWith(QLatin1Char('/')))
             path += QLatin1Char('/');
     }
+    const QString suffixOrDotQM = suffix.isNull() ? dotQmLiteral() : suffix;
 
-    QFileInfo fi;
     QString realname;
+    realname += path + filename + prefix; // using += in the hope for some reserve capacity
+    const int realNameBaseSize = realname.size();
     QStringList fuzzyLocales;
 
     // see http://www.unicode.org/reports/tr35/#LanguageMatching for inspiration
@@ -646,24 +661,24 @@ static QString find_translation(const QLocale & locale,
 #endif
 
     // try explicit locales names first
-    foreach (QString localeName, languages) {
+    for (QString localeName : qAsConst(languages)) {
         localeName.replace(QLatin1Char('-'), QLatin1Char('_'));
 
-        realname = path + filename + prefix + localeName + (suffix.isNull() ? QLatin1String(".qm") : suffix);
-        fi.setFile(realname);
-        if (fi.isReadable() && fi.isFile())
+        realname += localeName + suffixOrDotQM;
+        if (is_readable_file(realname))
             return realname;
 
-        realname = path + filename + prefix + localeName;
-        fi.setFile(realname);
-        if (fi.isReadable() && fi.isFile())
+        realname.truncate(realNameBaseSize + localeName.size());
+        if (is_readable_file(realname))
             return realname;
 
+        realname.truncate(realNameBaseSize);
         fuzzyLocales.append(localeName);
     }
 
     // start guessing
-    foreach (QString localeName, fuzzyLocales) {
+    for (const QString &fuzzyLocale : qAsConst(fuzzyLocales)) {
+        QStringRef localeName(&fuzzyLocale);
         for (;;) {
             int rightmost = localeName.lastIndexOf(QLatin1Char('_'));
             // no truncations? fail
@@ -671,36 +686,40 @@ static QString find_translation(const QLocale & locale,
                 break;
             localeName.truncate(rightmost);
 
-            realname = path + filename + prefix + localeName + (suffix.isNull() ? QLatin1String(".qm") : suffix);
-            fi.setFile(realname);
-            if (fi.isReadable() && fi.isFile())
+            realname += localeName + suffixOrDotQM;
+            if (is_readable_file(realname))
                 return realname;
 
-            realname = path + filename + prefix + localeName;
-            fi.setFile(realname);
-            if (fi.isReadable() && fi.isFile())
+            realname.truncate(realNameBaseSize + localeName.size());
+            if (is_readable_file(realname))
                 return realname;
+
+            realname.truncate(realNameBaseSize);
         }
     }
 
+    const int realNameBaseSizeFallbacks = path.size() + filename.size();
+
+    // realname == path + filename + prefix;
     if (!suffix.isNull()) {
-        realname = path + filename + suffix;
-        fi.setFile(realname);
-        if (fi.isReadable() && fi.isFile())
+        realname.replace(realNameBaseSizeFallbacks, prefix.size(), suffix);
+        // realname == path + filename;
+        if (is_readable_file(realname))
             return realname;
+        realname.replace(realNameBaseSizeFallbacks, suffix.size(), prefix);
     }
 
-    realname = path + filename + prefix;
-    fi.setFile(realname);
-    if (fi.isReadable() && fi.isFile())
+    // realname == path + filename + prefix;
+    if (is_readable_file(realname))
         return realname;
 
-    realname = path + filename;
-    fi.setFile(realname);
-    if (fi.isReadable() && fi.isFile())
+    realname.truncate(realNameBaseSizeFallbacks);
+    // realname == path + filename;
+    if (is_readable_file(realname))
         return realname;
 
-    return QString();
+    realname.truncate(0);
+    return realname;
 }
 
 /*!
@@ -708,8 +727,8 @@ static QString find_translation(const QLocale & locale,
 
     Loads \a filename + \a prefix + \l{QLocale::uiLanguages()}{ui language
     name} + \a suffix (".qm" if the \a suffix is not specified), which may be
-    an absolute file name or relative to \a directory. Returns true if the
-    translation is successfully loaded; otherwise returns false.
+    an absolute file name or relative to \a directory. Returns \c true if the
+    translation is successfully loaded; otherwise returns \c false.
 
     The previous contents of this translator object are discarded.
 
@@ -725,7 +744,7 @@ static QString find_translation(const QLocale & locale,
 
     For example, an application running in the \a locale with the following
     \l{QLocale::uiLanguages()}{ui languages} - "es", "fr-CA", "de" might call
-    load(QLocale::system(), "foo", ".", "/opt/foolib", ".qm"). load() would
+    load(QLocale(), "foo", ".", "/opt/foolib", ".qm"). load() would
     replace '-' (dash) with '_' (underscore) in the ui language and then try to
     open the first existing readable file from this list:
 
@@ -839,8 +858,6 @@ bool QTranslatorPrivate::do_load(const uchar *data, int len, const QString &dire
         data += blockLen;
     }
 
-    if (dependencies.isEmpty() && (!offsetArray || !messageArray))
-        ok = false;
     if (ok && !isValidNumerusRules(numerusRulesArray, numerusRulesLength))
         ok = false;
     if (ok) {
@@ -880,6 +897,9 @@ static QString getMessage(const uchar *m, const uchar *end, const char *context,
 {
     const uchar *tn = 0;
     uint tn_length = 0;
+    const uint sourceTextLen = uint(strlen(sourceText));
+    const uint contextLen = uint(strlen(context));
+    const uint commentLen = uint(strlen(comment));
 
     for (;;) {
         uchar tag = 0;
@@ -906,7 +926,7 @@ static QString getMessage(const uchar *m, const uchar *end, const char *context,
         case Tag_SourceText: {
             quint32 len = read32(m);
             m += 4;
-            if (!match(m, sourceText, len))
+            if (!match(m, len, sourceText, sourceTextLen))
                 return QString();
             m += len;
         }
@@ -914,7 +934,7 @@ static QString getMessage(const uchar *m, const uchar *end, const char *context,
         case Tag_Context: {
             quint32 len = read32(m);
             m += 4;
-            if (!match(m, context, len))
+            if (!match(m, len, context, contextLen))
                 return QString();
             m += len;
         }
@@ -922,7 +942,7 @@ static QString getMessage(const uchar *m, const uchar *end, const char *context,
         case Tag_Comment: {
             quint32 len = read32(m);
             m += 4;
-            if (*m && !match(m, comment, len))
+            if (*m && !match(m, len, comment, commentLen))
                 return QString();
             m += len;
         }
@@ -936,8 +956,8 @@ end:
         return QString();
     QString str = QString((const QChar *)tn, tn_length/2);
     if (QSysInfo::ByteOrder == QSysInfo::LittleEndian) {
-        for (int i = 0; i < str.length(); ++i)
-            str[i] = QChar((str.at(i).unicode() >> 8) + ((str.at(i).unicode() << 8) & 0xff00));
+        QChar *data = str.data();
+        qbswap<sizeof(QChar)>(data, str.length(), data);
     }
     return str;
 }
@@ -972,11 +992,12 @@ QString QTranslatorPrivate::do_translate(const char *context, const char *source
             return QString();
         c = contextArray + (2 + (hTableSize << 1) + (off << 1));
 
+        const uint contextLen = uint(strlen(context));
         for (;;) {
             quint8 len = read8(c++);
             if (len == 0)
                 return QString();
-            if (match(c, context, len))
+            if (match(c, len, context, contextLen))
                 break;
             c += len;
         }
@@ -1034,7 +1055,7 @@ QString QTranslatorPrivate::do_translate(const char *context, const char *source
     }
 
 searchDependencies:
-    foreach (QTranslator *translator, subTranslators) {
+    for (QTranslator *translator : subTranslators) {
         QString tn = translator->translate(context, sourceText, comment, n);
         if (!tn.isNull())
             return tn;
@@ -1042,7 +1063,7 @@ searchDependencies:
     return QString();
 }
 
-/*!
+/*
     Empties this translator of all contents.
 
     This function works with stripped translator files.
@@ -1084,11 +1105,14 @@ void QTranslatorPrivate::clear()
 }
 
 /*!
-    \overload translate()
-
     Returns the translation for the key (\a context, \a sourceText,
     \a disambiguation). If none is found, also tries (\a context, \a
     sourceText, ""). If that still fails, returns a null string.
+
+    \note Incomplete translations may result in unexpected behavior:
+    If no translation for (\a context, \a sourceText, "")
+    is provided, the method might in this case actually return a
+    translation for a different \a disambiguation.
 
     If \a n is not -1, it is used to choose an appropriate form for
     the translation (e.g. "%n file found" vs. "%n files found").
@@ -1106,16 +1130,18 @@ QString QTranslator::translate(const char *context, const char *sourceText, cons
 }
 
 /*!
-    Returns true if this translator is empty, otherwise returns false.
+    Returns \c true if this translator is empty, otherwise returns \c false.
     This function works with stripped and unstripped translation files.
 */
 bool QTranslator::isEmpty() const
 {
     Q_D(const QTranslator);
-    return !d->unmapPointer && !d->unmapLength && !d->messageArray &&
-           !d->offsetArray && !d->contextArray && d->subTranslators.isEmpty();
+    return !d->messageArray && !d->offsetArray && !d->contextArray
+            && d->subTranslators.isEmpty();
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qtranslator.cpp"
 
 #endif // QT_NO_TRANSLATION

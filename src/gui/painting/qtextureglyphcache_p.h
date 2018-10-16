@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,16 +51,13 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <qhash.h>
 #include <qimage.h>
 #include <qobject.h>
 #include <qtransform.h>
 
 #include <private/qfontengineglyphcache_p.h>
-
-#if defined(Q_OS_VXWORKS) && defined(m_type)
-#  undef m_type
-#endif
 
 #ifndef QT_DEFAULT_TEXTURE_GLYPH_CACHE_WIDTH
 #define QT_DEFAULT_TEXTURE_GLYPH_CACHE_WIDTH 256
@@ -79,12 +74,12 @@ class QTextItemInt;
 class Q_GUI_EXPORT QTextureGlyphCache : public QFontEngineGlyphCache
 {
 public:
-    QTextureGlyphCache(QFontEngineGlyphCache::Type type, const QTransform &matrix)
-        : QFontEngineGlyphCache(matrix, type), m_current_fontengine(0),
+    QTextureGlyphCache(QFontEngine::GlyphFormat format, const QTransform &matrix)
+        : QFontEngineGlyphCache(format, matrix), m_current_fontengine(0),
                                                m_w(0), m_h(0), m_cx(0), m_cy(0), m_currentRowHeight(0)
         { }
 
-    virtual ~QTextureGlyphCache() { }
+    ~QTextureGlyphCache();
 
     struct GlyphAndSubPixelPosition
     {
@@ -116,13 +111,16 @@ public:
 
     bool populate(QFontEngine *fontEngine, int numGlyphs, const glyph_t *glyphs,
                   const QFixedPoint *positions);
+    bool hasPendingGlyphs() const { return !m_pendingGlyphs.isEmpty(); };
     void fillInPendingGlyphs();
 
     virtual void createTextureData(int width, int height) = 0;
     virtual void resizeTextureData(int width, int height) = 0;
     virtual int glyphPadding() const { return 0; }
 
+    virtual void beginFillTexture() { }
     virtual void fillTexture(const Coord &coord, glyph_t glyph, QFixed subPixelPosition) = 0;
+    virtual void endFillTexture() { }
 
     inline void createCache(int width, int height) {
         m_w = width;
@@ -167,11 +165,13 @@ inline uint qHash(const QTextureGlyphCache::GlyphAndSubPixelPosition &g)
 class Q_GUI_EXPORT QImageTextureGlyphCache : public QTextureGlyphCache
 {
 public:
-    QImageTextureGlyphCache(QFontEngineGlyphCache::Type type, const QTransform &matrix)
-        : QTextureGlyphCache(type, matrix) { }
-    virtual void createTextureData(int width, int height);
-    virtual void resizeTextureData(int width, int height);
-    virtual void fillTexture(const Coord &c, glyph_t glyph, QFixed subPixelPosition);
+    QImageTextureGlyphCache(QFontEngine::GlyphFormat format, const QTransform &matrix)
+        : QTextureGlyphCache(format, matrix) { }
+    ~QImageTextureGlyphCache();
+
+    virtual void createTextureData(int width, int height) override;
+    virtual void resizeTextureData(int width, int height) override;
+    virtual void fillTexture(const Coord &c, glyph_t glyph, QFixed subPixelPosition) override;
 
     inline const QImage &image() const { return m_image; }
 

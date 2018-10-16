@@ -1,47 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qtoolbox.h"
-
-#ifndef QT_NO_TOOLBOX
 
 #include <qapplication.h>
 #include <qeventloop.h>
@@ -73,12 +69,12 @@ public:
     inline void setSelected(bool b) { selected = b; update(); }
     inline void setIndex(int newIndex) { indexInPage = newIndex; }
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
 protected:
     void initStyleOption(QStyleOptionToolBox *opt) const;
-    void paintEvent(QPaintEvent *);
+    void paintEvent(QPaintEvent *) override;
 
 private:
     bool selected;
@@ -119,7 +115,7 @@ public:
     void _q_buttonClicked();
     void _q_widgetDestroyed(QObject*);
 
-    Page *page(QWidget *widget) const;
+    const Page *page(const QObject *widget) const;
     const Page *page(int index) const;
     Page *page(int index);
 
@@ -131,14 +127,14 @@ public:
     Page *currentPage;
 };
 
-QToolBoxPrivate::Page *QToolBoxPrivate::page(QWidget *widget) const
+const QToolBoxPrivate::Page *QToolBoxPrivate::page(const QObject *widget) const
 {
     if (!widget)
         return 0;
 
     for (PageList::ConstIterator i = pageList.constBegin(); i != pageList.constEnd(); ++i)
         if ((*i).widget == widget)
-            return (Page*) &(*i);
+            return (const Page*) &(*i);
     return 0;
 }
 
@@ -214,35 +210,32 @@ void QToolBoxButton::initStyleOption(QStyleOptionToolBox *option) const
     option->text = text();
     option->icon = icon();
 
-    if (QStyleOptionToolBoxV2 *optionV2 = qstyleoption_cast<QStyleOptionToolBoxV2 *>(option)) {
-        QToolBox *toolBox = static_cast<QToolBox *>(parentWidget()); // I know I'm in a tool box.
-        int widgetCount = toolBox->count();
-        int currIndex = toolBox->currentIndex();
-        if (widgetCount == 1) {
-            optionV2->position = QStyleOptionToolBoxV2::OnlyOneTab;
-        } else if (indexInPage == 0) {
-            optionV2->position = QStyleOptionToolBoxV2::Beginning;
-        } else if (indexInPage == widgetCount - 1) {
-            optionV2->position = QStyleOptionToolBoxV2::End;
-        } else {
-            optionV2->position = QStyleOptionToolBoxV2::Middle;
-        }
-        if (currIndex == indexInPage - 1) {
-            optionV2->selectedPosition = QStyleOptionToolBoxV2::PreviousIsSelected;
-        } else if (currIndex == indexInPage + 1) {
-            optionV2->selectedPosition = QStyleOptionToolBoxV2::NextIsSelected;
-        } else {
-            optionV2->selectedPosition = QStyleOptionToolBoxV2::NotAdjacent;
-        }
+    QToolBox *toolBox = static_cast<QToolBox *>(parentWidget()); // I know I'm in a tool box.
+    const int widgetCount = toolBox->count();
+    const int currIndex = toolBox->currentIndex();
+    if (widgetCount == 1) {
+        option->position = QStyleOptionToolBox::OnlyOneTab;
+    } else if (indexInPage == 0) {
+        option->position = QStyleOptionToolBox::Beginning;
+    } else if (indexInPage == widgetCount - 1) {
+        option->position = QStyleOptionToolBox::End;
+    } else {
+        option->position = QStyleOptionToolBox::Middle;
+    }
+    if (currIndex == indexInPage - 1) {
+        option->selectedPosition = QStyleOptionToolBox::PreviousIsSelected;
+    } else if (currIndex == indexInPage + 1) {
+        option->selectedPosition = QStyleOptionToolBox::NextIsSelected;
+    } else {
+        option->selectedPosition = QStyleOptionToolBox::NotAdjacent;
     }
 }
 
 void QToolBoxButton::paintEvent(QPaintEvent *)
 {
     QPainter paint(this);
-    QString text = QAbstractButton::text();
     QPainter *p = &paint;
-    QStyleOptionToolBoxV2 opt;
+    QStyleOptionToolBox opt;
     initStyleOption(&opt);
     style()->drawControl(QStyle::CE_ToolBoxTab, &opt, p, parentWidget());
 }
@@ -454,11 +447,9 @@ void QToolBoxPrivate::relayout()
 void QToolBoxPrivate::_q_widgetDestroyed(QObject *object)
 {
     Q_Q(QToolBox);
-    // no verification - vtbl corrupted already
-    QWidget *p = (QWidget*)object;
 
-    QToolBoxPrivate::Page *c = page(p);
-    if (!p || !c)
+    const QToolBoxPrivate::Page * const c = page(object);
+    if (!c)
         return;
 
     layout->removeWidget(c->sv);
@@ -532,10 +523,10 @@ QWidget * QToolBox::currentWidget() const
 void QToolBox::setCurrentWidget(QWidget *widget)
 {
     int i = indexOf(widget);
-    if (i >= 0)
-        setCurrentIndex(i);
-    else
+    if (Q_UNLIKELY(i < 0))
         qWarning("QToolBox::setCurrentWidget: widget not contained in tool box");
+    else
+        setCurrentIndex(i);
 }
 
 /*!
@@ -559,7 +550,7 @@ QWidget *QToolBox::widget(int index) const
 int QToolBox::indexOf(QWidget *widget) const
 {
     Q_D(const QToolBox);
-    QToolBoxPrivate::Page *c = (widget ? d->page(widget) : 0);
+    const QToolBoxPrivate::Page *c = (widget ? d->page(widget) : 0);
     return c ? d->pageList.indexOf(*c) : -1;
 }
 
@@ -646,7 +637,7 @@ void QToolBox::setItemToolTip(int index, const QString &toolTip)
 #endif // QT_NO_TOOLTIP
 
 /*!
-    Returns true if the item at position \a index is enabled; otherwise returns false.
+    Returns \c true if the item at position \a index is enabled; otherwise returns \c false.
 */
 
 bool QToolBox::isItemEnabled(int index) const
@@ -741,5 +732,3 @@ QT_END_NAMESPACE
 
 #include "moc_qtoolbox.cpp"
 #include "qtoolbox.moc"
-
-#endif //QT_NO_TOOLBOX

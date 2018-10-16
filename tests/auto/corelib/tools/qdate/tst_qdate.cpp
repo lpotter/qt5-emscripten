@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -104,12 +92,12 @@ private slots:
     void longMonthName() const;
     void standaloneLongMonthName() const;
     void roundtrip() const;
+    void qdebug() const;
 private:
     QDate defDate() const { return QDate(1900, 1, 1); }
     QDate invalidDate() const { return QDate(); }
 };
 
-Q_DECLARE_METATYPE(QDate)
 Q_DECLARE_METATYPE(Qt::DateFormat)
 
 void tst_QDate::isNull_data()
@@ -163,6 +151,9 @@ void tst_QDate::isValid_data()
     QTest::newRow("400-years leap 2400") << 2400 <<  2 << 29 << qint64(2597701) << true;
     QTest::newRow("400-years leap 1600") << 1600 <<  2 << 29 << qint64(2305507) << true;
     QTest::newRow("year 0")              <<    0 <<  2 << 27 << nullJd  << false;
+
+    // Test end of four-digit years:
+    QTest::newRow("late") << 9999 << 12 << 31 << qint64(5373484) << true;
 
     // test the number of days in months:
     QTest::newRow("jan") << 2000 <<  1 << 31 << qint64(2451575) << true;
@@ -400,16 +391,37 @@ void tst_QDate::weekNumber_data()
     QTest::addColumn<int>("month");
     QTest::addColumn<int>("day");
 
-    //next we fill it with data
-    QTest::newRow( "data0" )  << 10 << 2002 << 2002 << 3 << 8;
-    QTest::newRow( "data1" )  << 10 << 2002 << 2002 << 3 << 8;
-    QTest::newRow( "data2" )  << 52 << 1999 << 2000 << 1 << 1;
-    QTest::newRow( "data3" )  << 52 << 1999 << 1999 << 12 << 31;
-    QTest::newRow( "data4" )  << 1 << 2001 << 2001 << 1 << 1;
-    QTest::newRow( "data5" )  << 53 << 1998 << 1998 << 12 << 31;
-    QTest::newRow( "data6" )  << 1 << 1985 << 1984 << 12 << 31;
-    QTest::newRow( "data7" )  << 52 << 2006 << 2006 << 12 << 31;
-    QTest::newRow( "data8" )  << 53 << 2004 << 2005 << 1 << 1;
+    enum { Thursday = 4 };
+    bool wasLastYearLong = false;   // 1999 was not a long (53-week) year
+    bool isLongYear;
+
+    // full 400-year cycle for Jan 1, 4 and Dec 28, 31
+    for (int yr = 2000; yr < 2400; ++yr, wasLastYearLong = isLongYear) {
+        QByteArray yrstr = QByteArray::number(yr);
+        int wday = QDate(yr, 1, 1).dayOfWeek();
+
+        // the year is 53-week long if Jan 1 is Thursday or, if it's a leap year, a Wednesday
+        isLongYear = (wday == Thursday) || (QDate::isLeapYear(yr) && wday == Thursday - 1);
+
+        // Jan 4 is always on week 1
+        QTest::newRow(yrstr + "-01-04") << 1 << yr << yr << 1 << 4;
+
+        // Dec 28 is always on the last week
+        QTest::newRow(yrstr + "-12-28") << (52 + isLongYear) << yr << yr << 12 << 28;
+
+        // Jan 1 is on either on week 1 or on the last week of the previous year
+        QTest::newRow(yrstr + "-01-01")
+                << (wday <= Thursday ? 1 : 52 + wasLastYearLong)
+                << (wday <= Thursday ? yr : yr - 1)
+                << yr << 1 << 1;
+
+        // Dec 31 is either on the last week or week 1 of the next year
+        wday = QDate(yr, 12, 31).dayOfWeek();
+        QTest::newRow(yrstr + "-12-31")
+                << (wday >= Thursday ? 52 + isLongYear : 1)
+                << (wday >= Thursday ? yr : yr + 1)
+                << yr << 12 << 31;
+    }
 }
 
 void tst_QDate::weekNumber()
@@ -945,6 +957,68 @@ void tst_QDate::fromStringDateFormat_data()
     QTest::newRow("iso2") << QDate(1999, 11, 14).toString(Qt::ISODate) << Qt::ISODate << QDate(1999, 11, 14);
     QTest::newRow("iso3") << QString("0999-01-01") << Qt::ISODate << QDate(999, 1, 1);
     QTest::newRow("iso3b") << QString("0999-01-01") << Qt::ISODate << QDate(999, 1, 1);
+    QTest::newRow("iso4") << QString("2000101101")      << Qt::ISODate << QDate();
+    QTest::newRow("iso5") << QString("2000/01/01")      << Qt::ISODate << QDate(2000, 1, 1);
+    QTest::newRow("iso6") << QString("2000-01-01 blah") << Qt::ISODate << QDate(2000, 1, 1);
+    QTest::newRow("iso7") << QString("2000-01-011blah") << Qt::ISODate << QDate();
+    QTest::newRow("iso8") << QString("2000-01-01blah")  << Qt::ISODate << QDate(2000, 1, 1);
+    QTest::newRow("iso9") << QString("-001-01-01")      << Qt::ISODate << QDate();
+    QTest::newRow("iso10") << QString("99999-01-01")    << Qt::ISODate << QDate();
+
+    // Test Qt::RFC2822Date format (RFC 2822).
+    QTest::newRow("RFC 2822") << QString::fromLatin1("13 Feb 1987 13:24:51 +0100")
+        << Qt::RFC2822Date << QDate(1987, 2, 13);
+    QTest::newRow("RFC 2822 with day") << QString::fromLatin1("Thu, 01 Jan 1970 00:12:34 +0000")
+        << Qt::RFC2822Date << QDate(1970, 1, 1);
+    // No timezone
+    QTest::newRow("RFC 2822 no timezone") << QString::fromLatin1("01 Jan 1970 00:12:34")
+        << Qt::RFC2822Date << QDate(1970, 1, 1);
+    // No time specified
+    QTest::newRow("RFC 2822 date only") << QString::fromLatin1("01 Nov 2002")
+        << Qt::RFC2822Date << QDate(2002, 11, 1);
+    QTest::newRow("RFC 2822 with day date only") << QString::fromLatin1("Fri, 01 Nov 2002")
+        << Qt::RFC2822Date << QDate(2002, 11, 1);
+    // Test invalid month, day, year
+    QTest::newRow("RFC 2822 invalid month name") << QString::fromLatin1("13 Fev 1987 13:24:51 +0100")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 2822 invalid day") << QString::fromLatin1("36 Fev 1987 13:24:51 +0100")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 2822 invalid year") << QString::fromLatin1("13 Fev 0000 13:24:51 +0100")
+        << Qt::RFC2822Date << QDate();
+    // Test invalid characters (should ignore invalid characters at end of string).
+    QTest::newRow("RFC 2822 invalid character at end") << QString::fromLatin1("01 Jan 2012 08:00:00 +0100!")
+        << Qt::RFC2822Date << QDate(2012, 1, 1);
+    QTest::newRow("RFC 2822 invalid character at front") << QString::fromLatin1("!01 Jan 2012 08:00:00 +0000")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 2822 invalid character both ends") << QString::fromLatin1("!01 Jan 2012 08:00:00 +0000!")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 2822 invalid character at front, 2 at back") << QString::fromLatin1("!01 Jan 2012 08:00:00 +0000..")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 2822 invalid character 2 at front") << QString::fromLatin1("!!01 Jan 2012 08:00:00 +0000")
+        << Qt::RFC2822Date << QDate();
+
+    // Test Qt::RFC2822Date format (RFC 850 and 1036).
+    QTest::newRow("RFC 850 and 1036") << QString::fromLatin1("Fri Feb 13 13:24:51 1987 +0100")
+        << Qt::RFC2822Date << QDate(1987, 2, 13);
+    // No timezone
+    QTest::newRow("RFC 850 and 1036 no timezone") << QString::fromLatin1("Thu Jan 01 00:12:34 1970")
+        << Qt::RFC2822Date << QDate(1970, 1, 1);
+    // No time specified
+    QTest::newRow("RFC 850 and 1036 date only") << QString::fromLatin1("Fri Nov 01 2002")
+        << Qt::RFC2822Date << QDate(2002, 11, 1);
+    // Test invalid characters (should ignore invalid characters at end of string).
+    QTest::newRow("RFC 850 and 1036 invalid character at end") << QString::fromLatin1("Sun Jan 01 08:00:00 2012 +0100!")
+        << Qt::RFC2822Date << QDate(2012, 1, 1);
+    QTest::newRow("RFC 850 and 1036 invalid character at front") << QString::fromLatin1("!Sun Jan 01 08:00:00 2012 +0000")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 850 and 1036 invalid character both ends") << QString::fromLatin1("!Sun Jan 01 08:00:00 2012 +0000!")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 850 and 1036 invalid character at front, 2 at back") << QString::fromLatin1("!Sun Jan 01 08:00:00 2012 +0000..")
+        << Qt::RFC2822Date << QDate();
+    QTest::newRow("RFC 850 and 1036 invalid character 2 at front") << QString::fromLatin1("!!Sun Jan 01 08:00:00 2012 +0000")
+        << Qt::RFC2822Date << QDate();
+
+    QTest::newRow("RFC empty") << QString::fromLatin1("") << Qt::RFC2822Date << QDate();
 }
 
 void tst_QDate::fromStringDateFormat()
@@ -962,7 +1036,8 @@ void tst_QDate::fromStringFormat_data()
     QTest::addColumn<QString>("format");
     QTest::addColumn<QDate>("expected");
 
-    //get localized names
+    // Undo this (inline the C-locale versions) for ### Qt 6
+    // Get localized names:
     QString january = QDate::longMonthName(1);
     QString february = QDate::longMonthName(2);
     QString march = QDate::longMonthName(3);
@@ -993,7 +1068,7 @@ void tst_QDate::fromStringFormat_data()
     QTest::newRow("data14") << QString("132") << QString("Md") << invalidDate();
     QTest::newRow("data15") << february << QString("MMMM") << QDate(defDate().year(), 2, 1);
 
-    QString date = mon + " " + august + " 8 2005";
+    QString date = mon + QLatin1Char(' ') + august + " 8 2005";
     QTest::newRow("data16") << date << QString("ddd MMMM d yyyy") << QDate(2005, 8, 8);
     QTest::newRow("data17") << QString("2000:00") << QString("yyyy:yy") << QDate(2000, 1, 1);
     QTest::newRow("data18") << QString("1999:99") << QString("yyyy:yy") << QDate(1999, 1, 1);
@@ -1026,6 +1101,8 @@ void tst_QDate::fromStringFormat_data()
     QTest::newRow("data41") << QString("21/5/06") << QString("d/M/yy") << QDate(1906,5,21);
     QTest::newRow("data42") << QString("20060521") << QString("yyyyMMdd") << QDate(2006,5,21);
     QTest::newRow("data43") << QString("060521") << QString("yyMMdd") << QDate(1906,5,21);
+    QTest::newRow("lateMarch") << QString("9999-03-06") << QString("yyyy-MM-dd") << QDate(9999, 3, 6);
+    QTest::newRow("late") << QString("9999-12-31") << QString("yyyy-MM-dd") << QDate(9999, 12, 31);
 }
 
 
@@ -1073,6 +1150,8 @@ void tst_QDate::toStringDateFormat_data()
     QTest::newRow("data3") << QDate(1974,12,1) << Qt::ISODate << QString("1974-12-01");
     QTest::newRow("year < 0") << QDate(-1,1,1) << Qt::ISODate << QString();
     QTest::newRow("year > 9999") << QDate(-1,1,1) << Qt::ISODate << QString();
+    QTest::newRow("RFC2822Date") << QDate(1974,12,1) << Qt::RFC2822Date << QString("01 Dec 1974");
+    QTest::newRow("ISODateWithMs") << QDate(1974,12,1) << Qt::ISODateWithMs << QString("1974-12-01");
 }
 
 void tst_QDate::toStringDateFormat()
@@ -1082,10 +1161,14 @@ void tst_QDate::toStringDateFormat()
     QFETCH(QString, expectedStr);
 
     QCOMPARE(date.toString(Qt::SystemLocaleShortDate), QLocale::system().toString(date, QLocale::ShortFormat));
-    QCOMPARE(date.toString(Qt::LocaleDate), QLocale().toString(date, QLocale::ShortFormat));
+    QCOMPARE(date.toString(Qt::DefaultLocaleShortDate), QLocale().toString(date, QLocale::ShortFormat));
+    QCOMPARE(date.toString(Qt::SystemLocaleLongDate), QLocale::system().toString(date, QLocale::LongFormat));
+    QCOMPARE(date.toString(Qt::DefaultLocaleLongDate), QLocale().toString(date, QLocale::LongFormat));
     QLocale::setDefault(QLocale::German);
     QCOMPARE(date.toString(Qt::SystemLocaleShortDate), QLocale::system().toString(date, QLocale::ShortFormat));
-    QCOMPARE(date.toString(Qt::LocaleDate), QLocale().toString(date, QLocale::ShortFormat));
+    QCOMPARE(date.toString(Qt::DefaultLocaleShortDate), QLocale().toString(date, QLocale::ShortFormat));
+    QCOMPARE(date.toString(Qt::SystemLocaleLongDate), QLocale::system().toString(date, QLocale::LongFormat));
+    QCOMPARE(date.toString(Qt::DefaultLocaleLongDate), QLocale().toString(date, QLocale::LongFormat));
 
     QCOMPARE(date.toString(format), expectedStr);
 }
@@ -1408,6 +1491,14 @@ void tst_QDate::roundtrip() const
         QCOMPARE(loopDate.toJulianDay(), testDate.toJulianDay());
         loopDate = loopDate.addDays(1);
     }
+}
+
+void tst_QDate::qdebug() const
+{
+    QTest::ignoreMessage(QtDebugMsg, "QDate(Invalid)");
+    qDebug() << QDate();
+    QTest::ignoreMessage(QtDebugMsg, "QDate(\"1983-08-07\")");
+    qDebug() << QDate(1983, 8, 7);
 }
 
 QTEST_APPLESS_MAIN(tst_QDate)

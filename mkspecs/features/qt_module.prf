@@ -1,32 +1,68 @@
-!no_qt_module_warning:!contains(QMAKE_INTERNAL_INCLUDED_FILES, .*qmodule\\.pri) {
-    QMAKE_ACTUAL_PRO_FILE = $$basename(_PRO_FILE_)
-    isEmpty(QMAKE_ACTUAL_PRO_FILE): QMAKE_ACTUAL_PRO_FILE=.pro
-    warning("You should probably load(qt_build_config) first in $$QMAKE_ACTUAL_PRO_FILE for $$TARGET, as the latter also load()s qt_module.")
-    message("Not doing so may lead to qt_module.prf overriding compiler/linker options in your .pro file.")
-    message("Ignore this warning with CONFIG+=no_qt_module_warning if you know what you are doing.")
-    unset(QMAKE_ACTUAL_PRO_FILE)
-}
-load(qt_build_config) # loads qmodule.pri if hasn't been loaded already
+#
+#  W A R N I N G
+#  -------------
+#
+# This file is not part of the Qt API.  It exists purely as an
+# implementation detail.  It may change from version to version
+# without notice, or even be removed.
+#
+# We mean it.
+#
 
 isEmpty(MODULE):MODULE = $$section($$list($$basename(_PRO_FILE_)), ., 0, 0)
-isEmpty(VERSION):VERSION = $$QT_VERSION
+isEmpty(VERSION): VERSION = $$MODULE_VERSION
+isEmpty(VERSION): error("Module does not define version.")
+
+isEmpty(MODULE_CFG_FILE): MODULE_CFG_FILE = qt$${MODULE}-config
+exists($$OUT_PWD/$${MODULE_CFG_FILE}.pri) {
+    include($$OUT_PWD/$${MODULE_CFG_FILE}.pri)
+    CONFIG += generated_privates
+}
+
+skip = $$eval(QT.$${MODULE}.skip)
+isEmpty(skip): skip = false
+requires(!$$skip)
 
 # Compile as shared/DLL or static according to the option given to configure
 # unless overridden. Host builds are always static
 host_build|staticlib: CONFIG += static
-!static:!shared {
-    contains(QT_CONFIG, static): \
-        CONFIG += static
-    else: \
-        CONFIG += shared
+
+host_build {
+    QT -= gui   # no host module will ever use gui
+    force_bootstrap {
+        !build_pass:qtConfig(release_tools): CONFIG += release
+        contains(QT, core(-private)?|xml) {
+            QT -= core core-private xml
+            QT += bootstrap-private
+        }
+    } else {
+        !build_pass:qtConfig(debug_and_release): CONFIG += release
+    }
 }
+
+qtConfig(framework) {
+    minimal_syncqt: \
+        CONFIG += module_frameworks
+    else: CONFIG(shared, static|shared): \
+        CONFIG += module_frameworks lib_bundle
+}
+
+CONFIG += relative_qt_rpath  # Qt libraries should be relocatable
+
+# Qt libraries should only use Application Extension safe APIs
+darwin:!no_app_extension_api_only: CONFIG += app_extension_api_only
 
 ucmodule = $$upper($$MODULE)
 
 isEmpty(MODULE_INCNAME): MODULE_INCNAME = $$TARGET
 
-MODULE_DEPENDS = $$replace(QT, -private$, )
+internal_module: \
+    MODULE_DEPENDS = $$replace(QT, -private$, _private)
+else: \
+    MODULE_DEPENDS = $$replace(QT, -private$, )
 MODULE_DEPENDS = $$unique(MODULE_DEPENDS)
+contains(MODULE_DEPENDS, $$MODULE): \
+    error("$$TARGET depends on itself.")
 
 contains(TARGET, QtAddOn.*): \
     MODULE_DEFINE = QT_ADDON_$${ucmodule}_LIB
@@ -34,109 +70,47 @@ else: \
     MODULE_DEFINE = QT_$${ucmodule}_LIB
 MODULE_DEFINES = $$MODULE_DEFINE $$MODULE_DEFINES
 
+# Make sure that the supporting runtime is linked into the application when
+# the module is built with exceptions enabled.
+integrity:CONFIG(exceptions, exceptions|exceptions_off): \
+    MODULE_CONFIG += exceptions
+
 load(qt_build_paths)
 
-# This check will be removed soon. Weird indentation to avoid reindenting the code later.
-!isEmpty(MODULE_PRI) {
-    !build_pass:warning("$$_PRO_FILE_ still sets MODULE_PRI. Not auto-generating module .pri file.")
-    MODULE_PRI = $$absolute_path($$MODULE_PRI, $$_PRO_FILE_PWD_)
-    exists($$MODULE_PRI)|error("Specified module pri file $$MODULE_PRI does not exist.")
+header_module {
+    TEMPLATE     = aux
+    CONFIG      += force_qt  # Needed for the headers_clean tests.
+    !lib_bundle: \
+        CONFIG  += qt_no_install_library
 } else {
+    TEMPLATE     = lib
+}
+DESTDIR          = $$MODULE_BASE_OUTDIR/lib
+DLLDESTDIR       = $$MODULE_BASE_OUTDIR/bin
 
-MODULE_PRI = $$MODULE_QMAKE_OUTDIR/mkspecs/modules-inst/qt_lib_$${MODULE}.pri
-
-!build_pass {
-
-    # Create a module .pri file
-    !isEmpty(QT_FOR_PRIVATE) {
-        contains(QT_FOR_PRIVATE, .*-private$):error("QT_FOR_PRIVATE may not contain *-private.")
-        module_privdep = "QT.$${MODULE}.private_depends = $$QT_FOR_PRIVATE"
-    } else {
-        module_privdep =
-    }
-    static: \
-        module_build_type = "QT.$${MODULE}.module_config = staticlib"
-    else:mac:contains(QT_CONFIG, qt_framework): \
-        module_build_type = "QT.$${MODULE}.module_config = lib_bundle"
-    else: \
-        module_build_type =
-    !isEmpty(MODULE_CONFIG): \
-        module_config = "QT.$${MODULE}.CONFIG = $$MODULE_CONFIG"
-    else: \
-        module_config =
-    !no_module_headers {
-        MODULE_INCLUDES = "\$\$QT_MODULE_INCLUDE_BASE \$\$QT_MODULE_INCLUDE_BASE/$$MODULE_INCNAME"
-        MODULE_PRIVATE_INCLUDES = "\$\$QT_MODULE_INCLUDE_BASE/$$MODULE_INCNAME/$$VERSION \
-                                   \$\$QT_MODULE_INCLUDE_BASE/$$MODULE_INCNAME/$$VERSION/$$MODULE_INCNAME"
-    }
-    MODULE_PRI_CONT = \
-        "QT.$${MODULE}.VERSION = $${VERSION}" \
-        "QT.$${MODULE}.MAJOR_VERSION = $$section(VERSION, ., 0, 0)" \
-        "QT.$${MODULE}.MINOR_VERSION = $$section(VERSION, ., 1, 1)" \
-        "QT.$${MODULE}.PATCH_VERSION = $$section(VERSION, ., 2, 2)" \
-        "" \
-        "QT.$${MODULE}.name = $$TARGET" \
-        "QT.$${MODULE}.bins = \$\$QT_MODULE_BIN_BASE" \
-        "QT.$${MODULE}.includes = $$MODULE_INCLUDES" \
-        "QT.$${MODULE}.private_includes = $$MODULE_PRIVATE_INCLUDES" \
-        "QT.$${MODULE}.sources = $$val_escape(_PRO_FILE_PWD_)" \
-        "QT.$${MODULE}.libs = \$\$QT_MODULE_LIB_BASE" \
-        "QT.$${MODULE}.libexecs = \$\$QT_MODULE_LIBEXEC_BASE" \
-        "QT.$${MODULE}.rpath = $$[QT_INSTALL_LIBS/raw]" \
-        "QT.$${MODULE}.plugins = \$\$QT_MODULE_PLUGIN_BASE" \
-        "QT.$${MODULE}.imports = \$\$QT_MODULE_IMPORT_BASE" \
-        "QT.$${MODULE}.qml = \$\$QT_MODULE_QML_BASE" \
-        "QT.$${MODULE}.depends =$$join(MODULE_DEPENDS, " ", " ")" \
-        $$module_privdep \
-        $$module_build_type \
-        $$module_config \
-        "QT.$${MODULE}.DEFINES = $$MODULE_DEFINES" \ # assume sufficient quoting
-        "" \
-        "QT_CONFIG += $$MODULE" # this is obsolete, but some code still depends on it
-    write_file($$MODULE_PRI, MODULE_PRI_CONT)|error("Aborting.")
-
-} # !build_pass
-
-} # isEmpty(MODULE_PRI)
-
-load(qt_module_fwdpri)
-
-INCLUDEPATH *= $$eval(QT.$${MODULE}.includes) $$eval(QT.$${MODULE}.private_includes)
-
-!no_module_headers: load(qt_module_headers)
-
-#other
-TEMPLATE         = lib
-DESTDIR          = $$eval(QT.$${MODULE}.libs)
-win32:!wince*:exists($$[QT_INSTALL_PREFIX]/.qmake.cache): DLLDESTDIR = $$eval(QT.$${MODULE}.bins)
-
-CONFIG          += qt warn_on depend_includepath
 CONFIG          += qmake_cache target_qt
 
-!isEmpty(QMAKE_DOCS) {
-    doc_subdir = doc
+QMAKE_DOCS_TARGETDIR = qt$${MODULE}
 
-    unset(QMAKE_DOCS_INDEX)
-    QMAKE_DOCS_BASE_OUTDIR = $$MODULE_BASE_OUTDIR/$$doc_subdir
-    QMAKE_DOCS_OUTPUTDIR = $$QMAKE_DOCS_BASE_OUTDIR/qt$${MODULE}
-    QMAKE_DOCS_TARGET = $$replace(QMAKE_DOCS, ^(.*/)?(.*)\\.qdocconf$, \\2)
-    for(qmod, QMAKEMODULES): \
-        QMAKE_DOCS_INDEX += $$section(qmod, /, 0, -3)/$$doc_subdir
+load(qt_common)
+!no_module_headers: load(qt_module_headers)
+load(qt_module_pris)
 
-    CONFIG += qt_install_module_docs
-}
+INCLUDEPATH *= $$eval(QT.$${MODULE}.includes) $$eval(QT.$${MODULE}_private.includes)
 
 # If Qt was configured with -debug-and-release then build the module the same way
 # - unless this is a host library
 !host_build:if(win32|mac):!macx-xcode {
-    contains(QT_CONFIG, debug_and_release):CONFIG += debug_and_release
-    contains(QT_CONFIG, build_all):CONFIG += build_all
+    qtConfig(debug_and_release): CONFIG += debug_and_release
+    qtConfig(build_all): CONFIG += build_all
 }
 
-linux*:QMAKE_LFLAGS += $$QMAKE_LFLAGS_NOUNDEF
+QMAKE_LFLAGS += $$QMAKE_LFLAGS_NOUNDEF
 
-QT += $$QT_FOR_PRIVATE
+QT_PRIVATE += $$QT_FOR_PRIVATE
 unset(QT_FOR_PRIVATE)
+QMAKE_USE_PRIVATE += $$QMAKE_USE_FOR_PRIVATE
+unset(QMAKE_USE_FOR_PRIVATE)
 
 !internal_module:CONFIG += create_cmake
 
@@ -145,40 +119,61 @@ contains(TARGET, QtAddOn.*): \
 else: \
     DEFINES += QT_BUILD_$${ucmodule}_LIB
 
-contains(QT_CONFIG, reduce_exports):CONFIG += hide_symbols
-unix:contains(QT_CONFIG, reduce_relocations):CONFIG += bsymbolic_functions
-contains(QT_CONFIG, largefile):CONFIG += largefile
-contains(QT_CONFIG, separate_debug_info):CONFIG += separate_debug_info
-contains(QT_CONFIG, separate_debug_info_nocopy):CONFIG += separate_debug_info_nocopy
-contains(QT_CONFIG, c++11):CONFIG += c++11
-
-#mac frameworks
-mac:!static:contains(QT_CONFIG, qt_framework) {
+# OS X and iOS frameworks
+lib_bundle {
+   # Set the CFBundleIdentifier prefix for Qt frameworks
+   QMAKE_TARGET_BUNDLE_PREFIX = org.qt-project
    #QMAKE_FRAMEWORK_VERSION = 4.0
-   CONFIG += lib_bundle qt_no_framework_direct_includes qt_framework
-   CONFIG(release, debug|release) {
-      !debug_and_release|build_pass {
-          CONFIG -= qt_install_headers #no need to install these as well
-          FRAMEWORK_HEADERS.version = Versions
-          FRAMEWORK_HEADERS.files = $$SYNCQT.HEADER_FILES $$SYNCQT.HEADER_CLASSES
-          FRAMEWORK_HEADERS.path = Headers
-      }
-      QMAKE_BUNDLE_DATA += FRAMEWORK_HEADERS
+   CONFIG += sliced_bundle
+   header_module {
+        CONFIG += bundle
+        QMAKE_BUNDLE_NAME = $$TARGET
+        QMAKE_BUNDLE_EXTENSION = .framework
+        QMAKE_INFO_PLIST = $$QMAKESPEC/Info.plist.lib
+   }
+   !build_all| \
+           if(if(!debug_and_release|CONFIG(release, debug|release))) {
+        FRAMEWORK_HEADERS.version = Versions
+        FRAMEWORK_HEADERS.files = \
+            $$SYNCQT.HEADER_FILES $$SYNCQT.GENERATED_HEADER_FILES $$SYNCQT.INJECTED_HEADER_FILES
+        FRAMEWORK_HEADERS.path = Headers
+        FRAMEWORK_PRIVATE_HEADERS.version = Versions
+        FRAMEWORK_PRIVATE_HEADERS.files = \
+            $$SYNCQT.PRIVATE_HEADER_FILES $$SYNCQT.INJECTED_PRIVATE_HEADER_FILES
+        FRAMEWORK_PRIVATE_HEADERS.path = Headers/$$VERSION/$$MODULE_INCNAME/private
+        FRAMEWORK_QPA_HEADERS.version = Versions
+        FRAMEWORK_QPA_HEADERS.files = $$SYNCQT.QPA_HEADER_FILES
+        FRAMEWORK_QPA_HEADERS.path = Headers/$$VERSION/$$MODULE_INCNAME/qpa
+        QMAKE_BUNDLE_DATA += FRAMEWORK_HEADERS FRAMEWORK_PRIVATE_HEADERS FRAMEWORK_QPA_HEADERS
    }
 }
 
 mac {
-   CONFIG += explicitlib
    macx-g++ {
        QMAKE_CFLAGS += -fconstant-cfstrings
        QMAKE_CXXFLAGS += -fconstant-cfstrings
    }
+
+   qtConfig(rpath): \
+       QMAKE_SONAME_PREFIX = @rpath
+   else: \
+       CONFIG += absolute_library_soname
 }
 
 DEFINES += QT_BUILDING_QT
 win32 {
     INCLUDEPATH += tmp
     CONFIG += skip_target_version_ext
+    # If the code is really "unsafe" then it is unsafe on
+    # other platforms as well; so fixing these warnings just
+    # for MSVC builds, would clutter the code and wouldn't help
+    # in fixing issues that might exist on other platforms.
+    # Using the same functions across all supported platforms
+    # keeps the code clean and helps in writing code that is
+    # safe across all platforms.
+    DEFINES *= _CRT_SECURE_NO_WARNINGS
+
+    DEFINES += _USE_MATH_DEFINES
 }
 
 aix-g++* {
@@ -186,36 +181,126 @@ aix-g++* {
      QMAKE_CXXFLAGS += -mminimal-toc
 }
 
+sse2:!contains(QT_CPU_FEATURES.$$QT_ARCH, sse2):!host_build:!if(static:qtConfig(shared)) {
+    # If the compiler supports SSE2, enable it unconditionally in all of Qt shared libraries
+    # (and only the libraries). This is not expected to be a problem because:
+    # - on Windows, sharing of libraries is uncommon
+    # - on Mac OS X, all x86 CPUs already have SSE2 support (we won't even reach here)
+    # - on Linux, the dynamic loader can find the libraries on LIBDIR/sse2/
+    # The last guarantee does not apply to executables and plugins, so we can't enable for them.
+    QT_CPU_FEATURES.$$QT_ARCH += sse sse2
+    QMAKE_CFLAGS += $$QMAKE_CFLAGS_SSE2
+    QMAKE_CXXFLAGS += $$QMAKE_CFLAGS_SSE2
+}
+
+clang {
+    apple_clang_ver = $${QT_APPLE_CLANG_MAJOR_VERSION}.$${QT_APPLE_CLANG_MINOR_VERSION}
+    reg_clang_ver = $${QT_CLANG_MAJOR_VERSION}.$${QT_CLANG_MINOR_VERSION}
+    versionAtLeast(apple_clang_ver, 5.1)|versionAtLeast(reg_clang_ver, 3.4): \
+        CONFIG += compiler_supports_fpmath
+} else: gcc {
+    CONFIG += compiler_supports_fpmath
+}
+
+equals(QT_ARCH, i386):contains(QT_CPU_FEATURES.$$QT_ARCH, sse2):compiler_supports_fpmath {
+    # Turn on SSE-based floating-point math
+    QMAKE_CFLAGS += -mfpmath=sse
+    QMAKE_CXXFLAGS += -mfpmath=sse
+}
+
+android: CONFIG += qt_android_deps no_linker_version_script
+
+!header_module:unix:!isEmpty(QMAKE_LFLAGS_VERSION_SCRIPT):!no_linker_version_script:!static {
+    verscript = $${TARGET}.version
+    QMAKE_LFLAGS += $${QMAKE_LFLAGS_VERSION_SCRIPT}$$verscript
+
+    internal_module {
+        verscript_content = "Qt_$${QT_MAJOR_VERSION}_PRIVATE_API { *; };"
+    } else {
+        verscript_content = "Qt_$${QT_MAJOR_VERSION}_PRIVATE_API {" \
+                            "    qt_private_api_tag*;"
+
+        private_api_headers = $$SYNCQT.PRIVATE_HEADER_FILES $$SYNCQT.QPA_HEADER_FILES
+
+        for(header, private_api_headers): \
+            verscript_content += "    @FILE:$$header@"
+        verscript_content += "};"
+
+        current = Qt_$$QT_MAJOR_VERSION
+        verscript_content += "$$current { *; };"
+        isEmpty(QT_NAMESPACE): tag_symbol = qt_version_tag
+        else:                  tag_symbol = qt_version_tag_$$QT_NAMESPACE
+
+        for(i, 0..$$QT_MINOR_VERSION) {
+            previous = $$current
+            current = Qt_$${QT_MAJOR_VERSION}.$$i
+            equals(i, $$QT_MINOR_VERSION): verscript_content += "$$current { $$tag_symbol; } $$previous;"
+            else:                          verscript_content += "$$current {} $$previous;"
+        }
+
+        # Add a post-processing step to replace the @FILE:filename@
+        verscript_in = $${verscript}.in
+        verscriptprocess.name = linker version script ${QMAKE_FILE_BASE}
+        verscriptprocess.input = verscript_in
+        verscriptprocess.CONFIG += no_link target_predeps
+        verscriptprocess.depends = $$private_api_headers
+        verscriptprocess.output = $$verscript
+        verscriptprocess.commands = perl $${PWD}/data/unix/findclasslist.pl < ${QMAKE_FILE_IN} > $@
+        silent:verscriptprocess.commands = @echo creating linker version script ${QMAKE_FILE_BASE} && $$verscriptprocess.commands
+        QMAKE_EXTRA_COMPILERS += verscriptprocess
+
+        verscript = $$verscript_in
+    }
+    write_file($$OUT_PWD/$$verscript, verscript_content)|error()
+    unset(current)
+    unset(previous)
+    unset(verscript)
+    unset(verscript_content)
+}
+
 #install directives
 load(qt_installs)
 
-unix|win32-g++* {
-   CONFIG += create_pc
-   QMAKE_PKGCONFIG_LIBDIR = $$[QT_INSTALL_LIBS/raw]
-   QMAKE_PKGCONFIG_INCDIR = $$[QT_INSTALL_HEADERS/raw]/$$MODULE_INCNAME
-   QMAKE_PKGCONFIG_CFLAGS = -I$$[QT_INSTALL_HEADERS/raw]
-   QMAKE_PKGCONFIG_DESTDIR = pkgconfig
-   include_replace.match = $$[QT_INSTALL_HEADERS/get]
-   include_replace.replace = $$[QT_INSTALL_HEADERS/raw]
-   lib_replace.match = $$[QT_INSTALL_LIBS/get]
-   lib_replace.replace = $$[QT_INSTALL_LIBS/raw]
-   prefix_replace.match = $$QT_BUILD_TREE
-   prefix_replace.replace = $$[QT_INSTALL_PREFIX/raw]
-   QMAKE_PKGCONFIG_INSTALL_REPLACE += include_replace lib_replace prefix_replace
-}
+load(qt_targets)
 
-unix {
-   CONFIG += create_libtool explicitlib
-   QMAKE_PRL_LIBDIR = $$[QT_INSTALL_LIBS/raw] ### XXX
-   QMAKE_PRL_INSTALL_REPLACE += include_replace lib_replace
-   QMAKE_LIBTOOL_LIBDIR = $$[QT_INSTALL_LIBS/raw]
-   QMAKE_LIBTOOL_INSTALL_REPLACE += include_replace lib_replace
-}
-
-unix|win32-g++* {
-    for(i, QT):QMAKE_PKGCONFIG_REQUIRES += $$eval(QT.$${i}.name)
+# this builds on top of qt_common
+!internal_module:if(unix|mingw) {
+    CONFIG += create_pc
+    QMAKE_PKGCONFIG_DESTDIR = pkgconfig
+    host_build: \
+        QMAKE_PKGCONFIG_LIBDIR = $$[QT_HOST_LIBS]
+    else: \
+        QMAKE_PKGCONFIG_LIBDIR = $$[QT_INSTALL_LIBS/raw]
+    lib_bundle {
+        QMAKE_PKGCONFIG_INCDIR = $$[QT_INSTALL_LIBS/raw]/$${MODULE_INCNAME}.framework/Headers
+        QMAKE_PKGCONFIG_CFLAGS = -D$$MODULE_DEFINE
+    } else {
+        QMAKE_PKGCONFIG_INCDIR = $$[QT_INSTALL_HEADERS/raw]
+        QMAKE_PKGCONFIG_CFLAGS = -D$$MODULE_DEFINE -I${includedir}/$$MODULE_INCNAME
+    }
+    QMAKE_PKGCONFIG_NAME = $$replace(TARGET, ^Qt, "Qt$$QT_MAJOR_VERSION ")
+    QMAKE_PKGCONFIG_FILE = $$replace(TARGET, ^Qt, Qt$$QT_MAJOR_VERSION)
+    for(i, MODULE_DEPENDS): \
+        QMAKE_PKGCONFIG_REQUIRES += $$replace(QT.$${i}.name, ^Qt, Qt$$section(QT.$${i}.VERSION, ., 0, 0))
     isEmpty(QMAKE_PKGCONFIG_DESCRIPTION): \
         QMAKE_PKGCONFIG_DESCRIPTION = $$replace(TARGET, ^Qt, "Qt ") module
+    pclib_replace.match = $$lib_replace.match
+    !isEmpty(lib_replace.replace): \
+        pclib_replace.replace = $$QMAKE_PKGCONFIG_LIBDIR
+    pclib_replace.CONFIG = path
+    QMAKE_PKGCONFIG_INSTALL_REPLACE += pclib_replace
+}
+!lib_bundle:unix {
+    CONFIG += create_libtool
+    host_build: \
+        QMAKE_LIBTOOL_LIBDIR = $$[QT_HOST_LIBS]
+    else: \
+        QMAKE_LIBTOOL_LIBDIR = "=$$[QT_INSTALL_LIBS/raw]"
+    ltlib_replace.match = $$lib_replace.match
+    !isEmpty(lib_replace.replace): \
+        ltlib_replace.replace = $$QMAKE_LIBTOOL_LIBDIR
+    ltlib_replace.CONFIG = path
+    QMAKE_LIBTOOL_INSTALL_REPLACE += ltlib_replace
 }
 
 contains(QT_PRODUCT, OpenSource.*):DEFINES *= QT_OPENSOURCE
@@ -233,14 +318,4 @@ win32 {
     DEFINES *= QT_DISABLE_DEPRECATED_BEFORE=0x050000
 }
 
-TARGET = $$qtLibraryTarget($$TARGET$$QT_LIBINFIX) #do this towards the end
-
-# Provides useful info normally only contained in the internal .qmake.cache file
-qt_conf.name = qt_config
-qt_conf.variable = CONFIG
-QMAKE_PKGCONFIG_VARIABLES += qt_conf
-
-load(qt_targets)
-
-win32:DEFINES+=_USE_MATH_DEFINES
-
+TARGET = $$qt5LibraryTarget($$TARGET$$QT_LIBINFIX)  # Do this towards the end

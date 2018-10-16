@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,40 +10,39 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qxcbimage.h"
+#include <QtCore/QtEndian>
 #include <QtGui/QColor>
 #include <QtGui/private/qimage_p.h>
 #include <QtGui/private/qdrawhelper_p.h>
-#ifdef XCB_USE_RENDER
+#if QT_CONFIG(xcb_render)
 #include <xcb/render.h>
 // 'template' is used as a function argument name in xcb_renderutil.h
 #define template template_param
@@ -54,29 +53,108 @@ extern "C" {
 #undef template
 #endif
 
+#include "qxcbconnection.h"
+#include "qxcbintegration.h"
+
+namespace {
+
+QImage::Format imageFormatForMasks(int depth, int bits_per_pixel, int red_mask, int blue_mask)
+{
+    if (bits_per_pixel == 32) {
+        switch (depth) {
+        case 32:
+            if (red_mask == 0xff0000 && blue_mask == 0xff)
+                return QImage::Format_ARGB32_Premultiplied;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+            if (red_mask == 0xff && blue_mask == 0xff0000)
+                return QImage::Format_RGBA8888_Premultiplied;
+#else
+            if (unsigned(red_mask) == unsigned(0xff000000) && blue_mask == 0xff00)
+                return QImage::Format_RGBA8888_Premultiplied;
+#endif
+            if (red_mask == 0x3ff && blue_mask == 0x3ff00000)
+                return QImage::Format_A2BGR30_Premultiplied;
+            if (red_mask == 0x3ff00000 && blue_mask == 0x3ff)
+                return QImage::Format_A2RGB30_Premultiplied;
+            break;
+        case 30:
+            if (red_mask == 0x3ff && blue_mask == 0x3ff00000)
+                return QImage::Format_BGR30;
+            if (blue_mask == 0x3ff && red_mask == 0x3ff00000)
+                return QImage::Format_RGB30;
+            break;
+        case 24:
+            if (red_mask == 0xff0000 && blue_mask == 0xff)
+                return QImage::Format_RGB32;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+            if (red_mask == 0xff && blue_mask == 0xff0000)
+                return QImage::Format_RGBX8888;
+#else
+            if (unsigned(red_mask) == unsigned(0xff000000) && blue_mask == 0xff00)
+                return QImage::Format_RGBX8888;
+#endif
+            break;
+        }
+    } else if (bits_per_pixel == 16) {
+        if (depth == 16 && red_mask == 0xf800 && blue_mask == 0x1f)
+            return QImage::Format_RGB16;
+        if (depth == 15 && red_mask == 0x7c00 && blue_mask == 0x1f)
+            return QImage::Format_RGB555;
+    }
+    return QImage::Format_Invalid;
+}
+
+} // namespace
+
 QT_BEGIN_NAMESPACE
 
-QImage::Format qt_xcb_imageFormatForVisual(QXcbConnection *connection, uint8_t depth,
-                                           const xcb_visualtype_t *visual)
+bool qt_xcb_imageFormatForVisual(QXcbConnection *connection, uint8_t depth, const xcb_visualtype_t *visual,
+                                 QImage::Format *imageFormat, bool *needsRgbSwap)
 {
+    Q_ASSERT(connection && visual && imageFormat);
+
+    if (needsRgbSwap)
+        *needsRgbSwap = false;
+    *imageFormat = QImage::Format_Invalid;
+
+    if (depth == 8) {
+        if (visual->_class == XCB_VISUAL_CLASS_GRAY_SCALE) {
+            *imageFormat = QImage::Format_Grayscale8;
+            return true;
+        }
+#if QT_CONFIG(xcb_native_painting)
+        if (QXcbIntegration::instance() && QXcbIntegration::instance()->nativePaintingEnabled()) {
+            *imageFormat = QImage::Format_Indexed8;
+            return true;
+        }
+#endif
+        return false;
+    }
+
     const xcb_format_t *format = connection->formatForDepth(depth);
+    if (!format)
+        return false;
 
-    if (!visual || !format)
-        return QImage::Format_Invalid;
+    const bool connectionEndianSwap = connection->imageNeedsEndianSwap();
+    // We swap the masks and see if we can recognize it as a host format
+    const quint32 red_mask = connectionEndianSwap ? qbswap(visual->red_mask) : visual->red_mask;
+    const quint32 blue_mask = connectionEndianSwap ? qbswap(visual->blue_mask) : visual->blue_mask;
 
-    if (depth == 32 && format->bits_per_pixel == 32 && visual->red_mask == 0xff0000
-        && visual->green_mask == 0xff00 && visual->blue_mask == 0xff)
-        return QImage::Format_ARGB32_Premultiplied;
+    *imageFormat = imageFormatForMasks(depth, format->bits_per_pixel, red_mask, blue_mask);
+    if (*imageFormat != QImage::Format_Invalid)
+        return true;
 
-    if (depth == 24 && format->bits_per_pixel == 32 && visual->red_mask == 0xff0000
-        && visual->green_mask == 0xff00 && visual->blue_mask == 0xff)
-        return QImage::Format_RGB32;
+    if (needsRgbSwap) {
+        *imageFormat = imageFormatForMasks(depth, format->bits_per_pixel, blue_mask, red_mask);
+        if (*imageFormat != QImage::Format_Invalid) {
+            *needsRgbSwap = true;
+            return true;
+        }
+    }
 
-    if (depth == 16 && format->bits_per_pixel == 16 && visual->red_mask == 0xf800
-        && visual->green_mask == 0x7e0 && visual->blue_mask == 0x1f)
-        return QImage::Format_RGB16;
+    qWarning("Unsupported screen format: depth: %d, bits_per_pixel: %d, red_mask: %x, blue_mask: %x", depth, format->bits_per_pixel, red_mask, blue_mask);
 
-    return QImage::Format_Invalid;
+    return false;
 }
 
 QPixmap qt_xcb_pixmapFromXPixmap(QXcbConnection *connection, xcb_pixmap_t pixmap,
@@ -85,66 +163,39 @@ QPixmap qt_xcb_pixmapFromXPixmap(QXcbConnection *connection, xcb_pixmap_t pixmap
 {
     xcb_connection_t *conn = connection->xcb_connection();
 
-    xcb_get_image_cookie_t get_image_cookie =
-        xcb_get_image_unchecked(conn, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap,
-                      0, 0, width, height, 0xffffffff);
-
-    xcb_get_image_reply_t *image_reply =
-        xcb_get_image_reply(conn, get_image_cookie, NULL);
-
+    auto image_reply = Q_XCB_REPLY_UNCHECKED(xcb_get_image, conn, XCB_IMAGE_FORMAT_Z_PIXMAP, pixmap,
+                                             0, 0, width, height, 0xffffffff);
     if (!image_reply) {
         return QPixmap();
     }
 
-    uint8_t *data = xcb_get_image_data(image_reply);
-    uint32_t length = xcb_get_image_data_length(image_reply);
+    uint8_t *data = xcb_get_image_data(image_reply.get());
+    uint32_t length = xcb_get_image_data_length(image_reply.get());
 
     QPixmap result;
 
-    QImage::Format format = qt_xcb_imageFormatForVisual(connection, depth, visual);
-    if (format != QImage::Format_Invalid) {
+    QImage::Format format;
+    bool needsRgbSwap;
+    if (qt_xcb_imageFormatForVisual(connection, depth, visual, &format, &needsRgbSwap)) {
         uint32_t bytes_per_line = length / height;
         QImage image(const_cast<uint8_t *>(data), width, height, bytes_per_line, format);
-        uint8_t image_byte_order = connection->setup()->image_byte_order;
 
-        // we may have to swap the byte order
-        if ((QSysInfo::ByteOrder == QSysInfo::LittleEndian && image_byte_order == XCB_IMAGE_ORDER_MSB_FIRST)
-            || (QSysInfo::ByteOrder == QSysInfo::BigEndian && image_byte_order == XCB_IMAGE_ORDER_LSB_FIRST))
-        {
-            for (int i=0; i < image.height(); i++) {
-                switch (format) {
-                case QImage::Format_RGB16: {
-                    ushort *p = (ushort*)image.scanLine(i);
-                    ushort *end = p + image.width();
-                    while (p < end) {
-                        *p = ((*p << 8) & 0xff00) | ((*p >> 8) & 0x00ff);
-                        p++;
-                    }
-                    break;
-                }
-                case QImage::Format_RGB32: // fall-through
-                case QImage::Format_ARGB32_Premultiplied: {
-                    uint *p = (uint*)image.scanLine(i);
-                    uint *end = p + image.width();
-                    while (p < end) {
-                        *p = ((*p << 24) & 0xff000000) | ((*p << 8) & 0x00ff0000)
-                            | ((*p >> 8) & 0x0000ff00) | ((*p >> 24) & 0x000000ff);
-                        p++;
-                    }
-                    break;
-                }
-                default:
-                    Q_ASSERT(false);
-                }
-            }
-        }
+        if (needsRgbSwap)
+            image = std::move(image).rgbSwapped();
 
         // fix-up alpha channel
-        if (format == QImage::Format_RGB32) {
+        if (format == QImage::Format_RGB32 || format == QImage::Format_RGBX8888) {
             QRgb *p = (QRgb *)image.bits();
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x)
                     p[x] |= 0xff000000;
+                p += bytes_per_line / 4;
+            }
+        } else if (format == QImage::Format_BGR30 || format == QImage::Format_RGB30) {
+            QRgb *p = (QRgb *)image.bits();
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x)
+                    p[x] |= 0xc0000000;
                 p += bytes_per_line / 4;
             }
         }
@@ -152,7 +203,6 @@ QPixmap qt_xcb_pixmapFromXPixmap(QXcbConnection *connection, xcb_pixmap_t pixmap
         result = QPixmap::fromImage(image.copy());
     }
 
-    free(image_reply);
     return result;
 }
 
@@ -186,26 +236,19 @@ xcb_pixmap_t qt_xcb_XPixmapFromBitmap(QXcbScreen *screen, const QImage &image)
 xcb_cursor_t qt_xcb_createCursorXRender(QXcbScreen *screen, const QImage &image,
                                         const QPoint &spot)
 {
-#ifdef XCB_USE_RENDER
+#if QT_CONFIG(xcb_render)
     xcb_connection_t *conn = screen->xcb_connection();
     const int w = image.width();
     const int h = image.height();
-    xcb_generic_error_t *error = 0;
-    xcb_render_query_pict_formats_cookie_t formatsCookie = xcb_render_query_pict_formats(conn);
-    xcb_render_query_pict_formats_reply_t *formatsReply = xcb_render_query_pict_formats_reply(conn,
-                                                                                              formatsCookie,
-                                                                                              &error);
-    if (!formatsReply || error) {
+    auto formats = Q_XCB_REPLY(xcb_render_query_pict_formats, conn);
+    if (!formats) {
         qWarning("qt_xcb_createCursorXRender: query_pict_formats failed");
-        free(formatsReply);
-        free(error);
         return XCB_NONE;
     }
-    xcb_render_pictforminfo_t *fmt = xcb_render_util_find_standard_format(formatsReply,
+    xcb_render_pictforminfo_t *fmt = xcb_render_util_find_standard_format(formats.get(),
                                                                           XCB_PICT_STANDARD_ARGB_32);
     if (!fmt) {
         qWarning("qt_xcb_createCursorXRender: Failed to find format PICT_STANDARD_ARGB_32");
-        free(formatsReply);
         return XCB_NONE;
     }
 
@@ -217,17 +260,15 @@ xcb_cursor_t qt_xcb_createCursorXRender(QXcbScreen *screen, const QImage &image,
                                        0, 0, 0);
     if (!xi) {
         qWarning("qt_xcb_createCursorXRender: xcb_image_create failed");
-        free(formatsReply);
         return XCB_NONE;
     }
     xi->data = (uint8_t *) malloc(xi->stride * h);
     if (!xi->data) {
         qWarning("qt_xcb_createCursorXRender: Failed to malloc() image data");
         xcb_image_destroy(xi);
-        free(formatsReply);
         return XCB_NONE;
     }
-    memcpy(xi->data, img.constBits(), img.byteCount());
+    memcpy(xi->data, img.constBits(), img.sizeInBytes());
 
     xcb_pixmap_t pix = xcb_generate_id(conn);
     xcb_create_pixmap(conn, 32, pix, screen->root(), w, h);
@@ -247,7 +288,6 @@ xcb_cursor_t qt_xcb_createCursorXRender(QXcbScreen *screen, const QImage &image,
     xcb_image_destroy(xi);
     xcb_render_free_picture(conn, pic);
     xcb_free_pixmap(conn, pix);
-    free(formatsReply);
     return cursor;
 
 #else

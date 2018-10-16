@@ -1,47 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qglobal.h"
-
-#ifndef QT_NO_GRAPHICSVIEW
 
 #include <QtCore/qdebug.h>
 #include <QtCore/qnumeric.h>
@@ -54,9 +50,6 @@
 #include <QtWidgets/qstyleoption.h>
 #include <QtWidgets/QStyleOptionTitleBar>
 #include <QtWidgets/QGraphicsSceneMouseEvent>
-#if defined(Q_WS_MAC) && !defined(QT_NO_STYLE_MAC)
-# include <private/qmacstyle_mac_p.h>
-#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -72,9 +65,7 @@ void QGraphicsWidgetPrivate::init(QGraphicsItem *parentItem, Qt::WindowFlags wFl
     adjustWindowFlags(&wFlags);
     windowFlags = wFlags;
 
-    if (parentItem)
-        setParentItemHelper(parentItem, 0, 0);
-
+    q->setParentItem(parentItem);
     q->setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred, QSizePolicy::DefaultType));
     q->setGraphicsItem(q);
 
@@ -90,17 +81,31 @@ qreal QGraphicsWidgetPrivate::titleBarHeight(const QStyleOptionTitleBar &options
 {
     Q_Q(const QGraphicsWidget);
     int height = q->style()->pixelMetric(QStyle::PM_TitleBarHeight, &options);
-#if defined(Q_WS_MAC) && !defined(QT_NO_STYLE_MAC)
-    if (qobject_cast<QMacStyle*>(q->style())) {
-        height -=4;
-    }
-#endif
     return (qreal)height;
 }
 
 /*!
     \internal
 */
+QGraphicsWidgetPrivate::QGraphicsWidgetPrivate()
+    : margins(nullptr),
+      layout(nullptr),
+      inheritedPaletteResolveMask(0),
+      inheritedFontResolveMask(0),
+      inSetGeometry(false),
+      polished(false),
+      inSetPos(false),
+      autoFillBackground(false),
+      focusPolicy(Qt::NoFocus),
+      focusNext(nullptr),
+      focusPrev(nullptr),
+      windowFlags(),
+      windowData(nullptr),
+      setWindowFrameMargins(false),
+      windowFrameMargins(nullptr)
+{
+}
+
 QGraphicsWidgetPrivate::~QGraphicsWidgetPrivate()
 {
     // Remove any lazily allocated data
@@ -317,12 +322,11 @@ void QGraphicsWidgetPrivate::initStyleOptionTitleBar(QStyleOptionTitleBar *optio
     option->subControls = QStyle::SC_TitleBarCloseButton | QStyle::SC_TitleBarLabel | QStyle::SC_TitleBarSysMenu;
     option->activeSubControls = windowData->hoveredSubControl;
     bool isActive = q->isActiveWindow();
+    option->state.setFlag(QStyle::State_Active, isActive);
     if (isActive) {
-        option->state |= QStyle::State_Active;
         option->titleBarState = Qt::WindowActive;
         option->titleBarState |= QStyle::State_Active;
     } else {
-        option->state &= ~QStyle::State_Active;
         option->titleBarState = Qt::WindowNoState;
     }
     QFont windowTitleFont = QApplication::font("QMdiSubWindowTitleBar");
@@ -402,7 +406,7 @@ void QGraphicsWidgetPrivate::windowFrameMousePressEvent(QGraphicsSceneMouseEvent
     event->setAccepted(windowData->grabbedSection != Qt::NoSection);
 }
 
-/*!
+/*
   Used to calculate the
   Precondition:
   \a widget should support either hfw or wfh
@@ -466,7 +470,7 @@ static QSizeF closestAcceptableSize(const QSizeF &proposed,
 
     do {
         if (maxw - minw < 0.1) {
-            // we still havent found anything, cut off binary search
+            // we still haven't found anything, cut off binary search
             minw = maxw;
             minh = maxh;
         }
@@ -695,7 +699,7 @@ void QGraphicsWidgetPrivate::windowFrameHoverMoveEvent(QGraphicsSceneHoverEvent 
         case Qt::TitleBarArea:
             windowData->buttonRect = q->style()->subControlRect(
                 QStyle::CC_TitleBar, &bar, QStyle::SC_TitleBarCloseButton, 0);
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
             // On mac we should hover if we are in the 'area' of the buttons
             windowData->buttonRect |= q->style()->subControlRect(
                 QStyle::CC_TitleBar, &bar, QStyle::SC_TitleBarMinButton, 0);
@@ -713,6 +717,9 @@ void QGraphicsWidgetPrivate::windowFrameHoverMoveEvent(QGraphicsSceneHoverEvent 
 #ifndef QT_NO_CURSOR
     if (needsSetCursorCall)
         q->setCursor(cursorShape);
+#else
+    Q_UNUSED(needsSetCursorCall);
+    Q_UNUSED(cursorShape);
 #endif
     // update buttons if we hover over them
     windowData->hoveredSubControl = q->style()->hitTestComplexControl(QStyle::CC_TitleBar, &bar, pos.toPoint(), 0);
@@ -764,73 +771,59 @@ bool QGraphicsWidgetPrivate::hasDecoration() const
 void QGraphicsWidgetPrivate::fixFocusChainBeforeReparenting(QGraphicsWidget *newParent, QGraphicsScene *oldScene, QGraphicsScene *newScene)
 {
     Q_Q(QGraphicsWidget);
-
     Q_ASSERT(focusNext && focusPrev);
 
-    QGraphicsWidget *n = q;     //last one in 'new' list
-    QGraphicsWidget *o = 0;     //last one in 'old' list
-
-    QGraphicsWidget *w = focusNext;
-
-    QGraphicsWidget *firstOld = 0;
-    bool wasPreviousNew = true;
-
-    while (w != q) {
-        bool isCurrentNew = q->isAncestorOf(w);
-        if (isCurrentNew) {
-            if (!wasPreviousNew) {
-                n->d_func()->focusNext = w;
-                w->d_func()->focusPrev = n;
-            }
-            n = w;
-        } else /*if (!isCurrentNew)*/ {
-            if (wasPreviousNew) {
-                if (o) {
-                    o->d_func()->focusNext = w;
-                    w->d_func()->focusPrev = o;
-                } else {
-                    firstOld = w;
-                }
-            }
-            o = w;
-        }
-        w = w->d_func()->focusNext;
-        wasPreviousNew = isCurrentNew;
+    if (q_ptr->isPanel()) {
+        // panels are never a part of their parent's or ancestors' focus
+        // chains. so reparenting a panel is easy; there's nothing to
+        // do.
+        return;
     }
 
-    // repair the 'old' chain
-    if (firstOld) {
-        o->d_func()->focusNext = firstOld;
-        firstOld->d_func()->focusPrev = o;
+    // we're not a panel, so find the first widget in the focus chain
+    // (this), and the last (this, or the last widget that is still
+    // a descendent of this). also find the widgets that currently /
+    // before reparenting point to this widgets' focus chain.
+    QGraphicsWidget *focusFirst = q;
+    QGraphicsWidget *focusBefore = focusPrev;
+    QGraphicsWidget *focusLast = focusFirst;
+    QGraphicsWidget *focusAfter = focusNext;
+    do {
+        if (!q->isAncestorOf(focusAfter))
+            break;
+        focusLast = focusAfter;
+    } while ((focusAfter = focusAfter->d_func()->focusNext));
+
+    if (!parent && oldScene && oldScene != newScene && oldScene->d_func()->tabFocusFirst == q) {
+        // detach from old scene's top level focus chain.
+        oldScene->d_func()->tabFocusFirst = (focusAfter != q) ? focusAfter : 0;
     }
 
-    // update tabFocusFirst for oldScene if the item is going to be removed from oldScene
-    if (newParent)
-        newScene = newParent->scene();
+    // detach from current focus chain; skip this widget subtree.
+    focusBefore->d_func()->focusNext = focusAfter;
+    focusAfter->d_func()->focusPrev = focusBefore;
 
-    if (oldScene && newScene != oldScene)
-        oldScene->d_func()->tabFocusFirst = (firstOld && firstOld->scene() == oldScene) ? firstOld : 0;
+    if (newParent) {
+        // attach to new parent's focus chain as the last element
+        // in its chain.
+        QGraphicsWidget *newFocusFirst = newParent;
+        QGraphicsWidget *newFocusLast = newFocusFirst;
+        QGraphicsWidget *newFocusAfter = newFocusFirst->d_func()->focusNext;
+        do {
+            if (!newParent->isAncestorOf(newFocusAfter))
+                break;
+            newFocusLast = newFocusAfter;
+        } while ((newFocusAfter = newFocusAfter->d_func()->focusNext));
 
-    QGraphicsItem *topLevelItem = newParent ? newParent->topLevelItem() : 0;
-    QGraphicsWidget *topLevel = 0;
-    if (topLevelItem && topLevelItem->isWidget())
-        topLevel = static_cast<QGraphicsWidget *>(topLevelItem);
-
-    if (topLevel && newParent) {
-        QGraphicsWidget *last = topLevel->d_func()->focusPrev;
-        // link last with new chain
-        last->d_func()->focusNext = q;
-        focusPrev = last;
-
-        // link last in chain with
-        topLevel->d_func()->focusPrev = n;
-        n->d_func()->focusNext = topLevel;
+        newFocusLast->d_func()->focusNext = q;
+        focusLast->d_func()->focusNext = newFocusAfter;
+        newFocusAfter->d_func()->focusPrev = focusLast;
+        focusPrev = newFocusLast;
     } else {
-        // q is the start of the focus chain
-        n->d_func()->focusNext = q;
-        focusPrev = n;
+        // no new parent, so just link up our own prev->last widgets.
+        focusPrev = focusLast;
+        focusLast->d_func()->focusNext = q;
     }
-
 }
 
 void QGraphicsWidgetPrivate::setLayout_helper(QGraphicsLayout *l)
@@ -902,5 +895,3 @@ void QGraphicsWidgetPrivate::setGeometryFromSetPos()
 }
 
 QT_END_NAMESPACE
-
-#endif //QT_NO_GRAPHICSVIEW

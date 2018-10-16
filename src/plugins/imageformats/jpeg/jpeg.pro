@@ -1,13 +1,18 @@
 TARGET  = qjpeg
 
-PLUGIN_TYPE = imageformats
-load(qt_plugin)
+QT += core-private gui-private
 
-QT += core-private
+SOURCES += main.cpp qjpeghandler.cpp
+HEADERS += main.h qjpeghandler_p.h
 
-QTDIR_build:REQUIRES = "!contains(QT_CONFIG, no-jpeg)"
+qtConfig(system-jpeg) {
+    QMAKE_USE += libjpeg
+} else {
+    include($$PWD/../../../3rdparty/libjpeg.pri)
+}
 
-include(../../../gui/image/qjpeghandler.pri)
-SOURCES += main.cpp
-HEADERS += main.h
 OTHER_FILES += jpeg.json
+
+PLUGIN_TYPE = imageformats
+PLUGIN_CLASS_NAME = QJpegPlugin
+load(qt_plugin)

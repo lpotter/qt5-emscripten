@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,9 +32,7 @@
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkCookie>
 
-Q_DECLARE_METATYPE(QList<QByteArray>)
 Q_DECLARE_METATYPE(QNetworkRequest::KnownHeaders)
-Q_DECLARE_METATYPE(QVariant)
 
 class tst_QNetworkRequest: public QObject
 {
@@ -71,40 +56,13 @@ private slots:
     void removeHeader();
 };
 
-QT_BEGIN_NAMESPACE
-
-namespace QTest {
-    template<>
-    char *toString(const QNetworkCookie &cookie)
-    {
-        return qstrdup(cookie.toRawForm());
-    }
-
-    template<>
-    char *toString(const QList<QNetworkCookie> &list)
-    {
-        QString result = "QList(";
-        bool first = true;
-        foreach (QNetworkCookie cookie, list) {
-            if (!first)
-                result += ", ";
-            first = false;
-            result += QString::fromLatin1("QNetworkCookie(%1)").arg(QLatin1String(cookie.toRawForm()));
-        }
-
-        return qstrdup(result.append(')').toLocal8Bit());
-    }
-}
-
-QT_END_NAMESPACE
-
 void tst_QNetworkRequest::ctor_data()
 {
     QTest::addColumn<QUrl>("url");
 
     QTest::newRow("nothing") << QUrl();
     QTest::newRow("empty") << QUrl();
-    QTest::newRow("http") << QUrl("http://qt.nokia.com");
+    QTest::newRow("http") << QUrl("http://qt-project.org");
 }
 
 void tst_QNetworkRequest::ctor()
@@ -278,6 +236,46 @@ void tst_QNetworkRequest::setHeader_data()
                                             << true << "Last-Modified"
                                             << "Thu, 01 Nov 2007 18:08:30 GMT";
 
+    QTest::newRow("If-Modified-Since-Date") << QNetworkRequest::IfModifiedSinceHeader
+                                        << QVariant(QDate(2017, 7, 01))
+                                        << true << "If-Modified-Since"
+                                        << "Sat, 01 Jul 2017 00:00:00 GMT";
+    QTest::newRow("If-Modified-Since-DateTime") << QNetworkRequest::IfModifiedSinceHeader
+                                            << QVariant(QDateTime(QDate(2017, 7, 01),
+                                                                  QTime(3, 14, 15),
+                                                                  Qt::UTC))
+                                            << true << "If-Modified-Since"
+                                            << "Sat, 01 Jul 2017 03:14:15 GMT";
+
+    QTest::newRow("Etag-strong") << QNetworkRequest::ETagHeader << QVariant(R"("xyzzy")")
+                                            << true << "ETag" << R"("xyzzy")";
+    QTest::newRow("Etag-weak") << QNetworkRequest::ETagHeader << QVariant(R"(W/"xyzzy")")
+                                            << true << "ETag" << R"(W/"xyzzy")";
+    QTest::newRow("Etag-empty") << QNetworkRequest::ETagHeader << QVariant(R"("")")
+                                            << true << "ETag" << R"("")";
+
+    QTest::newRow("If-Match-empty") << QNetworkRequest::IfMatchHeader << QVariant(R"("")")
+                                            << true << "If-Match" << R"("")";
+    QTest::newRow("If-Match-any") << QNetworkRequest::IfMatchHeader << QVariant(R"("*")")
+                                            << true << "If-Match" << R"("*")";
+    QTest::newRow("If-Match-single") << QNetworkRequest::IfMatchHeader << QVariant(R"("xyzzy")")
+                                            << true << "If-Match" << R"("xyzzy")";
+    QTest::newRow("If-Match-multiple") << QNetworkRequest::IfMatchHeader
+                                            << QVariant(R"("xyzzy", "r2d2xxxx", "c3piozzzz")")
+                                            << true << "If-Match"
+                                            << R"("xyzzy", "r2d2xxxx", "c3piozzzz")";
+
+    QTest::newRow("If-None-Match-empty") << QNetworkRequest::IfNoneMatchHeader << QVariant(R"("")")
+                                            << true << "If-None-Match" << R"("")";
+    QTest::newRow("If-None-Match-any") << QNetworkRequest::IfNoneMatchHeader << QVariant(R"("*")")
+                                            << true << "If-None-Match" << R"("*")";
+    QTest::newRow("If-None-Match-single") << QNetworkRequest::IfNoneMatchHeader << QVariant(R"("xyzzy")")
+                                            << true << "If-None-Match" << R"("xyzzy")";
+    QTest::newRow("If-None-Match-multiple") << QNetworkRequest::IfNoneMatchHeader
+                                            << QVariant(R"("xyzzy", W/"r2d2xxxx", "c3piozzzz")")
+                                            << true << "If-None-Match"
+                                            << R"("xyzzy", W/"r2d2xxxx", "c3piozzzz")";
+
     QNetworkCookie cookie;
     cookie.setName("a");
     cookie.setValue("b");
@@ -369,6 +367,62 @@ void tst_QNetworkRequest::rawHeaderParsing_data()
                                            << true << "Last-Modified"
                                            << "Sun Nov  6 08:49:37 1994";
 
+    QTest::newRow("If-Modified-Since-RFC1123") << QNetworkRequest::IfModifiedSinceHeader
+                                           << QVariant(QDateTime(QDate(1994, 8, 06),
+                                                                 QTime(8, 49, 37),
+                                                                 Qt::UTC))
+                                           << true << "If-Modified-Since"
+                                           << "Sun, 06 Aug 1994 08:49:37 GMT";
+    QTest::newRow("If-Modified-Since-RFC850") << QNetworkRequest::IfModifiedSinceHeader
+                                           << QVariant(QDateTime(QDate(1994, 8, 06),
+                                                                 QTime(8, 49, 37),
+                                                                 Qt::UTC))
+                                           << true << "If-Modified-Since"
+                                           << "Sunday, 06-Aug-94 08:49:37 GMT";
+    QTest::newRow("If-Modified-Since-asctime") << QNetworkRequest::IfModifiedSinceHeader
+                                           << QVariant(QDateTime(QDate(1994, 8, 06),
+                                                                 QTime(8, 49, 37),
+                                                                 Qt::UTC))
+                                           << true << "If-Modified-Since"
+                                           << "Sun Aug  6 08:49:37 1994";
+
+    QTest::newRow("Etag-strong") << QNetworkRequest::ETagHeader << QVariant(R"("xyzzy")")
+                                            << true << "ETag" << R"("xyzzy")";
+    QTest::newRow("Etag-weak") << QNetworkRequest::ETagHeader << QVariant(R"(W/"xyzzy")")
+                                            << true << "ETag" << R"(W/"xyzzy")";
+    QTest::newRow("Etag-empty") << QNetworkRequest::ETagHeader << QVariant(R"("")")
+                                            << true << "ETag" << R"("")";
+
+    QTest::newRow("If-Match-empty") << QNetworkRequest::IfMatchHeader << QVariant(QStringList(R"("")"))
+                                            << true << "If-Match" << R"("")";
+    QTest::newRow("If-Match-any") << QNetworkRequest::IfMatchHeader << QVariant(QStringList(R"("*")"))
+                                            << true << "If-Match" << R"("*")";
+    QTest::newRow("If-Match-single") << QNetworkRequest::IfMatchHeader
+                                            << QVariant(QStringList(R"("xyzzy")"))
+                                            << true << "If-Match" << R"("xyzzy")";
+    QTest::newRow("If-Match-multiple") << QNetworkRequest::IfMatchHeader
+                                            << QVariant(QStringList({R"("xyzzy")",
+                                                                     R"("r2d2xxxx")",
+                                                                     R"("c3piozzzz")"}))
+                                           << true << "If-Match"
+                                           << R"("xyzzy", "r2d2xxxx", "c3piozzzz")";
+
+    QTest::newRow("If-None-Match-empty") << QNetworkRequest::IfNoneMatchHeader
+                                            << QVariant(QStringList(R"("")"))
+                                            << true << "If-None-Match" << R"("")";
+    QTest::newRow("If-None-Match-any") << QNetworkRequest::IfNoneMatchHeader
+                                            << QVariant(QStringList(R"("*")"))
+                                            << true << "If-None-Match" << R"("*")";
+    QTest::newRow("If-None-Match-single") << QNetworkRequest::IfNoneMatchHeader
+                                            << QVariant(QStringList(R"("xyzzy")"))
+                                            << true << "If-None-Match" << R"("xyzzy")";
+    QTest::newRow("If-None-Match-multiple") << QNetworkRequest::IfNoneMatchHeader
+                                            << QVariant(QStringList({R"("xyzzy")",
+                                                                     R"(W/"r2d2xxxx")",
+                                                                     R"("c3piozzzz")"}))
+                                            << true << "If-None-Match"
+                                            << R"("xyzzy", W/"r2d2xxxx", "c3piozzzz")";
+
     QTest::newRow("Content-Length-invalid1") << QNetworkRequest::ContentLengthHeader << QVariant()
                                              << false << "Content-Length" << "1a";
     QTest::newRow("Content-Length-invalid2") << QNetworkRequest::ContentLengthHeader << QVariant()
@@ -415,6 +469,9 @@ void tst_QNetworkRequest::rawHeaderParsing_data()
                                  << QVariant::fromValue(QList<QNetworkCookie>() << cookie << cookie2)
                                  << true << "Set-Cookie"
                                  << "a=b; path=/\nc=d";
+    QTest::newRow("Content-Disposition") << QNetworkRequest::ContentDispositionHeader
+                                         << QVariant("attachment; filename=\"test.txt\"") << true
+                                         << "Content-Disposition" << "attachment; filename=\"test.txt\"";
 }
 
 void tst_QNetworkRequest::rawHeaderParsing()

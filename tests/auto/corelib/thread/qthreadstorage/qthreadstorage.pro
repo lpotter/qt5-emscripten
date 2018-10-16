@@ -1,5 +1,8 @@
 TEMPLATE = subdirs
-SUBDIRS = \
-    crashonexit \
-    test
-CONFIG += ordered parallel_test
+
+!android:!winrt {
+    test.depends = crashonexit
+    SUBDIRS += crashonexit
+}
+
+SUBDIRS += test

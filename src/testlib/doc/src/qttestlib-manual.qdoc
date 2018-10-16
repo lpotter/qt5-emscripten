@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +11,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -51,7 +52,7 @@
            exported symbols.
     \row
         \li \b Self-contained
-        \li Qt Test requires only a few symbols from the Qt Core library
+        \li Qt Test requires only a few symbols from the Qt Core module
            for non-gui testing.
     \row
         \li \b {Rapid testing}
@@ -68,8 +69,8 @@
         \li Qt Test supports benchmarking and provides several measurement back-ends.
     \row
          \li \b {IDE friendly}
-         \li Qt Test outputs messages that can be interpreted by Visual
-            Studio and KDevelop.
+         \li Qt Test outputs messages that can be interpreted by Qt Creator, Visual
+            Studio, and KDevelop.
     \row
          \li \b Thread-safety
          \li The error reporting is thread safe and atomic.
@@ -108,6 +109,7 @@
 
     For more examples, refer to the \l{Qt Test Tutorial}.
 
+    \if !defined(qtforpython)
     \section1 Building a Test
 
     If you are using \c qmake as your build tool, just add the
@@ -120,7 +122,7 @@
 
     \snippet code/doc_src_qtestlib.pro 2
 
-    See \l{qmake Common Projects#building-a-testcase}{the qmake manual} for
+    See the \l{Building a Testcase}{qmake manual} for
     more information about \c{make check}.
 
     If you are using other build tools, make sure that you add the location
@@ -131,6 +133,7 @@
 
     See \l {Chapter 1: Writing a Unit Test}{Writing a Unit Test} for a step by
     step explanation.
+    \endif
 
     \section1 Qt Test Command Line Arguments
 
@@ -174,7 +177,7 @@
     \list
     \li \c -o \e{filename,format} \br
     Writes output to the specified file, in the specified format (one of
-    \c txt, \c xml, \c lightxml or \c xunitxml).  The special filename \c -
+    \c txt, \c xml, \c lightxml, \c xunitxml or \c tap).  The special filename \c -
     may be used to log to standard output.
     \li \c -o \e filename \br
     Writes output to the specified file.
@@ -186,6 +189,13 @@
     Outputs results as a stream of XML tags.
     \li \c -xunitxml \br
     Outputs results as an Xunit XML document.
+    \li \c -csv \br
+    Outputs results as comma-separated values (CSV). This mode is only suitable for
+    benchmarks, since it suppresses normal pass/fail messages.
+    \li \c -teamcity \br
+    Outputs results in TeamCity format.
+    \li \c -tap \br
+    Outputs results in Test Anything Protocol (TAP) format.
     \endlist
 
     The first version of the \c -o option may be repeated in order to log
@@ -193,8 +203,8 @@
     option can log test results to standard output.
 
     If the first version of the \c -o option is used, neither the second version
-    of the \c -o option nor the \c -txt, \c -xml, \c -lightxml or \c -xunitxml
-    options should be used.
+    of the \c -o option nor the \c -txt, \c -xml, \c -lightxml, \c -teamcity,
+    \c -xunitxml or \c -tap options should be used.
 
     If neither version of the \c -o option is used, test results will be logged to
     standard output.  If no format option is used, test results will be logged in
@@ -247,6 +257,15 @@
     2000.
     \li \c -nocrashhandler \br
     Disables the crash handler on Unix platforms.
+    On Windows, it re-enables the Windows Error Reporting dialog, which is
+    turned off by default. This is useful for debugging crashes.
+
+    \li \c -platform \e name \br
+    This command line argument applies to all Qt applications, but might be
+    especially useful in the context of auto-testing. By using the "offscreen"
+    platform plugin (-platform offscreen) it's possible to have tests that use
+    QWidget or QWindow run without showing anything on the screen. Currently
+    the offscreen platform plugin is only fully supported on X11.
     \endlist
 
     \section3 Benchmarking Options
@@ -262,6 +281,8 @@
     Counts events received during benchmarks.
     \li \c -minimumvalue \e n \br
     Sets the minimum acceptable measurement value.
+    \li \c -minimumtotal \e n \br
+    Sets the minimum acceptable total for repeated executions of a test function.
     \li \c -iterations \e n \br
     Sets the number of accumulation iterations.
     \li \c -median \e n \br
@@ -300,13 +321,16 @@
          \li All platforms
     \row \li CPU tick counter
          \li -tickcounter
-         \li Windows, Mac OS X, Linux, many UNIX-like systems.
-    \row \li Valgrind Callgrind
-         \li -callgrind
-         \li Linux (if installed)
+         \li Windows, \macos, Linux, many UNIX-like systems.
     \row \li Event Counter
          \li -eventcounter
          \li All platforms
+    \row \li Valgrind Callgrind
+         \li -callgrind
+         \li Linux (if installed)
+    \row \li Linux Perf
+         \li -perf
+         \li Linux
     \endtable
 
     In short, walltime is always available but requires many repetitions to
@@ -321,109 +345,26 @@
     that were received by the event loop before they are sent to their corresponding
     targets (this might include non-Qt events).
 
-    \note Depending on the device configuration, tick counters on the
-     Windows CE platform may not be as fine-grained, compared to other platforms.
-     Devices that do not support high-resolution timers default to
-     one-millisecond granularity.
+    The Linux Performance Monitoring solution is available only on Linux and
+    provides many different counters, which can be selected by passing an
+    additional option \c {-perfcounter countername}, such as \c {-perfcounter
+    cache-misses}, \c {-perfcounter branch-misses}, or \c {-perfcounter
+    l1d-load-misses}. The default counter is \c {cpu-cycles}. The full list of
+    counters can be obtained by running any benchmark executable with the
+    option \c -perfcounterlist.
+
+    \list
+    \li \b Notes:
+    \list
+    \li Using the performance counter may require enabling access to non-privileged
+        applications.
+    \li Devices that do not support high-resolution timers default to
+        one-millisecond granularity.
+    \endlist
+    \endlist
 
     See \l {Chapter 5: Writing a Benchmark}{Writing a Benchmark} in the Qt Test
     Tutorial for more benchmarking examples.
-
-    \section1 Using Qt Test Remotely on Windows CE
-
-    The \c cetest convenience application enables you to launch an
-    application remotely on a Windows CE device or emulator.
-
-    It needs to be executed after the unit test has been successfully compiled.
-
-    Prior to launching, the following files are copied to the device:
-
-    \list
-    \li all Qt libraries the project links to
-    \li \l {QtRemote}{QtRemote.dll}
-    \li the c runtime library specified during installation
-    \li all files specified in the \c .pro file following the \l DEPLOYMENT rules.
-    \endlist
-
-    \section2 Syntax
-    The syntax to execute an autotest takes the following simple form:
-
-    \snippet code/doc_src_qtestlib.qdoc 6
-
-    \section2 Options
-    \c cetest provides the same options as those for unit-testing on non cross-compiled
-    platforms. See \l {Qt Test Command Line Arguments} {Command Line Arguments} for
-    more information.
-
-    The following commands are also included:
-
-    \list
-    \li \c -debug \br
-    Compiles the test version in debug mode.
-    \li \c -release \br
-    Compiles the test version in release mode.
-    \li \c -libpath \e path \br
-    Copies Qt libraries to the specified path.
-    \li \c -qt-delete \br
-    Deletes Qt libraries after execution.
-    \li \c -project-delete \br
-    Deletes project files after execution.
-    \li \c -delete \br
-    Deletes project and Qt libraries after execution.
-    \li \c -conf \br
-    Specifies a qt.conf file to be deployed to remote directory.
-    \endlist
-
-    \note \c{debug} is the default build option.
-
-    \section2 QtRemote
-    \c QtRemote is a small library which is built after Qt Test. It allows the host
-    system to create a process on a remote device and waits until its execution has
-    been finished.
-
-    \section2 Requirements
-    \c cetest uses Microsoft ActiveSync to establish a remote connection between the
-    host computer and the device. Thus header files and libraries are needed to compile
-    cetest and QtRemote successfully.
-
-    Prior to \l{Installing Qt for Windows CE}{installation} of Qt, you need to set your
-    \c INCLUDE and \c LIB environment variables properly.
-
-    A default installation of Windows Mobile 5 for Pocket PC can be obtained by:
-
-    \snippet code/doc_src_qtestlib.qdoc 7
-
-    Note that Qt will remember the path, so you do not need to set it again
-    after switching the environments for cross-compilation.
-
-    \section1 3rd Party Code
-
-    The CPU tick counters used for benchmarking are licensed under the following
-    license: (from src/testlib/3rdparty/cycle.h)
-
-    \legalese
-    Copyright (c) 2003, 2006 Matteo Frigo\br
-    Copyright (c) 2003, 2006 Massachusetts Institute of Technology
-
-    Permission is hereby granted, free of charge, to any person obtaining
-    a copy of this software and associated documentation files (the
-    "Software"), to deal in the Software without restriction, including
-    without limitation the rights to use, copy, modify, merge, publish,
-    distribute, sublicense, and/or sell copies of the Software, and to
-    permit persons to whom the Software is furnished to do so, subject to
-    the following conditions:
-
-    The above copyright notice and this permission notice shall be
-    included in all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-    \endlegalese
 */
 
 /*!
@@ -445,6 +386,7 @@
     \li \l {Chapter 3: Simulating GUI Events}{Simulating GUI Events}
     \li \l {Chapter 4: Replaying GUI Events}{Replaying GUI Events}
     \li \l {Chapter 5: Writing a Benchmark}{Writing a Benchmark}
+    \li \l {Chapter 6: Skipping Tests with QSKIP}{Skipping Tests}
     \endlist
 
 */
@@ -457,6 +399,7 @@
     \nextpage {Chapter 2: Data Driven Testing}{Chapter 2}
 
     \title Chapter 1: Writing a Unit Test
+    \brief How to write a unit test.
 
     In this first chapter we will see how to write a simple unit test
     for a class, and how to execute it.
@@ -532,6 +475,7 @@
     \nextpage {Chapter 3: Simulating Gui Events}{Chapter 3}
 
     \title Chapter 2: Data Driven Testing
+    \brief How to create data driven tests.
 
     In this chapter we will demonstrate how to execute a test
     multiple times with different test data.
@@ -637,6 +581,7 @@
     \nextpage {Chapter 4: Replaying GUI Events}{Chapter 4}
 
     \title Chapter 3: Simulating GUI Events
+    \brief Howe to simulate GUI events.
 
     Qt Test features some mechanisms to test graphical user
     interfaces. Instead of simulating native window system events,
@@ -645,7 +590,7 @@
 
     In this chapter we will see how to write a simple GUI test.
 
-    \section1 Writing a GUI test
+    \section1 Writing a GUI Test
 
     This time, let's assume you want to test the behavior of our
     QLineEdit class. As before, you will need a class that contains
@@ -653,7 +598,7 @@
 
     \snippet tutorial3/testgui.cpp 0
 
-    The only difference is that you need to include the QtGui class
+    The only difference is that you need to include the Qt GUI class
     definitions in addition to the QTest namespace.
 
     \snippet tutorial3/testgui.cpp 1
@@ -697,6 +642,7 @@
     \nextpage {Chapter 5: Writing a Benchmark}{Chapter 5}
 
     \title Chapter 4: Replaying GUI Events
+    \brief How to replay GUI events.
 
     In this chapter, we will show how to simulate a GUI event,
     and how to store a series of GUI events as well as replay them on
@@ -774,8 +720,10 @@
 
     \previouspage {Chapter 4: Replaying GUI Events}{Chapter 4}
     \contentspage {Qt Test Tutorial}{Contents}
+    \nextpage {Chapter 6: Skipping Tests with QSKIP}{Chapter 6}
 
     \title Chapter 5: Writing a Benchmark
+    \brief How to write a benchmark.
 
     In this final chapter we will demonstrate how to write benchmarks
     using Qt Test.
@@ -822,4 +770,49 @@
     See the \l{qtestlib-tools Announcement}{qtestlib-tools announcement}
     for more information on these tools and a simple graphing example.
 
+*/
+/*!
+    \page qttestlib-tutorial6.html
+
+    \previouspage {Chapter 5: Writing a Benchmark}{Chapter 5}
+    \contentspage {Qt Test Tutorial}{Contents}
+
+    \title Chapter 6: Skipping Tests with QSKIP
+    \brief How to skip tests in certain cases.
+
+    \section2 Using QSKIP(\a description) in a test function
+
+    If the QSKIP() macro is called from a test function, it stops
+    the execution of the test without adding a failure to the test log.
+    It can be used to skip tests that are certain to fail. The text in
+    the QSKIP \a description parameter is appended to the test log,
+    and explains why the test was not carried out.
+
+    QSKIP can be used to skip testing when the implementation is not yet
+    complete or not supported on a certain platform. When there are known
+    failures, it is recommended to use QEXPECT_FAIL, so that the test is
+    always completely executed.
+
+    Example of QSKIP in a test function:
+
+    \snippet code/doc_src_qtqskip.cpp 0
+
+    In a data-driven test, each call to QSKIP() skips only the current
+    row of test data. If the data-driven test contains an unconditional
+    call to QSKIP, it produces a skip message for each row of test data.
+
+    \section2 Using QSKIP in a _data function
+
+    If called from a _data function, the QSKIP() macro stops
+    execution of the _data function. This prevents execution of the
+    associated test function.
+
+    See below for an example:
+
+    \snippet code/doc_src_qtqskip.cpp 1
+
+    \section2 Using QSKIP from initTestCase() or initTestCase_data()
+
+    If called from \c initTestCase() or \c initTestCase_data(), the
+    QSKIP() macro will skip all test and _data functions.
 */

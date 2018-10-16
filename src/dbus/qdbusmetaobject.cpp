@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,9 +74,10 @@ private:
         QByteArray name;
         QVarLengthArray<int, 4> inputTypes;
         QVarLengthArray<int, 4> outputTypes;
+        QByteArray rawReturnType;
         int flags;
     };
-    
+
     struct Property {
         QByteArray typeName;
         QByteArray signature;
@@ -92,14 +92,14 @@ private:
     QMap<QByteArray, Method> signals_;
     QMap<QByteArray, Method> methods;
     QMap<QByteArray, Property> properties;
-    
+
     const QDBusIntrospection::Interface *data;
     QString interface;
 
     Type findType(const QByteArray &signature,
                   const QDBusIntrospection::Annotations &annotations,
                   const char *direction = "Out", int id = -1);
-    
+
     void parseMethods();
     void parseSignals();
     void parseProperties();
@@ -127,25 +127,9 @@ QDBusMetaObjectGenerator::QDBusMetaObjectGenerator(const QString &interfaceName,
     }
 }
 
-Q_DBUS_EXPORT bool qt_dbus_metaobject_skip_annotations = false;
-
-QDBusMetaObjectGenerator::Type
-QDBusMetaObjectGenerator::findType(const QByteArray &signature,
-                                   const QDBusIntrospection::Annotations &annotations,
-                                   const char *direction, int id)
+static int registerComplexDBusType(const char *typeName)
 {
     struct QDBusRawTypeHandler {
-        static void destroy(void *)
-        {
-            qFatal("Cannot destroy placeholder type QDBusRawType");
-        }
-
-        static void *create(const void *)
-        {
-            qFatal("Cannot create placeholder type QDBusRawType");
-            return 0;
-        }
-
         static void destruct(void *)
         {
             qFatal("Cannot destruct placeholder type QDBusRawType");
@@ -158,6 +142,21 @@ QDBusMetaObjectGenerator::findType(const QByteArray &signature,
         }
     };
 
+    return QMetaType::registerNormalizedType(typeName,
+                                             QDBusRawTypeHandler::destruct,
+                                             QDBusRawTypeHandler::construct,
+                                             sizeof(void *),
+                                             QMetaType::MovableType,
+                                             0);
+}
+
+Q_DBUS_EXPORT bool qt_dbus_metaobject_skip_annotations = false;
+
+QDBusMetaObjectGenerator::Type
+QDBusMetaObjectGenerator::findType(const QByteArray &signature,
+                                   const QDBusIntrospection::Annotations &annotations,
+                                   const char *direction, int id)
+{
     Type result;
     result.id = QVariant::Invalid;
 
@@ -194,13 +193,7 @@ QDBusMetaObjectGenerator::findType(const QByteArray &signature,
             // type is still unknown or doesn't match back to the signature that it
             // was expected to, so synthesize a fake type
             typeName = "QDBusRawType<0x" + signature.toHex() + ">*";
-            type = QMetaType::registerType(typeName, QDBusRawTypeHandler::destroy,
-                                           QDBusRawTypeHandler::create,
-                                           QDBusRawTypeHandler::destruct,
-                                           QDBusRawTypeHandler::construct,
-                                           sizeof(void *),
-                                           QMetaType::MovableType,
-                                           0);
+            type = registerComplexDBusType(typeName);
         }
 
         result.name = typeName;
@@ -214,9 +207,12 @@ QDBusMetaObjectGenerator::findType(const QByteArray &signature,
         } else if (signature == "a{sv}") {
             result.name = "QVariantMap";
             type = QVariant::Map;
+        } else if (signature == "a{ss}") {
+            result.name = "QMap<QString,QString>";
+            type = qMetaTypeId<QMap<QString, QString> >();
         } else {
-            result.name = "QDBusRawType::" + signature;
-            type = -1;
+            result.name = "{D-Bus type \"" + signature + "\"}";
+            type = registerComplexDBusType(result.name);
         }
     } else {
         result.name = QMetaType::typeName(type);
@@ -258,7 +254,7 @@ void QDBusMetaObjectGenerator::parseMethods()
             mm.inputTypes.append(type.id);
 
             mm.parameterNames.append(arg.name.toLatin1());
-            
+
             prototype.append(type.name);
             prototype.append(',');
         }
@@ -276,6 +272,9 @@ void QDBusMetaObjectGenerator::parseMethods()
 
             mm.outputTypes.append(type.id);
 
+            if (i == 0 && type.id == -1) {
+                mm.rawReturnType = type.name;
+            }
             if (i != 0) {
                 // non-const ref parameter
                 mm.parameterNames.append(arg.name.toLatin1());
@@ -331,7 +330,7 @@ void QDBusMetaObjectGenerator::parseSignals()
             mm.inputTypes.append(type.id);
 
             mm.parameterNames.append(arg.name.toLatin1());
-            
+
             prototype.append(type.name);
             prototype.append(',');
         }
@@ -344,7 +343,7 @@ void QDBusMetaObjectGenerator::parseSignals()
             prototype.append(')');
 
         // meta method flags
-        mm.flags = AccessProtected | MethodSignal | MethodScriptable;
+        mm.flags = AccessPublic | MethodSignal | MethodScriptable;
 
         // add
         signals_.insert(QMetaObject::normalizedSignature(prototype), mm);
@@ -361,7 +360,7 @@ void QDBusMetaObjectGenerator::parseProperties()
         Type type = findType(p.type.toLatin1(), p.annotations);
         if (type.id == QVariant::Invalid)
             continue;
-        
+
         QByteArray name = p.name.toLatin1();
         mp.signature = p.type.toLatin1();
         mp.type = type.id;
@@ -413,7 +412,7 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
             - methods.count(); // ditto
 
     QDBusMetaObjectPrivate *header = reinterpret_cast<QDBusMetaObjectPrivate *>(idata.data());
-    Q_STATIC_ASSERT_X(QMetaObjectPrivate::OutputRevision == 7, "QtDBus meta-object generator should generate the same version as moc");
+    Q_STATIC_ASSERT_X(QMetaObjectPrivate::OutputRevision == 8, "QtDBus meta-object generator should generate the same version as moc");
     header->revision = QMetaObjectPrivate::OutputRevision;
     header->className = 0;
     header->classInfoCount = 0;
@@ -435,14 +434,13 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
     int data_size = idata.size() +
                     (header->methodCount * (5+intsPerMethod)) + methodParametersDataSize +
                     (header->propertyCount * (3+intsPerProperty));
-    foreach (const Method &mm, signals_)
+    for (const Method &mm : qAsConst(signals_))
         data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
-    foreach (const Method &mm, methods)
+    for (const Method &mm : qAsConst(methods))
         data_size += 2 + mm.inputTypes.count() + mm.outputTypes.count();
     idata.resize(data_size + 1);
 
-    QMetaStringTable strings;
-    strings.enter(className.toLatin1());
+    QMetaStringTable strings(className.toLatin1());
 
     int offset = header->methodData;
     int parametersOffset = offset + header->methodCount * 5;
@@ -471,10 +469,14 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
                 int type;
                 QByteArray typeName;
                 if (i < 0) { // Return type
-                    if (!mm.outputTypes.isEmpty())
+                    if (!mm.outputTypes.isEmpty()) {
                         type = mm.outputTypes.first();
-                    else
+                        if (type == -1) {
+                            type = IsUnresolvedType | strings.enter(mm.rawReturnType);
+                        }
+                    } else {
                         type = QMetaType::Void;
+                    }
                 } else if (i < mm.inputTypes.size()) {
                     type = mm.inputTypes.at(i);
                 } else {
@@ -509,7 +511,7 @@ void QDBusMetaObjectGenerator::write(QDBusMetaObject *obj)
     }
 
     Q_ASSERT(offset == header->methodData + header->methodCount * 5);
-    Q_ASSERT(parametersOffset = header->propertyData);
+    Q_ASSERT(parametersOffset == header->propertyData);
     Q_ASSERT(signatureOffset == header->methodDBusData + header->methodCount * intsPerMethod);
     Q_ASSERT(typeidOffset == idata.size());
     offset += methodParametersDataSize;
@@ -564,7 +566,7 @@ void QDBusMetaObjectGenerator::writeWithoutXml(const QString &interface)
 
     char *stringdata = new char[name.length() + 1];
     stringdata[name.length()] = '\0';
-    
+
     d.data = reinterpret_cast<uint*>(header);
     d.relatedMetaObjects = 0;
     d.static_metacall = 0;
@@ -615,7 +617,7 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
     if (we)
         return we;
     // still nothing?
-    
+
     if (parsed.isEmpty()) {
         // object didn't return introspection
         we = new QDBusMetaObject;
@@ -627,7 +629,7 @@ QDBusMetaObject *QDBusMetaObject::createMetaObject(const QString &interface, con
         // merge all interfaces
         it = parsed.constBegin();
         QDBusIntrospection::Interface merged = *it.value().constData();
- 
+
         for (++it; it != end; ++it) {
             merged.annotations.unite(it.value()->annotations);
             merged.methods.unite(it.value()->methods);

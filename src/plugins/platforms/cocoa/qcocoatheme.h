@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +43,8 @@
 #include <QtCore/QHash>
 #include <qpa/qplatformtheme.h>
 
+Q_FORWARD_DECLARE_OBJC_CLASS(QT_MANGLE_NAMESPACE(QCocoaThemeAppAppearanceObserver));
+
 QT_BEGIN_NAMESPACE
 
 class QPalette;
@@ -54,30 +54,37 @@ public:
     QCocoaTheme();
     ~QCocoaTheme();
 
-    virtual QPlatformMenuItem* createPlatformMenuItem() const;
-    virtual QPlatformMenu* createPlatformMenu() const;
-    virtual QPlatformMenuBar* createPlatformMenuBar() const;
+    void reset();
+
+    QPlatformMenuItem* createPlatformMenuItem() const override;
+    QPlatformMenu* createPlatformMenu() const override;
+    QPlatformMenuBar* createPlatformMenuBar() const override;
 
 #ifndef QT_NO_SYSTEMTRAYICON
-    QPlatformSystemTrayIcon *createPlatformSystemTrayIcon() const;
+    QPlatformSystemTrayIcon *createPlatformSystemTrayIcon() const override;
 #endif
 
-    bool usePlatformNativeDialog(DialogType dialogType) const;
-    QPlatformDialogHelper *createPlatformDialogHelper(DialogType dialogType) const;
+    bool usePlatformNativeDialog(DialogType dialogType) const override;
+    QPlatformDialogHelper *createPlatformDialogHelper(DialogType dialogType) const override;
 
-    const QPalette *palette(Palette type = SystemPalette) const;
-    const QFont *font(Font type = SystemFont) const;
-    QPixmap standardPixmap(StandardPixmap sp, const QSizeF &size) const;
-    QPixmap fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &size) const;
+    const QPalette *palette(Palette type = SystemPalette) const override;
+    const QFont *font(Font type = SystemFont) const override;
+    QPixmap standardPixmap(StandardPixmap sp, const QSizeF &size) const override;
+    QIcon fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptions options = 0) const override;
 
-    QVariant themeHint(ThemeHint hint) const;
+    QVariant themeHint(ThemeHint hint) const override;
+    QString standardButtonText(int button) const override;
+    QKeySequence standardButtonShortcut(int button) const override;
 
     static const char *name;
+
+    void handleSystemThemeChange();
 
 private:
     mutable QPalette *m_systemPalette;
     mutable QHash<QPlatformTheme::Palette, QPalette*> m_palettes;
     mutable QHash<QPlatformTheme::Font, QFont*> m_fonts;
+    QT_MANGLE_NAMESPACE(QCocoaThemeAppAppearanceObserver) *m_appearanceObserver;
 };
 
 QT_END_NAMESPACE

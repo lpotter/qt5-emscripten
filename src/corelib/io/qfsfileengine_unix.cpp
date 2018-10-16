@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +43,7 @@
 #include "private/qcore_unix_p.h"
 #include "qfilesystementry_p.h"
 #include "qfilesystemengine_p.h"
+#include "qcoreapplication.h"
 
 #ifndef QT_NO_FSFILEENGINE
 
@@ -66,46 +65,6 @@ QT_BEGIN_NAMESPACE
 /*!
     \internal
 
-    Returns the stdlib open string corresponding to a QIODevice::OpenMode.
-*/
-static inline QByteArray openModeToFopenMode(QIODevice::OpenMode flags, const QFileSystemEntry &fileEntry,
-        QFileSystemMetaData &metaData)
-{
-    QByteArray mode;
-    if ((flags & QIODevice::ReadOnly) && !(flags & QIODevice::Truncate)) {
-        mode = "rb";
-        if (flags & QIODevice::WriteOnly) {
-            metaData.clearFlags(QFileSystemMetaData::FileType);
-            if (!fileEntry.isEmpty()
-                    && QFileSystemEngine::fillMetaData(fileEntry, metaData, QFileSystemMetaData::FileType)
-                    && metaData.isFile()) {
-                mode += '+';
-            } else {
-                mode = "wb+";
-            }
-        }
-    } else if (flags & QIODevice::WriteOnly) {
-        mode = "wb";
-        if (flags & QIODevice::ReadOnly)
-            mode += '+';
-    }
-    if (flags & QIODevice::Append) {
-        mode = "ab";
-        if (flags & QIODevice::ReadOnly)
-            mode += '+';
-    }
-
-#if defined(__GLIBC__) && (__GLIBC__ * 0x100 + __GLIBC_MINOR__) >= 0x0207
-    // must be glibc >= 2.7
-    mode += 'e';
-#endif
-
-    return mode;
-}
-
-/*!
-    \internal
-
     Returns the stdio open flags corresponding to a QIODevice::OpenMode.
 */
 static inline int openModeToOpenFlags(QIODevice::OpenMode mode)
@@ -115,31 +74,34 @@ static inline int openModeToOpenFlags(QIODevice::OpenMode mode)
     oflags |= QT_OPEN_LARGEFILE;
 #endif
 
-    if ((mode & QFile::ReadWrite) == QFile::ReadWrite) {
-        oflags = QT_OPEN_RDWR | QT_OPEN_CREAT;
-    } else if (mode & QFile::WriteOnly) {
-        oflags = QT_OPEN_WRONLY | QT_OPEN_CREAT;
-    }
+    if ((mode & QFile::ReadWrite) == QFile::ReadWrite)
+        oflags = QT_OPEN_RDWR;
+    else if (mode & QFile::WriteOnly)
+        oflags = QT_OPEN_WRONLY;
 
-    if (mode & QFile::Append) {
+    if (QFSFileEnginePrivate::openModeCanCreate(mode))
+        oflags |= QT_OPEN_CREAT;
+
+    if (mode & QFile::Truncate)
+        oflags |= QT_OPEN_TRUNC;
+
+    if (mode & QFile::Append)
         oflags |= QT_OPEN_APPEND;
-    } else if (mode & QFile::WriteOnly) {
-        if ((mode & QFile::Truncate) || !(mode & QFile::ReadOnly))
-            oflags |= QT_OPEN_TRUNC;
-    }
+
+    if (mode & QFile::NewOnly)
+        oflags |= QT_OPEN_EXCL;
 
     return oflags;
 }
 
-/*!
-    \internal
-
-    Sets the file descriptor to close on exec. That is, the file
-    descriptor is not inherited by child processes.
-*/
-static inline bool setCloseOnExec(int fd)
+static inline QString msgOpenDirectory()
 {
-    return fd != -1 && fcntl(fd, F_SETFD, FD_CLOEXEC) != -1;
+    const char message[] = QT_TRANSLATE_NOOP("QIODevice", "file to open is a directory");
+#if QT_CONFIG(translation)
+    return QIODevice::tr(message);
+#else
+    return QLatin1String(message);
+#endif
 }
 
 /*!
@@ -149,6 +111,8 @@ bool QFSFileEnginePrivate::nativeOpen(QIODevice::OpenMode openMode)
 {
     Q_Q(QFSFileEngine);
 
+    Q_ASSERT_X(openMode & QIODevice::Unbuffered, "QFSFileEngine::open",
+               "QFSFileEngine no longer supports buffered mode; upper layer must buffer");
     if (openMode & QIODevice::Unbuffered) {
         int flags = openModeToOpenFlags(openMode);
 
@@ -169,7 +133,7 @@ bool QFSFileEnginePrivate::nativeOpen(QIODevice::OpenMode openMode)
             // we had received EISDIR anyway.
             if (QFileSystemEngine::fillMetaData(fd, metaData)
                     && metaData.isDirectory()) {
-                q->setError(QFile::OpenError, QLatin1String("file to open is a directory"));
+                q->setError(QFile::OpenError, msgOpenDirectory());
                 QT_CLOSE(fd);
                 return false;
             }
@@ -190,49 +154,6 @@ bool QFSFileEnginePrivate::nativeOpen(QIODevice::OpenMode openMode)
         }
 
         fh = 0;
-    } else {
-        QByteArray fopenMode = openModeToFopenMode(openMode, fileEntry, metaData);
-
-        // Try to open the file in buffered mode.
-        do {
-            fh = QT_FOPEN(fileEntry.nativeFilePath().constData(), fopenMode.constData());
-        } while (!fh && errno == EINTR);
-
-        // On failure, return and report the error.
-        if (!fh) {
-            q->setError(errno == EMFILE ? QFile::ResourceError : QFile::OpenError,
-                        qt_error_string(int(errno)));
-            return false;
-        }
-
-        if (!(openMode & QIODevice::WriteOnly)) {
-            // we don't need this check if we tried to open for writing because then
-            // we had received EISDIR anyway.
-            if (QFileSystemEngine::fillMetaData(QT_FILENO(fh), metaData)
-                    && metaData.isDirectory()) {
-                q->setError(QFile::OpenError, QLatin1String("file to open is a directory"));
-                fclose(fh);
-                return false;
-            }
-        }
-
-        setCloseOnExec(fileno(fh)); // ignore failure
-
-        // Seek to the end when in Append mode.
-        if (openMode & QIODevice::Append) {
-            int ret;
-            do {
-                ret = QT_FSEEK(fh, 0, SEEK_END);
-            } while (ret == -1 && errno == EINTR);
-
-            if (ret == -1) {
-                q->setError(errno == EMFILE ? QFile::ResourceError : QFile::OpenError,
-                            qt_error_string(int(errno)));
-                return false;
-            }
-        }
-
-        fd = -1;
     }
 
     closeFileHandle = true;
@@ -254,6 +175,24 @@ bool QFSFileEnginePrivate::nativeClose()
 bool QFSFileEnginePrivate::nativeFlush()
 {
     return fh ? flushFh() : fd != -1;
+}
+
+/*!
+    \internal
+    \since 5.1
+*/
+bool QFSFileEnginePrivate::nativeSyncToDisk()
+{
+    Q_Q(QFSFileEngine);
+    int ret;
+#if defined(_POSIX_SYNCHRONIZED_IO) && _POSIX_SYNCHRONIZED_IO > 0
+    EINTR_LOOP(ret, fdatasync(nativeHandle()));
+#else
+    EINTR_LOOP(ret, fsync(nativeHandle()));
+#endif
+    if (ret != 0)
+        q->setError(QFile::WriteError, qt_error_string(errno));
+    return ret == 0;
 }
 
 /*!
@@ -388,6 +327,18 @@ bool QFSFileEngine::copy(const QString &newName)
     return ret;
 }
 
+bool QFSFileEngine::renameOverwrite(const QString &newName)
+{
+    Q_D(QFSFileEngine);
+    QSystemError error;
+    bool ret = QFileSystemEngine::renameOverwriteFile(d->fileEntry, QFileSystemEntry(newName), error);
+
+    if (!ret)
+        setError(QFile::RenameError, error.toString());
+
+    return ret;
+}
+
 bool QFSFileEngine::rename(const QString &newName)
 {
     Q_D(QFSFileEngine);
@@ -517,11 +468,14 @@ QAbstractFileEngine::FileFlags QFSFileEngine::fileFlags(FileFlags type) const
                     | QFileSystemMetaData::LinkType
                     | QFileSystemMetaData::FileType
                     | QFileSystemMetaData::DirectoryType
-                    | QFileSystemMetaData::BundleType;
+                    | QFileSystemMetaData::BundleType
+                    | QFileSystemMetaData::WasDeletedAttribute;
 
         if (type & FlagsMask)
             queryFlags |= QFileSystemMetaData::HiddenAttribute
                     | QFileSystemMetaData::ExistsAttribute;
+        else if (type & ExistsFlag)
+            queryFlags |= QFileSystemMetaData::WasDeletedAttribute;
 
         queryFlags |= QFileSystemMetaData::LinkType;
 
@@ -553,7 +507,8 @@ QAbstractFileEngine::FileFlags QFSFileEngine::fileFlags(FileFlags type) const
     }
 
     if (type & FlagsMask) {
-        if (exists)
+        // the inode existing does not mean the file exists
+        if (!d->metaData.wasDeleted())
             ret |= ExistsFlag;
         if (d->fileEntry.isRoot())
             ret |= RootFlag;
@@ -564,32 +519,43 @@ QAbstractFileEngine::FileFlags QFSFileEngine::fileFlags(FileFlags type) const
     return ret;
 }
 
+QByteArray QFSFileEngine::id() const
+{
+    Q_D(const QFSFileEngine);
+    if (d->fd != -1)
+        return QFileSystemEngine::id(d->fd);
+    return QFileSystemEngine::id(d->fileEntry);
+}
+
 QString QFSFileEngine::fileName(FileName file) const
 {
     Q_D(const QFSFileEngine);
-    if (file == BundleName) {
+    switch (file) {
+    case BundleName:
         return QFileSystemEngine::bundleName(d->fileEntry);
-    } else if (file == BaseName) {
+    case BaseName:
         return d->fileEntry.fileName();
-    } else if (file == PathName) {
+    case PathName:
         return d->fileEntry.path();
-    } else if (file == AbsoluteName || file == AbsolutePathName) {
+    case AbsoluteName:
+    case AbsolutePathName: {
         QFileSystemEntry entry(QFileSystemEngine::absoluteName(d->fileEntry));
-        if (file == AbsolutePathName) {
-            return entry.path();
-        }
-        return entry.filePath();
-    } else if (file == CanonicalName || file == CanonicalPathName) {
+        return file == AbsolutePathName ? entry.path() : entry.filePath();
+    }
+    case CanonicalName:
+    case CanonicalPathName: {
         QFileSystemEntry entry(QFileSystemEngine::canonicalName(d->fileEntry, d->metaData));
-        if (file == CanonicalPathName)
-            return entry.path();
-        return entry.filePath();
-    } else if (file == LinkName) {
+        return file == CanonicalPathName ? entry.path() : entry.filePath();
+    }
+    case LinkName:
         if (d->isSymlink()) {
             QFileSystemEntry entry = QFileSystemEngine::getLinkTarget(d->fileEntry, d->metaData);
             return entry.filePath();
         }
         return QString();
+    case DefaultName:
+    case NFileNames:
+        break;
     }
     return d->fileEntry.filePath();
 }
@@ -597,7 +563,7 @@ QString QFSFileEngine::fileName(FileName file) const
 bool QFSFileEngine::isRelativePath() const
 {
     Q_D(const QFSFileEngine);
-    return d->fileEntry.filePath().length() ? d->fileEntry.filePath()[0] != QLatin1Char('/') : true;
+    return d->fileEntry.filePath().length() ? d->fileEntry.filePath().at(0) != QLatin1Char('/') : true;
 }
 
 uint QFSFileEngine::ownerId(FileOwner own) const
@@ -622,7 +588,12 @@ bool QFSFileEngine::setPermissions(uint perms)
 {
     Q_D(QFSFileEngine);
     QSystemError error;
-    if (!QFileSystemEngine::setPermissions(d->fileEntry, QFile::Permissions(perms), error, 0)) {
+    bool ok;
+    if (d->fd != -1)
+        ok = QFileSystemEngine::setPermissions(d->fd, QFile::Permissions(perms), error, 0);
+    else
+        ok = QFileSystemEngine::setPermissions(d->fileEntry, QFile::Permissions(perms), error, 0);
+    if (!ok) {
         setError(QFile::PermissionsError, error.toString());
         return false;
     }
@@ -644,26 +615,46 @@ bool QFSFileEngine::setSize(qint64 size)
     return ret;
 }
 
-QDateTime QFSFileEngine::fileTime(FileTime time) const
+bool QFSFileEngine::setFileTime(const QDateTime &newDate, FileTime time)
 {
-    Q_D(const QFSFileEngine);
+    Q_D(QFSFileEngine);
 
-    if (d->doStat(QFileSystemMetaData::Times))
-        return d->metaData.fileTime(time);
+    if (d->openMode == QIODevice::NotOpen) {
+        setError(QFile::PermissionsError, qt_error_string(EACCES));
+        return false;
+    }
 
-    return QDateTime();
+    QSystemError error;
+    if (!QFileSystemEngine::setFileTime(d->nativeHandle(), newDate, time, error)) {
+        setError(QFile::PermissionsError, error.toString());
+        return false;
+    }
+
+    d->metaData.clearFlags(QFileSystemMetaData::Times);
+    return true;
 }
 
 uchar *QFSFileEnginePrivate::map(qint64 offset, qint64 size, QFile::MemoryMapFlags flags)
 {
+    qint64 maxFileOffset = std::numeric_limits<QT_OFF_T>::max();
+#if (defined(Q_OS_LINUX) || defined(Q_OS_ANDROID)) && Q_PROCESSOR_WORDSIZE == 4
+    // The Linux mmap2 system call on 32-bit takes a page-shifted 32-bit
+    // integer so the maximum offset is 1 << (32+12) (the shift is always 12,
+    // regardless of the actual page size). Unfortunately, the mmap64()
+    // function is known to be broken in all Linux libcs (glibc, uclibc, musl
+    // and Bionic): all of them do the right shift, but don't confirm that the
+    // result fits into the 32-bit parameter to the kernel.
+
+    maxFileOffset = qMin((Q_INT64_C(1) << (32+12)) - 1, maxFileOffset);
+#endif
+
     Q_Q(QFSFileEngine);
-    Q_UNUSED(flags);
     if (openMode == QIODevice::NotOpen) {
         q->setError(QFile::PermissionsError, qt_error_string(int(EACCES)));
         return 0;
     }
 
-    if (offset < 0 || offset != qint64(QT_OFF_T(offset))
+    if (offset < 0 || offset > maxFileOffset
             || size < 0 || quint64(size) > quint64(size_t(-1))) {
         q->setError(QFile::UnspecifiedError, qt_error_string(int(EINVAL)));
         return 0;
@@ -678,6 +669,12 @@ uchar *QFSFileEnginePrivate::map(qint64 offset, qint64 size, QFile::MemoryMapFla
     int access = 0;
     if (openMode & QIODevice::ReadOnly) access |= PROT_READ;
     if (openMode & QIODevice::WriteOnly) access |= PROT_WRITE;
+
+    int sharemode = MAP_SHARED;
+    if (flags & QFileDevice::MapPrivateOption) {
+        sharemode = MAP_PRIVATE;
+        access |= PROT_WRITE;
+    }
 
 #if defined(Q_OS_INTEGRITY)
     int pageSize = sysconf(_SC_PAGESIZE);
@@ -696,7 +693,7 @@ uchar *QFSFileEnginePrivate::map(qint64 offset, qint64 size, QFile::MemoryMapFla
     realOffset &= ~(QT_OFF_T(pageSize - 1));
 
     void *mapAddress = QT_MMAP((void*)0, realSize,
-                   access, MAP_SHARED, nativeHandle(), realOffset);
+                   access, sharemode, nativeHandle(), realOffset);
     if (MAP_FAILED != mapAddress) {
         uchar *address = extra + static_cast<uchar*>(mapAddress);
         maps[address] = QPair<int,size_t>(extra, realSize);
@@ -740,6 +737,20 @@ bool QFSFileEnginePrivate::unmap(uchar *ptr)
 #else
     return false;
 #endif
+}
+
+/*!
+    \reimp
+*/
+bool QFSFileEngine::cloneTo(QAbstractFileEngine *target)
+{
+    Q_D(QFSFileEngine);
+    if ((target->fileFlags(LocalDiskFlag) & LocalDiskFlag) == 0)
+        return false;
+
+    int srcfd = d->nativeHandle();
+    int dstfd = target->handle();
+    return QFileSystemEngine::cloneFile(srcfd, dstfd, d->metaData);
 }
 
 QT_END_NAMESPACE

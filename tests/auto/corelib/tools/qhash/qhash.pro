@@ -1,5 +1,4 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qhash
 QT = core testlib
-SOURCES = tst_qhash.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+SOURCES = $$PWD/tst_qhash.cpp

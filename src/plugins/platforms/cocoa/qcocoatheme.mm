@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,101 +10,193 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#import <Cocoa/Cocoa.h>
+#import <AppKit/AppKit.h>
 
 #include "qcocoatheme.h"
+#include "messages.h"
 
+#include <QtCore/QOperatingSystemVersion>
 #include <QtCore/QVariant>
 
-#include "qcocoacolordialoghelper.h"
-#include "qcocoafiledialoghelper.h"
-#include "qcocoafontdialoghelper.h"
 #include "qcocoasystemsettings.h"
 #include "qcocoasystemtrayicon.h"
 #include "qcocoamenuitem.h"
 #include "qcocoamenu.h"
 #include "qcocoamenubar.h"
+#include "qcocoahelpers.h"
 
 #include <QtCore/qfileinfo.h>
 #include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/private/qcoregraphics_p.h>
 #include <QtGui/qpainter.h>
+#include <QtGui/qtextformat.h>
+#include <QtFontDatabaseSupport/private/qcoretextfontdatabase_p.h>
+#include <QtThemeSupport/private/qabstractfileiconengine_p.h>
+#include <qpa/qplatformdialoghelper.h>
 #include <qpa/qplatformintegration.h>
 #include <qpa/qplatformnativeinterface.h>
+
+#ifdef QT_WIDGETS_LIB
+#include <QtWidgets/qtwidgetsglobal.h>
+#if QT_CONFIG(colordialog)
+#include "qcocoacolordialoghelper.h"
+#endif
+#if QT_CONFIG(filedialog)
+#include "qcocoafiledialoghelper.h"
+#endif
+#if QT_CONFIG(fontdialog)
+#include "qcocoafontdialoghelper.h"
+#endif
+#endif
+
+#include <CoreServices/CoreServices.h>
+
+#if !QT_MACOS_PLATFORM_SDK_EQUAL_OR_ABOVE(__MAC_10_14)
+@interface NSApplication (MojaveForwardDeclarations)
+@property (readonly, strong) NSAppearance *effectiveAppearance NS_AVAILABLE_MAC(10_14);
+@end
+#endif
+
+@interface QT_MANGLE_NAMESPACE(QCocoaThemeAppAppearanceObserver) : NSObject
+@property (readonly, nonatomic) QCocoaTheme *theme;
+- (instancetype)initWithTheme:(QCocoaTheme *)theme;
+@end
+
+QT_NAMESPACE_ALIAS_OBJC_CLASS(QCocoaThemeAppAppearanceObserver);
+
+@implementation QCocoaThemeAppAppearanceObserver
+- (instancetype)initWithTheme:(QCocoaTheme *)theme
+{
+    if ((self = [super init])) {
+        _theme = theme;
+        [NSApp addObserver:self forKeyPath:@"effectiveAppearance" options:NSKeyValueObservingOptionNew context:nullptr];
+    }
+    return self;
+}
+
+- (void)dealloc
+{
+    [NSApp removeObserver:self forKeyPath:@"effectiveAppearance"];
+    [super dealloc];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object
+        change:(NSDictionary<NSKeyValueChangeKey, id> *)change context:(void *)context
+{
+    Q_UNUSED(change);
+    Q_UNUSED(context);
+
+    Q_ASSERT(object == NSApp);
+    Q_ASSERT([keyPath isEqualToString:@"effectiveAppearance"]);
+
+    if (__builtin_available(macOS 10.14, *))
+        NSAppearance.currentAppearance = NSApp.effectiveAppearance;
+
+    self.theme->handleSystemThemeChange();
+}
+@end
 
 QT_BEGIN_NAMESPACE
 
 const char *QCocoaTheme::name = "cocoa";
 
 QCocoaTheme::QCocoaTheme()
-    :m_systemPalette(0)
+    : m_systemPalette(nullptr), m_appearanceObserver(nil)
 {
+    if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::MacOSMojave)
+        m_appearanceObserver = [[QCocoaThemeAppAppearanceObserver alloc] initWithTheme:this];
 
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSSystemColorsDidChangeNotification
+        object:nil queue:nil usingBlock:^(NSNotification *) {
+            handleSystemThemeChange();
+        }];
 }
 
 QCocoaTheme::~QCocoaTheme()
 {
+    if (m_appearanceObserver)
+        [m_appearanceObserver release];
+
+    reset();
+    qDeleteAll(m_fonts);
+}
+
+void QCocoaTheme::reset()
+{
     delete m_systemPalette;
+    m_systemPalette = nullptr;
+    qDeleteAll(m_palettes);
+    m_palettes.clear();
+}
+
+void QCocoaTheme::handleSystemThemeChange()
+{
+    reset();
+    m_systemPalette = qt_mac_createSystemPalette();
+    m_palettes = qt_mac_createRolePalettes();
+
+    QWindowSystemInterface::handleThemeChange(nullptr);
 }
 
 bool QCocoaTheme::usePlatformNativeDialog(DialogType dialogType) const
 {
     if (dialogType == QPlatformTheme::FileDialog)
         return true;
-#ifndef QT_NO_COLORDIALOG
+#if defined(QT_WIDGETS_LIB) && QT_CONFIG(colordialog)
     if (dialogType == QPlatformTheme::ColorDialog)
         return true;
 #endif
-#ifndef QT_NO_FONTDIALOG
+#if defined(QT_WIDGETS_LIB) && QT_CONFIG(fontdialog)
     if (dialogType == QPlatformTheme::FontDialog)
         return true;
 #endif
     return false;
 }
 
-QPlatformDialogHelper * QCocoaTheme::createPlatformDialogHelper(DialogType dialogType) const
+QPlatformDialogHelper *QCocoaTheme::createPlatformDialogHelper(DialogType dialogType) const
 {
     switch (dialogType) {
+#if defined(QT_WIDGETS_LIB) && QT_CONFIG(filedialog)
     case QPlatformTheme::FileDialog:
         return new QCocoaFileDialogHelper();
-#ifndef QT_NO_COLORDIALOG
+#endif
+#if defined(QT_WIDGETS_LIB) && QT_CONFIG(colordialog)
     case QPlatformTheme::ColorDialog:
         return new QCocoaColorDialogHelper();
 #endif
-#ifndef QT_NO_FONTDIALOG
+#if defined(QT_WIDGETS_LIB) && QT_CONFIG(fontdialog)
     case QPlatformTheme::FontDialog:
         return new QCocoaFontDialogHelper();
 #endif
     default:
-        return 0;
+        return nullptr;
     }
 }
 
@@ -124,9 +216,15 @@ const QPalette *QCocoaTheme::palette(Palette type) const
     } else {
         if (m_palettes.isEmpty())
             m_palettes = qt_mac_createRolePalettes();
-        return m_palettes.value(type, 0);
+        return m_palettes.value(type, nullptr);
     }
-    return 0;
+    return nullptr;
+}
+
+QHash<QPlatformTheme::Font, QFont *> qt_mac_createRoleFonts()
+{
+    QCoreTextFontDatabase *ctfd = static_cast<QCoreTextFontDatabase *>(QGuiApplicationPrivate::platformIntegration()->fontDatabase());
+    return ctfd->themeFonts();
 }
 
 const QFont *QCocoaTheme::font(Font type) const
@@ -134,11 +232,8 @@ const QFont *QCocoaTheme::font(Font type) const
     if (m_fonts.isEmpty()) {
         m_fonts = qt_mac_createRoleFonts();
     }
-    return m_fonts.value(type, 0);
+    return m_fonts.value(type, nullptr);
 }
-
-// Defined in qpaintengine_mac.mm
-extern CGContextRef qt_mac_cg_context(const QPaintDevice *pdev);
 
 //! \internal
 QPixmap qt_mac_convert_iconref(const IconRef icon, int width, int height)
@@ -148,7 +243,7 @@ QPixmap qt_mac_convert_iconref(const IconRef icon, int width, int height)
 
     CGRect rect = CGRectMake(0, 0, width, height);
 
-    CGContextRef ctx = qt_mac_cg_context(&ret);
+    QMacCGContext ctx(&ret);
     CGAffineTransform old_xform = CGContextGetCTM(ctx);
     CGContextConcatCTM(ctx, CGAffineTransformInvert(old_xform));
     CGContextConcatCTM(ctx, CGAffineTransformIdentity);
@@ -156,7 +251,6 @@ QPixmap qt_mac_convert_iconref(const IconRef icon, int width, int height)
     ::RGBColor b;
     b.blue = b.green = b.red = 255*255;
     PlotIconRefInContext(ctx, &rect, kAlignNone, kTransformNone, &b, kPlotIconRefNormalFlags, icon);
-    CGContextRelease(ctx);
     return ret;
 }
 
@@ -214,32 +308,12 @@ QPixmap QCocoaTheme::standardPixmap(StandardPixmap sp, const QSizeF &size) const
     }
     if (iconType != 0) {
         QPixmap pixmap;
-        IconRef icon;
-        IconRef overlayIcon = 0;
-        if (iconType != kGenericApplicationIcon) {
-            GetIconRef(kOnSystemDisk, kSystemIconsCreator, iconType, &icon);
-        } else {
-            FSRef fsRef;
-            ProcessSerialNumber psn = { 0, kCurrentProcess };
-            GetProcessBundleLocation(&psn, &fsRef);
-            GetIconRefFromFileInfo(&fsRef, 0, 0, 0, 0, kIconServicesNormalUsageFlag, &icon, 0);
-            if (sp == MessageBoxCritical) {
-                overlayIcon = icon;
-                GetIconRef(kOnSystemDisk, kSystemIconsCreator, kAlertCautionIcon, &icon);
-            }
-        }
+        IconRef icon = nullptr;
+        GetIconRef(kOnSystemDisk, kSystemIconsCreator, iconType, &icon);
 
         if (icon) {
             pixmap = qt_mac_convert_iconref(icon, size.width(), size.height());
             ReleaseIconRef(icon);
-        }
-
-        if (overlayIcon) {
-            QSizeF littleSize = size / 2;
-            QPixmap overlayPix = qt_mac_convert_iconref(overlayIcon, littleSize.width(), littleSize.height());
-            QPainter painter(&pixmap);
-            painter.drawPixmap(littleSize.width(), littleSize.height(), overlayPix);
-            ReleaseIconRef(overlayIcon);
         }
 
         return pixmap;
@@ -248,30 +322,42 @@ QPixmap QCocoaTheme::standardPixmap(StandardPixmap sp, const QSizeF &size) const
     return QPlatformTheme::standardPixmap(sp, size);
 }
 
-QPixmap QCocoaTheme::fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &size) const
+class QCocoaFileIconEngine : public QAbstractFileIconEngine
 {
-    FSRef macRef;
-    OSStatus status = FSPathMakeRef(reinterpret_cast<const UInt8*>(fileInfo.canonicalFilePath().toUtf8().constData()),
-                                    &macRef, 0);
-    if (status != noErr)
-        return QPixmap();
-    FSCatalogInfo info;
-    HFSUniStr255 macName;
-    status = FSGetCatalogInfo(&macRef, kIconServicesCatalogInfoMask, &info, &macName, 0, 0);
-    if (status != noErr)
-        return QPixmap();
-    IconRef iconRef;
-    SInt16 iconLabel;
-    status = GetIconRefFromFileInfo(&macRef, macName.length, macName.unicode,
-                                    kIconServicesCatalogInfoMask, &info, kIconServicesNormalUsageFlag,
-                                    &iconRef, &iconLabel);
-    if (status != noErr)
-        return QPixmap();
+public:
+    explicit QCocoaFileIconEngine(const QFileInfo &info,
+                                  QPlatformTheme::IconOptions opts) :
+        QAbstractFileIconEngine(info, opts) {}
 
-    QPixmap pixmap = qt_mac_convert_iconref(iconRef, size.width(), size.height());
-    ReleaseIconRef(iconRef);
+    static QList<QSize> availableIconSizes()
+    {
+        const qreal devicePixelRatio = qGuiApp->devicePixelRatio();
+        const int sizes[] = {
+            qRound(16 * devicePixelRatio), qRound(32 * devicePixelRatio),
+            qRound(64 * devicePixelRatio), qRound(128 * devicePixelRatio),
+            qRound(256 * devicePixelRatio)
+        };
+        return QAbstractFileIconEngine::toSizeList(sizes, sizes + sizeof(sizes) / sizeof(sizes[0]));
+    }
 
-    return pixmap;
+    QList<QSize> availableSizes(QIcon::Mode = QIcon::Normal, QIcon::State = QIcon::Off) const override
+    { return QCocoaFileIconEngine::availableIconSizes(); }
+
+protected:
+    QPixmap filePixmap(const QSize &size, QIcon::Mode, QIcon::State) override
+    {
+        QMacAutoReleasePool pool;
+
+        NSImage *iconImage = [[NSWorkspace sharedWorkspace] iconForFile:fileInfo().canonicalFilePath().toNSString()];
+        if (!iconImage)
+            return QPixmap();
+        return qt_mac_toQPixmap(iconImage, size);
+    }
+};
+
+QIcon QCocoaTheme::fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptions iconOptions) const
+{
+    return QIcon(new QCocoaFileIconEngine(fileInfo, iconOptions));
 }
 
 QVariant QCocoaTheme::themeHint(ThemeHint hint) const
@@ -280,20 +366,37 @@ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
     case QPlatformTheme::StyleNames:
         return QStringList(QStringLiteral("macintosh"));
     case QPlatformTheme::DialogButtonBoxLayout:
-        return QVariant(1); // QDialogButtonBox::MacLayout
+        return QVariant(QPlatformDialogHelper::MacLayout);
     case KeyboardScheme:
         return QVariant(int(MacKeyboardScheme));
-    case TabAllWidgets:
-        return QVariant(bool([[NSApplication sharedApplication] isFullKeyboardAccessEnabled]));
-    case IconPixmapSizes: {
-        QList<int> sizes;
-        sizes << 16 << 32 << 64 << 128;
-        return QVariant::fromValue(sizes);
-    }
+    case TabFocusBehavior:
+        return QVariant([[NSApplication sharedApplication] isFullKeyboardAccessEnabled] ?
+                    int(Qt::TabFocusAllControls) : int(Qt::TabFocusTextControls | Qt::TabFocusListControls));
+    case IconPixmapSizes:
+        return QVariant::fromValue(QCocoaFileIconEngine::availableIconSizes());
+    case QPlatformTheme::PasswordMaskCharacter:
+        return QVariant(QChar(0x2022));
+    case QPlatformTheme::UiEffects:
+        return QVariant(int(HoverEffect));
+    case QPlatformTheme::SpellCheckUnderlineStyle:
+        return QVariant(int(QTextCharFormat::DotLine));
+    case QPlatformTheme::UseFullScreenForPopupMenu:
+        return QVariant(bool([[NSApplication sharedApplication] presentationOptions] & NSApplicationPresentationFullScreen));
     default:
         break;
     }
     return QPlatformTheme::themeHint(hint);
+}
+
+QString QCocoaTheme::standardButtonText(int button) const
+{
+    return button == QPlatformDialogHelper::Discard ? msgDialogButtonDiscard() : QPlatformTheme::standardButtonText(button);
+}
+
+QKeySequence QCocoaTheme::standardButtonShortcut(int button) const
+{
+    return button == QPlatformDialogHelper::Discard ? QKeySequence(Qt::CTRL | Qt::Key_Delete)
+                                                    : QPlatformTheme::standardButtonShortcut(button);
 }
 
 QPlatformMenuItem *QCocoaTheme::createPlatformMenuItem() const

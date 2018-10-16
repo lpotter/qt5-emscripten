@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -96,7 +94,7 @@ QString QSqlRecordPrivate::createField(int index, const QString &prefix) const
     view within the database). QSqlRecord supports adding and
     removing fields as well as setting and retrieving field values.
 
-    The values of a record's fields' can be set by name or position
+    The values of a record's fields can be set by name or position
     with setValue(); if you want to set a field to null use
     setNull(). To find the position of a field by name use indexOf(),
     and to find the name of a field at a particular position use
@@ -167,15 +165,15 @@ QSqlRecord::~QSqlRecord()
 /*!
     \fn bool QSqlRecord::operator!=(const QSqlRecord &other) const
 
-    Returns true if this object is not identical to \a other;
-    otherwise returns false.
+    Returns \c true if this object is not identical to \a other;
+    otherwise returns \c false.
 
     \sa operator==()
 */
 
 /*!
-    Returns true if this object is identical to \a other (i.e., has
-    the same fields in the same order); otherwise returns false.
+    Returns \c true if this object is identical to \a other (i.e., has
+    the same fields in the same order); otherwise returns \c false.
 
     \sa operator!=()
 */
@@ -234,10 +232,24 @@ QString QSqlRecord::fieldName(int index) const
 
 int QSqlRecord::indexOf(const QString& name) const
 {
-    QString nm = name.toUpper();
-    for (int i = 0; i < count(); ++i) {
-        if (d->fields.at(i).name().toUpper() == nm) // TODO: case-insensitive comparison
+    QStringRef tableName;
+    QStringRef fieldName(&name);
+    const int idx = name.indexOf(QLatin1Char('.'));
+    if (idx != -1) {
+        tableName = name.leftRef(idx);
+        fieldName = name.midRef(idx + 1);
+    }
+    const int cnt = count();
+    for (int i = 0; i < cnt; ++i) {
+        // Check the passed in name first in case it is an alias using a dot.
+        // Then check if both the table and field match when there is a table name specified.
+        const auto &currentField = d->fields.at(i);
+        const auto &currentFieldName = currentField.name();
+        if (currentFieldName.compare(name, Qt::CaseInsensitive) == 0
+            || (idx != -1 && currentFieldName.compare(fieldName, Qt::CaseInsensitive) == 0
+                && currentField.tableName().compare(tableName, Qt::CaseInsensitive) == 0)) {
             return i;
+        }
     }
     return -1;
 }
@@ -329,8 +341,8 @@ void QSqlRecord::clear()
 }
 
 /*!
-    Returns true if there are no fields in the record; otherwise
-    returns false.
+    Returns \c true if there are no fields in the record; otherwise
+    returns \c false.
 
     \sa append(), insert(), clear()
 */
@@ -342,8 +354,8 @@ bool QSqlRecord::isEmpty() const
 
 
 /*!
-    Returns true if there is a field in the record called \a name;
-    otherwise returns false.
+    Returns \c true if there is a field in the record called \a name;
+    otherwise returns \c false.
 */
 
 bool QSqlRecord::contains(const QString& name) const
@@ -399,8 +411,8 @@ void QSqlRecord::setGenerated(int index, bool generated)
 /*!
     \overload
 
-    Returns true if the field \a index is null or if there is no field at
-    position \a index; otherwise returns false.
+    Returns \c true if the field \a index is null or if there is no field at
+    position \a index; otherwise returns \c false.
 */
 bool QSqlRecord::isNull(int index) const
 {
@@ -408,8 +420,8 @@ bool QSqlRecord::isNull(int index) const
 }
 
 /*!
-    Returns true if the field called \a name is null or if there is no
-    field called \a name; otherwise returns false.
+    Returns \c true if the field called \a name is null or if there is no
+    field called \a name; otherwise returns \c false.
 
     \sa setNull()
 */
@@ -445,8 +457,8 @@ void QSqlRecord::setNull(const QString& name)
 
 
 /*!
-    Returns true if the record has a field called \a name and this
-    field is to be generated (the default); otherwise returns false.
+    Returns \c true if the record has a field called \a name and this
+    field is to be generated (the default); otherwise returns \c false.
 
     \sa setGenerated()
 */
@@ -457,8 +469,8 @@ bool QSqlRecord::isGenerated(const QString& name) const
 
 /*! \overload
 
-    Returns true if the record has a field at position \a index and this
-    field is to be generated (the default); otherwise returns false.
+    Returns \c true if the record has a field at position \a index and this
+    field is to be generated (the default); otherwise returns \c false.
 
     \sa setGenerated()
 */
@@ -517,11 +529,33 @@ void QSqlRecord::detach()
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QSqlRecord &r)
 {
-    dbg << "QSqlRecord(" << r.count() << ')';
-    for (int i = 0; i < r.count(); ++i)
-        dbg << '\n' << QString::fromLatin1("%1:").arg(i, 2) << r.field(i) << r.value(i).toString();
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
+    const int count = r.count();
+    dbg << "QSqlRecord(" << count << ')';
+    for (int i = 0; i < count; ++i) {
+        dbg.nospace();
+        dbg << '\n' << qSetFieldWidth(2) << right << i << left << qSetFieldWidth(0) << ':';
+        dbg.space();
+        dbg << r.field(i) << r.value(i).toString();
+    }
     return dbg;
 }
 #endif
+
+/*!
+    \since 5.1
+    Returns a record containing the fields represented in \a keyFields set to values
+    that match by field name.
+*/
+QSqlRecord QSqlRecord::keyValues(const QSqlRecord &keyFields) const
+{
+    QSqlRecord retValues(keyFields);
+
+    for (int i = retValues.count() - 1; i >= 0; --i)
+        retValues.setValue(i, value(retValues.fieldName(i)));
+
+    return retValues;
+}
 
 QT_END_NAMESPACE

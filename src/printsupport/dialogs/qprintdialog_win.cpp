@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,36 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#ifndef QT_NO_PRINTDIALOG
+#include <QtPrintSupport/qtprintsupportglobal.h>
 
 #include "qprintdialog.h"
 
@@ -54,8 +52,8 @@
 
 #if !defined(PD_NOCURRENTPAGE)
 #define PD_NOCURRENTPAGE    0x00800000
-#define PD_RESULT_PRINT	1
-#define PD_RESULT_APPLY	2
+#define PD_RESULT_PRINT 1
+#define PD_RESULT_APPLY 2
 #define START_PAGE_GENERAL  0XFFFFFFFF
 #endif
 
@@ -68,12 +66,13 @@ class QPrintDialogPrivate : public QAbstractPrintDialogPrivate
     Q_DECLARE_PUBLIC(QPrintDialog)
 public:
     QPrintDialogPrivate()
-        : ep(0)
+        : engine(0), ep(0)
     {
     }
 
     int openWindowsPrintDialogModally();
 
+    QWin32PrintEngine *engine;
     QWin32PrintEnginePrivate *ep;
 };
 
@@ -109,10 +108,12 @@ static void qt_win_setup_PRINTDLGEX(PRINTDLGEX *pd, QWidget *parent,
     if(!pdlg->isOptionEnabled(QPrintDialog::PrintToFile))
         pd->Flags |= PD_DISABLEPRINTTOFILE;
 
-    if (pdlg->printRange() == QPrintDialog::Selection)
+    if (pdlg->isOptionEnabled(QPrintDialog::PrintSelection) && pdlg->printRange() == QPrintDialog::Selection)
         pd->Flags |= PD_SELECTION;
-    else if (pdlg->printRange() == QPrintDialog::PageRange)
+    else if (pdlg->isOptionEnabled(QPrintDialog::PrintPageRange) && pdlg->printRange() == QPrintDialog::PageRange)
         pd->Flags |= PD_PAGENUMS;
+    else if (pdlg->isOptionEnabled(QPrintDialog::PrintCurrentPage) && pdlg->printRange() == QPrintDialog::CurrentPage)
+        pd->Flags |= PD_CURRENTPAGE;
     else
         pd->Flags |= PD_ALLPAGES;
 
@@ -139,7 +140,7 @@ static void qt_win_setup_PRINTDLGEX(PRINTDLGEX *pd, QWidget *parent,
     pd->hwndOwner = parentWindow ? (HWND)QGuiApplication::platformNativeInterface()->nativeResourceForWindow("handle", parentWindow) : 0;
     pd->lpPageRanges[0].nFromPage = qMax(pdlg->fromPage(), pdlg->minPage());
     pd->lpPageRanges[0].nToPage   = (pdlg->toPage() > 0) ? qMin(pdlg->toPage(), pdlg->maxPage()) : 1;
-    pd->nCopies = d->ep->num_copies;
+    pd->nCopies = d->printer->copyCount();
 }
 
 static void qt_win_read_back_PRINTDLGEX(PRINTDLGEX *pd, QPrintDialog *pdlg, QPrintDialogPrivate *d)
@@ -160,12 +161,10 @@ static void qt_win_read_back_PRINTDLGEX(PRINTDLGEX *pd, QPrintDialog *pdlg, QPri
 
     d->ep->printToFile = (pd->Flags & PD_PRINTTOFILE) != 0;
 
-    d->ep->readDevnames(pd->hDevNames);
-    d->ep->readDevmode(pd->hDevMode);
-    d->ep->updateCustomPaperSize();
+    d->engine->setGlobalDevMode(pd->hDevNames, pd->hDevMode);
 
     if (d->ep->printToFile && d->ep->fileName.isEmpty())
-        d->ep->fileName = d->ep->port;
+        d->ep->fileName = QLatin1String("FILE:");
     else if (!d->ep->printToFile && d->ep->fileName == QLatin1String("FILE:"))
         d->ep->fileName.clear();
 }
@@ -185,7 +184,8 @@ QPrintDialog::QPrintDialog(QPrinter *printer, QWidget *parent)
     Q_D(QPrintDialog);
     if (!warnIfNotNative(d->printer))
         return;
-    d->ep = static_cast<QWin32PrintEngine *>(d->printer->paintEngine())->d_func();
+    d->engine = static_cast<QWin32PrintEngine *>(d->printer->printEngine());
+    d->ep = static_cast<QWin32PrintEngine *>(d->printer->printEngine())->d_func();
     setAttribute(Qt::WA_DontShowOnScreen);
 }
 
@@ -195,7 +195,8 @@ QPrintDialog::QPrintDialog(QWidget *parent)
     Q_D(QPrintDialog);
     if (!warnIfNotNative(d->printer))
         return;
-    d->ep = static_cast<QWin32PrintEngine *>(d->printer->paintEngine())->d_func();
+    d->engine = static_cast<QWin32PrintEngine *>(d->printer->printEngine());
+    d->ep = static_cast<QWin32PrintEngine *>(d->printer->printEngine())->d_func();
     setAttribute(Qt::WA_DontShowOnScreen);
 }
 
@@ -227,7 +228,7 @@ int QPrintDialogPrivate::openWindowsPrintDialogModally()
 
     q->QDialog::setVisible(true);
 
-    HGLOBAL *tempDevNames = ep->createDevNames();
+    HGLOBAL *tempDevNames = engine->createGlobalDevNames();
 
     bool done;
     bool result;
@@ -276,7 +277,7 @@ int QPrintDialogPrivate::openWindowsPrintDialogModally()
     {
         qt_win_read_back_PRINTDLGEX(&pd, q, this);
         // update printer validity
-        printer->d_func()->validPrinter = !ep->name.isEmpty();
+        printer->d_func()->validPrinter = !printer->printerName().isEmpty();
     }
 
     // Cleanup...
@@ -305,5 +306,3 @@ void QPrintDialog::setVisible(bool visible)
 QT_END_NAMESPACE
 
 #include "moc_qprintdialog.cpp"
-
-#endif // QT_NO_PRINTDIALOG

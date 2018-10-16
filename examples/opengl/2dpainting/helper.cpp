@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,8 +48,11 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
 #include "helper.h"
+
+#include <QPainter>
+#include <QPaintEvent>
+#include <QWidget>
 
 //! [0]
 Helper::Helper()
@@ -70,14 +83,15 @@ void Helper::paint(QPainter *painter, QPaintEvent *event, int elapsed)
     painter->setPen(circlePen);
     painter->rotate(elapsed * 0.030);
 
-    qreal r = elapsed/1000.0;
+    qreal r = elapsed / 1000.0;
     int n = 30;
     for (int i = 0; i < n; ++i) {
         painter->rotate(30);
-        qreal radius = 0 + 120.0*((i+r)/n);
-        qreal circleRadius = 1 + ((i+r)/n)*20;
+        qreal factor = (i + r) / n;
+        qreal radius = 0 + 120.0 * factor;
+        qreal circleRadius = 1 + factor * 20;
         painter->drawEllipse(QRectF(radius, -circleRadius,
-                                    circleRadius*2, circleRadius*2));
+                                    circleRadius * 2, circleRadius * 2));
     }
     painter->restore();
 //! [2]
@@ -85,6 +99,6 @@ void Helper::paint(QPainter *painter, QPaintEvent *event, int elapsed)
 //! [3]
     painter->setPen(textPen);
     painter->setFont(textFont);
-    painter->drawText(QRect(-50, -50, 100, 100), Qt::AlignCenter, "Qt");
+    painter->drawText(QRect(-50, -50, 100, 100), Qt::AlignCenter, QStringLiteral("Qt"));
 }
 //! [3]

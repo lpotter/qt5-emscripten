@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -94,6 +104,24 @@ void Window::createSpinBoxes()
     priceSpinBox->setValue(99);
 //! [4] //! [5]
 
+    groupSeparatorSpinBox = new QSpinBox;
+    groupSeparatorSpinBox->setRange(-99999999, 99999999);
+    groupSeparatorSpinBox->setValue(1000);
+    groupSeparatorSpinBox->setGroupSeparatorShown(true);
+    QCheckBox *groupSeparatorChkBox = new QCheckBox;
+    groupSeparatorChkBox->setText(tr("Show group separator"));
+    groupSeparatorChkBox->setChecked(true);
+    connect(groupSeparatorChkBox, &QCheckBox::toggled, groupSeparatorSpinBox,
+            &QSpinBox::setGroupSeparatorShown);
+
+    QLabel *hexLabel = new QLabel(tr("Enter a value between "
+        "%1 and %2:").arg('-' + QString::number(31, 16)).arg(QString::number(31, 16)));
+    QSpinBox *hexSpinBox = new QSpinBox;
+    hexSpinBox->setRange(-31, 31);
+    hexSpinBox->setSingleStep(1);
+    hexSpinBox->setValue(0);
+    hexSpinBox->setDisplayIntegerBase(16);
+
     QVBoxLayout *spinBoxLayout = new QVBoxLayout;
     spinBoxLayout->addWidget(integerLabel);
     spinBoxLayout->addWidget(integerSpinBox);
@@ -101,6 +129,10 @@ void Window::createSpinBoxes()
     spinBoxLayout->addWidget(zoomSpinBox);
     spinBoxLayout->addWidget(priceLabel);
     spinBoxLayout->addWidget(priceSpinBox);
+    spinBoxLayout->addWidget(hexLabel);
+    spinBoxLayout->addWidget(hexSpinBox);
+    spinBoxLayout->addWidget(groupSeparatorChkBox);
+    spinBoxLayout->addWidget(groupSeparatorSpinBox);
     spinBoxesGroup->setLayout(spinBoxLayout);
 }
 //! [5]
@@ -172,12 +204,12 @@ void Window::setFormatString(const QString &formatString)
         meetingEdit->setDateRange(QDate(2004, 11, 1), QDate(2005, 11, 30));
         meetingLabel->setText(tr("Meeting date (between %0 and %1):")
             .arg(meetingEdit->minimumDate().toString(Qt::ISODate))
-	    .arg(meetingEdit->maximumDate().toString(Qt::ISODate)));
+            .arg(meetingEdit->maximumDate().toString(Qt::ISODate)));
     } else {
         meetingEdit->setTimeRange(QTime(0, 7, 20, 0), QTime(21, 0, 0, 0));
         meetingLabel->setText(tr("Meeting time (between %0 and %1):")
             .arg(meetingEdit->minimumTime().toString(Qt::ISODate))
-	    .arg(meetingEdit->maximumTime().toString(Qt::ISODate)));
+            .arg(meetingEdit->maximumTime().toString(Qt::ISODate)));
     }
 }
 //! [13]
@@ -227,6 +259,17 @@ void Window::createDoubleSpinBoxes()
 //! [17]
             this, SLOT(changePrecision(int)));
 
+    groupSeparatorSpinBox_d = new QDoubleSpinBox;
+    groupSeparatorSpinBox_d->setRange(-99999999, 99999999);
+    groupSeparatorSpinBox_d->setDecimals(2);
+    groupSeparatorSpinBox_d->setValue(1000.00);
+    groupSeparatorSpinBox_d->setGroupSeparatorShown(true);
+    QCheckBox *groupSeparatorChkBox = new QCheckBox;
+    groupSeparatorChkBox->setText(tr("Show group separator"));
+    groupSeparatorChkBox->setChecked(true);
+    connect(groupSeparatorChkBox, &QCheckBox::toggled, groupSeparatorSpinBox_d,
+            &QDoubleSpinBox::setGroupSeparatorShown);
+
 //! [18]
     QVBoxLayout *spinBoxLayout = new QVBoxLayout;
     spinBoxLayout->addWidget(precisionLabel);
@@ -237,6 +280,8 @@ void Window::createDoubleSpinBoxes()
     spinBoxLayout->addWidget(scaleSpinBox);
     spinBoxLayout->addWidget(priceLabel);
     spinBoxLayout->addWidget(priceSpinBox);
+    spinBoxLayout->addWidget(groupSeparatorChkBox);
+    spinBoxLayout->addWidget(groupSeparatorSpinBox_d);
     doubleSpinBoxesGroup->setLayout(spinBoxLayout);
 }
 //! [18]

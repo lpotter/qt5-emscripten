@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include "qstatictext.h"
 
 #include <private/qtextureglyphcache_p.h>
@@ -60,7 +59,8 @@
 
 QT_BEGIN_NAMESPACE
 
-class QStaticTextUserData
+// ### Qt 6: Unexport again, if QOpenGLStaticTextUserData (the one from QtOpenGL) is gone by then
+class Q_GUI_EXPORT QStaticTextUserData
 {
 public:
     enum Type {
@@ -69,7 +69,7 @@ public:
     };
 
     QStaticTextUserData(Type t) : ref(0), type(t) {}
-    virtual ~QStaticTextUserData() {}
+    virtual ~QStaticTextUserData();
 
     QAtomicInt ref;
     Type type;
@@ -77,51 +77,23 @@ public:
 
 class Q_GUI_EXPORT QStaticTextItem
 {
-public:    
-    QStaticTextItem() : chars(0), numChars(0), useBackendOptimizations(false),
-                        userDataNeedsUpdate(0), m_fontEngine(0), m_userData(0) {}
-
-    QStaticTextItem(const QStaticTextItem &other)
-    {
-        operator=(other);
-    }
-
-    void operator=(const QStaticTextItem &other)
-    {
-        glyphPositions = other.glyphPositions;
-        glyphs = other.glyphs;
-        chars = other.chars;
-        numGlyphs = other.numGlyphs;
-        numChars = other.numChars;
-        font = other.font;
-        color = other.color;
-        useBackendOptimizations = other.useBackendOptimizations;
-        userDataNeedsUpdate = other.userDataNeedsUpdate;
-
-        m_fontEngine = 0;
-        m_userData = 0;
-        setUserData(other.userData());
-        setFontEngine(other.fontEngine());
-    }
-
-    ~QStaticTextItem();
+public:
+    QStaticTextItem() : useBackendOptimizations(false),
+                        userDataNeedsUpdate(0), usesRawFont(0),
+                        m_fontEngine(0), m_userData(0) {}
 
     void setUserData(QStaticTextUserData *newUserData)
     {
-        if (m_userData == newUserData)
-            return;
-
-        if (m_userData != 0 && !m_userData->ref.deref())
-            delete m_userData;
-
         m_userData = newUserData;
-        if (m_userData != 0)
-            m_userData->ref.ref();
     }
-    QStaticTextUserData *userData() const { return m_userData; }
+    QStaticTextUserData *userData() const { return m_userData.data(); }
 
-    void setFontEngine(QFontEngine *fe);
-    QFontEngine *fontEngine() const { return m_fontEngine; }
+    void setFontEngine(QFontEngine *fe)
+    {
+        m_fontEngine = fe;
+    }
+
+    QFontEngine *fontEngine() const { return m_fontEngine.data(); }
 
     union {
         QFixedPoint *glyphPositions;             // 8 bytes per glyph
@@ -131,28 +103,24 @@ public:
         glyph_t *glyphs;                         // 4 bytes per glyph
         int glyphOffset;
     };
-    union {
-        QChar *chars;                            // 2 bytes per glyph
-        int charOffset;
-    };
                                                  // =================
-                                                 // 14 bytes per glyph
+                                                 // 12 bytes per glyph
 
-                                                 // 12 bytes for pointers
+                                                 // 8 bytes for pointers
     int numGlyphs;                               // 4 bytes per item
-    int numChars;                                // 4 bytes per item
     QFont font;                                  // 8 bytes per item
     QColor color;                                // 10 bytes per item
     char useBackendOptimizations : 1;            // 1 byte per item
     char userDataNeedsUpdate : 1;                //
-                                                 // ================
-                                                 // 51 bytes per item
+    char usesRawFont : 1;                        //
 
-private: // Needs special handling in setters, so private to avoid abuse
-    QFontEngine *m_fontEngine;                     // 4 bytes per item
-    QStaticTextUserData *m_userData;               // 8 bytes per item
-
+private: // private to avoid abuse
+    QExplicitlySharedDataPointer<QFontEngine> m_fontEngine;       // 4 bytes per item
+    QExplicitlySharedDataPointer<QStaticTextUserData> m_userData; // 8 bytes per item
+                                                                  // ================
+                                                                  // 43 bytes per item
 };
+Q_DECLARE_TYPEINFO(QStaticTextItem, Q_MOVABLE_TYPE);
 
 class QStaticText;
 class Q_AUTOTEST_EXPORT QStaticTextPrivate
@@ -163,7 +131,7 @@ public:
     ~QStaticTextPrivate();
 
     void init();
-    void paintText(const QPointF &pos, QPainter *p);
+    void paintText(const QPointF &pos, QPainter *p, const QColor &pen);
 
     void invalidate()
     {
@@ -184,7 +152,6 @@ public:
 
     glyph_t *glyphPool;                  // 4 bytes per text
     QFixedPoint *positionPool;           // 4 bytes per text
-    QChar *charPool;                     // 4 bytes per text
 
     QTextOption textOption;              // 28 bytes per text
 
@@ -193,7 +160,7 @@ public:
     unsigned char textFormat               : 2;
     unsigned char untransformedCoordinates : 1;
                                          // ================
-                                         // 195 bytes per text
+                                         // 191 bytes per text
 
     static QStaticTextPrivate *get(const QStaticText *q);
 };

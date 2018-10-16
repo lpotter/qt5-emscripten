@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,10 +52,13 @@
 #include <QMap>
 #include <QApplication>
 #include <QAbstractScrollArea>
+#if QT_CONFIG(graphicsview)
 #include <QGraphicsObject>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#endif
 #include <QDesktopWidget>
+#include <private/qdesktopwidget_p.h>
 #include <QVector2D>
 #include <QtCore/qmath.h>
 #include <QtGui/qevent.h>
@@ -167,8 +168,8 @@ static qreal differentialForProgress(const QEasingCurve &curve, qreal pos)
 
 static qreal progressForValue(const QEasingCurve &curve, qreal value)
 {
-    if (curve.type() >= QEasingCurve::InElastic &&
-        curve.type() < QEasingCurve::Custom) {
+    if (Q_UNLIKELY(curve.type() >= QEasingCurve::InElastic &&
+                   curve.type() < QEasingCurve::Custom)) {
         qWarning("progressForValue(): QEasingCurves of type %d do not have an inverse, since they are not injective.", curve.type());
         return value;
     }
@@ -195,10 +196,10 @@ class QScrollTimer : public QAbstractAnimation
 {
 public:
     QScrollTimer(QScrollerPrivate *_d)
-        : d(_d), ignoreUpdate(false), skip(0)
+        : QAbstractAnimation(_d), d(_d), ignoreUpdate(false), skip(0)
     { }
 
-    int duration() const
+    int duration() const override
     {
         return -1;
     }
@@ -214,7 +215,7 @@ public:
     }
 
 protected:
-    void updateCurrentTime(int /*currentTime*/)
+    void updateCurrentTime(int /*currentTime*/) override
    {
         if (!ignoreUpdate) {
             if (++skip >= d->frameRateSkip()) {
@@ -234,10 +235,10 @@ private:
 /*!
     \class QScroller
     \brief The QScroller class enables kinetic scrolling for any scrolling widget or graphics item.
-    \since 4.8
+    \since 5.0
 
     \inmodule QtWidgets
- 
+
     With kinetic scrolling, the user can push the widget in a given
     direction and it will continue to scroll in this direction until it is
     stopped either by the user or by friction.  Aspects of inertia, friction
@@ -280,10 +281,9 @@ private:
 */
 
 typedef QMap<QObject *, QScroller *> ScrollerHash;
-typedef QSet<QScroller *> ScrollerSet;
 
 Q_GLOBAL_STATIC(ScrollerHash, qt_allScrollers)
-Q_GLOBAL_STATIC(ScrollerSet, qt_activeScrollers)
+Q_GLOBAL_STATIC(QList<QScroller *>, qt_activeScrollers)
 
 /*!
     Returns \c true if a QScroller object was already created for \a target; \c false otherwise.
@@ -334,7 +334,7 @@ const QScroller *QScroller::scroller(const QObject *target)
 */
 QList<QScroller *> QScroller::activeScrollers()
 {
-    return qt_activeScrollers()->toList();
+    return *qt_activeScrollers();
 }
 
 /*!
@@ -348,7 +348,7 @@ QObject *QScroller::target() const
 }
 
 /*!
-    \fn QScroller::scrollerPropertiesChanged(const QScrollerProperties &newProperties);
+    \fn void QScroller::scrollerPropertiesChanged(const QScrollerProperties &newProperties);
 
     QScroller emits this signal whenever its scroller properties change.
     \a newProperties are the new scroller properties.
@@ -431,12 +431,12 @@ Qt::GestureType QScroller::grabGesture(QObject *target, ScrollerGestureType scro
         widget->grabGesture(sp->recognizerType);
         if (scrollGestureType == TouchGesture)
             widget->setAttribute(Qt::WA_AcceptTouchEvents);
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
     } else if (QGraphicsObject *go = qobject_cast<QGraphicsObject*>(target)) {
         if (scrollGestureType == TouchGesture)
             go->setAcceptTouchEvents(true);
         go->grabGesture(sp->recognizerType);
-#endif // QT_NO_GRAPHICSVIEW
+#endif // QT_CONFIG(graphicsview)
     }
     return sp->recognizerType;
 }
@@ -475,7 +475,7 @@ void QScroller::ungrabGesture(QObject *target)
     if (target->isWidgetType()) {
         QWidget *widget = static_cast<QWidget *>(target);
         widget->ungrabGesture(sp->recognizerType);
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
     } else if (QGraphicsObject *go = qobject_cast<QGraphicsObject*>(target)) {
         go->ungrabGesture(sp->recognizerType);
 #endif
@@ -511,14 +511,14 @@ QScroller::~QScroller()
     d->recognizer = 0;
 #endif
     qt_allScrollers()->remove(d->target);
-    qt_activeScrollers()->remove(this);
+    qt_activeScrollers()->removeOne(this);
 
     delete d_ptr;
 }
 
 
 /*!
-    \fn QScroller::stateChanged(QScroller::State newState);
+    \fn void QScroller::stateChanged(QScroller::State newState);
 
     QScroller emits this signal whenever the state changes. \a newState is the new State.
 
@@ -566,19 +566,22 @@ void QScroller::stop()
 
     \note Please note that this value should be physically correct. The actual DPI settings
     that Qt returns for the display may be reported wrongly on purpose by the underlying
-    windowing system, for example on Mac OS X.
+    windowing system, for example on \macos.
 */
 QPointF QScroller::pixelPerMeter() const
 {
     Q_D(const QScroller);
     QPointF ppm = d->pixelPerMeter;
 
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
     if (QGraphicsObject *go = qobject_cast<QGraphicsObject *>(d->target)) {
         QTransform viewtr;
         //TODO: the first view isn't really correct - maybe use an additional field in the prepare event?
-        if (go->scene() && !go->scene()->views().isEmpty())
-            viewtr = go->scene()->views().first()->viewportTransform();
+        if (const auto *scene = go->scene()) {
+            const auto views = scene->views();
+            if (!views.isEmpty())
+                viewtr = views.first()->viewportTransform();
+        }
         QTransform tr = go->deviceTransform(viewtr);
         if (tr.isScaling()) {
             QPointF p0 = tr.map(QPointF(0, 0));
@@ -588,7 +591,7 @@ QPointF QScroller::pixelPerMeter() const
             ppm.ry() /= QLineF(p0, py).length();
         }
     }
-#endif // QT_NO_GRAPHICSVIEW
+#endif // QT_CONFIG(graphicsview)
     return ppm;
 }
 
@@ -746,9 +749,8 @@ void QScroller::ensureVisible(const QRectF &rect, qreal xmargin, qreal ymargin, 
         return;
 
     // -- calculate the current pos (or the position after the current scroll)
-    QPointF startPos = d->contentPosition + d->overshootPosition;
-    startPos = QPointF(d->scrollingSegmentsEndPos(Qt::Horizontal),
-                       d->scrollingSegmentsEndPos(Qt::Vertical));
+    QPointF startPos(d->scrollingSegmentsEndPos(Qt::Horizontal),
+                     d->scrollingSegmentsEndPos(Qt::Vertical));
 
     QRectF marginRect(rect.x() - xmargin, rect.y() - ymargin,
                       rect.width() + 2 * xmargin, rect.height() + 2 * ymargin);
@@ -985,7 +987,7 @@ bool QScroller::handleInput(Input input, const QPointF &position, qint64 timesta
 {
     Q_D(QScroller);
 
-    qScrollerDebug() << "QScroller::handleInput(" << input << ", " << d->stateName(d->state) << ", " << position << ", " << timestamp << ")";
+    qScrollerDebug() << "QScroller::handleInput(" << input << ", " << d->stateName(d->state) << ", " << position << ", " << timestamp << ')';
     struct statechange {
         State state;
         Input input;
@@ -1011,40 +1013,6 @@ bool QScroller::handleInput(Input input, const QPointF &position, qint64 timesta
     return false;
 }
 
-#if !defined(Q_WS_MAC)
-// the Mac version is implemented in qscroller_mac.mm
-
-QPointF QScrollerPrivate::realDpi(int screen)
-{
-#  if defined(Q_WS_X11) && !defined(QT_NO_XRANDR)
-    if (X11 && X11->use_xrandr && X11->ptrXRRSizes && X11->ptrXRRRootToScreen) {
-        int nsizes = 0;
-        // QDesktopWidget is based on Xinerama screens, which do not always
-        // correspond to RandR screens: NVidia's TwinView e.g.  will show up
-        // as 2 screens in QDesktopWidget, but libXRandR will only see 1 screen.
-        // (although with the combined size of the Xinerama screens).
-        // Additionally, libXrandr will simply crash when calling XRRSizes
-        // for (the non-existent) screen 1 in this scenario.
-        Window root =  RootWindow(X11->display, screen == -1 ? X11->defaultScreen : screen);
-        int randrscreen = (root != XNone) ? X11->ptrXRRRootToScreen(X11->display, root) : -1;
-
-        XRRScreenSize *sizes = X11->ptrXRRSizes(X11->display, randrscreen == -1 ? 0 : randrscreen, &nsizes);
-        if (nsizes > 0 && sizes && sizes->width && sizes->height && sizes->mwidth && sizes->mheight) {
-            qScrollerDebug() << "XRandR DPI:" << QPointF(qreal(25.4) * qreal(sizes->width) / qreal(sizes->mwidth),
-                                                         qreal(25.4) * qreal(sizes->height) / qreal(sizes->mheight));
-            return QPointF(qreal(25.4) * qreal(sizes->width) / qreal(sizes->mwidth),
-                           qreal(25.4) * qreal(sizes->height) / qreal(sizes->mheight));
-        }
-    }
-#  endif
-
-    QWidget *w = QApplication::desktop()->screen(screen);
-    return QPointF(w->physicalDpiX(), w->physicalDpiY());
-}
-
-#endif // !Q_WS_MAC
-
-
 /*! \internal
     Returns the resolution of the used screen.
 */
@@ -1069,8 +1037,8 @@ void QScrollerPrivate::setDpi(const QPointF &dpi)
 */
 void QScrollerPrivate::setDpiFromWidget(QWidget *widget)
 {
-    QDesktopWidget *dw = QApplication::desktop();
-    setDpi(realDpi(widget ? dw->screenNumber(widget) : dw->primaryScreen()));
+    const QScreen *screen = QGuiApplication::screens().at(QApplication::desktop()->screenNumber(widget));
+    setDpi(QPointF(screen->physicalDotsPerInchX(), screen->physicalDotsPerInchY()));
 }
 
 /*! \internal
@@ -1124,12 +1092,15 @@ void QScrollerPrivate::pushSegment(ScrollType type, qreal deltaTime, qreal stopP
         return;
 
     ScrollSegment s;
-    if (orientation == Qt::Horizontal && !xSegments.isEmpty())
-        s.startTime = xSegments.last().startTime + xSegments.last().deltaTime * xSegments.last().stopProgress;
-    else if (orientation == Qt::Vertical && !ySegments.isEmpty())
-        s.startTime = ySegments.last().startTime + ySegments.last().deltaTime * ySegments.last().stopProgress;
-    else
+    if (orientation == Qt::Horizontal && !xSegments.isEmpty()) {
+        const auto &lastX = xSegments.constLast();
+        s.startTime = lastX.startTime + lastX.deltaTime * lastX.stopProgress;
+    } else if (orientation == Qt::Vertical && !ySegments.isEmpty()) {
+        const auto &lastY = ySegments.constLast();
+        s.startTime = lastY.startTime + lastY.deltaTime * lastY.stopProgress;
+    } else {
         s.startTime = monotonicTimer.elapsed();
+    }
 
     s.startPos = startPos;
     s.deltaPos = deltaPos;
@@ -1185,9 +1156,9 @@ qreal QScrollerPrivate::scrollingSegmentsEndPos(Qt::Orientation orientation) con
 /*! \internal
     Checks if the scroller segment end in a valid position.
 */
-bool QScrollerPrivate::scrollingSegmentsValid(Qt::Orientation orientation)
+bool QScrollerPrivate::scrollingSegmentsValid(Qt::Orientation orientation) const
 {
-    QQueue<ScrollSegment> *segments;
+    const QQueue<ScrollSegment> *segments;
     qreal minPos;
     qreal maxPos;
 
@@ -1305,7 +1276,7 @@ void QScrollerPrivate::createScrollingSegments(qreal v, qreal startPos,
     qreal lowerSnapPos = nextSnapPos(startPos, -1, orientation);
     qreal higherSnapPos = nextSnapPos(startPos, 1, orientation);
 
-    qScrollerDebug() << "  Real Delta:" << lowerSnapPos <<"-"<<nextSnap <<"-"<<higherSnapPos;
+    qScrollerDebug() << "  Real Delta:" << lowerSnapPos << '-' << nextSnap << '-' <<higherSnapPos;
 
     // - check if we can reach another snap point
     if (nextSnap > higherSnapPos || qIsNaN(higherSnapPos))
@@ -1429,7 +1400,7 @@ void QScrollerPrivate::createScrollingSegments(const QPointF &v,
 
 /*! \internal
     Prepares scrolling by sending a QScrollPrepareEvent to the receiver widget.
-    Returns true if the scrolling was accepted and a target was returned.
+    Returns \c true if the scrolling was accepted and a target was returned.
 */
 bool QScrollerPrivate::prepareScrolling(const QPointF &position)
 {
@@ -1463,11 +1434,14 @@ bool QScrollerPrivate::prepareScrolling(const QPointF &position)
 
         if (QWidget *w = qobject_cast<QWidget *>(target))
             setDpiFromWidget(w);
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
         if (QGraphicsObject *go = qobject_cast<QGraphicsObject *>(target)) {
             //TODO: the first view isn't really correct - maybe use an additional field in the prepare event?
-            if (go->scene() && !go->scene()->views().isEmpty())
-                setDpiFromWidget(go->scene()->views().first());
+            if (const auto *scene = go->scene()) {
+                const auto views = scene->views();
+                if (!views.isEmpty())
+                    setDpiFromWidget(views.first());
+            }
         }
 #endif
 
@@ -1677,7 +1651,7 @@ bool QScrollerPrivate::releaseWhileDragging(const QPointF &position, qint64 time
 
 void QScrollerPrivate::timerEventWhileScrolling()
 {
-    qScrollerDebug() << "QScroller::timerEventWhileScrolling()";
+    qScrollerDebug("QScroller::timerEventWhileScrolling()");
 
     setContentPositionHelperScrolling();
     if (xSegments.isEmpty() && ySegments.isEmpty())
@@ -1712,7 +1686,7 @@ void QScrollerPrivate::setState(QScroller::State newstate)
     if (state == newstate)
         return;
 
-    qScrollerDebug() << q << "QScroller::setState(" << stateName(newstate) << ")";
+    qScrollerDebug() << q << "QScroller::setState(" << stateName(newstate) << ')';
 
     switch (newstate) {
     case QScroller::Inactive:
@@ -1759,9 +1733,9 @@ void QScrollerPrivate::setState(QScroller::State newstate)
         firstScroll = true;
     }
     if (state == QScroller::Dragging || state == QScroller::Scrolling)
-        qt_activeScrollers()->insert(q);
+        qt_activeScrollers()->push_back(q);
     else
-        qt_activeScrollers()->remove(q);
+        qt_activeScrollers()->removeOne(q);
     emit q->stateChanged(state);
 }
 
@@ -1879,8 +1853,8 @@ void QScrollerPrivate::setContentPositionHelperScrolling()
     newPos.setY(nextSegmentPosition(ySegments, now, newPos.y()));
 
     // -- set the position and handle overshoot
-    qScrollerDebug() << "QScroller::setContentPositionHelperScrolling()";
-    qScrollerDebug() << "  --> overshoot:" << overshootPosition << "- new pos:" << newPos;
+    qScrollerDebug() << "QScroller::setContentPositionHelperScrolling()\n"
+                        "  --> overshoot:" << overshootPosition << "- new pos:" << newPos;
 
     QPointF newClampedPos = clampToRect(newPos, contentPosRange);
 
@@ -1902,7 +1876,7 @@ void QScrollerPrivate::setContentPositionHelperScrolling()
     on a snap point.
     Returns the nearest snap position or NaN if no such point could be found.
  */
-qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientation)
+qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientation) const
 {
     qreal bestSnapPos = Q_QNAN;
     qreal bestSnapPosDist = Q_INFINITY;
@@ -1920,7 +1894,7 @@ qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientatio
 
     if (orientation == Qt::Horizontal) {
         // the snap points in the list
-        foreach (qreal snapPos, snapPositionsX) {
+        for (qreal snapPos : snapPositionsX) {
             qreal snapPosDist = snapPos - p;
             if ((dir > 0 && snapPosDist < 0) ||
                 (dir < 0 && snapPosDist > 0))
@@ -1967,7 +1941,7 @@ qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientatio
 
     } else { // (orientation == Qt::Vertical)
         // the snap points in the list
-        foreach (qreal snapPos, snapPositionsY) {
+        for (qreal snapPos : snapPositionsY) {
             qreal snapPosDist = snapPos - p;
             if ((dir > 0 && snapPosDist < 0) ||
                 (dir < 0 && snapPosDist > 0))
@@ -2057,3 +2031,6 @@ qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientatio
 */
 
 QT_END_NAMESPACE
+
+#include "moc_qscroller.cpp"
+#include "moc_qscroller_p.cpp"

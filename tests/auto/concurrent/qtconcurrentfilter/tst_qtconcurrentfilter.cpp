@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -99,7 +86,6 @@ void tst_QtConcurrentFilter::filter()
         QtConcurrent::blockingFilter(vector, KeepEvenIntegers());
         QCOMPARE(vector, QVector<int>() << 2 << 4);
     }
-
 
     // function
     {
@@ -554,7 +540,6 @@ void tst_QtConcurrentFilter::filteredReduced()
         int sum = QtConcurrent::filteredReduced<int>(vector, KeepEvenIntegers(), IntSumReduce());
         QCOMPARE(sum, 6);
     }
-
     {
         int sum = QtConcurrent::filteredReduced<int>(list.begin(),
                                                      list.end(),
@@ -1396,43 +1381,42 @@ void tst_QtConcurrentFilter::filteredReduced()
     // ### the same as above, with an initial result value
 }
 
-bool filterfn(int i)  
-{ 
+bool filterfn(int i)
+{
     return (i % 2);
-} 
+}
 
 void tst_QtConcurrentFilter::resultAt()
 {
 
-    QList<int> ints; 
+    QList<int> ints;
     for (int i=0; i < 1000; ++i)
         ints << i;
 
     QFuture<int> future = QtConcurrent::filtered(ints, filterfn);
-    future.waitForFinished(); 
+    future.waitForFinished();
 
-    
     for (int i = 0; i < future.resultCount(); ++i) {
         QCOMPARE(future.resultAt(i), ints.at(i * 2 + 1));
     }
 
 }
 
-bool waitFilterfn(const int &i)  
-{ 
+bool waitFilterfn(const int &i)
+{
     QTest::qWait(1);
     return (i % 2);
-} 
+}
 
 void tst_QtConcurrentFilter::incrementalResults()
 {
     const int count = 200;
-    QList<int> ints; 
+    QList<int> ints;
     for (int i=0; i < count; ++i)
         ints << i;
 
     QFuture<int> future = QtConcurrent::filtered(ints, waitFilterfn);
-    
+
     QList<int> results;
 
     while (future.isFinished() == false) {
@@ -1454,45 +1438,45 @@ void tst_QtConcurrentFilter::noDetach()
         QVERIFY(l.isDetached());
 
         QList<int> ll = l;
-        QVERIFY(l.isDetached() == false);
+        QVERIFY(!l.isDetached());
 
         QtConcurrent::filtered(l, waitFilterfn).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::blockingFiltered(l, waitFilterfn);
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::filteredReduced(l, waitFilterfn, intSumReduce).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::filter(l, waitFilterfn).waitForFinished();
         if (!l.isDetached())
             QEXPECT_FAIL("", "QTBUG-20688: Known unstable failure", Abort);
-        QVERIFY(l.isDetached() == true);
-        QVERIFY(ll.isDetached() == true);
+        QVERIFY(l.isDetached());
+        QVERIFY(ll.isDetached());
     }
     {
         const QList<int> l = QList<int>() << 1;
         QVERIFY(l.isDetached());
 
         const QList<int> ll = l;
-        QVERIFY(l.isDetached() == false);
+        QVERIFY(!l.isDetached());
 
         QtConcurrent::filtered(l, waitFilterfn).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
 
         QtConcurrent::filteredReduced(l, waitFilterfn, intSumReduce).waitForFinished();
 
-        QVERIFY(l.isDetached() == false);
-        QVERIFY(ll.isDetached() == false);
+        QVERIFY(!l.isDetached());
+        QVERIFY(!ll.isDetached());
     }
 }
 

@@ -1,4 +1,4 @@
-build_pass:console: {
+build_pass:console {
     warning("QAxServer applications cannot be console applications.")
     warning("Remove 'console' from your CONFIG.")
 }
@@ -13,15 +13,10 @@ qtPrepareTool(QMAKE_IDC, idc)
 contains(TEMPLATE, "vc.*") {
     ACTIVEQT_IDC = $${QMAKE_IDC}
     ACTIVEQT_IDL = $${QMAKE_IDL}
-    ACTIVEQT_TARGET = "$(TargetPath)"
-    win32-msvc {
-        ACTIVEQT_NEWLINE = $$escape_expand(\\t)
-        ACTIVEQT_OUTPUT = $(IntDir)/$${TARGET}
-    } else {
-        ACTIVEQT_NEWLINE = $$escape_expand(\\n\\t)
-        ACTIVEQT_OUTPUT = $(IntDir)$${TARGET}
-    }
-    ACTIVEQT_TLBOUT = "$(TargetDir)/$${TARGET}.tlb"
+    ACTIVEQT_TARGET = \"$(TargetPath)\"
+    ACTIVEQT_NEWLINE = $$escape_expand(\\n\\t)
+    ACTIVEQT_OUTPUT = $(IntDir)$${TARGET}
+    ACTIVEQT_TLBOUT = \"$(TargetDir)/$${TARGET}.tlb\"
     GENERATED += $${OBJECTS_DIR}/$${TARGET}.idl $${ACTIVEQT_TLBOUT}
 } else {
     ACTIVEQT_IDC = -$(IDC)
@@ -46,7 +41,8 @@ contains(TEMPLATE, "vc.*") {
         QMAKE_POST_LINK += $$quote($$ACTIVEQT_IDL "$${ACTIVEQT_OUTPUT}.idl" /nologo /tlb "$${ACTIVEQT_TLBOUT}"$$ACTIVEQT_NEWLINE)
         message("No rc-file linked into project; type library will be a separate file.")
     }
-    QMAKE_POST_LINK += $$quote($$ACTIVEQT_IDC $${ACTIVEQT_TARGET} /regserver)
+    !qaxserver_no_register: \
+        QMAKE_POST_LINK += $$quote($$ACTIVEQT_IDC $${ACTIVEQT_TARGET} /regserver)
     QMAKE_CLEAN += $${ACTIVEQT_OUTPUT}.idl $${ACTIVEQT_OUTPUT}.tlb
 }
 

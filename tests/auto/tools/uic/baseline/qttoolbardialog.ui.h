@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'qttoolbardialog.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,9 +10,7 @@
 #define QTTOOLBARDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QGridLayout>
@@ -53,21 +50,21 @@ public:
     void setupUi(QDialog *QtToolBarDialog)
     {
         if (QtToolBarDialog->objectName().isEmpty())
-            QtToolBarDialog->setObjectName(QStringLiteral("QtToolBarDialog"));
+            QtToolBarDialog->setObjectName(QString::fromUtf8("QtToolBarDialog"));
         QtToolBarDialog->resize(583, 508);
         gridLayout = new QGridLayout(QtToolBarDialog);
 #ifndef Q_OS_MAC
         gridLayout->setSpacing(6);
 #endif
         gridLayout->setContentsMargins(8, 8, 8, 8);
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         actionTree = new QTreeWidget(QtToolBarDialog);
-        actionTree->setObjectName(QStringLiteral("actionTree"));
+        actionTree->setObjectName(QString::fromUtf8("actionTree"));
 
         gridLayout->addWidget(actionTree, 1, 0, 3, 1);
 
         label = new QLabel(QtToolBarDialog);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
 
         gridLayout->addWidget(label, 0, 0, 1, 1);
 
@@ -76,24 +73,24 @@ public:
         hboxLayout->setSpacing(6);
 #endif
         hboxLayout->setContentsMargins(0, 0, 0, 0);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         label_2 = new QLabel(QtToolBarDialog);
-        label_2->setObjectName(QStringLiteral("label_2"));
+        label_2->setObjectName(QString::fromUtf8("label_2"));
 
         hboxLayout->addWidget(label_2);
 
         newButton = new QToolButton(QtToolBarDialog);
-        newButton->setObjectName(QStringLiteral("newButton"));
+        newButton->setObjectName(QString::fromUtf8("newButton"));
 
         hboxLayout->addWidget(newButton);
 
         removeButton = new QToolButton(QtToolBarDialog);
-        removeButton->setObjectName(QStringLiteral("removeButton"));
+        removeButton->setObjectName(QString::fromUtf8("removeButton"));
 
         hboxLayout->addWidget(removeButton);
 
         renameButton = new QToolButton(QtToolBarDialog);
-        renameButton->setObjectName(QStringLiteral("renameButton"));
+        renameButton->setObjectName(QString::fromUtf8("renameButton"));
 
         hboxLayout->addWidget(renameButton);
 
@@ -105,9 +102,9 @@ public:
         vboxLayout->setSpacing(6);
 #endif
         vboxLayout->setContentsMargins(0, 0, 0, 0);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         upButton = new QToolButton(QtToolBarDialog);
-        upButton->setObjectName(QStringLiteral("upButton"));
+        upButton->setObjectName(QString::fromUtf8("upButton"));
         QSizePolicy sizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -117,21 +114,21 @@ public:
         vboxLayout->addWidget(upButton);
 
         leftButton = new QToolButton(QtToolBarDialog);
-        leftButton->setObjectName(QStringLiteral("leftButton"));
+        leftButton->setObjectName(QString::fromUtf8("leftButton"));
         sizePolicy.setHeightForWidth(leftButton->sizePolicy().hasHeightForWidth());
         leftButton->setSizePolicy(sizePolicy);
 
         vboxLayout->addWidget(leftButton);
 
         rightButton = new QToolButton(QtToolBarDialog);
-        rightButton->setObjectName(QStringLiteral("rightButton"));
+        rightButton->setObjectName(QString::fromUtf8("rightButton"));
         sizePolicy.setHeightForWidth(rightButton->sizePolicy().hasHeightForWidth());
         rightButton->setSizePolicy(sizePolicy);
 
         vboxLayout->addWidget(rightButton);
 
         downButton = new QToolButton(QtToolBarDialog);
-        downButton->setObjectName(QStringLiteral("downButton"));
+        downButton->setObjectName(QString::fromUtf8("downButton"));
         sizePolicy.setHeightForWidth(downButton->sizePolicy().hasHeightForWidth());
         downButton->setSizePolicy(sizePolicy);
 
@@ -145,22 +142,22 @@ public:
         gridLayout->addLayout(vboxLayout, 3, 1, 1, 1);
 
         currentToolBarList = new QListWidget(QtToolBarDialog);
-        currentToolBarList->setObjectName(QStringLiteral("currentToolBarList"));
+        currentToolBarList->setObjectName(QString::fromUtf8("currentToolBarList"));
 
         gridLayout->addWidget(currentToolBarList, 3, 2, 1, 1);
 
         label_3 = new QLabel(QtToolBarDialog);
-        label_3->setObjectName(QStringLiteral("label_3"));
+        label_3->setObjectName(QString::fromUtf8("label_3"));
 
         gridLayout->addWidget(label_3, 2, 1, 1, 2);
 
         toolBarList = new QListWidget(QtToolBarDialog);
-        toolBarList->setObjectName(QStringLiteral("toolBarList"));
+        toolBarList->setObjectName(QString::fromUtf8("toolBarList"));
 
         gridLayout->addWidget(toolBarList, 1, 1, 1, 2);
 
         buttonBox = new QDialogButtonBox(QtToolBarDialog);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setStandardButtons(QDialogButtonBox::Apply|QDialogButtonBox::Cancel|QDialogButtonBox::Ok|QDialogButtonBox::RestoreDefaults);
 
         gridLayout->addWidget(buttonBox, 5, 0, 1, 3);
@@ -181,40 +178,40 @@ public:
 
     void retranslateUi(QDialog *QtToolBarDialog)
     {
-        QtToolBarDialog->setWindowTitle(QApplication::translate("QtToolBarDialog", "Customize Toolbars", 0));
+        QtToolBarDialog->setWindowTitle(QApplication::translate("QtToolBarDialog", "Customize Toolbars", nullptr));
         QTreeWidgetItem *___qtreewidgetitem = actionTree->headerItem();
-        ___qtreewidgetitem->setText(0, QApplication::translate("QtToolBarDialog", "1", 0));
-        label->setText(QApplication::translate("QtToolBarDialog", "Actions", 0));
-        label_2->setText(QApplication::translate("QtToolBarDialog", "Toolbars", 0));
+        ___qtreewidgetitem->setText(0, QApplication::translate("QtToolBarDialog", "1", nullptr));
+        label->setText(QApplication::translate("QtToolBarDialog", "Actions", nullptr));
+        label_2->setText(QApplication::translate("QtToolBarDialog", "Toolbars", nullptr));
 #ifndef QT_NO_TOOLTIP
-        newButton->setToolTip(QApplication::translate("QtToolBarDialog", "Add new toolbar", 0));
+        newButton->setToolTip(QApplication::translate("QtToolBarDialog", "Add new toolbar", nullptr));
 #endif // QT_NO_TOOLTIP
-        newButton->setText(QApplication::translate("QtToolBarDialog", "New", 0));
+        newButton->setText(QApplication::translate("QtToolBarDialog", "New", nullptr));
 #ifndef QT_NO_TOOLTIP
-        removeButton->setToolTip(QApplication::translate("QtToolBarDialog", "Remove selected toolbar", 0));
+        removeButton->setToolTip(QApplication::translate("QtToolBarDialog", "Remove selected toolbar", nullptr));
 #endif // QT_NO_TOOLTIP
-        removeButton->setText(QApplication::translate("QtToolBarDialog", "Remove", 0));
+        removeButton->setText(QApplication::translate("QtToolBarDialog", "Remove", nullptr));
 #ifndef QT_NO_TOOLTIP
-        renameButton->setToolTip(QApplication::translate("QtToolBarDialog", "Rename toolbar", 0));
+        renameButton->setToolTip(QApplication::translate("QtToolBarDialog", "Rename toolbar", nullptr));
 #endif // QT_NO_TOOLTIP
-        renameButton->setText(QApplication::translate("QtToolBarDialog", "Rename", 0));
+        renameButton->setText(QApplication::translate("QtToolBarDialog", "Rename", nullptr));
 #ifndef QT_NO_TOOLTIP
-        upButton->setToolTip(QApplication::translate("QtToolBarDialog", "Move action up", 0));
+        upButton->setToolTip(QApplication::translate("QtToolBarDialog", "Move action up", nullptr));
 #endif // QT_NO_TOOLTIP
-        upButton->setText(QApplication::translate("QtToolBarDialog", "Up", 0));
+        upButton->setText(QApplication::translate("QtToolBarDialog", "Up", nullptr));
 #ifndef QT_NO_TOOLTIP
-        leftButton->setToolTip(QApplication::translate("QtToolBarDialog", "Remove action from toolbar", 0));
+        leftButton->setToolTip(QApplication::translate("QtToolBarDialog", "Remove action from toolbar", nullptr));
 #endif // QT_NO_TOOLTIP
-        leftButton->setText(QApplication::translate("QtToolBarDialog", "<-", 0));
+        leftButton->setText(QApplication::translate("QtToolBarDialog", "<-", nullptr));
 #ifndef QT_NO_TOOLTIP
-        rightButton->setToolTip(QApplication::translate("QtToolBarDialog", "Add action to toolbar", 0));
+        rightButton->setToolTip(QApplication::translate("QtToolBarDialog", "Add action to toolbar", nullptr));
 #endif // QT_NO_TOOLTIP
-        rightButton->setText(QApplication::translate("QtToolBarDialog", "->", 0));
+        rightButton->setText(QApplication::translate("QtToolBarDialog", "->", nullptr));
 #ifndef QT_NO_TOOLTIP
-        downButton->setToolTip(QApplication::translate("QtToolBarDialog", "Move action down", 0));
+        downButton->setToolTip(QApplication::translate("QtToolBarDialog", "Move action down", nullptr));
 #endif // QT_NO_TOOLTIP
-        downButton->setText(QApplication::translate("QtToolBarDialog", "Down", 0));
-        label_3->setText(QApplication::translate("QtToolBarDialog", "Current Toolbar Actions", 0));
+        downButton->setText(QApplication::translate("QtToolBarDialog", "Down", nullptr));
+        label_3->setText(QApplication::translate("QtToolBarDialog", "Current Toolbar Actions", nullptr));
     } // retranslateUi
 
 };

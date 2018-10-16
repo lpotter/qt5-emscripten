@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Copyright (C) 2012 Intel Corporation
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -11,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,38 +40,21 @@
 
 #include "qplatformdefs.h"
 #include "qmutex.h"
-
-#ifndef QT_NO_THREAD
 #include "qatomic.h"
 #include "qmutex_p.h"
-#include "qelapsedtimer.h"
+#include "qfutex_p.h"
 
-#include <linux/futex.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#include <errno.h>
-#include <asm/unistd.h>
-
-#if defined(__GXX_EXPERIMENTAL_CXX0X__) || __cplusplus >= 201103L
-// C++11 mode
-#  include <type_traits>
-
-static void checkElapsedTimerIsTrivial()
-{
-    Q_STATIC_ASSERT(std::has_trivial_default_constructor<QT_PREPEND_NAMESPACE(QElapsedTimer)>::value);
-}
-
-#else
-static void checkElapsedTimerIsTrivial()
-{
-}
-#endif
-
-#ifndef QT_LINUX_FUTEX
+#ifndef QT_ALWAYS_USE_FUTEX
 # error "Qt build is broken: qmutex_linux.cpp is being built but futex support is not wanted"
 #endif
 
+#ifndef FUTEX_PRIVATE_FLAG
+#  define FUTEX_PRIVATE_FLAG    0
+#endif
+
 QT_BEGIN_NAMESPACE
+
+using namespace QtFutex;
 
 /*
  * QBasicMutex implementation on Linux with futexes
@@ -119,63 +100,13 @@ QT_BEGIN_NAMESPACE
  * waiting in the past. We then set the mutex to 0x0 and perform a FUTEX_WAKE.
  */
 
-static QBasicAtomicInt futexFlagSupport = Q_BASIC_ATOMIC_INITIALIZER(-1);
-
-static int checkFutexPrivateSupport()
-{
-    int value = 0;
-#if defined(FUTEX_PRIVATE_FLAG)
-    // check if the kernel supports extra futex flags
-    // FUTEX_PRIVATE_FLAG appeared in v2.6.22
-    Q_STATIC_ASSERT(FUTEX_PRIVATE_FLAG != 0x80000000);
-
-    // try an operation that has no side-effects: wake up 42 threads
-    // futex will return -1 (errno==ENOSYS) if the flag isn't supported
-    // there should be no other error conditions
-    value = syscall(__NR_futex, &futexFlagSupport,
-                    FUTEX_WAKE | FUTEX_PRIVATE_FLAG,
-                    42, 0, 0, 0);
-    if (value != -1)
-        value = FUTEX_PRIVATE_FLAG;
-    else
-        value = 0;
-
-#else
-    value = 0;
-#endif
-    futexFlagSupport.store(value);
-    return value;
-}
-
-static inline int futexFlags()
-{
-    int value = futexFlagSupport.load();
-    if (Q_LIKELY(value != -1))
-        return value;
-    return checkFutexPrivateSupport();
-}
-
-static inline int _q_futex(void *addr, int op, int val, const struct timespec *timeout) Q_DECL_NOTHROW
-{
-    volatile int *int_addr = reinterpret_cast<volatile int *>(addr);
-#if Q_BYTE_ORDER == Q_BIG_ENDIAN && QT_POINTER_SIZE == 8
-    int_addr++; //We want a pointer to the 32 least significant bit of QMutex::d
-#endif
-    int *addr2 = 0;
-    int val2 = 0;
-
-    // we use __NR_futex because some libcs (like Android's bionic) don't
-    // provide SYS_futex etc.
-    return syscall(__NR_futex, int_addr, op | futexFlags(), val, timeout, addr2, val2);
-}
-
 static inline QMutexData *dummyFutexValue()
 {
     return reinterpret_cast<QMutexData *>(quintptr(3));
 }
 
 template <bool IsTimed> static inline
-bool lockInternal_helper(QBasicAtomicPointer<QMutexData> &d_ptr, int timeout = -1) Q_DECL_NOTHROW
+bool lockInternal_helper(QBasicAtomicPointer<QMutexData> &d_ptr, int timeout = -1, QElapsedTimer *elapsedTimer = 0) Q_DECL_NOTHROW
 {
     if (!IsTimed)
         timeout = -1;
@@ -184,39 +115,38 @@ bool lockInternal_helper(QBasicAtomicPointer<QMutexData> &d_ptr, int timeout = -
     if (timeout == 0)
         return false;
 
-    struct timespec ts, *pts = 0;
-    QElapsedTimer elapsedTimer;
-    checkElapsedTimerIsTrivial();
-    if (IsTimed) {
-        ts.tv_sec = timeout / 1000;
-        ts.tv_nsec = (timeout % 1000) * 1000 * 1000;
-        elapsedTimer.start();
-    }
-
     // the mutex is locked already, set a bit indicating we're waiting
-    while (d_ptr.fetchAndStoreAcquire(dummyFutexValue()) != 0) {
-        if (IsTimed && pts == &ts) {
-            // recalculate the timeout
-            qint64 xtimeout = qint64(timeout) * 1000 * 1000;
-            xtimeout -= elapsedTimer.nsecsElapsed();
-            if (xtimeout <= 0) {
-                // timer expired after we returned
-                return false;
-            }
-            ts.tv_sec = xtimeout / Q_INT64_C(1000) / 1000 / 1000;
-            ts.tv_nsec = xtimeout % (Q_INT64_C(1000) * 1000 * 1000);
-        }
-        if (IsTimed)
-            pts = &ts;
+    if (d_ptr.fetchAndStoreAcquire(dummyFutexValue()) == nullptr)
+        return true;
 
+    qint64 nstimeout = timeout * Q_INT64_C(1000) * 1000;
+    qint64 remainingTime = nstimeout;
+    forever {
         // successfully set the waiting bit, now sleep
-        int r = _q_futex(&d_ptr, FUTEX_WAIT, quintptr(dummyFutexValue()), pts);
-        if (IsTimed && r != 0 && errno == ETIMEDOUT)
-            return false;
+        if (IsTimed && nstimeout >= 0) {
+            bool r = futexWait(d_ptr, dummyFutexValue(), remainingTime);
+            if (!r)
+                return false;
 
-        // we got woken up, so try to acquire the mutex
-        // note we must set to dummyFutexValue because there could be other threads
-        // also waiting
+            // we got woken up, so try to acquire the mutex
+            // note we must set to dummyFutexValue because there could be other threads
+            // also waiting
+            if (d_ptr.fetchAndStoreAcquire(dummyFutexValue()) == nullptr)
+                return true;
+
+            // recalculate the timeout
+            remainingTime = nstimeout - elapsedTimer->nsecsElapsed();
+            if (remainingTime <= 0)
+                return false;
+        } else {
+            futexWait(d_ptr, dummyFutexValue());
+
+            // we got woken up, so try to acquire the mutex
+            // note we must set to dummyFutexValue because there could be other threads
+            // also waiting
+            if (d_ptr.fetchAndStoreAcquire(dummyFutexValue()) == nullptr)
+                return true;
+        }
     }
 
     Q_ASSERT(d_ptr.load());
@@ -232,8 +162,9 @@ void QBasicMutex::lockInternal() Q_DECL_NOTHROW
 bool QBasicMutex::lockInternal(int timeout) Q_DECL_NOTHROW
 {
     Q_ASSERT(!isRecursive());
-    Q_ASSERT(timeout >= 0);
-    return lockInternal_helper<true>(d_ptr, timeout);
+    QElapsedTimer elapsedTimer;
+    elapsedTimer.start();
+    return lockInternal_helper<true>(d_ptr, timeout, &elapsedTimer);
 }
 
 void QBasicMutex::unlockInternal() Q_DECL_NOTHROW
@@ -245,10 +176,7 @@ void QBasicMutex::unlockInternal() Q_DECL_NOTHROW
     Q_ASSERT(!isRecursive());
 
     d_ptr.storeRelease(0);
-    _q_futex(&d_ptr, FUTEX_WAKE, 1, 0);
+    futexWakeOne(d_ptr);
 }
 
-
 QT_END_NAMESPACE
-
-#endif // QT_NO_THREAD

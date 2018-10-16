@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,8 +40,6 @@
 #include "qlocalsocket.h"
 #include "qlocalsocket_p.h"
 #include "qnet_unix_p.h"
-
-#ifndef QT_NO_LOCALSOCKET
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -90,6 +86,11 @@ void QLocalSocketPrivate::init()
                q, SLOT(_q_error(QAbstractSocket::SocketError)));
     q->connect(&unixSocket, SIGNAL(readChannelFinished()), q, SIGNAL(readChannelFinished()));
     unixSocket.setParent(q);
+}
+
+qint64 QLocalSocketPrivate::skip(qint64 maxSize)
+{
+    return unixSocket.skip(maxSize);
 }
 
 void QLocalSocketPrivate::_q_error(QAbstractSocket::SocketError socketError)
@@ -221,7 +222,7 @@ void QLocalSocketPrivate::errorOccurred(QLocalSocket::LocalSocketError error, co
         q->emit stateChanged(state);
 }
 
-void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
+void QLocalSocket::connectToServer(OpenMode openMode)
 {
     Q_D(QLocalSocket);
     if (state() == ConnectedState || state() == ConnectingState) {
@@ -236,31 +237,24 @@ void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
     d->state = ConnectingState;
     emit stateChanged(d->state);
 
-    if (name.isEmpty()) {
+    if (d->serverName.isEmpty()) {
         d->errorOccurred(ServerNotFoundError,
                 QLatin1String("QLocalSocket::connectToServer"));
         return;
     }
 
     // create the socket
-    if (-1 == (d->connectingSocket = qt_safe_socket(PF_UNIX, SOCK_STREAM, 0))) {
+    if (-1 == (d->connectingSocket = qt_safe_socket(PF_UNIX, SOCK_STREAM, 0, O_NONBLOCK))) {
         d->errorOccurred(UnsupportedSocketOperationError,
                         QLatin1String("QLocalSocket::connectToServer"));
         return;
     }
-    // set non blocking so we can try to connect and it wont wait
-    int flags = fcntl(d->connectingSocket, F_GETFL, 0);
-    if (-1 == flags
-        || -1 == (fcntl(d->connectingSocket, F_SETFL, flags | O_NONBLOCK))) {
-        d->errorOccurred(UnknownSocketError,
-                QLatin1String("QLocalSocket::connectToServer"));
-        return;
-    }
 
     // _q_connectToSocket does the actual connecting
-    d->connectingName = name;
+    d->connectingName = d->serverName;
     d->connectingOpenMode = openMode;
     d->_q_connectToSocket();
+    return;
 }
 
 /*!
@@ -283,15 +277,16 @@ void QLocalSocketPrivate::_q_connectToSocket()
         connectingPathName += QLatin1Char('/') + connectingName;
     }
 
+    const QByteArray encodedConnectingPathName = QFile::encodeName(connectingPathName);
     struct sockaddr_un name;
     name.sun_family = PF_UNIX;
-    if (sizeof(name.sun_path) < (uint)connectingPathName.toLatin1().size() + 1) {
+    if (sizeof(name.sun_path) < (uint)encodedConnectingPathName.size() + 1) {
         QString function = QLatin1String("QLocalSocket::connectToServer");
         errorOccurred(QLocalSocket::ServerNotFoundError, function);
         return;
     }
-    ::memcpy(name.sun_path, connectingPathName.toLatin1().data(),
-             connectingPathName.toLatin1().size() + 1);
+    ::memcpy(name.sun_path, encodedConnectingPathName.constData(),
+             encodedConnectingPathName.size() + 1);
     if (-1 == qt_safe_connect(connectingSocket, (struct sockaddr *)&name, sizeof(name))) {
         QString function = QLatin1String("QLocalSocket::connectToServer");
         switch (errno)
@@ -521,36 +516,25 @@ void QLocalSocket::setReadBufferSize(qint64 size)
 bool QLocalSocket::waitForConnected(int msec)
 {
     Q_D(QLocalSocket);
+
     if (state() != ConnectingState)
         return (state() == ConnectedState);
 
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(d->connectingSocket, &fds);
-
-    timeval timeout;
-    timeout.tv_sec = msec / 1000;
-    timeout.tv_usec = (msec % 1000) * 1000;
-
-    // timeout can not be 0 or else select will return an error.
-    if (0 == msec)
-        timeout.tv_usec = 1000;
-
-    int result = -1;
-    // on Linux timeout will be updated by select, but _not_ on other systems.
     QElapsedTimer timer;
     timer.start();
-    while (state() == ConnectingState
-           && (-1 == msec || timer.elapsed() < msec)) {
-        result = ::select(d->connectingSocket + 1, &fds, 0, 0, &timeout);
-        if (-1 == result && errno != EINTR) {
-            d->errorOccurred( QLocalSocket::UnknownSocketError,
-                    QLatin1String("QLocalSocket::waitForConnected"));
-            break;
-        }
-        if (result > 0)
+
+    pollfd pfd = qt_make_pollfd(d->connectingSocket, POLLIN);
+
+    do {
+        const int timeout = (msec > 0) ? qMax(msec - timer.elapsed(), Q_INT64_C(0)) : msec;
+        const int result = qt_poll_msecs(&pfd, 1, timeout);
+
+        if (result == -1)
+            d->errorOccurred(QLocalSocket::UnknownSocketError,
+                             QLatin1String("QLocalSocket::waitForConnected"));
+        else if (result > 0)
             d->_q_connectToSocket();
-    }
+    } while (state() == ConnectingState && !timer.hasExpired(msec));
 
     return (state() == ConnectedState);
 }
@@ -559,7 +543,7 @@ bool QLocalSocket::waitForDisconnected(int msecs)
 {
     Q_D(QLocalSocket);
     if (state() == UnconnectedState) {
-        qWarning() << "QLocalSocket::waitForDisconnected() is not allowed in UnconnectedState";
+        qWarning("QLocalSocket::waitForDisconnected() is not allowed in UnconnectedState");
         return false;
     }
     return (d->unixSocket.waitForDisconnected(msecs));
@@ -574,5 +558,3 @@ bool QLocalSocket::waitForReadyRead(int msecs)
 }
 
 QT_END_NAMESPACE
-
-#endif

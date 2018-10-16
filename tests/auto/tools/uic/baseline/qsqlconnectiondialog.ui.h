@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'qsqlconnectiondialog.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,16 +10,13 @@
 #define QSQLCONNECTIONDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QPushButton>
@@ -59,44 +55,44 @@ public:
     void setupUi(QDialog *QSqlConnectionDialogUi)
     {
         if (QSqlConnectionDialogUi->objectName().isEmpty())
-            QSqlConnectionDialogUi->setObjectName(QStringLiteral("QSqlConnectionDialogUi"));
+            QSqlConnectionDialogUi->setObjectName(QString::fromUtf8("QSqlConnectionDialogUi"));
         QSqlConnectionDialogUi->resize(315, 302);
         vboxLayout = new QVBoxLayout(QSqlConnectionDialogUi);
 #ifndef Q_OS_MAC
         vboxLayout->setSpacing(6);
 #endif
         vboxLayout->setContentsMargins(8, 8, 8, 8);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         connGroupBox = new QGroupBox(QSqlConnectionDialogUi);
-        connGroupBox->setObjectName(QStringLiteral("connGroupBox"));
+        connGroupBox->setObjectName(QString::fromUtf8("connGroupBox"));
         gridLayout = new QGridLayout(connGroupBox);
 #ifndef Q_OS_MAC
         gridLayout->setSpacing(6);
 #endif
         gridLayout->setContentsMargins(8, 8, 8, 8);
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         comboDriver = new QComboBox(connGroupBox);
-        comboDriver->setObjectName(QStringLiteral("comboDriver"));
+        comboDriver->setObjectName(QString::fromUtf8("comboDriver"));
 
         gridLayout->addWidget(comboDriver, 0, 1, 1, 1);
 
         textLabel4 = new QLabel(connGroupBox);
-        textLabel4->setObjectName(QStringLiteral("textLabel4"));
+        textLabel4->setObjectName(QString::fromUtf8("textLabel4"));
 
         gridLayout->addWidget(textLabel4, 2, 0, 1, 1);
 
         textLabel2 = new QLabel(connGroupBox);
-        textLabel2->setObjectName(QStringLiteral("textLabel2"));
+        textLabel2->setObjectName(QString::fromUtf8("textLabel2"));
 
         gridLayout->addWidget(textLabel2, 0, 0, 1, 1);
 
         editDatabase = new QLineEdit(connGroupBox);
-        editDatabase->setObjectName(QStringLiteral("editDatabase"));
+        editDatabase->setObjectName(QString::fromUtf8("editDatabase"));
 
         gridLayout->addWidget(editDatabase, 1, 1, 1, 1);
 
         portSpinBox = new QSpinBox(connGroupBox);
-        portSpinBox->setObjectName(QStringLiteral("portSpinBox"));
+        portSpinBox->setObjectName(QString::fromUtf8("portSpinBox"));
         portSpinBox->setMaximum(65535);
         portSpinBox->setMinimum(-1);
         portSpinBox->setValue(-1);
@@ -104,38 +100,38 @@ public:
         gridLayout->addWidget(portSpinBox, 5, 1, 1, 1);
 
         textLabel3 = new QLabel(connGroupBox);
-        textLabel3->setObjectName(QStringLiteral("textLabel3"));
+        textLabel3->setObjectName(QString::fromUtf8("textLabel3"));
 
         gridLayout->addWidget(textLabel3, 1, 0, 1, 1);
 
         editPassword = new QLineEdit(connGroupBox);
-        editPassword->setObjectName(QStringLiteral("editPassword"));
+        editPassword->setObjectName(QString::fromUtf8("editPassword"));
         editPassword->setEchoMode(QLineEdit::Password);
 
         gridLayout->addWidget(editPassword, 3, 1, 1, 1);
 
         editUsername = new QLineEdit(connGroupBox);
-        editUsername->setObjectName(QStringLiteral("editUsername"));
+        editUsername->setObjectName(QString::fromUtf8("editUsername"));
 
         gridLayout->addWidget(editUsername, 2, 1, 1, 1);
 
         editHostname = new QLineEdit(connGroupBox);
-        editHostname->setObjectName(QStringLiteral("editHostname"));
+        editHostname->setObjectName(QString::fromUtf8("editHostname"));
 
         gridLayout->addWidget(editHostname, 4, 1, 1, 1);
 
         textLabel5 = new QLabel(connGroupBox);
-        textLabel5->setObjectName(QStringLiteral("textLabel5"));
+        textLabel5->setObjectName(QString::fromUtf8("textLabel5"));
 
         gridLayout->addWidget(textLabel5, 4, 0, 1, 1);
 
         textLabel5_2 = new QLabel(connGroupBox);
-        textLabel5_2->setObjectName(QStringLiteral("textLabel5_2"));
+        textLabel5_2->setObjectName(QString::fromUtf8("textLabel5_2"));
 
         gridLayout->addWidget(textLabel5_2, 5, 0, 1, 1);
 
         textLabel4_2 = new QLabel(connGroupBox);
-        textLabel4_2->setObjectName(QStringLiteral("textLabel4_2"));
+        textLabel4_2->setObjectName(QString::fromUtf8("textLabel4_2"));
 
         gridLayout->addWidget(textLabel4_2, 3, 0, 1, 1);
 
@@ -147,13 +143,13 @@ public:
         hboxLayout->setSpacing(6);
 #endif
         hboxLayout->setContentsMargins(0, 0, 0, 0);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         spacerItem = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         hboxLayout->addItem(spacerItem);
 
         dbCheckBox = new QCheckBox(QSqlConnectionDialogUi);
-        dbCheckBox->setObjectName(QStringLiteral("dbCheckBox"));
+        dbCheckBox->setObjectName(QString::fromUtf8("dbCheckBox"));
 
         hboxLayout->addWidget(dbCheckBox);
 
@@ -165,19 +161,18 @@ public:
         hboxLayout1->setSpacing(6);
 #endif
         hboxLayout1->setContentsMargins(0, 0, 0, 0);
-        hboxLayout1->setObjectName(QStringLiteral("hboxLayout1"));
+        hboxLayout1->setObjectName(QString::fromUtf8("hboxLayout1"));
         spacerItem1 = new QSpacerItem(20, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         hboxLayout1->addItem(spacerItem1);
 
         okButton = new QPushButton(QSqlConnectionDialogUi);
-        okButton->setObjectName(QStringLiteral("okButton"));
-        okButton->setDefault(true);
+        okButton->setObjectName(QString::fromUtf8("okButton"));
 
         hboxLayout1->addWidget(okButton);
 
         cancelButton = new QPushButton(QSqlConnectionDialogUi);
-        cancelButton->setObjectName(QStringLiteral("cancelButton"));
+        cancelButton->setObjectName(QString::fromUtf8("cancelButton"));
 
         hboxLayout1->addWidget(cancelButton);
 
@@ -203,23 +198,26 @@ public:
 
         retranslateUi(QSqlConnectionDialogUi);
 
+        okButton->setDefault(true);
+
+
         QMetaObject::connectSlotsByName(QSqlConnectionDialogUi);
     } // setupUi
 
     void retranslateUi(QDialog *QSqlConnectionDialogUi)
     {
-        QSqlConnectionDialogUi->setWindowTitle(QApplication::translate("QSqlConnectionDialogUi", "Connect...", 0));
-        connGroupBox->setTitle(QApplication::translate("QSqlConnectionDialogUi", "Connection settings", 0));
-        textLabel4->setText(QApplication::translate("QSqlConnectionDialogUi", "&Username:", 0));
-        textLabel2->setText(QApplication::translate("QSqlConnectionDialogUi", "D&river", 0));
-        portSpinBox->setSpecialValueText(QApplication::translate("QSqlConnectionDialogUi", "Default", 0));
-        textLabel3->setText(QApplication::translate("QSqlConnectionDialogUi", "Database Name:", 0));
-        textLabel5->setText(QApplication::translate("QSqlConnectionDialogUi", "&Hostname:", 0));
-        textLabel5_2->setText(QApplication::translate("QSqlConnectionDialogUi", "P&ort:", 0));
-        textLabel4_2->setText(QApplication::translate("QSqlConnectionDialogUi", "&Password:", 0));
-        dbCheckBox->setText(QApplication::translate("QSqlConnectionDialogUi", "Us&e predefined in-memory database", 0));
-        okButton->setText(QApplication::translate("QSqlConnectionDialogUi", "&OK", 0));
-        cancelButton->setText(QApplication::translate("QSqlConnectionDialogUi", "&Cancel", 0));
+        QSqlConnectionDialogUi->setWindowTitle(QApplication::translate("QSqlConnectionDialogUi", "Connect...", nullptr));
+        connGroupBox->setTitle(QApplication::translate("QSqlConnectionDialogUi", "Connection settings", nullptr));
+        textLabel4->setText(QApplication::translate("QSqlConnectionDialogUi", "&Username:", nullptr));
+        textLabel2->setText(QApplication::translate("QSqlConnectionDialogUi", "D&river", nullptr));
+        portSpinBox->setSpecialValueText(QApplication::translate("QSqlConnectionDialogUi", "Default", nullptr));
+        textLabel3->setText(QApplication::translate("QSqlConnectionDialogUi", "Database Name:", nullptr));
+        textLabel5->setText(QApplication::translate("QSqlConnectionDialogUi", "&Hostname:", nullptr));
+        textLabel5_2->setText(QApplication::translate("QSqlConnectionDialogUi", "P&ort:", nullptr));
+        textLabel4_2->setText(QApplication::translate("QSqlConnectionDialogUi", "&Password:", nullptr));
+        dbCheckBox->setText(QApplication::translate("QSqlConnectionDialogUi", "Us&e predefined in-memory database", nullptr));
+        okButton->setText(QApplication::translate("QSqlConnectionDialogUi", "&OK", nullptr));
+        cancelButton->setText(QApplication::translate("QSqlConnectionDialogUi", "&Cancel", nullptr));
     } // retranslateUi
 
 };

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,88 +10,75 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include "qdevicediscovery_p.h"
+#include "qdevicediscovery_udev_p.h"
 
 #include <QStringList>
 #include <QCoreApplication>
 #include <QObject>
 #include <QHash>
 #include <QSocketNotifier>
+#include <QLoggingCategory>
 
 #include <linux/input.h>
 
-//#define QT_QPA_DEVICE_DISCOVERY_DEBUG
-
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-#include <QtDebug>
-#endif
-
 QT_BEGIN_NAMESPACE
+
+Q_LOGGING_CATEGORY(lcDD, "qt.qpa.input")
 
 QDeviceDiscovery *QDeviceDiscovery::create(QDeviceTypes types, QObject *parent)
 {
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-    qWarning() << "Try to create new UDeviceHelper";
-#endif
+    qCDebug(lcDD) << "udev device discovery for type" << types;
 
     QDeviceDiscovery *helper = 0;
     struct udev *udev;
 
     udev = udev_new();
     if (udev) {
-        helper = new QDeviceDiscovery(types, udev, parent);
+        helper = new QDeviceDiscoveryUDev(types, udev, parent);
     } else {
-        qWarning("Failed to get udev library context.");
+        qWarning("Failed to get udev library context");
     }
 
     return helper;
 }
 
-QDeviceDiscovery::QDeviceDiscovery(QDeviceTypes types, struct udev *udev, QObject *parent) :
-    QObject(parent),
-    m_types(types), m_udev(udev), m_udevMonitor(0), m_udevMonitorFileDescriptor(-1), m_udevSocketNotifier(0)
+QDeviceDiscoveryUDev::QDeviceDiscoveryUDev(QDeviceTypes types, struct udev *udev, QObject *parent) :
+    QDeviceDiscovery(types, parent),
+    m_udev(udev), m_udevMonitor(0), m_udevMonitorFileDescriptor(-1), m_udevSocketNotifier(0)
 {
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-    qWarning() << "New UDeviceHelper created for type" << types;
-#endif
-
     if (!m_udev)
         return;
 
     m_udevMonitor = udev_monitor_new_from_netlink(m_udev, "udev");
     if (!m_udevMonitor) {
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-        qWarning("Unable to create an Udev monitor. No devices can be detected.");
-#endif
+        qWarning("Unable to create an udev monitor. No devices can be detected.");
         return;
     }
 
@@ -104,7 +91,7 @@ QDeviceDiscovery::QDeviceDiscovery(QDeviceTypes types, struct udev *udev, QObjec
     connect(m_udevSocketNotifier, SIGNAL(activated(int)), this, SLOT(handleUDevNotification()));
 }
 
-QDeviceDiscovery::~QDeviceDiscovery()
+QDeviceDiscoveryUDev::~QDeviceDiscoveryUDev()
 {
     if (m_udevMonitor)
         udev_monitor_unref(m_udevMonitor);
@@ -113,7 +100,7 @@ QDeviceDiscovery::~QDeviceDiscovery()
         udev_unref(m_udev);
 }
 
-QStringList QDeviceDiscovery::scanConnectedDevices()
+QStringList QDeviceDiscoveryUDev::scanConnectedDevices()
 {
     QStringList devices;
 
@@ -130,15 +117,17 @@ QStringList QDeviceDiscovery::scanConnectedDevices()
         udev_enumerate_add_match_property(ue, "ID_INPUT_TOUCHPAD", "1");
     if (m_types & Device_Touchscreen)
         udev_enumerate_add_match_property(ue, "ID_INPUT_TOUCHSCREEN", "1");
-    if (m_types & Device_Keyboard)
+    if (m_types & Device_Keyboard) {
         udev_enumerate_add_match_property(ue, "ID_INPUT_KEYBOARD", "1");
+        udev_enumerate_add_match_property(ue, "ID_INPUT_KEY", "1");
+    }
     if (m_types & Device_Tablet)
         udev_enumerate_add_match_property(ue, "ID_INPUT_TABLET", "1");
+    if (m_types & Device_Joystick)
+        udev_enumerate_add_match_property(ue, "ID_INPUT_JOYSTICK", "1");
 
     if (udev_enumerate_scan_devices(ue) != 0) {
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-        qWarning() << "UDeviceHelper scan connected devices for enumeration failed";
-#endif
+        qWarning("Failed to scan devices");
         return devices;
     }
 
@@ -149,21 +138,27 @@ QStringList QDeviceDiscovery::scanConnectedDevices()
         QString candidate = QString::fromUtf8(udev_device_get_devnode(udevice));
         if ((m_types & Device_InputMask) && candidate.startsWith(QLatin1String(QT_EVDEV_DEVICE)))
             devices << candidate;
-        if ((m_types & Device_VideoMask) && candidate.startsWith(QLatin1String(QT_DRM_DEVICE)))
-            devices << candidate;
+        if ((m_types & Device_VideoMask) && candidate.startsWith(QLatin1String(QT_DRM_DEVICE))) {
+            if (m_types & Device_DRM_PrimaryGPU) {
+                udev_device *pci = udev_device_get_parent_with_subsystem_devtype(udevice, "pci", 0);
+                if (pci) {
+                    if (qstrcmp(udev_device_get_sysattr_value(pci, "boot_vga"), "1") == 0)
+                        devices << candidate;
+                }
+            } else
+                devices << candidate;
+        }
 
         udev_device_unref(udevice);
     }
     udev_enumerate_unref(ue);
 
-#ifdef QT_QPA_DEVICE_DISCOVERY_DEBUG
-    qWarning() << "UDeviceHelper found matching devices" << devices;
-#endif
+    qCDebug(lcDD) << "Found matching devices" << devices;
 
     return devices;
 }
 
-void QDeviceDiscovery::handleUDevNotification()
+void QDeviceDiscoveryUDev::handleUDevNotification()
 {
     if (!m_udevMonitor)
         return;
@@ -196,11 +191,11 @@ void QDeviceDiscovery::handleUDevNotification()
     // if we cannot determine a type, walk up the device tree
     if (!checkDeviceType(dev)) {
         // does not increase the refcount
-        dev = udev_device_get_parent_with_subsystem_devtype(dev, subsystem, 0);
-        if (!dev)
+        struct udev_device *parent_dev = udev_device_get_parent_with_subsystem_devtype(dev, subsystem, 0);
+        if (!parent_dev)
             goto cleanup;
 
-        if (!checkDeviceType(dev))
+        if (!checkDeviceType(parent_dev))
             goto cleanup;
     }
 
@@ -214,14 +209,14 @@ cleanup:
     udev_device_unref(dev);
 }
 
-bool QDeviceDiscovery::checkDeviceType(udev_device *dev)
+bool QDeviceDiscoveryUDev::checkDeviceType(udev_device *dev)
 {
     if (!dev)
         return false;
 
     if ((m_types & Device_Keyboard) && (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_KEYBOARD"), "1") == 0 )) {
-        const char *capabilities_key = udev_device_get_sysattr_value(dev, "capabilities/key");
-        QStringList val = QString::fromUtf8(capabilities_key).split(QString::fromUtf8(" "), QString::SkipEmptyParts);
+        const QString capabilities_key = QString::fromUtf8(udev_device_get_sysattr_value(dev, "capabilities/key"));
+        const auto val = capabilities_key.splitRef(QLatin1Char(' '), QString::SkipEmptyParts);
         if (!val.isEmpty()) {
             bool ok;
             unsigned long long keys = val.last().toULongLong(&ok, 16);
@@ -234,6 +229,9 @@ bool QDeviceDiscovery::checkDeviceType(udev_device *dev)
         }
     }
 
+    if ((m_types & Device_Keyboard) && (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_KEY"), "1") == 0 ))
+        return true;
+
     if ((m_types & Device_Mouse) && (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_MOUSE"), "1") == 0))
         return true;
 
@@ -244,6 +242,9 @@ bool QDeviceDiscovery::checkDeviceType(udev_device *dev)
         return true;
 
     if ((m_types & Device_Tablet) && (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_TABLET"), "1") == 0))
+        return true;
+
+    if ((m_types & Device_Joystick) && (qstrcmp(udev_device_get_property_value(dev, "ID_INPUT_JOYSTICK"), "1") == 0))
         return true;
 
     if ((m_types & Device_DRM) && (qstrcmp(udev_device_get_subsystem(dev), "drm") == 0))

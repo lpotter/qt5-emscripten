@@ -1,18 +1,28 @@
 CONFIG += testcase
-CONFIG -= app_bundle debug_and_release_target
 
 QT += widgets widgets-private testlib
 QT += core-private gui-private
 
 SOURCES += ../tst_qapplication.cpp
-TARGET = ../tst_qapplication
 
-TESTDATA = ../test/test.pro ../tmp/README
+builtin_testdata: DEFINES += BUILTIN_TESTDATA
 
-SUBPROGRAMS = desktopsettingsaware modal
-win32: !wince*: SUBPROGRAMS += wincmdline
+TESTDATA = ../test/test.pro ../tmp/README ../modal
 
-for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../$${file}/$${file}"
+!android:!winrt: SUBPROGRAMS = desktopsettingsaware modal
 
-
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+debug_and_release {
+    CONFIG(debug, debug|release) {
+        TARGET = ../../debug/tst_qapplication
+        !android:!winrt: TEST_HELPER_INSTALLS = ../debug/helper
+        for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../debug/$${file}"
+    } else {
+        TARGET = ../../release/tst_qapplication
+        !android:!winrt: TEST_HELPER_INSTALLS = ../release/helper
+        for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../release/$${file}"
+    }
+} else {
+    TARGET = ../tst_qapplication
+    !android:!winrt: TEST_HELPER_INSTALLS = ../helper
+    for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../$${file}"
+}

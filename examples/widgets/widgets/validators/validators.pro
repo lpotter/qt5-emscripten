@@ -1,4 +1,5 @@
 QT += widgets
+requires(qtConfig(combobox))
 
 FORMS += validators.ui
 RESOURCES += validators.qrc
@@ -9,5 +10,3 @@ HEADERS += ledwidget.h localeselector.h
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/widgets/validators
 INSTALLS += target
-
-simulator: warning(This example might not fully work on Simulator platform)

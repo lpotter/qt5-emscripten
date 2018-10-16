@@ -9,9 +9,8 @@ HEADERS += \
         image/qimage_p.h \
         image/qimageiohandler.h \
         image/qimagereader.h \
+        image/qimagereaderwriterhelpers_p.h \
         image/qimagewriter.h \
-        image/qmovie.h \
-        image/qnativeimage_p.h \
         image/qpaintengine_pic_p.h \
         image/qpicture.h \
         image/qpicture_p.h \
@@ -32,8 +31,10 @@ HEADERS += \
 SOURCES += \
         image/qbitmap.cpp \
         image/qimage.cpp \
+        image/qimage_conversions.cpp \
         image/qimageiohandler.cpp \
         image/qimagereader.cpp \
+        image/qimagereaderwriterhelpers.cpp \
         image/qimagewriter.cpp \
         image/qpaintengine_pic.cpp \
         image/qpicture.cpp \
@@ -41,18 +42,25 @@ SOURCES += \
         image/qpixmap.cpp \
         image/qpixmapcache.cpp \
         image/qplatformpixmap.cpp \
-        image/qmovie.cpp \
         image/qpixmap_raster.cpp \
         image/qpixmap_blitter.cpp \
-        image/qnativeimage.cpp \
         image/qimagepixmapcleanuphooks.cpp \
         image/qicon.cpp \
         image/qiconloader.cpp \
         image/qiconengine.cpp \
         image/qiconengineplugin.cpp \
 
+qtConfig(movie) {
+    HEADERS += image/qmovie.h
+    SOURCES += image/qmovie.cpp
+}
 
-win32: SOURCES += image/qpixmap_win.cpp
+win32:!winrt: SOURCES += image/qpixmap_win.cpp
+
+darwin: OBJECTIVE_SOURCES += image/qimage_darwin.mm
+
+NO_PCH_SOURCES += image/qimage_compat.cpp
+false: SOURCES += $$NO_PCH_SOURCES # Hack for QtCreator
 
 # Built-in image format support
 HEADERS += \
@@ -67,14 +75,14 @@ SOURCES += \
         image/qxbmhandler.cpp \
         image/qxpmhandler.cpp
 
-!contains(QT_CONFIG, no-png):include($$PWD/qpnghandler.pri)
-else:DEFINES *= QT_NO_IMAGEFORMAT_PNG
-
-contains(QT_CONFIG, jpeg):include($$PWD/qjpeghandler.pri)
-contains(QT_CONFIG, gif):include($$PWD/qgifhandler.pri)
+qtConfig(png) {
+    HEADERS += image/qpnghandler_p.h
+    SOURCES += image/qpnghandler.cpp
+    QMAKE_USE_PRIVATE += libpng
+}
 
 # SIMD
-NEON_SOURCES += image/qimage_neon.cpp
-SSE2_SOURCES += image/qimage_sse2.cpp
 SSSE3_SOURCES += image/qimage_ssse3.cpp
-AVX_SOURCES += image/qimage_avx.cpp
+NEON_SOURCES += image/qimage_neon.cpp
+MIPS_DSPR2_SOURCES += image/qimage_mips_dspr2.cpp
+MIPS_DSPR2_ASM += image/qimage_mips_dspr2_asm.S

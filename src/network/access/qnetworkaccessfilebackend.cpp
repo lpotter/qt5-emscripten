@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,13 +39,27 @@
 
 #include "qnetworkaccessfilebackend_p.h"
 #include "qfileinfo.h"
+#if QT_CONFIG(ftp)
 #include "qurlinfo_p.h"
+#endif
 #include "qdir.h"
 #include "private/qnoncontiguousbytedevice_p.h"
 
 #include <QtCore/QCoreApplication>
+#include <QtCore/QDateTime>
 
 QT_BEGIN_NAMESPACE
+
+QStringList QNetworkAccessFileBackendFactory::supportedSchemes() const
+{
+    QStringList schemes;
+    schemes << QStringLiteral("file")
+            << QStringLiteral("qrc");
+#if defined(Q_OS_ANDROID)
+    schemes << QStringLiteral("assets");
+#endif
+    return schemes;
+}
 
 QNetworkAccessBackend *
 QNetworkAccessFileBackendFactory::create(QNetworkAccessManager::Operation op,
@@ -65,7 +77,11 @@ QNetworkAccessFileBackendFactory::create(QNetworkAccessManager::Operation op,
     }
 
     QUrl url = request.url();
-    if (url.scheme().compare(QLatin1String("qrc"), Qt::CaseInsensitive) == 0 || url.isLocalFile()) {
+    if (url.scheme().compare(QLatin1String("qrc"), Qt::CaseInsensitive) == 0
+#if defined(Q_OS_ANDROID)
+            || url.scheme().compare(QLatin1String("assets"), Qt::CaseInsensitive) == 0
+#endif
+            || url.isLocalFile()) {
         return new QNetworkAccessFileBackend;
     } else if (!url.scheme().isEmpty() && url.authority().isEmpty() && (url.scheme().length() > 1)) {
         // check if QFile could, in theory, open this URL via the file engines
@@ -83,7 +99,7 @@ QNetworkAccessFileBackendFactory::create(QNetworkAccessManager::Operation op,
 }
 
 QNetworkAccessFileBackend::QNetworkAccessFileBackend()
-    : uploadByteDevice(0), totalBytes(0), hasUploadFinished(false)
+    : totalBytes(0), hasUploadFinished(false)
 {
 }
 
@@ -113,10 +129,16 @@ void QNetworkAccessFileBackend::open()
 
     QString fileName = url.toLocalFile();
     if (fileName.isEmpty()) {
-        if (url.scheme() == QLatin1String("qrc"))
+        if (url.scheme() == QLatin1String("qrc")) {
             fileName = QLatin1Char(':') + url.path();
-        else
-            fileName = url.toString(QUrl::RemoveAuthority | QUrl::RemoveFragment | QUrl::RemoveQuery);
+        } else {
+#if defined(Q_OS_ANDROID)
+            if (url.scheme() == QLatin1String("assets"))
+                fileName = QLatin1String("assets:") + url.path();
+            else
+#endif
+                fileName = url.toString(QUrl::RemoveAuthority | QUrl::RemoveFragment | QUrl::RemoveQuery);
+        }
     }
     file.setFileName(fileName);
 
@@ -132,8 +154,8 @@ void QNetworkAccessFileBackend::open()
         break;
     case QNetworkAccessManager::PutOperation:
         mode = QIODevice::WriteOnly | QIODevice::Truncate;
-        uploadByteDevice = createUploadByteDevice();
-        QObject::connect(uploadByteDevice, SIGNAL(readyRead()), this, SLOT(uploadReadyReadSlot()));
+        createUploadByteDevice();
+        QObject::connect(uploadByteDevice.data(), SIGNAL(readyRead()), this, SLOT(uploadReadyReadSlot()));
         QMetaObject::invokeMethod(this, "uploadReadyReadSlot", Qt::QueuedConnection);
         break;
     default:

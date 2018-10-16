@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -93,6 +91,13 @@ void QSqlQueryModelPrivate::initColOffsets(int size)
 {
     colOffsets.resize(size);
     memset(colOffsets.data(), 0, colOffsets.size() * sizeof(int));
+}
+
+int QSqlQueryModelPrivate::columnInQuery(int modelColumn) const
+{
+    if (modelColumn < 0 || modelColumn >= rec.count() || !rec.isGenerated(modelColumn) || modelColumn >= colOffsets.size())
+        return -1;
+    return modelColumn - colOffsets[modelColumn];
 }
 
 /*!
@@ -193,7 +198,7 @@ void QSqlQueryModel::fetchMore(const QModelIndex &parent)
 /*!
     \since 4.1
 
-    Returns true if it is possible to read more rows from the database.
+    Returns \c true if it is possible to read more rows from the database.
     This only affects databases that don't report back the size of a query
     (see QSqlDriver::hasFeature()).
 
@@ -205,6 +210,30 @@ bool QSqlQueryModel::canFetchMore(const QModelIndex &parent) const
 {
     Q_D(const QSqlQueryModel);
     return (!parent.isValid() && !d->atEnd);
+}
+
+/*!
+    \since 5.10
+    \reimp
+
+    Returns the model's role names.
+
+    Qt defines only one role for the QSqlQueryModel:
+
+    \table
+    \header
+    \li Qt Role
+    \li QML Role Name
+    \row
+    \li Qt::DisplayRole
+    \li display
+    \endtable
+*/
+QHash<int, QByteArray> QSqlQueryModel::roleNames() const
+{
+    return QHash<int, QByteArray> {
+        { Qt::DisplayRole, QByteArrayLiteral("display") }
+    };
 }
 
 /*! \internal
@@ -370,11 +399,7 @@ QVariant QSqlQueryModel::headerData(int section, Qt::Orientation orientation, in
             val = d->headers.value(section).value(Qt::EditRole);
         if (val.isValid())
             return val;
-
-        // See if it's an inserted column (iiq.column() != -1)
-        QModelIndex dItem = indexInQuery(createIndex(0, section));
-
-        if (role == Qt::DisplayRole && d->rec.count() > section && dItem.column() != -1)
+        if (role == Qt::DisplayRole && d->rec.count() > section && d->columnInQuery(section) != -1)
             return d->rec.fieldName(section);
     }
     return QAbstractItemModel::headerData(section, orientation, role);
@@ -476,6 +501,7 @@ void QSqlQueryModel::setQuery(const QString &query, const QSqlDatabase &db)
 void QSqlQueryModel::clear()
 {
     Q_D(QSqlQueryModel);
+    beginResetModel();
     d->error = QSqlError();
     d->atEnd = true;
     d->query.clear();
@@ -483,6 +509,7 @@ void QSqlQueryModel::clear()
     d->colOffsets.clear();
     d->bottom = QModelIndex();
     d->headers.clear();
+    endResetModel();
 }
 
 /*!
@@ -490,7 +517,7 @@ void QSqlQueryModel::clear()
     \a value. This is useful if the model is used to
     display data in a view (e.g., QTableView).
 
-    Returns true if \a orientation is Qt::Horizontal and
+    Returns \c true if \a orientation is Qt::Horizontal and
     the \a section refers to a valid section; otherwise returns
     false.
 
@@ -591,7 +618,7 @@ QSqlRecord QSqlQueryModel::record() const
     \a parent parameter must always be an invalid QModelIndex, since
     the model does not support parent-child relationships.
 
-    Returns true if \a column is within bounds; otherwise returns false.
+    Returns \c true if \a column is within bounds; otherwise returns \c false.
 
     By default, inserted columns are empty. To fill them with data,
     reimplement data() and handle any inserted column separately:
@@ -633,7 +660,7 @@ bool QSqlQueryModel::insertColumns(int column, int count, const QModelIndex &par
     Removing columns effectively hides them. It does not affect the
     underlying QSqlQuery.
 
-    Returns true if the columns were removed; otherwise returns false.
+    Returns \c true if the columns were removed; otherwise returns \c false.
  */
 bool QSqlQueryModel::removeColumns(int column, int count, const QModelIndex &parent)
 {
@@ -668,12 +695,10 @@ bool QSqlQueryModel::removeColumns(int column, int count, const QModelIndex &par
 QModelIndex QSqlQueryModel::indexInQuery(const QModelIndex &item) const
 {
     Q_D(const QSqlQueryModel);
-    if (item.column() < 0 || item.column() >= d->rec.count()
-        || !d->rec.isGenerated(item.column())
-        || item.column() >= d->colOffsets.size())
+    int modelColumn = d->columnInQuery(item.column());
+    if (modelColumn < 0)
         return QModelIndex();
-    return createIndex(item.row(), item.column() - d->colOffsets[item.column()],
-                       item.internalPointer());
+    return createIndex(item.row(), modelColumn, item.internalPointer());
 }
 
 QT_END_NAMESPACE

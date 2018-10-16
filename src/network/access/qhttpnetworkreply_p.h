@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,8 +50,10 @@
 //
 // We mean it.
 //
+
+#include <QtNetwork/private/qtnetworkglobal_p.h>
+
 #include <qplatformdefs.h>
-#ifndef QT_NO_HTTP
 
 #ifndef QT_NO_COMPRESS
 struct z_stream_s;
@@ -75,6 +75,8 @@ struct z_stream_s;
 #include <private/qringbuffer_p.h>
 #include <private/qbytedata_p.h>
 
+QT_REQUIRE_CONFIG(http);
+
 QT_BEGIN_NAMESPACE
 
 class QHttpNetworkConnection;
@@ -90,18 +92,18 @@ public:
     explicit QHttpNetworkReply(const QUrl &url = QUrl(), QObject *parent = 0);
     virtual ~QHttpNetworkReply();
 
-    QUrl url() const;
-    void setUrl(const QUrl &url);
+    QUrl url() const override;
+    void setUrl(const QUrl &url) override;
 
-    int majorVersion() const;
-    int minorVersion() const;
+    int majorVersion() const override;
+    int minorVersion() const override;
 
-    qint64 contentLength() const;
-    void setContentLength(qint64 length);
+    qint64 contentLength() const override;
+    void setContentLength(qint64 length) override;
 
-    QList<QPair<QByteArray, QByteArray> > header() const;
-    QByteArray headerField(const QByteArray &name, const QByteArray &defaultValue = QByteArray()) const;
-    void setHeaderField(const QByteArray &name, const QByteArray &data);
+    QList<QPair<QByteArray, QByteArray> > header() const override;
+    QByteArray headerField(const QByteArray &name, const QByteArray &defaultValue = QByteArray()) const override;
+    void setHeaderField(const QByteArray &name, const QByteArray &data) override;
     void parseHeader(const QByteArray &header); // mainly for testing
 
     QHttpNetworkRequest request() const;
@@ -129,11 +131,24 @@ public:
     void setUserProvidedDownloadBuffer(char*);
     char* userProvidedDownloadBuffer();
 
+    void abort();
+
+    bool isAborted() const;
     bool isFinished() const;
 
     bool isPipeliningUsed() const;
+    bool isSpdyUsed() const;
+    void setSpdyWasUsed(bool spdy);
+    qint64 removedContentLength() const;
+
+    bool isRedirecting() const;
 
     QHttpNetworkConnection* connection();
+
+    QUrl redirectUrl() const;
+    void setRedirectUrl(const QUrl &url);
+
+    static bool isHttpRedirect(int statusCode);
 
 #ifndef QT_NO_SSL
     QSslConfiguration sslConfiguration() const;
@@ -142,7 +157,9 @@ public:
     void ignoreSslErrors(const QList<QSslError> &errors);
 
 Q_SIGNALS:
+    void encrypted();
     void sslErrors(const QList<QSslError> &errors);
+    void preSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *authenticator);
 #endif
 
 Q_SIGNALS:
@@ -157,16 +174,20 @@ Q_SIGNALS:
     void proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator);
 #endif
     void authenticationRequired(const QHttpNetworkRequest &request, QAuthenticator *authenticator);
+    void redirected(const QUrl &url, int httpStatus, int maxRedirectsRemaining);
 private:
     Q_DECLARE_PRIVATE(QHttpNetworkReply)
     friend class QHttpSocketEngine;
     friend class QHttpNetworkConnection;
     friend class QHttpNetworkConnectionPrivate;
     friend class QHttpNetworkConnectionChannel;
+    friend class QHttp2ProtocolHandler;
+    friend class QHttpProtocolHandler;
+    friend class QSpdyProtocolHandler;
 };
 
 
-class QHttpNetworkReplyPrivate : public QObjectPrivate, public QHttpNetworkHeaderPrivate
+class Q_AUTOTEST_EXPORT QHttpNetworkReplyPrivate : public QObjectPrivate, public QHttpNetworkHeaderPrivate
 {
 public:
     QHttpNetworkReplyPrivate(const QUrl &newUrl = QUrl());
@@ -187,6 +208,7 @@ public:
     qint64 readReplyBodyChunked(QAbstractSocket *in, QByteDataBuffer *out);
     qint64 getChunkSize(QAbstractSocket *in, qint64 *chunkSize);
 
+    bool isRedirecting() const;
     bool shouldEmitSignals();
     bool expectContent();
     void eraseData();
@@ -203,7 +225,12 @@ public:
         ReadingStatusState,
         ReadingHeaderState,
         ReadingDataState,
-        AllDoneState
+        AllDoneState,
+        SPDYSYNSent,
+        SPDYUploading,
+        SPDYHalfClosed,
+        SPDYClosed,
+        Aborted
     } state;
 
     QHttpNetworkRequest request;
@@ -224,6 +251,12 @@ public:
     qint64 currentChunkSize;
     qint64 currentChunkRead;
     qint64 readBufferMaxSize;
+    qint32 windowSizeDownload; // only for SPDY
+    qint32 windowSizeUpload; // only for SPDY
+    qint32 currentlyReceivedDataInWindow; // only for SPDY
+    qint32 currentlyUploadedDataInWindow; // only for SPDY
+    qint64 totallyUploadedData; // only for SPDY
+    qint64 removedContentLength;
     QPointer<QHttpNetworkConnection> connection;
     QPointer<QHttpNetworkConnectionChannel> connectionChannel;
 
@@ -234,12 +267,15 @@ public:
     bool requestIsPrepared;
 
     bool pipeliningUsed;
+    bool spdyUsed;
     bool downstreamLimited;
 
     char* userProvidedDownloadBuffer;
+    QUrl redirectUrl;
 
 #ifndef QT_NO_COMPRESS
     z_stream_s *inflateStrm;
+    int initializeInflateStream();
     qint64 uncompressBodyData(QByteDataBuffer *in, QByteDataBuffer *out);
 #endif
 };
@@ -248,8 +284,5 @@ public:
 
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_HTTP
-
 
 #endif // QHTTPNETWORKREPLY_H

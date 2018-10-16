@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,12 +39,12 @@
 
 #include "qtabwidget.h"
 
-#ifndef QT_NO_TABWIDGET
 #include "private/qwidget_p.h"
 #include "private/qtabbar_p.h"
 #include "qapplication.h"
 #include "qbitmap.h"
 #include "qdesktopwidget.h"
+#include <private/qdesktopwidget_p.h>
 #include "qevent.h"
 #include "qlayout.h"
 #include "qstackedwidget.h"
@@ -65,6 +63,8 @@ QT_BEGIN_NAMESPACE
     \ingroup organizers
     \ingroup basicwidgets
     \inmodule QtWidgets
+
+    \image windows-tabwidget.png
 
     A tab widget provides a tab bar (see QTabBar) and a "page area"
     that is used to display pages related to each tab. By default, the
@@ -119,15 +119,6 @@ QT_BEGIN_NAMESPACE
     (at the top, providing the tabs) and a QStackedWidget (most of the
     area, organizing the individual pages).
 
-    \table 100%
-    \row \li \inlineimage windowsxp-tabwidget.png Screenshot of a Windows XP style tab widget
-         \li \inlineimage macintosh-tabwidget.png Screenshot of a Macintosh style tab widget
-         \li \inlineimage fusion-tabwidget.png Screenshot of a Fusion style tab widget
-    \row \li A Windows XP style tab widget.
-         \li A Macintosh style tab widget.
-         \li A Fusion style tab widget.
-    \endtable
-
     \sa QTabBar, QStackedWidget, QToolBox, {Tab Dialog Example}
 */
 
@@ -172,6 +163,26 @@ QT_BEGIN_NAMESPACE
     \sa setTabsClosable()
 */
 
+/*!
+    \fn void QTabWidget::tabBarClicked(int index)
+
+    This signal is emitted when user clicks on a tab at an \a index.
+
+    \a index refers to the tab clicked, or -1 if no tab is under the cursor.
+
+    \since 5.2
+*/
+
+/*!
+    \fn void QTabWidget::tabBarDoubleClicked(int index)
+
+    This signal is emitted when the user double clicks on a tab at an \a index.
+
+    \a index is the index of a clicked tab, or -1 if no tab is under the cursor.
+
+    \since 5.2
+*/
+
 class QTabWidgetPrivate : public QWidgetPrivate
 {
     Q_DECLARE_PUBLIC(QTabWidget)
@@ -184,6 +195,13 @@ public:
     void _q_removeTab(int);
     void _q_tabMoved(int from, int to);
     void init();
+    bool isAutoHidden() const
+    {
+        // see QTabBarPrivate::autoHideTabs()
+        return (tabs->autoHide() && tabs->count() <= 1);
+    }
+
+    void initBasicStyleOption(QStyleOptionTabWidgetFrame *option) const;
 
     QTabBar *tabs;
     QStackedWidget *stack;
@@ -191,7 +209,6 @@ public:
     bool dirty;
     QTabWidget::TabPosition pos;
     QTabWidget::TabShape shape;
-    int alignment;
     QWidget *leftCornerWidget;
     QWidget *rightCornerWidget;
 };
@@ -248,6 +265,43 @@ bool QTabWidget::hasHeightForWidth() const
     return has;
 }
 
+/*!
+    \internal
+
+    Initialize only time inexpensive parts of the style option
+    for QTabWidget::setUpLayout()'s non-visible code path.
+*/
+void QTabWidgetPrivate::initBasicStyleOption(QStyleOptionTabWidgetFrame *option) const
+{
+    Q_Q(const QTabWidget);
+    option->initFrom(q);
+
+    if (q->documentMode())
+        option->lineWidth = 0;
+    else
+        option->lineWidth = q->style()->pixelMetric(QStyle::PM_DefaultFrameWidth, 0, q);
+
+    switch (pos) {
+    case QTabWidget::North:
+        option->shape = shape == QTabWidget::Rounded ? QTabBar::RoundedNorth
+                                                     : QTabBar::TriangularNorth;
+        break;
+    case QTabWidget::South:
+        option->shape = shape == QTabWidget::Rounded ? QTabBar::RoundedSouth
+                                                     : QTabBar::TriangularSouth;
+        break;
+    case QTabWidget::West:
+        option->shape = shape == QTabWidget::Rounded ? QTabBar::RoundedWest
+                                                     : QTabBar::TriangularWest;
+        break;
+    case QTabWidget::East:
+        option->shape = shape == QTabWidget::Rounded ? QTabBar::RoundedEast
+                                                     : QTabBar::TriangularEast;
+        break;
+    }
+
+    option->tabBarRect = q->tabBar()->geometry();
+}
 
 /*!
     Initialize \a option with the values from this QTabWidget. This method is useful
@@ -262,12 +316,7 @@ void QTabWidget::initStyleOption(QStyleOptionTabWidgetFrame *option) const
         return;
 
     Q_D(const QTabWidget);
-    option->initFrom(this);
-
-    if (documentMode())
-        option->lineWidth = 0;
-    else
-        option->lineWidth = style()->pixelMetric(QStyle::PM_DefaultFrameWidth, 0, this);
+    d->initBasicStyleOption(option);
 
     int exth = style()->pixelMetric(QStyle::PM_TabBarBaseHeight, 0, this);
     QSize t(0, d->stack->frameWidth());
@@ -298,34 +347,11 @@ void QTabWidget::initStyleOption(QStyleOptionTabWidgetFrame *option) const
         option->leftCornerWidgetSize = QSize(0, 0);
     }
 
-    switch (d->pos) {
-    case QTabWidget::North:
-        option->shape = d->shape == QTabWidget::Rounded ? QTabBar::RoundedNorth
-                                                        : QTabBar::TriangularNorth;
-        break;
-    case QTabWidget::South:
-        option->shape = d->shape == QTabWidget::Rounded ? QTabBar::RoundedSouth
-                                                        : QTabBar::TriangularSouth;
-        break;
-    case QTabWidget::West:
-        option->shape = d->shape == QTabWidget::Rounded ? QTabBar::RoundedWest
-                                                        : QTabBar::TriangularWest;
-        break;
-    case QTabWidget::East:
-        option->shape = d->shape == QTabWidget::Rounded ? QTabBar::RoundedEast
-                                                        : QTabBar::TriangularEast;
-        break;
-    }
-
     option->tabBarSize = t;
 
-    if (QStyleOptionTabWidgetFrameV2 *tabframe = qstyleoption_cast<QStyleOptionTabWidgetFrameV2*>(option)) {
-        QRect tbRect = tabBar()->geometry();
-        QRect selectedTabRect = tabBar()->tabRect(tabBar()->currentIndex());
-        tabframe->tabBarRect = tbRect;
-        selectedTabRect.moveTopLeft(selectedTabRect.topLeft() + tbRect.topLeft());
-        tabframe->selectedTabRect = selectedTabRect;
-    }
+    QRect selectedTabRect = tabBar()->tabRect(tabBar()->currentIndex());
+    selectedTabRect.moveTopLeft(selectedTabRect.topLeft() + option->tabBarRect.topLeft());
+    option->selectedTabRect = selectedTabRect;
 }
 
 /*!
@@ -350,7 +376,8 @@ QTabWidget::~QTabWidget()
     \fn int QTabWidget::addTab(QWidget *page, const QString &label)
 
     Adds a tab with the given \a page and \a label to the tab widget,
-    and returns the index of the tab in the tab bar.
+    and returns the index of the tab in the tab bar. Ownership of \a page
+    is passed on to the QTabWidget.
 
     If the tab's \a label contains an ampersand, the letter following
     the ampersand is used as a shortcut for the tab, e.g. if the
@@ -377,7 +404,8 @@ int QTabWidget::addTab(QWidget *child, const QString &label)
     \overload
 
     Adds a tab with the given \a page, \a icon, and \a label to the tab
-    widget, and returns the index of the tab in the tab bar.
+    widget, and returns the index of the tab in the tab bar. Ownership
+    of \a page is passed on to the QTabWidget.
 
     This function is the same as addTab(), but with an additional \a
     icon.
@@ -393,7 +421,8 @@ int QTabWidget::addTab(QWidget *child, const QIcon& icon, const QString &label)
 
     Inserts a tab with the given \a label and \a page into the tab
     widget at the specified \a index, and returns the index of the
-    inserted tab in the tab bar.
+    inserted tab in the tab bar. Ownership of \a page is passed on to the
+    QTabWidget.
 
     The label is displayed in the tab and may vary in appearance depending
     on the configuration of the tab widget.
@@ -432,7 +461,8 @@ int QTabWidget::insertTab(int index, QWidget *w, const QString &label)
 
     Inserts a tab with the given \a label, \a page, and \a icon into
     the tab widget at the specified \a index, and returns the index of the
-    inserted tab in the tab bar.
+    inserted tab in the tab bar. Ownership of \a page is passed on to the
+    QTabWidget.
 
     This function is the same as insertTab(), but with an additional
     \a icon.
@@ -481,8 +511,6 @@ QString QTabWidget::tabText(int index) const
 }
 
 /*!
-    \overload
-
     Sets the \a icon for the tab at position \a index.
 */
 void QTabWidget::setTabIcon(int index, const QIcon &icon)
@@ -503,7 +531,7 @@ QIcon QTabWidget::tabIcon(int index) const
 }
 
 /*!
-    Returns true if the page at position \a index is enabled; otherwise returns false.
+    Returns \c true if the page at position \a index is enabled; otherwise returns \c false.
 
     \sa setTabEnabled(), QWidget::isEnabled()
 */
@@ -693,6 +721,10 @@ void QTabWidget::setTabBar(QTabBar* tb)
             this, SLOT(_q_showTab(int)));
     connect(d->tabs, SIGNAL(tabMoved(int,int)),
             this, SLOT(_q_tabMoved(int,int)));
+    connect(d->tabs, SIGNAL(tabBarClicked(int)),
+            this, SIGNAL(tabBarClicked(int)));
+    connect(d->tabs, SIGNAL(tabBarDoubleClicked(int)),
+            this, SIGNAL(tabBarDoubleClicked(int)));
     if (d->tabs->tabsClosable())
         connect(d->tabs, SIGNAL(tabCloseRequested(int)),
                 this, SIGNAL(tabCloseRequested(int)));
@@ -712,7 +744,7 @@ QTabBar* QTabWidget::tabBar() const
     return d->tabs;
 }
 
-/*!
+/*
     Ensures that the selected tab's page is visible and appropriately
     sized.
 */
@@ -735,11 +767,10 @@ void QTabWidgetPrivate::_q_removeTab(int index)
 
 void QTabWidgetPrivate::_q_tabMoved(int from, int to)
 {
-    stack->blockSignals(true);
+    const QSignalBlocker blocker(stack);
     QWidget *w = stack->widget(from);
     stack->removeWidget(w);
     stack->insertWidget(to, w);
-    stack->blockSignals(false);
 }
 
 /*
@@ -753,16 +784,18 @@ void QTabWidget::setUpLayout(bool onlyCheck)
     if (onlyCheck && !d->dirty)
         return; // nothing to do
 
-    QStyleOptionTabWidgetFrameV2 option;
-    initStyleOption(&option);
-
-    // this must be done immediately, because QWidgetItem relies on it (even if !isVisible())
-    d->setLayoutItemMargins(QStyle::SE_TabWidgetLayoutItem, &option);
-
     if (!isVisible()) {
+        // this must be done immediately, because QWidgetItem relies on it (even if !isVisible())
+        QStyleOptionTabWidgetFrame basicOption;
+        d->initBasicStyleOption(&basicOption);
+        d->setLayoutItemMargins(QStyle::SE_TabWidgetLayoutItem, &basicOption);
         d->dirty = true;
         return; // we'll do it later
     }
+
+    QStyleOptionTabWidgetFrame option;
+    initStyleOption(&option);
+    d->setLayoutItemMargins(QStyle::SE_TabWidgetLayoutItem, &option);
 
     QRect tabRect = style()->subElementRect(QStyle::SE_TabWidgetTabBar, &option, this);
     d->panelRect = style()->subElementRect(QStyle::SE_TabWidgetTabPane, &option, this);
@@ -802,7 +835,7 @@ QSize QTabWidget::sizeHint() const
 {
     Q_D(const QTabWidget);
     QSize lc(0, 0), rc(0, 0);
-    QStyleOptionTabWidgetFrameV2 opt;
+    QStyleOptionTabWidgetFrame opt;
     initStyleOption(&opt);
     opt.state = QStyle::State_None;
 
@@ -811,15 +844,18 @@ QSize QTabWidget::sizeHint() const
     if(d->rightCornerWidget)
         rc = d->rightCornerWidget->sizeHint();
     if (!d->dirty) {
-        QTabWidget *that = (QTabWidget*)this;
+        QTabWidget *that = const_cast<QTabWidget*>(this);
         that->setUpLayout(true);
     }
     QSize s(d->stack->sizeHint());
-    QSize t(d->tabs->sizeHint());
-    if(usesScrollButtons())
-        t = t.boundedTo(QSize(200,200));
-    else
-        t = t.boundedTo(QApplication::desktop()->size());
+    QSize t;
+    if (!d->isAutoHidden()) {
+        t = d->tabs->sizeHint();
+        if (usesScrollButtons())
+            t = t.boundedTo(QSize(200,200));
+        else
+            t = t.boundedTo(QDesktopWidgetPrivate::size());
+    }
 
     QSize sz = basicSize(d->pos == North || d->pos == South, lc, rc, s, t);
 
@@ -843,15 +879,17 @@ QSize QTabWidget::minimumSizeHint() const
     if(d->rightCornerWidget)
         rc = d->rightCornerWidget->minimumSizeHint();
     if (!d->dirty) {
-        QTabWidget *that = (QTabWidget*)this;
+        QTabWidget *that = const_cast<QTabWidget*>(this);
         that->setUpLayout(true);
     }
     QSize s(d->stack->minimumSizeHint());
-    QSize t(d->tabs->minimumSizeHint());
+    QSize t;
+    if (!d->isAutoHidden())
+        t = d->tabs->minimumSizeHint();
 
     QSize sz = basicSize(d->pos == North || d->pos == South, lc, rc, s, t);
 
-    QStyleOptionTabWidgetFrameV2 opt;
+    QStyleOptionTabWidgetFrame opt;
     initStyleOption(&opt);
     opt.palette = palette();
     opt.state = QStyle::State_None;
@@ -865,7 +903,7 @@ QSize QTabWidget::minimumSizeHint() const
 int QTabWidget::heightForWidth(int width) const
 {
     Q_D(const QTabWidget);
-    QStyleOptionTabWidgetFrameV2 opt;
+    QStyleOptionTabWidgetFrame opt;
     initStyleOption(&opt);
     opt.state = QStyle::State_None;
 
@@ -879,15 +917,17 @@ int QTabWidget::heightForWidth(int width) const
     if(d->rightCornerWidget)
         rc = d->rightCornerWidget->sizeHint();
     if (!d->dirty) {
-        QTabWidget *that = (QTabWidget*)this;
+        QTabWidget *that = const_cast<QTabWidget*>(this);
         that->setUpLayout(true);
     }
-    QSize t(d->tabs->sizeHint());
-
-    if(usesScrollButtons())
-        t = t.boundedTo(QSize(200,200));
-    else
-        t = t.boundedTo(QApplication::desktop()->size());
+    QSize t;
+    if (!d->isAutoHidden()) {
+        t = d->tabs->sizeHint();
+        if (usesScrollButtons())
+            t = t.boundedTo(QSize(200,200));
+        else
+            t = t.boundedTo(QDesktopWidgetPrivate::size());
+    }
 
     const bool tabIsHorizontal = (d->pos == North || d->pos == South);
     const int contentsWidth = width - padding.width();
@@ -996,7 +1036,7 @@ void QTabWidget::setTabsClosable(bool closeable)
 
     \since 4.5
 
-    By default, this property is false;
+    By default, this property is \c false;
 */
 
 bool QTabWidget::isMovable() const
@@ -1152,7 +1192,7 @@ QString QTabWidget::tabToolTip(int index) const
 }
 #endif // QT_NO_TOOLTIP
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
 /*!
     \since 4.1
 
@@ -1176,7 +1216,7 @@ QString QTabWidget::tabWhatsThis(int index) const
     Q_D(const QTabWidget);
     return d->tabs->tabWhatsThis(index);
 }
-#endif // QT_NO_WHATSTHIS
+#endif // QT_CONFIG(whatsthis)
 
 /*!
   This virtual handler is called after a new tab was added or
@@ -1211,14 +1251,14 @@ void QTabWidget::paintEvent(QPaintEvent *)
     if (documentMode()) {
         QStylePainter p(this, tabBar());
         if (QWidget *w = cornerWidget(Qt::TopLeftCorner)) {
-            QStyleOptionTabBarBaseV2 opt;
+            QStyleOptionTabBarBase opt;
             QTabBarPrivate::initStyleBaseOption(&opt, tabBar(), w->size());
             opt.rect.moveLeft(w->x() + opt.rect.x());
             opt.rect.moveTop(w->y() + opt.rect.y());
             p.drawPrimitive(QStyle::PE_FrameTabBarBase, opt);
         }
         if (QWidget *w = cornerWidget(Qt::TopRightCorner)) {
-            QStyleOptionTabBarBaseV2 opt;
+            QStyleOptionTabBarBase opt;
             QTabBarPrivate::initStyleBaseOption(&opt, tabBar(), w->size());
             opt.rect.moveLeft(w->x() + opt.rect.x());
             opt.rect.moveTop(w->y() + opt.rect.y());
@@ -1228,7 +1268,7 @@ void QTabWidget::paintEvent(QPaintEvent *)
     }
     QStylePainter p(this);
 
-    QStyleOptionTabWidgetFrameV2 opt;
+    QStyleOptionTabWidgetFrame opt;
     initStyleOption(&opt);
     opt.rect = d->panelRect;
     p.drawPrimitive(QStyle::PE_FrameTabWidget, opt);
@@ -1303,7 +1343,7 @@ void QTabWidget::setUsesScrollButtons(bool useButtons)
 /*!
     \property QTabWidget::documentMode
     \brief Whether or not the tab widget is rendered in a mode suitable for document
-     pages. This is the same as document mode on Mac OS X.
+     pages. This is the same as document mode on \macos.
     \since 4.5
 
     When this property is set the tab widget frame is not rendered. This mode is useful
@@ -1328,6 +1368,29 @@ void QTabWidget::setDocumentMode(bool enabled)
 }
 
 /*!
+    \property QTabWidget::tabBarAutoHide
+    \brief If true, the tab bar is automatically hidden when it contains less
+    than 2 tabs.
+    \since 5.4
+
+    By default, this property is false.
+
+    \sa QWidget::visible
+*/
+
+bool QTabWidget::tabBarAutoHide() const
+{
+    Q_D(const QTabWidget);
+    return d->tabs->autoHide();
+}
+
+void QTabWidget::setTabBarAutoHide(bool enabled)
+{
+    Q_D(QTabWidget);
+    return d->tabs->setAutoHide(enabled);
+}
+
+/*!
     Removes all the pages, but does not delete them. Calling this function
     is equivalent to calling removeTab() until the tab widget is empty.
 */
@@ -1341,5 +1404,3 @@ void QTabWidget::clear()
 QT_END_NAMESPACE
 
 #include "moc_qtabwidget.cpp"
-
-#endif //QT_NO_TABWIDGET

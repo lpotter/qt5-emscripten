@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,7 +52,7 @@
 class SimpleItem : public QGraphicsItem
 {
 public:
-    QRectF boundingRect() const
+    QRectF boundingRect() const override
     {
         qreal penWidth = 1;
         return QRectF(-10 - penWidth / 2, -10 - penWidth / 2,
@@ -50,7 +60,7 @@ public:
     }
 
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-               QWidget *widget)
+               QWidget *widget) override
     {
         painter->drawRoundedRect(-10, -10, 20, 20, 5, 5);
     }
@@ -61,10 +71,10 @@ public:
 //! [1]
 class CustomItem : public QGraphicsItem
 {
-   ...
+public:
    enum { Type = UserType + 1 };
 
-   int type() const
+   int type() const override
    {
        // Enable the use of qgraphicsitem_cast with this item.
        return Type;
@@ -245,27 +255,12 @@ scene->destroyItemGroup(group);
 //! [17]
 
 
-//! [QGraphicsItem type]
-class CustomItem : public QGraphicsItem
-{
-   ...
-   enum { Type = UserType + 1 };
-
-   int type() const
-   {
-       // Enable the use of qgraphicsitem_cast with this item.
-       return Type;
-   }
-   ...
-};
-//! [QGraphicsItem type]
-
 //! [18]
 class QGraphicsPathItem : public QAbstractGraphicsShapeItem
 {
  public:
   enum { Type = 2 };
-    int type() const { return Type; }
+    int type() const override { return Type; }
   ...
 };
 //! [18]

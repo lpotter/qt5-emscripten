@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,8 +41,6 @@
 #define QLINE_H
 
 #include <QtCore/qpoint.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -77,8 +73,10 @@ public:
     inline void translate(const QPoint &p);
     inline void translate(int dx, int dy);
 
-    Q_DECL_CONSTEXPR inline QLine translated(const QPoint &p) const;
-    Q_DECL_CONSTEXPR inline QLine translated(int dx, int dy) const;
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QLine translated(const QPoint &p) const;
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QLine translated(int dx, int dy) const;
+
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QPoint center() const;
 
     inline void setP1(const QPoint &p1);
     inline void setP2(const QPoint &p2);
@@ -169,6 +167,11 @@ Q_DECL_CONSTEXPR inline QLine QLine::translated(int adx, int ady) const
     return translated(QPoint(adx, ady));
 }
 
+Q_DECL_CONSTEXPR inline QPoint QLine::center() const
+{
+    return QPoint(int((qint64(pt1.x()) + pt2.x()) / 2), int((qint64(pt1.y()) + pt2.y()) / 2));
+}
+
 inline void QLine::setP1(const QPoint &aP1)
 {
     pt1 = aP1;
@@ -218,7 +221,7 @@ public:
     Q_DECL_CONSTEXPR inline QLineF(qreal x1, qreal y1, qreal x2, qreal y2);
     Q_DECL_CONSTEXPR inline QLineF(const QLine &line) : pt1(line.p1()), pt2(line.p2()) { }
 
-    static QLineF fromPolar(qreal length, qreal angle);
+    Q_REQUIRED_RESULT static QLineF fromPolar(qreal length, qreal angle);
 
     Q_DECL_CONSTEXPR bool isNull() const;
 
@@ -242,8 +245,8 @@ public:
 
     qreal angleTo(const QLineF &l) const;
 
-    QLineF unitVector() const;
-    Q_DECL_CONSTEXPR inline QLineF normalVector() const;
+    Q_REQUIRED_RESULT QLineF unitVector() const;
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QLineF normalVector() const;
 
     // ### Qt 6: rename intersects() or intersection() and rename IntersectType IntersectionType
     IntersectType intersect(const QLineF &l, QPointF *intersectionPoint) const;
@@ -254,8 +257,10 @@ public:
     inline void translate(const QPointF &p);
     inline void translate(qreal dx, qreal dy);
 
-    Q_DECL_CONSTEXPR inline QLineF translated(const QPointF &p) const;
-    Q_DECL_CONSTEXPR inline QLineF translated(qreal dx, qreal dy) const;
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QLineF translated(const QPointF &p) const;
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QLineF translated(qreal dx, qreal dy) const;
+
+    Q_REQUIRED_RESULT Q_DECL_CONSTEXPR inline QPointF center() const;
 
     inline void setP1(const QPointF &p1);
     inline void setP2(const QPointF &p2);
@@ -361,6 +366,11 @@ Q_DECL_CONSTEXPR inline QLineF QLineF::translated(qreal adx, qreal ady) const
     return translated(QPointF(adx, ady));
 }
 
+Q_DECL_CONSTEXPR inline QPointF QLineF::center() const
+{
+    return QPointF(0.5 * pt1.x() + 0.5 * pt2.x(), 0.5 * pt1.y() + 0.5 * pt2.y());
+}
+
 inline void QLineF::setLength(qreal len)
 {
     if (isNull())
@@ -420,7 +430,5 @@ Q_CORE_EXPORT QDataStream &operator>>(QDataStream &, QLineF &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLINE_H

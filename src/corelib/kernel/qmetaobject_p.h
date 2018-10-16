@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2014 Olivier Goffart <ogoffart@woboq.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,6 +60,8 @@
 #include <QtCore/qvarlengtharray.h>
 
 QT_BEGIN_NAMESPACE
+// ### TODO Qt6: add a proper namespace with Q_NAMESPACE and use scoped enums
+// A namespace and scoped are needed to avoid enum clashes
 
 enum PropertyFlags  {
     Invalid = 0x00000000,
@@ -104,14 +105,21 @@ enum MethodFlags  {
     MethodRevisioned = 0x80
 };
 
-enum MetaObjectFlags {
+enum MetaObjectFlags { // keep it in sync with QMetaObjectBuilder::MetaObjectFlag enum
     DynamicMetaObject = 0x01,
-    RequiresVariantMetaObject = 0x02
+    RequiresVariantMetaObject = 0x02,
+    PropertyAccessInStaticMetaCall = 0x04 // since Qt 5.5, property code is in the static metacall
 };
 
 enum MetaDataFlags {
     IsUnresolvedType = 0x80000000,
-    TypeNameIndexMask = 0x7FFFFFFF
+    TypeNameIndexMask = 0x7FFFFFFF,
+    IsUnresolvedSignal = 0x70000000
+};
+
+enum EnumFlags {
+    EnumIsFlag = 0x1,
+    EnumIsScoped = 0x2
 };
 
 extern int qMetaTypeTypeInternal(const char *);
@@ -138,27 +146,24 @@ public:
     }
     bool operator==(const QArgumentType &other) const
     {
-        if (_type)
+        if (_type && other._type)
             return _type == other._type;
-        else if (other._type)
-            return false;
         else
-            return _name == other._name;
+            return name() == other.name();
     }
     bool operator!=(const QArgumentType &other) const
     {
-        if (_type)
+        if (_type && other._type)
             return _type != other._type;
-        else if (other._type)
-            return true;
         else
-            return _name != other._name;
+            return name() != other.name();
     }
 
 private:
     int _type;
     QByteArray _name;
 };
+Q_DECLARE_TYPEINFO(QArgumentType, Q_MOVABLE_TYPE);
 
 typedef QVarLengthArray<QArgumentType, 10> QArgumentTypeArray;
 
@@ -167,7 +172,9 @@ class QMutex;
 
 struct QMetaObjectPrivate
 {
-    enum { OutputRevision = 7 }; // Used by moc, qmetaobjectbuilder and qdbus
+    // revision 7 is Qt 5.0 everything lower is not supported
+    // revision 8 is Qt 5.12: It adds the enum name to QMetaEnum
+    enum { OutputRevision = 8 }; // Used by moc, qmetaobjectbuilder and qdbus
 
     int revision;
     int className;
@@ -175,12 +182,9 @@ struct QMetaObjectPrivate
     int methodCount, methodData;
     int propertyCount, propertyData;
     int enumeratorCount, enumeratorData;
-    int constructorCount, constructorData; //since revision 2
-    int flags; //since revision 3
-    int signalCount; //since revision 4
-    // revision 5 introduces changes in normalized signatures, no new members
-    // revision 6 added qt_static_metacall as a member of each Q_OBJECT and inside QMetaObject itself
-    // revision 7 is Qt 5
+    int constructorCount, constructorData;
+    int flags;
+    int signalCount;
 
     static inline const QMetaObjectPrivate *get(const QMetaObject *metaobject)
     { return reinterpret_cast<const QMetaObjectPrivate*>(metaobject->d.data); }

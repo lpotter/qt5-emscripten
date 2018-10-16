@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,13 +44,14 @@
 //  W A R N I N G
 //  -------------
 //
-// This file is not part of the Qt API.  It exists for the convenience
-// of the QLibrary class.  This header file may change from
-// version to version without notice, or even be removed.
+// This file is not part of the Qt API. It exists purely as an
+// implementation detail. This header file may change from version to
+// version without notice, or even be removed.
 //
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QtCore/QStringList>
 #include <QtCore/QVector>
 #include <QtCore/QVariant>
@@ -76,6 +75,15 @@ QT_END_NAMESPACE
 #if defined(Q_OS_INTEGRITY)
 #  undef Value
 #endif
+// Hurd has #define TILDE 0x00080000 from <sys/ioctl.h>
+#if defined(TILDE)
+#  undef TILDE
+#endif
+
+#define QT_CSS_DECLARE_TYPEINFO(Class, Type) \
+    } /* namespace QCss */ \
+    Q_DECLARE_TYPEINFO(QCss:: Class, Type); \
+    namespace QCss {
 
 QT_BEGIN_NAMESPACE
 
@@ -186,6 +194,7 @@ enum Property {
     QtListNumberPrefix,
     QtListNumberSuffix,
     LineHeight,
+    QtLineHeightType,
     NumProperties
 };
 
@@ -353,7 +362,7 @@ enum StyleFeature {
     NumKnownStyleFeatures = 4
 };
 
-struct Q_GUI_EXPORT Value
+struct Value
 {
     enum Type {
         Unknown,
@@ -372,8 +381,10 @@ struct Q_GUI_EXPORT Value
     inline Value() : type(Unknown) { }
     Type type;
     QVariant variant;
-    QString toString() const;
+
+    Q_GUI_EXPORT QString toString() const;
 };
+QT_CSS_DECLARE_TYPEINFO(Value, Q_MOVABLE_TYPE)
 
 struct ColorData {
     ColorData() : role(QPalette::NoRole), type(Invalid) {}
@@ -383,6 +394,7 @@ struct ColorData {
     QPalette::ColorRole role;
     enum { Invalid, Color, Role} type;
 };
+QT_CSS_DECLARE_TYPEINFO(ColorData, Q_MOVABLE_TYPE)
 
 struct BrushData {
     BrushData() : role(QPalette::NoRole), type(Invalid) {}
@@ -392,6 +404,7 @@ struct BrushData {
     QPalette::ColorRole role;
     enum { Invalid, Brush, Role, DependsOnThePalette } type;
 };
+QT_CSS_DECLARE_TYPEINFO(BrushData, Q_MOVABLE_TYPE)
 
 struct BackgroundData {
     BrushData brush;
@@ -399,17 +412,20 @@ struct BackgroundData {
     Repeat repeat;
     Qt::Alignment alignment;
 };
+QT_CSS_DECLARE_TYPEINFO(BackgroundData, Q_MOVABLE_TYPE)
 
 struct LengthData {
     qreal number;
     enum { None, Px, Ex, Em } unit;
 };
+QT_CSS_DECLARE_TYPEINFO(LengthData, Q_PRIMITIVE_TYPE)
 
 struct BorderData {
     LengthData width;
     BorderStyle style;
     BrushData color;
 };
+QT_CSS_DECLARE_TYPEINFO(BorderData, Q_MOVABLE_TYPE)
 
 
 // 1. StyleRule - x:hover, y:clicked > z:checked { prop1: value1; prop2: value2; }
@@ -422,12 +438,13 @@ struct Q_GUI_EXPORT Declaration
 {
     struct DeclarationData : public QSharedData
     {
-        inline DeclarationData() : propertyId(UnknownProperty), important(false) {}
+        inline DeclarationData() : propertyId(UnknownProperty), important(false), inheritable(false) {}
         QString property;
         Property propertyId;
         QVector<Value> values;
         QVariant parsed;
-        bool important;
+        bool important:1;
+        bool inheritable:1;
     };
     QExplicitlySharedDataPointer<DeclarationData> d;
     inline Declaration() : d(new DeclarationData()) {}
@@ -459,6 +476,7 @@ struct Q_GUI_EXPORT Declaration
 
     void borderImageValue(QString *image, int *cuts, TileMode *h, TileMode *v) const;
 };
+QT_CSS_DECLARE_TYPEINFO(Declaration, Q_MOVABLE_TYPE)
 
 const quint64 PseudoClass_Unknown          = Q_UINT64_C(0x0000000000000000);
 const quint64 PseudoClass_Enabled          = Q_UINT64_C(0x0000000000000001);
@@ -508,7 +526,7 @@ const quint64 PseudoClass_EditFocus        = Q_UINT64_C(0x0000080000000000);
 const quint64 PseudoClass_Alternate        = Q_UINT64_C(0x0000100000000000);
 // The Any specifier is never generated, but can be used as a wildcard in searches.
 const quint64 PseudoClass_Any              = Q_UINT64_C(0x0000ffffffffffff);
-const int NumPseudos = 46;
+const int NumPseudos = 45;
 
 struct Pseudo
 {
@@ -518,14 +536,18 @@ struct Pseudo
     QString function;
     bool negated;
 };
+QT_CSS_DECLARE_TYPEINFO(Pseudo, Q_MOVABLE_TYPE)
 
 struct AttributeSelector
 {
     enum ValueMatchType {
         NoMatch,
         MatchEqual,
-        MatchContains,
-        MatchBeginsWith
+        MatchIncludes,
+        MatchDashMatch,
+        MatchBeginsWith,
+        MatchEndsWith,
+        MatchContains
     };
     inline AttributeSelector() : valueMatchCriterium(NoMatch) {}
 
@@ -533,6 +555,7 @@ struct AttributeSelector
     QString value;
     ValueMatchType valueMatchCriterium;
 };
+QT_CSS_DECLARE_TYPEINFO(AttributeSelector, Q_MOVABLE_TYPE)
 
 struct BasicSelector
 {
@@ -542,7 +565,8 @@ struct BasicSelector
         NoRelation,
         MatchNextSelectorIfAncestor,
         MatchNextSelectorIfParent,
-        MatchNextSelectorIfPreceeds
+        MatchNextSelectorIfDirectAdjecent,
+        MatchNextSelectorIfIndirectAdjecent,
     };
 
     QString elementName;
@@ -553,6 +577,7 @@ struct BasicSelector
 
     Relation relationToNext;
 };
+QT_CSS_DECLARE_TYPEINFO(BasicSelector, Q_MOVABLE_TYPE)
 
 struct Q_GUI_EXPORT Selector
 {
@@ -561,45 +586,7 @@ struct Q_GUI_EXPORT Selector
     quint64 pseudoClass(quint64 *negated = 0) const;
     QString pseudoElement() const;
 };
-
-struct StyleRule;
-struct MediaRule;
-struct PageRule;
-struct ImportRule;
-
-struct Q_GUI_EXPORT ValueExtractor
-{
-    ValueExtractor(const QVector<Declaration> &declarations, const QPalette & = QPalette());
-
-    bool extractFont(QFont *font, int *fontSizeAdjustment);
-    bool extractBackground(QBrush *, QString *, Repeat *, Qt::Alignment *, QCss::Origin *, QCss::Attachment *,
-                           QCss::Origin *);
-    bool extractGeometry(int *w, int *h, int *minw, int *minh, int *maxw, int *maxh);
-    bool extractPosition(int *l, int *t, int *r, int *b, QCss::Origin *, Qt::Alignment *,
-                         QCss::PositionMode *, Qt::Alignment *);
-    bool extractBox(int *margins, int *paddings, int *spacing = 0);
-    bool extractBorder(int *borders, QBrush *colors, BorderStyle *Styles, QSize *radii);
-    bool extractOutline(int *borders, QBrush *colors, BorderStyle *Styles, QSize *radii, int *offsets);
-    bool extractPalette(QBrush *fg, QBrush *sfg, QBrush *sbg, QBrush *abg);
-    int  extractStyleFeatures();
-    bool extractImage(QIcon *icon, Qt::Alignment *a, QSize *size);
-
-    int lengthValue(const Declaration &decl);
-
-private:
-    void extractFont();
-    void borderValue(const Declaration &decl, int *width, QCss::BorderStyle *style, QBrush *color);
-    LengthData lengthValue(const Value& v);
-    void lengthValues(const Declaration &decl, int *m);
-    QSize sizeValue(const Declaration &decl);
-    void sizeValues(const Declaration &decl, QSize *radii);
-
-    QVector<Declaration> declarations;
-    QFont f;
-    int adjustment;
-    int fontExtracted;
-    QPalette pal;
-};
+QT_CSS_DECLARE_TYPEINFO(Selector, Q_MOVABLE_TYPE)
 
 struct StyleRule
 {
@@ -608,24 +595,28 @@ struct StyleRule
     QVector<Declaration> declarations;
     int order;
 };
+QT_CSS_DECLARE_TYPEINFO(StyleRule, Q_MOVABLE_TYPE)
 
 struct MediaRule
 {
     QStringList media;
     QVector<StyleRule> styleRules;
 };
+QT_CSS_DECLARE_TYPEINFO(MediaRule, Q_MOVABLE_TYPE)
 
 struct PageRule
 {
     QString selector;
     QVector<Declaration> declarations;
 };
+QT_CSS_DECLARE_TYPEINFO(PageRule, Q_MOVABLE_TYPE)
 
 struct ImportRule
 {
     QString href;
     QStringList media;
 };
+QT_CSS_DECLARE_TYPEINFO(ImportRule, Q_MOVABLE_TYPE)
 
 enum StyleSheetOrigin {
     StyleSheetOrigin_Unspecified,
@@ -635,7 +626,7 @@ enum StyleSheetOrigin {
     StyleSheetOrigin_Inline
 };
 
-struct Q_GUI_EXPORT StyleSheet
+struct StyleSheet
 {
     StyleSheet() : origin(StyleSheetOrigin_Unspecified), depth(0) { }
     QVector<StyleRule> styleRules;  //only contains rules that are not indexed
@@ -646,8 +637,11 @@ struct Q_GUI_EXPORT StyleSheet
     int depth; // applicable only for inline style sheets
     QMultiHash<QString, StyleRule> nameIndex;
     QMultiHash<QString, StyleRule> idIndex;
-    void buildIndexes(Qt::CaseSensitivity nameCaseSensitivity = Qt::CaseSensitive);
+
+    Q_GUI_EXPORT void buildIndexes(Qt::CaseSensitivity nameCaseSensitivity = Qt::CaseSensitive);
 };
+QT_CSS_DECLARE_TYPEINFO(StyleSheet, Q_MOVABLE_TYPE)
+
 
 class Q_GUI_EXPORT StyleSelector
 {
@@ -693,11 +687,15 @@ enum TokenType {
     CDC,
     INCLUDES,
     DASHMATCH,
+    BEGINSWITH,
+    ENDSWITH,
+    CONTAINS,
 
     LBRACE,
     PLUS,
     GREATER,
     COMMA,
+    TILDE,
 
     STRING,
     INVALID,
@@ -732,14 +730,15 @@ enum TokenType {
     OR
 };
 
-struct Q_GUI_EXPORT Symbol
+struct Symbol
 {
     inline Symbol() : token(NONE), start(0), len(-1) {}
     TokenType token;
     QString text;
     int start, len;
-    QString lexem() const;
+    Q_GUI_EXPORT QString lexem() const;
 };
+QT_CSS_DECLARE_TYPEINFO(Symbol, Q_MOVABLE_TYPE)
 
 class Q_GUI_EXPORT Scanner
 {
@@ -796,7 +795,7 @@ public:
     inline bool testImport() { return testTokenAndEndsWith(ATKEYWORD_SYM, QLatin1String("import")); }
     inline bool testMedia() { return testTokenAndEndsWith(ATKEYWORD_SYM, QLatin1String("media")); }
     inline bool testPage() { return testTokenAndEndsWith(ATKEYWORD_SYM, QLatin1String("page")); }
-    inline bool testCombinator() { return test(PLUS) || test(GREATER) || test(S); }
+    inline bool testCombinator() { return test(PLUS) || test(GREATER) || test(TILDE) || test(S); }
     inline bool testProperty() { return test(IDENT); }
     bool testTerm();
     inline bool testExpr() { return testTerm(); }
@@ -835,6 +834,40 @@ public:
     QString sourcePath;
 };
 
+struct Q_GUI_EXPORT ValueExtractor
+{
+    ValueExtractor(const QVector<Declaration> &declarations, const QPalette & = QPalette());
+
+    bool extractFont(QFont *font, int *fontSizeAdjustment);
+    bool extractBackground(QBrush *, QString *, Repeat *, Qt::Alignment *, QCss::Origin *, QCss::Attachment *,
+                           QCss::Origin *);
+    bool extractGeometry(int *w, int *h, int *minw, int *minh, int *maxw, int *maxh);
+    bool extractPosition(int *l, int *t, int *r, int *b, QCss::Origin *, Qt::Alignment *,
+                         QCss::PositionMode *, Qt::Alignment *);
+    bool extractBox(int *margins, int *paddings, int *spacing = 0);
+    bool extractBorder(int *borders, QBrush *colors, BorderStyle *Styles, QSize *radii);
+    bool extractOutline(int *borders, QBrush *colors, BorderStyle *Styles, QSize *radii, int *offsets);
+    bool extractPalette(QBrush *fg, QBrush *sfg, QBrush *sbg, QBrush *abg);
+    int  extractStyleFeatures();
+    bool extractImage(QIcon *icon, Qt::Alignment *a, QSize *size);
+
+    int lengthValue(const Declaration &decl);
+
+private:
+    void extractFont();
+    void borderValue(const Declaration &decl, int *width, QCss::BorderStyle *style, QBrush *color);
+    LengthData lengthValue(const Value& v);
+    void lengthValues(const Declaration &decl, int *m);
+    QSize sizeValue(const Declaration &decl);
+    void sizeValues(const Declaration &decl, QSize *radii);
+
+    QVector<Declaration> declarations;
+    QFont f;
+    int adjustment;
+    int fontExtracted;
+    QPalette pal;
+};
+
 } // namespace QCss
 
 QT_END_NAMESPACE
@@ -843,6 +876,7 @@ Q_DECLARE_METATYPE( QCss::BackgroundData )
 Q_DECLARE_METATYPE( QCss::LengthData )
 Q_DECLARE_METATYPE( QCss::BorderData )
 
+#undef QT_CSS_DECLARE_TYPEINFO
 
 #endif // QT_NO_CSSPARSER
 

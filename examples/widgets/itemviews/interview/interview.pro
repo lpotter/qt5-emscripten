@@ -1,6 +1,7 @@
 TEMPLATE = app
+QT += widgets
+requires(qtConfig(treeview))
 
-CONFIG += qt warn_on
 HEADERS += model.h
 SOURCES += model.cpp main.cpp
 RESOURCES += interview.qrc
@@ -13,5 +14,3 @@ build_all:!build_pass {
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/itemviews/interview
 INSTALLS += target
-
-QT += widgets

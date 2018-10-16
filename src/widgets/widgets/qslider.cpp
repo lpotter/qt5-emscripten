@@ -1,46 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qslider.h"
-#ifndef QT_NO_SLIDER
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
 #endif
@@ -63,7 +60,7 @@ public:
     QSlider::TickPosition tickPosition;
     int clickOffset;
     void init();
-	void resetLayoutItemMargins();
+    void resetLayoutItemMargins();
     int pixelPosToRangeValue(int pos) const;
     inline int pick(const QPoint &pt) const;
 
@@ -86,7 +83,7 @@ void QSliderPrivate::init()
         sp.transpose();
     q->setSizePolicy(sp);
     q->setAttribute(Qt::WA_WState_OwnSizePolicy, false);
-	resetLayoutItemMargins();
+    resetLayoutItemMargins();
 }
 
 void QSliderPrivate::resetLayoutItemMargins()
@@ -205,6 +202,8 @@ QStyle::SubControl QSliderPrivate::newHoverControl(const QPoint &pos)
     \ingroup basicwidgets
     \inmodule QtWidgets
 
+    \image windows-slider.png
+
     The slider is the classic widget for controlling a bounded value.
     It lets the user move a slider handle along a horizontal or vertical
     groove and translates the handle's position into an integer value
@@ -254,15 +253,6 @@ QStyle::SubControl QSliderPrivate::newHoverControl(const QPoint &pos)
         \li End moves to the end (maximum).
     \endlist
 
-    \table 100%
-    \row \li \inlineimage macintosh-slider.png Screenshot of a Macintosh slider
-         \li A slider shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-    \row \li \inlineimage windows-slider.png Screenshot of a Windows XP slider
-         \li A slider shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
-    \row \li \inlineimage fusion-slider.png Screenshot of a Fusion slider
-         \li A slider shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \endtable
-
     \sa QScrollBar, QSpinBox, QDial, {fowler}{GUI Design Handbook: Slider}, {Sliders Example}
 */
 
@@ -286,10 +276,8 @@ QStyle::SubControl QSliderPrivate::newHoverControl(const QPoint &pos)
     Constructs a vertical slider with the given \a parent.
 */
 QSlider::QSlider(QWidget *parent)
-    : QAbstractSlider(*new QSliderPrivate, parent)
+    : QSlider(Qt::Vertical, parent)
 {
-    d_func()->orientation = Qt::Vertical;
-    d_func()->init();
 }
 
 /*!
@@ -558,6 +546,6 @@ Q_WIDGETS_EXPORT QStyleOptionSlider qt_qsliderStyleOption(QSlider *slider)
     return sliderOption;
 }
 
-#endif
-
 QT_END_NAMESPACE
+
+#include "moc_qslider.cpp"

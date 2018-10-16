@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 Olivier Goffart <ogoffart@woboq.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,41 +48,68 @@
 **
 ****************************************************************************/
 
-//! [0]
+#include <QtCore/QThread>
+class MyObject;
+
+//! [reimpl-run]
+class WorkerThread : public QThread
+{
+    Q_OBJECT
+    void run() override {
+        QString result;
+        /* ... here is the expensive or blocking operation ... */
+        emit resultReady(result);
+    }
+signals:
+    void resultReady(const QString &s);
+};
+
+void MyObject::startWorkInAThread()
+{
+    WorkerThread *workerThread = new WorkerThread(this);
+    connect(workerThread, &WorkerThread::resultReady, this, &MyObject::handleResults);
+    connect(workerThread, &WorkerThread::finished, workerThread, &QObject::deleteLater);
+    workerThread->start();
+}
+//! [reimpl-run]
+
+
+//! [worker]
 class Worker : public QObject
 {
     Q_OBJECT
 
 public slots:
-    void doWork() {
-        ...
+    void doWork(const QString &parameter) {
+        QString result;
+        /* ... here is the expensive or blocking operation ... */
+        emit resultReady(result);
     }
+
+signals:
+    void resultReady(const QString &result);
 };
 
-void MyObject::putWorkerInAThread()
+class Controller : public QObject
 {
-    Worker *worker = new Worker;
-    QThread *workerThread = new QThread(this);
-
-    connect(workerThread, &QThread::started, worker, &Worker::doWork);
-    connect(workerThread, &QThread::finished, worker, &Worker::deleteLater);
-    worker->moveToThread(workerThread);
-
-    // Starts an event loop, and emits workerThread->started()
-    workerThread->start();
-}
-//! [0]
-
-//! [1]
-class AdvancedThreadManager : public QThread
-{
-protected:
-    void run()
-    {
-        /* ... other code to initialize thread... */
-
-        // Begin event handling
-        exec();
+    Q_OBJECT
+    QThread workerThread;
+public:
+    Controller() {
+        Worker *worker = new Worker;
+        worker->moveToThread(&workerThread);
+        connect(&workerThread, &QThread::finished, worker, &QObject::deleteLater);
+        connect(this, &Controller::operate, worker, &Worker::doWork);
+        connect(worker, &Worker::resultReady, this, &Controller::handleResults);
+        workerThread.start();
     }
+    ~Controller() {
+        workerThread.quit();
+        workerThread.wait();
+    }
+public slots:
+    void handleResults(const QString &);
+signals:
+    void operate(const QString &);
 };
-//! [1]
+//! [worker]

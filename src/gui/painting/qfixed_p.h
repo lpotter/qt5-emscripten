@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include "QtCore/qdebug.h"
 #include "QtCore/qpoint.h"
 #include "QtCore/qsize.h"
@@ -64,10 +63,10 @@ private:
     Q_DECL_CONSTEXPR QFixed(int val, int) : val(val) {} // 2nd int is just a dummy for disambiguation
 public:
     Q_DECL_CONSTEXPR QFixed() : val(0) {}
-    Q_DECL_CONSTEXPR QFixed(int i) : val(i<<6) {}
-    Q_DECL_CONSTEXPR QFixed(long i) : val(i<<6) {}
-    QFixed &operator=(int i) { val = (i<<6); return *this; }
-    QFixed &operator=(long i) { val = (i<<6); return *this; }
+    Q_DECL_CONSTEXPR QFixed(int i) : val(i * 64) {}
+    Q_DECL_CONSTEXPR QFixed(long i) : val(i * 64) {}
+    QFixed &operator=(int i) { val = i * 64; return *this; }
+    QFixed &operator=(long i) { val = i * 64; return *this; }
 
     Q_DECL_CONSTEXPR static QFixed fromReal(qreal r) { return fromFixed((int)(r*qreal(64))); }
     Q_DECL_CONSTEXPR static QFixed fromFixed(int fixed) { return QFixed(fixed,0); } // uses private ctor
@@ -83,16 +82,16 @@ public:
     Q_DECL_CONSTEXPR inline QFixed floor() const { return fromFixed((val) & -64); }
     Q_DECL_CONSTEXPR inline QFixed ceil() const { return fromFixed((val+63) & -64); }
 
-    Q_DECL_CONSTEXPR inline QFixed operator+(int i) const { return fromFixed((val + (i<<6))); }
+    Q_DECL_CONSTEXPR inline QFixed operator+(int i) const { return fromFixed(val + i * 64); }
     Q_DECL_CONSTEXPR inline QFixed operator+(uint i) const { return fromFixed((val + (i<<6))); }
     Q_DECL_CONSTEXPR inline QFixed operator+(const QFixed &other) const { return fromFixed((val + other.val)); }
-    inline QFixed &operator+=(int i) { val += (i<<6); return *this; }
+    inline QFixed &operator+=(int i) { val += i * 64; return *this; }
     inline QFixed &operator+=(uint i) { val += (i<<6); return *this; }
     inline QFixed &operator+=(const QFixed &other) { val += other.val; return *this; }
-    Q_DECL_CONSTEXPR inline QFixed operator-(int i) const { return fromFixed((val - (i<<6))); }
+    Q_DECL_CONSTEXPR inline QFixed operator-(int i) const { return fromFixed(val - i * 64); }
     Q_DECL_CONSTEXPR inline QFixed operator-(uint i) const { return fromFixed((val - (i<<6))); }
     Q_DECL_CONSTEXPR inline QFixed operator-(const QFixed &other) const { return fromFixed((val - other.val)); }
-    inline QFixed &operator-=(int i) { val -= (i<<6); return *this; }
+    inline QFixed &operator-=(int i) { val -= i * 64; return *this; }
     inline QFixed &operator-=(uint i) { val -= (i<<6); return *this; }
     inline QFixed &operator-=(const QFixed &other) { val -= other.val; return *this; }
     Q_DECL_CONSTEXPR inline QFixed operator-() const { return fromFixed(-val); }
@@ -170,18 +169,18 @@ Q_DECL_CONSTEXPR inline QFixed operator+(uint i, const QFixed &d) { return d+i; 
 Q_DECL_CONSTEXPR inline QFixed operator-(uint i, const QFixed &d) { return -(d-i); }
 // Q_DECL_CONSTEXPR inline QFixed operator*(qreal d, const QFixed &d2) { return d2*d; }
 
-Q_DECL_CONSTEXPR inline bool operator==(const QFixed &f, int i) { return f.value() == (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator==(int i, const QFixed &f) { return f.value() == (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator!=(const QFixed &f, int i) { return f.value() != (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator!=(int i, const QFixed &f) { return f.value() != (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator<=(const QFixed &f, int i) { return f.value() <= (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator<=(int i, const QFixed &f) { return (i<<6) <= f.value(); }
-Q_DECL_CONSTEXPR inline bool operator>=(const QFixed &f, int i) { return f.value() >= (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator>=(int i, const QFixed &f) { return (i<<6) >= f.value(); }
-Q_DECL_CONSTEXPR inline bool operator<(const QFixed &f, int i) { return f.value() < (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator<(int i, const QFixed &f) { return (i<<6) < f.value(); }
-Q_DECL_CONSTEXPR inline bool operator>(const QFixed &f, int i) { return f.value() > (i<<6); }
-Q_DECL_CONSTEXPR inline bool operator>(int i, const QFixed &f) { return (i<<6) > f.value(); }
+Q_DECL_CONSTEXPR inline bool operator==(const QFixed &f, int i) { return f.value() == i * 64; }
+Q_DECL_CONSTEXPR inline bool operator==(int i, const QFixed &f) { return f.value() == i * 64; }
+Q_DECL_CONSTEXPR inline bool operator!=(const QFixed &f, int i) { return f.value() != i * 64; }
+Q_DECL_CONSTEXPR inline bool operator!=(int i, const QFixed &f) { return f.value() != i * 64; }
+Q_DECL_CONSTEXPR inline bool operator<=(const QFixed &f, int i) { return f.value() <= i * 64; }
+Q_DECL_CONSTEXPR inline bool operator<=(int i, const QFixed &f) { return i * 64 <= f.value(); }
+Q_DECL_CONSTEXPR inline bool operator>=(const QFixed &f, int i) { return f.value() >= i * 64; }
+Q_DECL_CONSTEXPR inline bool operator>=(int i, const QFixed &f) { return i * 64 >= f.value(); }
+Q_DECL_CONSTEXPR inline bool operator<(const QFixed &f, int i) { return f.value() < i * 64; }
+Q_DECL_CONSTEXPR inline bool operator<(int i, const QFixed &f) { return i * 64 < f.value(); }
+Q_DECL_CONSTEXPR inline bool operator>(const QFixed &f, int i) { return f.value() > i * 64; }
+Q_DECL_CONSTEXPR inline bool operator>(int i, const QFixed &f) { return i * 64 > f.value(); }
 
 #ifndef QT_NO_DEBUG_STREAM
 inline QDebug &operator<<(QDebug &dbg, const QFixed &f)

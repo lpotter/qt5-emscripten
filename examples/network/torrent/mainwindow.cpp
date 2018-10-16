@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -52,12 +62,14 @@ class TorrentView : public QTreeWidget
 public:
     TorrentView(QWidget *parent = 0);
 
+#if QT_CONFIG(draganddrop)
 signals:
     void fileDropped(const QString &fileName);
 
 protected:
-    void dragMoveEvent(QDragMoveEvent *event);
-    void dropEvent(QDropEvent *event);
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
+#endif
 };
 
 // TorrentViewDelegate is used to draw the progress bars.
@@ -67,8 +79,8 @@ class TorrentViewDelegate : public QItemDelegate
 public:
     inline TorrentViewDelegate(MainWindow *mainWindow) : QItemDelegate(mainWindow) {}
 
-    inline void paint(QPainter *painter, const QStyleOptionViewItem &option,
-                      const QModelIndex &index ) const
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index ) const override
     {
         if (index.column() != 2) {
             QItemDelegate::paint(painter, option, index);
@@ -90,7 +102,7 @@ public:
         // Set the progress and text values of the style option.
         int progress = qobject_cast<MainWindow *>(parent())->clientForRow(index.row())->progress();
         progressBarOption.progress = progress < 0 ? 0 : progress;
-        progressBarOption.text = QString().sprintf("%d%%", progressBarOption.progress);
+        progressBarOption.text = QString::asprintf("%d%%", progressBarOption.progress);
 
         // Draw the progress bar onto the view.
         QApplication::style()->drawControl(QStyle::CE_ProgressBar, &progressBarOption, painter);
@@ -117,18 +129,18 @@ MainWindow::MainWindow(QWidget *parent)
     // Set header resize modes and initial section sizes
     QFontMetrics fm = fontMetrics();
     QHeaderView *header = torrentView->header();
-    header->resizeSection(0, fm.width("typical-name-for-a-torrent.torrent"));
-    header->resizeSection(1, fm.width(headers.at(1) + "  "));
-    header->resizeSection(2, fm.width(headers.at(2) + "  "));
-    header->resizeSection(3, qMax(fm.width(headers.at(3) + "  "), fm.width(" 1234.0 KB/s ")));
-    header->resizeSection(4, qMax(fm.width(headers.at(4) + "  "), fm.width(" 1234.0 KB/s ")));
-    header->resizeSection(5, qMax(fm.width(headers.at(5) + "  "), fm.width(tr("Downloading") + "  ")));
+    header->resizeSection(0, fm.horizontalAdvance("typical-name-for-a-torrent.torrent"));
+    header->resizeSection(1, fm.horizontalAdvance(headers.at(1) + "  "));
+    header->resizeSection(2, fm.horizontalAdvance(headers.at(2) + "  "));
+    header->resizeSection(3, qMax(fm.horizontalAdvance(headers.at(3) + "  "), fm.horizontalAdvance(" 1234.0 KB/s ")));
+    header->resizeSection(4, qMax(fm.horizontalAdvance(headers.at(4) + "  "), fm.horizontalAdvance(" 1234.0 KB/s ")));
+    header->resizeSection(5, qMax(fm.horizontalAdvance(headers.at(5) + "  "), fm.horizontalAdvance(tr("Downloading") + "  ")));
 
     // Create common actions
     QAction *newTorrentAction = new QAction(QIcon(":/icons/bottom.png"), tr("Add &new torrent"), this);
     pauseTorrentAction = new QAction(QIcon(":/icons/player_pause.png"), tr("&Pause torrent"), this);
     removeTorrentAction = new QAction(QIcon(":/icons/player_stop.png"), tr("&Remove torrent"), this);
-    
+
     // File menu
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
     fileMenu->addAction(newTorrentAction);
@@ -162,14 +174,18 @@ MainWindow::MainWindow(QWidget *parent)
     bottomBar->addWidget(new QLabel(tr("Max download:")));
     bottomBar->addWidget(downloadLimitSlider);
     bottomBar->addWidget((downloadLimitLabel = new QLabel(tr("0 KB/s"))));
-    downloadLimitLabel->setFixedSize(QSize(fm.width(tr("99999 KB/s")), fm.lineSpacing()));
+    downloadLimitLabel->setFixedSize(QSize(fm.horizontalAdvance(tr("99999 KB/s")), fm.lineSpacing()));
     bottomBar->addSeparator();
     uploadLimitSlider = new QSlider(Qt::Horizontal);
     uploadLimitSlider->setRange(0, 1000);
     bottomBar->addWidget(new QLabel(tr("Max upload:")));
     bottomBar->addWidget(uploadLimitSlider);
     bottomBar->addWidget((uploadLimitLabel = new QLabel(tr("0 KB/s"))));
-    uploadLimitLabel->setFixedSize(QSize(fm.width(tr("99999 KB/s")), fm.lineSpacing()));
+    uploadLimitLabel->setFixedSize(QSize(fm.horizontalAdvance(tr("99999 KB/s")), fm.lineSpacing()));
+
+#ifdef Q_OS_OSX
+    setUnifiedTitleAndToolBarOnMac(true);
+#endif
 
     // Set up connections
     connect(torrentView, SIGNAL(itemSelectionChanged()),
@@ -204,7 +220,7 @@ QSize MainWindow::sizeHint() const
     // Add up the sizes of all header sections. The last section is
     // stretched, so its size is relative to the size of the width;
     // instead of counting it, we count the size of its largest value.
-    int width = fontMetrics().width(tr("Downloading") + "  ");
+    int width = fontMetrics().horizontalAdvance(tr("Downloading") + "  ");
     for (int i = 0; i < header->count() - 1; ++i)
         width += header->sectionSize(i);
 
@@ -503,8 +519,7 @@ void MainWindow::updateDownloadRate(int bytesPerSecond)
     // Update the download rate.
     TorrentClient *client = qobject_cast<TorrentClient *>(sender());
     int row = rowOfClient(client);
-    QString num;
-    num.sprintf("%.1f KB/s", bytesPerSecond / 1024.0);
+    const QString num = QString::asprintf("%.1f KB/s", bytesPerSecond / 1024.0);
     torrentView->topLevelItem(row)->setText(3, num);
 
     if (!saveChanges) {
@@ -518,8 +533,7 @@ void MainWindow::updateUploadRate(int bytesPerSecond)
     // Update the upload rate.
     TorrentClient *client = qobject_cast<TorrentClient *>(sender());
     int row = rowOfClient(client);
-    QString num;
-    num.sprintf("%.1f KB/s", bytesPerSecond / 1024.0);
+    const QString num = QString::asprintf("%.1f KB/s", bytesPerSecond / 1024.0);
     torrentView->topLevelItem(row)->setText(4, num);
 
     if (!saveChanges) {
@@ -587,14 +601,14 @@ static int rateFromValue(int value)
 void MainWindow::setUploadLimit(int value)
 {
     int rate = rateFromValue(value);
-    uploadLimitLabel->setText(tr("%1 KB/s").arg(QString().sprintf("%4d", rate)));
+    uploadLimitLabel->setText(tr("%1 KB/s").arg(QString::asprintf("%4d", rate)));
     RateController::instance()->setUploadLimit(rate * 1024);
 }
 
 void MainWindow::setDownloadLimit(int value)
 {
     int rate = rateFromValue(value);
-    downloadLimitLabel->setText(tr("%1 KB/s").arg(QString().sprintf("%4d", rate)));
+    downloadLimitLabel->setText(tr("%1 KB/s").arg(QString::asprintf("%4d", rate)));
     RateController::instance()->setDownloadLimit(rate * 1024);
 }
 
@@ -688,14 +702,17 @@ void MainWindow::closeEvent(QCloseEvent *)
 TorrentView::TorrentView(QWidget *parent)
     : QTreeWidget(parent)
 {
+#if QT_CONFIG(draganddrop)
     setAcceptDrops(true);
+#endif
 }
 
+#if QT_CONFIG(draganddrop)
 void TorrentView::dragMoveEvent(QDragMoveEvent *event)
 {
     // Accept file actions with a '.torrent' extension.
     QUrl url(event->mimeData()->text());
-    if (url.isValid() && url.scheme().toLower() == "file"
+    if (url.isValid() && url.scheme() == "file"
             && url.path().toLower().endsWith(".torrent"))
         event->acceptProposedAction();
 }
@@ -708,5 +725,6 @@ void TorrentView::dropEvent(QDropEvent *event)
     if (QFile::exists(fileName) && fileName.toLower().endsWith(".torrent"))
         emit fileDropped(fileName);
 }
+#endif
 
 #include "mainwindow.moc"

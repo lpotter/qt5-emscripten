@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,8 +44,8 @@
 //  W A R N I N G
 //  -------------
 //
-// This file is not part of the Qt API.  It exists for the convenience
-// of QIODevice. This header file may change from version to
+// This file is not part of the Qt API.
+// This header file may change from version to
 // version without notice, or even be removed.
 //
 // We mean it.
@@ -118,7 +116,7 @@ class QDefaultAnimationDriver : public QAnimationDriver
     Q_OBJECT
 public:
     QDefaultAnimationDriver(QUnifiedTimer *timer);
-    void timerEvent(QTimerEvent *e);
+    void timerEvent(QTimerEvent *e) override;
 
 private Q_SLOTS:
     void startTimer();
@@ -132,9 +130,9 @@ private:
 class Q_CORE_EXPORT QAnimationDriverPrivate : public QObjectPrivate
 {
 public:
-    QAnimationDriverPrivate() : running(false), startTime(0) {}
+    QAnimationDriverPrivate() : running(false) {}
+    QElapsedTimer timer;
     bool running;
-    qint64 startTime;
 };
 
 class Q_CORE_EXPORT QAbstractAnimationTimer : public QObject
@@ -193,8 +191,12 @@ public:
     int runningAnimationCount();
     void registerProfilerCallback(void (*cb)(qint64));
 
+    void startAnimationDriver();
+    void stopAnimationDriver();
+    qint64 elapsed() const;
+
 protected:
-    void timerEvent(QTimerEvent *);
+    void timerEvent(QTimerEvent *) override;
 
 private Q_SLOTS:
     void startTimers();
@@ -233,6 +235,9 @@ private:
     int closestPausedAnimationTimerTimeToFinish();
 
     void (*profilerCallback)(qint64);
+
+    qint64 driverStartTime; // The time the animation driver was started
+    qint64 temporalDrift; // The delta between animation driver time and wall time.
 };
 
 class QAnimationTimer : public QAbstractAnimationTimer
@@ -260,11 +265,11 @@ public:
     */
     static void updateAnimationTimer();
 
-    void restartAnimationTimer();
-    void updateAnimationsTime(qint64 delta);
+    void restartAnimationTimer() override;
+    void updateAnimationsTime(qint64 delta) override;
 
     //useful for profiling/debugging
-    int runningAnimationCount() { return animations.count(); }
+    int runningAnimationCount() override { return animations.count(); }
 
 private Q_SLOTS:
     void startAnimations();

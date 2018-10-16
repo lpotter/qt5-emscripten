@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,13 +48,16 @@
 
 QT_BEGIN_NAMESPACE
 
-static const int QFILE_WRITEBUFFER_SIZE = 16384;
+#ifndef QFILE_WRITEBUFFER_SIZE
+#define QFILE_WRITEBUFFER_SIZE 16384
+#endif
 
 QFileDevicePrivate::QFileDevicePrivate()
-    : fileEngine(0), lastWasWrite(false),
-      writeBuffer(QFILE_WRITEBUFFER_SIZE), error(QFile::NoError),
-      cachedSize(0)
+    : fileEngine(0),
+      cachedSize(0),
+      error(QFile::NoError), lastWasWrite(false)
 {
+    writeBufferChunkSize = QFILE_WRITEBUFFER_SIZE;
 }
 
 QFileDevicePrivate::~QFileDevicePrivate()
@@ -100,7 +101,7 @@ void QFileDevicePrivate::setError(QFileDevice::FileError err, int errNum)
     \value ReadError        An error occurred when reading from the file.
     \value WriteError       An error occurred when writing to the file.
     \value FatalError       A fatal error occurred.
-    \value ResourceError
+    \value ResourceError    Out of resources (e.g., too many open files, out of memory, etc.)
     \value OpenError        The file could not be opened.
     \value AbortError       The operation was aborted.
     \value TimeOutError     A timeout occurred.
@@ -139,10 +140,9 @@ void QFileDevicePrivate::setError(QFileDevice::FileError err, int errNum)
     are returned and on Windows the rights of the current user are
     returned. This behavior might change in a future Qt version.
 
-    Note that Qt does not by default check for permissions on NTFS
-    file systems, as this may decrease the performance of file
-    handling considerably. It is possible to force permission checking
-    on NTFS by including the following code in your source:
+    \note On NTFS file systems, ownership and permissions checking is
+    disabled by default for performance reasons. To enable it,
+    include the following line:
 
     \snippet ntfsp.cpp 0
 
@@ -232,8 +232,8 @@ QFileDevice::~QFileDevice()
 }
 
 /*!
-    Returns true if the file can only be manipulated sequentially;
-    otherwise returns false.
+    Returns \c true if the file can only be manipulated sequentially;
+    otherwise returns \c false.
 
     Most files support random-access, but some special files may not.
 
@@ -249,13 +249,11 @@ bool QFileDevice::isSequential() const
   Returns the file handle of the file.
 
   This is a small positive integer, suitable for use with C library
-  functions such as fdopen() and fcntl(). On systems that use file
+  functions such as \c fdopen() and \c fcntl(). On systems that use file
   descriptors for sockets (i.e. Unix systems, but not Windows) the handle
   can be used with QSocketNotifier as well.
 
   If the file is not open, or there is an error, handle() returns -1.
-
-  This function is not supported on Windows CE.
 
   \sa QSocketNotifier
 */
@@ -270,24 +268,16 @@ int QFileDevice::handle() const
 
 /*!
     Returns the name of the file.
-    The default implementation in QFileDevice returns QString().
+    The default implementation in QFileDevice returns a null string.
 */
 QString QFileDevice::fileName() const
 {
     return QString();
 }
 
-static inline qint64 _qfile_writeData(QAbstractFileEngine *engine, QRingBuffer *buffer)
-{
-    qint64 ret = engine->write(buffer->readPointer(), buffer->nextDataBlockSize());
-    if (ret > 0)
-        buffer->free(ret);
-    return ret;
-}
-
 /*!
-    Flushes any buffered data to the file. Returns true if successful;
-    otherwise returns false.
+    Flushes any buffered data to the file. Returns \c true if successful;
+    otherwise returns \c false.
 */
 bool QFileDevice::flush()
 {
@@ -298,8 +288,11 @@ bool QFileDevice::flush()
     }
 
     if (!d->writeBuffer.isEmpty()) {
-        qint64 size = d->writeBuffer.size();
-        if (_qfile_writeData(d->fileEngine, &d->writeBuffer) != size) {
+        qint64 size = d->writeBuffer.nextDataBlockSize();
+        qint64 written = d->fileEngine->write(d->writeBuffer.readPointer(), size);
+        if (written > 0)
+            d->writeBuffer.free(written);
+        if (written != size) {
             QFileDevice::FileError err = d->fileEngine->error();
             if (err == QFileDevice::UnspecifiedError)
                 err = QFileDevice::WriteError;
@@ -335,6 +328,9 @@ void QFileDevice::close()
     d->lastWasWrite = false;
     d->writeBuffer.clear();
 
+    // reset cached size
+    d->cachedSize = 0;
+
     // keep earlier error from flush
     if (d->fileEngine->close() && flushed)
         unsetError();
@@ -351,11 +347,11 @@ qint64 QFileDevice::pos() const
 }
 
 /*!
-  Returns true if the end of the file has been reached; otherwise returns
+  Returns \c true if the end of the file has been reached; otherwise returns
   false.
 
   For regular empty files on Unix (e.g. those in \c /proc), this function
-  returns true, since the file system reports that the size of such a file is
+  returns \c true, since the file system reports that the size of such a file is
   0. Therefore, you should not depend on atEnd() when reading data from such a
   file, but rather call read() until no more data can be read.
 */
@@ -364,7 +360,7 @@ bool QFileDevice::atEnd() const
     Q_D(const QFileDevice);
 
     // If there's buffered data left, we're not at the end.
-    if (!d->buffer.isEmpty())
+    if (!d->isBufferEmpty())
         return false;
 
     if (!isOpen())
@@ -398,9 +394,9 @@ bool QFileDevice::atEnd() const
     return false.
 
     Seeking beyond the end of a file:
-    If the position is beyond the end of a file, then seek() shall not
+    If the position is beyond the end of a file, then seek() will not
     immediately extend the file. If a write is performed at this position,
-    then the file shall be extended. The content of the file between the
+    then the file will be extended. The content of the file between the
     previous end of file and the newly written data is UNDEFINED and
     varies between platforms and file systems.
 */
@@ -490,10 +486,11 @@ bool QFileDevicePrivate::putCharHelper(char c)
 #else
 
     // Cutoff for code that doesn't only touch the buffer.
-    int writeBufferSize = writeBuffer.size();
-    if ((openMode & QIODevice::Unbuffered) || writeBufferSize + 1 >= QFILE_WRITEBUFFER_SIZE
+    qint64 writeBufferSize = writeBuffer.size();
+    if ((openMode & QIODevice::Unbuffered) || writeBufferSize + 1 >= writeBufferChunkSize
 #ifdef Q_OS_WIN
-        || ((openMode & QIODevice::Text) && c == '\n' && writeBufferSize + 2 >= QFILE_WRITEBUFFER_SIZE)
+        || ((openMode & QIODevice::Text) && c == '\n'
+            && writeBufferSize + 2 >= writeBufferChunkSize)
 #endif
         ) {
         return QIODevicePrivate::putCharHelper(c);
@@ -547,14 +544,14 @@ qint64 QFileDevice::writeData(const char *data, qint64 len)
     bool buffered = !(d->openMode & Unbuffered);
 
     // Flush buffered data if this read will overflow.
-    if (buffered && (d->writeBuffer.size() + len) > QFILE_WRITEBUFFER_SIZE) {
+    if (buffered && (d->writeBuffer.size() + len) > d->writeBufferChunkSize) {
         if (!flush())
             return -1;
     }
 
     // Write directly to the engine if the block size is larger than
     // the write buffer size.
-    if (!buffered || len > QFILE_WRITEBUFFER_SIZE) {
+    if (!buffered || len > d->writeBufferChunkSize) {
         const qint64 ret = d->fileEngine->write(data, len);
         if (ret < 0) {
             QFileDevice::FileError err = d->fileEngine->error();
@@ -566,11 +563,7 @@ qint64 QFileDevice::writeData(const char *data, qint64 len)
     }
 
     // Write to the buffer.
-    char *writePointer = d->writeBuffer.reserve(len);
-    if (len == 1)
-        *writePointer = *data;
-    else
-        ::memcpy(writePointer, data, len);
+    d->writeBuffer.append(data, len);
     return len;
 }
 
@@ -578,7 +571,7 @@ qint64 QFileDevice::writeData(const char *data, qint64 len)
     Returns the file error status.
 
     The I/O device status returns an error code. For example, if open()
-    returns false, or a read/write operation returns -1, this function can
+    returns \c false, or a read/write operation returns -1, this function can
     be called to find out the reason why the operation failed.
 
     \sa unsetError()
@@ -617,10 +610,12 @@ qint64 QFileDevice::size() const
 }
 
 /*!
-    Sets the file size (in bytes) \a sz. Returns true if the file if the
+    Sets the file size (in bytes) \a sz. Returns \c true if the
     resize succeeds; false otherwise. If \a sz is larger than the file
-    currently is the new bytes will be set to 0, if \a sz is smaller the
+    currently is, the new bytes will be set to 0; if \a sz is smaller, the
     file is simply truncated.
+
+    \warning This function can fail if the file doesn't exist.
 
     \sa size()
 */
@@ -657,8 +652,11 @@ QFile::Permissions QFileDevice::permissions() const
 
 /*!
     Sets the permissions for the file to the \a permissions specified.
-    Returns true if successful, or false if the permissions cannot be
+    Returns \c true if successful, or \c false if the permissions cannot be
     modified.
+
+    \warning This function does not manipulate ACLs, which may limit its
+    effectiveness.
 
     \sa permissions()
 */
@@ -681,6 +679,12 @@ bool QFileDevice::setPermissions(Permissions permissions)
     function.
 
     \value NoOptions        No options.
+    \value MapPrivateOption The mapped memory will be private, so any
+    modifications will not be visible to other processes and will not
+    be written to disk.  Any such modifications will be lost when the
+    memory is unmapped.  It is unspecified whether modifications made
+    to the file made after the mapping is created will be visible through
+    the mapped memory. This enum value was introduced in Qt 5.4.
 */
 
 /*!
@@ -690,11 +694,13 @@ bool QFileDevice::setPermissions(Permissions permissions)
     or a new file is opened with this object, any maps that have not been
     unmapped will automatically be unmapped.
 
+    The mapping will have the same open mode as the file (read and/or write),
+    except when using MapPrivateOption, in which case it is always possible
+    to write to the mapped memory.
+
     Any mapping options can be passed through \a flags.
 
     Returns a pointer to the memory or 0 if there is an error.
-
-    \note On Windows CE 5.0 the file will be closed before mapping occurs.
 
     \sa unmap()
  */
@@ -715,7 +721,7 @@ uchar *QFileDevice::map(qint64 offset, qint64 size, MemoryMapFlags flags)
 /*!
     Unmaps the memory \a address.
 
-    Returns true if the unmap succeeds; false otherwise.
+    Returns \c true if the unmap succeeds; false otherwise.
 
     \sa map()
  */
@@ -734,4 +740,78 @@ bool QFileDevice::unmap(uchar *address)
     return false;
 }
 
+/*!
+    \enum QFileDevice::FileTime
+    \since 5.10
+
+    This enum is used by the fileTime() and setFileTime() functions.
+
+    \value FileAccessTime           When the file was most recently accessed
+                                    (e.g. read or written to).
+    \value FileBirthTime            When the file was created (may not be not
+                                    supported on UNIX).
+    \value FileMetadataChangeTime   When the file's metadata was last changed.
+    \value FileModificationTime     When the file was most recently modified.
+
+    \sa setFileTime(), fileTime(), QFileInfo::fileTime()
+*/
+
+static inline QAbstractFileEngine::FileTime FileDeviceTimeToAbstractFileEngineTime(QFileDevice::FileTime time)
+{
+    Q_STATIC_ASSERT(int(QFileDevice::FileAccessTime) == int(QAbstractFileEngine::AccessTime));
+    Q_STATIC_ASSERT(int(QFileDevice::FileBirthTime) == int(QAbstractFileEngine::BirthTime));
+    Q_STATIC_ASSERT(int(QFileDevice::FileMetadataChangeTime) == int(QAbstractFileEngine::MetadataChangeTime));
+    Q_STATIC_ASSERT(int(QFileDevice::FileModificationTime) == int(QAbstractFileEngine::ModificationTime));
+    return QAbstractFileEngine::FileTime(time);
+}
+
+/*!
+    \since 5.10
+    Returns the file time specified by \a time.
+    If the time cannot be determined return QDateTime() (an invalid
+    date time).
+
+    \sa setFileTime(), FileTime, QDateTime::isValid()
+*/
+QDateTime QFileDevice::fileTime(QFileDevice::FileTime time) const
+{
+    Q_D(const QFileDevice);
+
+    if (d->engine())
+        return d->engine()->fileTime(FileDeviceTimeToAbstractFileEngineTime(time));
+
+    return QDateTime();
+}
+
+/*!
+    \since 5.10
+    Sets the file time specified by \a fileTime to \a newDate, returning true
+    if successful; otherwise returns false.
+
+    \note The file must be open to use this function.
+
+    \sa fileTime(), FileTime
+*/
+bool QFileDevice::setFileTime(const QDateTime &newDate, QFileDevice::FileTime fileTime)
+{
+    Q_D(QFileDevice);
+
+    if (!d->engine()) {
+        d->setError(QFileDevice::UnspecifiedError, tr("No file engine available"));
+        return false;
+    }
+
+    if (!d->fileEngine->setFileTime(newDate, FileDeviceTimeToAbstractFileEngineTime(fileTime))) {
+        d->setError(d->fileEngine->error(), d->fileEngine->errorString());
+        return false;
+    }
+
+    unsetError();
+    return true;
+}
+
 QT_END_NAMESPACE
+
+#ifndef QT_NO_QOBJECT
+#include "moc_qfiledevice.cpp"
+#endif

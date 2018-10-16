@@ -1,56 +1,9 @@
 
-win32 {
-    CMAKE_VERSION = $$system(cmake --version 2>NUL)
-} else {
-    CMAKE_VERSION = $$system(cmake --version 2>/dev/null)
+CMAKE_TEST_LOCATION = $$_PRO_FILE_PWD_
+
+for(d, $$list($$split($$list($$[QMAKE_MKSPECS]), $$DIRLIST_SEPARATOR))) {
+    CMAKE_PREFIX_PATH *= $$clean_path($$dirname(d))
 }
+CMAKE_PREFIX_PATH=\"$$join(CMAKE_PREFIX_PATH, ;)\"
 
-
-check.commands =
-isEmpty(CMAKE_VERSION) {
-    message("cmake executable not found. Not running CMake unit tests")
-} else {
-    CTEST_VERSION = $$system(ctest --version)
-    isEmpty(CTEST_VERSION) {
-        message("ctest executable not found. Not running CMake unit tests")
-    } else {
-        CMAKE_VERSION = $$last(CMAKE_VERSION)
-        CMAKE_VERSION_MAJOR = $$section(CMAKE_VERSION, ., 0, 0)
-        CMAKE_VERSION_MINOR = $$section(CMAKE_VERSION, ., 1, 1)
-        CMAKE_VERSION_PATCH = $$section(CMAKE_VERSION, ., 2, 2)
-
-        VERSION_OK =
-        greaterThan(CMAKE_VERSION_MAJOR, 2) {
-            VERSION_OK = 1
-        } else:greaterThan(CMAKE_VERSION_MAJOR, 1):greaterThan(CMAKE_VERSION_MINOR, 8) {
-            VERSION_OK = 1
-        } else:greaterThan(CMAKE_VERSION_MAJOR, 1):greaterThan(CMAKE_VERSION_MINOR, 7):greaterThan(CMAKE_VERSION_PATCH, 2) {
-            VERSION_OK = 1
-        }
-
-        isEmpty(VERSION_OK) {
-            message("cmake $$CMAKE_VERSION is too old for this test.")
-        } else {
-            CMAKE_BUILD_TYPE = Debug
-            CONFIG(release, debug|release):CMAKE_BUILD_TYPE = Release
-
-            BUILD_DIR = $$replace($$list($$OUT_PWD/build), /, $$QMAKE_DIR_SEP)
-
-            for(d, $$list($$split($$list($$[QMAKE_MKSPECS]), $$DIRLIST_SEPARATOR))) {
-                CMAKE_PREFIX_PATH *= $$dirname(d)
-            }
-
-            check.commands = \
-                $(MKDIR) $$BUILD_DIR && cd $$BUILD_DIR && \
-                cmake $$_PRO_FILE_PWD_ -DCMAKE_BUILD_TYPE=$${CMAKE_BUILD_TYPE} -DCMAKE_PREFIX_PATH=\"$$join(CMAKE_PREFIX_PATH, ;)\" && \
-                $(TESTRUNNER) ctest --output-on-failure
-
-        }
-    }
-}
-
-insignificant_test:!isEmpty(check.commands) {
-    check.commands = -$${check.commands}
-}
-
-QMAKE_EXTRA_TARGETS *= check
+include(ctest_testcase_common.prf)

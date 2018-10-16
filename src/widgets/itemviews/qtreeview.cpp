@@ -1,46 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 #include "qtreeview.h"
 
-#ifndef QT_NO_TREEVIEW
 #include <qheaderview.h>
 #include <qitemdelegate.h>
 #include <qapplication.h>
@@ -52,13 +49,16 @@
 #include <qevent.h>
 #include <qpen.h>
 #include <qdebug.h>
+#include <QMetaMethod>
+#include <private/qscrollbar_p.h>
 #ifndef QT_NO_ACCESSIBILITY
 #include <qaccessible.h>
-#include <qaccessible2.h>
 #endif
 
 #include <private/qtreeview_p.h>
 #include <private/qheaderview_p.h>
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -69,6 +69,8 @@ QT_BEGIN_NAMESPACE
     \ingroup model-view
     \ingroup advanced
     \inmodule QtWidgets
+
+    \image windows-treeview.png
 
     A QTreeView implements a tree representation of items from a
     model. This class is used to provide standard hierarchical lists that
@@ -107,6 +109,10 @@ QT_BEGIN_NAMESPACE
     its header. If this value is set to true, this property will override the
     resize mode set on the last section in the header.
 
+    By default, all columns in a tree view are movable except the first. To
+    disable movement of these columns, use QHeaderView's
+    \l {QHeaderView::}{setSectionsMovable()} function. For more information
+    about rearranging sections, see \l {Moving Header Sections}.
 
     \section1 Key Bindings
 
@@ -125,11 +131,12 @@ QT_BEGIN_NAMESPACE
          of the sibling that follows the parent.
     \row \li Left  \li Hides the children of the current item (if present)
          by collapsing a branch.
-    \row \li Minus  \li Same as LeftArrow.
+    \row \li Minus \li Same as Left.
     \row \li Right \li Reveals the children of the current item (if present)
          by expanding a branch.
-    \row \li Plus  \li Same as RightArrow.
-    \row \li Asterisk  \li Expands all children of the current item (if present).
+    \row \li Plus  \li Same as Right.
+    \row \li Asterisk  \li Expands the current item and all its children
+         (if present).
     \row \li PageUp   \li Moves the cursor up one page.
     \row \li PageDown \li Moves the cursor down one page.
     \row \li Home \li Moves the cursor to an item in the same column of the first
@@ -144,15 +151,6 @@ QT_BEGIN_NAMESPACE
     \omit
     Describe the expanding/collapsing concept if not covered elsewhere.
     \endomit
-
-    \table 100%
-    \row \li \inlineimage windowsxp-treeview.png Screenshot of a Windows XP style tree view
-         \li \inlineimage macintosh-treeview.png Screenshot of a Macintosh style tree view
-         \li \inlineimage fusion-treeview.png Screenshot of a Fusion style tree view
-    \row \li A \l{Windows XP Style Widget Gallery}{Windows XP style} tree view.
-         \li A \l{Macintosh Style Widget Gallery}{Macintosh style} tree view.
-         \li A \l{Fusion Style Widget Gallery}{Fusion style} tree view.
-    \endtable
 
     \section1 Improving Performance
 
@@ -314,7 +312,7 @@ void QTreeView::setHeader(QHeaderView *header)
         delete d->header;
     d->header = header;
     d->header->setParent(this);
-    d->header->d_func()->setAllowUserMoveOfSection0(false);
+    d->header->setFirstSectionMovable(false);
 
     if (!d->header->model()) {
         d->header->setModel(d->model);
@@ -334,6 +332,7 @@ void QTreeView::setHeader(QHeaderView *header)
             this, SLOT(updateGeometries()));
 
     setSortingEnabled(d->sortingEnabled);
+    d->updateGeometry();
 }
 
 /*!
@@ -368,7 +367,9 @@ void QTreeView::setAutoExpandDelay(int delay)
   horizontal distance from the viewport edge to the items in the first column;
   for child items, it specifies their indentation from their parent items.
 
-  By default, this property has a value of 20.
+  By default, the value of this property is style dependent. Thus, when the style
+  changes, this property updates from it. Calling setIndentation() stops the updates,
+  calling resetIndentation() will restore default behavior.
 */
 int QTreeView::indentation() const
 {
@@ -379,9 +380,19 @@ int QTreeView::indentation() const
 void QTreeView::setIndentation(int i)
 {
     Q_D(QTreeView);
-    if (i != d->indent) {
+    if (!d->customIndent || (i != d->indent)) {
         d->indent = i;
+        d->customIndent = true;
         d->viewport->update();
+    }
+}
+
+void QTreeView::resetIndentation()
+{
+    Q_D(QTreeView);
+    if (d->customIndent) {
+        d->updateIndentationFromStyle();
+        d->customIndent = false;
     }
 }
 
@@ -394,7 +405,7 @@ void QTreeView::setIndentation(int i)
   false, these controls are not shown for top-level items. This can be used to
   make a single level tree structure appear like a simple list of items.
 
-  By default, this property is true.
+  By default, this property is \c true.
 */
 bool QTreeView::rootIsDecorated() const
 {
@@ -422,7 +433,10 @@ void QTreeView::setRootIsDecorated(bool show)
   The height is obtained from the first item in the view.  It is updated
   when the data changes on that item.
 
-  By default, this property is false.
+  \note If the editor size hint is bigger than the cell size hint, then the
+  size hint of the editor will be used.
+
+  By default, this property is \c false.
 */
 bool QTreeView::uniformRowHeights() const
 {
@@ -443,7 +457,7 @@ void QTreeView::setUniformRowHeights(bool uniform)
   This property holds whether the user can expand and collapse items
   interactively.
 
-  By default, this property is true.
+  By default, this property is \c true.
 
 */
 bool QTreeView::itemsExpandable() const
@@ -524,7 +538,7 @@ int QTreeView::columnAt(int x) const
 }
 
 /*!
-    Returns true if the \a column is hidden; otherwise returns false.
+    Returns \c true if the \a column is hidden; otherwise returns \c false.
 
     \sa hideColumn(), isRowHidden()
 */
@@ -552,7 +566,7 @@ void QTreeView::setColumnHidden(int column, bool hide)
   \brief whether the header is shown or not.
   \since 4.4
 
-  If this property is true, the header is not shown otherwise it is.
+  If this property is \c true, the header is not shown otherwise it is.
   The default value is false.
 
   \sa header()
@@ -570,8 +584,8 @@ void QTreeView::setHeaderHidden(bool hide)
 }
 
 /*!
-    Returns true if the item in the given \a row of the \a parent is hidden;
-    otherwise returns false.
+    Returns \c true if the item in the given \a row of the \a parent is hidden;
+    otherwise returns \c false.
 
     \sa setRowHidden(), isColumnHidden()
 */
@@ -609,8 +623,8 @@ void QTreeView::setRowHidden(int row, const QModelIndex &parent, bool hide)
 /*!
   \since 4.3
 
-  Returns true if the item in first column in the given \a row
-  of the \a parent is spanning all the columns; otherwise returns false.
+  Returns \c true if the item in first column in the given \a row
+  of the \a parent is spanning all the columns; otherwise returns \c false.
 
   \sa setFirstColumnSpanned()
 */
@@ -619,11 +633,8 @@ bool QTreeView::isFirstColumnSpanned(int row, const QModelIndex &parent) const
     Q_D(const QTreeView);
     if (d->spanningIndexes.isEmpty() || !d->model)
         return false;
-    QModelIndex index = d->model->index(row, 0, parent);
-    for (int i = 0; i < d->spanningIndexes.count(); ++i)
-        if (d->spanningIndexes.at(i) == index)
-            return true;
-    return false;
+    const QModelIndex index = d->model->index(row, 0, parent);
+    return d->spanningIndexes.contains(index);
 }
 
 /*!
@@ -640,20 +651,14 @@ void QTreeView::setFirstColumnSpanned(int row, const QModelIndex &parent, bool s
     Q_D(QTreeView);
     if (!d->model)
         return;
-    QModelIndex index = d->model->index(row, 0, parent);
+    const QModelIndex index = d->model->index(row, 0, parent);
     if (!index.isValid())
         return;
 
-    if (span) {
-        QPersistentModelIndex persistent(index);
-        if (!d->spanningIndexes.contains(persistent))
-            d->spanningIndexes.append(persistent);
-    } else {
-        QPersistentModelIndex persistent(index);
-        int i = d->spanningIndexes.indexOf(persistent);
-        if (i >= 0)
-            d->spanningIndexes.remove(i);
-    }
+    if (span)
+        d->spanningIndexes.insert(index);
+    else
+        d->spanningIndexes.remove(index);
 
     d->executePostedLayout();
     int i = d->viewIndex(index);
@@ -723,7 +728,10 @@ void QTreeView::dataChanged(const QModelIndex &topLeft, const QModelIndex &botto
 void QTreeView::hideColumn(int column)
 {
     Q_D(QTreeView);
+    if (d->header->isSectionHidden(column))
+        return;
     d->header->hideSection(column);
+    doItemsLayout();
 }
 
 /*!
@@ -734,7 +742,10 @@ void QTreeView::hideColumn(int column)
 void QTreeView::showColumn(int column)
 {
     Q_D(QTreeView);
+    if (!d->header->isSectionHidden(column))
+        return;
     d->header->showSection(column);
+    doItemsLayout();
 }
 
 /*!
@@ -748,6 +759,10 @@ void QTreeView::expand(const QModelIndex &index)
 {
     Q_D(QTreeView);
     if (!d->isIndexValid(index))
+        return;
+    if (index.flags() & Qt::ItemNeverHasChildren)
+        return;
+    if (d->isIndexExpanded(index))
         return;
     if (d->delayedPendingLayout) {
         //A complete relayout is going to be performed, just store the expanded index, no need to layout.
@@ -780,6 +795,8 @@ void QTreeView::collapse(const QModelIndex &index)
     Q_D(QTreeView);
     if (!d->isIndexValid(index))
         return;
+    if (!d->isIndexExpanded(index))
+        return;
     //if the current item is now invisible, the autoscroll will expand the tree to see it, so disable the autoscroll
     d->delayedAutoScroll.stop();
 
@@ -805,7 +822,7 @@ void QTreeView::collapse(const QModelIndex &index)
 /*!
   \fn bool QTreeView::isExpanded(const QModelIndex &index) const
 
-  Returns true if the model item \a index is expanded; otherwise returns
+  Returns \c true if the model item \a index is expanded; otherwise returns
   false.
 
   \sa expand(), expanded(), setExpanded()
@@ -835,7 +852,7 @@ void QTreeView::setExpanded(const QModelIndex &index, bool expanded)
     \property QTreeView::sortingEnabled
     \brief whether sorting is enabled
 
-    If this property is true, sorting is enabled for the tree; if the property
+    If this property is \c true, sorting is enabled for the tree; if the property
     is false, sorting is not enabled. The default value is false.
 
     \note In order to avoid performance issues, it is recommended that
@@ -875,12 +892,12 @@ bool QTreeView::isSortingEnabled() const
     \property QTreeView::animated
     \brief whether animations are enabled
 
-    If this property is true the treeview will animate expandsion
-    and collasping of branches. If this property is false, the treeview
+    If this property is \c true the treeview will animate expansion
+    and collapsing of branches. If this property is \c false, the treeview
     will expand or collapse branches immediately without showing
     the animation.
 
-    By default, this property is false.
+    By default, this property is \c false.
 */
 
 void QTreeView::setAnimated(bool animate)
@@ -900,7 +917,7 @@ bool QTreeView::isAnimated() const
     \property QTreeView::allColumnsShowFocus
     \brief whether items should show keyboard focus using all columns
 
-    If this property is true all columns will show focus, otherwise only
+    If this property is \c true all columns will show focus, otherwise only
     one column will show focus.
 
     The default is false.
@@ -926,9 +943,9 @@ bool QTreeView::allColumnsShowFocus() const
     \brief the item text word-wrapping policy
     \since 4.3
 
-    If this property is true then the item text is wrapped where
+    If this property is \c true then the item text is wrapped where
     necessary at word-breaks; otherwise it is not wrapped at all.
-    This property is false by default.
+    This property is \c false by default.
 
     Note that even if wrapping is enabled, the cell will not be
     expanded to fit all text. Ellipsis will be inserted according to
@@ -949,6 +966,36 @@ bool QTreeView::wordWrap() const
     return d->wrapItemText;
 }
 
+/*!
+    \since 5.2
+
+    This specifies that the tree structure should be placed at logical index \a index.
+    If \index is set to -1 then the tree will always follow visual index 0.
+
+    \sa treePosition(), QHeaderView::swapSections(), QHeaderView::moveSection()
+*/
+
+void QTreeView::setTreePosition(int index)
+{
+    Q_D(QTreeView);
+    d->treePosition = index;
+    d->viewport->update();
+}
+
+/*!
+    \since 5.2
+
+    Return the logical index the tree is set on. If the return value is -1 then the
+    tree is placed on the visual index 0.
+
+    \sa setTreePosition()
+*/
+
+int QTreeView::treePosition() const
+{
+    Q_D(const QTreeView);
+    return d->treePosition;
+}
 
 /*!
   \reimp
@@ -959,15 +1006,24 @@ void QTreeView::keyboardSearch(const QString &search)
     if (!d->model->rowCount(d->root) || !d->model->columnCount(d->root))
         return;
 
+    // Do a relayout nows, so that we can utilize viewItems
+    d->executePostedLayout();
+    if (d->viewItems.isEmpty())
+        return;
+
     QModelIndex start;
     if (currentIndex().isValid())
         start = currentIndex();
     else
-        start = d->model->index(0, 0, d->root);
+        start = d->viewItems.at(0).index;
 
     bool skipRow = false;
     bool keyboardTimeWasValid = d->keyboardInputTime.isValid();
-    qint64 keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    qint64 keyboardInputTimeElapsed;
+    if (keyboardTimeWasValid)
+        keyboardInputTimeElapsed = d->keyboardInputTime.restart();
+    else
+        d->keyboardInputTime.start();
     if (search.isEmpty() || !keyboardTimeWasValid
         || keyboardInputTimeElapsed > QApplication::keyboardInputInterval()) {
         d->keyboardInput = search;
@@ -987,13 +1043,16 @@ void QTreeView::keyboardSearch(const QString &search)
 
     // skip if we are searching for the same key or a new search started
     if (skipRow) {
-        if (indexBelow(start).isValid())
+        if (indexBelow(start).isValid()) {
             start = indexBelow(start);
-        else
-            start = d->model->index(0, start.column(), d->root);
+        } else {
+            const int origCol = start.column();
+            start = d->viewItems.at(0).index;
+            if (origCol != start.column())
+                start = start.sibling(start.row(), origCol);
+        }
     }
 
-    d->executePostedLayout();
     int startIndex = d->viewIndex(start);
     if (startIndex <= -1)
         return;
@@ -1064,7 +1123,7 @@ QRect QTreeView::visualRect(const QModelIndex &index) const
     int x = (spanning ? 0 : columnViewportPosition(index.column()));
     int w = (spanning ? d->header->length() : columnWidth(index.column()));
     // handle indentation
-    if (index.column() == 0) {
+    if (d->isTreePosition(index.column())) {
         int i = d->indentationForItem(vi);
         w -= i;
         if (!isRightToLeft())
@@ -1097,7 +1156,7 @@ void QTreeView::scrollTo(const QModelIndex &index, ScrollHint hint)
 
     // Expand all parents if the parent(s) of the node are not expanded.
     QModelIndex parent = index.parent();
-    while (parent.isValid() && state() == NoState && d->itemsExpandable) {
+    while (parent != d->root && parent.isValid() && state() == NoState && d->itemsExpandable) {
         if (!isExpanded(parent))
             expand(parent);
         parent = d->model->parent(parent);
@@ -1220,7 +1279,7 @@ void QTreeView::timerEvent(QTimerEvent *event)
 /*!
   \reimp
 */
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 void QTreeView::dragMoveEvent(QDragMoveEvent *event)
 {
     Q_D(QTreeView);
@@ -1275,10 +1334,18 @@ void QTreeView::paintEvent(QPaintEvent *event)
 #endif //QT_NO_ANIMATION
     {
         drawTree(&painter, event->region());
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
         d->paintDropIndicator(&painter);
 #endif
     }
+}
+
+int QTreeViewPrivate::logicalIndexForTree() const
+{
+    int index = treePosition;
+    if (index < 0)
+        index = header->logicalIndex(0);
+    return index;
 }
 
 void QTreeViewPrivate::paintAlternatingRowColors(QPainter *painter, QStyleOptionViewItem *option, int y, int bottom) const
@@ -1294,11 +1361,7 @@ void QTreeViewPrivate::paintAlternatingRowColors(QPainter *painter, QStyleOption
     }
     while (y <= bottom) {
         option->rect.setRect(0, y, viewport->width(), rowHeight);
-        if (current & 1) {
-            option->features |= QStyleOptionViewItem::Alternate;
-        } else {
-            option->features &= ~QStyleOptionViewItem::Alternate;
-        }
+        option->features.setFlag(QStyleOptionViewItem::Alternate, current & 1);
         ++current;
         q->style()->drawPrimitive(QStyle::PE_PanelItemViewRow, option, painter, q);
         y += rowHeight;
@@ -1310,8 +1373,8 @@ bool QTreeViewPrivate::expandOrCollapseItemAtPos(const QPoint &pos)
     Q_Q(QTreeView);
     // we want to handle mousePress in EditingState (persistent editors)
     if ((state != QAbstractItemView::NoState
-		&& state != QAbstractItemView::EditingState)
-		|| !viewport->rect().contains(pos))
+                && state != QAbstractItemView::EditingState)
+                || !viewport->rect().contains(pos))
         return true;
 
     int i = itemDecorationAt(pos);
@@ -1349,7 +1412,7 @@ QItemViewPaintPairs QTreeViewPrivate::draggablePaintPairs(const QModelIndexList 
     if (spanningIndexes.isEmpty())
         return QAbstractItemViewPrivate::draggablePaintPairs(indexes, r);
     QModelIndexList list;
-    foreach (const QModelIndex &idx, indexes) {
+    for (const QModelIndex &idx : indexes) {
         if (idx.column() > 0 && q->isFirstColumnSpanned(idx.row(), idx.parent()))
             continue;
         list << idx;
@@ -1374,15 +1437,8 @@ void QTreeViewPrivate::adjustViewOptionsForIndex(QStyleOptionViewItem *option, c
     const int right = (spanning ? header->visualIndex(0) : header->count() - 1 );
     calcLogicalIndices(&logicalIndices, &viewItemPosList, left, right);
 
-    int columnIndex = 0;
-    for (int visualIndex = 0; visualIndex < current.column(); ++visualIndex) {
-        int logicalIndex = header->logicalIndex(visualIndex);
-        if (!header->isSectionHidden(logicalIndex)) {
-            ++columnIndex;
-        }
-    }
-
-    option->viewItemPosition = viewItemPosList.at(columnIndex);
+    const int visualIndex = logicalIndices.indexOf(current.column());
+    option->viewItemPosition = viewItemPosList.at(visualIndex);
 }
 
 
@@ -1398,7 +1454,7 @@ void QTreeView::drawTree(QPainter *painter, const QRegion &region) const
     Q_D(const QTreeView);
     const QVector<QTreeViewItem> viewItems = d->viewItems;
 
-    QStyleOptionViewItem option = d->viewOptions();
+    QStyleOptionViewItem option = d->viewOptionsV1();
     const QStyle::State state = option.state;
     d->current = 0;
 
@@ -1419,13 +1475,12 @@ void QTreeView::drawTree(QPainter *painter, const QRegion &region) const
     QPoint hoverPos = d->viewport->mapFromGlobal(QCursor::pos());
     d->hoverBranch = d->itemDecorationAt(hoverPos);
 
-    QVector<QRect> rects = region.rects();
     QVector<int> drawn;
-    bool multipleRects = (rects.size() > 1);
-    for (int a = 0; a < rects.size(); ++a) {
+    bool multipleRects = (region.rectCount() > 1);
+    for (const QRect &a : region) {
         const QRect area = (multipleRects
-                            ? QRect(0, rects.at(a).y(), viewportWidth, rects.at(a).height())
-                            : rects.at(a));
+                            ? QRect(0, a.y(), viewportWidth, a.height())
+                            : a);
         d->leftAndRight = d->startAndEndColumns(area);
 
         int i = firstVisibleItem; // the first item at the top of the viewport
@@ -1513,7 +1568,7 @@ void QTreeViewPrivate::calcLogicalIndices(QVector<int> *logicalIndices, QVector<
         if (columnCount == 1 || (nextLogicalSection == 0 && prevLogicalSection == -1)
             || (headerSection == 0 && nextLogicalSection == -1) || spanning)
             pos = QStyleOptionViewItem::OnlyOne;
-        else if (headerSection == 0 || (nextLogicalSection != 0 && prevLogicalSection == -1))
+        else if (isTreePosition(headerSection) || (nextLogicalSection != 0 && prevLogicalSection == -1))
             pos = QStyleOptionViewItem::Beginning;
         else if (nextLogicalSection == 0 || nextLogicalSection == -1)
             pos = QStyleOptionViewItem::End;
@@ -1523,10 +1578,27 @@ void QTreeViewPrivate::calcLogicalIndices(QVector<int> *logicalIndices, QVector<
     }
 }
 
+/*!
+  \internal
+  Get sizeHint width for single index (providing existing hint and style option) and index in viewIndex i.
+*/
+int QTreeViewPrivate::widthHintForIndex(const QModelIndex &index, int hint, const QStyleOptionViewItem &option, int i) const
+{
+    QWidget *editor = editorForIndex(index).widget.data();
+    if (editor && persistent.contains(editor)) {
+        hint = qMax(hint, editor->sizeHint().width());
+        int min = editor->minimumSize().width();
+        int max = editor->maximumSize().width();
+        hint = qBound(min, hint, max);
+    }
+    int xhint = delegateForIndex(index)->sizeHint(option, index).width();
+    hint = qMax(hint, xhint + (isTreePosition(index.column()) ? indentationForItem(i) : 0));
+    return hint;
+}
 
 /*!
     Draws the row in the tree view that contains the model item \a index,
-    using the \a painter given. The \a option control how the item is
+    using the \a painter given. The \a option controls how the item is
     displayed.
 
     \sa setAlternatingRowColors()
@@ -1634,11 +1706,9 @@ void QTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
             else
                 opt.state |= QStyle::State_HasFocus;
         }
-        if ((hoverRow || modelIndex == hover)
-            && (option.showDecorationSelected || (d->hoverBranch == -1)))
-            opt.state |= QStyle::State_MouseOver;
-        else
-            opt.state &= ~QStyle::State_MouseOver;
+        opt.state.setFlag(QStyle::State_MouseOver,
+                          (hoverRow || modelIndex == hover)
+                          && (option.showDecorationSelected || d->hoverBranch == -1));
 
         if (enabled) {
             QPalette::ColorGroup cg;
@@ -1654,18 +1724,14 @@ void QTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
         }
 
         if (alternate) {
-            if (d->current & 1) {
-                opt.features |= QStyleOptionViewItem::Alternate;
-            } else {
-                opt.features &= ~QStyleOptionViewItem::Alternate;
-            }
+            opt.features.setFlag(QStyleOptionViewItem::Alternate, d->current & 1);
         }
 
         /* Prior to Qt 4.3, the background of the branch (in selected state and
            alternate row color was provided by the view. For backward compatibility,
            this is now delegated to the style using PE_PanelViewItemRow which
            does the appropriate fill */
-        if (headerSection == 0) {
+        if (d->isTreePosition(headerSection)) {
             const int i = d->indentationForItem(d->current);
             QRect branches(reverse ? position + width - i : position, y, i, height);
             const bool setClipRect = branches.width() > width;
@@ -1711,14 +1777,14 @@ void QTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
         int x = 0;
         if (!option.showDecorationSelected)
             x = header->sectionPosition(0) + d->indentationForItem(d->current);
-	QRect focusRect(x - header->offset(), y, header->length() - x, height);
+        QRect focusRect(x - header->offset(), y, header->length() - x, height);
         o.rect = style()->visualRect(layoutDirection(), d->viewport->rect(), focusRect);
         style()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, painter);
         // if we show focus on all columns and the first section is moved,
         // we have to split the focus rect into two rects
         if (allColumnsShowFocus && !option.showDecorationSelected
             && header->sectionsMoved() && (header->visualIndex(0) != 0)) {
-	    QRect sectionRect(0, y, header->sectionPosition(0), height);
+            QRect sectionRect(0, y, header->sectionPosition(0), height);
             o.rect = style()->visualRect(layoutDirection(), d->viewport->rect(), sectionRect);
             style()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, painter);
         }
@@ -1750,18 +1816,14 @@ void QTreeView::drawBranches(QPainter *painter, const QRect &rect,
     QStyle::State extraFlags = QStyle::State_None;
     if (isEnabled())
         extraFlags |= QStyle::State_Enabled;
-    if (window()->isActiveWindow())
+    if (hasFocus())
         extraFlags |= QStyle::State_Active;
     QPoint oldBO = painter->brushOrigin();
     if (verticalScrollMode() == QAbstractItemView::ScrollPerPixel)
         painter->setBrushOrigin(QPoint(0, verticalOffset()));
 
     if (d->alternatingColors) {
-        if (d->current & 1) {
-            opt.features |= QStyleOptionViewItem::Alternate;
-        } else {
-            opt.features &= ~QStyleOptionViewItem::Alternate;
-        }
+        opt.features.setFlag(QStyleOptionViewItem::Alternate, d->current & 1);
     }
 
     // When hovering over a row, pass State_Hover for painting the branch
@@ -1787,10 +1849,8 @@ void QTreeView::drawBranches(QPainter *painter, const QRect &rect,
                     | (moreSiblings ? QStyle::State_Sibling : QStyle::State_None)
                     | (children ? QStyle::State_Children : QStyle::State_None)
                     | (expanded ? QStyle::State_Open : QStyle::State_None);
-        if (hoverRow || item == d->hoverBranch)
-            opt.state |= QStyle::State_MouseOver;
-        else
-            opt.state &= ~QStyle::State_MouseOver;
+        opt.state.setFlag(QStyle::State_MouseOver, hoverRow || item == d->hoverBranch);
+
         style()->drawPrimitive(QStyle::PE_IndicatorBranch, &opt, painter, this);
     }
     // then go out level by level
@@ -1815,10 +1875,8 @@ void QTreeView::drawBranches(QPainter *painter, const QRect &rect,
         }
         if (moreSiblings)
             opt.state |= QStyle::State_Sibling;
-        if (hoverRow || item == d->hoverBranch)
-            opt.state |= QStyle::State_MouseOver;
-        else
-            opt.state &= ~QStyle::State_MouseOver;
+        opt.state.setFlag(QStyle::State_MouseOver, hoverRow || item == d->hoverBranch);
+
         style()->drawPrimitive(QStyle::PE_IndicatorBranch, &opt, painter, this);
         current = ancestor;
         ancestor = current.parent();
@@ -1831,11 +1889,11 @@ void QTreeView::drawBranches(QPainter *painter, const QRect &rect,
 */
 void QTreeView::mousePressEvent(QMouseEvent *event)
 {
-	Q_D(QTreeView);
+    Q_D(QTreeView);
     bool handled = false;
     if (style()->styleHint(QStyle::SH_ListViewExpand_SelectMouseType, 0, this) == QEvent::MouseButtonPress)
         handled = d->expandOrCollapseItemAtPos(event->pos());
-	if (!handled && d->itemDecorationAt(event->pos()) == -1)
+    if (!handled && d->itemDecorationAt(event->pos()) == -1)
         QAbstractItemView::mousePressEvent(event);
 }
 
@@ -1848,7 +1906,7 @@ void QTreeView::mouseReleaseEvent(QMouseEvent *event)
     if (d->itemDecorationAt(event->pos()) == -1) {
         QAbstractItemView::mouseReleaseEvent(event);
     } else {
-        if (state() == QAbstractItemView::DragSelectingState)
+        if (state() == QAbstractItemView::DragSelectingState || state() == QAbstractItemView::DraggingState)
             setState(QAbstractItemView::NoState);
         if (style()->styleHint(QStyle::SH_ListViewExpand_SelectMouseType, 0, this) == QEvent::MouseButtonRelease)
             d->expandOrCollapseItemAtPos(event->pos());
@@ -1934,19 +1992,21 @@ void QTreeView::keyPressEvent(QKeyEvent *event)
     if (d->isIndexValid(current) && d->model && d->itemsExpandable) {
         switch (event->key()) {
         case Qt::Key_Asterisk: {
+            // do layouting only once after expanding is done
+            d->doDelayedItemsLayout();
             QStack<QModelIndex> parents;
             parents.push(current);
-                while (!parents.isEmpty()) {
-                    QModelIndex parent = parents.pop();
-                    for (int row = 0; row < d->model->rowCount(parent); ++row) {
-                        QModelIndex child = d->model->index(row, 0, parent);
-                        if (!d->isIndexValid(child))
-                            break;
-                        parents.push(child);
-                        expand(child);
-                    }
+            while (!parents.isEmpty()) {
+                QModelIndex parent = parents.pop();
+                for (int row = 0; row < d->model->rowCount(parent); ++row) {
+                    QModelIndex child = d->model->index(row, 0, parent);
+                    if (!d->isIndexValid(child))
+                        break;
+                    parents.push(child);
+                    expand(child);
                 }
-                expand(current);
+            }
+            expand(current);
             break; }
         case Qt::Key_Plus:
             expand(current);
@@ -2024,6 +2084,12 @@ QModelIndex QTreeView::indexBelow(const QModelIndex &index) const
 void QTreeView::doItemsLayout()
 {
     Q_D(QTreeView);
+    if (!d->customIndent) {
+        // ### Qt 6: move to event()
+        // QAbstractItemView calls this method in case of a style change,
+        // so update the indentation here if it wasn't set manually.
+        d->updateIndentationFromStyle();
+    }
     if (d->hasRemovedItems) {
         //clean the QSet that may contains old (and this invalid) indexes
         d->hasRemovedItems = false;
@@ -2120,15 +2186,15 @@ QModelIndex QTreeView::moveCursor(CursorAction cursorAction, Qt::KeyboardModifie
     if (!current.isValid()) {
         int i = d->below(-1);
         int c = 0;
-        while (c < d->header->count() && d->header->isSectionHidden(c))
+        while (c < d->header->count() && d->header->isSectionHidden(d->header->logicalIndex(c)))
             ++c;
         if (i < d->viewItems.count() && c < d->header->count()) {
-            return d->modelIndex(i, c);
+            return d->modelIndex(i, d->header->logicalIndex(c));
         }
         return QModelIndex();
     }
     int vi = -1;
-#if defined(Q_WS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if 0 /* Used to be included in Qt4 for Q_WS_MAC */ && QT_CONFIG(style_mac)
     // Selection behavior is slightly different on the Mac.
     if (d->selectionMode == QAbstractItemView::ExtendedSelection
         && d->selectionModel
@@ -2236,8 +2302,8 @@ QModelIndex QTreeView::moveCursor(CursorAction cursorAction, Qt::KeyboardModifie
                     int visualColumn = d->header->visualIndex(current.column()) + 1;
                     while (visualColumn < d->model->columnCount(current.parent()) && isColumnHidden(d->header->logicalIndex(visualColumn)))
                         visualColumn++;
-
-                    QModelIndex next = current.sibling(current.row(), visualColumn);
+                    const int newColumn = d->header->logicalIndex(visualColumn);
+                    const QModelIndex next = current.sibling(current.row(), newColumn);
                     if (next.isValid())
                         return next;
                 }
@@ -2290,10 +2356,10 @@ void QTreeView::setSelection(const QRect &rect, QItemSelectionModel::SelectionFl
         return;
     }
     if (!topLeft.isValid() && !d->viewItems.isEmpty())
-        topLeft = d->viewItems.first().index;
+        topLeft = d->viewItems.constFirst().index;
     if (!bottomRight.isValid() && !d->viewItems.isEmpty()) {
         const int column = d->header->logicalIndex(d->header->count() - 1);
-        const QModelIndex index = d->viewItems.last().index;
+        const QModelIndex index = d->viewItems.constLast().index;
         bottomRight = index.sibling(index.row(), column);
     }
 
@@ -2318,8 +2384,7 @@ QRegion QTreeView::visualRegionForSelection(const QItemSelection &selection) con
 
     QRegion selectionRegion;
     const QRect &viewportRect = d->viewport->rect();
-    for (int i = 0; i < selection.count(); ++i) {
-        QItemSelectionRange range = selection.at(i);
+    for (const auto &range : selection) {
         if (!range.isValid())
             continue;
         QModelIndex parent = range.parent();
@@ -2397,16 +2462,11 @@ void QTreeView::scrollContentsBy(int dx, int dy)
 
     dx = isRightToLeft() ? -dx : dx;
     if (dx) {
+        int oldOffset = d->header->offset();
+        d->header->d_func()->setScrollOffset(horizontalScrollBar(), horizontalScrollMode());
         if (horizontalScrollMode() == QAbstractItemView::ScrollPerItem) {
-            int oldOffset = d->header->offset();
-            if (horizontalScrollBar()->value() == horizontalScrollBar()->maximum())
-                d->header->setOffsetToLastSection();
-            else
-                d->header->setOffsetToSectionPosition(horizontalScrollBar()->value());
             int newOffset = d->header->offset();
             dx = isRightToLeft() ? newOffset - oldOffset : oldOffset - newOffset;
-        } else {
-            d->header->setOffset(horizontalScrollBar()->value());
         }
     }
 
@@ -2429,7 +2489,6 @@ void QTreeView::scrollContentsBy(int dx, int dy)
         int previousScrollbarValue = currentScrollbarValue + dy; // -(-dy)
         int currentViewIndex = currentScrollbarValue; // the first visible item
         int previousViewIndex = previousScrollbarValue;
-        const QVector<QTreeViewItem> viewItems = d->viewItems;
         dy = 0;
         if (previousViewIndex < currentViewIndex) { // scrolling down
             for (int i = previousViewIndex; i < currentViewIndex; ++i) {
@@ -2495,7 +2554,7 @@ void QTreeView::rowsInserted(const QModelIndex &parent, int start, int end)
     if (((parentItem != -1) && d->viewItems.at(parentItem).expanded)
         || (parent == d->root)) {
         d->doDelayedItemsLayout();
-    } else if (parentItem != -1 && (d->model->rowCount(parent) == end - start + 1)) {
+    } else if (parentItem != -1 && parentRowCount == delta) {
         // the parent just went from 0 children to more. update to re-paint the decoration
         d->viewItems[parentItem].hasChildren = true;
         viewport()->update();
@@ -2543,13 +2602,13 @@ void QTreeView::columnCountChanged(int oldCount, int newCount)
 
     if (isVisible())
         updateGeometries();
-	viewport()->update();
+    viewport()->update();
 }
 
 /*!
   Resizes the \a column given to the size of its contents.
 
-  \sa columnWidth(), setColumnWidth()
+  \sa columnWidth(), setColumnWidth(), sizeHintForColumn(), QHeaderView::resizeContentsPrecision()
 */
 void QTreeView::resizeColumnToContents(int column)
 {
@@ -2607,12 +2666,41 @@ void QTreeView::selectAll()
     SelectionMode mode = d->selectionMode;
     d->executePostedLayout(); //make sure we lay out the items
     if (mode != SingleSelection && mode != NoSelection && !d->viewItems.isEmpty()) {
-        const QModelIndex &idx = d->viewItems.last().index;
+        const QModelIndex &idx = d->viewItems.constLast().index;
         QModelIndex lastItemIndex = idx.sibling(idx.row(), d->model->columnCount(idx.parent()) - 1);
-        d->select(d->viewItems.first().index, lastItemIndex,
+        d->select(d->viewItems.constFirst().index, lastItemIndex,
                   QItemSelectionModel::ClearAndSelect
                   |QItemSelectionModel::Rows);
     }
+}
+
+/*!
+  \reimp
+*/
+QSize QTreeView::viewportSizeHint() const
+{
+    Q_D(const QTreeView);
+    d->executePostedLayout(); // Make sure that viewItems are up to date.
+
+    if (d->viewItems.size() == 0)
+        return QAbstractItemView::viewportSizeHint();
+
+    // Get rect for last item
+    const QRect deepestRect = visualRect(d->viewItems.last().index);
+
+    if (!deepestRect.isValid())
+        return QAbstractItemView::viewportSizeHint();
+
+    QSize result = QSize(d->header->length(), deepestRect.bottom() + 1);
+
+    // add size for header
+    result += QSize(0, d->header->isVisible() ? d->header->height() : 0);
+
+    // add size for scrollbars
+    result += QSize(verticalScrollBar()->isVisible() ? verticalScrollBar()->width() : 0,
+                    horizontalScrollBar()->isVisible() ? horizontalScrollBar()->height() : 0);
+
+    return result;
 }
 
 /*!
@@ -2644,7 +2732,17 @@ void QTreeView::expandAll()
 void QTreeView::collapseAll()
 {
     Q_D(QTreeView);
+    QSet<QPersistentModelIndex> old_expandedIndexes;
+    old_expandedIndexes = d->expandedIndexes;
     d->expandedIndexes.clear();
+    if (!signalsBlocked() && isSignalConnected(QMetaMethod::fromSignal(&QTreeView::collapsed))) {
+        QSet<QPersistentModelIndex>::const_iterator i = old_expandedIndexes.constBegin();
+        for (; i != old_expandedIndexes.constEnd(); ++i) {
+            const QPersistentModelIndex &mi = (*i);
+            if (mi.isValid() && !(mi.flags() & Qt::ItemNeverHasChildren))
+                emit collapsed(mi);
+        }
+    }
     doItemsLayout();
 }
 
@@ -2658,6 +2756,8 @@ void QTreeView::expandToDepth(int depth)
 {
     Q_D(QTreeView);
     d->viewItems.clear();
+    QSet<QPersistentModelIndex> old_expandedIndexes;
+    old_expandedIndexes = d->expandedIndexes;
     d->expandedIndexes.clear();
     d->interruptDelayedItemsLayout();
     d->layout(-1);
@@ -2668,6 +2768,29 @@ void QTreeView::expandToDepth(int depth)
             d->storeExpanded(d->viewItems.at(i).index);
         }
     }
+
+    bool someSignalEnabled = isSignalConnected(QMetaMethod::fromSignal(&QTreeView::collapsed));
+    someSignalEnabled |= isSignalConnected(QMetaMethod::fromSignal(&QTreeView::expanded));
+
+    if (!signalsBlocked() && someSignalEnabled) {
+        // emit signals
+        QSet<QPersistentModelIndex> collapsedIndexes = old_expandedIndexes - d->expandedIndexes;
+        QSet<QPersistentModelIndex>::const_iterator i = collapsedIndexes.constBegin();
+        for (; i != collapsedIndexes.constEnd(); ++i) {
+            const QPersistentModelIndex &mi = (*i);
+            if (mi.isValid() && !(mi.flags() & Qt::ItemNeverHasChildren))
+                emit collapsed(mi);
+        }
+
+        QSet<QPersistentModelIndex> expandedIndexs = d->expandedIndexes - old_expandedIndexes;
+        i = expandedIndexs.constBegin();
+        for (; i != expandedIndexs.constEnd(); ++i) {
+            const QPersistentModelIndex &mi = (*i);
+            if (mi.isValid() && !(mi.flags() & Qt::ItemNeverHasChildren))
+                emit expanded(mi);
+        }
+    }
+
     updateGeometries();
     d->viewport->update();
 }
@@ -2697,12 +2820,15 @@ void QTreeView::updateGeometries()
         if (d->geometryRecursionBlock)
             return;
         d->geometryRecursionBlock = true;
-        QSize hint = d->header->isHidden() ? QSize(0, 0) : d->header->sizeHint();
-        setViewportMargins(0, hint.height(), 0, 0);
+        int height = 0;
+        if (!d->header->isHidden()) {
+            height = qMax(d->header->minimumHeight(), d->header->sizeHint().height());
+            height = qMin(height, d->header->maximumHeight());
+        }
+        setViewportMargins(0, height, 0, 0);
         QRect vg = d->viewport->geometry();
-        QRect geometryRect(vg.left(), vg.top() - hint.height(), vg.width(), hint.height());
+        QRect geometryRect(vg.left(), vg.top() - height, vg.width(), height);
         d->header->setGeometry(geometryRect);
-        //d->header->setOffset(horizontalScrollBar()->value()); // ### bug ???
         QMetaObject::invokeMethod(d->header, "updateGeometries");
         d->updateScrollBars();
         d->geometryRecursionBlock = false;
@@ -2722,7 +2848,7 @@ void QTreeView::updateGeometries()
   if a larger column width is required by either the view's header or
   the item delegate, that width will be used instead.
 
-  \sa QWidget::sizeHint, header()
+  \sa QWidget::sizeHint, header(), QHeaderView::resizeContentsPrecision()
 */
 int QTreeView::sizeHintForColumn(int column) const
 {
@@ -2732,31 +2858,76 @@ int QTreeView::sizeHintForColumn(int column) const
         return -1;
     ensurePolished();
     int w = 0;
-    QStyleOptionViewItem option = d->viewOptions();
+    QStyleOptionViewItem option = d->viewOptionsV1();
     const QVector<QTreeViewItem> viewItems = d->viewItems;
 
-    int start = 0;
-    int end = viewItems.count();
-    if(end > 1000) { //if we have too many item this function would be too slow.
-        //we get a good approximation by only iterate over 1000 items.
-        start = qMax(0, d->firstVisibleItem() - 100);
-        end = qMin(end, start + 900);
+    const int maximumProcessRows = d->header->resizeContentsPrecision(); // To avoid this to take forever.
+
+    int offset = 0;
+    int start = d->firstVisibleItem(&offset);
+    int end = d->lastVisibleItem(start, offset);
+    if (start < 0 || end < 0 || end == viewItems.size() - 1) {
+        end = viewItems.size() - 1;
+        if (maximumProcessRows < 0) {
+            start = 0;
+        } else if (maximumProcessRows == 0) {
+            start = qMax(0, end - 1);
+            int remainingHeight = viewport()->height();
+            while (start > 0 && remainingHeight > 0) {
+                remainingHeight -= d->itemHeight(start);
+                --start;
+            }
+        } else {
+            start = qMax(0, end - maximumProcessRows);
+        }
     }
 
-    for (int i = start; i < end; ++i) {
+    int rowsProcessed = 0;
+
+    for (int i = start; i <= end; ++i) {
         if (viewItems.at(i).spanning)
             continue; // we have no good size hint
         QModelIndex index = viewItems.at(i).index;
         index = index.sibling(index.row(), column);
-        QWidget *editor = d->editorForIndex(index).widget.data();
-        if (editor && d->persistent.contains(editor)) {
-            w = qMax(w, editor->sizeHint().width());
-            int min = editor->minimumSize().width();
-            int max = editor->maximumSize().width();
-            w = qBound(min, w, max);
+        w = d->widthHintForIndex(index, w, option, i);
+        ++rowsProcessed;
+        if (rowsProcessed == maximumProcessRows)
+            break;
+    }
+
+    --end;
+    int actualBottom = viewItems.size() - 1;
+
+    if (maximumProcessRows == 0)
+        rowsProcessed = 0; // skip the while loop
+
+    while (rowsProcessed != maximumProcessRows && (start > 0 || end < actualBottom)) {
+        int idx  = -1;
+
+        if ((rowsProcessed % 2 && start > 0) || end == actualBottom) {
+            while (start > 0) {
+                --start;
+                if (viewItems.at(start).spanning)
+                    continue;
+                idx = start;
+                break;
+            }
+        } else {
+            while (end < actualBottom) {
+                ++end;
+                if (viewItems.at(end).spanning)
+                    continue;
+                idx = end;
+                break;
+            }
         }
-        int hint = d->delegateForIndex(index)->sizeHint(option, index).width();
-        w = qMax(w, hint + (column == 0 ? d->indentationForItem(i) : 0));
+        if (idx < 0)
+            continue;
+
+        QModelIndex index = viewItems.at(idx).index;
+        index = index.sibling(index.row(), column);
+        w = d->widthHintForIndex(index, w, option, idx);
+        ++rowsProcessed;
     }
     return w;
 }
@@ -2799,7 +2970,7 @@ int QTreeView::indexRowSizeHint(const QModelIndex &index) const
         qSwap(end, start);
 
     int height = -1;
-    QStyleOptionViewItem option = d->viewOptions();
+    QStyleOptionViewItem option = d->viewOptionsV1();
     // ### If we want word wrapping in the items,
     // ### we need to go through all the columns
     // ### and set the width of the column
@@ -2865,6 +3036,8 @@ bool QTreeView::isIndexHidden(const QModelIndex &index) const
 void QTreeViewPrivate::initialize()
 {
     Q_Q(QTreeView);
+
+    updateIndentationFromStyle();
     updateStyledFrameWidths();
     q->setSelectionBehavior(QAbstractItemView::SelectRows);
     q->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -2877,6 +3050,7 @@ void QTreeViewPrivate::initialize()
     header->setDefaultAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     q->setHeader(header);
 #ifndef QT_NO_ANIMATION
+    animationsEnabled = q->style()->styleHint(QStyle::SH_Widget_Animation_Duration, 0, q) > 0;
     QObject::connect(&animatedOperation, SIGNAL(finished()), q, SLOT(_q_endAnimatedOperation()));
 #endif //QT_NO_ANIMATION
 }
@@ -2887,6 +3061,9 @@ void QTreeViewPrivate::expand(int item, bool emitSignal)
 
     if (item == -1 || viewItems.at(item).expanded)
         return;
+    const QModelIndex index = viewItems.at(item).index;
+    if (index.flags() & Qt::ItemNeverHasChildren)
+        return;
 
 #ifndef QT_NO_ANIMATION
     if (emitSignal && animationsEnabled)
@@ -2896,7 +3073,6 @@ void QTreeViewPrivate::expand(int item, bool emitSignal)
     if (state != QAbstractItemView::AnimatingState)
         stateBeforeAnimation = state;
     q->setState(QAbstractItemView::ExpandingState);
-    const QModelIndex index = viewItems.at(item).index;
     storeExpanded(index);
     viewItems[item].expanded = true;
     layout(item);
@@ -2915,8 +3091,6 @@ void QTreeViewPrivate::expand(int item, bool emitSignal)
 
 void QTreeViewPrivate::insertViewItems(int pos, int count, const QTreeViewItem &viewItem)
 {
-    Q_Q(QTreeView);
-    Q_UNUSED(q)
     viewItems.insert(pos, count, viewItem);
     QTreeViewItem *items = viewItems.data();
     for (int i = pos + count; i < viewItems.count(); i++)
@@ -2926,8 +3100,6 @@ void QTreeViewPrivate::insertViewItems(int pos, int count, const QTreeViewItem &
 
 void QTreeViewPrivate::removeViewItems(int pos, int count)
 {
-    Q_Q(QTreeView);
-    Q_UNUSED(q)
     viewItems.remove(pos, count);
     QTreeViewItem *items = viewItems.data();
     for (int i = pos; i < viewItems.count(); i++)
@@ -3058,7 +3230,8 @@ void QTreeViewPrivate::drawAnimatedOperation(QPainter *painter) const
 QPixmap QTreeViewPrivate::renderTreeToPixmapForAnimation(const QRect &rect) const
 {
     Q_Q(const QTreeView);
-    QPixmap pixmap(rect.size());
+    QPixmap pixmap(rect.size() * q->devicePixelRatio());
+    pixmap.setDevicePixelRatio(q->devicePixelRatio());
     if (rect.size().isEmpty())
         return pixmap;
     pixmap.fill(Qt::transparent); //the base might not be opaque, and we don't want uninitialized pixels.
@@ -3069,7 +3242,7 @@ QPixmap QTreeViewPrivate::renderTreeToPixmapForAnimation(const QRect &rect) cons
     painter.end();
 
     //and now let's render the editors the editors
-    QStyleOptionViewItem option = viewOptions();
+    QStyleOptionViewItem option = viewOptionsV1();
     for (QEditorIndexHash::const_iterator it = editorIndexHash.constBegin(); it != editorIndexHash.constEnd(); ++it) {
         QWidget *editor = it.key();
         const QModelIndex &index = it.value();
@@ -3189,9 +3362,9 @@ void QTreeViewPrivate::layout(int i, bool recursiveExpanding, bool afterIsUninit
             item->expanded = false;
             item->total = 0;
             item->hasMoreSiblings = false;
-            if (recursiveExpanding || isIndexExpanded(current)) {
-                if (recursiveExpanding)
-                    expandedIndexes.insert(current);
+            if ((recursiveExpanding && !(current.flags() & Qt::ItemNeverHasChildren)) || isIndexExpanded(current)) {
+                if (recursiveExpanding && storeExpanded(current) && !q->signalsBlocked())
+                    emit q->expanded(current);
                 item->expanded = true;
                 layout(last, recursiveExpanding, afterIsUninitialized);
                 item = &viewItems[last];
@@ -3274,7 +3447,7 @@ int QTreeViewPrivate::coordinateForItem(int item) const
     if (verticalScrollMode == QAbstractItemView::ScrollPerPixel) {
         if (uniformRowHeights)
             return (item * defaultItemHeight) - vbar->value();
-        // ### optimize (spans or caching)
+        // ### optimize (maybe do like QHeaderView by letting items have startposition)
         int y = 0;
         for (int i = 0; i < viewItems.count(); ++i) {
             if (i == item)
@@ -3337,7 +3510,7 @@ int QTreeViewPrivate::itemAtCoordinate(int coordinate) const
         const int contentsCoordinate = coordinate + vbar->value();
         for (int viewItemIndex = 0; viewItemIndex < viewItems.count(); ++viewItemIndex) {
             viewItemCoordinate += itemHeight(viewItemIndex);
-            if (viewItemCoordinate >= contentsCoordinate)
+            if (viewItemCoordinate > contentsCoordinate)
                 return (viewItemIndex >= itemCount ? -1 : viewItemIndex);
         }
     } else { // ScrollPerItem
@@ -3441,7 +3614,7 @@ int QTreeViewPrivate::firstVisibleItem(int *offset) const
             *offset = -(value % defaultItemHeight);
         return value / defaultItemHeight;
     }
-    int y = 0; // ### optimize (use spans ?)
+    int y = 0; // ### (maybe do like QHeaderView by letting items have startposition)
     for (int i = 0; i < viewItems.count(); ++i) {
         y += itemHeight(i); // the height value is cached
         if (y > value) {
@@ -3451,6 +3624,24 @@ int QTreeViewPrivate::firstVisibleItem(int *offset) const
         }
     }
     return -1;
+}
+
+int QTreeViewPrivate::lastVisibleItem(int firstVisual, int offset) const
+{
+    if (firstVisual < 0 || offset < 0) {
+        firstVisual = firstVisibleItem(&offset);
+        if (firstVisual < 0)
+            return -1;
+    }
+    int y = - offset;
+    int value = viewport->height();
+
+    for (int i = firstVisual; i < viewItems.count(); ++i) {
+        y += itemHeight(i); // the height value is cached
+        if (y > value)
+            return i;
+    }
+    return viewItems.size() - 1;
 }
 
 int QTreeViewPrivate::columnAt(int x) const
@@ -3465,6 +3656,7 @@ void QTreeViewPrivate::updateScrollBars()
     if (!viewportSize.isValid())
         viewportSize = QSize(0, 0);
 
+    executePostedLayout();
     if (viewItems.isEmpty()) {
         q->doItemsLayout();
     }
@@ -3495,13 +3687,13 @@ void QTreeViewPrivate::updateScrollBars()
         int contentsHeight = 0;
         if (uniformRowHeights) {
             contentsHeight = defaultItemHeight * viewItems.count();
-        } else { // ### optimize (spans or caching)
+        } else { // ### (maybe do like QHeaderView by letting items have startposition)
             for (int i = 0; i < viewItems.count(); ++i)
                 contentsHeight += itemHeight(i);
         }
         vbar->setRange(0, contentsHeight - viewportSize.height());
         vbar->setPageStep(viewportSize.height());
-        vbar->setSingleStep(qMax(viewportSize.height() / (itemsInViewport + 1), 2));
+        vbar->d_func()->itemviewChangeSingleStep(qMax(viewportSize.height() / (itemsInViewport + 1), 2));
     }
 
     const int columnCount = header->count();
@@ -3527,16 +3719,21 @@ void QTreeViewPrivate::updateScrollBars()
             viewportSize = maxSize;
         hbar->setPageStep(viewportSize.width());
         hbar->setRange(0, qMax(horizontalLength - viewportSize.width(), 0));
-        hbar->setSingleStep(qMax(viewportSize.width() / (columnsInViewport + 1), 2));
+        hbar->d_func()->itemviewChangeSingleStep(qMax(viewportSize.width() / (columnsInViewport + 1), 2));
     }
 }
 
 int QTreeViewPrivate::itemDecorationAt(const QPoint &pos) const
 {
+    Q_Q(const QTreeView);
     executePostedLayout();
-    int x = pos.x();
-    int column = header->logicalIndexAt(x);
-    if (column != 0)
+    bool spanned = false;
+    if (!spanningIndexes.isEmpty()) {
+        const QModelIndex index = q->indexAt(pos);
+        spanned = q->isFirstColumnSpanned(index.row(), index.parent());
+    }
+    const int column = spanned ? 0 : header->logicalIndexAt(pos.x());
+    if (!isTreePosition(column))
         return -1; // no logical index at x
 
     int viewItemIndex = itemAtCoordinate(pos.y());
@@ -3558,8 +3755,8 @@ QRect QTreeViewPrivate::itemDecorationRect(const QModelIndex &index) const
         return QRect();
 
     int itemIndentation = indentationForItem(viewItemIndex);
-    int position = header->sectionViewportPosition(0);
-    int size = header->sectionSize(0);
+    int position = header->sectionViewportPosition(logicalIndexForTree());
+    int size = header->sectionSize(logicalIndexForTree());
 
     QRect rect;
     if (q->isRightToLeft())
@@ -3574,8 +3771,8 @@ QRect QTreeViewPrivate::itemDecorationRect(const QModelIndex &index) const
     return q->style()->subElementRect(QStyle::SE_TreeViewDisclosureItem, &opt, q);
 }
 
-QList<QPair<int, int> > QTreeViewPrivate::columnRanges(const QModelIndex &topIndex,
-                                                          const QModelIndex &bottomIndex) const
+QVector<QPair<int, int> > QTreeViewPrivate::columnRanges(const QModelIndex &topIndex,
+                                                         const QModelIndex &bottomIndex) const
 {
     const int topVisual = header->visualIndex(topIndex.column()),
         bottomVisual = header->visualIndex(bottomIndex.column());
@@ -3593,9 +3790,9 @@ QList<QPair<int, int> > QTreeViewPrivate::columnRanges(const QModelIndex &topInd
         }
     }
     //let's sort the list
-    qSort(logicalIndexes.begin(), logicalIndexes.end());
+    std::sort(logicalIndexes.begin(), logicalIndexes.end());
 
-    QList<QPair<int, int> > ret;
+    QVector<QPair<int, int> > ret;
     QPair<int, int> current;
     current.first = -2; // -1 is not enough because -1+1 = 0
     current.second = -2;
@@ -3629,8 +3826,8 @@ void QTreeViewPrivate::select(const QModelIndex &topIndex, const QModelIndex &bo
     const int top = viewIndex(topIndex),
         bottom = viewIndex(bottomIndex);
 
-    const QList< QPair<int, int> > colRanges = columnRanges(topIndex, bottomIndex);
-    QList< QPair<int, int> >::const_iterator it;
+    const QVector<QPair<int, int> > colRanges = columnRanges(topIndex, bottomIndex);
+    QVector<QPair<int, int> >::const_iterator it;
     for (it = colRanges.begin(); it != colRanges.end(); ++it) {
         const int left = (*it).first,
             right = (*it).second;
@@ -3699,6 +3896,8 @@ QPair<int,int> QTreeViewPrivate::startAndEndColumns(const QRect &rect) const
 bool QTreeViewPrivate::hasVisibleChildren(const QModelIndex& parent) const
 {
     Q_Q(const QTreeView);
+    if (parent.flags() & Qt::ItemNeverHasChildren)
+        return false;
     if (model->hasChildren(parent)) {
         if (hiddenIndexes.isEmpty())
             return true;
@@ -3718,6 +3917,20 @@ bool QTreeViewPrivate::hasVisibleChildren(const QModelIndex& parent) const
 void QTreeViewPrivate::_q_sortIndicatorChanged(int column, Qt::SortOrder order)
 {
     model->sort(column, order);
+}
+
+int QTreeViewPrivate::accessibleTree2Index(const QModelIndex &index) const
+{
+    Q_Q(const QTreeView);
+
+    // Note that this will include the header, even if its hidden.
+    return (q->visualIndex(index) + (q->header() ? 1 : 0)) * index.model()->columnCount() + index.column();
+}
+
+void QTreeViewPrivate::updateIndentationFromStyle()
+{
+    Q_Q(const QTreeView);
+    indent = q->style()->pixelMetric(QStyle::PM_TreeViewIndentation, 0, q);
 }
 
 /*!
@@ -3743,9 +3956,10 @@ void QTreeView::currentChanged(const QModelIndex &current, const QModelIndex &pr
     }
 #ifndef QT_NO_ACCESSIBILITY
     if (QAccessible::isActive() && current.isValid()) {
-        int entry = (visualIndex(current) + (header()?1:0))*current.model()->columnCount()+current.column() + 1;
+        Q_D(QTreeView);
+
         QAccessibleEvent event(this, QAccessible::Focus);
-        event.setChild(entry);
+        event.setChild(d->accessibleTree2Index(current));
         QAccessible::updateAccessibility(&event);
     }
 #endif
@@ -3760,19 +3974,21 @@ void QTreeView::selectionChanged(const QItemSelection &selected,
     QAbstractItemView::selectionChanged(selected, deselected);
 #ifndef QT_NO_ACCESSIBILITY
     if (QAccessible::isActive()) {
+        Q_D(QTreeView);
+
         // ### does not work properly for selection ranges.
         QModelIndex sel = selected.indexes().value(0);
         if (sel.isValid()) {
-            int entry = (visualIndex(sel) + (header()?1:0))*sel.model()->columnCount()+sel.column() + 1;
-            Q_ASSERT(entry > 0);
-            QAccessibleEvent event(this, QAccessible::Selection);
+            int entry = d->accessibleTree2Index(sel);
+            Q_ASSERT(entry >= 0);
+            QAccessibleEvent event(this, QAccessible::SelectionAdd);
             event.setChild(entry);
             QAccessible::updateAccessibility(&event);
         }
         QModelIndex desel = deselected.indexes().value(0);
         if (desel.isValid()) {
-            int entry = (visualIndex(desel) + (header()?1:0))*desel.model()->columnCount()+desel.column() + 1;
-            Q_ASSERT(entry > 0);
+            int entry = d->accessibleTree2Index(desel);
+            Q_ASSERT(entry >= 0);
             QAccessibleEvent event(this, QAccessible::SelectionRemove);
             event.setChild(entry);
             QAccessible::updateAccessibility(&event);
@@ -3788,8 +4004,27 @@ int QTreeView::visualIndex(const QModelIndex &index) const
     return d->viewIndex(index);
 }
 
+/*!
+   \internal
+*/
+
+void QTreeView::verticalScrollbarValueChanged(int value)
+{
+    Q_D(QTreeView);
+    if (!d->viewItems.isEmpty() && value == verticalScrollBar()->maximum()) {
+        QModelIndex ret = d->viewItems.last().index;
+        // Root index will be handled by base class implementation
+        while (ret.isValid()) {
+            if (isExpanded(ret) && d->model->canFetchMore(ret)) {
+                d->model->fetchMore(ret);
+                break;
+            }
+            ret = ret.parent();
+        }
+    }
+    QAbstractItemView::verticalScrollbarValueChanged(value);
+}
+
 QT_END_NAMESPACE
 
 #include "moc_qtreeview.cpp"
-
-#endif // QT_NO_TREEVIEW

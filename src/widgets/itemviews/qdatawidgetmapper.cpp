@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,14 +39,14 @@
 
 #include "qdatawidgetmapper.h"
 
-#ifndef QT_NO_DATAWIDGETMAPPER
-
 #include "qabstractitemmodel.h"
 #include "qitemdelegate.h"
 #include "qmetaobject.h"
 #include "qwidget.h"
 #include "private/qobject_p.h"
 #include "private/qabstractitemmodel_p.h"
+
+#include <iterator>
 
 QT_BEGIN_NAMESPACE
 
@@ -89,11 +87,11 @@ public:
             : model->index(itemPos, currentIdx(), rootIndex);
     }
 
-    inline void flipEventFilters(QAbstractItemDelegate *oldDelegate,
-                                 QAbstractItemDelegate *newDelegate)
+    void flipEventFilters(QAbstractItemDelegate *oldDelegate,
+                          QAbstractItemDelegate *newDelegate) const
     {
-        for (int i = 0; i < widgetMap.count(); ++i) {
-            QWidget *w = widgetMap.at(i).widget;
+        for (const WidgetMapper &e : widgetMap) {
+            QWidget *w = e.widget;
             if (!w)
                 continue;
             w->removeEventFilter(oldDelegate);
@@ -111,11 +109,6 @@ public:
 
     struct WidgetMapper
     {
-        inline WidgetMapper(QWidget *w = 0, int c = 0, const QModelIndex &i = QModelIndex())
-            : widget(w), section(c), currentIndex(i) {}
-        inline WidgetMapper(QWidget *w, int c, const QModelIndex &i, const QByteArray &p)
-            : widget(w), section(c), currentIndex(i), property(p) {}
-
         QPointer<QWidget> widget;
         int section;
         QPersistentModelIndex currentIndex;
@@ -127,14 +120,15 @@ public:
 
     bool commit(const WidgetMapper &m);
 
-    QList<WidgetMapper> widgetMap;
+    std::vector<WidgetMapper> widgetMap;
 };
+Q_DECLARE_TYPEINFO(QDataWidgetMapperPrivate::WidgetMapper, Q_MOVABLE_TYPE);
 
 int QDataWidgetMapperPrivate::findWidget(QWidget *w) const
 {
-    for (int i = 0; i < widgetMap.count(); ++i) {
-        if (widgetMap.at(i).widget == w)
-            return i;
+    for (const WidgetMapper &e : widgetMap) {
+        if (e.widget == w)
+            return int(&e - &widgetMap.front());
     }
     return -1;
 }
@@ -171,8 +165,8 @@ void QDataWidgetMapperPrivate::populate(WidgetMapper &m)
 
 void QDataWidgetMapperPrivate::populate()
 {
-    for (int i = 0; i < widgetMap.count(); ++i)
-        populate(widgetMap[i]);
+    for (WidgetMapper &e : widgetMap)
+        populate(e);
 }
 
 static bool qContainsIndex(const QModelIndex &idx, const QModelIndex &topLeft,
@@ -187,10 +181,9 @@ void QDataWidgetMapperPrivate::_q_dataChanged(const QModelIndex &topLeft, const 
     if (topLeft.parent() != rootIndex)
         return; // not in our hierarchy
 
-    for (int i = 0; i < widgetMap.count(); ++i) {
-        WidgetMapper &m = widgetMap[i];
-        if (qContainsIndex(m.currentIndex, topLeft, bottomRight))
-            populate(m);
+    for (WidgetMapper &e : widgetMap) {
+        if (qContainsIndex(e.currentIndex, topLeft, bottomRight))
+            populate(e);
     }
 }
 
@@ -203,22 +196,8 @@ void QDataWidgetMapperPrivate::_q_commitData(QWidget *w)
     if (idx == -1)
         return; // not our widget
 
-    commit(widgetMap.at(idx));
+    commit(widgetMap[idx]);
 }
-
-class QFocusHelper: public QWidget
-{
-public:
-    bool focusNextPrevChild(bool next)
-    {
-        return QWidget::focusNextPrevChild(next);
-    }
-
-    static inline void focusNextPrevChild(QWidget *w, bool next)
-    {
-        static_cast<QFocusHelper *>(w)->focusNextPrevChild(next);
-    }
-};
 
 void QDataWidgetMapperPrivate::_q_closeEditor(QWidget *w, QAbstractItemDelegate::EndEditHint hint)
 {
@@ -231,10 +210,10 @@ void QDataWidgetMapperPrivate::_q_closeEditor(QWidget *w, QAbstractItemDelegate:
         populate(widgetMap[idx]);
         break; }
     case QAbstractItemDelegate::EditNextItem:
-        QFocusHelper::focusNextPrevChild(w, true);
+        w->focusNextChild();
         break;
     case QAbstractItemDelegate::EditPreviousItem:
-        QFocusHelper::focusNextPrevChild(w, false);
+        w->focusPreviousChild();
         break;
     case QAbstractItemDelegate::SubmitModelCache:
     case QAbstractItemDelegate::NoHint:
@@ -494,7 +473,7 @@ void QDataWidgetMapper::addMapping(QWidget *widget, int section)
     Q_D(QDataWidgetMapper);
 
     removeMapping(widget);
-    d->widgetMap.append(QDataWidgetMapperPrivate::WidgetMapper(widget, section, d->indexAt(section)));
+    d->widgetMap.push_back({widget, section, d->indexAt(section), QByteArray()});
     widget->installEventFilter(d->delegate);
 }
 
@@ -512,7 +491,7 @@ void QDataWidgetMapper::addMapping(QWidget *widget, int section, const QByteArra
     Q_D(QDataWidgetMapper);
 
     removeMapping(widget);
-    d->widgetMap.append(QDataWidgetMapperPrivate::WidgetMapper(widget, section, d->indexAt(section), propertyName));
+    d->widgetMap.push_back({widget, section, d->indexAt(section), propertyName});
     widget->installEventFilter(d->delegate);
 }
 
@@ -529,7 +508,7 @@ void QDataWidgetMapper::removeMapping(QWidget *widget)
     if (idx == -1)
         return;
 
-    d->widgetMap.removeAt(idx);
+    d->widgetMap.erase(d->widgetMap.begin() + idx);
     widget->removeEventFilter(d->delegate);
 }
 
@@ -547,7 +526,7 @@ int QDataWidgetMapper::mappedSection(QWidget *widget) const
     if (idx == -1)
         return -1;
 
-    return d->widgetMap.at(idx).section;
+    return d->widgetMap[idx].section;
 }
 
 /*!
@@ -565,7 +544,7 @@ QByteArray QDataWidgetMapper::mappedPropertyName(QWidget *widget) const
     int idx = d->findWidget(widget);
     if (idx == -1)
         return QByteArray();
-    const QDataWidgetMapperPrivate::WidgetMapper &m = d->widgetMap.at(idx);
+    const auto &m = d->widgetMap[idx];
     if (m.property.isEmpty())
         return m.widget->metaObject()->userProperty().name();
     else
@@ -582,9 +561,9 @@ QWidget *QDataWidgetMapper::mappedWidgetAt(int section) const
 {
     Q_D(const QDataWidgetMapper);
 
-    for (int i = 0; i < d->widgetMap.count(); ++i) {
-        if (d->widgetMap.at(i).section == section)
-            return d->widgetMap.at(i).widget;
+    for (auto &e : d->widgetMap) {
+        if (e.section == section)
+            return e.widget;
     }
 
     return 0;
@@ -610,7 +589,7 @@ void QDataWidgetMapper::revert()
     value from the widget and sets it in the model. Finally, the
     model's \l {QAbstractItemModel::}{submit()} method is invoked.
 
-    Returns true if all the values were submitted, otherwise false.
+    Returns \c true if all the values were submitted, otherwise false.
 
     Note: For database models, QSqlQueryModel::lastError() can be
     used to retrieve the last error.
@@ -621,9 +600,8 @@ bool QDataWidgetMapper::submit()
 {
     Q_D(QDataWidgetMapper);
 
-    for (int i = 0; i < d->widgetMap.count(); ++i) {
-        const QDataWidgetMapperPrivate::WidgetMapper &m = d->widgetMap.at(i);
-        if (!d->commit(m))
+    for (auto &e : d->widgetMap) {
+        if (!d->commit(e))
             return false;
     }
 
@@ -762,10 +740,11 @@ void QDataWidgetMapper::clearMapping()
 {
     Q_D(QDataWidgetMapper);
 
-    while (!d->widgetMap.isEmpty()) {
-        QWidget *w = d->widgetMap.takeLast().widget;
-        if (w)
-            w->removeEventFilter(d->delegate);
+    decltype(d->widgetMap) copy;
+    d->widgetMap.swap(copy); // a C++98 move
+    for (auto it = copy.crbegin(), end = copy.crend(); it != end; ++it) {
+        if (it->widget)
+            it->widget->removeEventFilter(d->delegate);
     }
 }
 
@@ -846,5 +825,3 @@ QDataWidgetMapper::SubmitPolicy QDataWidgetMapper::submitPolicy() const
 QT_END_NAMESPACE
 
 #include "moc_qdatawidgetmapper.cpp"
-
-#endif // QT_NO_DATAWIDGETMAPPER

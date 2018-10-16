@@ -1,4 +1,10 @@
 TEMPLATE = subdirs
-contains(QT_CONFIG, dbus) {
-!macx:!win32:SUBDIRS += ibus maliit
+QT_FOR_CONFIG += gui-private
+
+qtHaveModule(dbus) {
+!mac:!win32:SUBDIRS += ibus
 }
+
+qtConfig(xcb): SUBDIRS += compose
+
+

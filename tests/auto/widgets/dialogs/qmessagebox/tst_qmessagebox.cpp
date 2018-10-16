@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -97,13 +84,6 @@
 class tst_QMessageBox : public QObject
 {
     Q_OBJECT
-public:
-    tst_QMessageBox();
-    int exec(QMessageBox *msgBox, int key = -1);
-    void sendKeySoon();
-
-public slots:
-    void sendKey();
 
 private slots:
     void sanityTest();
@@ -114,6 +94,7 @@ private slots:
     void about();
     void detailsText();
     void detailsButtonText();
+    void expandDetails_QTBUG_32473();
 
 #ifndef Q_OS_MAC
     void shortcut();
@@ -129,63 +110,89 @@ private slots:
     void setInformativeText();
     void iconPixmap();
 
-    void init();
-    void initTestCase();
-
-private:
-    int keyToSend;
-    QTimer keySendTimer;
+    void cleanup();
 };
 
-tst_QMessageBox::tst_QMessageBox() : keyToSend(-1)
+class tst_ResizingMessageBox : public QMessageBox
 {
-}
+public:
+    tst_ResizingMessageBox() : QMessageBox(), resized(false) { }
+    bool resized;
 
-int tst_QMessageBox::exec(QMessageBox *msgBox, int key)
-{
-    if (key == -1) {
-        QTimer::singleShot(1000, msgBox, SLOT(close()));
-    } else {
-        keyToSend = key;
-        sendKeySoon();
+protected:
+    void resizeEvent ( QResizeEvent * event ) {
+        resized = true;
+        QMessageBox::resizeEvent(event);
     }
-    return msgBox->exec();
-}
+};
 
-void tst_QMessageBox::sendKey()
+// ExecCloseHelper: Closes a modal QDialog during its exec() function by either
+// sending a key event or closing it (CloseWindow) once it becomes the active
+// modal window. Pass nullptr to "autodetect" the instance for static methods.
+class ExecCloseHelper : public QObject
 {
-    if (keyToSend == -2) {
-        QApplication::activeModalWidget()->close();
-        keyToSend = -1;
-        return;
+public:
+    enum { CloseWindow = -1 };
+
+    explicit ExecCloseHelper(QObject *parent = nullptr)
+        : QObject(parent), m_key(0), m_timerId(0), m_testCandidate(nullptr) { }
+
+    void start(int key, QWidget *testCandidate = nullptr)
+    {
+        m_key = key;
+        m_testCandidate = testCandidate;
+        m_timerId = startTimer(50);
     }
-    if (keyToSend == -1)
+
+    bool done() const { return !m_timerId; }
+
+protected:
+    void timerEvent(QTimerEvent *te) override;
+
+private:
+    int m_key;
+    int m_timerId;
+    QWidget *m_testCandidate;
+};
+
+void ExecCloseHelper::timerEvent(QTimerEvent *te)
+{
+    if (te->timerId() != m_timerId)
         return;
-    QKeyEvent *ke = new QKeyEvent(QEvent::KeyPress, keyToSend, Qt::NoModifier);
-    qApp->postEvent(QApplication::activeModalWidget(), ke);
-    keyToSend = -1;
+
+    QWidget *modalWidget = QApplication::activeModalWidget();
+
+    if (!m_testCandidate && modalWidget)
+        m_testCandidate = modalWidget;
+
+    if (m_testCandidate && m_testCandidate == modalWidget) {
+        if (m_key == CloseWindow) {
+            m_testCandidate->close();
+        } else {
+            QKeyEvent *ke = new QKeyEvent(QEvent::KeyPress, m_key, Qt::NoModifier);
+            QCoreApplication::postEvent(m_testCandidate, ke);
+        }
+        m_testCandidate = nullptr;
+        killTimer(m_timerId);
+        m_timerId = m_key = 0;
+    }
 }
 
-void tst_QMessageBox::sendKeySoon()
+void tst_QMessageBox::cleanup()
 {
-    keySendTimer.start();
-}
-
-void tst_QMessageBox::init()
-{
-    // if there is any pending key send from the last test, cancel it.
-    keySendTimer.stop();
-}
-
-void tst_QMessageBox::initTestCase()
-{
-    keySendTimer.setInterval(1000);
-    keySendTimer.setSingleShot(true);
-    QVERIFY(QObject::connect(&keySendTimer, SIGNAL(timeout()), this, SLOT(sendKey())));
+    QTRY_VERIFY(QApplication::topLevelWidgets().isEmpty()); // OS X requires TRY
 }
 
 void tst_QMessageBox::sanityTest()
 {
+#if defined(Q_OS_MACOS)
+    if (QSysInfo::productVersion() == QLatin1String("10.12")) {
+        QSKIP("Test hangs on macOS 10.12 -- QTQAINFRA-1362");
+        return;
+    }
+#elif defined(Q_OS_WINRT)
+    QSKIP("Test hangs on winrt -- QTBUG-68297");
+#endif
     QMessageBox msgBox;
     msgBox.setText("This is insane");
     for (int i = 0; i < 10; i++)
@@ -194,7 +201,9 @@ void tst_QMessageBox::sanityTest()
     msgBox.setIconPixmap(QPixmap("whatever.png"));
     msgBox.setTextFormat(Qt::RichText);
     msgBox.setTextFormat(Qt::PlainText);
-    exec(&msgBox);
+    ExecCloseHelper closeHelper;
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox);
+    msgBox.exec();
 }
 
 void tst_QMessageBox::button()
@@ -210,7 +219,7 @@ void tst_QMessageBox::button()
 
     // remove the cancel, should not exist anymore
     msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    QVERIFY(msgBox.button(QMessageBox::Cancel) == 0);
+    QVERIFY(!msgBox.button(QMessageBox::Cancel));
     QVERIFY(msgBox.button(QMessageBox::Yes) != 0);
 
     // should not crash
@@ -222,93 +231,112 @@ void tst_QMessageBox::button()
 void tst_QMessageBox::defaultButton()
 {
     QMessageBox msgBox;
-    QVERIFY(msgBox.defaultButton() == 0);
+    QVERIFY(!msgBox.defaultButton());
     msgBox.addButton(QMessageBox::Ok);
     msgBox.addButton(QMessageBox::Cancel);
-    QVERIFY(msgBox.defaultButton() == 0);
+    QVERIFY(!msgBox.defaultButton());
     QPushButton pushButton;
     msgBox.setDefaultButton(&pushButton);
     QVERIFY(msgBox.defaultButton() == 0); // we have not added it yet
     QPushButton *retryButton = msgBox.addButton(QMessageBox::Retry);
     msgBox.setDefaultButton(retryButton);
     QCOMPARE(msgBox.defaultButton(), retryButton);
-    exec(&msgBox);
+    ExecCloseHelper closeHelper;
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), msgBox.button(QMessageBox::Cancel));
 
-    exec(&msgBox, Qt::Key_Enter);
+    closeHelper.start(Qt::Key_Enter, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), (QAbstractButton *)retryButton);
 
     QAbstractButton *okButton = msgBox.button(QMessageBox::Ok);
     msgBox.setDefaultButton(QMessageBox::Ok);
     QCOMPARE(msgBox.defaultButton(), (QPushButton *)okButton);
-    exec(&msgBox, Qt::Key_Enter);
+    closeHelper.start(Qt::Key_Enter, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), okButton);
     msgBox.setDefaultButton(QMessageBox::Yes); // its not in there!
-    QVERIFY(msgBox.defaultButton() == okButton);
+    QCOMPARE(msgBox.defaultButton(), okButton);
     msgBox.removeButton(okButton);
     delete okButton;
     okButton = 0;
-    QVERIFY(msgBox.defaultButton() == 0);
+    QVERIFY(!msgBox.defaultButton());
     msgBox.setDefaultButton(QMessageBox::Ok);
-    QVERIFY(msgBox.defaultButton() == 0);
+    QVERIFY(!msgBox.defaultButton());
 }
 
 void tst_QMessageBox::escapeButton()
 {
     QMessageBox msgBox;
-    QVERIFY(msgBox.escapeButton() == 0);
+    QVERIFY(!msgBox.escapeButton());
     msgBox.addButton(QMessageBox::Ok);
-    exec(&msgBox);
+    ExecCloseHelper closeHelper;
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox);
+    msgBox.exec();
     QVERIFY(msgBox.clickedButton() == msgBox.button(QMessageBox::Ok)); // auto detected (one button only)
     msgBox.addButton(QMessageBox::Cancel);
-    QVERIFY(msgBox.escapeButton() == 0);
+    QVERIFY(!msgBox.escapeButton());
     QPushButton invalidButton;
     msgBox.setEscapeButton(&invalidButton);
-    QVERIFY(msgBox.escapeButton() == 0);
+    QVERIFY(!msgBox.escapeButton());
     QAbstractButton *retryButton = msgBox.addButton(QMessageBox::Retry);
 
-    exec(&msgBox);
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox);
+    msgBox.exec();
     QVERIFY(msgBox.clickedButton() == msgBox.button(QMessageBox::Cancel)); // auto detected (cancel)
 
     msgBox.setEscapeButton(retryButton);
     QCOMPARE(msgBox.escapeButton(), (QAbstractButton *)retryButton);
 
     // with escape
-    exec(&msgBox, Qt::Key_Escape);
+    closeHelper.start(Qt::Key_Escape, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), retryButton);
 
     // with close
-    exec(&msgBox);
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), (QAbstractButton *)retryButton);
 
     QAbstractButton *okButton = msgBox.button(QMessageBox::Ok);
     msgBox.setEscapeButton(QMessageBox::Ok);
     QCOMPARE(msgBox.escapeButton(), okButton);
-    exec(&msgBox, Qt::Key_Escape);
+    closeHelper.start(Qt::Key_Escape, &msgBox);
+    msgBox.exec();
     QCOMPARE(msgBox.clickedButton(), okButton);
     msgBox.setEscapeButton(QMessageBox::Yes); // its not in there!
-    QVERIFY(msgBox.escapeButton() == okButton);
+    QCOMPARE(msgBox.escapeButton(), okButton);
     msgBox.removeButton(okButton);
     delete okButton;
     okButton = 0;
-    QVERIFY(msgBox.escapeButton() == 0);
+    QVERIFY(!msgBox.escapeButton());
     msgBox.setEscapeButton(QMessageBox::Ok);
-    QVERIFY(msgBox.escapeButton() == 0);
+    QVERIFY(!msgBox.escapeButton());
 
     QMessageBox msgBox2;
     msgBox2.addButton(QMessageBox::Yes);
     msgBox2.addButton(QMessageBox::No);
-    exec(&msgBox2);
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox2);
+    msgBox2.exec();
     QVERIFY(msgBox2.clickedButton() == msgBox2.button(QMessageBox::No)); // auto detected (one No button only)
 
     QPushButton *rejectButton = new QPushButton;
     msgBox2.addButton(rejectButton, QMessageBox::RejectRole);
-    exec(&msgBox2);
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox2);
+    msgBox2.exec();
     QVERIFY(msgBox2.clickedButton() == rejectButton); // auto detected (one reject button only)
 
     msgBox2.addButton(new QPushButton, QMessageBox::RejectRole);
-    exec(&msgBox2);
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox2);
+    msgBox2.exec();
     QVERIFY(msgBox2.clickedButton() == msgBox2.button(QMessageBox::No)); // auto detected (one No button only)
+
+    QMessageBox msgBox3;
+    msgBox3.setDetailedText("Details");
+    closeHelper.start(ExecCloseHelper::CloseWindow, &msgBox3);
+    msgBox3.exec();
+    QVERIFY(msgBox3.clickedButton() == msgBox3.button(QMessageBox::Ok)); // auto detected
 }
 
 void tst_QMessageBox::statics()
@@ -322,42 +350,39 @@ void tst_QMessageBox::statics()
     statics[2] = QMessageBox::question;
     statics[3] = QMessageBox::warning;
 
+    ExecCloseHelper closeHelper;
     for (int i = 0; i < 4; i++) {
-        keyToSend = Qt::Key_Escape;
-        sendKeySoon();
+        closeHelper.start(Qt::Key_Escape);
         QMessageBox::StandardButton sb = (*statics[i])(0, "caption",
             "text", QMessageBox::Yes | QMessageBox::No | QMessageBox::Help | QMessageBox::Cancel,
            QMessageBox::NoButton);
         QCOMPARE(sb, QMessageBox::Cancel);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
 
-        keyToSend = -2; // close()
-        sendKeySoon();
+        closeHelper.start(ExecCloseHelper::CloseWindow);
         sb = (*statics[i])(0, "caption",
            "text", QMessageBox::Yes | QMessageBox::No | QMessageBox::Help | QMessageBox::Cancel,
            QMessageBox::NoButton);
         QCOMPARE(sb, QMessageBox::Cancel);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
 
-        keyToSend = Qt::Key_Enter;
-        sendKeySoon();
+        closeHelper.start(Qt::Key_Enter);
         sb = (*statics[i])(0, "caption",
            "text", QMessageBox::Yes | QMessageBox::No | QMessageBox::Help,
            QMessageBox::Yes);
         QCOMPARE(sb, QMessageBox::Yes);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
 
-        keyToSend = Qt::Key_Enter;
-        sendKeySoon();
+        closeHelper.start(Qt::Key_Enter);
         sb = (*statics[i])(0, "caption",
            "text", QMessageBox::Yes | QMessageBox::No | QMessageBox::Help,
             QMessageBox::No);
         QCOMPARE(sb, QMessageBox::No);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
     }
 }
 
-// shortcuts are not used on MAC OS X
+// shortcuts are not used on OS X
 #ifndef Q_OS_MAC
 void tst_QMessageBox::shortcut()
 {
@@ -365,34 +390,33 @@ void tst_QMessageBox::shortcut()
     msgBox.addButton("O&k", QMessageBox::YesRole);
     msgBox.addButton("&No", QMessageBox::YesRole);
     msgBox.addButton("&Maybe", QMessageBox::YesRole);
-    QCOMPARE(exec(&msgBox, Qt::Key_M), 2);
+    ExecCloseHelper closeHelper;
+    closeHelper.start(Qt::Key_M, &msgBox);
+    QCOMPARE(msgBox.exec(), 2);
 }
 #endif
 
 void tst_QMessageBox::about()
 {
-    keyToSend = Qt::Key_Escape;
-    sendKeySoon();
+    ExecCloseHelper closeHelper;
+    closeHelper.start(Qt::Key_Escape);
     QMessageBox::about(0, "Caption", "This is an auto test");
     // On Mac, about and aboutQt are not modal, so we need to
     // explicitly run the event loop
 #ifdef Q_OS_MAC
-    QTRY_COMPARE(keyToSend, -1);
+    QTRY_VERIFY(closeHelper.done());
 #else
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 #endif
 
-#if !defined(Q_OS_WINCE)
-    keyToSend = Qt::Key_Enter;
-#else
-    keyToSend = Qt::Key_Escape;
-#endif
-    sendKeySoon();
+    const int keyToSend = Qt::Key_Enter;
+
+    closeHelper.start(keyToSend);
     QMessageBox::aboutQt(0, "Caption");
 #ifdef Q_OS_MAC
-    QTRY_COMPARE(keyToSend, -1);
+    QTRY_VERIFY(closeHelper.done());
 #else
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 #endif
 }
 
@@ -401,8 +425,8 @@ void tst_QMessageBox::staticSourceCompat()
     int ret;
 
     // source compat tests for < 4.2
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    ExecCloseHelper closeHelper;
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", QMessageBox::Yes, QMessageBox::No);
     int expectedButton = int(QMessageBox::Yes);
     if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme()) {
@@ -412,51 +436,44 @@ void tst_QMessageBox::staticSourceCompat()
             expectedButton = int(QMessageBox::No);
     }
     QCOMPARE(ret, expectedButton);
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", QMessageBox::Yes | QMessageBox::Default, QMessageBox::No);
     QCOMPARE(ret, int(QMessageBox::Yes));
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", QMessageBox::Yes, QMessageBox::No | QMessageBox::Default);
     QCOMPARE(ret, int(QMessageBox::No));
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", QMessageBox::Yes | QMessageBox::Default, QMessageBox::No | QMessageBox::Escape);
     QCOMPARE(ret, int(QMessageBox::Yes));
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", QMessageBox::Yes | QMessageBox::Escape, QMessageBox::No | QMessageBox::Default);
     QCOMPARE(ret, int(QMessageBox::No));
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
     // the button text versions
-    keyToSend = Qt::Key_Enter;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Enter);
     ret = QMessageBox::information(0, "title", "text", "Yes", "No", QString(), 1);
     QCOMPARE(ret, 1);
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
     if (0) { // don't run these tests since the dialog won't close!
-        keyToSend = Qt::Key_Escape;
-        sendKeySoon();
+        closeHelper.start(Qt::Key_Escape);
         ret = QMessageBox::information(0, "title", "text", "Yes", "No", QString(), 1);
         QCOMPARE(ret, -1);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
 
-        keyToSend = Qt::Key_Escape;
-        sendKeySoon();
+        closeHelper.start(Qt::Key_Escape);
         ret = QMessageBox::information(0, "title", "text", "Yes", "No", QString(), 0, 1);
         QCOMPARE(ret, 1);
-        QCOMPARE(keyToSend, -1);
+        QVERIFY(closeHelper.done());
     }
 }
 
@@ -474,12 +491,17 @@ void tst_QMessageBox::instanceSourceCompat()
     mb.addButton("&Revert", QMessageBox::RejectRole);
     mb.addButton("&Zoo", QMessageBox::ActionRole);
 
-    QCOMPARE(exec(&mb, Qt::Key_Enter), int(QMessageBox::Yes));
-    QCOMPARE(exec(&mb, Qt::Key_Escape), int(QMessageBox::Cancel));
+    ExecCloseHelper closeHelper;
+    closeHelper.start(Qt::Key_Enter, &mb);
+    QCOMPARE(mb.exec(), int(QMessageBox::Yes));
+    closeHelper.start(Qt::Key_Escape, &mb);
+    QCOMPARE(mb.exec(), int(QMessageBox::Cancel));
 #ifndef Q_OS_MAC
-    // mnemonics are not used on Mac OS X
-    QCOMPARE(exec(&mb, Qt::ALT + Qt::Key_R), 0);
-    QCOMPARE(exec(&mb, Qt::ALT + Qt::Key_Z), 1);
+    // mnemonics are not used on OS X
+    closeHelper.start(Qt::ALT + Qt::Key_R, &mb);
+    QCOMPARE(mb.exec(), 0);
+    closeHelper.start(Qt::ALT + Qt::Key_Z, &mb);
+    QCOMPARE(mb.exec(), 1);
 #endif
 }
 
@@ -521,13 +543,13 @@ void tst_QMessageBox::testSymbols()
     QCOMPARE(mb1.text(), text);
 
     icon = mb1.icon();
-    QVERIFY(icon == QMessageBox::NoIcon);
+    QCOMPARE(icon, QMessageBox::NoIcon);
     mb1.setIcon(QMessageBox::Question);
-    QVERIFY(mb1.icon() == QMessageBox::Question);
+    QCOMPARE(mb1.icon(), QMessageBox::Question);
 
     QPixmap iconPixmap = mb1.iconPixmap();
     mb1.setIconPixmap(iconPixmap);
-    QVERIFY(mb1.icon() == QMessageBox::NoIcon);
+    QCOMPARE(mb1.icon(), QMessageBox::NoIcon);
 
     QCOMPARE(mb1.buttonText(QMessageBox::Ok), QLatin1String("OK"));
     QCOMPARE(mb1.buttonText(QMessageBox::Cancel), QString());
@@ -579,6 +601,11 @@ void tst_QMessageBox::detailsText()
     QString text("This is the details text.");
     box.setDetailedText(text);
     QCOMPARE(box.detailedText(), text);
+    box.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&box));
+    // QTBUG-39334, the box should now have the default "Ok" button as well as
+    // the "Show Details.." button.
+    QCOMPARE(box.findChildren<QAbstractButton *>().size(), 2);
 }
 
 void tst_QMessageBox::detailsButtonText()
@@ -595,7 +622,7 @@ void tst_QMessageBox::detailsButtonText()
     QAbstractButton* btn = NULL;
     foreach(btn, list) {
         if (btn && (btn->inherits("QPushButton"))) {
-            if (btn->text().remove("&") != QMessageBox::tr("OK")
+            if (btn->text().remove(QLatin1Char('&')) != QMessageBox::tr("OK")
                 && btn->text() != QMessageBox::tr("Show Details...")) {
                 QFAIL(qPrintable(QString("Unexpected messagebox button text: %1").arg(btn->text())));
             }
@@ -603,28 +630,57 @@ void tst_QMessageBox::detailsButtonText()
     }
 }
 
+void tst_QMessageBox::expandDetails_QTBUG_32473()
+{
+    tst_ResizingMessageBox box;
+    box.setDetailedText("bla");
+    box.show();
+    QApplication::postEvent(&box, new QEvent(QEvent::LanguageChange));
+    QApplication::processEvents();
+    QDialogButtonBox* bb = box.findChild<QDialogButtonBox*>("qt_msgbox_buttonbox");
+    QVERIFY(bb);
+
+    QList<QAbstractButton *> list = bb->buttons();
+    QAbstractButton* moreButton = NULL;
+    foreach (QAbstractButton* btn, list)
+        if (btn && bb->buttonRole(btn) == QDialogButtonBox::ActionRole)
+            moreButton = btn;
+    QVERIFY(moreButton);
+    QVERIFY(QTest::qWaitForWindowExposed(&box));
+    QRect geom = box.geometry();
+    box.resized = false;
+    moreButton->click();
+    QTRY_VERIFY(box.resized);
+    // After we receive the expose event for a second widget, it's likely
+    // that the window manager is also done manipulating the first QMessageBox.
+    QWidget fleece;
+    fleece.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&fleece));
+    if (geom.topLeft() == box.geometry().topLeft())
+        QTest::qWait(500);
+    QCOMPARE(geom.topLeft(), box.geometry().topLeft());
+}
+
 void tst_QMessageBox::incorrectDefaultButton()
 {
-    keyToSend = Qt::Key_Escape;
-    sendKeySoon();
+    ExecCloseHelper closeHelper;
+    closeHelper.start(Qt::Key_Escape);
     //Do not crash here
     QTest::ignoreMessage(QtWarningMsg, "QDialogButtonBox::createButton: Invalid ButtonRole, button not added");
     QMessageBox::question( 0, "", "I've been hit!",QMessageBox::Ok | QMessageBox::Cancel,QMessageBox::Save );
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Escape;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Escape);
     QTest::ignoreMessage(QtWarningMsg, "QDialogButtonBox::createButton: Invalid ButtonRole, button not added");
     QMessageBox::question( 0, "", "I've been hit!",QFlag(QMessageBox::Ok | QMessageBox::Cancel),QMessageBox::Save );
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 
-    keyToSend = Qt::Key_Escape;
-    sendKeySoon();
+    closeHelper.start(Qt::Key_Escape);
     QTest::ignoreMessage(QtWarningMsg, "QDialogButtonBox::createButton: Invalid ButtonRole, button not added");
     QTest::ignoreMessage(QtWarningMsg, "QDialogButtonBox::createButton: Invalid ButtonRole, button not added");
     //do not crash here -> call old function of QMessageBox in this case
     QMessageBox::question( 0, "", "I've been hit!",QMessageBox::Ok | QMessageBox::Cancel,QMessageBox::Save | QMessageBox::Cancel,QMessageBox::Ok);
-    QCOMPARE(keyToSend, -1);
+    QVERIFY(closeHelper.done());
 }
 
 void tst_QMessageBox::updateSize()

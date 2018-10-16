@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +28,11 @@
 
 #include <QtTest/QtTest>
 #include <QtNetwork/QtNetwork>
-
-#include <time.h>
+#include <QtCore/QDateTime>
+#include <QtCore/QTextStream>
+#include <QtCore/QRandomGenerator>
+#include <QtCore/QStandardPaths>
+#include <QtCore/private/qiodevice_p.h>
 
 #ifndef QT_NO_BEARERMANAGEMENT
 #include <QtNetwork/qnetworkconfigmanager.h>
@@ -171,19 +161,33 @@ static QString prettyByteArray(const QByteArray &array)
     return result;
 }
 
-static bool doSocketRead(QTcpSocket *socket, int minBytesAvailable, int timeout = 4000)
+enum { defaultReadTimeoutMS = 4000 };
+
+static bool doSocketRead(QTcpSocket *socket, int minBytesAvailable, int timeout = defaultReadTimeoutMS)
 {
     QElapsedTimer timer;
     timer.start();
+    int t = timeout;
     forever {
         if (socket->bytesAvailable() >= minBytesAvailable)
             return true;
-        if (socket->state() == QAbstractSocket::UnconnectedState
-            || timer.elapsed() >= timeout)
+        if (socket->state() == QAbstractSocket::UnconnectedState)
             return false;
-        if (!socket->waitForReadyRead(timeout - timer.elapsed()))
+        if (!socket->waitForReadyRead(t))
+            return false;
+        t = qt_subtract_from_timeout(timeout, timer.elapsed());
+        if (t == 0)
             return false;
     }
+}
+
+static QByteArray msgDoSocketReadFailed(const QString &host, quint16 port,
+                                        int step, int minBytesAvailable)
+{
+    return "Failed to receive "
+        + QByteArray::number(minBytesAvailable) + " bytes from "
+        + host.toLatin1() + ':' + QByteArray::number(port)
+        + " in step " + QByteArray::number(step) + ": timeout";
 }
 
 static bool doSocketFlush(QTcpSocket *socket, int timeout = 4000)
@@ -193,6 +197,7 @@ static bool doSocketFlush(QTcpSocket *socket, int timeout = 4000)
 #endif
     QTime timer;
     timer.start();
+    int t = timeout;
     forever {
         if (socket->bytesToWrite() == 0
 #ifndef QT_NO_SSL
@@ -200,10 +205,12 @@ static bool doSocketFlush(QTcpSocket *socket, int timeout = 4000)
 #endif
             )
             return true;
-        if (socket->state() == QAbstractSocket::UnconnectedState
-            || timer.elapsed() >= timeout)
+        if (socket->state() == QAbstractSocket::UnconnectedState)
             return false;
-        if (!socket->waitForBytesWritten(timeout - timer.elapsed()))
+        if (!socket->waitForBytesWritten(t))
+            return false;
+        t = qt_subtract_from_timeout(timeout, timer.elapsed());
+        if (t == 0)
             return false;
     }
 }
@@ -227,8 +234,8 @@ static void netChat(int port, const QList<Chat> &chat)
         switch (it->type) {
             case Chat::Expect: {
                     qDebug() << i << "Expecting" << prettyByteArray(it->data);
-                    if (!doSocketRead(&socket, it->data.length()))
-                        QFAIL(QString("Failed to receive data in step %1: timeout").arg(i).toLocal8Bit());
+                    if (!doSocketRead(&socket, it->data.length(), 3 * defaultReadTimeoutMS))
+                        QFAIL(msgDoSocketReadFailed(QtNetworkSettings::serverName(), port, i, it->data.length()));
 
                     // pop that many bytes off the socket
                     QByteArray received = socket.read(it->data.length());
@@ -246,7 +253,7 @@ static void netChat(int port, const QList<Chat> &chat)
                 while (true) {
                     // scan the buffer until we have our string
                     if (!doSocketRead(&socket, it->data.length()))
-                        QFAIL(QString("Failed to receive data in step %1: timeout").arg(i).toLocal8Bit());
+                        QFAIL(msgDoSocketReadFailed(QtNetworkSettings::serverName(), port, i, it->data.length()));
 
                     QByteArray buffer;
                     buffer.resize(socket.bytesAvailable());
@@ -267,7 +274,7 @@ static void netChat(int port, const QList<Chat> &chat)
             case Chat::SkipBytes: {
                     qDebug() << i << "Skipping" << it->value << "bytes";
                     if (!doSocketRead(&socket, it->value))
-                        QFAIL(QString("Failed to receive data in step %1: timeout").arg(i).toLocal8Bit());
+                        QFAIL(msgDoSocketReadFailed(QtNetworkSettings::serverName(), port, i, it->value));
 
                     // now discard the bytes
                     QByteArray buffer = socket.read(it->value);
@@ -455,7 +462,7 @@ void tst_NetworkSelfTest::remotePortsOpen()
         else
             QFAIL(QString("Error connecting to server on port %1: %2").arg(portNumber).arg(socket.errorString()).toLocal8Bit());
     }
-    QVERIFY(socket.state() == QAbstractSocket::ConnectedState);
+    QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 }
 
 static QList<Chat> ftpChat(const QByteArray &userSuffix = QByteArray())
@@ -531,13 +538,9 @@ void tst_NetworkSelfTest::imapServer()
 
 void tst_NetworkSelfTest::httpServer()
 {
-    QString uniqueExtension;
-    qsrand(time(0));
-#ifndef Q_OS_WINCE
-    uniqueExtension = QString("%1%2%3").arg((qulonglong)this).arg(qrand()).arg((qulonglong)time(0));
-#else
-    uniqueExtension = QString("%1%2").arg((qulonglong)this).arg(qrand());
-#endif
+    QByteArray uniqueExtension = QByteArray::number((qulonglong)this) +
+                                 QByteArray::number((qulonglong)QRandomGenerator::global()->generate()) +
+                                 QByteArray::number(QDateTime::currentSecsSinceEpoch());
 
     netChat(80, QList<Chat>()
             // HTTP/0.9 chat:
@@ -603,7 +606,7 @@ void tst_NetworkSelfTest::httpServer()
 
             // HTTP/1.0 PUT
             << Chat::Reconnect
-            << Chat::send("PUT /dav/networkselftest-" + uniqueExtension.toLatin1() + ".txt HTTP/1.0\r\n"
+            << Chat::send("PUT /dav/networkselftest-" + uniqueExtension + ".txt HTTP/1.0\r\n"
                           "Content-Length: 5\r\n"
                           "Host: " + QtNetworkSettings::serverName().toLatin1() + "\r\n"
                           "Connection: close\r\n"
@@ -616,7 +619,7 @@ void tst_NetworkSelfTest::httpServer()
 
             // check that the file did get uploaded
             << Chat::Reconnect
-            << Chat::send("HEAD /dav/networkselftest-" + uniqueExtension.toLatin1() + ".txt HTTP/1.0\r\n"
+            << Chat::send("HEAD /dav/networkselftest-" + uniqueExtension + ".txt HTTP/1.0\r\n"
                           "Host: " + QtNetworkSettings::serverName().toLatin1() + "\r\n"
                           "Connection: close\r\n"
                           "\r\n")
@@ -628,7 +631,7 @@ void tst_NetworkSelfTest::httpServer()
 
             // HTTP/1.0 DELETE
             << Chat::Reconnect
-            << Chat::send("DELETE /dav/networkselftest-" + uniqueExtension.toLatin1() + ".txt HTTP/1.0\r\n"
+            << Chat::send("DELETE /dav/networkselftest-" + uniqueExtension + ".txt HTTP/1.0\r\n"
                           "Host: " + QtNetworkSettings::serverName().toLatin1() + "\r\n"
                           "Connection: close\r\n"
                           "\r\n")
@@ -959,13 +962,32 @@ void tst_NetworkSelfTest::supportsSsl()
 #endif
 }
 
+#if QT_CONFIG(process)
+static const QByteArray msgProcessError(const QProcess &process, const char *what)
+{
+    QString result;
+    QTextStream(&result) << what << ": \"" << process.program() << ' '
+        << process.arguments().join(QLatin1Char(' ')) << "\": " << process.errorString();
+    return result.toLocal8Bit();
+}
+
+static void ensureTermination(QProcess &process)
+{
+    if (process.state() == QProcess::Running) {
+        process.terminate();
+        if (!process.waitForFinished(300))
+            process.kill();
+    }
+}
+#endif // QT_CONFIG(process)
+
 void tst_NetworkSelfTest::smbServer()
 {
     static const char contents[] = "This is 34 bytes. Do not change...";
 #ifdef Q_OS_WIN
     // use Windows's native UNC support to try and open a file on the server
-    QString filepath = QString("\\\\%1\\testshare\\test.pri").arg(QtNetworkSettings::winServerName());
-    FILE *f = fopen(filepath.toLatin1(), "rb");
+    QByteArray filepath = "\\\\" + QtNetworkSettings::winServerName().toLatin1() + "\\testshare\\test.pri";
+    FILE *f = fopen(filepath.constData(), "rb");
     QVERIFY2(f, qt_error_string().toLocal8Bit());
 
     char buf[128];
@@ -975,19 +997,25 @@ void tst_NetworkSelfTest::smbServer()
     QCOMPARE(ret, strlen(contents));
     QVERIFY(memcmp(buf, contents, strlen(contents)) == 0);
 #else
+#if QT_CONFIG(process)
+    enum { sambaTimeOutSecs = 5 };
     // try to use Samba
-    QString progname = "smbclient";
-    QProcess smbclient;
-    smbclient.start(progname, QIODevice::ReadOnly);
-    if (!smbclient.waitForStarted(2000))
+    const QString progname = "smbclient";
+    const QString binary = QStandardPaths::findExecutable(progname);
+    if (binary.isEmpty())
         QSKIP("Could not find smbclient (from Samba), cannot continue testing");
-    if (!smbclient.waitForFinished(2000) || smbclient.exitStatus() != QProcess::NormalExit)
-        QSKIP("smbclient isn't working, cannot continue testing");
-    smbclient.close();
 
     // try listing the server
-    smbclient.start(progname, QStringList() << "-g" << "-N" << "-L" << QtNetworkSettings::winServerName(), QIODevice::ReadOnly);
-    QVERIFY(smbclient.waitForFinished(5000));
+    const QStringList timeOutArguments = QStringList()
+        << "--timeout" << QString::number(sambaTimeOutSecs);
+    QStringList arguments = timeOutArguments;
+    arguments << "-g" << "-N" << "-L" << QtNetworkSettings::winServerName();
+    QProcess smbclient;
+    smbclient.start(binary, arguments, QIODevice::ReadOnly);
+    QVERIFY2(smbclient.waitForStarted(), msgProcessError(smbclient, "Unable to start"));
+    const bool listFinished = smbclient.waitForFinished((1 + sambaTimeOutSecs) * 1000);
+    ensureTermination(smbclient);
+    QVERIFY2(listFinished, msgProcessError(smbclient, "Listing servers timed out"));
     if (smbclient.exitStatus() != QProcess::NormalExit)
         QSKIP("smbclient crashed");
     QVERIFY2(smbclient.exitCode() == 0, "Test server not found");
@@ -1002,9 +1030,13 @@ void tst_NetworkSelfTest::smbServer()
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert("PAGER", "/bin/cat"); // just in case
     smbclient.setProcessEnvironment(env);
-    smbclient.start(progname, QStringList() << "-N" << "-c" << "more test.pri"
-                    << QString("\\\\%1\\testshare").arg(QtNetworkSettings::winServerName()), QIODevice::ReadOnly);
-    QVERIFY(smbclient.waitForFinished(5000));
+    arguments = timeOutArguments;
+    arguments << "-N" << "-c" << "more test.pri"
+        << ("\\\\" + QtNetworkSettings::winServerName() + "\\testshare");
+    smbclient.start(binary, arguments, QIODevice::ReadOnly);
+    const bool fileFinished = smbclient.waitForFinished((1 + sambaTimeOutSecs) * 1000);
+    ensureTermination(smbclient);
+    QVERIFY2(fileFinished, msgProcessError(smbclient, "Timed out"));
     if (smbclient.exitStatus() != QProcess::NormalExit)
         QSKIP("smbclient crashed");
     QVERIFY2(smbclient.exitCode() == 0, "File //qt-test-server/testshare/test.pri not found");
@@ -1012,6 +1044,9 @@ void tst_NetworkSelfTest::smbServer()
     output = smbclient.readAll();
     QCOMPARE(output.constData(), contents);
     qDebug() << "Test file is correct";
+#else
+    QSKIP( "No QProcess support", SkipAll);
+#endif
 #endif
 }
 

@@ -2,9 +2,11 @@ TEMPLATE      = subdirs
 SUBDIRS       = htmlinfo \
                 xmlstreamlint
 
-!contains(QT_CONFIG, no-widgets) {
+qtHaveModule(widgets) {
     SUBDIRS +=  dombookmarks \
-                rsslisting \
                 saxbookmarks \
                 streambookmarks
+
+    qtHaveModule(network): SUBDIRS += \
+                rsslisting
 }

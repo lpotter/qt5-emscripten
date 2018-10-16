@@ -2,7 +2,6 @@ TEMPLATE=subdirs
 SUBDIRS=\
     qabstractfileengine \
     qbuffer \
-    qdatastream \
     qdataurl \
     qdebug \
     qdir \
@@ -10,35 +9,66 @@ SUBDIRS=\
     qfile \
     largefile \
     qfileinfo \
+    qfileselector \
+    qfilesystemmetadata \
     qfilesystementry \
     qfilesystemwatcher \
     qiodevice \
     qipaddress \
+    qlockfile \
+    qloggingcategory \
+    qloggingregistry \
     qnodebug \
     qprocess \
     qprocess-noapplication \
     qprocessenvironment \
     qresourceengine \
     qsettings \
+    qsavefile \
     qstandardpaths \
+    qstorageinfo \
     qtemporarydir \
     qtemporaryfile \
-    qtextstream \
     qurl \
     qurlinternal \
     qurlquery \
-    qwinoverlappedionotifier \
 
-!win32|wince* {
-    SUBDIRS -=\
-        qwinoverlappedionotifier
-}
+!qtHaveModule(gui): SUBDIRS -= \
+    qsettings
 
-!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+!qtHaveModule(network): SUBDIRS -= \
+    qiodevice \
+    qprocess
+
+!qtHaveModule(concurrent): SUBDIRS -= \
+    qdebug \
+    qlockfile \
+    qurl
+
+!qtConfig(private_tests): SUBDIRS -= \
     qabstractfileengine \
     qfileinfo \
     qipaddress \
-    qurlinternal
+    qurlinternal \
+    qloggingregistry
 
-win32:!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+win32:!qtConfig(private_tests): SUBDIRS -= \
     qfilesystementry
+
+!qtConfig(filesystemwatcher): SUBDIRS -= \
+    qfilesystemwatcher
+
+!qtConfig(processenvironment): SUBDIRS -= \
+    qprocessenvironment
+
+!qtConfig(process): SUBDIRS -= \
+    qprocess \
+    qprocess-noapplication
+
+winrt: SUBDIRS -= \
+    qstorageinfo
+
+android: SUBDIRS -= \
+    qprocess \
+    qdir \
+    qresourceengine

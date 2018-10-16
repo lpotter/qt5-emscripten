@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,38 +10,38 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include "qmatrix.h"
+
 #include "qdatastream.h"
 #include "qdebug.h"
-#include "qmatrix.h"
+#include "qhashfunctions.h"
 #include "qregion.h"
 #include "qpainterpath.h"
 #include "qpainterpath_p.h"
@@ -82,9 +82,9 @@ QT_BEGIN_NAMESPACE
     transformed into a \e polygon (mapped to the coordinate system
     defined by \e this matrix), using the mapToPolygon() function.
 
-    QMatrix provides the isIdentity() function which returns true if
+    QMatrix provides the isIdentity() function which returns \c true if
     the matrix is the identity matrix, and the isInvertible() function
-    which returns true if the matrix is non-singular (i.e. AB = BA =
+    which returns \c true if the matrix is non-singular (i.e. AB = BA =
     I). The inverted() function returns an inverted copy of \e this
     matrix if it is invertible (otherwise it returns the identity
     matrix). In addition, QMatrix provides the determinant() function
@@ -244,11 +244,11 @@ QMatrix::QMatrix(qreal m11, qreal m12, qreal m21, qreal m22, qreal dx, qreal dy)
 {
 }
 
-
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 /*!
      Constructs a matrix that is a copy of the given \a matrix.
  */
-QMatrix::QMatrix(const QMatrix &matrix)
+QMatrix::QMatrix(const QMatrix &matrix) Q_DECL_NOTHROW
     : _m11(matrix._m11)
     , _m12(matrix._m12)
     , _m21(matrix._m21)
@@ -257,6 +257,7 @@ QMatrix::QMatrix(const QMatrix &matrix)
     , _dy(matrix._dy)
 {
 }
+#endif
 
 /*!
     Sets the matrix elements to the specified values, \a m11, \a m12,
@@ -817,8 +818,8 @@ void QMatrix::reset()
 /*!
     \fn bool QMatrix::isIdentity() const
 
-    Returns true if the matrix is the identity matrix, otherwise
-    returns false.
+    Returns \c true if the matrix is the identity matrix, otherwise
+    returns \c false.
 
     \sa reset()
 */
@@ -919,7 +920,7 @@ QMatrix &QMatrix::rotate(qreal a)
 /*!
     \fn bool QMatrix::isInvertible() const
 
-    Returns true if the matrix is invertible, otherwise returns false.
+    Returns \c true if the matrix is invertible, otherwise returns \c false.
 
     \sa inverted()
 */
@@ -966,8 +967,8 @@ QMatrix QMatrix::inverted(bool *invertible) const
 /*!
     \fn bool QMatrix::operator==(const QMatrix &matrix) const
 
-    Returns true if this matrix is equal to the given \a matrix,
-    otherwise returns false.
+    Returns \c true if this matrix is equal to the given \a matrix,
+    otherwise returns \c false.
 */
 
 bool QMatrix::operator==(const QMatrix &m) const
@@ -980,11 +981,31 @@ bool QMatrix::operator==(const QMatrix &m) const
            _dy == m._dy;
 }
 
+
+/*!
+    \since 5.6
+    \relates QMatrix
+
+    Returns the hash value for \a key, using
+    \a seed to seed the calculation.
+*/
+uint qHash(const QMatrix &key, uint seed) Q_DECL_NOTHROW
+{
+    QtPrivate::QHashCombine hash;
+    seed = hash(seed, key.m11());
+    seed = hash(seed, key.m12());
+    seed = hash(seed, key.m21());
+    seed = hash(seed, key.m22());
+    seed = hash(seed, key.dx());
+    seed = hash(seed, key.dy());
+    return seed;
+}
+
 /*!
     \fn bool QMatrix::operator!=(const QMatrix &matrix) const
 
-    Returns true if this matrix is not equal to the given \a matrix,
-    otherwise returns false.
+    Returns \c true if this matrix is not equal to the given \a matrix,
+    otherwise returns \c false.
 */
 
 bool QMatrix::operator!=(const QMatrix &m) const
@@ -1043,10 +1064,11 @@ QMatrix QMatrix::operator *(const QMatrix &m) const
     return QMatrix(tm11, tm12, tm21, tm22, tdx, tdy, true);
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 /*!
     Assigns the given \a matrix's values to this matrix.
 */
-QMatrix &QMatrix::operator=(const QMatrix &matrix)
+QMatrix &QMatrix::operator=(const QMatrix &matrix) Q_DECL_NOTHROW
 {
     _m11 = matrix._m11;
     _m12 = matrix._m12;
@@ -1056,6 +1078,7 @@ QMatrix &QMatrix::operator=(const QMatrix &matrix)
     _dy  = matrix._dy;
     return *this;
 }
+#endif
 
 /*!
     \since 4.2
@@ -1138,6 +1161,7 @@ QDataStream &operator>>(QDataStream &s, QMatrix &m)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QMatrix &m)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QMatrix("
                   << "11=" << m.m11()
                   << " 12=" << m.m12()
@@ -1146,7 +1170,7 @@ QDebug operator<<(QDebug dbg, const QMatrix &m)
                   << " dx=" << m.dx()
                   << " dy=" << m.dy()
                   << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
 
@@ -1159,7 +1183,7 @@ QDebug operator<<(QDebug dbg, const QMatrix &m)
     \brief The qFuzzyCompare function is for comparing two matrices
     using a fuzziness factor.
 
-    Returns true if \a m1 and \a m2 are equal, allowing for a small
+    Returns \c true if \a m1 and \a m2 are equal, allowing for a small
     fuzziness factor for floating-point comparisons; false otherwise.
 */
 

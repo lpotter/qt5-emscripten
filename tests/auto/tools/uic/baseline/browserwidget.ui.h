@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'browserwidget.ui'
 **
-** Created: Fri Sep 4 10:17:12 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -13,7 +12,6 @@
 #include <QtCore/QVariant>
 #include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QHeaderView>
@@ -48,22 +46,22 @@ public:
     void setupUi(QWidget *Browser)
     {
         if (Browser->objectName().isEmpty())
-            Browser->setObjectName(QStringLiteral("Browser"));
+            Browser->setObjectName(QString::fromUtf8("Browser"));
         Browser->resize(765, 515);
         insertRowAction = new QAction(Browser);
-        insertRowAction->setObjectName(QStringLiteral("insertRowAction"));
+        insertRowAction->setObjectName(QString::fromUtf8("insertRowAction"));
         insertRowAction->setEnabled(false);
         deleteRowAction = new QAction(Browser);
-        deleteRowAction->setObjectName(QStringLiteral("deleteRowAction"));
+        deleteRowAction->setObjectName(QString::fromUtf8("deleteRowAction"));
         deleteRowAction->setEnabled(false);
         vboxLayout = new QVBoxLayout(Browser);
 #ifndef Q_OS_MAC
         vboxLayout->setSpacing(6);
 #endif
         vboxLayout->setContentsMargins(8, 8, 8, 8);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         splitter_2 = new QSplitter(Browser);
-        splitter_2->setObjectName(QStringLiteral("splitter_2"));
+        splitter_2->setObjectName(QString::fromUtf8("splitter_2"));
         QSizePolicy sizePolicy(static_cast<QSizePolicy::Policy>(7), static_cast<QSizePolicy::Policy>(7));
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -71,7 +69,7 @@ public:
         splitter_2->setSizePolicy(sizePolicy);
         splitter_2->setOrientation(Qt::Horizontal);
         connectionWidget = new ConnectionWidget(splitter_2);
-        connectionWidget->setObjectName(QStringLiteral("connectionWidget"));
+        connectionWidget->setObjectName(QString::fromUtf8("connectionWidget"));
         QSizePolicy sizePolicy1(static_cast<QSizePolicy::Policy>(13), static_cast<QSizePolicy::Policy>(7));
         sizePolicy1.setHorizontalStretch(1);
         sizePolicy1.setVerticalStretch(0);
@@ -79,7 +77,7 @@ public:
         connectionWidget->setSizePolicy(sizePolicy1);
         splitter_2->addWidget(connectionWidget);
         table = new QTableView(splitter_2);
-        table->setObjectName(QStringLiteral("table"));
+        table->setObjectName(QString::fromUtf8("table"));
         QSizePolicy sizePolicy2(static_cast<QSizePolicy::Policy>(7), static_cast<QSizePolicy::Policy>(7));
         sizePolicy2.setHorizontalStretch(2);
         sizePolicy2.setVerticalStretch(0);
@@ -92,7 +90,7 @@ public:
         vboxLayout->addWidget(splitter_2);
 
         groupBox = new QGroupBox(Browser);
-        groupBox->setObjectName(QStringLiteral("groupBox"));
+        groupBox->setObjectName(QString::fromUtf8("groupBox"));
         QSizePolicy sizePolicy3(static_cast<QSizePolicy::Policy>(5), static_cast<QSizePolicy::Policy>(3));
         sizePolicy3.setHorizontalStretch(0);
         sizePolicy3.setVerticalStretch(0);
@@ -106,9 +104,9 @@ public:
 #ifndef Q_OS_MAC
         vboxLayout1->setContentsMargins(9, 9, 9, 9);
 #endif
-        vboxLayout1->setObjectName(QStringLiteral("vboxLayout1"));
+        vboxLayout1->setObjectName(QString::fromUtf8("vboxLayout1"));
         sqlEdit = new QTextEdit(groupBox);
-        sqlEdit->setObjectName(QStringLiteral("sqlEdit"));
+        sqlEdit->setObjectName(QString::fromUtf8("sqlEdit"));
         QSizePolicy sizePolicy4(static_cast<QSizePolicy::Policy>(7), static_cast<QSizePolicy::Policy>(3));
         sizePolicy4.setHorizontalStretch(0);
         sizePolicy4.setVerticalStretch(0);
@@ -124,18 +122,18 @@ public:
         hboxLayout->setSpacing(6);
 #endif
         hboxLayout->setContentsMargins(1, 1, 1, 1);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         spacerItem = new QSpacerItem(40, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         hboxLayout->addItem(spacerItem);
 
         clearButton = new QPushButton(groupBox);
-        clearButton->setObjectName(QStringLiteral("clearButton"));
+        clearButton->setObjectName(QString::fromUtf8("clearButton"));
 
         hboxLayout->addWidget(clearButton);
 
         submitButton = new QPushButton(groupBox);
-        submitButton->setObjectName(QStringLiteral("submitButton"));
+        submitButton->setObjectName(QString::fromUtf8("submitButton"));
 
         hboxLayout->addWidget(submitButton);
 
@@ -157,18 +155,18 @@ public:
 
     void retranslateUi(QWidget *Browser)
     {
-        Browser->setWindowTitle(QApplication::translate("Browser", "Qt SQL Browser", 0));
-        insertRowAction->setText(QApplication::translate("Browser", "&Insert Row", 0));
+        Browser->setWindowTitle(QApplication::translate("Browser", "Qt SQL Browser", nullptr));
+        insertRowAction->setText(QApplication::translate("Browser", "&Insert Row", nullptr));
 #ifndef QT_NO_STATUSTIP
-        insertRowAction->setStatusTip(QApplication::translate("Browser", "Inserts a new Row", 0));
+        insertRowAction->setStatusTip(QApplication::translate("Browser", "Inserts a new Row", nullptr));
 #endif // QT_NO_STATUSTIP
-        deleteRowAction->setText(QApplication::translate("Browser", "&Delete Row", 0));
+        deleteRowAction->setText(QApplication::translate("Browser", "&Delete Row", nullptr));
 #ifndef QT_NO_STATUSTIP
-        deleteRowAction->setStatusTip(QApplication::translate("Browser", "Deletes the current Row", 0));
+        deleteRowAction->setStatusTip(QApplication::translate("Browser", "Deletes the current Row", nullptr));
 #endif // QT_NO_STATUSTIP
-        groupBox->setTitle(QApplication::translate("Browser", "SQL Query", 0));
-        clearButton->setText(QApplication::translate("Browser", "&Clear", 0));
-        submitButton->setText(QApplication::translate("Browser", "&Submit", 0));
+        groupBox->setTitle(QApplication::translate("Browser", "SQL Query", nullptr));
+        clearButton->setText(QApplication::translate("Browser", "&Clear", nullptr));
+        submitButton->setText(QApplication::translate("Browser", "&Submit", nullptr));
     } // retranslateUi
 
 };

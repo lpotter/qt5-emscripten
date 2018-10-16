@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'stylesheeteditor.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.10.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,13 +10,10 @@
 #define STYLESHEETEDITOR_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QSpacerItem>
@@ -45,7 +41,7 @@ public:
     void setupUi(QWidget *StyleSheetEditor)
     {
         if (StyleSheetEditor->objectName().isEmpty())
-            StyleSheetEditor->setObjectName(QStringLiteral("StyleSheetEditor"));
+            StyleSheetEditor->setObjectName(QString::fromUtf8("StyleSheetEditor"));
         StyleSheetEditor->resize(445, 289);
         gridLayout = new QGridLayout(StyleSheetEditor);
 #ifndef Q_OS_MAC
@@ -54,7 +50,7 @@ public:
 #ifndef Q_OS_MAC
         gridLayout->setContentsMargins(9, 9, 9, 9);
 #endif
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         spacerItem = new QSpacerItem(32, 20, QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
 
         gridLayout->addItem(spacerItem, 0, 6, 1, 1);
@@ -64,7 +60,10 @@ public:
         gridLayout->addItem(spacerItem1, 0, 0, 1, 1);
 
         styleSheetCombo = new QComboBox(StyleSheetEditor);
-        styleSheetCombo->setObjectName(QStringLiteral("styleSheetCombo"));
+        styleSheetCombo->addItem(QString());
+        styleSheetCombo->addItem(QString());
+        styleSheetCombo->addItem(QString());
+        styleSheetCombo->setObjectName(QString::fromUtf8("styleSheetCombo"));
 
         gridLayout->addWidget(styleSheetCombo, 0, 5, 1, 1);
 
@@ -73,7 +72,7 @@ public:
         gridLayout->addItem(spacerItem2, 0, 3, 1, 1);
 
         styleCombo = new QComboBox(StyleSheetEditor);
-        styleCombo->setObjectName(QStringLiteral("styleCombo"));
+        styleCombo->setObjectName(QString::fromUtf8("styleCombo"));
         QSizePolicy sizePolicy(static_cast<QSizePolicy::Policy>(5), static_cast<QSizePolicy::Policy>(0));
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -83,7 +82,7 @@ public:
         gridLayout->addWidget(styleCombo, 0, 2, 1, 1);
 
         label_7 = new QLabel(StyleSheetEditor);
-        label_7->setObjectName(QStringLiteral("label_7"));
+        label_7->setObjectName(QString::fromUtf8("label_7"));
         QSizePolicy sizePolicy1(static_cast<QSizePolicy::Policy>(0), static_cast<QSizePolicy::Policy>(5));
         sizePolicy1.setHorizontalStretch(0);
         sizePolicy1.setVerticalStretch(0);
@@ -97,13 +96,13 @@ public:
         hboxLayout->setSpacing(6);
 #endif
         hboxLayout->setContentsMargins(0, 0, 0, 0);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         spacerItem3 = new QSpacerItem(321, 20, QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         hboxLayout->addItem(spacerItem3);
 
         applyButton = new QPushButton(StyleSheetEditor);
-        applyButton->setObjectName(QStringLiteral("applyButton"));
+        applyButton->setObjectName(QString::fromUtf8("applyButton"));
         applyButton->setEnabled(false);
 
         hboxLayout->addWidget(applyButton);
@@ -112,12 +111,12 @@ public:
         gridLayout->addLayout(hboxLayout, 2, 0, 1, 7);
 
         styleTextEdit = new QTextEdit(StyleSheetEditor);
-        styleTextEdit->setObjectName(QStringLiteral("styleTextEdit"));
+        styleTextEdit->setObjectName(QString::fromUtf8("styleTextEdit"));
 
         gridLayout->addWidget(styleTextEdit, 1, 0, 1, 7);
 
         label_8 = new QLabel(StyleSheetEditor);
-        label_8->setObjectName(QStringLiteral("label_8"));
+        label_8->setObjectName(QString::fromUtf8("label_8"));
         sizePolicy1.setHeightForWidth(label_8->sizePolicy().hasHeightForWidth());
         label_8->setSizePolicy(sizePolicy1);
 
@@ -131,16 +130,14 @@ public:
 
     void retranslateUi(QWidget *StyleSheetEditor)
     {
-        StyleSheetEditor->setWindowTitle(QApplication::translate("StyleSheetEditor", "Style Editor", 0));
-        styleSheetCombo->clear();
-        styleSheetCombo->insertItems(0, QStringList()
-         << QApplication::translate("StyleSheetEditor", "Default", 0)
-         << QApplication::translate("StyleSheetEditor", "Coffee", 0)
-         << QApplication::translate("StyleSheetEditor", "Pagefold", 0)
-        );
-        label_7->setText(QApplication::translate("StyleSheetEditor", "Style:", 0));
-        applyButton->setText(QApplication::translate("StyleSheetEditor", "&Apply", 0));
-        label_8->setText(QApplication::translate("StyleSheetEditor", "Style Sheet:", 0));
+        StyleSheetEditor->setWindowTitle(QApplication::translate("StyleSheetEditor", "Style Editor", nullptr));
+        styleSheetCombo->setItemText(0, QApplication::translate("StyleSheetEditor", "Default", nullptr));
+        styleSheetCombo->setItemText(1, QApplication::translate("StyleSheetEditor", "Coffee", nullptr));
+        styleSheetCombo->setItemText(2, QApplication::translate("StyleSheetEditor", "Pagefold", nullptr));
+
+        label_7->setText(QApplication::translate("StyleSheetEditor", "Style:", nullptr));
+        applyButton->setText(QApplication::translate("StyleSheetEditor", "&Apply", nullptr));
+        label_8->setText(QApplication::translate("StyleSheetEditor", "Style Sheet:", nullptr));
     } // retranslateUi
 
 };

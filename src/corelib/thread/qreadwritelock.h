@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,14 +42,12 @@
 
 #include <QtCore/qglobal.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
 
-struct QReadWriteLockPrivate;
+class QReadWriteLockPrivate;
 
 class Q_CORE_EXPORT QReadWriteLock
 {
@@ -73,8 +69,10 @@ public:
 
 private:
     Q_DISABLE_COPY(QReadWriteLock)
-    QReadWriteLockPrivate *d;
+    QAtomicPointer<QReadWriteLockPrivate> d_ptr;
 
+    enum StateForWaitCondition { LockedForRead, LockedForWrite, Unlocked, RecursivelyLocked };
+    StateForWaitCondition stateForWaitCondition() const;
     friend class QWaitCondition;
 };
 
@@ -176,24 +174,24 @@ inline QWriteLocker::QWriteLocker(QReadWriteLock *areadWriteLock)
 #pragma warning( pop )
 #endif
 
-#else // QT_NO_THREAD
+#else // QT_CONFIG(thread)
 
 class Q_CORE_EXPORT QReadWriteLock
 {
 public:
     enum RecursionMode { NonRecursive, Recursive };
-    inline explicit QReadWriteLock(RecursionMode = NonRecursive) { }
+    inline explicit QReadWriteLock(RecursionMode = NonRecursive) Q_DECL_NOTHROW { }
     inline ~QReadWriteLock() { }
 
-    static inline void lockForRead() { }
-    static inline bool tryLockForRead() { return true; }
-    static inline bool tryLockForRead(int timeout) { Q_UNUSED(timeout); return true; }
+    static inline void lockForRead() Q_DECL_NOTHROW { }
+    static inline bool tryLockForRead() Q_DECL_NOTHROW { return true; }
+    static inline bool tryLockForRead(int timeout) Q_DECL_NOTHROW { Q_UNUSED(timeout); return true; }
 
-    static inline void lockForWrite() { }
-    static inline bool tryLockForWrite() { return true; }
-    static inline bool tryLockForWrite(int timeout) { Q_UNUSED(timeout); return true; }
+    static inline void lockForWrite() Q_DECL_NOTHROW { }
+    static inline bool tryLockForWrite() Q_DECL_NOTHROW { return true; }
+    static inline bool tryLockForWrite(int timeout) Q_DECL_NOTHROW { Q_UNUSED(timeout); return true; }
 
-    static inline void unlock() { }
+    static inline void unlock() Q_DECL_NOTHROW { }
 
 private:
     Q_DISABLE_COPY(QReadWriteLock)
@@ -202,12 +200,12 @@ private:
 class Q_CORE_EXPORT QReadLocker
 {
 public:
-    inline QReadLocker(QReadWriteLock *) { }
-    inline ~QReadLocker() { }
+    inline QReadLocker(QReadWriteLock *) Q_DECL_NOTHROW { }
+    inline ~QReadLocker() Q_DECL_NOTHROW { }
 
-    static inline void unlock() { }
-    static inline void relock() { }
-    static inline QReadWriteLock *readWriteLock() { return 0; }
+    static inline void unlock() Q_DECL_NOTHROW { }
+    static inline void relock() Q_DECL_NOTHROW { }
+    static inline QReadWriteLock *readWriteLock() Q_DECL_NOTHROW { return nullptr; }
 
 private:
     Q_DISABLE_COPY(QReadLocker)
@@ -216,21 +214,19 @@ private:
 class Q_CORE_EXPORT QWriteLocker
 {
 public:
-    inline explicit QWriteLocker(QReadWriteLock *) { }
-    inline ~QWriteLocker() { }
+    inline explicit QWriteLocker(QReadWriteLock *) Q_DECL_NOTHROW { }
+    inline ~QWriteLocker() Q_DECL_NOTHROW { }
 
-    static inline void unlock() { }
-    static inline void relock() { }
-    static inline QReadWriteLock *readWriteLock() { return 0; }
+    static inline void unlock() Q_DECL_NOTHROW { }
+    static inline void relock() Q_DECL_NOTHROW { }
+    static inline QReadWriteLock *readWriteLock() Q_DECL_NOTHROW { return nullptr; }
 
 private:
     Q_DISABLE_COPY(QWriteLocker)
 };
 
-#endif // QT_NO_THREAD
+#endif // QT_CONFIG(thread)
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QREADWRITELOCK_H

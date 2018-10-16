@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,6 +52,18 @@
 
 #include "xbeltree.h"
 
+enum { DomElementRole = Qt::UserRole + 1 };
+
+Q_DECLARE_METATYPE(QDomElement)
+
+static inline QString titleElement() { return QStringLiteral("title"); }
+static inline QString folderElement() { return QStringLiteral("folder"); }
+static inline QString bookmarkElement() { return QStringLiteral("bookmark"); }
+
+static inline QString versionAttribute() { return QStringLiteral("version"); }
+static inline QString hrefAttribute() { return QStringLiteral("href"); }
+static inline QString foldedAttribute() { return QStringLiteral("folded"); }
+
 XbelTree::XbelTree(QWidget *parent)
     : QTreeWidget(parent)
 {
@@ -57,6 +79,24 @@ XbelTree::XbelTree(QWidget *parent)
                          QIcon::Normal, QIcon::On);
     bookmarkIcon.addPixmap(style()->standardPixmap(QStyle::SP_FileIcon));
 }
+
+#if !defined(QT_NO_CONTEXTMENU) && !defined(QT_NO_CLIPBOARD)
+void XbelTree::contextMenuEvent(QContextMenuEvent *event)
+{
+    const QTreeWidgetItem *item = itemAt(event->pos());
+    if (!item)
+        return;
+    const QString url = item->text(1);
+    QMenu contextMenu;
+    QAction *copyAction = contextMenu.addAction(tr("Copy Link to Clipboard"));
+    QAction *openAction = contextMenu.addAction(tr("Open"));
+    QAction *action = contextMenu.exec(event->globalPos());
+    if (action == copyAction)
+        QGuiApplication::clipboard()->setText(url);
+    else if (action == openAction)
+        QDesktopServices::openUrl(QUrl(url));
+}
+#endif // !QT_NO_CONTEXTMENU && !QT_NO_CLIPBOARD
 
 bool XbelTree::read(QIODevice *device)
 {
@@ -79,8 +119,8 @@ bool XbelTree::read(QIODevice *device)
         QMessageBox::information(window(), tr("DOM Bookmarks"),
                                  tr("The file is not an XBEL file."));
         return false;
-    } else if (root.hasAttribute("version")
-               && root.attribute("version") != "1.0") {
+    } else if (root.hasAttribute(versionAttribute())
+               && root.attribute(versionAttribute()) != QLatin1String("1.0")) {
         QMessageBox::information(window(), tr("DOM Bookmarks"),
                                  tr("The file is not an XBEL version 1.0 "
                                     "file."));
@@ -89,22 +129,20 @@ bool XbelTree::read(QIODevice *device)
 
     clear();
 
-    disconnect(this, SIGNAL(itemChanged(QTreeWidgetItem*,int)),
-               this, SLOT(updateDomElement(QTreeWidgetItem*,int)));
+    disconnect(this, &QTreeWidget::itemChanged, this, &XbelTree::updateDomElement);
 
-    QDomElement child = root.firstChildElement("folder");
+    QDomElement child = root.firstChildElement(folderElement());
     while (!child.isNull()) {
         parseFolderElement(child);
-        child = child.nextSiblingElement("folder");
+        child = child.nextSiblingElement(folderElement());
     }
 
-    connect(this, SIGNAL(itemChanged(QTreeWidgetItem*,int)),
-            this, SLOT(updateDomElement(QTreeWidgetItem*,int)));
+    connect(this, &QTreeWidget::itemChanged, this, &XbelTree::updateDomElement);
 
     return true;
 }
 
-bool XbelTree::write(QIODevice *device)
+bool XbelTree::write(QIODevice *device) const
 {
     const int IndentSize = 4;
 
@@ -113,21 +151,21 @@ bool XbelTree::write(QIODevice *device)
     return true;
 }
 
-void XbelTree::updateDomElement(QTreeWidgetItem *item, int column)
+void XbelTree::updateDomElement(const QTreeWidgetItem *item, int column)
 {
-    QDomElement element = domElementForItem.value(item);
+    QDomElement element = item->data(0, DomElementRole).value<QDomElement>();
     if (!element.isNull()) {
         if (column == 0) {
-            QDomElement oldTitleElement = element.firstChildElement("title");
-            QDomElement newTitleElement = domDocument.createElement("title");
+            QDomElement oldTitleElement = element.firstChildElement(titleElement());
+            QDomElement newTitleElement = domDocument.createElement(titleElement());
 
             QDomText newTitleText = domDocument.createTextNode(item->text(0));
             newTitleElement.appendChild(newTitleText);
 
             element.replaceChild(newTitleElement, oldTitleElement);
         } else {
-            if (element.tagName() == "bookmark")
-                element.setAttribute("href", item->text(1));
+            if (element.tagName() == bookmarkElement())
+                element.setAttribute(hrefAttribute(), item->text(1));
         }
     }
 }
@@ -137,7 +175,7 @@ void XbelTree::parseFolderElement(const QDomElement &element,
 {
     QTreeWidgetItem *item = createItem(element, parentItem);
 
-    QString title = element.firstChildElement("title").text();
+    QString title = element.firstChildElement(titleElement()).text();
     if (title.isEmpty())
         title = QObject::tr("Folder");
 
@@ -145,25 +183,25 @@ void XbelTree::parseFolderElement(const QDomElement &element,
     item->setIcon(0, folderIcon);
     item->setText(0, title);
 
-    bool folded = (element.attribute("folded") != "no");
+    bool folded = (element.attribute(foldedAttribute()) != QLatin1String("no"));
     setItemExpanded(item, !folded);
 
     QDomElement child = element.firstChildElement();
     while (!child.isNull()) {
-        if (child.tagName() == "folder") {
+        if (child.tagName() == folderElement()) {
             parseFolderElement(child, item);
-        } else if (child.tagName() == "bookmark") {
+        } else if (child.tagName() == bookmarkElement()) {
             QTreeWidgetItem *childItem = createItem(child, item);
 
-            QString title = child.firstChildElement("title").text();
+            QString title = child.firstChildElement(titleElement()).text();
             if (title.isEmpty())
                 title = QObject::tr("Folder");
 
             childItem->setFlags(item->flags() | Qt::ItemIsEditable);
             childItem->setIcon(0, bookmarkIcon);
             childItem->setText(0, title);
-            childItem->setText(1, child.attribute("href"));
-        } else if (child.tagName() == "separator") {
+            childItem->setText(1, child.attribute(hrefAttribute()));
+        } else if (child.tagName() == QLatin1String("separator")) {
             QTreeWidgetItem *childItem = createItem(child, item);
             childItem->setFlags(item->flags() & ~(Qt::ItemIsSelectable | Qt::ItemIsEditable));
             childItem->setText(0, QString(30, 0xB7));
@@ -181,6 +219,6 @@ QTreeWidgetItem *XbelTree::createItem(const QDomElement &element,
     } else {
         item = new QTreeWidgetItem(this);
     }
-    domElementForItem.insert(item, element);
+    item->setData(0, DomElementRole, QVariant::fromValue(element));
     return item;
 }

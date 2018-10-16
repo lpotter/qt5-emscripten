@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QBLENDFUNCTIONS_P_H
 #define QBLENDFUNCTIONS_P_H
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <qmath.h>
 #include "qdrawhelper_p.h"
 
@@ -60,7 +59,7 @@ QT_BEGIN_NAMESPACE
 
 template <typename SRC, typename T>
 void qt_scale_image_16bit(uchar *destPixels, int dbpl,
-                          const uchar *srcPixels, int sbpl,
+                          const uchar *srcPixels, int sbpl, int srch,
                           const QRectF &targetRect,
                           const QRectF &srcRect,
                           const QRect &clip,
@@ -136,9 +135,28 @@ void qt_scale_image_16bit(uchar *destPixels, int dbpl,
 
     quint16 *dst = ((quint16 *) (destPixels + ty1 * dbpl)) + tx1;
 
+    // this bounds check here is required as floating point rounding above might in some cases lead to
+    // w/h values that are one pixel too large, falling outside of the valid image area.
+    const int ystart = srcy >> 16;
+    if (ystart >= srch && iy < 0) {
+        srcy += iy;
+        --h;
+    }
+    const int xstart = basex >> 16;
+    if (xstart >=  (int)(sbpl/sizeof(SRC)) && ix < 0) {
+        basex += ix;
+        --w;
+    }
+    int yend = (srcy + iy * (h - 1)) >> 16;
+    if (yend < 0 || yend >= srch)
+        --h;
+    int xend = (basex + ix * (w - 1)) >> 16;
+    if (xend < 0 || xend >= (int)(sbpl/sizeof(SRC)))
+        --w;
+
     while (h--) {
         const SRC *src = (const SRC *) (srcPixels + (srcy >> 16) * sbpl);
-        int srcx = basex;
+        quint32 srcx = basex;
         int x = 0;
         for (; x<w-7; x+=8) {
             blender.write(&dst[x], src[srcx >> 16]); srcx += ix;
@@ -161,7 +179,7 @@ void qt_scale_image_16bit(uchar *destPixels, int dbpl,
 }
 
 template <typename T> void qt_scale_image_32bit(uchar *destPixels, int dbpl,
-                                                const uchar *srcPixels, int sbpl,
+                                                const uchar *srcPixels, int sbpl, int srch,
                                                 const QRectF &targetRect,
                                                 const QRectF &srcRect,
                                                 const QRect &clip,
@@ -215,6 +233,8 @@ template <typename T> void qt_scale_image_32bit(uchar *destPixels, int dbpl,
 
     int h = ty2 - ty1;
     int w = tx2 - tx1;
+    if (!w || !h)
+        return;
 
     quint32 basex;
     quint32 srcy;
@@ -236,9 +256,28 @@ template <typename T> void qt_scale_image_32bit(uchar *destPixels, int dbpl,
 
     quint32 *dst = ((quint32 *) (destPixels + ty1 * dbpl)) + tx1;
 
+    // this bounds check here is required as floating point rounding above might in some cases lead to
+    // w/h values that are one pixel too large, falling outside of the valid image area.
+    const int ystart = srcy >> 16;
+    if (ystart >= srch && iy < 0) {
+        srcy += iy;
+        --h;
+    }
+    const int xstart = basex >> 16;
+    if (xstart >=  (int)(sbpl/sizeof(quint32)) && ix < 0) {
+        basex += ix;
+        --w;
+    }
+    int yend = (srcy + iy * (h - 1)) >> 16;
+    if (yend < 0 || yend >= srch)
+        --h;
+    int xend = (basex + ix * (w - 1)) >> 16;
+    if (xend < 0 || xend >= (int)(sbpl/sizeof(quint32)))
+        --w;
+
     while (h--) {
         const uint *src = (const quint32 *) (srcPixels + (srcy >> 16) * sbpl);
-        int srcx = basex;
+        quint32 srcx = basex;
         int x = 0;
         for (; x<w; ++x) {
             blender.write(&dst[x], src[srcx >> 16]);
@@ -356,12 +395,12 @@ void qt_transform_image_rasterize(DestT *destPixels, int dbpl,
                 --ii;
             }
             switch (i & 7) {
-                case 7: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
-                case 6: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
-                case 5: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
-                case 4: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
-                case 3: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
-                case 2: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
+                case 7: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
+                case 6: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
+                case 5: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
+                case 4: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
+                case 3: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
+                case 2: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line; Q_FALLTHROUGH();
                 case 1: blender.write(line, reinterpret_cast<const SrcT *>(reinterpret_cast<const uchar *>(srcPixels) + (v >> 16) * sbpl)[u >> 16]); u += dudx; v += dvdx; ++line;
             }
 

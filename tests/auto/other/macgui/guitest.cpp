@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -84,7 +71,6 @@ public:
 void WidgetNavigator::printAll(QWidget *widget)
 {
     QAccessibleInterface * const iface = QAccessible::queryAccessibleInterface(widget);
-    deleteInDestructor(iface);
     printAll(iface);
 }
 
@@ -97,7 +83,6 @@ void WidgetNavigator::printAll(QAccessibleInterface *interface)
 QAccessibleInterface *WidgetNavigator::find(QAccessible::Text textType, const QString &text, QWidget *start)
 {
     QAccessibleInterface *const iface = QAccessible::queryAccessibleInterface(start);
-    deleteInDestructor(iface);
     return find(textType, text, iface);
 }
 
@@ -118,25 +103,19 @@ QAccessibleInterface *WidgetNavigator::recursiveSearch(TestBase *test, QAccessib
 
     while (todoInterfaces.isEmpty() == false) {
         QAccessibleInterface *testInterface = todoInterfaces.pop();
-        
+
         if ((*test)(testInterface))
             return testInterface;
-            
+
         const int numChildren = testInterface->childCount();
         for (int i = 0; i < numChildren; ++i) {
             QAccessibleInterface *childInterface = testInterface->child(i);
             if (childInterface) {
                 todoInterfaces.push(childInterface);
-                deleteInDestructor(childInterface);
             }
         }
     }
     return 0;
-}
-
-void WidgetNavigator::deleteInDestructor(QAccessibleInterface *interface)
-{
-    interfaces.insert(interface);
 }
 
 QWidget *WidgetNavigator::getWidget(QAccessibleInterface *interface)
@@ -146,31 +125,33 @@ QWidget *WidgetNavigator::getWidget(QAccessibleInterface *interface)
 
 WidgetNavigator::~WidgetNavigator()
 {
-    foreach(QAccessibleInterface *interface, interfaces) {
-        delete interface;
-    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 namespace NativeEvents {
 #ifdef Q_OS_MAC
-   void mouseClick(const QPoint &globalPos, Qt::MouseButtons buttons, MousePosition updateMouse)
+   void mouseClick(const QPoint &globalPos, Qt::MouseButtons buttons)
     {
         CGPoint position;
         position.x = globalPos.x();
         position.y = globalPos.y();
-       
-        const bool updateMousePosition = (updateMouse == UpdatePosition);
-        
-        // Mouse down.
-        CGPostMouseEvent(position, updateMousePosition, 3, 
-                        (buttons & Qt::LeftButton) ? true : false, 
-                        (buttons & Qt::MidButton/* Middlebutton! */) ? true : false, 
-                        (buttons & Qt::RightButton) ? true : false);
 
-        // Mouse up.
-        CGPostMouseEvent(position, updateMousePosition, 3, false, false, false);	
+        CGEventType mouseDownType = (buttons & Qt::LeftButton) ? kCGEventLeftMouseDown :
+                                    (buttons & Qt::RightButton) ? kCGEventRightMouseDown :
+                                                                  kCGEventOtherMouseDown;
+        // The mouseButton argument to CGEventCreateMouseEvent() is ignored unless the type
+        // is kCGEventOtherMouseDown, so defaulting to kCGMouseButtonLeft is fine.
+        CGMouseButton mouseButton = mouseDownType == kCGEventOtherMouseDown ? kCGMouseButtonCenter : kCGMouseButtonLeft;
+        CGEventRef mouseEvent = CGEventCreateMouseEvent(NULL, mouseDownType, position, mouseButton);
+        CGEventPost(kCGHIDEventTap, mouseEvent);
+
+        CGEventType mouseUpType = (buttons & Qt::LeftButton) ? kCGEventLeftMouseUp :
+                                  (buttons & Qt::RightButton) ? kCGEventRightMouseUp :
+                                                                kCGEventOtherMouseUp;
+        CGEventSetType(mouseEvent, mouseUpType);
+        CGEventPost(kCGHIDEventTap, mouseEvent);
+        CFRelease(mouseEvent);
     }
 #else
 # error Oops, NativeEvents::mouseClick() is not implemented on this platform.
@@ -200,7 +181,7 @@ bool checkPixel(QColor pixel, QColor expected)
 }
 
 /*
-    Tests that the pixels inside rect in image all have the given color. 
+    Tests that the pixels inside rect in image all have the given color.
 */
 bool GuiTester::isFilled(const QImage image, const QRect &rect, const QColor &color)
 {
@@ -218,7 +199,7 @@ bool GuiTester::isFilled(const QImage image, const QRect &rect, const QColor &co
 
 /*
     Tests that stuff is painted to the pixels inside rect.
-    This test fails if any lines in the given direction have pixels 
+    This test fails if any lines in the given direction have pixels
     of only one color.
 */
 bool GuiTester::isContent(const QImage image, const QRect &rect, Directions directions)
@@ -239,7 +220,7 @@ bool GuiTester::isContent(const QImage image, const QRect &rect, Directions dire
             }
         }
         return true;
-    } 
+    }
 
     if (directions & Vertical) {
        for (int x = rect.left(); x <= rect.right(); ++x) {

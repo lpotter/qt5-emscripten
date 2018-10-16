@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,7 +51,7 @@
 // We mean it.
 //
 
-#include "QtCore/qglobal.h"
+#include <QtGui/private/qtguiglobal_p.h>
 #include "QtCore/qstring.h"
 #include "QtCore/qvarlengtharray.h"
 #include "QtCore/qnamespace.h"
@@ -71,13 +69,12 @@
 #include "private/qtextdocument_p.h"
 #endif
 
-#include "private/qharfbuzz_copy_p.h"
-
 #include "private/qfixed_p.h"
 
 #include <private/qunicodetools_p.h>
 
 #include <stdlib.h>
+#include <vector>
 
 QT_BEGIN_NAMESPACE
 
@@ -89,6 +86,7 @@ class QPainter;
 
 class QAbstractTextDocumentLayout;
 
+typedef quint32 glyph_t;
 
 // this uses the same coordinate system as Qt, but a different one to freetype.
 // * y is usually negative, and is equal to the ascent.
@@ -116,6 +114,22 @@ struct Q_GUI_EXPORT glyph_metrics_t
 
     glyph_metrics_t transformed(const QTransform &xform) const;
     inline bool isValid() const {return x != 100000 && y != 100000;}
+
+    inline QFixed leftBearing() const
+    {
+        if (!isValid())
+            return QFixed();
+
+        return x;
+    }
+
+    inline QFixed rightBearing() const
+    {
+        if (!isValid())
+            return QFixed();
+
+        return xoff - x - width;
+    }
 };
 Q_DECLARE_TYPEINFO(glyph_metrics_t, Q_PRIMITIVE_TYPE);
 
@@ -129,13 +143,22 @@ struct Q_AUTOTEST_EXPORT QScriptAnalysis
         LineOrParagraphSeparator = 4,
         Space = 5,
         SpaceTabOrObject = Space,
-        Tab = 6,
+        Nbsp = 6,
+        Tab = 7,
         TabOrObject = Tab,
-        Object = 7
+        Object = 8
     };
-    unsigned short script    : 7;
-    unsigned short bidiLevel : 6;  // Unicode Bidi algorithm embedding level (0-61)
-    unsigned short flags     : 3;
+    enum BidiFlags {
+        BidiBN = 1,
+        BidiMaybeResetToParagraphLevel = 2,
+        BidiResetToParagraphLevel = 4,
+        BidiMirrored = 8
+    };
+    unsigned short script    : 8;
+    unsigned short flags     : 4;
+    unsigned short bidiFlags : 4;
+    unsigned short bidiLevel : 8;  // Unicode Bidi algorithm embedding level (0-125)
+    QChar::Direction bidiDirection : 8; // used when running the bidi algorithm
     inline bool operator == (const QScriptAnalysis &other) const {
         return script == other.script && bidiLevel == other.bidiLevel && flags == other.flags;
     }
@@ -160,24 +183,28 @@ struct QGlyphJustification
 };
 Q_DECLARE_TYPEINFO(QGlyphJustification, Q_PRIMITIVE_TYPE);
 
-struct QGlyphLayoutInstance
-{
-    QFixedPoint offset;
-    QFixedPoint advance;
-    HB_Glyph glyph;
-    QGlyphJustification justification;
-    HB_GlyphAttributes attributes;
+struct QGlyphAttributes {
+    uchar clusterStart  : 1;
+    uchar dontPrint     : 1;
+    uchar justification : 4;
+    uchar reserved      : 2;
 };
+Q_STATIC_ASSERT(sizeof(QGlyphAttributes) == 1);
+Q_DECLARE_TYPEINFO(QGlyphAttributes, Q_PRIMITIVE_TYPE);
 
 struct QGlyphLayout
 {
+    enum {
+        SpaceNeeded = sizeof(glyph_t) + sizeof(QFixed) + sizeof(QFixedPoint)
+                    + sizeof(QGlyphAttributes) + sizeof(QGlyphJustification)
+    };
+
     // init to 0 not needed, done when shaping
     QFixedPoint *offsets; // 8 bytes per element
-    HB_Glyph *glyphs; // 4 bytes per element
-    QFixed *advances_x; // 4 bytes per element
-    QFixed *advances_y; // 4 bytes per element
+    glyph_t *glyphs; // 4 bytes per element
+    QFixed *advances; // 4 bytes per element
     QGlyphJustification *justifications; // 4 bytes per element
-    HB_GlyphAttributes *attributes; // 2 bytes per element
+    QGlyphAttributes *attributes; // 1 byte per element
 
     int numGlyphs;
 
@@ -186,24 +213,21 @@ struct QGlyphLayout
     inline explicit QGlyphLayout(char *address, int totalGlyphs)
     {
         offsets = reinterpret_cast<QFixedPoint *>(address);
-        int offset = totalGlyphs * sizeof(HB_FixedPoint);
-        glyphs = reinterpret_cast<HB_Glyph *>(address + offset);
-        offset += totalGlyphs * sizeof(HB_Glyph);
-        advances_x = reinterpret_cast<QFixed *>(address + offset);
-        offset += totalGlyphs * sizeof(QFixed);
-        advances_y = reinterpret_cast<QFixed *>(address + offset);
+        int offset = totalGlyphs * sizeof(QFixedPoint);
+        glyphs = reinterpret_cast<glyph_t *>(address + offset);
+        offset += totalGlyphs * sizeof(glyph_t);
+        advances = reinterpret_cast<QFixed *>(address + offset);
         offset += totalGlyphs * sizeof(QFixed);
         justifications = reinterpret_cast<QGlyphJustification *>(address + offset);
         offset += totalGlyphs * sizeof(QGlyphJustification);
-        attributes = reinterpret_cast<HB_GlyphAttributes *>(address + offset);
+        attributes = reinterpret_cast<QGlyphAttributes *>(address + offset);
         numGlyphs = totalGlyphs;
     }
 
     inline QGlyphLayout mid(int position, int n = -1) const {
         QGlyphLayout copy = *this;
         copy.glyphs += position;
-        copy.advances_x += position;
-        copy.advances_y += position;
+        copy.advances += position;
         copy.offsets += position;
         copy.justifications += position;
         copy.attributes += position;
@@ -214,51 +238,22 @@ struct QGlyphLayout
         return copy;
     }
 
-    static inline int spaceNeededForGlyphLayout(int totalGlyphs) {
-        return totalGlyphs * (sizeof(HB_Glyph) + sizeof(HB_GlyphAttributes)
-                + sizeof(QFixed) + sizeof(QFixed) + sizeof(QFixedPoint)
-                + sizeof(QGlyphJustification));
-    }
-
     inline QFixed effectiveAdvance(int item) const
-    { return (advances_x[item] + QFixed::fromFixed(justifications[item].space_18d6)) * !attributes[item].dontPrint; }
-
-    inline QGlyphLayoutInstance instance(int position) const {
-        QGlyphLayoutInstance g;
-        g.offset.x = offsets[position].x;
-        g.offset.y = offsets[position].y;
-        g.glyph = glyphs[position];
-        g.advance.x = advances_x[position];
-        g.advance.y = advances_y[position];
-        g.justification = justifications[position];
-        g.attributes = attributes[position];
-        return g;
-    }
-
-    inline void setInstance(int position, const QGlyphLayoutInstance &g) {
-        offsets[position].x = g.offset.x;
-        offsets[position].y = g.offset.y;
-        glyphs[position] = g.glyph;
-        advances_x[position] = g.advance.x;
-        advances_y[position] = g.advance.y;
-        justifications[position] = g.justification;
-        attributes[position] = g.attributes;
-    }
+    { return (advances[item] + QFixed::fromFixed(justifications[item].space_18d6)) * !attributes[item].dontPrint; }
 
     inline void clear(int first = 0, int last = -1) {
         if (last == -1)
             last = numGlyphs;
         if (first == 0 && last == numGlyphs
             && reinterpret_cast<char *>(offsets + numGlyphs) == reinterpret_cast<char *>(glyphs)) {
-            memset(offsets, 0, spaceNeededForGlyphLayout(numGlyphs));
+            memset(static_cast<void *>(offsets), 0, (numGlyphs * SpaceNeeded));
         } else {
             const int num = last - first;
-            memset(offsets + first, 0, num * sizeof(QFixedPoint));
-            memset(glyphs + first, 0, num * sizeof(HB_Glyph));
-            memset(advances_x + first, 0, num * sizeof(QFixed));
-            memset(advances_y + first, 0, num * sizeof(QFixed));
-            memset(justifications + first, 0, num * sizeof(QGlyphJustification));
-            memset(attributes + first, 0, num * sizeof(HB_GlyphAttributes));
+            memset(static_cast<void *>(offsets + first), 0, num * sizeof(QFixedPoint));
+            memset(glyphs + first, 0, num * sizeof(glyph_t));
+            memset(static_cast<void *>(advances + first), 0, num * sizeof(QFixed));
+            memset(static_cast<void *>(justifications + first), 0, num * sizeof(QGlyphJustification));
+            memset(attributes + first, 0, num * sizeof(QGlyphAttributes));
         }
     }
 
@@ -275,7 +270,7 @@ private:
     typedef QVarLengthArray<void *> Array;
 public:
     QVarLengthGlyphLayoutArray(int totalGlyphs)
-        : Array(spaceNeededForGlyphLayout(totalGlyphs) / sizeof(void *) + 1)
+        : Array((totalGlyphs * SpaceNeeded) / sizeof(void *) + 1)
         , QGlyphLayout(reinterpret_cast<char *>(Array::data()), totalGlyphs)
     {
         memset(Array::data(), 0, Array::size() * sizeof(void *));
@@ -283,7 +278,7 @@ public:
 
     void resize(int totalGlyphs)
     {
-        Array::resize(spaceNeededForGlyphLayout(totalGlyphs) / sizeof(void *) + 1);
+        Array::resize((totalGlyphs * SpaceNeeded) / sizeof(void *) + 1);
 
         *((QGlyphLayout *)this) = QGlyphLayout(reinterpret_cast<char *>(Array::data()), totalGlyphs);
         memset(Array::data(), 0, Array::size() * sizeof(void *));
@@ -300,10 +295,7 @@ public:
     }
 
 private:
-    void *buffer[(N * (sizeof(HB_Glyph) + sizeof(HB_GlyphAttributes)
-                + sizeof(QFixed) + sizeof(QFixed) + sizeof(QFixedPoint)
-                + sizeof(QGlyphJustification)))
-                    / sizeof(void *) + 1];
+    void *buffer[(N * SpaceNeeded) / sizeof(void *) + 1];
 };
 
 struct QScriptItem;
@@ -341,13 +333,9 @@ public:
     QFontEngine *fontEngine;
 };
 
-struct Q_AUTOTEST_EXPORT QScriptItem
+struct QScriptItem
 {
-    inline QScriptItem()
-        : position(0),
-          num_glyphs(0), descent(-1), ascent(-1), leading(-1), width(-1),
-          glyph_data_offset(0) {}
-    inline QScriptItem(int p, const QScriptAnalysis &a)
+    Q_DECL_CONSTEXPR QScriptItem(int p, QScriptAnalysis a) Q_DECL_NOTHROW
         : position(p), analysis(a),
           num_glyphs(0), descent(-1), ascent(-1), leading(-1), width(-1),
           glyph_data_offset(0) {}
@@ -360,11 +348,12 @@ struct Q_AUTOTEST_EXPORT QScriptItem
     QFixed leading;
     QFixed width;
     int glyph_data_offset;
-    QFixed height() const { return ascent + descent; }
+    Q_DECL_CONSTEXPR QFixed height() const Q_DECL_NOTHROW { return ascent + descent; }
+private:
+    friend class QVector<QScriptItem>;
+    QScriptItem() {}; // for QVector, don't use
 };
-
-
-Q_DECLARE_TYPEINFO(QScriptItem, Q_MOVABLE_TYPE);
+Q_DECLARE_TYPEINFO(QScriptItem, Q_PRIMITIVE_TYPE);
 
 typedef QVector<QScriptItem> QScriptItemArray;
 
@@ -392,8 +381,7 @@ struct Q_AUTOTEST_EXPORT QScriptLine
     uint leadingIncluded : 1;
     QFixed height() const { return ascent + descent
                             + (leadingIncluded?  qMax(QFixed(),leading) : QFixed()); }
-    QFixed base() const { return ascent
-                          + (leadingIncluded ? qMax(QFixed(),leading) : QFixed()); }
+    QFixed base() const { return ascent; }
     void setDefaultHeight(QTextEngine *eng);
     void operator+=(const QScriptLine &other);
 };
@@ -441,6 +429,7 @@ public:
     };
 
     struct ItemDecoration {
+        ItemDecoration() {} // for QVector, don't use
         ItemDecoration(qreal x1, qreal x2, qreal y, const QPen &pen):
             x1(x1), x2(x2), y(y), pen(pen) {}
 
@@ -450,9 +439,8 @@ public:
         QPen pen;
     };
 
-    typedef QList<ItemDecoration> ItemDecorationList;
+    typedef QVector<ItemDecoration> ItemDecorationList;
 
-    QTextEngine(LayoutData *data);
     QTextEngine();
     QTextEngine(const QString &str, const QFont &f);
     ~QTextEngine();
@@ -538,11 +526,11 @@ public:
 
     void freeMemory();
 
-    int findItem(int strPos) const;
-    inline QTextFormatCollection *formats() const {
+    int findItem(int strPos, int firstItem = 0) const;
+    inline QTextFormatCollection *formatCollection() const {
         if (block.docHandle())
             return block.docHandle()->formatCollection();
-        return specialData ? specialData->formats.data() : 0;
+        return specialData ? specialData->formatCollection.data() : 0;
     }
     QTextCharFormat format(const QScriptItem *si) const;
     inline QAbstractTextDocumentLayout *docLayout() const {
@@ -556,6 +544,7 @@ public:
 
     mutable QScriptLineArray lines;
 
+private:
     struct FontEngineCache {
         FontEngineCache();
         mutable QFontEngine *prevFontEngine;
@@ -573,6 +562,7 @@ public:
     };
     mutable FontEngineCache feCache;
 
+public:
     QString text;
     mutable QFont fnt;
 #ifndef QT_NO_RAWFONT
@@ -595,35 +585,43 @@ public:
     uint useRawFont : 1;
 #endif
 
-    int *underlinePositions;
-
     mutable LayoutData *layoutData;
 
     ItemDecorationList underlineList;
     ItemDecorationList strikeOutList;
     ItemDecorationList overlineList;
 
-    inline bool hasFormats() const { return (block.docHandle() || specialData); }
     inline bool visualCursorMovement() const
-    {
-        return (visualMovement ||
-                (block.docHandle() ? block.docHandle()->defaultCursorMoveStyle == Qt::VisualMoveStyle : false));
-    }
+    { return visualMovement || (block.docHandle() && block.docHandle()->defaultCursorMoveStyle == Qt::VisualMoveStyle); }
+
+    inline int preeditAreaPosition() const { return specialData ? specialData->preeditPosition : -1; }
+    inline QString preeditAreaText() const { return specialData ? specialData->preeditText : QString(); }
+    void setPreeditArea(int position, const QString &text);
+
+    inline bool hasFormats() const
+    { return block.docHandle() || (specialData && !specialData->formats.isEmpty()); }
+    inline QVector<QTextLayout::FormatRange> formats() const
+    { return specialData ? specialData->formats : QVector<QTextLayout::FormatRange>(); }
+    void setFormats(const QVector<QTextLayout::FormatRange> &formats);
+
+private:
+    static void init(QTextEngine *e);
 
     struct SpecialData {
         int preeditPosition;
         QString preeditText;
-        QList<QTextLayout::FormatRange> addFormats;
-        QVector<int> addFormatIndices;
-        QVector<int> resolvedFormatIndices;
+        QVector<QTextLayout::FormatRange> formats;
+        QVector<QTextCharFormat> resolvedFormats;
         // only used when no docHandle is available
-        QScopedPointer<QTextFormatCollection> formats;
+        QScopedPointer<QTextFormatCollection> formatCollection;
     };
     SpecialData *specialData;
 
+    void indexFormats();
+    void resolveFormats() const;
+
+public:
     bool atWordSeparator(int position) const;
-    bool atSpace(int position) const;
-    void indexAdditionalFormats();
 
     QString elidedText(Qt::TextElideMode mode, const QFixed &width, int flags = 0, int from = 0, int count = -1) const;
 
@@ -636,7 +634,7 @@ public:
     int nextLogicalPosition(int oldPos) const;
     int lineNumberForTextPosition(int pos);
     int positionAfterVisualMovement(int oldPos, QTextCursor::MoveOperation op);
-    void insertionPointsForLine(int lineNum, QVector<int> &insertionPoints);
+    std::vector<int> insertionPointsForLine(int lineNum);
     void resetFontEngineCache();
 
     void enableDelayDecorations(bool enable = true) { delayDecorations = enable; }
@@ -658,10 +656,17 @@ private:
     void setBoundary(int strPos) const;
     void addRequiredBoundaries() const;
     void shapeText(int item) const;
-    void shapeTextWithHarfbuzz(int item) const;
-    void splitItem(int item, int pos) const;
+#if QT_CONFIG(harfbuzz)
+    int shapeTextWithHarfbuzzNG(const QScriptItem &si,
+                                const ushort *string,
+                                int itemLength,
+                                QFontEngine *fontEngine,
+                                const QVector<uint> &itemBoundaries,
+                                bool kerningEnabled,
+                                bool hasLetterSpacing) const;
+#endif
+    int shapeTextWithHarfbuzz(const QScriptItem &si, const ushort *string, int itemLength, QFontEngine *fontEngine, const QVector<uint> &itemBoundaries, bool kerningEnabled) const;
 
-    void resolveAdditionalFormats() const;
     int endOfLine(int lineNum);
     int beginningOfLine(int lineNum);
     int getClusterLength(unsigned short *logClusters, const QCharAttributes *attributes, int from, int to, int glyph_pos, int *start);
@@ -674,6 +679,7 @@ public:
     LayoutData _layoutData;
     void *_memory[MemSize];
 };
+Q_DECLARE_TYPEINFO(QTextEngine::ItemDecoration, Q_MOVABLE_TYPE);
 
 struct QTextLineItemIterator
 {
@@ -693,15 +699,14 @@ struct QTextLineItemIterator
     QTextEngine *eng;
 
     QFixed x;
-    QFixed pos_x;
     const QScriptLine &line;
     QScriptItem *si;
 
-    int lineNum;
-    int lineEnd;
-    int firstItem;
-    int lastItem;
-    int nItems;
+    const int lineNum;
+    const int lineEnd;
+    const int firstItem;
+    const int lastItem;
+    const int nItems;
     int logicalItem;
     int item;
     int itemLength;
@@ -714,7 +719,6 @@ struct QTextLineItemIterator
     QFixed itemWidth;
 
     QVarLengthArray<int> visualOrder;
-    QVarLengthArray<uchar> levels;
 
     const QTextLayout::FormatRange *selection;
 };

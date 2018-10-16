@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -157,7 +155,7 @@ QFont QTextItem::font() const
   provided is the raster paint engine, which contains a software
   rasterizer which supports the full feature set on all supported platforms.
   This is the default for painting on QWidget-based classes in e.g. on Windows,
-  X11 and Mac OS X, it is the backend for painting on QImage and it is
+  X11 and \macos, it is the backend for painting on QImage and it is
   used as a fallback for paint engines that do not support a certain
   capability. In addition we provide QPaintEngine implementations for
   OpenGL (accessible through QGLWidget) and printing (which allows using
@@ -312,6 +310,7 @@ struct QT_Point {
     int x;
     int y;
 };
+Q_DECLARE_TYPEINFO(QT_Point, Q_PRIMITIVE_TYPE);
 
 /*!
     \fn void QPaintEngine::drawPolygon(const QPointF *points, int pointCount,
@@ -342,6 +341,8 @@ struct QT_PointF {
     qreal x;
     qreal y;
 };
+Q_DECLARE_TYPEINFO(QT_PointF, Q_PRIMITIVE_TYPE);
+
 /*!
     \overload
 
@@ -371,10 +372,10 @@ void QPaintEngine::drawPolygon(const QPoint *points, int pointCount, PolygonDraw
     \value X11
     \value Windows
     \value MacPrinter
-    \value CoreGraphics Mac OS X's Quartz2D (CoreGraphics)
-    \value QuickDraw Mac OS X's QuickDraw
+    \value CoreGraphics \macos's Quartz2D (CoreGraphics)
+    \value QuickDraw \macos's QuickDraw
     \value QWindowSystem Qt for Embedded Linux
-    \value PostScript
+    \value PostScript (No longer supported)
     \value OpenGL
     \value Picture QPicture format
     \value SVG Scalable Vector Graphics XML format
@@ -387,13 +388,14 @@ void QPaintEngine::drawPolygon(const QPoint *points, int pointCount, PolygonDraw
     \value OpenGL2
     \value PaintBuffer
     \value Blitter
+    \value Direct2D Windows only, Direct2D based engine
 */
 
 /*!
     \fn bool QPaintEngine::isActive() const
 
-    Returns true if the paint engine is actively drawing; otherwise
-    returns false.
+    Returns \c true if the paint engine is actively drawing; otherwise
+    returns \c false.
 
     \sa setActive()
 */
@@ -545,8 +547,8 @@ void qt_fill_tile(QPixmap *tile, const QPixmap &pixmap)
     }
 }
 
-void qt_draw_tile(QPaintEngine *gc, qreal x, qreal y, qreal w, qreal h,
-                  const QPixmap &pixmap, qreal xOffset, qreal yOffset)
+Q_GUI_EXPORT void qt_draw_tile(QPaintEngine *gc, qreal x, qreal y, qreal w, qreal h,
+                               const QPixmap &pixmap, qreal xOffset, qreal yOffset)
 {
     qreal yPos, xPos, drawH, drawW, yOff, xOff;
     yPos = y;
@@ -657,8 +659,8 @@ void QPaintEngine::drawImage(const QRectF &r, const QImage &image, const QRectF 
 /*!
     \fn bool QPaintEngine::hasFeature(PaintEngineFeatures feature) const
 
-    Returns true if the paint engine supports the specified \a
-    feature; otherwise returns false.
+    Returns \c true if the paint engine supports the specified \a
+    feature; otherwise returns \c false.
 */
 
 /*!
@@ -666,7 +668,7 @@ void QPaintEngine::drawImage(const QRectF &r, const QImage &image, const QRectF 
 
     \internal
 
-    Returns true if the paint engine is a QPaintEngineEx derivative.
+    Returns \c true if the paint engine is a QPaintEngineEx derivative.
 */
 
 /*!
@@ -749,18 +751,36 @@ void QPaintEngine::drawPath(const QPainterPath &)
 void QPaintEngine::drawTextItem(const QPointF &p, const QTextItem &textItem)
 {
     const QTextItemInt &ti = static_cast<const QTextItemInt &>(textItem);
+    if (ti.glyphs.numGlyphs == 0)
+        return;
+
+    if (ti.fontEngine->glyphFormat == QFontEngine::Format_ARGB) {
+        QVarLengthArray<QFixedPoint> positions;
+        QVarLengthArray<glyph_t> glyphs;
+        QTransform matrix = QTransform::fromTranslate(p.x(), p.y() - ti.fontEngine->ascent().toReal());
+        ti.fontEngine->getGlyphPositions(ti.glyphs, matrix, ti.flags, glyphs, positions);
+        painter()->save();
+        painter()->setRenderHint(QPainter::SmoothPixmapTransform,
+                                 bool((painter()->renderHints() & QPainter::TextAntialiasing)
+                                      && !(painter()->font().styleStrategy() & QFont::NoAntialias)));
+        for (int i = 0; i < ti.glyphs.numGlyphs; ++i) {
+            QImage glyph = ti.fontEngine->bitmapForGlyph(glyphs[i], QFixed(), QTransform());
+            painter()->drawImage(positions[i].x.toReal(), positions[i].y.toReal(), glyph);
+        }
+        painter()->restore();
+        return;
+    }
 
     QPainterPath path;
     path.setFillRule(Qt::WindingFill);
-    if (ti.glyphs.numGlyphs)
-        ti.fontEngine->addOutlineToPath(0, 0, ti.glyphs, &path, ti.flags);
+    ti.fontEngine->addOutlineToPath(0, 0, ti.glyphs, &path, ti.flags);
     if (!path.isEmpty()) {
         painter()->save();
         painter()->setRenderHint(QPainter::Antialiasing,
                                  bool((painter()->renderHints() & QPainter::TextAntialiasing)
                                       && !(painter()->font().styleStrategy() & QFont::NoAntialias)));
         painter()->translate(p.x(), p.y());
-        painter()->fillPath(path, state->pen().brush());
+        painter()->fillPath(path, painter()->pen().brush());
         painter()->restore();
     }
 }
@@ -927,11 +947,11 @@ QPoint QPaintEngine::coordinateOffset() const
 void QPaintEngine::setSystemClip(const QRegion &region)
 {
     Q_D(QPaintEngine);
-    d->systemClip = region;
+    d->baseSystemClip = region;
     // Be backward compatible and only call d->systemStateChanged()
     // if we currently have a system transform/viewport set.
+    d->updateSystemClip();
     if (d->hasSystemTransform || d->hasSystemViewport) {
-        d->transformSystemClip();
         d->systemStateChanged();
     }
 }
@@ -973,6 +993,10 @@ void QPaintEngine::setSystemRect(const QRect &rect)
 QRect QPaintEngine::systemRect() const
 {
     return d_func()->systemRect;
+}
+
+QPaintEnginePrivate::~QPaintEnginePrivate()
+{
 }
 
 void QPaintEnginePrivate::drawBoxTextItem(const QPointF &p, const QTextItemInt &ti)

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,45 +30,6 @@
 #include <QtTest/QtTest>
 #include <QtCore/QtCore>
 #include "viewstotest.cpp"
-#include <stdlib.h>
-
-#if defined(Q_OS_UNIX)
-#include <time.h>
-#endif
-#if defined(Q_OS_WIN)
-#include <time.h>
-#if defined(Q_OS_WINCE)
-#include <aygshell.h>
-#endif
-#define random rand
-#define srandom srand
-
-#if defined(Q_OS_WINCE)
-#ifndef SPI_GETPLATFORMTYPE
-#define SPI_GETPLATFORMTYPE 257
-#endif
-
-bool qt_wince_is_platform(const QString &platformString) {
-    wchar_t tszPlatform[64];
-    if (SystemParametersInfo(SPI_GETPLATFORMTYPE,
-                             sizeof(tszPlatform)/sizeof(*tszPlatform),tszPlatform,0))
-      if (0 == _tcsicmp(reinterpret_cast<const wchar_t *> (platformString.utf16()), tszPlatform))
-            return true;
-    return false;
-}
-
-bool qt_wince_is_pocket_pc() {
-    return qt_wince_is_platform(QString::fromLatin1("PocketPC"));
-}
-
-bool qt_wince_is_smartphone() {
-       return qt_wince_is_platform(QString::fromLatin1("Smartphone"));
-}
-bool qt_wince_is_mobile() {
-     return (qt_wince_is_smartphone() || qt_wince_is_pocket_pc());
-}
-#endif
-#endif
 
 /*!
     See viewstotest.cpp for instructions on how to have your view tested with these tests.
@@ -98,15 +46,10 @@ class tst_QItemView : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QItemView() {};
-    virtual ~tst_QItemView() {};
-
-public slots:
+private slots:
     void init();
     void cleanup();
 
-private slots:
     void nonDestructiveBasicTest_data();
     void nonDestructiveBasicTest();
 
@@ -296,14 +239,16 @@ void tst_QItemView::populate()
     const int baseInsert = 26;
 #endif
     for (int i = 0; i < 40; ++i) {
+        const QString iS = QString::number(i);
         parent = treeModel->index(0, 0, parent);
         treeModel->insertRows(0, baseInsert + i, parent);
         treeModel->insertColumns(0, baseInsert + i, parent);
         // Fill in some values to make it easier to debug
         for (int x = 0; x < treeModel->rowCount(); ++x) {
+            const QString xS = QString::number(x);
             for (int y = 0; y < treeModel->columnCount(); ++y) {
                 QModelIndex index = treeModel->index(x, y, parent);
-                treeModel->setData(index, QString("%1_%2_%3").arg(x).arg(y).arg(i));
+                treeModel->setData(index, xS + QLatin1Char('_') + QString::number(y) + QLatin1Char('_') + iS);
                 treeModel->setData(index, QVariant(QColor(Qt::blue)), Qt::TextColorRole);
             }
         }
@@ -321,10 +266,6 @@ void tst_QItemView::nonDestructiveBasicTest_data()
  */
 void tst_QItemView::nonDestructiveBasicTest()
 {
-#ifdef Q_OS_WINCE
-     QTest::qWait(400);
-#endif
-
     QFETCH(QString, viewType);
     QFETCH(int, vscroll);
     QFETCH(int, hscroll);
@@ -386,7 +327,7 @@ void tst_QItemView::nonDestructiveBasicTest()
     QCOMPARE(view->tabKeyNavigation(), false);
     view->setTabKeyNavigation(true);
     QCOMPARE(view->tabKeyNavigation(), true);
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     // setDropIndicatorShown
     view->setDropIndicatorShown(false);
     QCOMPARE(view->showDropIndicator(), false);
@@ -459,13 +400,15 @@ void touch(QWidget *widget, Qt::KeyboardModifier modifier, Qt::Key keyPress){
     int width = widget->width();
     int height = widget->height();
     for (int i = 0; i < 5; ++i) {
-        QTest::mouseClick(widget, Qt::LeftButton, modifier, QPoint(random() % width, random() % height));
-        QTest::mouseDClick(widget, Qt::LeftButton, modifier, QPoint(random() % width, random() % height));
-        QPoint press(random() % width, random() % height);
-        QPoint releasePoint(random() % width, random() % height);
+        QTest::mouseClick(widget, Qt::LeftButton, modifier,
+                          QPoint(QRandomGenerator::global()->bounded(width), QRandomGenerator::global()->bounded(height)));
+        QTest::mouseDClick(widget, Qt::LeftButton, modifier,
+                           QPoint(QRandomGenerator::global()->bounded(width), QRandomGenerator::global()->bounded(height)));
+        QPoint press(QRandomGenerator::global()->bounded(width), QRandomGenerator::global()->bounded(height));
+        QPoint releasePoint(QRandomGenerator::global()->bounded(width), QRandomGenerator::global()->bounded(height));
         QTest::mousePress(widget, Qt::LeftButton, modifier, press);
         QTest::mouseMove(widget, releasePoint);
-        if (random() % 1 == 0)
+        if (QRandomGenerator::global()->bounded(1) == 0)
             QTest::mouseRelease(widget, Qt::LeftButton, 0, releasePoint);
         else
             QTest::mouseRelease(widget, Qt::LeftButton, modifier, releasePoint);
@@ -491,11 +434,7 @@ void tst_QItemView::spider()
     view->setHorizontalScrollMode((QAbstractItemView::ScrollMode)hscroll);
     view->setModel(treeModel);
     view->show();
-#if defined(Q_OS_WINCE)
-    srandom(0);
-#else
-    srandom(time(0));
-#endif
+    QVERIFY(QTest::qWaitForWindowActive(view));
     touch(view->viewport(), Qt::NoModifier, Qt::Key_Left);
     touch(view->viewport(), Qt::ShiftModifier, Qt::Key_Enter);
     touch(view->viewport(), Qt::ControlModifier, Qt::Key_Backspace);
@@ -559,7 +498,7 @@ void tst_QItemView::visualRect()
 
     QFETCH(bool, displays);
     if (!displays){
-        QVERIFY(view->visualRect(topIndex) == QRect());
+        QCOMPARE(view->visualRect(topIndex), QRect());
         return;
     }
 
@@ -567,15 +506,15 @@ void tst_QItemView::visualRect()
     view->show();
     QVERIFY(view->visualRect(topIndex) != QRect());
 
-    QVERIFY(topIndex == view->indexAt(view->visualRect(topIndex).center()));
-    QVERIFY(topIndex == view->indexAt(view->visualRect(topIndex).bottomLeft()));
-    QVERIFY(topIndex == view->indexAt(view->visualRect(topIndex).bottomRight()));
-    QVERIFY(topIndex == view->indexAt(view->visualRect(topIndex).topLeft()));
-    QVERIFY(topIndex == view->indexAt(view->visualRect(topIndex).topRight()));
+    QCOMPARE(topIndex, view->indexAt(view->visualRect(topIndex).center()));
+    QCOMPARE(topIndex, view->indexAt(view->visualRect(topIndex).bottomLeft()));
+    QCOMPARE(topIndex, view->indexAt(view->visualRect(topIndex).bottomRight()));
+    QCOMPARE(topIndex, view->indexAt(view->visualRect(topIndex).topLeft()));
+    QCOMPARE(topIndex, view->indexAt(view->visualRect(topIndex).topRight()));
 
     testViews->hideIndexes(view);
     QModelIndex hiddenIndex = treeModel->index(1, 0);
-    QVERIFY(view->visualRect(hiddenIndex) == QRect());
+    QCOMPARE(view->visualRect(hiddenIndex), QRect());
 }
 
 void tst_QItemView::walkScreen(QAbstractItemView *view)
@@ -607,23 +546,26 @@ void tst_QItemView::walkScreen(QAbstractItemView *view)
     }
 }
 
-void walkIndex(QModelIndex index, QAbstractItemView *view)
+void walkIndex(const QModelIndex &index, const QAbstractItemView *view)
 {
-    QRect visualRect = view->visualRect(index);
-    //if (index.column() == 0)
-    //qDebug() << index << visualRect;
-    int width = visualRect.width();
-    int height = visualRect.height();
+    const QRect visualRect = view->visualRect(index);
+    const int width = visualRect.width();
+    const int height = visualRect.height();
 
-    for (int w = 0; w < width; ++w)
+    if (width == 0 || height == 0)
+        return;
+
+    const auto widths = (width < 2) ? QVector<int>({ 0, 1 }) : QVector<int>({ 0, 1, width / 2, width - 2, width - 1 });
+    const auto heights = (height < 2) ? QVector<int>({ 0, 1 }) : QVector<int>({ 0, 1, height / 2, height - 2, height - 1 });
+    for (int w : widths)
     {
-        for (int h = 0; h < height; ++h)
+        for (int h : heights)
         {
-            QPoint point(visualRect.x()+w, visualRect.y()+h);
-            if (view->indexAt(point) != index) {
+            const QPoint point(visualRect.x() + w, visualRect.y() + h);
+            const auto idxAt = view->indexAt(point);
+            if (idxAt != index)
                 qDebug() << "index" << index << "visualRect" << visualRect << point << view->indexAt(point);
-            }
-            QVERIFY(view->indexAt(point) == index);
+            QCOMPARE(idxAt, index);
         }
     }
 
@@ -640,7 +582,7 @@ void walkIndex(QModelIndex index, QAbstractItemView *view)
     a bug it will point it out, but the above tests should have already found the basic bugs
     because it is easier to figure out the problem in those tests then this one.
  */
-void checkChildren(QAbstractItemView *currentView, const QModelIndex &parent = QModelIndex(), int currentDepth=0)
+void checkChildren(const QAbstractItemView *currentView, const QModelIndex &parent = QModelIndex(), int currentDepth = 0)
 {
     QAbstractItemModel *currentModel = currentView->model();
 
@@ -684,7 +626,6 @@ void tst_QItemView::indexAt()
     view->setHorizontalScrollMode((QAbstractItemView::ScrollMode)hscroll);
     view->show();
     view->setModel(treeModel);
-#if 0
     checkChildren(view);
 
     QModelIndex index = view->model()->index(0, 0);
@@ -697,7 +638,6 @@ void tst_QItemView::indexAt()
     QPoint p(1, view->height()/2);
     QModelIndex idx = view->indexAt(p);
     QCOMPARE(idx, QModelIndex());
-#endif
 }
 
 void tst_QItemView::scrollTo_data()

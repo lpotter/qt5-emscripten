@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,7 @@
 #ifndef QPIXMAP_H
 #define QPIXMAP_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtGui/qpaintdevice.h>
 #include <QtGui/qcolor.h>
 #include <QtCore/qnamespace.h>
@@ -49,8 +48,6 @@
 #include <QtCore/qsharedpointer.h>
 #include <QtGui/qimage.h>
 #include <QtGui/qtransform.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -68,7 +65,7 @@ public:
     explicit QPixmap(QPlatformPixmap *data);
     QPixmap(int w, int h);
     explicit QPixmap(const QSize &);
-    QPixmap(const QString& fileName, const char *format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
+    QPixmap(const QString& fileName, const char *format = nullptr, Qt::ImageConversionFlags flags = Qt::AutoColor);
 #ifndef QT_NO_IMAGEFORMAT_XPM
     explicit QPixmap(const char * const xpm[]);
 #endif
@@ -77,15 +74,16 @@ public:
 
     QPixmap &operator=(const QPixmap &);
 #ifdef Q_COMPILER_RVALUE_REFS
-    inline QPixmap &operator=(QPixmap &&other)
+    inline QPixmap &operator=(QPixmap &&other) Q_DECL_NOEXCEPT
     { qSwap(data, other.data); return *this; }
 #endif
-    inline void swap(QPixmap &other) { qSwap(data, other.data); }
+    inline void swap(QPixmap &other) Q_DECL_NOEXCEPT
+    { qSwap(data, other.data); }
 
     operator QVariant() const;
 
     bool isNull() const;
-    int devType() const;
+    int devType() const override;
 
     int width() const;
     int height() const;
@@ -133,20 +131,26 @@ public:
     QImage toImage() const;
     static QPixmap fromImage(const QImage &image, Qt::ImageConversionFlags flags = Qt::AutoColor);
     static QPixmap fromImageReader(QImageReader *imageReader, Qt::ImageConversionFlags flags = Qt::AutoColor);
+#ifdef Q_COMPILER_RVALUE_REFS
+    static QPixmap fromImage(QImage &&image, Qt::ImageConversionFlags flags = Qt::AutoColor)
+    {
+        return fromImageInPlace(image, flags);
+    }
+#endif
 
-    bool load(const QString& fileName, const char *format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
-    bool loadFromData(const uchar *buf, uint len, const char* format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
-    inline bool loadFromData(const QByteArray &data, const char* format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
-    bool save(const QString& fileName, const char* format = 0, int quality = -1) const;
-    bool save(QIODevice* device, const char* format = 0, int quality = -1) const;
+    bool load(const QString& fileName, const char *format = nullptr, Qt::ImageConversionFlags flags = Qt::AutoColor);
+    bool loadFromData(const uchar *buf, uint len, const char* format = nullptr, Qt::ImageConversionFlags flags = Qt::AutoColor);
+    inline bool loadFromData(const QByteArray &data, const char* format = nullptr, Qt::ImageConversionFlags flags = Qt::AutoColor);
+    bool save(const QString& fileName, const char* format = nullptr, int quality = -1) const;
+    bool save(QIODevice* device, const char* format = nullptr, int quality = -1) const;
 
     bool convertFromImage(const QImage &img, Qt::ImageConversionFlags flags = Qt::AutoColor);
 
     inline QPixmap copy(int x, int y, int width, int height) const;
     QPixmap copy(const QRect &rect = QRect()) const;
 
-    inline void scroll(int dx, int dy, int x, int y, int width, int height, QRegion *exposed = 0);
-    void scroll(int dx, int dy, const QRect &rect, QRegion *exposed = 0);
+    inline void scroll(int dx, int dy, int x, int y, int width, int height, QRegion *exposed = nullptr);
+    void scroll(int dx, int dy, const QRect &rect, QRegion *exposed = nullptr);
 
 #if QT_DEPRECATED_SINCE(5, 0)
     QT_DEPRECATED inline int serialNumber() const { return cacheKey() >> 32; }
@@ -158,7 +162,7 @@ public:
 
     bool isQBitmap() const;
 
-    QPaintEngine *paintEngine() const;
+    QPaintEngine *paintEngine() const override;
 
     inline bool operator!() const { return isNull(); }
 
@@ -168,7 +172,8 @@ public:
 #endif
 
 protected:
-    int metric(PaintDeviceMetric) const;
+    int metric(PaintDeviceMetric) const override;
+    static QPixmap fromImageInPlace(QImage &image, Qt::ImageConversionFlags flags = Qt::AutoColor);
 
 private:
     QExplicitlySharedDataPointer<QPlatformPixmap> data;
@@ -244,7 +249,5 @@ Q_GUI_EXPORT QDebug operator<<(QDebug, const QPixmap &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPIXMAP_H

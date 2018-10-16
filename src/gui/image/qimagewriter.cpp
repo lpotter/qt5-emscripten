@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,7 +56,7 @@
     object.  Pass either a file name or a device pointer, and the
     image format to QImageWriter's constructor. You can then set
     several options, such as the gamma level (by calling setGamma())
-    and quality (by calling setQuality()). canWrite() returns true if
+    and quality (by calling setQuality()). canWrite() returns \c true if
     QImageWriter can write the image (i.e., the image format is
     supported and the device is open for writing). Call write() to
     write the image to the device.
@@ -89,6 +87,9 @@
     \value UnsupportedFormatError Qt does not support the requested
     image format.
 
+    \value InvalidImageError An attempt was made to write an invalid QImage. An
+    example of an invalid image would be a null QImage.
+
     \value UnknownError An unknown error occurred. If you get this
     value after calling write(), it is most likely caused by a bug in
     QImageWriter.
@@ -99,6 +100,7 @@
 #include <qbytearray.h>
 #include <qfile.h>
 #include <qfileinfo.h>
+#include <qimage.h>
 #include <qimageiohandler.h>
 #include <qset.h>
 #include <qvariant.h>
@@ -115,19 +117,12 @@
 #ifndef QT_NO_IMAGEFORMAT_PNG
 #include <private/qpnghandler_p.h>
 #endif
-#ifndef QT_NO_IMAGEFORMAT_JPEG
-#include <private/qjpeghandler_p.h>
-#endif
-#ifdef QT_BUILTIN_GIF_READER
-#include <private/qgifhandler_p.h>
-#endif
+
+#include <private/qimagereaderwriterhelpers_p.h>
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
-
-#ifndef QT_NO_LIBRARY
-Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
-                          (QImageIOHandlerFactoryInterface_iid, QLatin1String("/imageformats")))
-#endif
 
 static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
     const QByteArray &format)
@@ -136,11 +131,11 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
     QByteArray suffix;
     QImageIOHandler *handler = 0;
 
-#ifndef QT_NO_LIBRARY
+#ifndef QT_NO_IMAGEFORMATPLUGIN
     typedef QMultiMap<int, QString> PluginKeyMap;
 
     // check if any plugins can write the image
-    QFactoryLoader *l = loader();
+    auto l = QImageReaderWriterHelpers::pluginLoader();
     const PluginKeyMap keyMap = l->keyMap();
     int suffixPluginIndex = -1;
 #endif
@@ -151,7 +146,7 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
         // this allows plugins to override our built-in handlers.
         if (QFile *file = qobject_cast<QFile *>(device)) {
             if (!(suffix = QFileInfo(file->fileName()).suffix().toLower().toLatin1()).isEmpty()) {
-#ifndef QT_NO_LIBRARY
+#ifndef QT_NO_IMAGEFORMATPLUGIN
                 const int index = keyMap.key(QString::fromLatin1(suffix), -1);
                 if (index != -1)
                     suffixPluginIndex = index;
@@ -162,7 +157,7 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
 
     QByteArray testFormat = !form.isEmpty() ? form : suffix;
 
-#ifndef QT_NO_LIBRARY
+#ifndef QT_NO_IMAGEFORMATPLUGIN
     if (suffixPluginIndex != -1) {
         // when format is missing, check if we can find a plugin for the
         // suffix.
@@ -173,7 +168,7 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
                 handler = plugin->create(device, suffix);
         }
     }
-#endif // QT_NO_LIBRARY
+#endif // QT_NO_IMAGEFORMATPLUGIN
 
     // check if any built-in handlers can write the image
     if (!handler && !testFormat.isEmpty()) {
@@ -181,14 +176,6 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
 #ifndef QT_NO_IMAGEFORMAT_PNG
         } else if (testFormat == "png") {
             handler = new QPngHandler;
-#endif
-#ifndef QT_NO_IMAGEFORMAT_JPEG
-        } else if (testFormat == "jpg" || testFormat == "jpeg") {
-            handler = new QJpegHandler;
-#endif
-#ifdef QT_BUILTIN_GIF_READER
-        } else if (testFormat == "gif") {
-            handler = new QGifHandler;
 #endif
 #ifndef QT_NO_IMAGEFORMAT_BMP
         } else if (testFormat == "bmp") {
@@ -214,9 +201,9 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
         }
     }
 
-#ifndef QT_NO_LIBRARY
+#ifndef QT_NO_IMAGEFORMATPLUGIN
     if (!testFormat.isEmpty()) {
-        const int keyCount = keyMap.keys().size();
+        const int keyCount = keyMap.size();
         for (int i = 0; i < keyCount; ++i) {
             QImageIOPlugin *plugin = qobject_cast<QImageIOPlugin *>(l->instance(i));
             if (plugin && (plugin->capabilities(device, testFormat) & QImageIOPlugin::CanWrite)) {
@@ -226,7 +213,7 @@ static QImageIOHandler *createWriteHandlerHelper(QIODevice *device,
             }
         }
     }
-#endif // QT_NO_LIBRARY
+#endif // QT_NO_IMAGEFORMATPLUGIN
 
     if (!handler)
         return 0;
@@ -242,6 +229,8 @@ class QImageWriterPrivate
 public:
     QImageWriterPrivate(QImageWriter *qq);
 
+    bool canWriteHelper();
+
     // device
     QByteArray format;
     QIODevice *device;
@@ -254,6 +243,10 @@ public:
     float gamma;
     QString description;
     QString text;
+    QByteArray subType;
+    bool optimizedWrite;
+    bool progressiveScanWrite;
+    QImageIOHandler::Transformations transformation;
 
     // error
     QImageWriter::ImageWriterError imageWriterError;
@@ -271,12 +264,42 @@ QImageWriterPrivate::QImageWriterPrivate(QImageWriter *qq)
     deleteDevice = false;
     handler = 0;
     quality = -1;
-    compression = 0;
+    compression = -1;
     gamma = 0.0;
+    optimizedWrite = false;
+    progressiveScanWrite = false;
     imageWriterError = QImageWriter::UnknownError;
-    errorString = QT_TRANSLATE_NOOP(QImageWriter, QLatin1String("Unknown error"));
+    errorString = QImageWriter::tr("Unknown error");
+    transformation = QImageIOHandler::TransformationNone;
 
     q = qq;
+}
+
+bool QImageWriterPrivate::canWriteHelper()
+{
+    if (!device) {
+        imageWriterError = QImageWriter::DeviceError;
+        errorString = QImageWriter::tr("Device is not set");
+        return false;
+    }
+    if (!device->isOpen()) {
+        if (!device->open(QIODevice::WriteOnly)) {
+            imageWriterError = QImageWriter::DeviceError;
+            errorString = QImageWriter::tr("Cannot open device for writing: %1").arg(device->errorString());
+            return false;
+        }
+    }
+    if (!device->isWritable()) {
+        imageWriterError = QImageWriter::DeviceError;
+        errorString = QImageWriter::tr("Device not writable");
+        return false;
+    }
+    if (!handler && (handler = createWriteHandlerHelper(device, format)) == 0) {
+        imageWriterError = QImageWriter::UnsupportedFormatError;
+        errorString = QImageWriter::tr("Unsupported image format");
+        return false;
+    }
+    return true;
 }
 
 /*!
@@ -307,12 +330,9 @@ QImageWriter::QImageWriter(QIODevice *device, const QByteArray &format)
     by inspecting the extension of \a fileName.
 */
 QImageWriter::QImageWriter(const QString &fileName, const QByteArray &format)
-    : d(new QImageWriterPrivate(this))
+    : QImageWriter(new QFile(fileName), format)
 {
-    QFile *file = new QFile(fileName);
-    d->device = file;
     d->deleteDevice = true;
-    d->format = format;
 }
 
 /*!
@@ -414,13 +434,16 @@ QString QImageWriter::fileName() const
 }
 
 /*!
-    This is an image format specific function that sets the quality
-    level of the image to \a quality. For image formats that do not
-    support setting the quality, this value is ignored.
+    Sets the quality setting of the image format to \a quality.
 
-    The value range of \a quality depends on the image format. For
-    example, the "jpeg" format supports a quality range from 0 (low
-    quality, high compression) to 100 (high quality, low compression).
+    Some image formats, in particular lossy ones, entail a tradeoff between a)
+    visual quality of the resulting image, and b) encoding execution time and
+    compression level. This function sets the level of that tradeoff for image
+    formats that support it. For other formats, this value is ignored.
+
+    The value range of \a quality depends on the image format. For example,
+    the "jpeg" format supports a quality range from 0 (low visual quality, high
+    compression) to 100 (high visual quality, low compression).
 
     \sa quality()
 */
@@ -430,7 +453,7 @@ void QImageWriter::setQuality(int quality)
 }
 
 /*!
-    Returns the quality level of the image.
+    Returns the quality setting of the image format.
 
     \sa setQuality()
 */
@@ -488,6 +511,131 @@ void QImageWriter::setGamma(float gamma)
 float QImageWriter::gamma() const
 {
     return d->gamma;
+}
+
+/*!
+    \since 5.4
+
+    This is an image format specific function that sets the
+    subtype of the image to \a type. Subtype can be used by
+    a handler to determine which format it should use while
+    saving the image.
+
+    For example, saving an image in DDS format with A8R8G8R8 subtype:
+
+    \snippet code/src_gui_image_qimagewriter.cpp 3
+*/
+void QImageWriter::setSubType(const QByteArray &type)
+{
+    d->subType = type;
+}
+
+/*!
+    \since 5.4
+
+    Returns the subtype of the image.
+
+    \sa setSubType()
+*/
+QByteArray QImageWriter::subType() const
+{
+    return d->subType;
+}
+
+/*!
+    \since 5.4
+
+    Returns the list of subtypes supported by an image.
+*/
+QList<QByteArray> QImageWriter::supportedSubTypes() const
+{
+    if (!supportsOption(QImageIOHandler::SupportedSubTypes))
+        return QList<QByteArray>();
+    return d->handler->option(QImageIOHandler::SupportedSubTypes).value< QList<QByteArray> >();
+}
+
+/*!
+    \since 5.5
+
+    This is an image format-specific function which sets the \a optimize flags when
+    writing images. For image formats that do not support setting an \a optimize flag,
+    this value is ignored.
+
+    The default is false.
+
+    \sa optimizedWrite()
+*/
+void QImageWriter::setOptimizedWrite(bool optimize)
+{
+    d->optimizedWrite = optimize;
+}
+
+/*!
+    \since 5.5
+
+    Returns whether optimization has been turned on for writing the image.
+
+    \sa setOptimizedWrite()
+*/
+bool QImageWriter::optimizedWrite() const
+{
+    return d->optimizedWrite;
+}
+
+/*!
+    \since 5.5
+
+    This is an image format-specific function which turns on \a progressive scanning
+    when writing images. For image formats that do not support setting a \a progressive
+    scan flag, this value is ignored.
+
+    The default is false.
+
+    \sa progressiveScanWrite()
+*/
+
+void QImageWriter::setProgressiveScanWrite(bool progressive)
+{
+    d->progressiveScanWrite = progressive;
+}
+
+/*!
+    \since 5.5
+
+    Returns whether the image should be written as a progressive image.
+
+    \sa setProgressiveScanWrite()
+*/
+bool QImageWriter::progressiveScanWrite() const
+{
+    return d->progressiveScanWrite;
+}
+
+/*!
+    \since 5.5
+
+    Sets the image transformations metadata including orientation to \a transform.
+
+    If transformation metadata is not supported by the image format,
+    the transform is applied before writing.
+
+    \sa transformation(), write()
+*/
+void QImageWriter::setTransformation(QImageIOHandler::Transformations transform)
+{
+    d->transformation = transform;
+}
+
+/*!
+    \since 5.5
+
+    Returns the transformation and orientation the image has been set to written with.
+
+    \sa setTransformation()
+*/
+QImageIOHandler::Transformations QImageWriter::transformation() const
+{
+    return d->transformation;
 }
 
 /*!
@@ -551,33 +699,34 @@ void QImageWriter::setText(const QString &key, const QString &text)
 }
 
 /*!
-    Returns true if QImageWriter can write the image; i.e., the image
+    Returns \c true if QImageWriter can write the image; i.e., the image
     format is supported and the assigned device is open for reading.
 
     \sa write(), setDevice(), setFormat()
 */
 bool QImageWriter::canWrite() const
 {
-    if (d->device && !d->handler && (d->handler = createWriteHandlerHelper(d->device, d->format)) == 0) {
-        d->imageWriterError = QImageWriter::UnsupportedFormatError;
-        d->errorString = QT_TRANSLATE_NOOP(QImageWriter,
-                                           QLatin1String("Unsupported image format"));
-        return false;
+    if (QFile *file = qobject_cast<QFile *>(d->device)) {
+        const bool remove = !file->isOpen() && !file->exists();
+        const bool result = d->canWriteHelper();
+
+        // This looks strange (why remove if it doesn't exist?) but the issue
+        // here is that canWriteHelper will create the file in the process of
+        // checking if the write can succeed. If it subsequently fails, we
+        // should remove that empty file.
+        if (!result && remove)
+            file->remove();
+        return result;
     }
-    if (d->device && !d->device->isOpen())
-        d->device->open(QIODevice::WriteOnly);
-    if (!d->device || !d->device->isWritable()) {
-        d->imageWriterError = QImageWriter::DeviceError;
-        d->errorString = QT_TRANSLATE_NOOP(QImageWriter,
-                                           QLatin1String("Device not writable"));
-        return false;
-    }
-    return true;
+
+    return d->canWriteHelper();
 }
+
+extern void qt_imageTransform(QImage &src, QImageIOHandler::Transformations orient);
 
 /*!
     Writes the image \a image to the assigned device or file
-    name. Returns true on success; otherwise returns false. If the
+    name. Returns \c true on success; otherwise returns \c false. If the
     operation fails, you can call error() to find the type of error
     that occurred, or errorString() to get a human readable
     description of the error.
@@ -586,9 +735,17 @@ bool QImageWriter::canWrite() const
 */
 bool QImageWriter::write(const QImage &image)
 {
+    // Do this before canWrite, so it doesn't create a file if this fails.
+    if (Q_UNLIKELY(image.isNull())) {
+        d->imageWriterError = QImageWriter::InvalidImageError;
+        d->errorString = QImageWriter::tr("Image is empty");
+        return false;
+    }
+
     if (!canWrite())
         return false;
 
+    QImage img = image;
     if (d->handler->supportsOption(QImageIOHandler::Quality))
         d->handler->setOption(QImageIOHandler::Quality, d->quality);
     if (d->handler->supportsOption(QImageIOHandler::CompressionRatio))
@@ -597,8 +754,18 @@ bool QImageWriter::write(const QImage &image)
         d->handler->setOption(QImageIOHandler::Gamma, d->gamma);
     if (!d->description.isEmpty() && d->handler->supportsOption(QImageIOHandler::Description))
         d->handler->setOption(QImageIOHandler::Description, d->description);
+    if (!d->subType.isEmpty() && d->handler->supportsOption(QImageIOHandler::SubType))
+        d->handler->setOption(QImageIOHandler::SubType, d->subType);
+    if (d->handler->supportsOption(QImageIOHandler::OptimizedWrite))
+        d->handler->setOption(QImageIOHandler::OptimizedWrite, d->optimizedWrite);
+    if (d->handler->supportsOption(QImageIOHandler::ProgressiveScanWrite))
+        d->handler->setOption(QImageIOHandler::ProgressiveScanWrite, d->progressiveScanWrite);
+    if (d->handler->supportsOption(QImageIOHandler::ImageTransformation))
+        d->handler->setOption(QImageIOHandler::ImageTransformation, int(d->transformation));
+    else
+        qt_imageTransform(img, d->transformation);
 
-    if (!d->handler->write(image))
+    if (!d->handler->write(img))
         return false;
     if (QFile *file = qobject_cast<QFile *>(d->device))
         file->flush();
@@ -628,7 +795,7 @@ QString QImageWriter::errorString() const
 /*!
     \since 4.2
 
-    Returns true if the writer supports \a option; otherwise returns
+    Returns \c true if the writer supports \a option; otherwise returns
     false.
 
     Different image formats support different options. Call this function to
@@ -646,38 +813,12 @@ bool QImageWriter::supportsOption(QImageIOHandler::ImageOption option) const
 {
     if (!d->handler && (d->handler = createWriteHandlerHelper(d->device, d->format)) == 0) {
         d->imageWriterError = QImageWriter::UnsupportedFormatError;
-        d->errorString = QT_TRANSLATE_NOOP(QImageWriter,
-                                           QLatin1String("Unsupported image format"));
+        d->errorString = QImageWriter::tr("Unsupported image format");
         return false;
     }
 
     return d->handler->supportsOption(option);
 }
-
-
-#ifndef QT_NO_LIBRARY
-void supportedImageHandlerFormats(QFactoryLoader *loader,
-                                  QImageIOPlugin::Capability cap,
-                                  QSet<QByteArray> *result)
-{
-    typedef QMultiMap<int, QString> PluginKeyMap;
-    typedef PluginKeyMap::const_iterator PluginKeyMapConstIterator;
-
-    const PluginKeyMap keyMap = loader->keyMap();
-    const PluginKeyMapConstIterator cend = keyMap.constEnd();
-    int i = -1;
-    QImageIOPlugin *plugin = 0;
-    for (PluginKeyMapConstIterator it = keyMap.constBegin(); it != cend; ++it) {
-        if (it.key() != i) {
-            i = it.key();
-            plugin = qobject_cast<QImageIOPlugin *>(loader->instance(i));
-        }
-        const QByteArray key = it.value().toLatin1();
-        if (plugin && (plugin->capabilities(0, key) & cap) != 0)
-            result->insert(key);
-    }
-}
-#endif // QT_NO_LIBRARY
 
 /*!
     Returns the list of image formats supported by QImageWriter.
@@ -685,21 +826,19 @@ void supportedImageHandlerFormats(QFactoryLoader *loader,
     By default, Qt can write the following formats:
 
     \table
-    \header \li Format \li Description
-    \row    \li BMP    \li Windows Bitmap
-    \row    \li JPG    \li Joint Photographic Experts Group
-    \row    \li JPEG   \li Joint Photographic Experts Group
-    \row    \li PNG    \li Portable Network Graphics
-    \row    \li PBM    \li Portable Bitmap
-    \row    \li PGM    \li Portable Graymap
-    \row    \li PPM    \li Portable Pixmap
-    \row    \li XBM    \li X11 Bitmap
-    \row    \li XPM    \li X11 Pixmap
+    \header \li Format \li MIME type                    \li Description
+    \row    \li BMP    \li image/bmp                    \li Windows Bitmap
+    \row    \li JPG    \li image/jpeg                   \li Joint Photographic Experts Group
+    \row    \li PNG    \li image/png                    \li Portable Network Graphics
+    \row    \li PBM    \li image/x-portable-bitmap      \li Portable Bitmap
+    \row    \li PGM    \li image/x-portable-graymap     \li Portable Graymap
+    \row    \li PPM    \li image/x-portable-pixmap      \li Portable Pixmap
+    \row    \li XBM    \li image/x-xbitmap              \li X11 Bitmap
+    \row    \li XPM    \li image/x-xpixmap              \li X11 Pixmap
     \endtable
 
-    Reading and writing SVG files is supported through Qt's
-    \l{QtSvg Module}{SVG Module}. The \l{QtImageFormats Module}{Image Formats Module}
-    provides support for additional image formats.
+    Reading and writing SVG files is supported through the \l{Qt SVG} module.
+    The \l{Qt Image Formats} module provides support for additional image formats.
 
     Note that the QApplication instance must be created before this function is
     called.
@@ -708,37 +847,37 @@ void supportedImageHandlerFormats(QFactoryLoader *loader,
 */
 QList<QByteArray> QImageWriter::supportedImageFormats()
 {
-    QSet<QByteArray> formats;
-    formats << "bmp";
-#ifndef QT_NO_IMAGEFORMAT_PPM
-    formats << "pbm" << "pgm" << "ppm";
-#endif
-#ifndef QT_NO_IMAGEFORMAT_XBM
-    formats << "xbm";
-#endif
-#ifndef QT_NO_IMAGEFORMAT_XPM
-    formats << "xpm";
-#endif
-#ifndef QT_NO_IMAGEFORMAT_PNG
-    formats << "png";
-#endif
-#ifndef QT_NO_IMAGEFORMAT_JPEG
-    formats << "jpg" << "jpeg";
-#endif
-#ifdef QT_BUILTIN_GIF_READER
-    formats << "gif";
-#endif
+    return QImageReaderWriterHelpers::supportedImageFormats(QImageReaderWriterHelpers::CanWrite);
+}
 
-#ifndef QT_NO_LIBRARY
-    supportedImageHandlerFormats(loader(), QImageIOPlugin::CanWrite, &formats);
-#endif // QT_NO_LIBRARY
+/*!
+    Returns the list of MIME types supported by QImageWriter.
 
-    QList<QByteArray> sortedFormats;
-    for (QSet<QByteArray>::ConstIterator it = formats.constBegin(); it != formats.constEnd(); ++it)
-        sortedFormats << *it;
+    Note that the QApplication instance must be created before this function is
+    called.
 
-    qSort(sortedFormats);
-    return sortedFormats;
+    \sa supportedImageFormats(), QImageReader::supportedMimeTypes()
+*/
+QList<QByteArray> QImageWriter::supportedMimeTypes()
+{
+    return QImageReaderWriterHelpers::supportedMimeTypes(QImageReaderWriterHelpers::CanWrite);
+}
+
+/*!
+    \since 5.12
+
+    Returns the list of image formats corresponding to \a mimeType.
+
+    Note that the QGuiApplication instance must be created before this function is
+    called.
+
+    \sa supportedImageFormats(), supportedMimeTypes()
+*/
+
+QList<QByteArray> QImageWriter::imageFormatsForMimeType(const QByteArray &mimeType)
+{
+    return QImageReaderWriterHelpers::imageFormatsForMimeType(mimeType,
+                                                              QImageReaderWriterHelpers::CanWrite);
 }
 
 QT_END_NAMESPACE

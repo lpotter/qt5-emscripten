@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,6 +52,7 @@
 
 #include <QIcon>
 #include <QMimeData>
+#include <QRandomGenerator>
 
 PiecesModel::PiecesModel(int pieceSize, QObject *parent)
     : QAbstractListModel(parent), m_PieceSize(pieceSize)
@@ -67,7 +78,7 @@ QVariant PiecesModel::data(const QModelIndex &index, int role) const
 void PiecesModel::addPiece(const QPixmap &pixmap, const QPoint &location)
 {
     int row;
-    if (int(2.0 * qrand() / (RAND_MAX + 1.0)) == 1)
+    if (QRandomGenerator::global()->bounded(2) == 1)
         row = 0;
     else
         row = pixmaps.size();
@@ -192,10 +203,12 @@ Qt::DropActions PiecesModel::supportedDropActions() const
 
 void PiecesModel::addPieces(const QPixmap& pixmap)
 {
-    beginRemoveRows(QModelIndex(), 0, 24);
-    pixmaps.clear();
-    locations.clear();
-    endRemoveRows();
+    if (!pixmaps.isEmpty()) {
+        beginRemoveRows(QModelIndex(), 0, pixmaps.size() - 1);
+        pixmaps.clear();
+        locations.clear();
+        endRemoveRows();
+    }
     for (int y = 0; y < 5; ++y) {
         for (int x = 0; x < 5; ++x) {
             QPixmap pieceImage = pixmap.copy(x*m_PieceSize, y*m_PieceSize, m_PieceSize, m_PieceSize);

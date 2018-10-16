@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,6 +34,8 @@
 #include <qfile.h>
 #include <qdir.h>
 #include <qset.h>
+#include <qtextcodec.h>
+#include <QtTest/private/qtesthelpers_p.h>
 #ifdef Q_OS_WIN
 # include <windows.h>
 #endif
@@ -54,6 +43,7 @@
 # include <sys/types.h>
 # include <unistd.h>
 #endif
+#include "emulationdetector.h"
 
 class tst_QTemporaryDir : public QObject
 {
@@ -69,6 +59,8 @@ private slots:
     void fileTemplate_data();
     void getSetCheck();
     void fileName();
+    void filePath_data();
+    void filePath();
     void autoRemove();
     void nonWritableCurrentDir();
     void openOnRootDrives();
@@ -78,11 +70,16 @@ private slots:
     void QTBUG_4796_data();
     void QTBUG_4796();
 
-public:
+    void QTBUG43352_failedSetPermissions();
+
+private:
+    QString m_previousCurrent;
 };
 
 void tst_QTemporaryDir::initTestCase()
 {
+    m_previousCurrent = QDir::currentPath();
+    QDir::setCurrent(QDir::tempPath());
     QVERIFY(QDir("test-XXXXXX").exists() || QDir().mkdir("test-XXXXXX"));
     QCoreApplication::setApplicationName("tst_qtemporarydir");
 }
@@ -90,6 +87,8 @@ void tst_QTemporaryDir::initTestCase()
 void tst_QTemporaryDir::cleanupTestCase()
 {
     QVERIFY(QDir().rmdir("test-XXXXXX"));
+
+    QDir::setCurrent(m_previousCurrent);
 }
 
 void tst_QTemporaryDir::construction()
@@ -99,6 +98,7 @@ void tst_QTemporaryDir::construction()
     QCOMPARE(dir.path().left(tmp.size()), tmp);
     QVERIFY(dir.path().contains("tst_qtemporarydir"));
     QVERIFY(QFileInfo(dir.path()).isDir());
+    QCOMPARE(dir.errorString(), QString());
 }
 
 // Testing get/set functions
@@ -113,36 +113,68 @@ void tst_QTemporaryDir::getSetCheck()
     QCOMPARE(true, obj1.autoRemove());
 }
 
+static QString hanTestText()
+{
+    QString text;
+    text += QChar(0x65B0);
+    text += QChar(0x5E10);
+    text += QChar(0x6237);
+    return text;
+}
+
+static QString umlautTestText()
+{
+    QString text;
+    text += QChar(0xc4);
+    text += QChar(0xe4);
+    text += QChar(0xd6);
+    text += QChar(0xf6);
+    text += QChar(0xdc);
+    text += QChar(0xfc);
+    text += QChar(0xdf);
+    return text;
+}
+
 void tst_QTemporaryDir::fileTemplate_data()
 {
     QTest::addColumn<QString>("constructorTemplate");
     QTest::addColumn<QString>("prefix");
+    QTest::addColumn<QString>("suffix");
 
-    QTest::newRow("constructor default") << "" << "tst_qtemporarydir-";
+    QTest::newRow("default") << "" << "tst_qtemporarydir-" << "";
 
-    QTest::newRow("constructor with xxx sufix") << "qt_XXXXXXxxx" << "qt_XXXXXXxxx";
-    QTest::newRow("constructor with xXx sufix") << "qt_XXXXXXxXx" << "qt_XXXXXXxXx";
-    QTest::newRow("constructor with no suffix") << "qt_XXXXXX" << "qt_";
-    QTest::newRow("constructor with >6 X's, no suffix") << "qt_XXXXXXXXXX" << "qt_";
-    // When more than 6 X are present at the end, linux and windows will only replace the last 6,
-    // while Mac OS will actually replace all of them so we can only expect "qt_" (and check isValid).
-    QTest::newRow("constructor with XXXX suffix") << "qt_XXXXXX_XXXX" << "qt_";
-    QTest::newRow("constructor with XXXX prefix") << "qt_XXXX" << "qt_";
-    QTest::newRow("constructor with XXXXX prefix") << "qt_XXXXX" << "qt_";
+    QTest::newRow("xxx-suffix") << "qt_XXXXXXxxx" << "qt_" << "xxx";
+    QTest::newRow("xXx-suffix") << "qt_XXXXXXxXx" << "qt_" << "xXx";
+    QTest::newRow("no-suffix") << "qt_XXXXXX" << "qt_" << "";
+    QTest::newRow("10X") << "qt_XXXXXXXXXX" << "qt_" << "";
+    QTest::newRow("4Xsuffix") << "qt_XXXXXX_XXXX" << "qt_" << "_XXXX";
+    QTest::newRow("4Xprefix") << "qt_XXXX" << "qt_XXXX" << "";
+    QTest::newRow("5Xprefix") << "qt_XXXXX" << "qt_XXXXX" << "";
+    if (QTestPrivate::canHandleUnicodeFileNames()) {
+        // Test Umlauts (contained in Latin1)
+        QString prefix = "qt_" + umlautTestText();
+        QTest::newRow("Umlauts") << (prefix + "XXXXXX") << prefix << "";
+        // test non-Latin1
+        prefix = "qt_" + hanTestText();
+        QTest::newRow("Chinese") << (prefix + "XXXXXX" + umlautTestText()) << prefix << umlautTestText();
+    }
 }
 
 void tst_QTemporaryDir::fileTemplate()
 {
     QFETCH(QString, constructorTemplate);
     QFETCH(QString, prefix);
+    QFETCH(QString, suffix);
 
     QTemporaryDir tempDir(constructorTemplate);
 
     QVERIFY(tempDir.isValid());
 
     QString dirName = QDir(tempDir.path()).dirName();
-    if (prefix.length())
+    if (prefix.length()) {
         QCOMPARE(dirName.left(prefix.length()), prefix);
+        QCOMPARE(dirName.right(suffix.length()), suffix);
+    }
 }
 
 
@@ -166,6 +198,29 @@ void tst_QTemporaryDir::fileName()
     absoluteTempPath = absoluteTempPath.toLower();
 #endif
     QCOMPARE(absoluteFilePath, absoluteTempPath);
+}
+
+void tst_QTemporaryDir::filePath_data()
+{
+    QTest::addColumn<QString>("templatePath");
+    QTest::addColumn<QString>("fileName");
+
+    QTest::newRow("0") << QString() << "/tmpfile";
+    QTest::newRow("1") << QString() << "tmpfile";
+    QTest::newRow("2") << "XXXXX" << "tmpfile";
+    QTest::newRow("3") << "YYYYY" << "subdir/file";
+}
+
+void tst_QTemporaryDir::filePath()
+{
+    QFETCH(QString, templatePath);
+    QFETCH(QString, fileName);
+
+    QTemporaryDir dir(templatePath);
+    const QString filePath = dir.filePath(fileName);
+    const QString expectedFilePath = QDir::isAbsolutePath(fileName) ?
+                                     QString() : dir.path() + QLatin1Char('/') + fileName;
+    QCOMPARE(filePath, expectedFilePath);
 }
 
 void tst_QTemporaryDir::autoRemove()
@@ -221,6 +276,8 @@ void tst_QTemporaryDir::autoRemove()
         QFile file(dirName + "/dir1/file");
         QVERIFY(file.open(QIODevice::WriteOnly));
         QCOMPARE(file.write("Hello"), 5LL);
+        file.close();
+        QVERIFY(file.setPermissions(QFile::ReadUser));
     }
 #ifdef Q_OS_WIN
     QTRY_VERIFY(!QDir(dirName).exists());
@@ -232,6 +289,13 @@ void tst_QTemporaryDir::autoRemove()
 void tst_QTemporaryDir::nonWritableCurrentDir()
 {
 #ifdef Q_OS_UNIX
+
+#  if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    const char nonWritableDir[] = "/data";
+#  else
+    const char nonWritableDir[] = "/home";
+#  endif
+
     if (::geteuid() == 0)
         QSKIP("not valid running this test as root");
 
@@ -243,21 +307,33 @@ void tst_QTemporaryDir::nonWritableCurrentDir()
         }
         QString dir;
     };
-    ChdirOnReturn cor(QDir::currentPath());
 
-    QDir::setCurrent("/home");
+    const QFileInfo nonWritableDirFi = QFileInfo(QLatin1String(nonWritableDir));
+    QVERIFY(nonWritableDirFi.isDir());
+
+    if (EmulationDetector::isRunningArmOnX86()) {
+        if (nonWritableDirFi.ownerId() == ::geteuid()) {
+            QSKIP("Sysroot directories are owned by the current user");
+        }
+    }
+
+    QVERIFY(!nonWritableDirFi.isWritable());
+
+    ChdirOnReturn cor(QDir::currentPath());
+    QVERIFY(QDir::setCurrent(nonWritableDirFi.absoluteFilePath()));
     // QTemporaryDir("tempXXXXXX") is probably a bad idea in any app
     // where the current dir could anything...
     QTemporaryDir dir("tempXXXXXX");
     dir.setAutoRemove(true);
     QVERIFY(!dir.isValid());
+    QVERIFY(!dir.errorString().isEmpty());
     QVERIFY(dir.path().isEmpty());
 #endif
 }
 
 void tst_QTemporaryDir::openOnRootDrives()
 {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     unsigned int lastErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
 #endif
     // If it's possible to create a file in the root directory, it
@@ -271,7 +347,7 @@ void tst_QTemporaryDir::openOnRootDrives()
             QVERIFY(dir.isValid());
         }
     }
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     SetErrorMode(lastErrorMode);
 #endif
 }
@@ -279,17 +355,22 @@ void tst_QTemporaryDir::openOnRootDrives()
 void tst_QTemporaryDir::stressTest()
 {
     const int iterations = 1000;
+    QTemporaryDir rootDir;
+    QVERIFY(rootDir.isValid());
 
     QSet<QString> names;
+    const QString pattern = rootDir.path() + QStringLiteral("/XXXXXX");
     for (int i = 0; i < iterations; ++i) {
-        QTemporaryDir dir;
+        QTemporaryDir dir(pattern);
         dir.setAutoRemove(false);
-        QVERIFY2(dir.isValid(), qPrintable(QString::number(i)));
+        QVERIFY2(dir.isValid(),
+                 qPrintable(QString::fromLatin1("Failed to create #%1 under %2: %3.")
+                            .arg(i)
+                            .arg(QDir::toNativeSeparators(pattern))
+                            .arg(dir.errorString())));
         QVERIFY(!names.contains(dir.path()));
         names.insert(dir.path());
     }
-    for (QSet<QString>::const_iterator it = names.constBegin(); it != names.constEnd(); ++it)
-        QDir(*it).removeRecursively();
 }
 
 void tst_QTemporaryDir::rename()
@@ -420,6 +501,18 @@ void tst_QTemporaryDir::QTBUG_4796() // unicode support
         QVERIFY2(!QDir(tempName).exists(), qPrintable(tempName));
 
     cleaner.reset();
+}
+
+void tst_QTemporaryDir::QTBUG43352_failedSetPermissions()
+{
+    QString path = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + QStringLiteral("/");
+    int count = QDir(path).entryList().size();
+
+    {
+        QTemporaryDir dir(path);
+    }
+
+    QCOMPARE(QDir(path).entryList().size(), count);
 }
 
 QTEST_MAIN(tst_QTemporaryDir)

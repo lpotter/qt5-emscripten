@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,15 @@
 #ifndef QWINDOWSGLCONTEXT_H
 #define QWINDOWSGLCONTEXT_H
 
-#include "array.h"
-#include "qtwindows_additional.h"
+#include <QtCore/qt_windows.h>
+#include "qwindowsopenglcontext.h"
 
-#include <qpa/qplatformopenglcontext.h>
-#include <QtGui/QOpenGLContext>
-#include <QtCore/QSharedPointer>
+#include <QtGui/qopenglcontext.h>
+
+#include <vector>
 
 QT_BEGIN_NAMESPACE
+#ifndef QT_NO_OPENGL
 
 class QDebug;
 
@@ -64,45 +63,84 @@ enum QWindowsGLFormatFlags
 // Additional format information for Windows.
 struct QWindowsOpenGLAdditionalFormat
 {
-    QWindowsOpenGLAdditionalFormat(unsigned formatFlagsIn = 0, unsigned pixmapDepthIn = 0, unsigned swapIntervalIn = -1) :
-        formatFlags(formatFlagsIn), pixmapDepth(pixmapDepthIn), swapInterval(swapIntervalIn) {}
+    QWindowsOpenGLAdditionalFormat(unsigned formatFlagsIn = 0, unsigned pixmapDepthIn = 0) :
+        formatFlags(formatFlagsIn), pixmapDepth(pixmapDepthIn) { }
     unsigned formatFlags; // QWindowsGLFormatFlags.
     unsigned pixmapDepth; // for QWindowsGLRenderToPixmap
-    int swapInterval;
 };
 
 // Per-window data for active OpenGL contexts.
 struct QOpenGLContextData
 {
     QOpenGLContextData(HGLRC r, HWND h, HDC d) : renderingContext(r), hwnd(h), hdc(d) {}
-    QOpenGLContextData() : renderingContext(0), hwnd(0), hdc(0) {}
+    QOpenGLContextData() {}
 
-    HGLRC renderingContext;
-    HWND hwnd;
-    HDC hdc;
+    HGLRC renderingContext = 0;
+    HWND hwnd = 0;
+    HDC hdc = 0;
 };
+
+class QOpenGLStaticContext;
 
 struct QWindowsOpenGLContextFormat
 {
-    QWindowsOpenGLContextFormat();
     static QWindowsOpenGLContextFormat current();
     void apply(QSurfaceFormat *format) const;
 
-    QSurfaceFormat::OpenGLContextProfile profile;
-    int version; //! majorVersion<<8 + minorVersion
-    QSurfaceFormat::FormatOptions options;
+    QSurfaceFormat::OpenGLContextProfile profile = QSurfaceFormat::NoProfile;
+    int version = 0; //! majorVersion<<8 + minorVersion
+    QSurfaceFormat::FormatOptions options = 0;
 };
 
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const PIXELFORMATDESCRIPTOR &);
 QDebug operator<<(QDebug d, const QWindowsOpenGLContextFormat &);
+QDebug operator<<(QDebug d, const QOpenGLStaticContext &s);
+#endif
 
-class QOpenGLStaticContext
+struct QWindowsOpengl32DLL
+{
+    bool init(bool softwareRendering);
+    void *moduleHandle() const { return m_lib; }
+    bool moduleIsNotOpengl32() const { return m_nonOpengl32; }
+
+    // Wrappers. Always use these instead of SwapBuffers/wglSwapBuffers/etc.
+    BOOL swapBuffers(HDC dc);
+    BOOL setPixelFormat(HDC dc, int pf, const PIXELFORMATDESCRIPTOR *pfd);
+
+    // WGL
+    HGLRC (WINAPI * wglCreateContext)(HDC dc);
+    BOOL (WINAPI * wglDeleteContext)(HGLRC context);
+    HGLRC (WINAPI * wglGetCurrentContext)();
+    HDC (WINAPI * wglGetCurrentDC)();
+    PROC (WINAPI * wglGetProcAddress)(LPCSTR name);
+    BOOL (WINAPI * wglMakeCurrent)(HDC dc, HGLRC context);
+    BOOL (WINAPI * wglShareLists)(HGLRC context1, HGLRC context2);
+
+    // GL1+GLES2 common
+    GLenum (APIENTRY * glGetError)();
+    void (APIENTRY * glGetIntegerv)(GLenum pname, GLint* params);
+    const GLubyte * (APIENTRY * glGetString)(GLenum name);
+
+    QFunctionPointer resolve(const char *name);
+private:
+    HMODULE m_lib;
+    bool m_nonOpengl32;
+
+    // For Mesa llvmpipe shipped with a name other than opengl32.dll
+    BOOL (WINAPI * wglSwapBuffers)(HDC dc);
+    BOOL (WINAPI * wglSetPixelFormat)(HDC dc, int pf, const PIXELFORMATDESCRIPTOR *pfd);
+};
+
+class QOpenGLStaticContext : public QWindowsStaticOpenGLContext
 {
     Q_DISABLE_COPY(QOpenGLStaticContext)
     QOpenGLStaticContext();
 public:
     enum Extensions
     {
-        SampleBuffers = 0x1
+        SampleBuffers = 0x1,
+        sRGBCapableFramebuffer = 0x2
     };
 
     typedef bool
@@ -123,11 +161,24 @@ public:
     typedef int
         (APIENTRY *WglGetSwapInternalExt)(void);
 
+    typedef const char *
+        (APIENTRY *WglGetExtensionsStringARB)(HDC);
+
     bool hasExtensions() const
         { return wglGetPixelFormatAttribIVARB && wglChoosePixelFormatARB && wglCreateContextAttribsARB; }
 
-    static QOpenGLStaticContext *create();
+    static QOpenGLStaticContext *create(bool softwareRendering = false);
     static QByteArray getGlString(unsigned int which);
+
+    QWindowsOpenGLContext *createContext(QOpenGLContext *context) override;
+    void *moduleHandle() const override { return opengl32.moduleHandle(); }
+    QOpenGLContext::OpenGLModuleType moduleType() const override
+    { return QOpenGLContext::LibGL; }
+
+    // For a regular opengl32.dll report the ThreadedOpenGL capability.
+    // For others, which are likely to be software-only, don't.
+    bool supportsThreadedOpenGL() const override
+    { return !opengl32.moduleIsNotOpengl32(); }
 
     const QByteArray vendor;
     const QByteArray renderer;
@@ -140,46 +191,53 @@ public:
     WglCreateContextAttribsARB wglCreateContextAttribsARB;
     WglSwapInternalExt wglSwapInternalExt;
     WglGetSwapInternalExt wglGetSwapInternalExt;
+    WglGetExtensionsStringARB wglGetExtensionsStringARB;
+
+    static QWindowsOpengl32DLL opengl32;
 };
 
-QDebug operator<<(QDebug d, const QOpenGLStaticContext &);
-
-class QWindowsGLContext : public QPlatformOpenGLContext
+class QWindowsGLContext : public QWindowsOpenGLContext
 {
 public:
-    typedef QSharedPointer<QOpenGLStaticContext> QOpenGLStaticContextPtr;
+    explicit QWindowsGLContext(QOpenGLStaticContext *staticContext, QOpenGLContext *context);
+    ~QWindowsGLContext() override;
+    bool isSharing() const override { return m_context->shareHandle(); }
+    bool isValid() const override { return m_renderingContext && !m_lost; }
+    QSurfaceFormat format() const override { return m_obtainedFormat; }
 
-    explicit QWindowsGLContext(const QOpenGLStaticContextPtr &staticContext,
-                               QOpenGLContext *context);
-    virtual ~QWindowsGLContext();
-    bool isSharing() const                { return m_context->shareHandle(); }
-    bool isValid() const                  { return m_renderingContext; }
-    virtual QSurfaceFormat format() const { return m_obtainedFormat; }
+    void swapBuffers(QPlatformSurface *surface) override;
 
-    virtual void swapBuffers(QPlatformSurface *surface);
-
-    virtual bool makeCurrent(QPlatformSurface *surface);
-    virtual void doneCurrent();
+    bool makeCurrent(QPlatformSurface *surface) override;
+    void doneCurrent() override;
 
     typedef void (*GL_Proc) ();
 
-    virtual GL_Proc getProcAddress(const QByteArray &procName);
+    QFunctionPointer getProcAddress(const char *procName) override;
 
-    HGLRC renderingContext() const        { return m_renderingContext; }
+    HGLRC renderingContext() const { return m_renderingContext; }
+
+    void *nativeContext() const override { return m_renderingContext; }
 
 private:
-    inline void releaseDCs();
+    typedef GLenum (APIENTRY *GlGetGraphicsResetStatusArbType)();
 
-    const QOpenGLStaticContextPtr m_staticContext;
+    inline void releaseDCs();
+    bool updateObtainedParams(HDC hdc, int *obtainedSwapInterval = 0);
+
+    QOpenGLStaticContext *m_staticContext;
     QOpenGLContext *m_context;
     QSurfaceFormat m_obtainedFormat;
     HGLRC m_renderingContext;
-    Array<QOpenGLContextData> m_windowContexts;
+    std::vector<QOpenGLContextData> m_windowContexts;
     PIXELFORMATDESCRIPTOR m_obtainedPixelFormatDescriptor;
     int m_pixelFormat;
     bool m_extensionsUsed;
+    int m_swapInterval;
+    bool m_ownsContext;
+    GlGetGraphicsResetStatusArbType m_getGraphicsResetStatus;
+    bool m_lost;
 };
-
+#endif
 QT_END_NAMESPACE
 
 #endif // QWINDOWSGLCONTEXT_H

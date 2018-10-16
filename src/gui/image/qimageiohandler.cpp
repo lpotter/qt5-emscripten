@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,7 +50,7 @@
 
     Call setDevice() to assign a device to the handler, and
     setFormat() to assign a format to it. One QImageIOHandler may
-    support more than one image format. canRead() returns true if an
+    support more than one image format. canRead() returns \c true if an
     image can be read from the device, and read() and write() return
     true if reading or writing an image was completed successfully.
 
@@ -157,6 +155,53 @@
 
     \value ImageFormat The image's data format returned by the handler.
     This can be any of the formats listed in QImage::Format.
+
+    \value SupportedSubTypes Image formats that support different saving
+    variants should return a list of supported variant names
+    (QList<QByteArray>) in this option.
+
+    \value OptimizedWrite. A handler which supports this option
+    is expected to turn on optimization flags when writing.
+
+    \value ProgressiveScanWrite. A handler which supports
+    this option is expected to write the image as a progressive scan image.
+
+    \value ImageTransformation. A handler which supports this option can read
+    the transformation metadata of an image. A handler that supports this option
+    should not apply the transformation itself.
+
+    \value TransformedByDefault. A handler that reports support for this feature
+    will have image transformation metadata applied by default on read.
+*/
+
+/*! \enum QImageIOHandler::Transformation
+    \since 5.5
+
+    This enum describes the different transformations or orientations
+    supported by some image formats, usually through EXIF.
+
+    \value TransformationNone No transformation should be applied.
+
+    \value TransformationMirror Mirror the image horizontally.
+
+    \value TransformationFlip Mirror the image vertically.
+
+    \value TransformationRotate180 Rotate the image 180 degrees.
+    This is the same as mirroring it both horizontally and vertically.
+
+    \value TransformationRotate90 Rotate the image 90 degrees.
+
+    \value TransformationMirrorAndRotate90 Mirror the image horizontally
+    and then rotate it 90 degrees.
+
+    \value TransformationFlipAndRotate90 Mirror the image vertically
+    and then rotate it 90 degrees.
+
+    \value TransformationRotate270 Rotate the image 270 degrees.
+    This is the same as mirroring it both horizontally, vertically and
+    then rotating it 90 degrees.
+
+    \sa QImageReader::transformation(), QImageReader::setAutoTransform(), QImageWriter::setTransformation()
 */
 
 /*!
@@ -187,11 +232,15 @@
     return this handler.
 
     The json metadata file for the plugin needs to contain information
-    about the image formats the plugins supports. For a jpeg plugin, this
-    could e.g. look as follows:
+    about the image formats the plugins supports, together with the
+    corresponding MIME types (one for each format). For a jpeg plugin, this
+    could, for example, look as follows:
 
     \code
-    { "Keys": [ "jpg", "jpeg" ] }
+    {
+      "Keys": [ "jpg", "jpeg" ],
+      "MimeTypes": [ "image/jpeg", "image/jpeg" ]
+    }
     \endcode
 
     Different plugins can support different capabilities. For example,
@@ -342,7 +391,7 @@ QByteArray QImageIOHandler::format() const
     \fn bool QImageIOHandler::read(QImage *image)
 
     Read an image from the device, and stores it in \a image.
-    Returns true if the image is successfully read; otherwise returns
+    Returns \c true if the image is successfully read; otherwise returns
     false.
 
     For image formats that support incremental loading, and for animation
@@ -355,10 +404,10 @@ QByteArray QImageIOHandler::format() const
 /*!
     \fn bool QImageIOHandler::canRead() const
 
-    Returns true if an image can be read from the device (i.e., the
+    Returns \c true if an image can be read from the device (i.e., the
     image format is supported, the device can be read from and the
     initial header information suggests that the image can be read);
-    otherwise returns false.
+    otherwise returns \c false.
 
     When reimplementing canRead(), make sure that the I/O device
     (device()) is left in its original state (e.g., by using peek()
@@ -379,10 +428,10 @@ QByteArray QImageIOHandler::name() const
 }
 
 /*!
-    Writes the image \a image to the assigned device. Returns true on
-    success; otherwise returns false.
+    Writes the image \a image to the assigned device. Returns \c true on
+    success; otherwise returns \c false.
 
-    The default implementation does nothing, and simply returns false.
+    The default implementation does nothing, and simply returns \c false.
 */
 bool QImageIOHandler::write(const QImage &image)
 {
@@ -415,8 +464,8 @@ QVariant QImageIOHandler::option(ImageOption option) const
 }
 
 /*!
-    Returns true if the QImageIOHandler supports the option \a option;
-    otherwise returns false. For example, if the QImageIOHandler
+    Returns \c true if the QImageIOHandler supports the option \a option;
+    otherwise returns \c false. For example, if the QImageIOHandler
     supports the \l Size option, supportsOption(Size) must return
     true.
 
@@ -433,7 +482,7 @@ bool QImageIOHandler::supportsOption(ImageOption option) const
     the sequence number of the current image in the animation. If
     this function is called before any image is read(), -1 is
     returned. The number of the first image in the sequence is 0.
-    
+
     If the image format does not support animation, 0 is returned.
 
     \sa read()
@@ -461,7 +510,7 @@ QRect QImageIOHandler::currentImageRect() const
     not support animation, or if it is unable to determine the number
     of images, 0 is returned.
 
-    The default implementation returns 1 if canRead() returns true;
+    The default implementation returns 1 if canRead() returns \c true;
     otherwise 0 is returned.
 */
 int QImageIOHandler::imageCount() const
@@ -473,7 +522,7 @@ int QImageIOHandler::imageCount() const
    For image formats that support animation, this function jumps to the
    next image.
 
-   The default implementation does nothing, and returns false.
+   The default implementation does nothing, and returns \c false.
 */
 bool QImageIOHandler::jumpToNextImage()
 {
@@ -485,7 +534,7 @@ bool QImageIOHandler::jumpToNextImage()
    whose sequence number is \a imageNumber. The next call to read() will
    attempt to read this image.
 
-   The default implementation does nothing, and returns false.
+   The default implementation does nothing, and returns \c false.
 */
 bool QImageIOHandler::jumpToImage(int imageNumber)
 {
@@ -514,6 +563,8 @@ int QImageIOHandler::nextImageDelay() const
     return 0;
 }
 
+#ifndef QT_NO_IMAGEFORMATPLUGIN
+
 /*!
     Constructs an image plugin with the given \a parent. This is
     invoked automatically by the moc generated code that exports the plugin.
@@ -535,23 +586,35 @@ QImageIOPlugin::~QImageIOPlugin()
 
 /*! \fn QImageIOPlugin::capabilities(QIODevice *device, const QByteArray &format) const
 
-    Returns the capabilities on the plugin, based on the data in \a
-    device and the format \a format. For example, if the
-    QImageIOHandler supports the BMP format, and the data in the
-    device starts with the characters "BM", this function should
-    return \l CanRead. If \a format is "bmp" and the handler supports
-    both reading and writing, this function should return \l CanRead |
-    \l CanWrite.
+    Returns the capabilities of the plugin, based on the data in \a
+    device and the format \a format.  If \a device is \c 0, it should
+    simply report whether the format can be read or written.  Otherwise,
+    it should attempt to determine whether the given format (or any
+    format supported by the plugin if \a format is empty) can be read
+    from or written to \a device.  It should do this without changing
+    the state of \a device (typically by using QIODevice::peek()).
+
+    For example, if the QImageIOPlugin supports the BMP format, \a format
+    is either empty or \c "bmp", and the data in the device starts with the
+    characters \c "BM", this function should return \l CanRead. If \a format
+    is \c "bmp", \a device is \c 0 and the handler supports both reading and
+    writing, this function should return \l CanRead | \l CanWrite.
+
+    Format names are always given in lower case.
 */
 
 /*!
     \fn QImageIOHandler *QImageIOPlugin::create(QIODevice *device, const QByteArray &format) const
 
     Creates and returns a QImageIOHandler subclass, with \a device
-    and \a format set. The \a format must come from the list returned by keys().
-    Format names are case sensitive.
+    and \a format set. The \a format must come from the values listed
+    in the \c "Keys" entry in the plugin metadata, or be empty.  If it is
+    empty, the data in \a device must have been recognized by the
+    capabilities() method (with a likewise empty format).
 
-    \sa keys()
+    Format names are always given in lower case.
 */
+
+#endif // QT_NO_IMAGEFORMATPLUGIN
 
 QT_END_NAMESPACE

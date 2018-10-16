@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,14 +34,6 @@
 class tst_QStandardItem : public QObject
 {
     Q_OBJECT
-
-public:
-    tst_QStandardItem();
-    virtual ~tst_QStandardItem();
-
-public slots:
-    void init();
-    void cleanup();
 
 private slots:
     void ctor();
@@ -89,22 +68,19 @@ private slots:
     void clone();
     void sortChildren();
     void subclassing();
+    void lessThan();
+    void clearData();
 };
 
-tst_QStandardItem::tst_QStandardItem()
+void tst_QStandardItem::clearData()
 {
-}
-
-tst_QStandardItem::~tst_QStandardItem()
-{
-}
-
-void tst_QStandardItem::init()
-{
-}
-
-void tst_QStandardItem::cleanup()
-{
+    QStandardItem item;
+    item.setData(QStringLiteral("Test"), Qt::EditRole);
+    item.setData(5, Qt::UserRole);
+    item.clearData();
+    QCOMPARE(item.data(Qt::EditRole), QVariant());
+    QCOMPARE(item.data(Qt::UserRole), QVariant());
+    QCOMPARE(item.data(Qt::DisplayRole), QVariant());
 }
 
 void tst_QStandardItem::ctor()
@@ -147,7 +123,8 @@ void tst_QStandardItem::getSetData()
     QStandardItem item;
     for (int x = 0; x < 2; ++x) {
         for (int i = 1; i <= 2; ++i) {
-            QString text = QString("text %0").arg(i);
+            const QString iS = QString::number(i);
+            QString text = QLatin1String("text ") + iS;
             item.setText(text);
             QCOMPARE(item.text(), text);
 
@@ -157,15 +134,15 @@ void tst_QStandardItem::getSetData()
             item.setIcon(icon);
             QCOMPARE(item.icon(), icon);
 
-            QString toolTip = QString("toolTip %0").arg(i);
+            QString toolTip = QLatin1String("toolTip ") + iS;
             item.setToolTip(toolTip);
             QCOMPARE(item.toolTip(), toolTip);
 
-            QString statusTip = QString("statusTip %0").arg(i);
+            QString statusTip = QLatin1String("statusTip ") + iS;
             item.setStatusTip(statusTip);
             QCOMPARE(item.statusTip(), statusTip);
 
-            QString whatsThis = QString("whatsThis %0").arg(i);
+            QString whatsThis = QLatin1String("whatsThis ") + iS;
             item.setWhatsThis(whatsThis);
             QCOMPARE(item.whatsThis(), whatsThis);
 
@@ -187,7 +164,7 @@ void tst_QStandardItem::getSetData()
             item.setBackground(backgroundColor);
             QCOMPARE(item.background().color(), backgroundColor);
 
-            QColor textColor((i == i) ? Qt::green : Qt::cyan);
+            QColor textColor((i == 1) ? Qt::green : Qt::cyan);
             item.setForeground(textColor);
             QCOMPARE(item.foreground().color(), textColor);
 
@@ -195,11 +172,11 @@ void tst_QStandardItem::getSetData()
             item.setCheckState(checkState);
             QCOMPARE(item.checkState(), checkState);
 
-            QString accessibleText = QString("accessibleText %0").arg(i);
+            QString accessibleText = QLatin1String("accessibleText ") + iS;
             item.setAccessibleText(accessibleText);
             QCOMPARE(item.accessibleText(), accessibleText);
 
-            QString accessibleDescription = QString("accessibleDescription %0").arg(i);
+            QString accessibleDescription = QLatin1String("accessibleDescription ") + iS;
             item.setAccessibleDescription(accessibleDescription);
             QCOMPARE(item.accessibleDescription(), accessibleDescription);
 
@@ -285,10 +262,13 @@ void tst_QStandardItem::getSetFlags()
     QVERIFY(item.isCheckable());
     QCOMPARE(item.checkState(), Qt::Unchecked);
     QVERIFY(item.flags() & Qt::ItemIsUserCheckable);
-    item.setTristate(true);
-    QVERIFY(item.isTristate());
-    QVERIFY(item.flags() & Qt::ItemIsTristate);
-#ifndef QT_NO_DRAGANDDROP
+    item.setUserTristate(true);
+    QVERIFY(item.isUserTristate());
+    QVERIFY(item.flags() & Qt::ItemIsUserTristate);
+    item.setAutoTristate(true);
+    QVERIFY(item.isAutoTristate());
+    QVERIFY(item.flags() & Qt::ItemIsAutoTristate);
+#if QT_CONFIG(draganddrop)
     item.setDragEnabled(true);
     QVERIFY(item.isDragEnabled());
     QVERIFY(item.flags() & Qt::ItemIsDragEnabled);
@@ -313,11 +293,13 @@ void tst_QStandardItem::getSetFlags()
     item.setCheckable(false);
     QVERIFY(!item.isCheckable());
     QVERIFY(!(item.flags() & Qt::ItemIsUserCheckable));
-    QVERIFY(item.isTristate());
-    item.setTristate(false);
-    QVERIFY(!item.isTristate());
-    QVERIFY(!(item.flags() & Qt::ItemIsTristate));
-#ifndef QT_NO_DRAGANDDROP
+    item.setUserTristate(false);
+    QVERIFY(!item.isUserTristate());
+    QVERIFY(!(item.flags() & Qt::ItemIsUserTristate));
+    item.setAutoTristate(false);
+    QVERIFY(!item.isAutoTristate());
+    QVERIFY(!(item.flags() & Qt::ItemIsAutoTristate));
+#if QT_CONFIG(draganddrop)
     QVERIFY(item.isDragEnabled());
     item.setDragEnabled(false);
     QVERIFY(!item.isDragEnabled());
@@ -332,6 +314,13 @@ void tst_QStandardItem::getSetFlags()
     item.setCheckState(Qt::Checked);
     item.setCheckable(true);
     QCOMPARE(item.checkState(), Qt::Checked);
+
+    // deprecated API
+    item.setTristate(true);
+    QVERIFY(item.isTristate());
+    QVERIFY(item.flags() & Qt::ItemIsTristate);
+    item.setTristate(false);
+    QVERIFY(!(item.flags() & Qt::ItemIsTristate));
 }
 
 void tst_QStandardItem::getSetRowAndColumnCount()
@@ -1101,6 +1090,20 @@ void tst_QStandardItem::subclassing()
     QCOMPARE(item->child(0), (QStandardItem*)child2);
     QCOMPARE(item->child(1), (QStandardItem*)child0);
     QCOMPARE(item->child(2), (QStandardItem*)child1);
+}
+
+void tst_QStandardItem::lessThan()
+{
+    QStandardItem stringA("A");
+    QStandardItem stringB("B");
+    QStandardItem invalid1;
+    QStandardItem invalid2;
+    QVERIFY(stringA < stringB);
+    QVERIFY(!(stringB < stringA));
+    // Items with invalid data go to the end.
+    QVERIFY(stringA < invalid1);
+    QVERIFY(!(invalid1 < stringA));
+    QVERIFY(!(invalid1 < invalid2));
 }
 
 QTEST_MAIN(tst_QStandardItem)

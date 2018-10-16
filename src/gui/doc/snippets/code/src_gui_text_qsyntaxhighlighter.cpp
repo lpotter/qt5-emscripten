@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -50,14 +60,13 @@ void MyHighlighter::highlightBlock(const QString &text)
     QTextCharFormat myClassFormat;
     myClassFormat.setFontWeight(QFont::Bold);
     myClassFormat.setForeground(Qt::darkMagenta);
-    QString pattern = "\\bMy[A-Za-z]+\\b";
 
-    QRegExp expression(pattern);
-    int index = text.indexOf(expression);
-    while (index >= 0) {
-        int length = expression.matchedLength();
-        setFormat(index, length, myClassFormat);
-        index = text.indexOf(expression, index + length);
+    QRegularExpression expression("\\bMy[A-Za-z]+\\b");
+    QRegularExpressionMatchIterator i = expression.globalMatch(text);
+    while (i.hasNext())
+    {
+      QRegularExpressionMatch match = i.next();
+      setFormat(match.capturedStart(), match.capturedLength(), myClassFormat);
     }
 }
 //! [1]
@@ -67,8 +76,8 @@ void MyHighlighter::highlightBlock(const QString &text)
 QTextCharFormat multiLineCommentFormat;
 multiLineCommentFormat.setForeground(Qt::red);
 
-QRegExp startExpression("/\\*");
-QRegExp endExpression("\\*/");
+QRegularExpression startExpression("/\\*");
+QRegularExpression endExpression("\\*/");
 
 setCurrentBlockState(0);
 
@@ -77,14 +86,15 @@ if (previousBlockState() != 1)
     startIndex = text.indexOf(startExpression);
 
 while (startIndex >= 0) {
-   int endIndex = text.indexOf(endExpression, startIndex);
+   QRegularExpressionMatch endMatch;
+   int endIndex = text.indexOf(endExpression, startIndex, &endMatch);
    int commentLength;
    if (endIndex == -1) {
        setCurrentBlockState(1);
        commentLength = text.length() - startIndex;
    } else {
        commentLength = endIndex - startIndex
-                       + endExpression.matchedLength();
+                       + endMatch.capturedLength();
    }
    setFormat(startIndex, commentLength, multiLineCommentFormat);
    startIndex = text.indexOf(startExpression,
@@ -94,25 +104,6 @@ while (startIndex >= 0) {
 
 
 //! [3]
-void MyHighlighter::highlightBlock(const QString &text)
-{
-    QTextCharFormat myClassFormat;
-    myClassFormat.setFontWeight(QFont::Bold);
-    myClassFormat.setForeground(Qt::darkMagenta);
-    QString pattern = "\\bMy[A-Za-z]+\\b";
-
-    QRegExp expression(pattern);
-    int index = text.indexOf(expression);
-    while (index >= 0) {
-        int length = expression.matchedLength();
-        setFormat(index, length, myClassFormat);
-        index = text.indexOf(expression, index + length);
-     }
- }
-//! [3]
-
-
-//! [4]
 struct ParenthesisInfo
 {
     QChar char;
@@ -123,4 +114,4 @@ struct BlockData : public QTextBlockUserData
 {
     QVector<ParenthesisInfo> parentheses;
 };
-//! [4]
+//! [3]

@@ -32,6 +32,7 @@
 
 include(MacroAddFileDependencies)
 
+include(CMakeParseArguments)
 
 function(QT5_ADD_DBUS_INTERFACE _sources _interface _basename)
     get_filename_component(_infile ${_interface} ABSOLUTE)
@@ -60,7 +61,7 @@ function(QT5_ADD_DBUS_INTERFACE _sources _interface _basename)
         COMMAND ${Qt5DBus_QDBUSXML2CPP_EXECUTABLE} ${_params} -p ${_basename} ${_infile}
         DEPENDS ${_infile} VERBATIM)
 
-    set_source_files_properties("${_impl}" PROPERTIES SKIP_AUTOMOC TRUE)
+    set_source_files_properties("${_impl}" "${_header}" PROPERTIES SKIP_AUTOMOC TRUE)
 
     qt5_generate_moc("${_header}" "${_moc}")
 
@@ -91,7 +92,6 @@ function(QT5_GENERATE_DBUS_INTERFACE _header) # _customName OPTIONS -some -optio
     cmake_parse_arguments(_DBUS_INTERFACE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     set(_customName ${_DBUS_INTERFACE_UNPARSED_ARGUMENTS})
-    set(_qt4_dbus_options ${_DBUS_INTERFACE_OPTIONS})
 
     get_filename_component(_in_file ${_header} ABSOLUTE)
     get_filename_component(_basename ${_header} NAME_WE)
@@ -111,7 +111,7 @@ function(QT5_GENERATE_DBUS_INTERFACE _header) # _customName OPTIONS -some -optio
     endif()
 
     add_custom_command(OUTPUT ${_target}
-        COMMAND ${Qt5DBus_QDBUSCPP2XML_EXECUTABLE} ${_qt4_dbus_options} ${_in_file} -o ${_target}
+        COMMAND ${Qt5DBus_QDBUSCPP2XML_EXECUTABLE} ${_DBUS_INTERFACE_OPTIONS} ${_in_file} -o ${_target}
         DEPENDS ${_in_file} VERBATIM
     )
 endfunction()
@@ -146,7 +146,7 @@ function(QT5_ADD_DBUS_ADAPTOR _sources _xml_file _include _parentClass) # _optio
     endif()
 
     qt5_generate_moc("${_header}" "${_moc}")
-    set_source_files_properties("${_impl}" PROPERTIES SKIP_AUTOMOC TRUE)
+    set_source_files_properties("${_impl}" "${_header}" PROPERTIES SKIP_AUTOMOC TRUE)
     macro_add_file_dependencies("${_impl}" "${_moc}")
 
     list(APPEND ${_sources} "${_impl}" "${_header}" "${_moc}")

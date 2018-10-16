@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -69,6 +56,7 @@ private slots:
     void pixmapKey();
     void noLeak();
     void strictCacheLimit();
+    void noCrashOnLargeInsert();
 };
 
 static QPixmapCache::KeyData* getPrivate(QPixmapCache::Key &key)
@@ -104,6 +92,9 @@ void tst_QPixmapCache::cacheLimit()
     // it was between 2048 and 10240 last time I looked at it
     QVERIFY(originalCacheLimit >= 1024 && originalCacheLimit <= 20480);
 
+    QPixmapCache::setCacheLimit(std::numeric_limits<int>::max());
+    QCOMPARE(QPixmapCache::cacheLimit(), std::numeric_limits<int>::max());
+
     QPixmapCache::setCacheLimit(100);
     QCOMPARE(QPixmapCache::cacheLimit(), 100);
 
@@ -119,7 +110,7 @@ void tst_QPixmapCache::setCacheLimit()
     delete p1;
 
     QPixmapCache::setCacheLimit(0);
-    QVERIFY(QPixmapCache::find("P1") == 0);
+    QVERIFY(!QPixmapCache::find("P1"));
 
     p1 = new QPixmap(2, 3);
     QPixmapCache::setCacheLimit(1000);
@@ -155,7 +146,7 @@ void tst_QPixmapCache::setCacheLimit()
     QVERIFY(QPixmapCache::find(key, p1) == 0);
     QPixmapCache::setCacheLimit(1000);
     key = QPixmapCache::insert(*p1);
-    QCOMPARE(getPrivate(key)->isValid, true);
+    QVERIFY(key.isValid());
     QCOMPARE(getPrivate(key)->key, 1);
 
     delete p1;
@@ -197,7 +188,7 @@ void tst_QPixmapCache::setCacheLimit()
     key2 = QPixmapCache::insert(*p1);
     QCOMPARE(getPrivate(key2)->key, 1);
     //This old key is not valid anymore after the flush
-    QCOMPARE(getPrivate(key)->isValid, false);
+    QVERIFY(!key.isValid());
     QVERIFY(QPixmapCache::find(key, &p2) == 0);
     delete p1;
 }
@@ -241,7 +232,7 @@ void tst_QPixmapCache::find()
 
     //at that time the first key has been erase because no more place in the cache
     QVERIFY(QPixmapCache::find(key, &p1) == 0);
-    QCOMPARE(getPrivate(key)->isValid, false);
+    QVERIFY(!key.isValid());
 }
 
 void tst_QPixmapCache::insert()
@@ -321,7 +312,7 @@ void tst_QPixmapCache::replace()
     p2.fill(Qt::yellow);
 
     QPixmapCache::Key key = QPixmapCache::insert(p1);
-    QCOMPARE(getPrivate(key)->isValid, true);
+    QVERIFY(key.isValid());
 
     QPixmap p3;
     QVERIFY(QPixmapCache::find(key, &p3) == 1);
@@ -329,7 +320,7 @@ void tst_QPixmapCache::replace()
     QPixmapCache::replace(key, p2);
 
     QVERIFY(QPixmapCache::find(key, &p3) == 1);
-    QCOMPARE(getPrivate(key)->isValid, true);
+    QVERIFY(key.isValid());
     QCOMPARE(getPrivate(key)->key, 1);
 
     QCOMPARE(p3.width(), 10);
@@ -354,12 +345,12 @@ void tst_QPixmapCache::remove()
     QVERIFY(p1.toImage() == p1.toImage()); // sanity check
 
     QPixmapCache::remove("red");
-    QVERIFY(QPixmapCache::find("red") == 0);
+    QVERIFY(!QPixmapCache::find("red"));
     QPixmapCache::remove("red");
-    QVERIFY(QPixmapCache::find("red") == 0);
+    QVERIFY(!QPixmapCache::find("red"));
 
     QPixmapCache::remove("green");
-    QVERIFY(QPixmapCache::find("green") == 0);
+    QVERIFY(!QPixmapCache::find("green"));
 
     //The int part of the API
     QPixmapCache::clear();
@@ -432,7 +423,7 @@ void tst_QPixmapCache::clear()
     QPixmapCache::clear();
 
     for (int k = 0; k < numberOfKeys; ++k)
-        QVERIFY(QPixmapCache::find(QString::number(k)) == 0);
+        QVERIFY(!QPixmapCache::find(QString::number(k)));
 
     //The int part of the API
     QPixmap p2(10, 10);
@@ -446,7 +437,7 @@ void tst_QPixmapCache::clear()
 
     for (int k = 0; k < numberOfKeys; ++k) {
         QVERIFY(QPixmapCache::find(keys.at(k), &p1) == 0);
-        QCOMPARE(getPrivate(keys[k])->isValid, false);
+        QVERIFY(!keys[k].isValid());
     }
 }
 
@@ -536,6 +527,16 @@ void tst_QPixmapCache::strictCacheLimit()
     }
 
     QVERIFY(QPixmapCache::totalUsed() <= limit);
+}
+
+void tst_QPixmapCache::noCrashOnLargeInsert()
+{
+    QPixmapCache::clear();
+    QPixmapCache::setCacheLimit(100);
+    QPixmap pixmap(500, 500);
+    pixmap.fill(Qt::transparent);
+    QPixmapCache::insert("test", pixmap);
+    QVERIFY(true); // no crash
 }
 
 QTEST_MAIN(tst_QPixmapCache)

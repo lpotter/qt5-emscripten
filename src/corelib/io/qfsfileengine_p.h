@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,13 +61,9 @@
 
 QT_BEGIN_NAMESPACE
 
-#if defined(Q_OS_WINCE_STD) && _WIN32_WCE < 0x600
-#define Q_USE_DEPRECATED_MAP_API 1
-#endif
-
 class QFSFileEnginePrivate;
 
-class Q_AUTOTEST_EXPORT QFSFileEngine : public QAbstractFileEngine
+class Q_CORE_EXPORT QFSFileEngine : public QAbstractFileEngine
 {
     Q_DECLARE_PRIVATE(QFSFileEngine)
 public:
@@ -77,44 +71,52 @@ public:
     explicit QFSFileEngine(const QString &file);
     ~QFSFileEngine();
 
-    bool open(QIODevice::OpenMode openMode);
+    bool open(QIODevice::OpenMode openMode) override;
     bool open(QIODevice::OpenMode flags, FILE *fh);
-    bool close();
-    bool flush();
-    qint64 size() const;
-    qint64 pos() const;
-    bool seek(qint64);
-    bool isSequential() const;
-    bool remove();
-    bool copy(const QString &newName);
-    bool rename(const QString &newName);
-    bool link(const QString &newName);
-    bool mkdir(const QString &dirName, bool createParentDirectories) const;
-    bool rmdir(const QString &dirName, bool recurseParentDirectories) const;
-    bool setSize(qint64 size);
-    bool caseSensitive() const;
-    bool isRelativePath() const;
-    QStringList entryList(QDir::Filters filters, const QStringList &filterNames) const;
-    FileFlags fileFlags(FileFlags type) const;
-    bool setPermissions(uint perms);
-    QString fileName(FileName file) const;
-    uint ownerId(FileOwner) const;
-    QString owner(FileOwner) const;
-    QDateTime fileTime(FileTime time) const;
-    void setFileName(const QString &file);
-    int handle() const;
+    bool close() override;
+    bool flush() override;
+    bool syncToDisk() override;
+    qint64 size() const override;
+    qint64 pos() const override;
+    bool seek(qint64) override;
+    bool isSequential() const override;
+    bool remove() override;
+    bool copy(const QString &newName) override;
+    bool rename(const QString &newName) override;
+    bool renameOverwrite(const QString &newName) override;
+    bool link(const QString &newName) override;
+    bool mkdir(const QString &dirName, bool createParentDirectories) const override;
+    bool rmdir(const QString &dirName, bool recurseParentDirectories) const override;
+    bool setSize(qint64 size) override;
+    bool caseSensitive() const override;
+    bool isRelativePath() const override;
+    QStringList entryList(QDir::Filters filters, const QStringList &filterNames) const override;
+    FileFlags fileFlags(FileFlags type) const override;
+    bool setPermissions(uint perms) override;
+    QByteArray id() const override;
+    QString fileName(FileName file) const override;
+    uint ownerId(FileOwner) const override;
+    QString owner(FileOwner) const override;
+    bool setFileTime(const QDateTime &newDate, FileTime time) override;
+    QDateTime fileTime(FileTime time) const override;
+    void setFileName(const QString &file) override;
+    int handle() const override;
 
 #ifndef QT_NO_FILESYSTEMITERATOR
-    Iterator *beginEntryList(QDir::Filters filters, const QStringList &filterNames);
-    Iterator *endEntryList();
+    Iterator *beginEntryList(QDir::Filters filters, const QStringList &filterNames) override;
+    Iterator *endEntryList() override;
 #endif
 
-    qint64 read(char *data, qint64 maxlen);
-    qint64 readLine(char *data, qint64 maxlen);
-    qint64 write(const char *data, qint64 len);
+    qint64 read(char *data, qint64 maxlen) override;
+    qint64 readLine(char *data, qint64 maxlen) override;
+    qint64 write(const char *data, qint64 len) override;
+    bool cloneTo(QAbstractFileEngine *target) override;
 
-    bool extension(Extension extension, const ExtensionOption *option = 0, ExtensionReturn *output = 0);
-    bool supportsExtension(Extension extension) const;
+    virtual bool isUnnamedFile() const
+    { return false; }
+
+    bool extension(Extension extension, const ExtensionOption *option = 0, ExtensionReturn *output = 0) override;
+    bool supportsExtension(Extension extension) const override;
 
     //FS only!!
     bool open(QIODevice::OpenMode flags, int fd);
@@ -129,6 +131,9 @@ public:
 
 protected:
     QFSFileEngine(QFSFileEnginePrivate &dd);
+
+private:
+    inline bool processOpenModeFlags(QIODevice::OpenMode *mode);
 };
 
 class Q_AUTOTEST_EXPORT QFSFileEnginePrivate : public QAbstractFileEnginePrivate
@@ -149,6 +154,7 @@ public:
     bool nativeClose();
     bool closeFdFh();
     bool nativeFlush();
+    bool nativeSyncToDisk();
     bool flushFh();
     qint64 nativeSize() const;
 #ifndef Q_OS_WIN
@@ -172,6 +178,7 @@ public:
 
     uchar *map(qint64 offset, qint64 size, QFile::MemoryMapFlags flags);
     bool unmap(uchar *ptr);
+    void unmapAll();
 
     mutable QFileSystemMetaData metaData;
 
@@ -182,10 +189,7 @@ public:
     HANDLE mapHandle;
     QHash<uchar *, DWORD /* offset % AllocationGranularity */> maps;
 
-#ifndef Q_OS_WINCE
     mutable int cachedFd;
-#endif
-
     mutable DWORD fileAttrib;
 #else
     QHash<uchar *, QPair<int /*offset % PageSize*/, size_t /*length + offset % PageSize*/> > maps;
@@ -203,12 +207,9 @@ public:
     bool closeFileHandle;
 
     mutable uint is_sequential : 2;
-    mutable uint could_stat : 1;
     mutable uint tried_stat : 1;
-#if !defined(Q_OS_WINCE)
     mutable uint need_lstat : 1;
     mutable uint is_link : 1;
-#endif
 
 #if defined(Q_OS_WIN)
     bool doStat(QFileSystemMetaData::MetaDataFlags flags) const;
@@ -221,6 +222,12 @@ public:
     int sysOpen(const QString &, int flags);
 #endif
 
+    static bool openModeCanCreate(QIODevice::OpenMode openMode)
+    {
+        // WriteOnly can create, but only when ExistingOnly isn't specified.
+        // ReadOnly by itself never creates.
+        return (openMode & QFile::WriteOnly) && !(openMode & QFile::ExistingOnly);
+    }
 protected:
     QFSFileEnginePrivate();
 

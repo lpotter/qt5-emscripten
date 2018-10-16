@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,18 +31,21 @@ class Server : public QObject
 {
     Q_OBJECT
 public:
-    Server(int port)
+
+    Server() { connect(&serverSocket, &QIODevice::readyRead, this, &Server::sendEcho); }
+
+    bool bind(quint16 port)
     {
-        connect(&serverSocket, SIGNAL(readyRead()),
-                this, SLOT(sendEcho()));
-        if (serverSocket.bind(QHostAddress::Any, port,
-                              QUdpSocket::ReuseAddressHint
-                              | QUdpSocket::ShareAddress)) {
+        const bool result = serverSocket.bind(QHostAddress::Any, port,
+                                              QUdpSocket::ReuseAddressHint
+                                              | QUdpSocket::ShareAddress);
+        if (result) {
             printf("OK\n");
         } else {
-            printf("FAILED\n");
+            printf("FAILED: %s\n", qPrintable(serverSocket.errorString()));
         }
         fflush(stdout);
+        return result;
     }
 
 private slots:
@@ -68,10 +58,10 @@ private slots:
         qint64 bytes = serverSocket.readDatagram(data, sizeof(data), &senderAddress, &senderPort);
         if (bytes == 1 && data[0] == '\0')
             QCoreApplication::instance()->quit();
-        
+
         for (int i = 0; i < bytes; ++i)
             data[i] += 1;
-        serverSocket.writeDatagram(data, bytes, senderAddress, senderPort);        
+        serverSocket.writeDatagram(data, bytes, senderAddress, senderPort);
     }
 
 private:
@@ -81,9 +71,20 @@ private:
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    QStringList arguments = QCoreApplication::arguments();
+    arguments.pop_front();
+    quint16 port = 0;
+    if (!arguments.isEmpty())
+        port = arguments.constFirst().toUShort();
+    if (!port) {
+        printf("Specify port number\n");
+        return -1;
+    }
 
-    Server server(app.arguments().at(1).toInt());
-    
+    Server server;
+    if (!server.bind(port))
+        return -2;
+
     return app.exec();
 }
 

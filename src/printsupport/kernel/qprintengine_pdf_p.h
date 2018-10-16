@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -68,6 +66,7 @@
 #include "private/qpdf_p.h"
 #include "private/qpaintengine_p.h"
 #include "qprintengine.h"
+#include "qprint_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -77,16 +76,6 @@ class QPen;
 class QPointF;
 class QRegion;
 class QFile;
-class QPdfPrintEngine;
-
-namespace QPdf {
-
-    struct PaperSize {
-        int width, height; // in postscript points
-    };
-    Q_PRINTSUPPORT_EXPORT PaperSize paperSize(QPrinter::PaperSize paperSize);
-    Q_PRINTSUPPORT_EXPORT const char *paperSizeToString(QPrinter::PaperSize paperSize);
-}
 
 class QPdfPrintEnginePrivate;
 
@@ -94,22 +83,22 @@ class Q_PRINTSUPPORT_EXPORT QPdfPrintEngine : public QPdfEngine, public QPrintEn
 {
     Q_DECLARE_PRIVATE(QPdfPrintEngine)
 public:
-    QPdfPrintEngine(QPrinter::PrinterMode m);
+    QPdfPrintEngine(QPrinter::PrinterMode m, QPdfEngine::PdfVersion version = QPdfEngine::Version_1_4);
     virtual ~QPdfPrintEngine();
 
     // reimplementations QPaintEngine
-    bool begin(QPaintDevice *pdev);
-    bool end();
+    bool begin(QPaintDevice *pdev) override;
+    bool end() override;
     // end reimplementations QPaintEngine
 
     // reimplementations QPrintEngine
-    bool abort() {return false;}
-    QPrinter::PrinterState printerState() const {return state;}
+    bool abort() override {return false;}
+    QPrinter::PrinterState printerState() const override {return state;}
 
-    bool newPage();
-    int metric(QPaintDevice::PaintDeviceMetric) const;
-    virtual void setProperty(PrintEnginePropertyKey key, const QVariant &value);
-    virtual QVariant property(PrintEnginePropertyKey key) const;
+    bool newPage() override;
+    int metric(QPaintDevice::PaintDeviceMetric) const override;
+    virtual void setProperty(PrintEnginePropertyKey key, const QVariant &value) override;
+    virtual QVariant property(PrintEnginePropertyKey key) const override;
     // end reimplementations QPrintEngine
 
     QPrinter::PrinterState state;
@@ -131,8 +120,6 @@ public:
     virtual bool openPrintDevice();
     virtual void closePrintDevice();
 
-    virtual void updatePaperSize();
-
 private:
     Q_DISABLE_COPY(QPdfPrintEnginePrivate)
 
@@ -143,15 +130,11 @@ private:
     QString printProgram;
     QString selectionOption;
 
-    QPrinter::DuplexMode duplex;
     bool collate;
     int copies;
     QPrinter::PageOrder pageOrder;
     QPrinter::PaperSource paperSource;
 
-    QPrinter::PaperSize printerPaperSize;
-    QSizeF customPaperSize; // in postscript points
-    bool pageMarginsSet;
     int fd;
 };
 

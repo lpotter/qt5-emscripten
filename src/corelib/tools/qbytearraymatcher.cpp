@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,7 +59,7 @@ static inline int bm_find(const uchar *cc, int l, int index, const uchar *puc, u
         return index > l ? -1 : index;
     const uint pl_minus_one = pl - 1;
 
-    register const uchar *current = cc + index + pl_minus_one;
+    const uchar *current = cc + index + pl_minus_one;
     const uchar *end = cc + l;
     while (current < end) {
         uint skip = skiptable[*current];
@@ -164,6 +162,7 @@ QByteArrayMatcher::QByteArrayMatcher(const QByteArrayMatcher &other)
 */
 QByteArrayMatcher::~QByteArrayMatcher()
 {
+    Q_UNUSED(d);
 }
 
 /*!
@@ -263,7 +262,7 @@ static int qFindByteArrayBoyerMoore(
 
 #define REHASH(a) \
     if (sl_minus_1 < sizeof(uint) * CHAR_BIT) \
-        hashHaystack -= (a) << sl_minus_1; \
+        hashHaystack -= uint(a) << sl_minus_1; \
     hashHaystack <<= 1
 
 /*!
@@ -323,5 +322,118 @@ int qFindByteArray(
     }
     return -1;
 }
+
+/*!
+    \class QStaticByteArrayMatcherBase
+    \since 5.9
+    \internal
+    \brief Non-template base class of QStaticByteArrayMatcher.
+*/
+
+/*!
+    \class QStaticByteArrayMatcher
+    \since 5.9
+    \inmodule QtCore
+    \brief The QStaticByteArrayMatcher class is a compile-time version of QByteArrayMatcher.
+
+    \ingroup tools
+    \ingroup string-processing
+
+    This class is useful when you have a sequence of bytes that you
+    want to repeatedly match against some byte arrays (perhaps in a
+    loop), or when you want to search for the same sequence of bytes
+    multiple times in the same byte array. Using a matcher object and
+    indexIn() is faster than matching a plain QByteArray with
+    QByteArray::indexOf(), in particular if repeated matching takes place.
+
+    Unlike QByteArrayMatcher, this class calculates the internal
+    representation at \e{compile-time}, if your compiler supports
+    C++14-level \c{constexpr} (C++11 is not sufficient), so it can
+    even benefit if you are doing one-off byte array matches.
+
+    Create the QStaticByteArrayMatcher by calling qMakeStaticByteArrayMatcher(),
+    passing it the C string literal you want to search for. Store the return
+    value of that function in a \c{static const auto} variable, so you don't need
+    to pass the \c{N} template parameter explicitly:
+
+    \code
+    static const auto matcher = qMakeStaticByteArrayMatcher("needle");
+    \endcode
+
+    Then call indexIn() on the QByteArray in which you want to search, just like
+    with QByteArrayMatcher.
+
+    Since this class is designed to do all the up-front calculations at compile-time,
+    it does not offer a setPattern() method.
+
+    \note Qt detects the necessary C++14 compiler support by way of the feature
+    test recommendations from
+    \l{https://isocpp.org/std/standing-documents/sd-6-sg10-feature-test-recommendations}
+    {C++ Committee's Standing Document 6}.
+
+    \sa QByteArrayMatcher, QStringMatcher
+*/
+
+/*!
+    \fn template <uint N> int QStaticByteArrayMatcher<N>::indexIn(const char *haystack, int hlen, int from = 0) const
+
+    Searches the char string \a haystack, which has length \a hlen, from
+    byte position \a from (default 0, i.e. from the first byte), for
+    the byte array pattern() that was set in the constructor.
+
+    Returns the position where the pattern() matched in \a haystack, or -1 if no match was found.
+*/
+
+/*!
+    \fn template <uint N> int QStaticByteArrayMatcher<N>::indexIn(const QByteArray &haystack, int from = 0) const
+
+    Searches the char string \a haystack, from byte position \a from
+    (default 0, i.e. from the first byte), for the byte array pattern()
+    that was set in the constructor.
+
+    Returns the position where the pattern() matched in \a haystack, or -1 if no match was found.
+*/
+
+/*!
+    \fn template <uint N> QByteArray QStaticByteArrayMatcher<N>::pattern() const
+
+    Returns the byte array pattern that this byte array matcher will
+    search for.
+
+    \sa QByteArrayMatcher::setPattern()
+*/
+
+/*!
+    \internal
+*/
+int QStaticByteArrayMatcherBase::indexOfIn(const char *needle, uint nlen, const char *haystack, int hlen, int from) const Q_DECL_NOTHROW
+{
+    if (from < 0)
+        from = 0;
+    return bm_find(reinterpret_cast<const uchar *>(haystack), hlen, from,
+                   reinterpret_cast<const uchar *>(needle),   nlen, m_skiptable.data);
+}
+
+/*!
+    \fn template <uint N> QStaticByteArrayMatcher<N>::QStaticByteArrayMatcher(const char (&pattern)[N])
+    \internal
+*/
+
+/*!
+    \fn template <uint N> QStaticByteArrayMatcher qMakeStaticByteArrayMatcher(const char (&pattern)[N])
+    \since 5.9
+    \relates QStaticByteArrayMatcher
+
+    Return a QStaticByteArrayMatcher with the correct \c{N} determined
+    automatically from the \a pattern passed.
+
+    To take full advantage of this function, assign the result to an
+    \c{auto} variable:
+
+    \code
+    static const auto matcher = qMakeStaticByteArrayMatcher("needle");
+    \endcode
+*/
+
 
 QT_END_NAMESPACE

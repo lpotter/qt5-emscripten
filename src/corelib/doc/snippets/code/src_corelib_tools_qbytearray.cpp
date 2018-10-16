@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -251,14 +261,14 @@ ba.lastIndexOf("X");        // returns -1
 
 
 //! [25]
-QByteArray url("ftp://ftp.qt.nokia.com/");
+QByteArray url("ftp://ftp.qt-project.org/");
 if (url.startsWith("ftp:"))
     ...
 //! [25]
 
 
 //! [26]
-QByteArray url("http://qt.nokia.com/index.html");
+QByteArray url("http://qt-project.org/doc/qt-5.0/qtdoc/index.html");
 if (url.endsWith(".html"))
     ...
 //! [26]
@@ -286,16 +296,16 @@ QByteArray z = x.mid(5);        // z == "pineapples"
 
 
 //! [30]
-QByteArray x("Qt by NOKIA");
+QByteArray x("Qt by THE QT COMPANY");
 QByteArray y = x.toLower();
-// y == "qt by nokia"
+// y == "qt by the qt company"
 //! [30]
 
 
 //! [31]
-QByteArray x("Qt by NOKIA");
+QByteArray x("Qt by THE QT COMPANY");
 QByteArray y = x.toUpper();
-// y == "QT BY NOKIA"
+// y == "QT BY THE QT COMPANY"
 //! [31]
 
 
@@ -343,14 +353,34 @@ long dec = str.toLong(&ok, 10);   // dec == 0, ok == false
 
 //! [38]
 QByteArray string("1234.56");
-double a = string.toDouble();   // a == 1234.56
+bool ok;
+double a = string.toDouble(&ok);   // a == 1234.56, ok == true
+
+string = "1234.56 Volt";
+a = str.toDouble(&ok);             // a == 0, ok == false
 //! [38]
 
+//! [38float]
+QByteArray string("1234.56");
+bool ok;
+float a = string.toFloat(&ok);    // a == 1234.56, ok == true
+
+string = "1234.56 Volt";
+a = str.toFloat(&ok);              // a == 0, ok == false
+//! [38float]
 
 //! [39]
 QByteArray text("Qt is great!");
 text.toBase64();        // returns "UXQgaXMgZ3JlYXQh"
 //! [39]
+
+//! [39bis]
+QByteArray text("<p>Hello?</p>");
+text.toBase64(QByteArray::Base64Encoding | QByteArray::OmitTrailingEquals);      // returns "PHA+SGVsbG8/PC9wPg"
+text.toBase64(QByteArray::Base64Encoding);                                       // returns "PHA+SGVsbG8/PC9wPg=="
+text.toBase64(QByteArray::Base64UrlEncoding);                                    // returns "PHA-SGVsbG8_PC9wPg=="
+text.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);   // returns "PHA-SGVsbG8_PC9wPg"
+//! [39bis]
 
 
 //! [40]
@@ -377,10 +407,10 @@ QByteArray ba = QByteArray::number(12.3456, 'E', 3);
 
 //! [43]
  static const char mydata[] = {
-    0x00, 0x00, 0x03, 0x84, 0x78, 0x9c, 0x3b, 0x76,
-    0xec, 0x18, 0xc3, 0x31, 0x0a, 0xf1, 0xcc, 0x99,
+    '\x00', '\x00', '\x03', '\x84', '\x78', '\x9c', '\x3b', '\x76',
+    '\xec', '\x18', '\xc3', '\x31', '\x0a', '\xf1', '\xcc', '\x99',
     ...
-    0x6d, 0x5b
+    '\x6d', '\x5b'
 };
 
 QByteArray data = QByteArray::fromRawData(mydata, sizeof(mydata));
@@ -394,6 +424,11 @@ QByteArray text = QByteArray::fromBase64("UXQgaXMgZ3JlYXQh");
 text.data();            // returns "Qt is great!"
 //! [44]
 
+//! [44bis]
+QByteArray::fromBase64("PHA+SGVsbG8/PC9wPg==", QByteArray::Base64Encoding); // returns "<p>Hello?</p>"
+QByteArray::fromBase64("PHA-SGVsbG8_PC9wPg==", QByteArray::Base64UrlEncoding); // returns "<p>Hello?</p>"
+//! [44bis]
+
 
 //! [45]
 QByteArray text = QByteArray::fromHex("517420697320677265617421");
@@ -403,15 +438,15 @@ text.data();            // returns "Qt is great!"
 //! [46]
 QString tmp = "test";
 QByteArray text = tmp.toLocal8Bit();
-char *data = new char[text.size()]
+char *data = new char[text.size()];
 strcpy(data, text.data());
-delete [] data; 
+delete [] data;
 //! [46]
 
 //! [47]
 QString tmp = "test";
 QByteArray text = tmp.toLocal8Bit();
-char *data = new char[text.size() + 1]
+char *data = new char[text.size() + 1];
 strcpy(data, text.data());
 delete [] data;
 //! [47]
@@ -427,7 +462,7 @@ ba2.constData();                // Returns "ca\0" with terminating \0.
 
 QByteArray ba3("ca\0r\0t", 4);
 ba3.size();                     // Returns 4.
-ba2.constData();                // Returns "ca\0r" with terminating \0.
+ba3.constData();                // Returns "ca\0r" with terminating \0.
 
 const char cart[] = {'c', 'a', '\0', 'r', '\0', 't'};
 QByteArray ba4(QByteArray::fromRawData(cart, 6));

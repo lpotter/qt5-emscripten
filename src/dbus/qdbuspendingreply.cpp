@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,7 +49,7 @@
     \inmodule QtDBus
     \since 4.5
 
-    \brief The QDBusPendingReply class contains the reply to an asynchronous method call
+    \brief The QDBusPendingReply class contains the reply to an asynchronous method call.
 
     The QDBusPendingReply is a template class with up to 8 template
     parameters. Those parameters are the types that will be used to
@@ -166,6 +165,12 @@
 */
 
 /*!
+  \enum QDBusPendingReply::anonymous
+
+  \value Count The number of arguments the reply is expected to have
+ */
+
+/*!
     \fn int QDBusPendingReply::count() const
 
     Return the number of arguments the reply is supposed to have. This
@@ -185,19 +190,17 @@
     function's return value is undefined (will probably cause an
     assertion failure), so it is important to verify that the
     processing is finished and the reply is valid.
+
+    If the reply does not contain an argument at position \a index or if the
+    reply was an error, this function returns an invalid QVariant. Since D-Bus
+    messages can never contain invalid QVariants, this return can be used to
+    detect an error condition.
 */
 
 /*!
-    \fn Type QDBusPendingReply::argumentAt() const
-
-    Returns the argument at position \c Index (which is a template
-    parameter) cast to type \c Type. This function uses template code
-    to determine the proper \c Type type, according to the type list
-    used in the construction of this object.
-
-    Note that, if the reply hasn't arrived, this function causes the
-    calling thread to block until the reply is processed.
-*/
+  \typedef QDBusPendingReply::T1
+  \internal
+ */
 
 /*!
     \fn T1 QDBusPendingReply::value() const
@@ -211,6 +214,10 @@
 
     Note that, if the reply hasn't arrived, this function causes the
     calling thread to block until the reply is processed.
+
+    If the reply is an error reply, this function returns a default-constructed
+    \c T1 object, which may be indistinguishable from a valid value. To
+    reliably determine whether the message was an error, use isError().
 */
 
 /*!
@@ -225,6 +232,10 @@
 
     Note that, if the reply hasn't arrived, this function causes the
     calling thread to block until the reply is processed.
+
+    If the reply is an error reply, this function returns a default-constructed
+    \c T1 object, which may be indistinguishable from a valid value. To
+    reliably determine whether the message was an error, use isError().
 */
 
 /*!
@@ -260,14 +271,12 @@ void QDBusPendingReplyData::assign(const QDBusMessage &message)
 
 QVariant QDBusPendingReplyData::argumentAt(int index) const
 {
-    if (d)
-        d->waitForFinished();   // bypasses "const"
+    if (!d)
+        return QVariant();
 
-    Q_ASSERT_X(d && index >= 0 && index < d->replyMessage.arguments().count(),
-               "QDBusPendingReply::argumentAt",
-               "Index out of bounds");
+    d->waitForFinished();   // bypasses "const"
 
-    return d->replyMessage.arguments().at(index);
+    return d->replyMessage.arguments().value(index);
 }
 
 void QDBusPendingReplyData::setMetaTypes(int count, const int *types)

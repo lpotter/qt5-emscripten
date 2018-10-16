@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -72,7 +70,7 @@ for ($j = 0; $j < $i; ++$j) {
 }
 print "0\n};\n";
 ===== PERL SCRIPT ====
- 
+
  * The input data is as follows:
 other
 org.freedesktop.DBus.Error.Failed
@@ -138,11 +136,11 @@ static const int errorMessages_indices[] = {
     0,    6,   40,   76,  118,  153,  191,  231,
     273,  313,  349,  384,  421,  461,  501,  540,
     581,  617,  661,  705,  746,  789,  833,  874,
-    916,  961, 1005,   -1
+    916,  961, 1005
 };
 
 static const int errorMessages_count = sizeof errorMessages_indices /
-                                       sizeof errorMessages_indices[0] - 1;
+                                       sizeof errorMessages_indices[0];
 
 static inline const char *get(QDBusError::ErrorType code)
 {
@@ -150,6 +148,7 @@ static inline const char *get(QDBusError::ErrorType code)
     return errorMessages_string + errorMessages_indices[intcode];
 }
 
+#ifndef QT_BOOTSTRAPPED
 static inline QDBusError::ErrorType get(const char *name)
 {
     if (!name || !*name)
@@ -159,6 +158,7 @@ static inline QDBusError::ErrorType get(const char *name)
             return QDBusError::ErrorType(i + int(QDBusError::Other));
     return QDBusError::Other;
 }
+#endif
 
 /*!
     \class QDBusError
@@ -176,7 +176,7 @@ static inline QDBusError::ErrorType get(const char *name)
     C++ and Java exceptions are a valid analogy for D-Bus errors:
     instead of returning normally with a return value, remote
     applications and the bus may decide to throw an error
-    condition. However, the QtDBus implementation does not use the C++
+    condition. However, the Qt D-Bus implementation does not use the C++
     exception-throwing mechanism, so you will receive QDBusErrors in
     the return reply (see QDBusReply::error()).
 
@@ -197,7 +197,7 @@ static inline QDBusError::ErrorType get(const char *name)
     values:
 
     \value NoError              QDBusError is invalid (i.e., the call succeeded)
-    \value Other                QDBusError contains an error that is one of the well-known ones
+    \value Other                QDBusError contains an error that is not one of the well-known ones
     \value Failed               The call failed (\c org.freedesktop.DBus.Error.Failed)
     \value NoMemory             Out of memory (\c org.freedesktop.DBus.Error.NoMemory)
     \value ServiceUnknown       The called service is not known
@@ -257,7 +257,9 @@ static inline QDBusError::ErrorType get(const char *name)
 QDBusError::QDBusError()
     : code(NoError)
 {
-
+    // ### This class has an implicit (therefore inline) destructor
+    // so the following field cannot be used.
+    Q_UNUSED(unused);
 }
 
 #ifndef QT_BOOTSTRAPPED
@@ -380,7 +382,7 @@ QString QDBusError::message() const
 }
 
 /*!
-    Returns true if this is a valid error condition (i.e., if there was an error),
+    Returns \c true if this is a valid error condition (i.e., if there was an error),
     otherwise false.
 */
 
@@ -401,10 +403,17 @@ QString QDBusError::errorString(ErrorType error)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QDBusError &msg)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QDBusError(" << msg.name() << ", " << msg.message() << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
+
+/*!
+    \fn void QDBusError::swap(QDBusError &other)
+
+    Swaps this QDBusError instance with \a other.
+*/
 
 QT_END_NAMESPACE
 

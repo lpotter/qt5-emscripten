@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -95,6 +82,7 @@
 #include <QtCore/qset.h>
 #include <QtCore/qstack.h>
 #include <QtCore/qvariant.h>
+#include <qplatformdefs.h>
 
 #ifdef Q_OS_WIN
 #   include <windows.h>
@@ -106,6 +94,8 @@
 #endif
 
 QT_BEGIN_NAMESPACE
+
+namespace QDirIteratorTest {
 
 class QFileSystemIteratorPrivate
 {
@@ -230,7 +220,12 @@ void QFileSystemIteratorPrivate::pushSubDirectory(const QByteArray &path)
     wchar_t szSearchPath[MAX_PATH];
     QString::fromLatin1(path).toWCharArray(szSearchPath);
     wcscat(szSearchPath, L"\\*");
+#ifndef Q_OS_WINRT
     HANDLE dir = FindFirstFile(szSearchPath, &m_fileSearchResult);
+#else
+    HANDLE dir = FindFirstFileEx(szSearchPath, FindExInfoStandard, &m_fileSearchResult,
+                                 FindExSearchLimitToDirectories, NULL, FIND_FIRST_EX_LARGE_FETCH);
+#endif
     m_bFirstSearchResult = true;
 #else
     DIR *dir = ::opendir(path.constData());
@@ -349,8 +344,8 @@ bool QFileSystemIteratorPrivate::advanceHelper()
     QByteArray ba = m_dirPaths.top();
     ba += '/';
     ba += name;
-    struct stat st;
-    lstat(ba.constData(), &st);
+    QT_STATBUF st;
+    QT_LSTAT(ba.constData(), &st);
 
     if (S_ISDIR(st.st_mode)) {
         pushSubDirectory(ba);
@@ -368,7 +363,7 @@ bool QFileSystemIteratorPrivate::shouldFollowDirectory(const QFileInfo &fileInfo
     // If we're doing flat iteration, we're done.
     if (!(iteratorFlags & QFileSystemIterator::Subdirectories))
         return false;
-    
+
     // Never follow non-directory entries
     if (!fileInfo.isDir())
         return false;
@@ -378,7 +373,7 @@ bool QFileSystemIteratorPrivate::shouldFollowDirectory(const QFileInfo &fileInfo
     if (fileInfo.fileName() == QLatin1String(".") || fileInfo.fileName() == QLatin1String(".."))
         return false;
 
-      
+
     // Check symlinks
     if (fileInfo.isSymLink() && !(iteratorFlags & QFileSystemIterator::FollowSymlinks)) {
         // Follow symlinks only if FollowSymlinks was passed
@@ -388,10 +383,10 @@ bool QFileSystemIteratorPrivate::shouldFollowDirectory(const QFileInfo &fileInfo
     // Stop link loops
     if (visitedLinks.contains(fileInfo.canonicalFilePath()))
         return false;
-    
+
     return true;
 }
-    
+
 
 /*!
     \internal
@@ -454,7 +449,7 @@ bool QFileSystemIteratorPrivate::matchesFilters(const QAbstractFileEngineIterato
             return false;
     }
 #endif
-    
+
     bool dotOrDotDot = (fileName == QLatin1String(".") || fileName == QLatin1String(".."));
     if ((filters & QDir::NoDotAndDotDot) && dotOrDotDot)
         return false;
@@ -495,7 +490,7 @@ bool QFileSystemIteratorPrivate::matchesFilters(const QAbstractFileEngineIterato
                                            || (!fi.exists() && fi.isSymLink()))) {
         return false;
     }
-    
+
     return true;
 }
 #endif
@@ -608,7 +603,7 @@ bool QFileSystemIterator::atEnd() const
     This function is provided for the convenience when iterating single
     directories. For recursive iteration, you should call filePath() or
     fileInfo() instead.
-    
+
     \sa filePath(), fileInfo()
 */
 QString QFileSystemIterator::fileName() const
@@ -673,5 +668,7 @@ QString QFileSystemIterator::path() const
 {
     return QString::fromLocal8Bit(d->m_dirPaths.top());
 }
+
+} // QDirIteratorTest::
 
 QT_END_NAMESPACE

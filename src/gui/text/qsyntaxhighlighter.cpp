@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -51,6 +49,8 @@
 #include <qtextcursor.h>
 #include <qdebug.h>
 #include <qtimer.h>
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -98,21 +98,21 @@ void QSyntaxHighlighterPrivate::applyFormatChanges()
 
     QTextLayout *layout = currentBlock.layout();
 
-    QList<QTextLayout::FormatRange> ranges = layout->additionalFormats();
+    QVector<QTextLayout::FormatRange> ranges = layout->formats();
 
     const int preeditAreaStart = layout->preeditAreaPosition();
     const int preeditAreaLength = layout->preeditAreaText().length();
 
     if (preeditAreaLength != 0) {
-        QList<QTextLayout::FormatRange>::Iterator it = ranges.begin();
-        while (it != ranges.end()) {
-            if (it->start >= preeditAreaStart
-                && it->start + it->length <= preeditAreaStart + preeditAreaLength) {
-                ++it;
-            } else {
-                it = ranges.erase(it);
-                formatsChanged = true;
-            }
+        auto isOutsidePreeditArea = [=](const QTextLayout::FormatRange &range) {
+            return range.start < preeditAreaStart
+                    || range.start + range.length > preeditAreaStart + preeditAreaLength;
+        };
+        const auto it = std::remove_if(ranges.begin(), ranges.end(),
+                                       isOutsidePreeditArea);
+        if (it != ranges.end()) {
+            ranges.erase(it, ranges.end());
+            formatsChanged = true;
         }
     } else if (!ranges.isEmpty()) {
         ranges.clear();
@@ -150,7 +150,7 @@ void QSyntaxHighlighterPrivate::applyFormatChanges()
     }
 
     if (formatsChanged) {
-        layout->setAdditionalFormats(ranges);
+        layout->setFormats(ranges);
         doc->markContentsDirty(currentBlock.position(), currentBlock.length());
     }
 }
@@ -243,6 +243,8 @@ void QSyntaxHighlighterPrivate::reformatBlock(const QTextBlock &block)
 
     \snippet code/src_gui_text_qsyntaxhighlighter.cpp 1
 
+    \target QSyntaxHighlighter multiblock
+
     Some syntaxes can have constructs that span several text
     blocks. For example, a C++ syntax highlighter should be able to
     cope with \c{/}\c{*...*}\c{/} multiline comments. To deal with
@@ -267,12 +269,12 @@ void QSyntaxHighlighterPrivate::reformatBlock(const QTextBlock &block)
     \snippet code/src_gui_text_qsyntaxhighlighter.cpp 2
 
     In the example above, we first set the current block state to
-    0. Then, if the previous block ended within a comment, we higlight
+    0. Then, if the previous block ended within a comment, we highlight
     from the beginning of the current block (\c {startIndex =
     0}). Otherwise, we search for the given start expression. If the
     specified end expression cannot be found in the text block, we
     change the current block state by calling setCurrentBlockState(),
-    and make sure that the rest of the block is higlighted.
+    and make sure that the rest of the block is highlighted.
 
     In addition you can query the current formatting and user data
     using the format() and currentBlockUserData() functions
@@ -290,7 +292,7 @@ void QSyntaxHighlighterPrivate::reformatBlock(const QTextBlock &block)
 /*!
     Constructs a QSyntaxHighlighter with the given \a parent.
 
-    If the parent is a QTextEdit, it installs the syntaxhighlighter on the
+    If the parent is a QTextEdit, it installs the syntax highlighter on the
     parents document. The specified QTextEdit also becomes the owner of
     the QSyntaxHighlighter.
 */
@@ -337,7 +339,7 @@ void QSyntaxHighlighter::setDocument(QTextDocument *doc)
         QTextCursor cursor(d->doc);
         cursor.beginEditBlock();
         for (QTextBlock blk = d->doc->begin(); blk.isValid(); blk = blk.next())
-            blk.layout()->clearAdditionalFormats();
+            blk.layout()->clearFormats();
         cursor.endEditBlock();
     }
     d->doc = doc;
@@ -380,7 +382,7 @@ void QSyntaxHighlighter::rehighlight()
     \since 4.6
 
     Reapplies the highlighting to the given QTextBlock \a block.
-    
+
     \sa rehighlight()
 */
 void QSyntaxHighlighter::rehighlightBlock(const QTextBlock &block)
@@ -411,33 +413,12 @@ void QSyntaxHighlighter::rehighlightBlock(const QTextBlock &block)
     setFormat() as often as necessary to apply any font and color
     changes that you require. For example:
 
-    \snippet code/src_gui_text_qsyntaxhighlighter.cpp 3
+    \snippet code/src_gui_text_qsyntaxhighlighter.cpp 1
 
-    Some syntaxes can have constructs that span several text
-    blocks. For example, a C++ syntax highlighter should be able to
-    cope with \c{/}\c{*...*}\c{/} multiline comments. To deal with
-    these cases it is necessary to know the end state of the previous
-    text block (e.g. "in comment").
-
-    Inside your highlightBlock() implementation you can query the end
-    state of the previous text block using the previousBlockState()
-    function. After parsing the block you can save the last state
-    using setCurrentBlockState().
-
-    The currentBlockState() and previousBlockState() functions return
-    an int value. If no state is set, the returned value is -1. You
-    can designate any other value to identify any given state using
-    the setCurrentBlockState() function. Once the state is set the
-    QTextBlock keeps that value until it is set set again or until the
-    corresponding paragraph of text gets deleted.
-
-    For example, if you're writing a simple C++ syntax highlighter,
-    you might designate 1 to signify "in comment". For a text block
-    that ended in the middle of a comment you'd set 1 using
-    setCurrentBlockState, and for other paragraphs you'd set 0.
-    In your parsing code if the return value of previousBlockState()
-    is 1, you would highlight the text as a C++ comment until you
-    reached the closing \c{*}\c{/}.
+    See the \l{QSyntaxHighlighter multiblock}{Detailed Description} for
+    examples of using setCurrentBlockState(), currentBlockState()
+    and previousBlockState() to handle syntaxes with constructs that
+    span several text blocks
 
     \sa previousBlockState(), setFormat(), setCurrentBlockState()
 */
@@ -581,7 +562,7 @@ void QSyntaxHighlighter::setCurrentBlockState(int newState)
     and store their relative position and the actual QChar in a simple
     class derived from QTextBlockUserData:
 
-    \snippet code/src_gui_text_qsyntaxhighlighter.cpp 4
+    \snippet code/src_gui_text_qsyntaxhighlighter.cpp 3
 
     During cursor navigation in the associated editor, you can ask the
     current QTextBlock (retrieved using the QTextCursor::block()

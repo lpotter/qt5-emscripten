@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -154,14 +141,22 @@ static inline QStringList systemEnvironment()
     return result;
 }
 
-bool TestCompiler::runCommand( QString cmdline, bool expectFail )
+bool TestCompiler::runCommand(const QString &cmd, const QStringList &args, bool expectFail)
 {
-    testOutput_.append("Running command: " + cmdline);
+    QString dbg = cmd;
+    if (dbg.contains(' '))
+        dbg.prepend('"').append('"');
+    foreach (QString arg, args) {
+        if (arg.contains(' '))
+            arg.prepend('"').append('"');
+        dbg.append(' ').append(arg);
+    }
+    testOutput_.append("Running command: " + dbg);
 
     QProcess child;
     child.setEnvironment(systemEnvironment() + environment_);
 
-    child.start(cmdline);
+    child.start(cmd, args);
     if (!child.waitForStarted(-1)) {
         testOutput_.append( "Unable to start child process." );
         return errorOut();
@@ -193,7 +188,7 @@ void TestCompiler::resetArguments()
     qmakeArgs_.clear();
 }
 
-void TestCompiler::setArguments( QString makeArgs, QString qmakeArgs )
+void TestCompiler::setArguments(const QStringList &makeArgs, const QStringList &qmakeArgs)
 {
     makeArgs_ = makeArgs;
     qmakeArgs_ = qmakeArgs;
@@ -221,7 +216,7 @@ bool TestCompiler::makeClean( const QString &workPath )
     QFileInfo Fi( workPath + "/Makefile");
     if (Fi.exists())
         // Run make clean
-        return runCommand( makeCmd_ + " clean" );
+        return runCommand(makeCmd_, QStringList() << "clean");
 
     return true;
 }
@@ -238,7 +233,7 @@ bool TestCompiler::makeDistClean( const QString &workPath )
     QFileInfo Fi( workPath + "/Makefile");
     if (Fi.exists())
         // Run make distclean
-        return runCommand( makeCmd_ + " distclean" );
+        return runCommand(makeCmd_, QStringList() << "distclean");
 
     return true;
 
@@ -257,7 +252,7 @@ bool TestCompiler::qmakeProject( const QString &workDir, const QString &proName 
     if (!projectFile.endsWith(".pro"))
         projectFile += ".pro";
 
-    return runCommand(qmakeCmd_ + " -project -o " + projectFile + " DESTDIR=./");
+    return runCommand(qmakeCmd_, QStringList() << "-project" << "-o" << projectFile << "DESTDIR=./");
 }
 
 bool TestCompiler::qmake( const QString &workDir, const QString &proName, const QString &buildDir )
@@ -277,7 +272,7 @@ bool TestCompiler::qmake( const QString &workDir, const QString &proName, const 
     makeFile += "Makefile";
 
     // Now start qmake and generate the makefile
-    return runCommand( qmakeCmd_ + " " + qmakeArgs_ + " " + projectFile + " -o " + makeFile );
+    return runCommand(qmakeCmd_, QStringList(qmakeArgs_) << projectFile << "-o" << makeFile);
 }
 
 bool TestCompiler::make( const QString &workPath, const QString &target, bool expectFail )
@@ -285,18 +280,18 @@ bool TestCompiler::make( const QString &workPath, const QString &target, bool ex
     QDir D;
     D.setCurrent( workPath );
 
-    QString cmdline = makeCmd_ + " " + makeArgs_;
-    if ( cmdline.contains("nmake", Qt::CaseInsensitive) )
-        cmdline.append(" /NOLOGO");
-    if ( !target.isEmpty() )
-        cmdline += " " + target;
+    QStringList args = makeArgs_;
+    if (makeCmd_.contains("nmake", Qt::CaseInsensitive))
+        args << "/NOLOGO";
+    if (!target.isEmpty())
+        args << target;
 
-    return runCommand( cmdline, expectFail );
+    return runCommand(makeCmd_, args, expectFail);
 }
 
 bool TestCompiler::exists( const QString &destDir, const QString &exeName, BuildType buildType, const QString &version )
 {
-    QFileInfo f(destDir + "/" + targetName(buildType, exeName, version));
+    QFileInfo f(destDir + QLatin1Char('/') + targetName(buildType, exeName, version));
     return f.exists();
 }
 

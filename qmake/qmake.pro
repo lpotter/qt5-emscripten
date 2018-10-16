@@ -1,40 +1,248 @@
-#This is a project file for building qmake, of course it presents a problem -
-# it is very hard to make qmake build this, when qmake is the thing it builds,
-#once you are boot strapped though, the qmake.pro will offer better coverage of a
-#platform than either of the generic makefiles
+# This project is not actually used to build qmake, but to support development
+# with Qt Creator. The real build system is made up by the Makefile templates
+# and the configures.
 
 option(host_build)
-CONFIG += console bootstrap
-CONFIG -= qt shared app_bundle uic
-DEFINES += QT_BUILD_QMAKE QT_BOOTSTRAPPED \
-    PROEVALUATOR_FULL PROEVALUATOR_DEBUG
-DESTDIR = ../bin/
+CONFIG += console
+CONFIG -= qt app_bundle
 
-OBJECTS_DIR = .
-MOC_DIR = .
+DEFINES += \
+    PROEVALUATOR_FULL \
+    QT_BOOTSTRAPPED \
+    QT_BUILD_QMAKE \
+    QT_NO_FOREACH \
+    $$shell_quote(QT_VERSION_STR=\"$$QT_VERSION\") \
+    QT_VERSION_MAJOR=$$QT_MAJOR_VERSION \
+    QT_VERSION_MINOR=$$QT_MINOR_VERSION \
+    QT_VERSION_PATCH=$$QT_PATCH_VERSION
 
-#guts
-VPATH += $$QT_SOURCE_TREE/src/corelib/global \
-         $$QT_SOURCE_TREE/src/corelib/tools \
-         $$QT_SOURCE_TREE/src/corelib/kernel \
-         $$QT_SOURCE_TREE/src/corelib/codecs \
-         $$QT_SOURCE_TREE/src/corelib/plugin \
-         $$QT_SOURCE_TREE/src/corelib/xml \
-         $$QT_SOURCE_TREE/src/corelib/io \
-         $$QT_SOURCE_TREE/tools/shared/windows
+win32: DEFINES += \
+    UNICODE \
+    _ENABLE_EXTENDED_ALIGNED_STORAGE \
+    _CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS
 
-INCLUDEPATH += . \
-           library \
-           generators \
-           generators/unix \
-           generators/win32 \
-           generators/mac \
-           generators/integrity \
-           $$QT_SOURCE_TREE/include \
-           $$QT_SOURCE_TREE/include/QtCore \
-           $$QT_SOURCE_TREE/include/QtCore/$$QT_VERSION \
-           $$QT_SOURCE_TREE/include/QtCore/$$QT_VERSION/QtCore \
-           $$QT_SOURCE_TREE/tools/shared \
-           $$QT_SOURCE_TREE/qmake
+# qmake code
 
-include(qmake.pri)
+PRECOMPILED_HEADER = qmake_pch.h
+
+INCLUDEPATH += \
+    . \
+    library \
+    generators \
+    generators/unix \
+    generators/win32 \
+    generators/mac
+
+SOURCES += \
+    main.cpp \
+    meta.cpp \
+    option.cpp \
+    project.cpp \
+    property.cpp \
+    library/ioutils.cpp \
+    library/proitems.cpp \
+    library/qmakebuiltins.cpp \
+    library/qmakeevaluator.cpp \
+    library/qmakeglobals.cpp \
+    library/qmakeparser.cpp \
+    library/qmakevfs.cpp \
+    generators/makefile.cpp \
+    generators/makefiledeps.cpp \
+    generators/metamakefile.cpp \
+    generators/projectgenerator.cpp \
+    generators/xmloutput.cpp \
+    generators/mac/pbuilder_pbx.cpp \
+    generators/unix/unixmake.cpp \
+    generators/unix/unixmake2.cpp \
+    generators/win32/mingw_make.cpp \
+    generators/win32/msbuild_objectmodel.cpp \
+    generators/win32/msvc_nmake.cpp \
+    generators/win32/msvc_objectmodel.cpp \
+    generators/win32/msvc_vcproj.cpp \
+    generators/win32/msvc_vcxproj.cpp \
+    generators/win32/winmakefile.cpp
+
+HEADERS += \
+    cachekeys.h \
+    meta.h \
+    option.h \
+    project.h \
+    property.h \
+    library/ioutils.h \
+    library/proitems.h \
+    library/qmake_global.h \
+    library/qmakeevaluator.h \
+    library/qmakeevaluator_p.h \
+    library/qmakeglobals.h \
+    library/qmakeparser.h \
+    library/qmakevfs.h \
+    generators/makefile.h \
+    generators/makefiledeps.h \
+    generators/metamakefile.h \
+    generators/projectgenerator.h \
+    generators/xmloutput.h \
+    generators/mac/pbuilder_pbx.h \
+    generators/unix/unixmake.h \
+    generators/win32/mingw_make.h \
+    generators/win32/msbuild_objectmodel.h \
+    generators/win32/msvc_nmake.h \
+    generators/win32/msvc_objectmodel.h \
+    generators/win32/msvc_vcproj.h \
+    generators/win32/msvc_vcxproj.h \
+    generators/win32/winmakefile.h
+
+# qt code
+
+bp = $$shadowed(..)
+INCLUDEPATH += \
+    $$bp/include $$bp/include/QtCore \
+    $$bp/include/QtCore/$$QT_VERSION $$bp/include/QtCore/$$QT_VERSION/QtCore
+    $$bp/src/corelib/global
+
+VPATH += \
+    ../src/corelib/global \
+    ../src/corelib/tools \
+    ../src/corelib/kernel \
+    ../src/corelib/codecs \
+    ../src/corelib/plugin \
+    ../src/corelib/io \
+    ../src/corelib/serialization
+
+SOURCES += \
+    qabstractfileengine.cpp \
+    qarraydata.cpp \
+    qbitarray.cpp \
+    qbuffer.cpp \
+    qbytearray.cpp \
+    qbytearraymatcher.cpp \
+    qcryptographichash.cpp \
+    qdatetime.cpp \
+    qdir.cpp \
+    qdiriterator.cpp \
+    qfile.cpp \
+    qfiledevice.cpp \
+    qfileinfo.cpp \
+    qfilesystemengine.cpp \
+    qfilesystementry.cpp \
+    qfsfileengine.cpp \
+    qfsfileengine_iterator.cpp \
+    qglobal.cpp \
+    qhash.cpp \
+    qiodevice.cpp \
+    qjson.cpp \
+    qjsonarray.cpp \
+    qjsondocument.cpp \
+    qjsonobject.cpp \
+    qjsonparser.cpp \
+    qjsonvalue.cpp \
+    qlibraryinfo.cpp \
+    qlinkedlist.cpp \
+    qlist.cpp \
+    qlocale.cpp \
+    qlocale_tools.cpp \
+    qlogging.cpp \
+    qmalloc.cpp \
+    qmap.cpp \
+    qmetatype.cpp \
+    qnumeric.cpp \
+    qregexp.cpp \
+    qsettings.cpp \
+    qstring.cpp \
+    qstring_compat.cpp \
+    qstringlist.cpp \
+    qsystemerror.cpp \
+    qtemporaryfile.cpp \
+    qtextcodec.cpp \
+    qtextstream.cpp \
+    qutfcodec.cpp \
+    quuid.cpp \
+    qvariant.cpp \
+    qversionnumber.cpp \
+    qvsnprintf.cpp \
+    qxmlstream.cpp \
+    qxmlutils.cpp
+
+HEADERS += \
+    qabstractfileengine_p.h \
+    qarraydata.h \
+    qarraydataops.h \
+    qarraydatapointer.h \
+    qbitarray.h \
+    qbuffer.h \
+    qbytearray.h \
+    qbytearraymatcher.h \
+    qchar.h \
+    qcryptographichash.h \
+    qdatetime.h \
+    qdatetime_p.h \
+    qdir.h \
+    qdir_p.h \
+    qdiriterator.h \
+    qfile.h \
+    qfileinfo.h \
+    qglobal.h \
+    qhash.h \
+    qiodevice.h \
+    qjson.h \
+    qjsonarray.h \
+    qjsondocument.h \
+    qjsonobject.h \
+    qjsonparser.h \
+    qjsonvalue.h \
+    qjsonwriter.h \
+    qlinkedlist.h \
+    qlist.h \
+    qlocale.h \
+    qlocale_tools_p.h \
+    qmalloc.h \
+    qmap.h \
+    qmetatype.h \
+    qnumeric.h \
+    qregexp.h \
+    qstring.h \
+    qstringlist.h \
+    qstringmatcher.h \
+    qsystemerror_p.h \
+    qtemporaryfile.h \
+    qtextcodec.h \
+    qtextstream.h \
+    qutfcodec.h \
+    quuid.h \
+    qvector.h \
+    qversionnumber.h \
+    qxmlstream.h \
+    qxmlutils.h
+
+unix {
+    SOURCES += \
+        qcore_unix.cpp \
+        qfilesystemengine_unix.cpp \
+        qfilesystemiterator_unix.cpp \
+        qfsfileengine_unix.cpp \
+        qlocale_unix.cpp
+    macos {
+        SOURCES += \
+            qcore_foundation.mm \
+            qcore_mac.cpp \
+            qoperatingsystemversion_darwin.mm \
+            qsettings_mac.cpp
+        LIBS += \
+            -framework ApplicationServices \
+            -framework CoreServices \
+            -framework Foundation
+        QMAKE_CXXFLAGS += -fconstant-cfstrings
+    }
+} else {
+    SOURCES += \
+        qfilesystemengine_win.cpp \
+        qfilesystemiterator_win.cpp \
+        qfsfileengine_win.cpp \
+        qlocale_win.cpp \
+        qoperatingsystemversion_win.cpp \
+        qsettings_win.cpp \
+        qsystemlibrary.cpp \
+        registry.cpp
+    LIBS += -lole32 -ladvapi32 -lkernel32 -lnetapi32
+    mingw: LIBS += -luuid
+    clang: QMAKE_CXXFLAGS += -fms-compatibility-version=19.00.23506 -Wno-microsoft-enum-value
+}

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,10 +59,9 @@ public:
 
     QByteArray *buf;
     QByteArray defaultBuf;
-    int ioIndex;
 
-    virtual qint64 peek(char *data, qint64 maxSize);
-    virtual QByteArray peek(qint64 maxSize);
+    virtual qint64 peek(char *data, qint64 maxSize) override;
+    virtual QByteArray peek(qint64 maxSize) override;
 
 #ifndef QT_NO_QOBJECT
     // private slots
@@ -157,14 +154,12 @@ QBuffer::QBuffer()
 {
     Q_D(QBuffer);
     d->buf = &d->defaultBuf;
-    d->ioIndex = 0;
 }
 QBuffer::QBuffer(QByteArray *buf)
     : QIODevice(*new QBufferPrivate)
 {
     Q_D(QBuffer);
     d->buf = buf ? buf : &d->defaultBuf;
-    d->ioIndex = 0;
     d->defaultBuf.clear();
 }
 #else
@@ -180,7 +175,6 @@ QBuffer::QBuffer(QObject *parent)
 {
     Q_D(QBuffer);
     d->buf = &d->defaultBuf;
-    d->ioIndex = 0;
 }
 
 /*!
@@ -206,7 +200,6 @@ QBuffer::QBuffer(QByteArray *byteArray, QObject *parent)
     Q_D(QBuffer);
     d->buf = byteArray ? byteArray : &d->defaultBuf;
     d->defaultBuf.clear();
-    d->ioIndex = 0;
 }
 #endif
 
@@ -253,7 +246,6 @@ void QBuffer::setBuffer(QByteArray *byteArray)
         d->buf = &d->defaultBuf;
     }
     d->defaultBuf.clear();
-    d->ioIndex = 0;
 }
 
 /*!
@@ -312,7 +304,6 @@ void QBuffer::setData(const QByteArray &data)
         return;
     }
     *d->buf = data;
-    d->ioIndex = 0;
 }
 
 /*!
@@ -340,9 +331,8 @@ bool QBuffer::open(OpenMode flags)
 
     if ((flags & Truncate) == Truncate)
         d->buf->resize(0);
-    d->ioIndex = (flags & Append) == Append ? d->buf->size() : 0;
 
-    return QIODevice::open(flags);
+    return QIODevice::open(flags | QIODevice::Unbuffered);
 }
 
 /*!
@@ -390,7 +380,6 @@ bool QBuffer::seek(qint64 pos)
         qWarning("QBuffer::seek: Invalid pos: %d", int(pos));
         return false;
     }
-    d->ioIndex = int(pos);
     return QIODevice::seek(pos);
 }
 
@@ -420,10 +409,9 @@ bool QBuffer::canReadLine() const
 qint64 QBuffer::readData(char *data, qint64 len)
 {
     Q_D(QBuffer);
-    if ((len = qMin(len, qint64(d->buf->size()) - d->ioIndex)) <= 0)
+    if ((len = qMin(len, qint64(d->buf->size()) - pos())) <= 0)
         return qint64(0);
-    memcpy(data, d->buf->constData() + d->ioIndex, len);
-    d->ioIndex += int(len);
+    memcpy(data, d->buf->constData() + pos(), len);
     return len;
 }
 
@@ -433,7 +421,7 @@ qint64 QBuffer::readData(char *data, qint64 len)
 qint64 QBuffer::writeData(const char *data, qint64 len)
 {
     Q_D(QBuffer);
-    int extraBytes = d->ioIndex + len - d->buf->size();
+    int extraBytes = pos() + len - d->buf->size();
     if (extraBytes > 0) { // overflow
         int newSize = d->buf->size() + extraBytes;
         d->buf->resize(newSize);
@@ -443,8 +431,7 @@ qint64 QBuffer::writeData(const char *data, qint64 len)
         }
     }
 
-    memcpy(d->buf->data() + d->ioIndex, (uchar *)data, int(len));
-    d->ioIndex += int(len);
+    memcpy(d->buf->data() + pos(), data, int(len));
 
 #ifndef QT_NO_QOBJECT
     d->writtenSinceLastEmit += len;

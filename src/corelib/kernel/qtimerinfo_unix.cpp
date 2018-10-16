@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -77,7 +76,7 @@ QTimerInfoList::QTimerInfoList()
         msPerTick = 1000/ticksPerSecond;
     } else {
         // detected monotonic timers
-        previousTime.tv_sec = previousTime.tv_usec = 0;
+        previousTime.tv_sec = previousTime.tv_nsec = 0;
         previousTicks = 0;
         ticksPerSecond = 0;
         msPerTick = 0;
@@ -87,35 +86,34 @@ QTimerInfoList::QTimerInfoList()
     firstTimerInfo = 0;
 }
 
-timeval QTimerInfoList::updateCurrentTime()
+timespec QTimerInfoList::updateCurrentTime()
 {
     return (currentTime = qt_gettime());
 }
 
 #if ((_POSIX_MONOTONIC_CLOCK-0 <= 0) && !defined(Q_OS_MAC) && !defined(Q_OS_INTEGRITY)) || defined(QT_BOOTSTRAPPED)
 
-template <>
-timeval qAbs(const timeval &t)
+timespec qAbsTimespec(const timespec &t)
 {
-    timeval tmp = t;
+    timespec tmp = t;
     if (tmp.tv_sec < 0) {
         tmp.tv_sec = -tmp.tv_sec - 1;
-        tmp.tv_usec -= 1000000;
+        tmp.tv_nsec -= 1000000000;
     }
-    if (tmp.tv_sec == 0 && tmp.tv_usec < 0) {
-        tmp.tv_usec = -tmp.tv_usec;
+    if (tmp.tv_sec == 0 && tmp.tv_nsec < 0) {
+        tmp.tv_nsec = -tmp.tv_nsec;
     }
-    return normalizedTimeval(tmp);
+    return normalizedTimespec(tmp);
 }
 
 /*
-  Returns true if the real time clock has changed by more than 10%
+  Returns \c true if the real time clock has changed by more than 10%
   relative to the processor time since the last time this function was
   called. This presumably means that the system time has been changed.
 
   If /a delta is nonzero, delta is set to our best guess at how much the system clock was changed.
 */
-bool QTimerInfoList::timeChanged(timeval *delta)
+bool QTimerInfoList::timeChanged(timespec *delta)
 {
 #ifdef Q_OS_NACL
     Q_UNUSED(delta)
@@ -125,13 +123,13 @@ bool QTimerInfoList::timeChanged(timeval *delta)
     clock_t currentTicks = times(&unused);
 
     clock_t elapsedTicks = currentTicks - previousTicks;
-    timeval elapsedTime = currentTime - previousTime;
+    timespec elapsedTime = currentTime - previousTime;
 
-    timeval elapsedTimeTicks;
+    timespec elapsedTimeTicks;
     elapsedTimeTicks.tv_sec = elapsedTicks / ticksPerSecond;
-    elapsedTimeTicks.tv_usec = (((elapsedTicks * 1000) / ticksPerSecond) % 1000) * 1000;
+    elapsedTimeTicks.tv_nsec = (((elapsedTicks * 1000) / ticksPerSecond) % 1000) * 1000 * 1000;
 
-    timeval dummy;
+    timespec dummy;
     if (!delta)
         delta = &dummy;
     *delta = elapsedTime - elapsedTimeTicks;
@@ -141,20 +139,20 @@ bool QTimerInfoList::timeChanged(timeval *delta)
 
     // If tick drift is more than 10% off compared to realtime, we assume that the clock has
     // been set. Of course, we have to allow for the tick granularity as well.
-    timeval tickGranularity;
+    timespec tickGranularity;
     tickGranularity.tv_sec = 0;
-    tickGranularity.tv_usec = msPerTick * 1000;
-    return elapsedTimeTicks < ((qAbs(*delta) - tickGranularity) * 10);
+    tickGranularity.tv_nsec = msPerTick * 1000 * 1000;
+    return elapsedTimeTicks < ((qAbsTimespec(*delta) - tickGranularity) * 10);
 }
 
 /*
   repair broken timer
 */
-void QTimerInfoList::timerRepair(const timeval &diff)
+void QTimerInfoList::timerRepair(const timespec &diff)
 {
     // repair all timers
     for (int i = 0; i < size(); ++i) {
-        register QTimerInfo *t = at(i);
+        QTimerInfo *t = at(i);
         t->timeout = t->timeout + diff;
     }
 }
@@ -163,7 +161,7 @@ void QTimerInfoList::repairTimersIfNeeded()
 {
     if (QElapsedTimer::isMonotonic())
         return;
-    timeval delta;
+    timespec delta;
     if (timeChanged(&delta))
         timerRepair(delta);
 }
@@ -183,51 +181,53 @@ void QTimerInfoList::timerInsert(QTimerInfo *ti)
 {
     int index = size();
     while (index--) {
-        register const QTimerInfo * const t = at(index);
+        const QTimerInfo * const t = at(index);
         if (!(ti->timeout < t->timeout))
             break;
     }
     insert(index+1, ti);
 }
 
-inline timeval &operator+=(timeval &t1, int ms)
+inline timespec &operator+=(timespec &t1, int ms)
 {
     t1.tv_sec += ms / 1000;
-    t1.tv_usec += ms % 1000 * 1000;
-    return normalizedTimeval(t1);
+    t1.tv_nsec += ms % 1000 * 1000 * 1000;
+    return normalizedTimespec(t1);
 }
 
-inline timeval operator+(const timeval &t1, int ms)
+inline timespec operator+(const timespec &t1, int ms)
 {
-    timeval t2 = t1;
+    timespec t2 = t1;
     return t2 += ms;
 }
 
-static timeval roundToMillisecond(timeval val)
+static timespec roundToMillisecond(timespec val)
 {
     // always round up
     // worst case scenario is that the first trigger of a 1-ms timer is 0.999 ms late
 
-    int us = val.tv_usec % 1000;
-    val.tv_usec += 1000 - us;
-    return normalizedTimeval(val);
+    int ns = val.tv_nsec % (1000 * 1000);
+    val.tv_nsec += 1000 * 1000 - ns;
+    return normalizedTimespec(val);
 }
 
 #ifdef QTIMERINFO_DEBUG
 QDebug operator<<(QDebug s, timeval tv)
 {
+    QDebugStateSaver saver(s);
     s.nospace() << tv.tv_sec << "." << qSetFieldWidth(6) << qSetPadChar(QChar(48)) << tv.tv_usec << reset;
-    return s.space();
+    return s;
 }
 QDebug operator<<(QDebug s, Qt::TimerType t)
 {
+    QDebugStateSaver saver(s);
     s << (t == Qt::PreciseTimer ? "P" :
           t == Qt::CoarseTimer ? "C" : "VC");
     return s;
 }
 #endif
 
-static void calculateCoarseTimerTimeout(QTimerInfo *t, timeval currentTime)
+static void calculateCoarseTimerTimeout(QTimerInfo *t, timespec currentTime)
 {
     // The coarse timer works like this:
     //  - interval under 40 ms: round to even
@@ -245,8 +245,8 @@ static void calculateCoarseTimerTimeout(QTimerInfo *t, timeval currentTime)
     //
     // The objective is to make most timers wake up at the same time, thereby reducing CPU wakeups.
 
-    register uint interval = uint(t->interval);
-    register uint msec = uint(t->timeout.tv_usec) / 1000;
+    uint interval = uint(t->interval);
+    uint msec = uint(t->timeout.tv_nsec) / 1000 / 1000;
     Q_ASSERT(interval >= 20);
 
     // Calculate how much we can round and still keep within 5% error
@@ -257,14 +257,14 @@ static void calculateCoarseTimerTimeout(QTimerInfo *t, timeval currentTime)
         if (interval < 50) {
             // round to even
             // round towards multiples of 50 ms
-            register bool roundUp = (msec % 50) >= 25;
+            bool roundUp = (msec % 50) >= 25;
             msec >>= 1;
             msec |= uint(roundUp);
             msec <<= 1;
         } else {
             // round to multiple of 4
             // round towards multiples of 100 ms
-            register bool roundUp = (msec % 100) >= 50;
+            bool roundUp = (msec % 100) >= 50;
             msec >>= 2;
             msec |= uint(roundUp);
             msec <<= 2;
@@ -328,16 +328,16 @@ static void calculateCoarseTimerTimeout(QTimerInfo *t, timeval currentTime)
 recalculate:
     if (msec == 1000u) {
         ++t->timeout.tv_sec;
-        t->timeout.tv_usec = 0;
+        t->timeout.tv_nsec = 0;
     } else {
-        t->timeout.tv_usec = msec * 1000;
+        t->timeout.tv_nsec = msec * 1000 * 1000;
     }
 
     if (t->timeout < currentTime)
         t->timeout += interval;
 }
 
-static void calculateNextTimeout(QTimerInfo *t, timeval currentTime)
+static void calculateNextTimeout(QTimerInfo *t, timespec currentTime)
 {
     switch (t->timerType) {
     case Qt::PreciseTimer:
@@ -383,9 +383,9 @@ static void calculateNextTimeout(QTimerInfo *t, timeval currentTime)
   Returns the time to wait for the next timer, or null if no timers
   are waiting.
 */
-bool QTimerInfoList::timerWait(timeval &tm)
+bool QTimerInfoList::timerWait(timespec &tm)
 {
-    timeval currentTime = updateCurrentTime();
+    timespec currentTime = updateCurrentTime();
     repairTimersIfNeeded();
 
     // Find first waiting timer not already active
@@ -406,7 +406,7 @@ bool QTimerInfoList::timerWait(timeval &tm)
     } else {
         // no time to wait
         tm.tv_sec  = 0;
-        tm.tv_usec = 0;
+        tm.tv_nsec = 0;
     }
 
     return true;
@@ -419,17 +419,17 @@ bool QTimerInfoList::timerWait(timeval &tm)
 */
 int QTimerInfoList::timerRemainingTime(int timerId)
 {
-    timeval currentTime = updateCurrentTime();
+    timespec currentTime = updateCurrentTime();
     repairTimersIfNeeded();
-    timeval tm = {0, 0};
+    timespec tm = {0, 0};
 
     for (int i = 0; i < count(); ++i) {
-        register QTimerInfo *t = at(i);
+        QTimerInfo *t = at(i);
         if (t->id == timerId) {
             if (currentTime < t->timeout) {
                 // time to wait
                 tm = roundToMillisecond(t->timeout - currentTime);
-                return tm.tv_sec*1000 + tm.tv_usec/1000;
+                return tm.tv_sec*1000 + tm.tv_nsec/1000/1000;
             } else {
                 return 0;
             }
@@ -452,7 +452,7 @@ void QTimerInfoList::registerTimer(int timerId, int interval, Qt::TimerType time
     t->obj = object;
     t->activateRef = 0;
 
-    timeval expected = updateCurrentTime() + interval;
+    timespec expected = updateCurrentTime() + interval;
 
     switch (timerType) {
     case Qt::PreciseTimer:
@@ -468,7 +468,6 @@ void QTimerInfoList::registerTimer(int timerId, int interval, Qt::TimerType time
         // above 20 s, 5% inaccuracy is above 1 s, so we convert to VeryCoarseTimer
         if (interval >= 20000) {
             t->timerType = Qt::VeryCoarseTimer;
-            // fall through
         } else {
             t->timeout = expected;
             if (interval <= 20) {
@@ -479,7 +478,7 @@ void QTimerInfoList::registerTimer(int timerId, int interval, Qt::TimerType time
             }
             break;
         }
-        // fall through
+        Q_FALLTHROUGH();
     case Qt::VeryCoarseTimer:
         // the very coarse timer is based on full second precision,
         // so we keep the interval in seconds (round to closest second)
@@ -487,10 +486,10 @@ void QTimerInfoList::registerTimer(int timerId, int interval, Qt::TimerType time
         t->interval += 1;
         t->interval >>= 1;
         t->timeout.tv_sec = currentTime.tv_sec + t->interval;
-        t->timeout.tv_usec = 0;
+        t->timeout.tv_nsec = 0;
 
         // if we're past the half-second mark, increase the timeout again
-        if (currentTime.tv_usec > 500*1000)
+        if (currentTime.tv_nsec > 500*1000*1000)
             ++t->timeout.tv_sec;
     }
 
@@ -510,7 +509,7 @@ bool QTimerInfoList::unregisterTimer(int timerId)
 {
     // set timer inactive
     for (int i = 0; i < count(); ++i) {
-        register QTimerInfo *t = at(i);
+        QTimerInfo *t = at(i);
         if (t->id == timerId) {
             // found it
             removeAt(i);
@@ -531,7 +530,7 @@ bool QTimerInfoList::unregisterTimers(QObject *object)
     if (isEmpty())
         return false;
     for (int i = 0; i < count(); ++i) {
-        register QTimerInfo *t = at(i);
+        QTimerInfo *t = at(i);
         if (t->obj == object) {
             // object found
             removeAt(i);
@@ -551,7 +550,7 @@ QList<QAbstractEventDispatcher::TimerInfo> QTimerInfoList::registeredTimers(QObj
 {
     QList<QAbstractEventDispatcher::TimerInfo> list;
     for (int i = 0; i < count(); ++i) {
-        register const QTimerInfo * const t = at(i);
+        const QTimerInfo * const t = at(i);
         if (t->obj == object) {
             list << QAbstractEventDispatcher::TimerInfo(t->id,
                                                         (t->timerType == Qt::VeryCoarseTimer
@@ -574,7 +573,7 @@ int QTimerInfoList::activateTimers()
     int n_act = 0, maxCount = 0;
     firstTimerInfo = 0;
 
-    timeval currentTime = updateCurrentTime();
+    timespec currentTime = updateCurrentTime();
     // qDebug() << "Thread" << QThread::currentThreadId() << "woken up at" << currentTime;
     repairTimersIfNeeded();
 
@@ -591,7 +590,7 @@ int QTimerInfoList::activateTimers()
         if (isEmpty())
             break;
 
-        QTimerInfo *currentTimerInfo = first();
+        QTimerInfo *currentTimerInfo = constFirst();
         if (currentTime < currentTimerInfo->timeout)
             break; // no timer has expired
 

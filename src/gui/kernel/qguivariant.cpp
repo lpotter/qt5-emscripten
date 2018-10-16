@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -115,7 +113,7 @@ static void clear(QVariant::Private *d)
     QMetaTypeSwitcher::switcher<void>(destructor, d->type, 0);
 }
 
-// This class is a hack that customizes access to QPolygon
+// This class is a hack that customizes access to QPolygon and QPolygonF
 template<class Filter>
 class QGuiVariantIsNull : public QVariantIsNull<Filter> {
     typedef QVariantIsNull<Filter> Base;
@@ -126,6 +124,7 @@ public:
     template<typename T>
     bool delegate(const T *p) { return Base::delegate(p); }
     bool delegate(const QPolygon*) { return v_cast<QPolygon>(Base::m_d)->isEmpty(); }
+    bool delegate(const QPolygonF*) { return v_cast<QPolygonF>(Base::m_d)->isEmpty(); }
     bool delegate(const void *p) { return Base::delegate(p); }
 };
 static bool isNull(const QVariant::Private *d)
@@ -164,7 +163,7 @@ public:
 #ifndef QT_NO_ICON
     bool delegate(const QIcon *)
     {
-        return false;
+        return v_cast<QIcon>(Base::m_a)->cacheKey() == v_cast<QIcon>(Base::m_b)->cacheKey();
     }
 #endif
     bool delegate(const void *p) { return Base::delegate(p); }
@@ -182,7 +181,8 @@ static bool convert(const QVariant::Private *d, int t,
     switch (t) {
     case QVariant::ByteArray:
         if (d->type == QVariant::Color) {
-            *static_cast<QByteArray *>(result) = v_cast<QColor>(d)->name().toLatin1();
+            const QColor *c = v_cast<QColor>(d);
+            *static_cast<QByteArray *>(result) = c->name(c->alpha() != 255 ? QColor::HexArgb : QColor::HexRgb).toLatin1();
             return true;
         }
         break;
@@ -197,9 +197,11 @@ static bool convert(const QVariant::Private *d, int t,
         case QVariant::Font:
             *str = v_cast<QFont>(d)->toString();
             return true;
-        case QVariant::Color:
-            *str = v_cast<QColor>(d)->name();
+        case QVariant::Color: {
+            const QColor *c = v_cast<QColor>(d);
+            *str = c->name(c->alpha() != 255 ? QColor::HexArgb : QColor::HexRgb);
             return true;
+        }
         default:
             break;
         }
@@ -258,8 +260,7 @@ static bool convert(const QVariant::Private *d, int t,
             static_cast<QColor *>(result)->setNamedColor(*v_cast<QString>(d));
             return static_cast<QColor *>(result)->isValid();
         } else if (d->type == QVariant::ByteArray) {
-            static_cast<QColor *>(result)->setNamedColor(QString::fromLatin1(
-                                *v_cast<QByteArray>(d)));
+            static_cast<QColor *>(result)->setNamedColor(QLatin1String(*v_cast<QByteArray>(d)));
             return true;
         } else if (d->type == QVariant::Brush) {
             if (v_cast<QBrush>(d)->style() == Qt::SolidPattern) {
@@ -290,6 +291,7 @@ static bool convert(const QVariant::Private *d, int t,
         default:
             break;
         }
+        break;
     }
 #endif
 #ifndef QT_NO_ICON

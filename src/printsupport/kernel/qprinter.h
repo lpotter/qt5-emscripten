@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,12 +40,11 @@
 #ifndef QPRINTER_H
 #define QPRINTER_H
 
+#include <QtPrintSupport/qtprintsupportglobal.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qscopedpointer.h>
 #include <QtGui/qpagedpaintdevice.h>
-#include <QtPrintSupport/qtprintsupportglobal.h>
-
-QT_BEGIN_HEADER
+#include <QtGui/qpagelayout.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -62,6 +59,8 @@ class QPrinterPrivate;
 class QPaintEngine;
 class QPrintEngine;
 class QPrinterInfo;
+class QPageSize;
+class QPageMargins;
 
 class Q_PRINTSUPPORT_EXPORT QPrinter : public QPagedPaintDevice
 {
@@ -73,18 +72,12 @@ public:
     explicit QPrinter(const QPrinterInfo& printer, PrinterMode mode = ScreenResolution);
     ~QPrinter();
 
-    int devType() const;
+    int devType() const override;
 
     enum Orientation { Portrait, Landscape };
 
-#ifndef Q_QDOC
+    // ### Qt6 Remove in favor of QPage::PageSize
     typedef PageSize PaperSize;
-#else
-    enum PaperSize { A4, B5, Letter, Legal, Executive,
-                     A0, A1, A2, A3, A5, A6, A7, A8, A9, B0, B1,
-                     B10, B2, B3, B4, B6, B7, B8, B9, C5E, Comm10E,
-                     DLE, Folio, Ledger, Tabloid, Custom, NPageSize = Custom, NPaperSize = Custom };
-#endif
 
     enum PageOrder   { FirstPageFirst,
                        LastPageFirst };
@@ -105,7 +98,10 @@ public:
                        LargeCapacity,
                        Cassette,
                        FormSource,
-                       MaxPageSource
+                       MaxPageSource, // Deprecated
+                       CustomSource,
+                       LastPaperSource = CustomSource,
+                       Upper = OnlyOne  // As defined in Windows
     };
 
     enum PrinterState { Idle,
@@ -138,6 +134,9 @@ public:
     void setOutputFormat(OutputFormat format);
     OutputFormat outputFormat() const;
 
+    void setPdfVersion(PdfVersion version);
+    PdfVersion pdfVersion() const;
+
     void setPrinterName(const QString &);
     QString printerName() const;
 
@@ -155,19 +154,35 @@ public:
     void setCreator(const QString &);
     QString creator() const;
 
+#ifdef Q_CLANG_QDOC
+    // ### Qt6 Remove when these are made virtual in QPagedPaintDevice
+    bool setPageLayout(const QPageLayout &pageLayout);
+    bool setPageSize(const QPageSize &pageSize);
+    bool setPageOrientation(QPageLayout::Orientation orientation);
+    bool setPageMargins(const QMarginsF &margins);
+    bool setPageMargins(const QMarginsF &margins, QPageLayout::Unit units);
+    QPageLayout pageLayout() const;
+#else
+    using QPagedPaintDevice::setPageSize;
+    using QPagedPaintDevice::setPageMargins;
+#endif
+
     void setOrientation(Orientation);
     Orientation orientation() const;
 
-    void setPageSize(PageSize);
+    void setPageSize(PageSize) override;
     PageSize pageSize() const;
 
-    void setPageSizeMM(const QSizeF &size);
+    void setPageSizeMM(const QSizeF &size) override;
 
     void setPaperSize(PaperSize);
     PaperSize paperSize() const;
 
     void setPaperSize(const QSizeF &paperSize, Unit unit);
     QSizeF paperSize(Unit unit) const;
+
+    void setPaperName(const QString &paperName);
+    QString paperName() const;
 
     void setPageOrder(PageOrder);
     PageOrder pageOrder() const;
@@ -201,7 +216,7 @@ public:
 
     QList<int> supportedResolutions() const;
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_CLANG_QDOC)
     QList<PaperSource> supportedPaperSources() const;
 #endif
 
@@ -211,27 +226,23 @@ public:
     void setDoubleSidedPrinting(bool enable);
     bool doubleSidedPrinting() const;
 
-#ifdef Q_OS_WIN
     void setWinPageSize(int winPageSize);
     int winPageSize() const;
-#endif
 
     QRect paperRect() const;
     QRect pageRect() const;
     QRectF paperRect(Unit) const;
     QRectF pageRect(Unit) const;
 
-#if !defined(Q_OS_WIN) || defined(qdoc)
     QString printerSelectionOption() const;
     void setPrinterSelectionOption(const QString &);
-#endif
 
-    bool newPage();
+    bool newPage() override;
     bool abort();
 
     PrinterState printerState() const;
 
-    QPaintEngine *paintEngine() const;
+    QPaintEngine *paintEngine() const override;
     QPrintEngine *printEngine() const;
 
     void setFromTo(int fromPage, int toPage);
@@ -241,13 +252,13 @@ public:
     void setPrintRange(PrintRange range);
     PrintRange printRange() const;
 
-    void setMargins(const Margins &m);
+    void setMargins(const Margins &m) override;
 
     void setPageMargins(qreal left, qreal top, qreal right, qreal bottom, Unit unit);
     void getPageMargins(qreal *left, qreal *top, qreal *right, qreal *bottom, Unit unit) const;
 
 protected:
-    int metric(PaintDeviceMetric) const;
+    int metric(PaintDeviceMetric) const override;
     void setEngines(QPrintEngine *printEngine, QPaintEngine *paintEngine);
 
 private:
@@ -266,7 +277,5 @@ private:
 #endif // QT_NO_PRINTER
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPRINTER_H

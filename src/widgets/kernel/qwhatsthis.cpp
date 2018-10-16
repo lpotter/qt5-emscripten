@@ -1,63 +1,61 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qwhatsthis.h"
-#ifndef QT_NO_WHATSTHIS
 #include "qpointer.h"
 #include "qapplication.h"
 #include <private/qguiapplication_p.h>
 #include "qdesktopwidget.h"
+#include <private/qdesktopwidget_p.h>
 #include "qevent.h"
 #include "qpixmap.h"
 #include "qscreen.h"
 #include "qpainter.h"
 #include "qtimer.h"
-#include "qhash.h"
+#if QT_CONFIG(action)
 #include "qaction.h"
+#endif // QT_CONFIG(action)
 #include "qcursor.h"
 #include "qbitmap.h"
 #include "qtextdocument.h"
 #include <qpa/qplatformtheme.h>
 #include "private/qtextdocumentlayout_p.h"
-#include "qtoolbutton.h"
 #include "qdebug.h"
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
@@ -149,12 +147,12 @@ public:
     static QWhatsThat *instance;
 
 protected:
-    void showEvent(QShowEvent *e);
-    void mousePressEvent(QMouseEvent*);
-    void mouseReleaseEvent(QMouseEvent*);
-    void mouseMoveEvent(QMouseEvent*);
-    void keyPressEvent(QKeyEvent*);
-    void paintEvent(QPaintEvent*);
+    void showEvent(QShowEvent *e) override;
+    void mousePressEvent(QMouseEvent*) override;
+    void mouseReleaseEvent(QMouseEvent*) override;
+    void mouseMoveEvent(QMouseEvent*) override;
+    void keyPressEvent(QKeyEvent*) override;
+    void paintEvent(QPaintEvent*) override;
 
 private:
     QPointer<QWidget>widget;
@@ -214,7 +212,7 @@ QWhatsThat::QWhatsThat(const QString& txt, QWidget* parent, QWidget *showTextFor
     }
     else
     {
-        int sw = QApplication::desktop()->width() / 3;
+        int sw = QDesktopWidgetPrivate::width() / 3;
         if (sw < 200)
             sw = 200;
         else if (sw > 300)
@@ -369,8 +367,10 @@ class QWhatsThisPrivate : public QObject
     QWhatsThisPrivate();
     ~QWhatsThisPrivate();
     static QWhatsThisPrivate *instance;
-    bool eventFilter(QObject *, QEvent *);
+    bool eventFilter(QObject *, QEvent *) override;
+#if QT_CONFIG(action)
     QPointer<QAction> action;
+#endif // QT_CONFIG(action)
     static void say(QWidget *, const QString &, int x = 0, int y = 0);
     static void notifyToplevels(QEvent *e);
     bool leaveOnMouseRelease;
@@ -378,11 +378,9 @@ class QWhatsThisPrivate : public QObject
 
 void QWhatsThisPrivate::notifyToplevels(QEvent *e)
 {
-    QWidgetList toplevels = QApplication::topLevelWidgets();
-    for (int i = 0; i < toplevels.count(); ++i) {
-        register QWidget *w = toplevels.at(i);
+    const QWidgetList toplevels = QApplication::topLevelWidgets();
+    for (auto *w : toplevels)
         QApplication::sendEvent(w, e);
-    }
 }
 
 QWhatsThisPrivate *QWhatsThisPrivate::instance = 0;
@@ -414,8 +412,10 @@ QWhatsThisPrivate::QWhatsThisPrivate()
 
 QWhatsThisPrivate::~QWhatsThisPrivate()
 {
+#if QT_CONFIG(action)
     if (action)
         action->setChecked(false);
+#endif // QT_CONFIG(action)
 #ifndef QT_NO_CURSOR
     QApplication::restoreOverrideCursor();
 #endif
@@ -455,8 +455,8 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
         QApplication::changeOverrideCursor((!sentEvent || !e.isAccepted())?
                                            Qt::ForbiddenCursor:Qt::WhatsThisCursor);
 #endif
+        Q_FALLTHROUGH();
     }
-    // fall through
     case QEvent::MouseButtonRelease:
     case QEvent::MouseButtonDblClick:
         if (leaveOnMouseRelease && e->type() == QEvent::MouseButtonRelease)
@@ -467,11 +467,13 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
     case QEvent::KeyPress:
     {
         QKeyEvent* kev = (QKeyEvent*)e;
-
-        if (kev->key() == Qt::Key_Escape) {
+#if QT_CONFIG(shortcut)
+        if (kev->matches(QKeySequence::Cancel)) {
             QWhatsThis::leaveWhatsThisMode();
             return true;
-        } else if (customWhatsThis) {
+        } else
+#endif
+          if (customWhatsThis) {
             return false;
         } else if (kev->key() == Qt::Key_Menu ||
                     (kev->key() == Qt::Key_F10 &&
@@ -489,6 +491,7 @@ bool QWhatsThisPrivate::eventFilter(QObject *o, QEvent *e)
     return true;
 }
 
+#if QT_CONFIG(action)
 class QWhatsThisAction: public QAction
 {
     Q_OBJECT
@@ -503,7 +506,7 @@ private slots:
 QWhatsThisAction::QWhatsThisAction(QObject *parent) : QAction(tr("What's This?"), parent)
 {
 #ifndef QT_NO_IMAGEFORMAT_XPM
-    QPixmap p((const char**)button_image);
+    QPixmap p(button_image);
     setIcon(p);
 #endif
     setCheckable(true);
@@ -520,6 +523,7 @@ void QWhatsThisAction::actionTriggered()
         QWhatsThisPrivate::instance->action = this;
     }
 }
+#endif // QT_CONFIG(action)
 
 /*!
     This function switches the user interface into "What's This?"
@@ -542,8 +546,8 @@ void QWhatsThis::enterWhatsThisMode()
  }
 
 /*!
-    Returns true if the user interface is in "What's This?" mode;
-    otherwise returns false.
+    Returns \c true if the user interface is in "What's This?" mode;
+    otherwise returns \c false.
 
     \sa enterWhatsThisMode()
 */
@@ -575,7 +579,7 @@ void QWhatsThisPrivate::say(QWidget * widget, const QString &text, int x, int y)
     // make a fresh widget, and set it up
     QWhatsThat *whatsThat = new QWhatsThat(
         text,
-#if defined(Q_WS_X11) && !defined(QT_NO_CURSOR)
+#if 0 /* Used to be included in Qt4 for Q_WS_X11 */ && !defined(QT_NO_CURSOR)
         QApplication::desktop()->screen(widget ? widget->x11Info().screen() : QCursor::x11Screen()),
 #else
         0,
@@ -587,14 +591,14 @@ void QWhatsThisPrivate::say(QWidget * widget, const QString &text, int x, int y)
     // okay, now to find a suitable location
 
     int scr = (widget ?
-                QApplication::desktop()->screenNumber(widget) :
-#if defined(Q_WS_X11) && !defined(QT_NO_CURSOR)
+                QDesktopWidgetPrivate::screenNumber(widget) :
+#if 0 /* Used to be included in Qt4 for Q_WS_X11 */ && !defined(QT_NO_CURSOR)
                 QCursor::x11Screen()
 #else
-                QApplication::desktop()->screenNumber(QPoint(x,y))
-#endif // Q_WS_X11
+                QDesktopWidgetPrivate::screenNumber(QPoint(x,y))
+#endif
                );
-    QRect screen = QApplication::desktop()->screenGeometry(scr);
+    QRect screen = QDesktopWidgetPrivate::screenGeometry(scr);
 
     int w = whatsThat->width();
     int h = whatsThat->height();
@@ -676,13 +680,13 @@ void QWhatsThis::hideText()
     The returned QAction provides a convenient way to let users enter
     "What's This?" mode.
 */
+#if QT_CONFIG(action)
 QAction *QWhatsThis::createAction(QObject *parent)
 {
     return new QWhatsThisAction(parent);
 }
+#endif // QT_CONFIG(action)
 
 QT_END_NAMESPACE
 
 #include "qwhatsthis.moc"
-
-#endif // QT_NO_WHATSTHIS

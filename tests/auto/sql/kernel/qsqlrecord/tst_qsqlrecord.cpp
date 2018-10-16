@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -114,8 +101,8 @@ void tst_QSqlRecord::cleanup()
 {
     delete rec;
     for ( int i = 0; i < NUM_FIELDS; ++i ) {
-	delete fields[ i ];
-	fields[ i ] = 0;
+        delete fields[ i ];
+        fields[ i ] = 0;
     }
     rec = 0;
 }
@@ -124,12 +111,12 @@ void tst_QSqlRecord::createTestRecord()
 {
     delete rec;
     rec = new QSqlRecord();
-    fields[ 0 ] = new QSqlField( "string", QVariant::String );
-    fields[ 1 ] = new QSqlField( "int", QVariant::Int );
-    fields[ 2 ] = new QSqlField( "double", QVariant::Double );
-    fields[ 3 ] = new QSqlField( "bool", QVariant::Bool );
+    fields[0] = new QSqlField(QStringLiteral("string"), QVariant::String, QStringLiteral("stringtable"));
+    fields[1] = new QSqlField(QStringLiteral("int"), QVariant::Int, QStringLiteral("inttable"));
+    fields[2] = new QSqlField(QStringLiteral("double"), QVariant::Double, QStringLiteral("doubletable"));
+    fields[3] = new QSqlField(QStringLiteral("bool"), QVariant::Bool);
     for ( int i = 0; i < NUM_FIELDS; ++i )
-	rec->append( *(fields[ i ] ) );
+        rec->append( *(fields[ i ] ) );
 }
 
 
@@ -137,12 +124,14 @@ void tst_QSqlRecord::append()
 {
     delete rec;
     rec = new QSqlRecord();
-    rec->append( QSqlField( "string", QVariant::String ) );
+    rec->append(QSqlField("string", QVariant::String, QStringLiteral("stringtable")));
     QCOMPARE( rec->field( 0 ).name(), (QString) "string" );
+    QCOMPARE(rec->field(0).tableName(), QStringLiteral("stringtable"));
     QVERIFY( !rec->isEmpty() );
     QCOMPARE( (int)rec->count(), 1 );
-    rec->append( QSqlField( "int", QVariant::Int ) );
+    rec->append(QSqlField("int", QVariant::Int, QStringLiteral("inttable")));
     QCOMPARE( rec->field( 1 ).name(), (QString) "int" );
+    QCOMPARE(rec->field(1).tableName(), QStringLiteral("inttable"));
     QCOMPARE( (int)rec->count(), 2 );
     rec->append( QSqlField( "double", QVariant::Double ) );
     QCOMPARE( rec->field( 2 ).name(), (QString) "double" );
@@ -237,7 +226,7 @@ void tst_QSqlRecord::contains()
 {
     createTestRecord();
     for ( int i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->contains( fields[ i ]->name() ) );
+        QVERIFY( rec->contains( fields[ i ]->name() ) );
     QVERIFY( !rec->contains( "__Harry__" ) );
 }
 
@@ -258,10 +247,10 @@ void tst_QSqlRecord::field()
 
     int i;
     for ( i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->field( i ) == *fields[ i ] );
+        QVERIFY( rec->field( i ) == *fields[ i ] );
 
     for ( i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->field( (fields[ i ] )->name() ) == *( fields[ i ] ) );
+        QVERIFY( rec->field( (fields[ i ] )->name() ) == *( fields[ i ] ) );
     QVERIFY( rec->indexOf( "_This should give a warning!_" ) == -1 );
 }
 
@@ -270,7 +259,7 @@ void tst_QSqlRecord::fieldName()
     createTestRecord();
 
     for ( int i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->field( (fields[ i ] )->name() ) == *( fields[ i ] ) );
+        QVERIFY( rec->field( (fields[ i ] )->name() ) == *( fields[ i ] ) );
     QVERIFY( rec->fieldName( NUM_FIELDS ).isNull() );
 }
 
@@ -279,10 +268,10 @@ void tst_QSqlRecord::insert()
     QSqlRecord iRec;
     int i;
     for ( i = 0; i <= 100; ++i ) {
-	iRec.insert( i, QSqlField( QString::number( i ), QVariant::Int ) );
+        iRec.insert( i, QSqlField( QString::number( i ), QVariant::Int ) );
     }
     for ( i = 0; i <= 100; ++i ) {
-	QCOMPARE( iRec.fieldName( i ), QString::number( i ) );
+        QCOMPARE( iRec.fieldName( i ), QString::number( i ) );
     }
 //    iRec.insert( 505, QSqlField( "Harry", QVariant::Double ) );
 //    QCOMPARE( iRec.fieldName( 505 ), (QString)"Harry" );
@@ -313,30 +302,30 @@ void tst_QSqlRecord::isGenerated()
 
     int i;
     for ( i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->isGenerated( i ) );
+        QVERIFY( rec->isGenerated( i ) );
 
     for ( i = 0; i < NUM_FIELDS; ++i )
-	QVERIFY( rec->isGenerated( fields[ i ]->name() ) );
+        QVERIFY( rec->isGenerated( fields[ i ]->name() ) );
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	if ( i % 2 )
-	    rec->setGenerated( i, false );
+        if ( i % 2 )
+            rec->setGenerated( i, false );
     }
     rec->setGenerated( NUM_FIELDS * 2, false ); // nothing should happen here
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	if ( i % 2 ) {
-	    QVERIFY( !rec->isGenerated( i ) );
-	} else {
-	    QVERIFY( rec->isGenerated( i ) );
+        if ( i % 2 ) {
+            QVERIFY( !rec->isGenerated( i ) );
+        } else {
+            QVERIFY( rec->isGenerated( i ) );
         }
     }
 
     for ( i = 0; i < NUM_FIELDS; ++i )
-	if ( i % 2 ) {
-	    QVERIFY( !rec->isGenerated( fields[ i ]->name() ) );
-	} else {
-	    QVERIFY( rec->isGenerated( fields[ i ]->name() ) );
+        if ( i % 2 ) {
+            QVERIFY( !rec->isGenerated( fields[ i ]->name() ) );
+        } else {
+            QVERIFY( rec->isGenerated( fields[ i ]->name() ) );
         }
 
     rec->setGenerated( "_This should give a warning!_",  false ); // nothing should happen here
@@ -348,31 +337,31 @@ void tst_QSqlRecord::isNull()
 
     int i;
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	QVERIFY( rec->isNull( i ) );
-	QVERIFY( rec->isNull( fields[ i ]->name() ) );
+        QVERIFY( rec->isNull( i ) );
+        QVERIFY( rec->isNull( fields[ i ]->name() ) );
     }
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	if ( i % 2 )
-	    rec->setNull( i );
+        if ( i % 2 )
+            rec->setNull( i );
     }
     rec->setNull( NUM_FIELDS ); // nothing should happen here
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	if ( i % 2 ) {
-	    QVERIFY( rec->isNull( i ) );
-	    QVERIFY( rec->isNull( fields[ i ]->name() ) );
+        if ( i % 2 ) {
+            QVERIFY( rec->isNull( i ) );
+            QVERIFY( rec->isNull( fields[ i ]->name() ) );
         }
     }
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	rec->setNull( fields[ i ]->name() );
+        rec->setNull( fields[ i ]->name() );
     }
     rec->setNull( "_This should give a warning!_" ); // nothing should happen here
 
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	QVERIFY( rec->isNull( i ) );
-	QVERIFY( rec->isNull( fields[ i ]->name() ) );
+        QVERIFY( rec->isNull( i ) );
+        QVERIFY( rec->isNull( fields[ i ]->name() ) );
     }
 }
 
@@ -385,19 +374,19 @@ void tst_QSqlRecord::operator_Assign()
     buf3 = *rec;
     buf4 = *rec;
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	QVERIFY( buf2.field( i ) == *fields[ i ] );
-	QVERIFY( buf3.field( i ) == *( fields[ i ] ) );
-	QVERIFY( buf4.field( i ) == *( fields[ i ] ) );
+        QVERIFY( buf2.field( i ) == *fields[ i ] );
+        QVERIFY( buf3.field( i ) == *( fields[ i ] ) );
+        QVERIFY( buf4.field( i ) == *( fields[ i ] ) );
     }
     for ( i = 0; i < NUM_FIELDS; ++i )
-	buf3.setNull( i );
+        buf3.setNull( i );
     buf3.remove( NUM_FIELDS - 1 );
     QSqlRecord buf5 = buf3;
     for ( i = 0; i < NUM_FIELDS - 1; ++i ) {
-	QSqlField fi ( fields[ i ]->name(), fields[ i ]->type() );
-	fi.clear();
-	QVERIFY( buf5.field( i ) == fi );
-	QVERIFY( buf5.isGenerated( i ) );
+        QSqlField fi(fields[i]->name(), fields[i]->type(), fields[i]->tableName());
+        fi.clear();
+        QVERIFY( buf5.field( i ) == fi );
+        QVERIFY( buf5.isGenerated( i ) );
     }
 }
 
@@ -406,7 +395,9 @@ void tst_QSqlRecord::position()
     createTestRecord();
     int i;
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	QCOMPARE( rec->indexOf( fields[ i ]->name() ), i );
+        QCOMPARE( rec->indexOf( fields[ i ]->name() ), i );
+        if (!fields[i]->tableName().isEmpty())
+            QCOMPARE(rec->indexOf(fields[i]->tableName() + QChar('.') + fields[i]->name()), i);
     }
 }
 
@@ -415,15 +406,15 @@ void tst_QSqlRecord::remove()
     createTestRecord();
     int i;
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	rec->setGenerated( i, false );
-	QCOMPARE( (int)rec->count(), NUM_FIELDS - i );
-	rec->remove( 0 );
-	QCOMPARE( (int)rec->count(), NUM_FIELDS - i - 1 );
+        rec->setGenerated( i, false );
+        QCOMPARE( (int)rec->count(), NUM_FIELDS - i );
+        rec->remove( 0 );
+        QCOMPARE( (int)rec->count(), NUM_FIELDS - i - 1 );
     }
     rec->remove( NUM_FIELDS * 2 ); // nothing should happen
     for ( i = 0; i < NUM_FIELDS; ++i ) {
-	rec->insert( i, QSqlField( fields[ i ]->name(), fields[ i ]->type() ) );
-	QVERIFY( rec->isGenerated( i ) );
+        rec->insert( i, QSqlField( fields[ i ]->name(), fields[ i ]->type() ) );
+        QVERIFY( rec->isGenerated( i ) );
     }
 }
 
@@ -472,7 +463,7 @@ void tst_QSqlRecord::setValue()
     QFETCH( int, bval );
 
     for ( i = 0; i < 4; ++i )
-	rec->setNull( i );
+        rec->setNull( i );
 
     rec->setValue( 0, sval );
     rec->setValue( 1, ival );
@@ -483,7 +474,7 @@ void tst_QSqlRecord::setValue()
     QVERIFY( rec->value( 2 ) == dval );
     QVERIFY( rec->value( 3 ) == QVariant(bval) );
     for ( i = 0; i < 4; ++i )
-	QVERIFY( !rec->isNull( i ) );
+        QVERIFY( !rec->isNull( i ) );
 
     QSqlRecord rec2 = *rec;
     QVERIFY( rec2.value( 0 ) == sval );
@@ -492,10 +483,10 @@ void tst_QSqlRecord::setValue()
     QVERIFY( rec2.value( 3 ) == QVariant(bval) );
 
     rec2.setValue( "string", "__Harry__" );
-    QVERIFY( rec2.value( 0 ) == "__Harry__" );
+    QCOMPARE(rec2.value(0).toString(), QLatin1String("__Harry__"));
 
     for ( i = 0; i < 4; ++i )
-	QVERIFY( !rec2.isNull( i ) );
+        QVERIFY( !rec2.isNull( i ) );
 
     QCOMPARE( rec->value( 0 ).toString(), sval );
     QCOMPARE( rec->value( 1 ).toInt(), ival );
@@ -509,7 +500,7 @@ void tst_QSqlRecord::value()
     QSqlRecord rec2;
     rec2.append( QSqlField( "string", QVariant::String ) );
     rec2.setValue( "string", "Harry" );
-    QVERIFY( rec2.value( "string" ) == "Harry" );
+    QCOMPARE(rec2.value("string").toString(), QLatin1String("Harry"));
 }
 
 QTEST_MAIN(tst_QSqlRecord)

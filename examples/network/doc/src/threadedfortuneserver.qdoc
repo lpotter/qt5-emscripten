@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,6 +28,7 @@
 /*!
     \example threadedfortuneserver
     \title Threaded Fortune Server Example
+    \ingroup examples-network
 
     \brief The Threaded Fortune Server example shows how to create a server for a
     simple network service that uses threads to handle requests from different
@@ -47,8 +48,8 @@
 
     FortuneServer inherits QTcpServer and reimplements
     QTcpServer::incomingConnection(). We also use it for storing the list of
-    random fortunes. 
-    
+    random fortunes.
+
     \snippet threadedfortuneserver/fortuneserver.cpp 0
 
     We use FortuneServer's constructor to simply generate the list of
@@ -70,7 +71,7 @@
     QThread::run(), and it has a signal for reporting errors.
 
     \snippet threadedfortuneserver/fortunethread.cpp 0
-    
+
     FortuneThread's constructor simply stores the socket descriptor and
     fortune text, so that they are available for run() later on.
 
@@ -100,7 +101,7 @@
     But unlike the previous example, we finish off by calling
     QTcpSocket::waitForDisconnected(), which blocks the calling thread until
     the socket has disconnected. Because we are running in a separate thread,
-    the GUI will remain responsive.  
+    the GUI will remain responsive.
 
     \sa {Fortune Server Example}, {Fortune Client Example}, {Blocking Fortune
     Client Example}

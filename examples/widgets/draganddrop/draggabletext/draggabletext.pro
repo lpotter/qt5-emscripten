@@ -1,13 +1,10 @@
-HEADERS     = draglabel.h \
-              dragwidget.h
+QT += widgets
+
+HEADERS     = dragwidget.h
 RESOURCES   = draggabletext.qrc
-SOURCES     = draglabel.cpp \
-              dragwidget.cpp \
+SOURCES     = dragwidget.cpp \
               main.cpp
 
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/draganddrop/draggabletext
 INSTALLS += target
-
-QT += widgets
-

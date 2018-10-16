@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    FreeType PFR object methods (body).                                  */
 /*                                                                         */
-/*  Copyright 2002, 2003, 2004, 2005, 2006, 2007, 2008 by                  */
+/*  Copyright 2002-2015 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -23,6 +23,8 @@
 #include "pfrsbit.h"
 #include FT_OUTLINE_H
 #include FT_INTERNAL_DEBUG_H
+#include FT_INTERNAL_CALC_H
+#include FT_TRUETYPE_IDS_H
 
 #include "pfrerror.h"
 
@@ -76,6 +78,8 @@
     FT_UNUSED( params );
 
 
+    FT_TRACE2(( "PFR driver\n" ));
+
     /* load the header and check it */
     error = pfr_header_load( &face->header, stream );
     if ( error )
@@ -83,14 +87,14 @@
 
     if ( !pfr_header_check( &face->header ) )
     {
-      FT_TRACE4(( "pfr_face_init: not a valid PFR font\n" ));
-      error = PFR_Err_Unknown_File_Format;
+      FT_TRACE2(( "  not a PFR font\n" ));
+      error = FT_THROW( Unknown_File_Format );
       goto Exit;
     }
 
     /* check face index */
     {
-      FT_UInt  num_faces;
+      FT_Long  num_faces;
 
 
       error = pfr_log_font_count( stream,
@@ -105,16 +109,16 @@
     if ( face_index < 0 )
       goto Exit;
 
-    if ( face_index >= pfrface->num_faces )
+    if ( ( face_index & 0xFFFF ) >= pfrface->num_faces )
     {
       FT_ERROR(( "pfr_face_init: invalid face index\n" ));
-      error = PFR_Err_Invalid_Argument;
+      error = FT_THROW( Invalid_Argument );
       goto Exit;
     }
 
     /* load the face */
     error = pfr_log_font_load(
-               &face->log_font, stream, face_index,
+               &face->log_font, stream, (FT_UInt)( face_index & 0xFFFF ),
                face->header.log_dir_offset,
                FT_BOOL( face->header.phy_font_max_size_high != 0 ) );
     if ( error )
@@ -132,9 +136,10 @@
       PFR_PhyFont  phy_font = &face->phy_font;
 
 
-      pfrface->face_index = face_index;
-      pfrface->num_glyphs = phy_font->num_chars + 1;
-      pfrface->face_flags = FT_FACE_FLAG_SCALABLE;
+      pfrface->face_index = face_index & 0xFFFF;
+      pfrface->num_glyphs = (FT_Long)phy_font->num_chars + 1;
+
+      pfrface->face_flags |= FT_FACE_FLAG_SCALABLE;
 
       /* if all characters point to the same gps_offset 0, we */
       /* assume that the font only contains bitmaps           */
@@ -147,7 +152,16 @@
             break;
 
         if ( nn == phy_font->num_chars )
-          pfrface->face_flags = 0;        /* not scalable */
+        {
+          if ( phy_font->num_strikes > 0 )
+            pfrface->face_flags = 0;        /* not scalable */
+          else
+          {
+            FT_ERROR(( "pfr_face_init: font doesn't contain glyphs\n" ));
+            error = FT_THROW( Invalid_File_Format );
+            goto Exit;
+          }
+        }
       }
 
       if ( (phy_font->flags & PFR_PHY_PROPORTIONAL) == 0 )
@@ -178,7 +192,7 @@
       pfrface->style_name = phy_font->style_name;
 
       pfrface->num_fixed_sizes = 0;
-      pfrface->available_sizes = 0;
+      pfrface->available_sizes = NULL;
 
       pfrface->bbox         = phy_font->bbox;
       pfrface->units_per_EM = (FT_UShort)phy_font->outline_resolution;
@@ -204,13 +218,13 @@
         strike = phy_font->strikes;
         for ( n = 0; n < count; n++, size++, strike++ )
         {
-          size->height = (FT_UShort)strike->y_ppm;
-          size->width  = (FT_UShort)strike->x_ppm;
-          size->size   = strike->y_ppm << 6;
-          size->x_ppem = strike->x_ppm << 6;
-          size->y_ppem = strike->y_ppm << 6;
+          size->height = (FT_Short)strike->y_ppm;
+          size->width  = (FT_Short)strike->x_ppm;
+          size->size   = (FT_Pos)( strike->y_ppm << 6 );
+          size->x_ppem = (FT_Pos)( strike->x_ppm << 6 );
+          size->y_ppem = (FT_Pos)( strike->y_ppm << 6 );
         }
-        pfrface->num_fixed_sizes = count;
+        pfrface->num_fixed_sizes = (FT_Int)count;
       }
 
       /* now compute maximum advance width */
@@ -243,11 +257,11 @@
 
 
         charmap.face        = pfrface;
-        charmap.platform_id = 3;
-        charmap.encoding_id = 1;
+        charmap.platform_id = TT_PLATFORM_MICROSOFT;
+        charmap.encoding_id = TT_MS_ID_UNICODE_CS;
         charmap.encoding    = FT_ENCODING_UNICODE;
 
-        FT_CMap_New( &pfr_cmap_class_rec, NULL, &charmap, NULL );
+        error = FT_CMap_New( &pfr_cmap_class_rec, NULL, &charmap, NULL );
 
 #if 0
         /* Select default charmap */
@@ -312,12 +326,14 @@
     FT_ULong     gps_offset;
 
 
+    FT_TRACE1(( "pfr_slot_load: glyph index %d\n", gindex ));
+
     if ( gindex > 0 )
       gindex--;
 
     if ( !face || gindex >= face->phy_font.num_chars )
     {
-      error = PFR_Err_Invalid_Argument;
+      error = FT_THROW( Invalid_Argument );
       goto Exit;
     }
 
@@ -331,7 +347,7 @@
 
     if ( load_flags & FT_LOAD_SBITS_ONLY )
     {
-      error = PFR_Err_Invalid_Argument;
+      error = FT_THROW( Invalid_Argument );
       goto Exit;
     }
 
@@ -350,7 +366,7 @@
       FT_BBox            cbox;
       FT_Glyph_Metrics*  metrics = &pfrslot->metrics;
       FT_Pos             advance;
-      FT_Int             em_metrics, em_outline;
+      FT_UInt            em_metrics, em_outline;
       FT_Bool            scaling;
 
 
@@ -374,7 +390,9 @@
       em_outline = face->phy_font.outline_resolution;
 
       if ( em_metrics != em_outline )
-        advance = FT_MulDiv( advance, em_outline, em_metrics );
+        advance = FT_MulDiv( advance,
+                             (FT_Long)em_outline,
+                             (FT_Long)em_metrics );
 
       if ( face->phy_font.flags & PFR_PHY_VERTICAL )
         metrics->vertAdvance = advance;
@@ -456,7 +474,7 @@
                         FT_Vector*  kerning )
   {
     PFR_Face     face     = (PFR_Face)pfrface;
-    FT_Error     error    = PFR_Err_Ok;
+    FT_Error     error    = FT_Err_Ok;
     PFR_PhyFont  phy_font = &face->phy_font;
     FT_UInt32    code1, code2, pair;
 
@@ -500,7 +518,7 @@
       {
         FT_UInt    count       = item->pair_count;
         FT_UInt    size        = item->pair_size;
-        FT_UInt    power       = (FT_UInt)ft_highpow2( (FT_UInt32)count );
+        FT_UInt    power       = 1 << FT_MSB( count );
         FT_UInt    probe       = power * size;
         FT_UInt    extra       = count - power;
         FT_Byte*   base        = stream->cursor;

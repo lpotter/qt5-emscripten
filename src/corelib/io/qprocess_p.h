@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,9 +55,15 @@
 #include "QtCore/qprocess.h"
 #include "QtCore/qstringlist.h"
 #include "QtCore/qhash.h"
+#include "QtCore/qmap.h"
 #include "QtCore/qshareddata.h"
-#include "private/qringbuffer_p.h"
 #include "private/qiodevice_p.h"
+
+QT_REQUIRE_CONFIG(processenvironment);
+
+#ifdef Q_OS_UNIX
+#include <QtCore/private/qorderedmutexlocker_p.h>
+#endif
 
 #ifdef Q_OS_WIN
 #include "QtCore/qt_windows.h"
@@ -68,8 +73,6 @@ typedef HANDLE Q_PIPE;
 typedef int Q_PIPE;
 #define INVALID_Q_PIPE -1
 #endif
-
-#ifndef QT_NO_PROCESS
 
 QT_BEGIN_NAMESPACE
 
@@ -88,22 +91,19 @@ public:
     QProcEnvKey(const QProcEnvKey &other) : QString(other) {}
     bool operator==(const QProcEnvKey &other) const { return !compare(other, Qt::CaseInsensitive); }
 };
-inline uint qHash(const QProcEnvKey &key) { return qHash(key.toCaseFolded()); }
+
+inline bool operator<(const QProcEnvKey &a, const QProcEnvKey &b)
+{
+    // On windows use case-insensitive ordering because that is how Windows needs the environment
+    // block sorted (https://msdn.microsoft.com/en-us/library/windows/desktop/ms682009(v=vs.85).aspx)
+    return a.compare(b, Qt::CaseInsensitive) < 0;
+}
+
+Q_DECLARE_TYPEINFO(QProcEnvKey, Q_MOVABLE_TYPE);
 
 typedef QString QProcEnvValue;
 #else
-class QProcEnvKey
-{
-public:
-    QProcEnvKey() : hash(0) {}
-    explicit QProcEnvKey(const QByteArray &other) : key(other), hash(qHash(key)) {}
-    QProcEnvKey(const QProcEnvKey &other) { *this = other; }
-    bool operator==(const QProcEnvKey &other) const { return key == other.key; }
-
-    QByteArray key;
-    uint hash;
-};
-inline uint qHash(const QProcEnvKey &key) { return key.hash; }
+using QProcEnvKey = QByteArray;
 
 class QProcEnvValue
 {
@@ -136,7 +136,6 @@ public:
 };
 Q_DECLARE_TYPEINFO(QProcEnvValue, Q_MOVABLE_TYPE);
 #endif
-Q_DECLARE_TYPEINFO(QProcEnvKey, Q_MOVABLE_TYPE);
 
 class QProcessEnvironmentPrivate: public QSharedData
 {
@@ -148,30 +147,70 @@ public:
     inline QString nameToString(const Key &name) const { return name; }
     inline Value prepareValue(const QString &value) const { return value; }
     inline QString valueToString(const Value &value) const { return value; }
+    struct MutexLocker {
+        MutexLocker(const QProcessEnvironmentPrivate *) {}
+    };
+    struct OrderedMutexLocker {
+        OrderedMutexLocker(const QProcessEnvironmentPrivate *,
+                           const QProcessEnvironmentPrivate *) {}
+    };
 #else
     inline Key prepareName(const QString &name) const
     {
         Key &ent = nameMap[name];
-        if (ent.key.isEmpty())
-            ent = Key(name.toLocal8Bit());
+        if (ent.isEmpty())
+            ent = name.toLocal8Bit();
         return ent;
     }
     inline QString nameToString(const Key &name) const
     {
-        const QString sname = QString::fromLocal8Bit(name.key);
+        const QString sname = QString::fromLocal8Bit(name);
         nameMap[sname] = name;
         return sname;
     }
     inline Value prepareValue(const QString &value) const { return Value(value); }
     inline QString valueToString(const Value &value) const { return value.string(); }
+
+    struct MutexLocker : public QMutexLocker
+    {
+        MutexLocker(const QProcessEnvironmentPrivate *d) : QMutexLocker(&d->mutex) {}
+    };
+    struct OrderedMutexLocker : public QOrderedMutexLocker
+    {
+        OrderedMutexLocker(const QProcessEnvironmentPrivate *d1,
+                           const QProcessEnvironmentPrivate *d2) :
+            QOrderedMutexLocker(&d1->mutex, &d2->mutex)
+        {}
+    };
+
+    QProcessEnvironmentPrivate() : QSharedData() {}
+    QProcessEnvironmentPrivate(const QProcessEnvironmentPrivate &other) :
+        QSharedData()
+    {
+        // This being locked ensures that the functions that only assign
+        // d pointers don't need explicit locking.
+        // We don't need to lock our own mutex, as this object is new and
+        // consequently not shared. For the same reason, non-const methods
+        // do not need a lock, as they detach objects (however, we need to
+        // ensure that they really detach before using prepareName()).
+        MutexLocker locker(&other);
+        vars = other.vars;
+        nameMap = other.nameMap;
+        // We need to detach our members, so that our mutex can protect them.
+        // As we are being detached, they likely would be detached a moment later anyway.
+        vars.detach();
+        nameMap.detach();
+    }
 #endif
 
-    typedef QHash<Key, Value> Hash;
-    Hash hash;
+    using Map = QMap<Key, Value>;
+    Map vars;
 
 #ifdef Q_OS_UNIX
     typedef QHash<QString, Key> NameHash;
     mutable NameHash nameMap;
+
+    mutable QMutex mutex;
 #endif
 
     static QProcessEnvironment fromList(const QStringList &list);
@@ -192,6 +231,8 @@ template<> Q_INLINE_TEMPLATE void QSharedDataPointer<QProcessEnvironmentPrivate>
     d = x;
 }
 
+#if QT_CONFIG(process)
+
 class QProcessPrivate : public QIODevicePrivate
 {
 public:
@@ -210,6 +251,9 @@ public:
         {
             pipe[0] = INVALID_Q_PIPE;
             pipe[1] = INVALID_Q_PIPE;
+#ifdef Q_OS_WIN
+            reader = 0;
+#endif
         }
 
         void clear();
@@ -239,6 +283,12 @@ public:
         QString file;
         QProcessPrivate *process;
         QSocketNotifier *notifier;
+#ifdef Q_OS_WIN
+        union {
+            QWindowsPipeReader *reader;
+            QWindowsPipeWriter *writer;
+        };
+#endif
         Q_PIPE pipe[2];
 
         unsigned type : 2;
@@ -255,10 +305,9 @@ public:
     bool _q_canWrite();
     bool _q_startupNotification();
     bool _q_processDied();
-    void _q_notified();
 
-    QProcess::ProcessChannel processChannel;
     QProcess::ProcessChannelMode processChannelMode;
+    QProcess::InputChannelMode inputChannelMode;
     QProcess::ProcessError processError;
     QProcess::ProcessState processState;
     QString workingDirectory;
@@ -272,44 +321,38 @@ public:
     Channel stdinChannel;
     Channel stdoutChannel;
     Channel stderrChannel;
-    bool createChannel(Channel &channel);
+    bool openChannel(Channel &channel);
+    void closeChannel(Channel *channel);
     void closeWriteChannel();
+    bool tryReadFromChannel(Channel *channel); // obviously, only stdout and stderr
 
     QString program;
     QStringList arguments;
 #if defined(Q_OS_WIN)
     QString nativeArguments;
+    QProcess::CreateProcessArgumentModifier modifyCreateProcessArgs;
 #endif
     QProcessEnvironment environment;
 
-    QRingBuffer outputReadBuffer;
-    QRingBuffer errorReadBuffer;
-    QRingBuffer writeBuffer;
-
     Q_PIPE childStartedPipe[2];
-    Q_PIPE deathPipe[2];
     void destroyPipe(Q_PIPE pipe[2]);
-    void destroyChannel(Channel *channel);
 
     QSocketNotifier *startupSocketNotifier;
     QSocketNotifier *deathNotifier;
 
+    int forkfd;
+
 #ifdef Q_OS_WIN
-    // the wonderful windows notifier
-    QTimer *notifier;
-    QWindowsPipeReader *stdoutReader;
-    QWindowsPipeReader *stderrReader;
-    QWindowsPipeWriter *pipeWriter;
+    QTimer *stdinWriteTrigger;
     QWinEventNotifier *processFinishedNotifier;
 #endif
 
+    void start(QIODevice::OpenMode mode);
     void startProcess();
-#if defined(Q_OS_UNIX) && !defined(Q_OS_QNX)
-    void execChild(const char *workingDirectory, char **path, char **argv, char **envp);
-#elif defined(Q_OS_QNX)
-    pid_t spawnChild(const char *workingDirectory, char **argv, char **envp);
+#if defined(Q_OS_UNIX)
+    void execChild(const char *workingDirectory, char **argv, char **envp);
 #endif
-    bool processStarted();
+    bool processStarted(QString *errorMessage = nullptr);
     void terminateProcess();
     void killProcess();
     void findExitCode();
@@ -317,40 +360,34 @@ public:
     bool waitForDeadChild();
 #endif
 #ifdef Q_OS_WIN
+    bool callCreateProcess(QProcess::CreateProcessArguments *cpargs);
+    bool drainOutputPipes();
     void flushPipeWriter();
     qint64 pipeWriterBytesToWrite() const;
 #endif
 
-    static bool startDetached(const QString &program, const QStringList &arguments, const QString &workingDirectory = QString(),
-                              qint64 *pid = 0);
+    bool startDetached(qint64 *pPid);
 
     int exitCode;
     QProcess::ExitStatus exitStatus;
     bool crashed;
-#ifdef Q_OS_UNIX
-    int serial;
-#endif
 
     bool waitForStarted(int msecs = 30000);
     bool waitForReadyRead(int msecs = 30000);
     bool waitForBytesWritten(int msecs = 30000);
     bool waitForFinished(int msecs = 30000);
-    bool waitForWrite(int msecs = 30000);
 
-    qint64 bytesAvailableFromStdout() const;
-    qint64 bytesAvailableFromStderr() const;
-    qint64 readFromStdout(char *data, qint64 maxlen);
-    qint64 readFromStderr(char *data, qint64 maxlen);
-    qint64 writeToStdin(const char *data, qint64 maxlen);
+    qint64 bytesAvailableInChannel(const Channel *channel) const;
+    qint64 readFromChannel(const Channel *channel, char *data, qint64 maxlen);
+    bool writeToStdin();
 
     void cleanup();
-#ifdef Q_OS_UNIX
-    static void initializeProcessManager();
-#endif
+    void setError(QProcess::ProcessError error, const QString &description = QString());
+    void setErrorAndEmit(QProcess::ProcessError error, const QString &description = QString());
 };
 
-QT_END_NAMESPACE
+#endif // QT_CONFIG(process)
 
-#endif // QT_NO_PROCESS
+QT_END_NAMESPACE
 
 #endif // QPROCESS_P_H

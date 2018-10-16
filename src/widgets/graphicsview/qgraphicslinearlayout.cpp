@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,9 +61,9 @@
     layout. The layout takes ownership of the items. In some cases when the layout
     item also inherits from QGraphicsItem (such as QGraphicsWidget) there will be a
     ambiguity in ownership because the layout item belongs to two ownership hierarchies.
-	See the documentation of QGraphicsLayoutItem::setOwnedByLayout() how to handle
-	this.
-	You can access each item in the layout by calling count() and itemAt(). Calling
+    See the documentation of QGraphicsLayoutItem::setOwnedByLayout() how to handle
+    this.
+    You can access each item in the layout by calling count() and itemAt(). Calling
     removeAt() or removeItem() will remove an item from the layout, without
     destroying it.
 
@@ -115,14 +113,14 @@
 
 #include "qapplication.h"
 
-#ifndef QT_NO_GRAPHICSVIEW
-
 #include "qwidget.h"
 #include "qgraphicslayout_p.h"
 #include "qgraphicslayoutitem.h"
 #include "qgraphicslinearlayout.h"
 #include "qgraphicswidget.h"
-#include "qgridlayoutengine_p.h"
+#include "qgraphicsgridlayoutengine_p.h"
+#include "qgraphicslayoutstyleinfo_p.h"
+#include "qscopedpointer.h"
 #ifdef QT_DEBUG
 #include <QtCore/qdebug.h>
 #endif
@@ -132,16 +130,19 @@ QT_BEGIN_NAMESPACE
 class QGraphicsLinearLayoutPrivate : public QGraphicsLayoutPrivate
 {
 public:
-    QGraphicsLinearLayoutPrivate(Qt::Orientation orientation) : orientation(orientation) { }
+    QGraphicsLinearLayoutPrivate(Qt::Orientation orientation)
+        : orientation(orientation)
+    { }
 
     void removeGridItem(QGridLayoutItem *gridItem);
-    QLayoutStyleInfo styleInfo() const;
+    QGraphicsLayoutStyleInfo *styleInfo() const;
     void fixIndex(int *index) const;
     int gridRow(int index) const;
     int gridColumn(int index) const;
 
     Qt::Orientation orientation;
-    QGridLayoutEngine engine;
+    mutable QScopedPointer<QGraphicsLayoutStyleInfo> m_styleInfo;
+    QGraphicsGridLayoutEngine engine;
 };
 
 void QGraphicsLinearLayoutPrivate::removeGridItem(QGridLayoutItem *gridItem)
@@ -172,13 +173,11 @@ int QGraphicsLinearLayoutPrivate::gridColumn(int index) const
     return int(qMin(uint(index), uint(engine.columnCount())));
 }
 
-Q_GLOBAL_STATIC(QWidget, globalStyleInfoWidget)
-
-QLayoutStyleInfo QGraphicsLinearLayoutPrivate::styleInfo() const
+QGraphicsLayoutStyleInfo *QGraphicsLinearLayoutPrivate::styleInfo() const
 {
-    QGraphicsItem *item = parentItem();
-    QStyle *style = (item && item->isWidget()) ? static_cast<QGraphicsWidget*>(item)->style() : QApplication::style();
-    return QLayoutStyleInfo(style, globalStyleInfoWidget());
+    if (!m_styleInfo)
+        m_styleInfo.reset(new QGraphicsLayoutStyleInfo(this));
+    return m_styleInfo.data();
 }
 
 /*!
@@ -281,7 +280,8 @@ void QGraphicsLinearLayout::insertItem(int index, QGraphicsLayoutItem *item)
     Q_ASSERT(item);
     d->fixIndex(&index);
     d->engine.insertRow(index, d->orientation);
-    new QGridLayoutItem(&d->engine, item, d->gridRow(index), d->gridColumn(index), 1, 1, 0, index);
+    QGraphicsGridLayoutEngineItem *gridEngineItem = new QGraphicsGridLayoutEngineItem(item, d->gridRow(index), d->gridColumn(index), 1, 1, 0);
+    d->engine.insertItem(gridEngineItem, index);
     invalidate();
 }
 
@@ -309,7 +309,7 @@ void QGraphicsLinearLayout::insertStretch(int index, int stretch)
 void QGraphicsLinearLayout::removeItem(QGraphicsLayoutItem *item)
 {
     Q_D(QGraphicsLinearLayout);
-    if (QGridLayoutItem *gridItem = d->engine.findLayoutItem(item)) {
+    if (QGraphicsGridLayoutEngineItem *gridItem = d->engine.findLayoutItem(item)) {
         item->setParentLayoutItem(0);
         d->removeGridItem(gridItem);
         delete gridItem;
@@ -330,7 +330,8 @@ void QGraphicsLinearLayout::removeAt(int index)
         qWarning("QGraphicsLinearLayout::removeAt: invalid index %d", index);
         return;
     }
-    if (QGridLayoutItem *gridItem = d->engine.itemAt(index)) {
+
+    if (QGraphicsGridLayoutEngineItem *gridItem = static_cast<QGraphicsGridLayoutEngineItem*>(d->engine.itemAt(index))) {
         if (QGraphicsLayoutItem *layoutItem = gridItem->layoutItem())
             layoutItem->setParentLayoutItem(0);
         d->removeGridItem(gridItem);
@@ -365,7 +366,7 @@ void QGraphicsLinearLayout::setSpacing(qreal spacing)
 qreal QGraphicsLinearLayout::spacing() const
 {
     Q_D(const QGraphicsLinearLayout);
-    return d->engine.spacing(d->styleInfo(), d->orientation);
+    return d->engine.spacing(d->orientation, d->styleInfo());
 }
 
 /*!
@@ -485,7 +486,7 @@ QGraphicsLayoutItem *QGraphicsLinearLayout::itemAt(int index) const
         return 0;
     }
     QGraphicsLayoutItem *item = 0;
-    if (QGridLayoutItem *gridItem = d->engine.itemAt(index))
+    if (QGraphicsGridLayoutEngineItem *gridItem = static_cast<QGraphicsGridLayoutEngineItem *>(d->engine.itemAt(index)))
         item = gridItem->layoutItem();
     return item;
 }
@@ -505,17 +506,17 @@ void QGraphicsLinearLayout::setGeometry(const QRectF &rect)
     if (visualDir == Qt::RightToLeft)
         qSwap(left, right);
     effectiveRect.adjust(+left, +top, -right, -bottom);
-#ifdef QT_DEBUG
+#ifdef QGRIDLAYOUTENGINE_DEBUG
     if (qt_graphicsLayoutDebug()) {
         static int counter = 0;
         qDebug() << counter++ << "QGraphicsLinearLayout::setGeometry - " << rect;
         dump(1);
     }
 #endif
-    d->engine.setGeometries(d->styleInfo(), effectiveRect);
-#ifdef QT_DEBUG
+    d->engine.setGeometries(effectiveRect, d->styleInfo());
+#ifdef QGRIDLAYOUTENGINE_DEBUG
     if (qt_graphicsLayoutDebug()) {
-        qDebug() << "post dump";
+        qDebug("post dump");
         dump(1);
     }
 #endif
@@ -530,7 +531,7 @@ QSizeF QGraphicsLinearLayout::sizeHint(Qt::SizeHint which, const QSizeF &constra
     qreal left, top, right, bottom;
     getContentsMargins(&left, &top, &right, &bottom);
     const QSizeF extraMargins(left + right, top + bottom);
-    return d->engine.sizeHint(d->styleInfo(), which , constraint - extraMargins) + extraMargins;
+    return d->engine.sizeHint(which , constraint - extraMargins, d->styleInfo()) + extraMargins;
 }
 
 /*!
@@ -540,6 +541,8 @@ void QGraphicsLinearLayout::invalidate()
 {
     Q_D(QGraphicsLinearLayout);
     d->engine.invalidate();
+    if (d->m_styleInfo)
+        d->m_styleInfo->invalidate();
     QGraphicsLayout::invalidate();
 }
 
@@ -548,7 +551,7 @@ void QGraphicsLinearLayout::invalidate()
 */
 void QGraphicsLinearLayout::dump(int indent) const
 {
-#ifdef QT_DEBUG
+#ifdef QGRIDLAYOUTENGINE_DEBUG
     if (qt_graphicsLayoutDebug()) {
         Q_D(const QGraphicsLinearLayout);
         qDebug("%*s%s layout", indent, "",
@@ -561,5 +564,3 @@ void QGraphicsLinearLayout::dump(int indent) const
 }
 
 QT_END_NAMESPACE
-
-#endif //QT_NO_GRAPHICSVIEW

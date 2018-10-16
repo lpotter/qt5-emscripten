@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,15 +31,13 @@
 #include "private/qhttpnetworkconnection_p.h"
 #include "private/qnoncontiguousbytedevice_p.h"
 #include <QAuthenticator>
+#include <QTcpServer>
 
 #include "../../../network-settings.h"
 
 class tst_QHttpNetworkConnection: public QObject
 {
     Q_OBJECT
-
-public:
-    tst_QHttpNetworkConnection();
 
 public Q_SLOTS:
     void finishedReply();
@@ -67,11 +52,7 @@ private:
     QNetworkReply::NetworkError netErrorCode;
 
 private Q_SLOTS:
-    void init();
-    void cleanup();
     void initTestCase();
-    void cleanupTestCase();
-
     void options_data();
     void options();
     void get_data();
@@ -114,27 +95,13 @@ private Q_SLOTS:
 
     void getAndThenDeleteObject();
     void getAndThenDeleteObject_data();
-};
 
-tst_QHttpNetworkConnection::tst_QHttpNetworkConnection()
-{
-}
+    void overlappingCloseAndWrite();
+};
 
 void tst_QHttpNetworkConnection::initTestCase()
 {
     QVERIFY(QtNetworkSettings::verifyTestNetworkSettings());
-}
-
-void tst_QHttpNetworkConnection::cleanupTestCase()
-{
-}
-
-void tst_QHttpNetworkConnection::init()
-{
-}
-
-void tst_QHttpNetworkConnection::cleanup()
-{
 }
 
 void tst_QHttpNetworkConnection::options_data()
@@ -160,7 +127,6 @@ void tst_QHttpNetworkConnection::head_data()
     QTest::addColumn<int>("contentLength");
 
     QTest::newRow("success-internal") << "http://" << QtNetworkSettings::serverName() << "/qtest/rfc3252.txt" << ushort(80) << false << 200 << "OK" << 25962;
-    QTest::newRow("success-external") << "http://" << "www.ietf.org" << "/rfc/rfc3252.txt" << ushort(80) << false << 200 << "OK" << 25962;
 
     QTest::newRow("failure-path") << "http://" << QtNetworkSettings::serverName() << "/t" << ushort(80) << false << 404 << "Not Found" << -1;
     QTest::newRow("failure-protocol") << "" << QtNetworkSettings::serverName() << "/qtest/rfc3252.txt" << ushort(80) << false << 400 << "Bad Request" << -1;
@@ -185,14 +151,7 @@ void tst_QHttpNetworkConnection::head()
     QHttpNetworkRequest request(protocol + host + path, QHttpNetworkRequest::Head);
     QHttpNetworkReply *reply = connection.sendRequest(request);
 
-    QTime stopWatch;
-    stopWatch.start();
-    do {
-        QCoreApplication::instance()->processEvents();
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    } while (!reply->isFinished());
-
+    QTRY_VERIFY_WITH_TIMEOUT(reply->isFinished(), 30000);
     QCOMPARE(reply->statusCode(), statusCode);
     QCOMPARE(reply->reasonPhrase(), statusString);
     // only check it if it is set and expected
@@ -217,7 +176,6 @@ void tst_QHttpNetworkConnection::get_data()
     QTest::addColumn<int>("downloadSize");
 
     QTest::newRow("success-internal") << "http://" << QtNetworkSettings::serverName() << "/qtest/rfc3252.txt" << ushort(80) << false << 200 << "OK" << 25962 << 25962;
-    QTest::newRow("success-external") << "http://" << "www.ietf.org" << "/rfc/rfc3252.txt" << ushort(80) << false << 200 << "OK" << 25962 << 25962;
 
     QTest::newRow("failure-path") << "http://" << QtNetworkSettings::serverName() << "/t" << ushort(80) << false << 404 << "Not Found" << -1 << -1;
     QTest::newRow("failure-protocol") << "" << QtNetworkSettings::serverName() << "/qtest/rfc3252.txt" << ushort(80) << false << 400 << "Bad Request" << -1 << -1;
@@ -243,15 +201,7 @@ void tst_QHttpNetworkConnection::get()
     QHttpNetworkRequest request(protocol + host + path);
     QHttpNetworkReply *reply = connection.sendRequest(request);
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (reply->bytesAvailable())
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(reply->bytesAvailable(), 30000);
 
     QCOMPARE(reply->statusCode(), statusCode);
     QCOMPARE(reply->reasonPhrase(), statusString);
@@ -259,17 +209,8 @@ void tst_QHttpNetworkConnection::get()
     if (reply->contentLength() != -1 && contentLength != -1)
         QCOMPARE(reply->contentLength(), qint64(contentLength));
 
-    stopWatch.start();
-    QByteArray ba;
-    do {
-        QCoreApplication::instance()->processEvents();
-        while (reply->bytesAvailable())
-            ba += reply->readAny();
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    } while (!reply->isFinished());
-
-    QVERIFY(reply->isFinished());
+    QTRY_VERIFY_WITH_TIMEOUT(reply->isFinished(), 30000);
+    QByteArray ba = reply->readAll();
     //do not require server generated error pages to be a fixed size
     if (downloadSize != -1)
         QCOMPARE(ba.size(), downloadSize);
@@ -305,7 +246,7 @@ void tst_QHttpNetworkConnection::put_data()
 
     QTest::newRow("success-internal") << "http://" << QtNetworkSettings::serverName() << "/dav/file1.txt" << ushort(80) << false << "Hello World\nEnd of file\n"<<true;
     QTest::newRow("fail-internal") << "http://" << QtNetworkSettings::serverName() << "/dav2/file1.txt" << ushort(80) << false << "Hello World\nEnd of file\n"<<false;
-    QTest::newRow("fail-host") << "http://" << "fluke-nosuchhost.troll.no" << "/dav2/file1.txt" << ushort(80) << false << "Hello World\nEnd of file\n"<<false;
+    QTest::newRow("fail-host") << "http://" << "invalid.test.qt-project.org" << "/dav2/file1.txt" << ushort(80) << false << "Hello World\nEnd of file\n"<<false;
 }
 
 void tst_QHttpNetworkConnection::put()
@@ -338,13 +279,7 @@ void tst_QHttpNetworkConnection::put()
     connect(reply, SIGNAL(finishedWithError(QNetworkReply::NetworkError,QString)),
         SLOT(finishedWithError(QNetworkReply::NetworkError,QString)));
 
-    QTime stopWatch;
-    stopWatch.start();
-    do {
-        QCoreApplication::instance()->processEvents();
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    } while (!reply->isFinished() && !finishedCalled && !finishedWithErrorCalled);
+    QTRY_VERIFY_WITH_TIMEOUT(reply->isFinished() || finishedCalled || finishedWithErrorCalled, 30000);
 
     if (reply->isFinished()) {
         QByteArray ba;
@@ -420,16 +355,7 @@ void tst_QHttpNetworkConnection::post()
 
     QHttpNetworkReply *reply = connection.sendRequest(request);
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (reply->bytesAvailable())
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
-
+    QTRY_VERIFY_WITH_TIMEOUT(reply->bytesAvailable(), 30000);
     QCOMPARE(reply->statusCode(), statusCode);
     QCOMPARE(reply->reasonPhrase(), statusString);
 
@@ -446,17 +372,8 @@ void tst_QHttpNetworkConnection::post()
         }
     }
 
-    stopWatch.start();
-    QByteArray ba;
-    do {
-        QCoreApplication::instance()->processEvents();
-        while (reply->bytesAvailable())
-            ba += reply->readAny();
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    } while (!reply->isFinished());
-
-    QVERIFY(reply->isFinished());
+    QTRY_VERIFY_WITH_TIMEOUT(reply->isFinished(), 30000);
+    QByteArray ba = reply->readAll();
     //don't require fixed size for generated error pages
     if (downloadSize != -1)
         QCOMPARE(ba.size(), downloadSize);
@@ -571,17 +488,7 @@ void tst_QHttpNetworkConnection::get401()
     connect(reply, SIGNAL(finishedWithError(QNetworkReply::NetworkError,QString)),
         SLOT(finishedWithError(QNetworkReply::NetworkError,QString)));
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (finishedCalled)
-            break;
-        if (finishedWithErrorCalled)
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(finishedCalled || finishedWithErrorCalled, 30000);
     QCOMPARE(reply->statusCode(), statusCode);
     delete reply;
 }
@@ -630,16 +537,8 @@ void tst_QHttpNetworkConnection::compression()
     if (!autoCompress)
         request.setHeaderField("Accept-Encoding", contentCoding.toLatin1());
     QHttpNetworkReply *reply = connection.sendRequest(request);
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (reply->bytesAvailable())
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
 
+    QTRY_VERIFY_WITH_TIMEOUT(reply->bytesAvailable(), 30000);
     QCOMPARE(reply->statusCode(), statusCode);
     QCOMPARE(reply->reasonPhrase(), statusString);
     bool isLengthOk = (reply->contentLength() == qint64(contentLength)
@@ -648,17 +547,8 @@ void tst_QHttpNetworkConnection::compression()
 
     QVERIFY(isLengthOk);
 
-    stopWatch.start();
-    QByteArray ba;
-    do {
-        QCoreApplication::instance()->processEvents();
-        while (reply->bytesAvailable())
-            ba += reply->readAny();
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    } while (!reply->isFinished());
-
-    QVERIFY(reply->isFinished());
+    QTRY_VERIFY_WITH_TIMEOUT(reply->isFinished(), 30000);
+    QByteArray ba = reply->readAll();
     QCOMPARE(ba.size(), downloadSize);
 
     delete reply;
@@ -729,17 +619,7 @@ void tst_QHttpNetworkConnection::ignoresslerror()
 
     connect(reply, SIGNAL(finished()), SLOT(finishedReply()));
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (reply->bytesAvailable())
-            break;
-        if (statusCode == 100 && finishedWithErrorCalled)
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(reply->bytesAvailable() || (statusCode == 100 && finishedWithErrorCalled), 30000);
     QCOMPARE(reply->statusCode(), statusCode);
     delete reply;
 }
@@ -781,15 +661,7 @@ void tst_QHttpNetworkConnection::nossl()
     connect(reply, SIGNAL(finishedWithError(QNetworkReply::NetworkError,QString)),
         SLOT(finishedWithError(QNetworkReply::NetworkError,QString)));
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (finishedWithErrorCalled)
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(finishedWithErrorCalled, 30000);
     QCOMPARE(netErrorCode, networkError);
     delete reply;
 }
@@ -809,6 +681,15 @@ void tst_QHttpNetworkConnection::getMultiple_data()
     QTest::newRow("1 connection, pipelining allowed, 100 requests")  << quint16(1) << true << 100;
 }
 
+static bool allRepliesFinished(const QList<QHttpNetworkReply*> *_replies)
+{
+    const QList<QHttpNetworkReply*> &replies = *_replies;
+    for (int i = 0; i < replies.length(); i++)
+        if (!replies.at(i)->isFinished())
+            return false;
+    return true;
+}
+
 void tst_QHttpNetworkConnection::getMultiple()
 {
     QFETCH(quint16, connectionCount);
@@ -825,8 +706,6 @@ void tst_QHttpNetworkConnection::getMultiple()
         // for the "real" results, use a URL that has "internet latency" for you. Then (6 connections, pipelining) will win.
         // for LAN latency, you will possibly get that (1 connection, no pipelining) is the fastest
         QHttpNetworkRequest *request = new QHttpNetworkRequest("http://" + QtNetworkSettings::serverName() + "/qtest/rfc3252.txt");
-        // located in Berlin:
-        //QHttpNetworkRequest *request = new QHttpNetworkRequest(QUrl("http://klinsmann.nokia.trolltech.de/~berlin/qtcreatorad.gif"));
         if (pipeliningAllowed)
             request->setPipeliningAllowed(true);
         requests.append(request);
@@ -834,27 +713,7 @@ void tst_QHttpNetworkConnection::getMultiple()
         replies.append(reply);
     }
 
-    QTime stopWatch;
-    stopWatch.start();
-    int finishedCount = 0;
-    do {
-        QCoreApplication::instance()->processEvents();
-        if (stopWatch.elapsed() >= 60000)
-            break;
-
-        finishedCount = 0;
-        for (int i = 0; i < replies.length(); i++)
-            if (replies.at(i)->isFinished())
-                finishedCount++;
-
-    } while (finishedCount != replies.length());
-
-    // redundant
-    for (int i = 0; i < replies.length(); i++)
-        QVERIFY(replies.at(i)->isFinished());
-
-    qDebug() << "===" << stopWatch.elapsed() << "msec ===";
-
+    QTRY_VERIFY_WITH_TIMEOUT(allRepliesFinished(&replies), 60000);
     qDeleteAll(requests);
     qDeleteAll(replies);
 }
@@ -875,40 +734,26 @@ void tst_QHttpNetworkConnection::getMultipleWithPipeliningAndMultiplePriorities(
             request = new QHttpNetworkRequest("http://" + QtNetworkSettings::serverName() + "/qtest/rfc3252.txt", QHttpNetworkRequest::Get);
         else
             request = new QHttpNetworkRequest("http://" + QtNetworkSettings::serverName() + "/qtest/rfc3252.txt", QHttpNetworkRequest::Head);
-        
+
         if (i % 2 || i % 3)
             request->setPipeliningAllowed(true);
-        
+
         if (i % 3)
             request->setPriority(QHttpNetworkRequest::HighPriority);
         else if (i % 5)
             request->setPriority(QHttpNetworkRequest::NormalPriority);
         else if (i % 7)
             request->setPriority(QHttpNetworkRequest::LowPriority);
-        
+
         requests.append(request);
         QHttpNetworkReply *reply = connection.sendRequest(*request);
         replies.append(reply);
     }
 
-    QTime stopWatch;
-    stopWatch.start();
-    int finishedCount = 0;
-    do {
-        QCoreApplication::instance()->processEvents();
-        if (stopWatch.elapsed() >= 60000)
-            break;
-
-        finishedCount = 0;
-        for (int i = 0; i < replies.length(); i++)
-            if (replies.at(i)->isFinished())
-                finishedCount++;
-
-    } while (finishedCount != replies.length());
+    QTRY_VERIFY_WITH_TIMEOUT(allRepliesFinished(&replies), 60000);
 
     int pipelinedCount = 0;
     for (int i = 0; i < replies.length(); i++) {
-        QVERIFY(replies.at(i)->isFinished());
         QVERIFY (!(replies.at(i)->request().isPipeliningAllowed() == false
             && replies.at(i)->isPipeliningUsed()));
 
@@ -921,8 +766,6 @@ void tst_QHttpNetworkConnection::getMultipleWithPipeliningAndMultiplePriorities(
     // (this is a very relaxed condition, when last measured 79 of 100
     // requests had been pipelined)
     QVERIFY(pipelinedCount >= requestCount / 2);
-
-    qDebug() << "===" << stopWatch.elapsed() << "msec ===";
 
     qDeleteAll(requests);
     qDeleteAll(replies);
@@ -1099,17 +942,7 @@ void tst_QHttpNetworkConnection::getAndThenDeleteObject()
     QHttpNetworkReply *reply = connection->sendRequest(request);
     reply->setDownstreamLimited(true);
 
-    QTime stopWatch;
-    stopWatch.start();
-    forever {
-        QCoreApplication::instance()->processEvents();
-        if (reply->bytesAvailable())
-            break;
-        if (stopWatch.elapsed() >= 30000)
-            break;
-    }
-
-    QVERIFY(reply->bytesAvailable());
+    QTRY_VERIFY_WITH_TIMEOUT(reply->bytesAvailable(), 30000);
     QCOMPARE(reply->statusCode() ,200);
     QVERIFY(!reply->isFinished()); // must not be finished
 
@@ -1124,6 +957,57 @@ void tst_QHttpNetworkConnection::getAndThenDeleteObject()
     }
 }
 
+class TestTcpServer : public QTcpServer
+{
+    Q_OBJECT
+public:
+    TestTcpServer() : errorCodeReports(0)
+    {
+        connect(this, &QTcpServer::newConnection, this, &TestTcpServer::onNewConnection);
+        QVERIFY(listen(QHostAddress::LocalHost));
+    }
+
+    int errorCodeReports;
+
+public slots:
+    void onNewConnection()
+    {
+        QTcpSocket *socket = nextPendingConnection();
+        if (!socket)
+            return;
+        // close socket instantly!
+        connect(socket, &QTcpSocket::readyRead, socket, &QTcpSocket::close);
+    }
+
+    void onReply(QNetworkReply::NetworkError code)
+    {
+        QCOMPARE(code, QNetworkReply::RemoteHostClosedError);
+        ++errorCodeReports;
+    }
+};
+
+void tst_QHttpNetworkConnection::overlappingCloseAndWrite()
+{
+    // server accepts connections, but closes the socket instantly
+    TestTcpServer server;
+    QNetworkAccessManager accessManager;
+
+    // ten requests are scheduled. All should result in an RemoteHostClosed...
+    QUrl url;
+    url.setScheme(QStringLiteral("http"));
+    url.setHost(server.serverAddress().toString());
+    url.setPort(server.serverPort());
+    for (int i = 0; i < 10; ++i) {
+        QNetworkRequest request(url);
+        QNetworkReply *reply = accessManager.get(request);
+        // Not using Qt5 connection syntax here because of overly baroque syntax to discern between
+        // different error() methods.
+        QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
+                         &server, SLOT(onReply(QNetworkReply::NetworkError)));
+    }
+
+    QTRY_COMPARE(server.errorCodeReports, 10);
+}
 
 
 QTEST_MAIN(tst_QHttpNetworkConnection)

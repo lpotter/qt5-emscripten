@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -62,28 +62,28 @@
 */
 
 /*!
-    \externalpage http://www.cmake.org/cmake/help/v2.8.9/cmake.html#command:find_package
+    \externalpage http://www.cmake.org/cmake/help/v2.8.11/cmake.html#command:find_package
     \title CMake find_package Documentation
 */
 
 /*!
-    \externalpage http://www.cmake.org/cmake/help/v2.8.9/cmake.html#prop_tgt:AUTOMOC
+    \externalpage http://www.cmake.org/cmake/help/v2.8.11/cmake.html#prop_tgt:AUTOMOC
     \title CMake AUTOMOC Documentation
 */
 
 
 /*!
-    \externalpage http://www.cmake.org/cmake/help/v2.8.9/cmake.html#prop_tgt:LOCATION
+    \externalpage http://www.cmake.org/cmake/help/v2.8.11/cmake.html#prop_tgt:LOCATION
     \title CMake LOCATION Documentation
 */
 
 /*!
-    \externalpage http://www.cmake.org/cmake/help/v2.8.9/cmake.html#prop_tgt:POSITION_INDEPENDENT_CODE
+    \externalpage http://www.cmake.org/cmake/help/v2.8.11/cmake.html#prop_tgt:POSITION_INDEPENDENT_CODE
     \title CMake POSITION_INDEPENDENT_CODE Documentation
 */
 
 /*!
-    \externalpage http://www.cmake.org/cmake/help/v2.8.9/cmake.html#command:target_link_libraries
+    \externalpage http://www.cmake.org/cmake/help/v2.8.11/cmake.html#command:target_link_libraries
     \title CMake target_link_libraries Documentation
 */
 
@@ -174,7 +174,7 @@
 */
 
 /*!
-    \externalpage http://code.google.com/p/angleproject/
+    \externalpage https://chromium.googlesource.com/angle/angle/+/master/README.md
     \title ANGLE
 */
 
@@ -199,7 +199,7 @@
 */
 
 /*!
-    \externalpage http://www.mingw.org/
+    \externalpage https://mingw-w64.org/
     \title MinGW
 */
 
@@ -259,22 +259,22 @@
 */
 
 /*!
-    \externalpage http://www.amazon.com/exec/obidos/ASIN/0134436989/trolltech/t
+    \externalpage http://www.amazon.com/Threads-Primer-Guide-Multithreaded-Programming/dp/0134436989/ref=sr_1_1?ie=UTF8&qid=1354884049&sr=8-1&keywords=a+guide+to+multithreaded+programming
     \title Threads Primer: A Guide to Multithreaded Programming
 */
 
 /*!
-    \externalpage http://www.amazon.com/exec/obidos/ASIN/0131900676/trolltech/t
+    \externalpage http://www.amazon.com/Thread-Time-MultiThreaded-Programming-Guide/dp/0131900676/ref=sr_1_sc_3?ie=UTF8&qid=1354884427&sr=8-3-spell&keywords=The+Mulltithread+Programming+Guide
     \title Thread Time: The Multithreaded Programming Guide
 */
 
 /*!
-    \externalpage http://www.amazon.com/exec/obidos/ASIN/1565921151/trolltech/t
+    \externalpage http://www.amazon.com/Pthreads-Programming-Standard-Multiprocessing-Nutshell/dp/1565921151/ref=sr_1_1?s=books&ie=UTF8&qid=1354884565&sr=1-1&keywords=threads+Programming%3A+A+POSIX+Standard+for+Better+Multiprocessing
     \title Pthreads Programming: A POSIX Standard for Better Multiprocessing
 */
 
 /*!
-    \externalpage http://www.amazon.com/exec/obidos/ASIN/1565922964/trolltech/t
+    \externalpage http://www.amazon.com/Win32-Multithreaded-Programming-Aaron-Cohen/dp/B00007GW3Z/ref=sr_1_1?s=books&ie=UTF8&qid=1354884647&sr=1-1&keywords=Win32+Multithreaded+Programming
     \title Win32 Multithreaded Programming
 */
 
@@ -449,11 +449,6 @@
 */
 
 /*!
-    \externalpage http://wiki.forum.nokia.com/
-    \title Forum Nokia Wiki
-*/
-
-/*!
     \externalpage http://accessibility.linuxfoundation.org/a11yspecs/ia2/docs/html/_accessible_event_i_d_8idl.html
     \title AccessibleEventID.idl File Reference
 */
@@ -464,7 +459,7 @@
 */
 
 /*!
-    \externalpage ftp://ftp.qt.nokia.com/pub/qt/solutions/lgpl/qtmotifextension-2.7_1-opensource.tar.gz
+    \externalpage ftp://ftp.qt-project.org/pub/qt/solutions/lgpl/qtmotifextension-2.7_1-opensource.tar.gz
     \title Motif Extension
 */
 
@@ -479,11 +474,21 @@
 */
 
 /*!
-    \externalpage http://git.iksaif.net/?p=qsslkey-p11.git
+    \externalpage https://github.com/iksaif/qsslkey-p11
     \title qsslkey example
 */
 
 /*!
     \externalpage http://www.w3.org/TR/2009/WD-webdatabase-20091029/
     \title HTML5 Web Database API
+*/
+
+/*!
+    \externalpage http://lldb.llvm.org/
+    \title The LLDB Debugger
+*/
+
+/*!
+    \externalpage https://login.qt.io/
+    \title Qt Account Sign-up
 */

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,6 +34,7 @@
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QTreeWidget>
 #include <QtWidgets/QTextEdit>
+#include <QtWidgets/QPushButton>
 
 #include <QDBusArgument>
 #include <QDBusConnection>
@@ -55,6 +43,7 @@
 #include <QDBusReply>
 
 #include "atspi/atspi-constants.h"
+#include "bus_interface.h"
 
 #include "dbusconnection_p.h"
 #include "struct_marshallers_p.h"
@@ -67,17 +56,14 @@ class AccessibleTestWindow : public QWidget
 public:
     AccessibleTestWindow()
     {
-        DBusConnection c;
-        m_address = c.connection().baseService().toLatin1().data();
         new QHBoxLayout(this);
     }
-    QString dbusAddress() const { return m_address; }
 
     void addWidget(QWidget* widget)
     {
         layout()->addWidget(widget);
         widget->show();
-        QTest::qWaitForWindowExposed(widget);
+        QVERIFY(QTest::qWaitForWindowExposed(widget));
     }
 
     void clearChildren()
@@ -85,16 +71,23 @@ public:
         qDeleteAll(children());
         new QHBoxLayout(this);
     }
-
-private:
-    QString m_address;
-    QString m_bus;
 };
 
 
 class tst_QAccessibilityLinux : public QObject
 {
     Q_OBJECT
+
+public:
+    tst_QAccessibilityLinux() : m_window(0), root(0), rootApplication(0), mainWindow(0)
+    {
+        qputenv("QT_LINUX_ACCESSIBILITY_ALWAYS_ON", QByteArrayLiteral("1"));
+        dbus = new DBusConnection();
+    }
+    ~tst_QAccessibilityLinux()
+    {
+        delete dbus;
+    }
 
 private slots:
     void initTestCase();
@@ -105,6 +98,7 @@ private slots:
     void testTreeWidget();
     void testTextEdit();
     void testSlider();
+    void testFocus();
 
     void cleanupTestCase();
 
@@ -116,23 +110,24 @@ private:
 
     AccessibleTestWindow *m_window;
 
-    QString bus;
     QString address;
     QDBusInterface *root; // the root object on dbus (for the app)
     QDBusInterface *rootApplication;
     QDBusInterface *mainWindow;
 
-    DBusConnection dbus;
+    DBusConnection *dbus;
 };
 
 // helper to find children of a dbus object
 QStringList tst_QAccessibilityLinux::getChildren(QDBusInterface *interface)
 {
     QSpiObjectReferenceArray list;
-    interface->call(QDBus::Block, "GetChildren").arguments().first().value<QDBusArgument>() >> list;
+    const QList<QVariant> args = interface->call(QDBus::Block, "GetChildren").arguments();
+    Q_ASSERT(args.size() == 1);
+    Q_ASSERT(args.first().isValid());
+    args.first().value<QDBusArgument>() >> list;
 
     Q_ASSERT(interface->property("ChildCount").toInt() == list.count());
-
     QStringList children;
     Q_FOREACH (const QSpiObjectReference &ref, list)
         children << ref.path.path();
@@ -157,33 +152,38 @@ QString tst_QAccessibilityLinux::getParent(QDBusInterface *interface)
 // helper to get dbus object
 QDBusInterface *tst_QAccessibilityLinux::getInterface(const QString &path, const QString &interfaceName)
 {
-    return new QDBusInterface(address, path, interfaceName, dbus.connection(), this);
+    return new QDBusInterface(address, path, interfaceName, dbus->connection(), this);
 }
-
 
 void tst_QAccessibilityLinux::initTestCase()
 {
     // Oxygen style creates many extra items, it's simply unusable here
-    qDebug() << "Using fusion style...";
     qApp->setStyle("fusion");
     qApp->setApplicationName("tst_QAccessibilityLinux app");
-    dbus = DBusConnection();
+
+
+    // trigger launching of at-spi if it isn't running already
+    QDBusConnection c = QDBusConnection::sessionBus();
+    OrgA11yStatusInterface *a11yStatus = new OrgA11yStatusInterface(QStringLiteral("org.a11y.Bus"), QStringLiteral("/org/a11y/bus"), c, this);
+    // don't care about the result, calling any function on "org.a11y.Bus" will launch the service
+    a11yStatus->isEnabled();
+    for (int i = 0; i < 5; ++i) {
+        if (!dbus->isEnabled())
+            QTest::qWait(100);
+    }
+
+    if (!dbus->isEnabled())
+        QSKIP("Could not connect to AT-SPI, make sure lib atspi2 is installed.");
+    QTRY_VERIFY(dbus->isEnabled());
+    QTRY_VERIFY(dbus->connection().isConnected());
+    address = dbus->connection().baseService().toLatin1().data();
+    QVERIFY(!address.isEmpty());
 
     m_window = new AccessibleTestWindow();
     m_window->show();
 
-    // this has the side-effect of immediately activating accessibility
-    qDebug() << "Explicitly activating accessibility...";
-    delete QAccessible::queryAccessibleInterface(m_window);
-
-    QTest::qWaitForWindowExposed(m_window);
-
-    address = m_window->dbusAddress();
+    QVERIFY(QTest::qWaitForWindowExposed(m_window));
     registerDbus();
-
-    QStringList appChildren = getChildren(root);
-    QString window = appChildren.at(0);
-    mainWindow = getInterface(window, "org.a11y.atspi.Accessible");
 }
 
 void tst_QAccessibilityLinux::cleanupTestCase()
@@ -196,7 +196,7 @@ void tst_QAccessibilityLinux::cleanupTestCase()
 
 void tst_QAccessibilityLinux::registerDbus()
 {
-    QVERIFY(dbus.connection().isConnected());
+    QVERIFY(dbus->connection().isConnected());
 
     root = getInterface("/org/a11y/atspi/accessible/root",
                         "org.a11y.atspi.Accessible");
@@ -426,14 +426,22 @@ void tst_QAccessibilityLinux::testTextEdit()
     QCOMPARE(callResult.at(2).toInt(), 17);
 
     // Check if at least CharacterExtents and RangeExtents give a consistent result
-    QDBusReply<QRect> replyRect20 = textInterface->call(QDBus::Block, "GetCharacterExtents", 20, ATSPI_COORD_TYPE_SCREEN);
-    QVERIFY(replyRect20.isValid());
-    QRect r1 = replyRect20.value();
-    QDBusReply<QRect> replyRect21  = textInterface->call(QDBus::Block, "GetCharacterExtents", 21, ATSPI_COORD_TYPE_SCREEN);
-    QRect r2 = replyRect21.value();
-    QDBusReply<QRect> reply = textInterface->call(QDBus::Block, "GetRangeExtents", 20, 21, ATSPI_COORD_TYPE_SCREEN);
-    QRect rect = reply.value();
-    QCOMPARE(rect, r1|r2);
+
+    QDBusMessage replyRect20 = textInterface->call(QDBus::Block, "GetCharacterExtents", 20, ATSPI_COORD_TYPE_SCREEN);
+    QCOMPARE(replyRect20.type(), QDBusMessage::ReplyMessage);
+    QCOMPARE(replyRect20.signature(), QStringLiteral("iiii"));
+    callResult = replyRect20.arguments();
+    QRect r1 = QRect(callResult.at(0).toInt(), callResult.at(1).toInt(), callResult.at(2).toInt(), callResult.at(3).toInt());
+    QDBusMessage replyRect21  = textInterface->call(QDBus::Block, "GetCharacterExtents", 21, ATSPI_COORD_TYPE_SCREEN);
+    QCOMPARE(replyRect21.type(), QDBusMessage::ReplyMessage);
+    QCOMPARE(replyRect21.signature(), QStringLiteral("iiii"));
+    callResult = replyRect21.arguments();
+    QRect r2 = QRect(callResult.at(0).toInt(), callResult.at(1).toInt(), callResult.at(2).toInt(), callResult.at(3).toInt());
+
+    QDBusMessage replyRange = textInterface->call(QDBus::Block, "GetRangeExtents", 20, 21, ATSPI_COORD_TYPE_SCREEN);
+    callResult = replyRange.arguments();
+    QRect rectRangeExtents = QRect(callResult.at(0).toInt(), callResult.at(1).toInt(), callResult.at(2).toInt(), callResult.at(3).toInt());
+    QCOMPARE(rectRangeExtents, r1|r2);
 
     m_window->clearChildren();
     delete textInterface;
@@ -460,6 +468,60 @@ void tst_QAccessibilityLinux::testSlider()
 
     valueInterface->setProperty("CurrentValue", 4);
     QCOMPARE(valueInterface->property("CurrentValue").toInt(), 4);
+    m_window->clearChildren();
+}
+
+quint64 getAtspiState(QDBusInterface *interface)
+{
+    QDBusMessage msg = interface->call(QDBus::Block, "GetState");
+    const QDBusArgument arg = msg.arguments().at(0).value<QDBusArgument>();
+    quint32 state1 = 0;
+    quint64 state2 = 0;
+    arg.beginArray();
+    arg >> state1;
+    arg >> state2;
+    arg.endArray();
+
+    state2 = state2 << 32;
+    return state2 | state1;
+}
+
+void tst_QAccessibilityLinux::testFocus()
+{
+    QLineEdit *lineEdit1 = new QLineEdit(m_window);
+    lineEdit1->setText("lineEdit 1");
+    QLineEdit *lineEdit2 = new QLineEdit(m_window);
+    lineEdit2->setText("lineEdit 2");
+
+    m_window->addWidget(lineEdit1);
+    m_window->addWidget(lineEdit2);
+    lineEdit1->setFocus();
+
+    QStringList children = getChildren(mainWindow);
+    QCOMPARE(children.length(), 2);
+    QDBusInterface *accessibleInterfaceLineEdit1 = getInterface(children.at(0), "org.a11y.atspi.Accessible");
+    QVERIFY(accessibleInterfaceLineEdit1->isValid());
+    QDBusInterface *accessibleInterfaceLineEdit2 = getInterface(children.at(1), "org.a11y.atspi.Accessible");
+    QVERIFY(accessibleInterfaceLineEdit2->isValid());
+    QDBusInterface *componentInterfaceLineEdit1 = getInterface(children.at(0), "org.a11y.atspi.Component");
+    QVERIFY(componentInterfaceLineEdit1->isValid());
+    QDBusInterface *componentInterfaceLineEdit2 = getInterface(children.at(1), "org.a11y.atspi.Component");
+    QVERIFY(componentInterfaceLineEdit2->isValid());
+
+    quint64 focusedState = quint64(1) << ATSPI_STATE_FOCUSED;
+    QVERIFY(getAtspiState(accessibleInterfaceLineEdit1) & focusedState);
+    QVERIFY(!(getAtspiState(accessibleInterfaceLineEdit2) & focusedState));
+
+    QDBusMessage focusReply = componentInterfaceLineEdit2->call(QDBus::Block, "GrabFocus");
+    QVERIFY(focusReply.arguments().at(0).toBool());
+    QVERIFY(lineEdit2->hasFocus());
+    QVERIFY(!(getAtspiState(accessibleInterfaceLineEdit1) & focusedState));
+    QVERIFY(getAtspiState(accessibleInterfaceLineEdit2) & focusedState);
+    m_window->clearChildren();
+    delete accessibleInterfaceLineEdit1;
+    delete accessibleInterfaceLineEdit2;
+    delete componentInterfaceLineEdit1;
+    delete componentInterfaceLineEdit2;
 }
 
 QTEST_MAIN(tst_QAccessibilityLinux)

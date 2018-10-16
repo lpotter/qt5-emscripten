@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    FreeType smooth renderer declaration                                 */
 /*                                                                         */
-/*  Copyright 1996-2001 by                                                 */
+/*  Copyright 1996-2015 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -28,6 +28,7 @@
 #include "ftimage.h"
 #else
 #include <ft2build.h>
+#include FT_CONFIG_CONFIG_H /* for FT_CONFIG_OPTION_PIC */
 #include FT_IMAGE_H
 #endif
 

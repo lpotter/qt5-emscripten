@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    FreeType incremental loading (specification).                        */
 /*                                                                         */
-/*  Copyright 2002, 2003, 2006, 2007, 2008 by                              */
+/*  Copyright 2002-2015 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -45,7 +45,7 @@ FT_BEGIN_HEADER
    * @description:
    *   This section contains various functions used to perform so-called
    *   `incremental' glyph loading.  This is a mode where all glyphs loaded
-   *   from a given @FT_Face are provided by the client application,
+   *   from a given @FT_Face are provided by the client application.
    *
    *   Apart from that, all other tables are loaded normally from the font
    *   file.  This mode is useful when FreeType is used within another
@@ -101,7 +101,10 @@ FT_BEGIN_HEADER
    *     Top bearing, in font units.
    *
    *   advance ::
-   *     Glyph advance, in font units.
+   *     Horizontal component of glyph advance, in font units.
+   *
+   *   advance_v ::
+   *     Vertical component of glyph advance, in font units.
    *
    * @note:
    *   These correspond to horizontal or vertical metrics depending on the
@@ -114,6 +117,7 @@ FT_BEGIN_HEADER
     FT_Long  bearing_x;
     FT_Long  bearing_y;
     FT_Long  advance;
+    FT_Long  advance_v;     /* since 2.3.12 */
 
   } FT_Incremental_MetricsRec;
 
@@ -340,6 +344,7 @@ FT_BEGIN_HEADER
 #define FT_PARAM_TAG_INCREMENTAL  FT_MAKE_TAG( 'i', 'n', 'c', 'r' )
 
   /* */
+
 
 FT_END_HEADER
 

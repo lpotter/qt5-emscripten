@@ -1,5 +1,4 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_moc
 
 #exists(/usr/include/boost/spirit.hpp) {
@@ -11,7 +10,6 @@ TARGET = tst_moc
 
 INCLUDEPATH += testproject/include testproject
 
-DEFINES += SRCDIR=\\\"$$PWD\\\"
 cross_compile: DEFINES += MOC_CROSS_COMPILED
 
 HEADERS += using-namespaces.h no-keywords.h task87883.h c-comments.h backslash-newlines.h oldstyle-casts.h \
@@ -23,16 +21,31 @@ HEADERS += using-namespaces.h no-keywords.h task87883.h c-comments.h backslash-n
            cxx11-explicit-override-control.h \
            forward-declared-param.h \
            parse-defines.h \
-           function-with-attributes.h
+           function-with-attributes.h \
+           plugin_metadata.h \
+           single-quote-digit-separator-n3781.h \
+           related-metaobjects-in-namespaces.h \
+           qtbug-35657-gadget.h \
+           non-gadget-parent-class.h grand-parent-gadget-class.h \
+           related-metaobjects-in-gadget.h \
+           related-metaobjects-name-conflict.h \
+           namespace.h cxx17-namespaces.h
 
 
-if(*-g++*|*-icc*|*-clang*|*-llvm):!irix-*:!win32-*: HEADERS += os9-newlines.h win-newlines.h
+if(*-g++*|*-icc*|*-clang*|*-llvm):!win32-*: HEADERS += os9-newlines.h win-newlines.h
+if(*-g++*|*-clang*): HEADERS += dollars.h
 SOURCES += tst_moc.cpp
 
-QT -= gui
-QT += sql network testlib
-contains(QT_CONFIG, dbus){
-    DEFINES += WITH_DBUS
-    QT += dbus
-}
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+QT = core testlib
+qtHaveModule(dbus):       QT += dbus
+qtHaveModule(concurrent): QT += concurrent
+qtHaveModule(network):    QT += network
+qtHaveModule(sql):        QT += sql
+
+# tst_Moc::specifyMetaTagsFromCmdline()
+# Ensure that plugin_metadata.h are moc-ed with some extra -M arguments:
+QMAKE_MOC_OPTIONS += -Muri=com.company.app -Muri=com.company.app.private
+
+# Define macro on the command lines used in  parse-defines.h
+QMAKE_MOC_OPTIONS += "-DDEFINE_CMDLINE_EMPTY="  "\"-DDEFINE_CMDLINE_SIGNAL=void cmdlineSignal(const QMap<int, int> &i)\""
+

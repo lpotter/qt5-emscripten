@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtOpenGL module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,7 @@
 
 #include <QtOpenGL/qgl.h>
 #include <QtOpenGL/private/qgl_p.h>
-#include <QtOpenGL/private/qglextensions_p.h>
+#include <private/qopenglextensions_p.h>
 #include <QtCore/qatomic.h>
 #include "qglbuffer.h"
 
@@ -139,7 +137,8 @@ public:
           type(t),
           guard(0),
           usagePattern(QGLBuffer::StaticDraw),
-          actualUsagePattern(QGLBuffer::StaticDraw)
+          actualUsagePattern(QGLBuffer::StaticDraw),
+          funcs(0)
     {
     }
 
@@ -148,6 +147,7 @@ public:
     QGLSharedResourceGuardBase *guard;
     QGLBuffer::UsagePattern usagePattern;
     QGLBuffer::UsagePattern actualUsagePattern;
+    QOpenGLExtensions *funcs;
 };
 
 /*!
@@ -259,13 +259,13 @@ void QGLBuffer::setUsagePattern(QGLBuffer::UsagePattern value)
 namespace {
     void freeBufferFunc(QGLContext *ctx, GLuint id)
     {
-        Q_UNUSED(ctx);
-        glDeleteBuffers(1, &id);
+        Q_ASSERT(ctx);
+        ctx->contextHandle()->functions()->glDeleteBuffers(1, &id);
     }
 }
 
 /*!
-    Creates the buffer object in the GL server.  Returns true if
+    Creates the buffer object in the GL server.  Returns \c true if
     the object was created; false otherwise.
 
     This function must be called with a current QGLContext.
@@ -284,10 +284,13 @@ bool QGLBuffer::create()
         return true;
     QGLContext *ctx = const_cast<QGLContext *>(QGLContext::currentContext());
     if (ctx) {
-        if (!qt_resolve_buffer_extensions(ctx))
+        delete d->funcs;
+        d->funcs = new QOpenGLExtensions(ctx->contextHandle());
+        if (!d->funcs->hasOpenGLFeature(QOpenGLFunctions::Buffers))
             return false;
+
         GLuint bufferId = 0;
-        glGenBuffers(1, &bufferId);
+        d->funcs->glGenBuffers(1, &bufferId);
         if (bufferId) {
             if (d->guard)
                 d->guard->free();
@@ -302,7 +305,7 @@ bool QGLBuffer::create()
 #define ctx QGLContext::currentContext()
 
 /*!
-    Returns true if this buffer has been created; false otherwise.
+    Returns \c true if this buffer has been created; false otherwise.
 
     \sa create(), destroy()
 */
@@ -328,7 +331,7 @@ void QGLBuffer::destroy()
 
 /*!
     Reads the \a count bytes in this buffer starting at \a offset
-    into \a data.  Returns true on success; false if reading from
+    into \a data.  Returns \c true on success; false if reading from
     the buffer is not supported.  Buffer reading is not supported
     under OpenGL/ES.
 
@@ -340,11 +343,11 @@ bool QGLBuffer::read(int offset, void *data, int count)
 {
 #if !defined(QT_OPENGL_ES)
     Q_D(QGLBuffer);
-    if (!glGetBufferSubData || !d->guard->id())
+    if (!d->funcs->hasOpenGLFeature(QOpenGLFunctions::Buffers) || !d->guard->id() || !d->funcs->d()->GetBufferSubData)
         return false;
-    while (glGetError() != GL_NO_ERROR) ; // Clear error state.
-    glGetBufferSubData(d->type, offset, count, data);
-    return glGetError() == GL_NO_ERROR;
+    while (d->funcs->glGetError() != GL_NO_ERROR) ; // Clear error state.
+    d->funcs->glGetBufferSubData(d->type, offset, count, data);
+    return d->funcs->glGetError() == GL_NO_ERROR;
 #else
     Q_UNUSED(offset);
     Q_UNUSED(data);
@@ -371,7 +374,7 @@ void QGLBuffer::write(int offset, const void *data, int count)
 #endif
     Q_D(QGLBuffer);
     if (d->guard && d->guard->id())
-        glBufferSubData(d->type, offset, count, data);
+        d->funcs->glBufferSubData(d->type, offset, count, data);
 }
 
 /*!
@@ -391,7 +394,7 @@ void QGLBuffer::allocate(const void *data, int count)
 #endif
     Q_D(QGLBuffer);
     if (d->guard && d->guard->id())
-        glBufferData(d->type, count, data, d->actualUsagePattern);
+        d->funcs->glBufferData(d->type, count, data, d->actualUsagePattern);
 }
 
 /*!
@@ -409,7 +412,7 @@ void QGLBuffer::allocate(const void *data, int count)
 
 /*!
     Binds the buffer associated with this object to the current
-    GL context.  Returns false if binding was not possible, usually because
+    GL context.  Returns \c false if binding was not possible, usually because
     type() is not supported on this GL implementation.
 
     The buffer must be bound to the same QGLContext current when create()
@@ -433,7 +436,7 @@ bool QGLBuffer::bind()
 #endif
             return false;
         }
-        glBindBuffer(d->type, bufferId);
+        d->funcs->glBindBuffer(d->type, bufferId);
         return true;
     } else {
         return false;
@@ -457,7 +460,7 @@ void QGLBuffer::release()
 #endif
     Q_D(const QGLBuffer);
     if (d->guard && d->guard->id())
-        glBindBuffer(d->type, 0);
+        d->funcs->glBindBuffer(d->type, 0);
 }
 
 #undef ctx
@@ -477,9 +480,8 @@ void QGLBuffer::release()
 */
 void QGLBuffer::release(QGLBuffer::Type type)
 {
-    const QGLContext *ctx = QGLContext::currentContext();
-    if (ctx && qt_resolve_buffer_extensions(const_cast<QGLContext *>(ctx)))
-        glBindBuffer(GLenum(type), 0);
+    if (QOpenGLContext *ctx = QOpenGLContext::currentContext())
+        ctx->functions()->glBindBuffer(GLenum(type), 0);
 }
 
 #define ctx QGLContext::currentContext()
@@ -515,7 +517,7 @@ int QGLBuffer::size() const
     if (!d->guard || !d->guard->id())
         return -1;
     GLint value = -1;
-    glGetBufferParameteriv(d->type, GL_BUFFER_SIZE, &value);
+    d->funcs->glGetBufferParameteriv(d->type, GL_BUFFER_SIZE, &value);
     return value;
 }
 
@@ -542,14 +544,12 @@ void *QGLBuffer::map(QGLBuffer::Access access)
 #endif
     if (!d->guard || !d->guard->id())
         return 0;
-    if (!glMapBufferARB)
-        return 0;
-    return glMapBufferARB(d->type, access);
+    return d->funcs->glMapBuffer(d->type, access);
 }
 
 /*!
     Unmaps the buffer after it was mapped into the application's
-    memory space with a previous call to map().  Returns true if
+    memory space with a previous call to map().  Returns \c true if
     the unmap succeeded; false otherwise.
 
     It is assumed that this buffer has been bound to the current context,
@@ -569,9 +569,7 @@ bool QGLBuffer::unmap()
 #endif
     if (!d->guard || !d->guard->id())
         return false;
-    if (!glUnmapBufferARB)
-        return false;
-    return glUnmapBufferARB(d->type) == GL_TRUE;
+    return d->funcs->glUnmapBuffer(d->type) == GL_TRUE;
 }
 
 QT_END_NAMESPACE

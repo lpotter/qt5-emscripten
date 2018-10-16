@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,7 @@
 
 #include "qnetworkconfiguration.h"
 #include "qnetworkconfiguration_p.h"
+#include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
@@ -85,7 +84,7 @@ QT_BEGIN_NAMESPACE
     \l {QNetworkSession}{session} is \l {QNetworkSession::open()}{opened}. Not all platforms
     support the concept of a user choice configuration.
 
-    \section1 Configuration states
+    \section1 Configuration States
 
     The list of available configurations can be obtained via
     QNetworkConfigurationManager::allConfigurations(). A configuration can have
@@ -112,7 +111,7 @@ QT_BEGIN_NAMESPACE
 
     Depending on the type of configuration some states are transient in nature. A GPRS/UMTS
     connection may almost always be \l Discovered if the GSM/UMTS network is available.
-    However if the GSM/UMTS network looses the connection the associated configuration may change its state
+    However if the GSM/UMTS network loses the connection the associated configuration may change its state
     from \l Discovered to \l Defined as well. A similar use case might be triggered by
     WLAN availability. QNetworkConfigurationManager::updateConfigurations() can be used to
     manually trigger updates of states. Note that some platforms do not require such updates
@@ -193,11 +192,15 @@ QT_BEGIN_NAMESPACE
     \value BearerEthernet   The configuration is for an Ethernet interfaces.
     \value BearerWLAN       The configuration is for a Wireless LAN interface.
     \value Bearer2G         The configuration is for a CSD, GPRS, HSCSD, EDGE or cdmaOne interface.
+    \value Bearer3G         The configuration is for a 3G interface.
+    \value Bearer4G         The configuration is for a 4G interface.
     \value BearerCDMA2000   The configuration is for CDMA interface.
     \value BearerWCDMA      The configuration is for W-CDMA/UMTS interface.
     \value BearerHSPA       The configuration is for High Speed Packet Access (HSPA) interface.
     \value BearerBluetooth  The configuration is for a Bluetooth interface.
     \value BearerWiMAX      The configuration is for a WiMAX interface.
+    \value BearerEVDO       The configuration is for an EVDO (3G) interface.
+    \value BearerLTE        The configuration is for a LTE (4G) interface.
 */
 
 /*!
@@ -243,8 +246,8 @@ QNetworkConfiguration &QNetworkConfiguration::operator=(const QNetworkConfigurat
 */
 
 /*!
-    Returns true, if this configuration is the same as the \a other
-    configuration given; otherwise returns false.
+    Returns \c true, if this configuration is the same as the \a other
+    configuration given; otherwise returns \c false.
 */
 bool QNetworkConfiguration::operator==(const QNetworkConfiguration &other) const
 {
@@ -254,8 +257,8 @@ bool QNetworkConfiguration::operator==(const QNetworkConfiguration &other) const
 /*!
     \fn bool QNetworkConfiguration::operator!=(const QNetworkConfiguration &other) const
 
-    Returns true if this configuration is not the same as the \a other
-    configuration given; otherwise returns false.
+    Returns \c true if this configuration is not the same as the \a other
+    configuration given; otherwise returns \c false.
 */
 
 /*!
@@ -304,7 +307,7 @@ QNetworkConfiguration::Type QNetworkConfiguration::type() const
 }
 
 /*!
-    Returns true if this QNetworkConfiguration object is valid.
+    Returns \c true if this QNetworkConfiguration object is valid.
     A configuration may become invalid if the user deletes the configuration or
     the configuration was default-constructed.
 
@@ -320,6 +323,44 @@ bool QNetworkConfiguration::isValid() const
 
     QMutexLocker locker(&d->mutex);
     return d->isValid;
+}
+
+/*!
+    \since 5.9
+
+    Returns the connect timeout of this configuration.
+
+    \sa setConnectTimeout
+*/
+int QNetworkConfiguration::connectTimeout() const
+{
+    if (!d)
+        return QNetworkConfigurationPrivate::DefaultTimeout;
+    QMutexLocker locker(&d->mutex);
+    return d->timeout;
+}
+
+/*!
+    \since 5.9
+
+    Sets the connect timeout of this configuration to \a timeout.
+    This allows control of the timeout used by \c QAbstractSocket
+    to establish a connection.
+
+    \warning This will have no effect if the bearer plugin doesn't have
+    the CanStartAndStopInterfaces capability.
+
+    Returns true if succeeded.
+
+    \sa connectTimeout
+*/
+bool QNetworkConfiguration::setConnectTimeout(int timeout)
+{
+    if (!d)
+        return false;
+    QMutexLocker locker(&d->mutex);
+    d->timeout = timeout;
+    return true;
 }
 
 /*!
@@ -351,7 +392,7 @@ QNetworkConfiguration::Purpose QNetworkConfiguration::purpose() const
 }
 
 /*!
-    Returns true if this configuration supports roaming; otherwise false.
+    Returns \c true if this configuration supports roaming; otherwise false.
 */
 bool QNetworkConfiguration::isRoamingAvailable() const
 {
@@ -381,25 +422,21 @@ QList<QNetworkConfiguration> QNetworkConfiguration::children() const
     if (d->type != QNetworkConfiguration::ServiceNetwork || !d->isValid)
         return results;
 
-    QMutableMapIterator<unsigned int, QNetworkConfigurationPrivatePointer> i(d->serviceNetworkMembers);
-    while (i.hasNext()) {
-        i.next();
-
-        QNetworkConfigurationPrivatePointer p = i.value();
-
+    for (auto it = d->serviceNetworkMembers.begin(), end = d->serviceNetworkMembers.end(); it != end;) {
+        QNetworkConfigurationPrivatePointer p = it.value();
         //if we have an invalid member get rid of it -> was deleted earlier on
         {
             QMutexLocker childLocker(&p->mutex);
 
             if (!p->isValid) {
-                i.remove();
+                it = d->serviceNetworkMembers.erase(it);
                 continue;
             }
         }
-
         QNetworkConfiguration item;
         item.d = p;
         results << item;
+        ++it;
     }
 
     return results;
@@ -412,6 +449,8 @@ QList<QNetworkConfiguration> QNetworkConfiguration::children() const
     function can be used to retrieve a textural type name for the bearer.
 
     An invalid network configuration always returns the BearerUnknown value.
+
+    \sa bearerTypeName(), bearerTypeFamily()
 */
 QNetworkConfiguration::BearerType QNetworkConfiguration::bearerType() const
 {
@@ -419,10 +458,61 @@ QNetworkConfiguration::BearerType QNetworkConfiguration::bearerType() const
         return BearerUnknown;
 
     QMutexLocker locker(&d->mutex);
-
     return d->bearerType;
 }
 
+/*!
+    \since 5.2
+
+    Returns the bearer type family used by this network configuration.
+    The following table lists how bearerType() values map to
+    bearerTypeFamily() values:
+
+    \table
+        \header
+            \li bearer type
+            \li bearer type family
+        \row
+            \li BearerUnknown, Bearer2G, BearerEthernet, BearerWLAN,
+            BearerBluetooth
+            \li (same type)
+        \row
+            \li BearerCDMA2000, BearerEVDO, BearerWCDMA, BearerHSPA, Bearer3G
+            \li Bearer3G
+        \row
+            \li BearerWiMAX, BearerLTE, Bearer4G
+            \li Bearer4G
+    \endtable
+
+    An invalid network configuration always returns the BearerUnknown value.
+
+    \sa bearerType(), bearerTypeName()
+*/
+QNetworkConfiguration::BearerType QNetworkConfiguration::bearerTypeFamily() const
+{
+    QNetworkConfiguration::BearerType type = bearerType();
+    switch (type) {
+    case QNetworkConfiguration::BearerUnknown: // fallthrough
+    case QNetworkConfiguration::Bearer2G: // fallthrough
+    case QNetworkConfiguration::BearerEthernet: // fallthrough
+    case QNetworkConfiguration::BearerWLAN: // fallthrough
+    case QNetworkConfiguration::BearerBluetooth:
+        return type;
+    case QNetworkConfiguration::BearerCDMA2000: // fallthrough
+    case QNetworkConfiguration::BearerEVDO: // fallthrough
+    case QNetworkConfiguration::BearerWCDMA: // fallthrough
+    case QNetworkConfiguration::BearerHSPA: // fallthrough
+    case QNetworkConfiguration::Bearer3G:
+        return QNetworkConfiguration::Bearer3G;
+    case QNetworkConfiguration::BearerWiMAX: // fallthrough
+    case QNetworkConfiguration::BearerLTE: // fallthrough
+    case QNetworkConfiguration::Bearer4G:
+        return QNetworkConfiguration::Bearer4G;
+    default:
+        qWarning() << "unknown bearer type" << type;
+        return QNetworkConfiguration::BearerUnknown;
+    }
+}
 /*!
     Returns the type of bearer used by this network configuration as a string.
 
@@ -437,7 +527,6 @@ QNetworkConfiguration::BearerType QNetworkConfiguration::bearerType() const
             \li Value
         \row
             \li BearerUnknown
-            \li
             \li The session is based on an unknown or unspecified bearer type. The value of the
                string returned describes the bearer type.
         \row
@@ -449,6 +538,12 @@ QNetworkConfiguration::BearerType QNetworkConfiguration::bearerType() const
         \row
             \li Bearer2G
             \li 2G
+        \row
+            \li Bearer3G
+            \li 3G
+        \row
+            \li Bearer4G
+            \li 4G
         \row
             \li BearerCDMA2000
             \li CDMA2000
@@ -464,13 +559,19 @@ QNetworkConfiguration::BearerType QNetworkConfiguration::bearerType() const
         \row
             \li BearerWiMAX
             \li WiMAX
+        \row
+            \li BearerEVDO
+            \li EVDO
+        \row
+            \li BearerLTE
+            \li LTE
     \endtable
 
     This function returns an empty string if this is an invalid configuration, a network
     configuration of type \l QNetworkConfiguration::ServiceNetwork or
     \l QNetworkConfiguration::UserChoice.
 
-    \sa bearerType()
+    \sa bearerType(), bearerTypeFamily()
 */
 QString QNetworkConfiguration::bearerTypeName() const
 {
@@ -490,6 +591,10 @@ QString QNetworkConfiguration::bearerTypeName() const
         return QStringLiteral("WLAN");
     case Bearer2G:
         return QStringLiteral("2G");
+    case Bearer3G:
+        return QStringLiteral("3G");
+    case Bearer4G:
+        return QStringLiteral("4G");
     case BearerCDMA2000:
         return QStringLiteral("CDMA2000");
     case BearerWCDMA:
@@ -500,6 +605,10 @@ QString QNetworkConfiguration::bearerTypeName() const
         return QStringLiteral("Bluetooth");
     case BearerWiMAX:
         return QStringLiteral("WiMAX");
+    case BearerEVDO:
+        return QStringLiteral("EVDO");
+    case BearerLTE:
+        return QStringLiteral("LTE");
     case BearerUnknown:
         break;
     }

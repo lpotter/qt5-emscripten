@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -103,9 +113,9 @@ QSet<QString> dictionary = QtConcurrent::blockingFilteredReduced(strings, allLow
 //! [7]
 // keep only images with an alpha channel
 QList<QImage> images = ...;
-QFuture<void> alphaImages = QtConcurrent::filter(strings, &QImage::hasAlphaChannel);
+QFuture<void> alphaImages = QtConcurrent::filter(images, &QImage::hasAlphaChannel);
 
-// keep only gray scale images
+// retrieve gray scale images
 QList<QImage> images = ...;
 QFuture<QImage> grayscaleImages = QtConcurrent::filtered(images, &QImage::isGrayscale);
 
@@ -131,23 +141,15 @@ QFuture<QImage> collage = QtConcurrent::filteredReduced(images, &QImage::isGrays
 
 
 //! [9]
-bool QString::contains(const QRegExp &regexp) const;
+bool QString::contains(const QRegularExpression &regexp) const;
 //! [9]
-
-
-//! [10]
-boost::bind(&QString::contains, QRegExp("^\\S+$")); // matches strings without whitespace
-//! [10]
-
-
-//! [11]
-bool contains(const QString &string)
-//! [11]
 
 
 //! [12]
 QStringList strings = ...;
-boost::bind(static_cast<bool(QString::*)(const QRegExp&)>( &QString::contains ), QRegExp("..." ));
+QFuture<QString> future = QtConcurrent::filtered(list, [](const QString &str) {
+    return str.contains(QRegularExpression("^\\S+$")); // matches strings without whitespace
+});
 //! [12]
 
 //! [13]
@@ -167,5 +169,17 @@ struct StartsWith
 };
 
 QList<QString> strings = ...;
-QFuture<QString> fooString = QtConcurrent::filtered(images, StartsWith(QLatin1String("Foo")));
+QFuture<QString> fooString = QtConcurrent::filtered(strings, StartsWith(QLatin1String("Foo")));
 //! [13]
+
+//! [14]
+struct StringTransform
+{
+    void operator()(QString &result, const QString &value);
+};
+
+QFuture<QString> fooString =
+  QtConcurrent::filteredReduced<QString>(strings,
+                                         StartsWith(QLatin1String("Foo")),
+                                         StringTransform());
+//! [14]

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -218,8 +216,8 @@ void QPolygon::translate(int dx, int dy)
     if (dx == 0 && dy == 0)
         return;
 
-    register QPoint *p = data();
-    register int i = size();
+    QPoint *p = data();
+    int i = size();
     QPoint pt(dx, dy);
     while (i--) {
         *p += pt;
@@ -445,14 +443,15 @@ void QPolygon::putPoints(int index, int nPoints, const QPolygon & from, int from
 
 QRect QPolygon::boundingRect() const
 {
-    if (isEmpty())
+    const QPoint *pd = constData();
+    const QPoint *pe = pd + size();
+    if (pd == pe)
         return QRect(0, 0, 0, 0);
-    register const QPoint *pd = constData();
     int minx, maxx, miny, maxy;
     minx = maxx = pd->x();
     miny = maxy = pd->y();
     ++pd;
-    for (int i = 1; i < size(); ++i) {
+    for (; pd != pe; ++pd) {
         if (pd->x() < minx)
             minx = pd->x();
         else if (pd->x() > maxx)
@@ -461,7 +460,6 @@ QRect QPolygon::boundingRect() const
             miny = pd->y();
         else if (pd->y() > maxy)
             maxy = pd->y();
-        ++pd;
     }
     return QRect(QPoint(minx,miny), QPoint(maxx,maxy));
 }
@@ -469,11 +467,12 @@ QRect QPolygon::boundingRect() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QPolygon &a)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QPolygon(";
     for (int i = 0; i < a.count(); ++i)
         dbg.nospace() << a.at(i);
     dbg.nospace() << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
 
@@ -599,8 +598,8 @@ void QPolygonF::translate(const QPointF &offset)
     if (offset.isNull())
         return;
 
-    register QPointF *p = data();
-    register int i = size();
+    QPointF *p = data();
+    int i = size();
     while (i--) {
         *p += offset;
         ++p;
@@ -642,7 +641,7 @@ QPolygonF QPolygonF::translated(const QPointF &offset) const
 /*!
     \fn bool QPolygonF::isClosed() const
 
-    Returns true if the polygon is closed; otherwise returns false.
+    Returns \c true if the polygon is closed; otherwise returns \c false.
 
     A polygon is said to be closed if its start point and end point are equal.
 
@@ -658,14 +657,15 @@ QPolygonF QPolygonF::translated(const QPointF &offset) const
 
 QRectF QPolygonF::boundingRect() const
 {
-    if (isEmpty())
+    const QPointF *pd = constData();
+    const QPointF *pe = pd + size();
+    if (pd == pe)
         return QRectF(0, 0, 0, 0);
-    register const QPointF *pd = constData();
     qreal minx, maxx, miny, maxy;
     minx = maxx = pd->x();
     miny = maxy = pd->y();
     ++pd;
-    for (int i = 1; i < size(); ++i) {
+    while (pd != pe) {
         if (pd->x() < minx)
             minx = pd->x();
         else if (pd->x() > maxx)
@@ -810,11 +810,12 @@ QDataStream &operator>>(QDataStream &s, QPolygonF &a)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QPolygonF &a)
 {
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QPolygonF(";
     for (int i = 0; i < a.count(); ++i)
         dbg.nospace() << a.at(i);
     dbg.nospace() << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
 
@@ -824,8 +825,8 @@ QDebug operator<<(QDebug dbg, const QPolygonF &a)
 
     \fn bool QPolygonF::containsPoint(const QPointF &point, Qt::FillRule fillRule) const
 
-    Returns true if the given \a point is inside the polygon according to
-    the specified \a fillRule; otherwise returns false.
+    Returns \c true if the given \a point is inside the polygon according to
+    the specified \a fillRule; otherwise returns \c false.
 */
 bool QPolygonF::containsPoint(const QPointF &pt, Qt::FillRule fillRule) const
 {
@@ -855,8 +856,8 @@ bool QPolygonF::containsPoint(const QPointF &pt, Qt::FillRule fillRule) const
     \since 4.3
 
     \fn bool QPolygon::containsPoint(const QPoint &point, Qt::FillRule fillRule) const
-    Returns true if the given \a point is inside the polygon according to
-    the specified \a fillRule; otherwise returns false.
+    Returns \c true if the given \a point is inside the polygon according to
+    the specified \a fillRule; otherwise returns \c false.
 */
 bool QPolygon::containsPoint(const QPoint &pt, Qt::FillRule fillRule) const
 {
@@ -908,6 +909,8 @@ QPolygon QPolygon::united(const QPolygon &r) const
 
     Set operations on polygons will treat the polygons as
     areas. Non-closed polygons will be treated as implicitly closed.
+
+    \sa intersects()
 */
 
 QPolygon QPolygon::intersected(const QPolygon &r) const
@@ -937,6 +940,26 @@ QPolygon QPolygon::subtracted(const QPolygon &r) const
 }
 
 /*!
+    \since 5.10
+
+    Returns \c true if the current polygon intersects at any point the given polygon \a p.
+    Also returns \c true if the current polygon contains or is contained by any part of \a p.
+
+    Set operations on polygons will treat the polygons as
+    areas. Non-closed polygons will be treated as implicitly closed.
+
+    \sa intersected()
+*/
+
+bool QPolygon::intersects(const QPolygon &p) const
+{
+    QPainterPath subject; subject.addPolygon(*this);
+    QPainterPath clip; clip.addPolygon(p);
+
+    return subject.intersects(clip);
+}
+
+/*!
     \since 4.3
 
     Returns a polygon which is the union of this polygon and \a r.
@@ -963,6 +986,7 @@ QPolygonF QPolygonF::united(const QPolygonF &r) const
     Set operations on polygons will treat the polygons as
     areas. Non-closed polygons will be treated as implicitly closed.
 
+    \sa intersects()
 */
 
 QPolygonF QPolygonF::intersected(const QPolygonF &r) const
@@ -988,6 +1012,26 @@ QPolygonF QPolygonF::subtracted(const QPolygonF &r) const
     QPainterPath subject; subject.addPolygon(*this);
     QPainterPath clip; clip.addPolygon(r);
     return subject.subtracted(clip).toFillPolygon();
+}
+
+/*!
+    \since 5.10
+
+    Returns \c true if the current polygon intersects at any point the given polygon \a p.
+    Also returns \c true if the current polygon contains or is contained by any part of \a p.
+
+    Set operations on polygons will treat the polygons as
+    areas. Non-closed polygons will be treated as implicitly closed.
+
+    \sa intersected()
+*/
+
+bool QPolygonF::intersects(const QPolygonF &p) const
+{
+    QPainterPath subject; subject.addPolygon(*this);
+    QPainterPath clip; clip.addPolygon(p);
+
+    return subject.intersects(clip);
 }
 
 /*!

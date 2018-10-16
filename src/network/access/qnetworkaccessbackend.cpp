@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,8 +43,8 @@
 #include "qnetworkrequest.h"
 #include "qnetworkreply.h"
 #include "qnetworkreply_p.h"
-#include "QtCore/qhash.h"
 #include "QtCore/qmutex.h"
+#include "QtCore/qstringlist.h"
 #include "QtNetwork/private/qnetworksession_p.h"
 
 #include "qnetworkaccesscachebackend_p.h"
@@ -110,21 +108,31 @@ QNetworkAccessBackend *QNetworkAccessManagerPrivate::findBackend(QNetworkAccessM
     return 0;
 }
 
+QStringList QNetworkAccessManagerPrivate::backendSupportedSchemes() const
+{
+    if (QNetworkAccessBackendFactoryData::valid.load()) {
+        QMutexLocker locker(&factoryData()->mutex);
+        QNetworkAccessBackendFactoryData::ConstIterator it = factoryData()->constBegin();
+        QNetworkAccessBackendFactoryData::ConstIterator end = factoryData()->constEnd();
+        QStringList schemes;
+        while (it != end) {
+            schemes += (*it)->supportedSchemes();
+            ++it;
+        }
+        return schemes;
+    }
+    return QStringList();
+}
+
 QNonContiguousByteDevice* QNetworkAccessBackend::createUploadByteDevice()
 {
     if (reply->outgoingDataBuffer)
-        uploadByteDevice = QSharedPointer<QNonContiguousByteDevice>(QNonContiguousByteDeviceFactory::create(reply->outgoingDataBuffer));
+        uploadByteDevice = QNonContiguousByteDeviceFactory::createShared(reply->outgoingDataBuffer);
     else if (reply->outgoingData) {
-        uploadByteDevice = QSharedPointer<QNonContiguousByteDevice>(QNonContiguousByteDeviceFactory::create(reply->outgoingData));
+        uploadByteDevice = QNonContiguousByteDeviceFactory::createShared(reply->outgoingData);
     } else {
         return 0;
     }
-
-    bool bufferDisallowed =
-            reply->request.attribute(QNetworkRequest::DoNotBufferUploadDataAttribute,
-                          QVariant(false)) == QVariant(true);
-    if (bufferDisallowed)
-        uploadByteDevice->disableReset();
 
     // We want signal emissions only for normal asynchronous uploads
     if (!isSynchronous())
@@ -321,7 +329,7 @@ void QNetworkAccessBackend::error(QNetworkReply::NetworkError code, const QStrin
 void QNetworkAccessBackend::proxyAuthenticationRequired(const QNetworkProxy &proxy,
                                                         QAuthenticator *authenticator)
 {
-    manager->proxyAuthenticationRequired(proxy, synchronous, authenticator, &reply->lastProxyAuthentication);
+    manager->proxyAuthenticationRequired(QUrl(), proxy, synchronous, authenticator, &reply->lastProxyAuthentication);
 }
 #endif
 
@@ -340,6 +348,13 @@ void QNetworkAccessBackend::redirectionRequested(const QUrl &target)
     reply->redirectionRequested(target);
 }
 
+void QNetworkAccessBackend::encrypted()
+{
+#ifndef QT_NO_SSL
+    reply->encrypted();
+#endif
+}
+
 void QNetworkAccessBackend::sslErrors(const QList<QSslError> &errors)
 {
 #ifndef QT_NO_SSL
@@ -350,7 +365,7 @@ void QNetworkAccessBackend::sslErrors(const QList<QSslError> &errors)
 }
 
 /*!
-    Starts the backend.  Returns true if the backend is started.  Returns false if the backend
+    Starts the backend.  Returns \c true if the backend is started.  Returns \c false if the backend
     could not be started due to an unopened or roaming session.  The caller should recall this
     function once the session has been opened or the roaming process has finished.
 */
@@ -370,43 +385,18 @@ bool QNetworkAccessBackend::start()
             // Session not ready, but can skip for loopback connections
 
             // This is not ideal.
-            const QString host = reply->url.host();
-
-            if (host == QLatin1String("localhost") ||
-                QHostAddress(host).isLoopback()) {
-                // Don't need an open session for localhost access.
-            } else {
-                // need to wait for session to be opened
-                return false;
+            // Don't need an open session for localhost access.
+            if (!reply->url.isLocalFile()) {
+                const QString host = reply->url.host();
+                if (host != QLatin1String("localhost") && !QHostAddress(host).isLoopback())
+                    return false; // need to wait for session to be opened
             }
         }
     }
 #endif
 
 #ifndef QT_NO_NETWORKPROXY
-#ifndef QT_NO_BEARERMANAGEMENT
-    // Get the proxy settings from the network session (in the case of service networks,
-    // the proxy settings change depending which AP was activated)
-    QNetworkSession *session = networkSession.data();
-    QNetworkConfiguration config;
-    if (session) {
-        QNetworkConfigurationManager configManager;
-        // The active configuration tells us what IAP is in use
-        QVariant v = session->sessionProperty(QLatin1String("ActiveConfiguration"));
-        if (v.isValid())
-            config = configManager.configurationFromIdentifier(qvariant_cast<QString>(v));
-        // Fallback to using the configuration if no active configuration
-        if (!config.isValid())
-            config = session->configuration();
-        // or unspecified configuration if that is no good either
-        if (!config.isValid())
-            config = QNetworkConfiguration();
-    }
-    reply->proxyList = manager->queryProxy(QNetworkProxyQuery(config, url()));
-#else // QT_NO_BEARERMANAGEMENT
-    // Without bearer management, the proxy depends only on the url
     reply->proxyList = manager->queryProxy(QNetworkProxyQuery(url()));
-#endif
 #endif
 
     // now start the request

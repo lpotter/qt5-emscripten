@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2014 Olivier Goffart <ogoffart@woboq.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,12 +29,17 @@
 
 #include <qdebug.h>
 #include <qglobal.h>
-#include <QtCore/QProcess>
-#include <QtTest/QtTest>
+#if QT_CONFIG(process)
+# include <QtCore/QProcess>
+#endif
+#include <QtTest/QTest>
 
 class tst_qmessagehandler : public QObject
 {
     Q_OBJECT
+public:
+    tst_qmessagehandler();
+
 public slots:
     void initTestCase();
 
@@ -63,10 +56,15 @@ private slots:
     void cleanupFuncinfo();
 #endif
 
+    void qMessagePattern_data();
     void qMessagePattern();
+    void setMessagePattern();
+
+    void formatLogMessage_data();
+    void formatLogMessage();
 
 private:
-    QString m_appDir;
+    QStringList m_baseEnvironment;
 };
 
 static QtMsgType s_type;
@@ -93,11 +91,23 @@ void customMsgHandler(QtMsgType type, const char *msg)
     s_message = QString::fromLocal8Bit(msg);
 }
 
+tst_qmessagehandler::tst_qmessagehandler()
+{
+    // ensure it's unset, otherwise we'll have trouble
+    qputenv("QT_MESSAGE_PATTERN", "");
+}
+
 void tst_qmessagehandler::initTestCase()
 {
-    m_appDir = QFINDTESTDATA("app");
-    QVERIFY2(!m_appDir.isEmpty(), qPrintable(
-        QString::fromLatin1("Couldn't find helper app dir starting from %1.").arg(QDir::currentPath())));
+#if QT_CONFIG(process)
+    m_baseEnvironment = QProcess::systemEnvironment();
+    for (int i = 0; i < m_baseEnvironment.count(); ++i) {
+        if (m_baseEnvironment.at(i).startsWith("QT_MESSAGE_PATTERN=")) {
+            m_baseEnvironment.removeAt(i);
+            break;
+        }
+    }
+#endif // QT_CONFIG(process)
 }
 
 void tst_qmessagehandler::cleanup()
@@ -225,6 +235,39 @@ public:
     int &operator--() { ADD("TestClass1::operator--"); return x; }
     int operator--(int) { ADD("TestClass1::operator--"); return 0; }
 
+    int nested_struct()
+    {
+        struct Nested { void nested() { ADD("TestClass1::nested_struct"); } };
+        Nested().nested();
+        return 0;
+    }
+    int nested_struct_const() const
+    {
+        struct Nested { void nested() { ADD("TestClass1::nested_struct_const"); } };
+        Nested().nested();
+        return 0;
+    }
+
+#ifdef Q_COMPILER_REF_QUALIFIERS
+    int lvalue() & { ADD("TestClass1::lvalue"); return 0; }
+    int const_lvalue() const & { ADD("TestClass1::const_lvalue"); return 0; }
+    int rvalue() && { ADD("TestClass1::rvalue"); return 0; }
+    int const_rvalue() const && { ADD("TestClass1::const_rvalue"); return 0; }
+#endif
+#ifdef Q_COMPILER_DECLTYPE
+    int decltype_param(int x = 0, decltype(x) = 0) { ADD("TestClass1::decltype_param"); return x; }
+    template<typename T> int decltype_template_param(T x = 0, decltype(x) = 0)
+    { ADD("TestClass1::decltype_template_param"); return x; }
+    template<typename T> void decltype_template_param2(T x, decltype(x + QString()))
+    { ADD("TestClass1::decltype_template_param2"); }
+#  ifdef Q_COMPILER_AUTO_FUNCTION
+    auto decltype_return(int x = 0) -> decltype(x)
+    { ADD("TestClass1::decltype_return"); return x; }
+    template <typename T> auto decltype_template_return(T x = 0) -> decltype(x)
+    { ADD("TestClass1::decltype_template_return"); return x; }
+#  endif
+#endif
+
 public:
     TestClass1()
         {
@@ -270,6 +313,25 @@ public:
             operator++(0);
             operator--();
             operator--(0);
+
+            nested_struct();
+            nested_struct_const();
+
+#ifdef Q_COMPILER_REF_QUALIFIERS
+            lvalue();
+            const_lvalue();
+            std::move(*this).rvalue();
+            std::move(*this).const_rvalue();
+#endif
+#ifdef Q_COMPILER_DECLTYPE
+            decltype_param();
+            decltype_template_param(0);
+            decltype_template_param2(QByteArray(), QString());
+#  ifdef Q_COMPILER_AUTO_FUNCTION
+            decltype_return();
+            decltype_template_return(0);
+#  endif
+#endif
         }
 };
 
@@ -609,6 +671,22 @@ void tst_qmessagehandler::cleanupFuncinfo_data()
     QTest::newRow("gcc_39")
         << "int TestClass1::operator>(int)"
         << "TestClass1::operator>";
+
+    QTest::newRow("objc_1")
+        << "-[SomeClass someMethod:withArguments:]"
+        << "-[SomeClass someMethod:withArguments:]";
+
+    QTest::newRow("objc_2")
+        << "+[SomeClass withClassMethod:withArguments:]"
+        << "+[SomeClass withClassMethod:withArguments:]";
+
+    QTest::newRow("objc_3")
+        << "-[SomeClass someMethodWithoutArguments]"
+        << "-[SomeClass someMethodWithoutArguments]";
+
+    QTest::newRow("objc_4")
+        << "__31-[SomeClass someMethodSchedulingBlock]_block_invoke"
+        << "__31-[SomeClass someMethodSchedulingBlock]_block_invoke";
 }
 #endif
 
@@ -625,59 +703,182 @@ void tst_qmessagehandler::cleanupFuncinfo()
 
 //    qDebug() << funcinfo.toLatin1();
     QByteArray result = qCleanupFuncinfo(funcinfo.toLatin1());
+    QEXPECT_FAIL("TestClass1::nested_struct", "Nested function processing is broken", Continue);
+    QEXPECT_FAIL("TestClass1::nested_struct_const", "Nested function processing is broken", Continue);
     QTEST(QString::fromLatin1(result), "expected");
 }
 #endif
 
+void tst_qmessagehandler::qMessagePattern_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<bool>("valid");
+    QTest::addColumn<QList<QByteArray> >("expected");
+
+    // %{file} is tricky because of shadow builds
+    QTest::newRow("basic") << "%{type} %{appname} %{line} %{function} %{message}" << true << (QList<QByteArray>()
+            << "debug  39 T::T static constructor"
+            //  we can't be sure whether the QT_MESSAGE_PATTERN is already destructed
+            << "static destructor"
+            << "debug tst_qlogging 60 MyClass::myFunction from_a_function 34"
+            << "debug tst_qlogging 70 main qDebug"
+            << "info tst_qlogging 71 main qInfo"
+            << "warning tst_qlogging 72 main qWarning"
+            << "critical tst_qlogging 73 main qCritical"
+            << "warning tst_qlogging 76 main qDebug with category"
+            << "debug tst_qlogging 80 main qDebug2");
+
+
+    QTest::newRow("invalid") << "PREFIX: %{unknown} %{message}" << false << (QList<QByteArray>()
+            << "QT_MESSAGE_PATTERN: Unknown placeholder %{unknown}"
+            << "PREFIX:  qDebug");
+
+    // test the if condition
+    QTest::newRow("ifs") << "[%{if-debug}D%{endif}%{if-warning}W%{endif}%{if-critical}C%{endif}%{if-fatal}F%{endif}] %{if-category}%{category}: %{endif}%{message}"
+        << true << (QList<QByteArray>()
+            << "[D] static constructor"
+            //  we can't be sure whether the QT_MESSAGE_PATTERN is already destructed
+            << "static destructor"
+            << "[D] qDebug"
+            << "[W] qWarning"
+            << "[C] qCritical"
+            << "[W] category: qDebug with category"
+            << "[D] qDebug2");
+
+    // test few errors cases
+    QTest::newRow("ifs-invalid1") << "PREFIX: %{unknown} %{endif}  %{if-warning}"
+        << false << (QList<QByteArray>()
+            << "QT_MESSAGE_PATTERN: Unknown placeholder %{unknown}"
+            << "QT_MESSAGE_PATTERN: %{endif} without an %{if-*}"
+            << "QT_MESSAGE_PATTERN: missing %{endif}");
+
+    QTest::newRow("ifs-invalid2") << "A %{if-debug}DEBUG%{if-warning}WARNING%{endif} %{message}  "
+        << false << (QList<QByteArray>()
+            << "QT_MESSAGE_PATTERN: %{if-*} cannot be nested"
+            << "A DEBUG qDebug  "
+            << "A  qWarning  ");
+
+    QTest::newRow("pid-tid") << "%{pid}/%{threadid}: %{message}"
+         << true << QList<QByteArray>(); // can't match anything, just test validity
+    QTest::newRow("qthreadptr") << "ThreadId:%{qthreadptr}: %{message}"
+         << true << (QList<QByteArray>()
+              << "ThreadId:0x");
+
+    // This test won't work when midnight is too close... wait a bit
+    while (QTime::currentTime() > QTime(23, 59, 30))
+        QTest::qWait(10000);
+    QTest::newRow("time") << "/%{time yyyy - MM - d}/%{message}"
+        << true << (QList<QByteArray>()
+            << ('/' + QDateTime::currentDateTime().toString("yyyy - MM - d").toUtf8() + "/qDebug"));
+
+    QTest::newRow("time-time") << "/%{time yyyy - MM - d}/%{time dd-MM-yy}/%{message}"
+        << true << (QList<QByteArray>()
+            << ('/' + QDateTime::currentDateTime().toString("yyyy - MM - d").toUtf8()
+                + '/' + QDateTime::currentDateTime().toString("dd-MM-yy").toUtf8()
+                + "/qDebug"));
+
+    QTest::newRow("skipped-time-shown-time")
+            << "/%{if-warning}%{time yyyy - MM - d}%{endif}%{if-debug}%{time dd-MM-yy}%{endif}/%{message}"
+            << true << (QList<QByteArray>()
+            << ('/' + QDateTime::currentDateTime().toString("dd-MM-yy").toUtf8() + "/qDebug"));
+
+    // %{time}  should have a padding of 6 so if it takes less than 10 seconds to show
+    // the first message, there should be 5 spaces
+    QTest::newRow("time-process") << "<%{time process}>%{message}" << true << (QList<QByteArray>()
+            << "<     ");
+
+#ifdef __GLIBC__
+#ifdef QT_NAMESPACE
+#define QT_NAMESPACE_STR QT_STRINGIFY(QT_NAMESPACE::)
+#else
+#define QT_NAMESPACE_STR ""
+#endif
+
+#ifndef QT_NO_DEBUG
+    QTest::newRow("backtrace") << "[%{backtrace}] %{message}" << true << (QList<QByteArray>()
+            // MyClass::qt_static_metacall is explicitly marked as hidden in the Q_OBJECT macro
+            << "[MyClass::myFunction|MyClass::mySlot1|?helper?|" QT_NAMESPACE_STR "QMetaMethod::invoke|" QT_NAMESPACE_STR "QMetaObject::invokeMethod] from_a_function 34");
+#endif
+
+    QTest::newRow("backtrace depth,separator") << "[%{backtrace depth=2 separator=\"\n\"}] %{message}" << true << (QList<QByteArray>()
+            << "[MyClass::myFunction\nMyClass::mySlot1] from_a_function 34"
+            << "[T::T\n");
+#endif
+
+}
+
+
 void tst_qmessagehandler::qMessagePattern()
 {
+#if !QT_CONFIG(process)
+    QSKIP("This test requires QProcess support");
+#else
+#ifdef Q_OS_ANDROID
+    QSKIP("This test crashes on Android");
+#endif
+    QFETCH(QString, pattern);
+    QFETCH(bool, valid);
+    QFETCH(QList<QByteArray>, expected);
+
     QProcess process;
-    const QString appExe = m_appDir + "/app";
+#ifndef Q_OS_ANDROID
+    const QString appExe(QLatin1String("helper"));
+#else
+    const QString appExe(QCoreApplication::applicationDirPath() + QLatin1String("/libhelper.so"));
+#endif
 
     //
     // test QT_MESSAGE_PATTERN
     //
-    QStringList environment = QProcess::systemEnvironment();
-    // %{file} is tricky because of shadow builds
-    environment.prepend("QT_MESSAGE_PATTERN=\"%{type} %{appname} %{line} %{function} %{message}\"");
+    QStringList environment = m_baseEnvironment;
+    environment.prepend("QT_MESSAGE_PATTERN=\"" + pattern + QLatin1Char('"'));
     process.setEnvironment(environment);
 
     process.start(appExe);
     QVERIFY2(process.waitForStarted(), qPrintable(
         QString::fromLatin1("Could not start %1: %2").arg(appExe, process.errorString())));
+    QByteArray pid = QByteArray::number(process.processId());
     process.waitForFinished();
 
     QByteArray output = process.readAllStandardError();
 //    qDebug() << output;
     QVERIFY(!output.isEmpty());
+    QCOMPARE(!output.contains("QT_MESSAGE_PATTERN"), valid);
 
-    QVERIFY(output.contains("debug  45 T::T static constructor"));
-    //  we can't be sure whether the QT_MESSAGE_PATTERN is already destructed
-    QVERIFY(output.contains("static destructor"));
-    QVERIFY(output.contains("debug tst_qlogging 56 main qDebug"));
-    QVERIFY(output.contains("warning tst_qlogging 57 main qWarning"));
-    QVERIFY(output.contains("critical tst_qlogging 58 main qCritical"));
-    QVERIFY(output.contains("debug tst_qlogging 62 main qDebug2"));
+    for (const QByteArray &e : qAsConst(expected)) {
+        if (!output.contains(e)) {
+            qDebug() << output;
+            qDebug() << "expected: " << e;
+            QVERIFY(output.contains(e));
+        }
+    }
+    if (pattern.startsWith("%{pid}"))
+        QVERIFY2(output.startsWith('"' + pid), "PID: " + pid + "\noutput:\n" + output);
+#endif
+}
 
-    environment = QProcess::systemEnvironment();
-    environment.prepend("QT_MESSAGE_PATTERN=\"PREFIX: %{unknown} %{message}\"");
-    process.setEnvironment(environment);
-
-    process.start(appExe);
-    QVERIFY2(process.waitForStarted(), qPrintable(
-        QString::fromLatin1("Could not start %1: %2").arg(appExe, process.errorString())));
-    process.waitForFinished();
-
-    output = process.readAllStandardError();
-//     qDebug() << output;
-    QVERIFY(!output.isEmpty());
-
-    QVERIFY(output.contains("QT_MESSAGE_PATTERN: Unknown placeholder %{unknown}"));
-    QVERIFY(output.contains("PREFIX:  qDebug"));
+void tst_qmessagehandler::setMessagePattern()
+{
+#if !QT_CONFIG(process)
+    QSKIP("This test requires QProcess support");
+#else
+#ifdef Q_OS_ANDROID
+    QSKIP("This test crashes on Android");
+#endif
 
     //
     // test qSetMessagePattern
     //
+
+    QProcess process;
+#ifndef Q_OS_ANDROID
+    const QString appExe(QLatin1String("helper"));
+#else
+    const QString appExe(QCoreApplication::applicationDirPath() + QLatin1String("/libhelper.so"));
+#endif
+
+    // make sure there is no QT_MESSAGE_PATTERN in the environment
+    QStringList environment = m_baseEnvironment;
     QMutableListIterator<QString> iter(environment);
     while (iter.hasNext()) {
         if (iter.next().startsWith("QT_MESSAGE_PATTERN"))
@@ -690,17 +891,81 @@ void tst_qmessagehandler::qMessagePattern()
         QString::fromLatin1("Could not start %1: %2").arg(appExe, process.errorString())));
     process.waitForFinished();
 
-    output = process.readAllStandardError();
+    QByteArray output = process.readAllStandardError();
     //qDebug() << output;
     QByteArray expected = "static constructor\n"
             "[debug] qDebug\n"
+            "[info] qInfo\n"
             "[warning] qWarning\n"
-            "[critical] qCritical\n";
+            "[critical] qCritical\n"
+            "[warning] qDebug with category\n";
 #ifdef Q_OS_WIN
     output.replace("\r\n", "\n");
 #endif
     QCOMPARE(QString::fromLatin1(output), QString::fromLatin1(expected));
+#endif // QT_CONFIG(process)
 }
+
+Q_DECLARE_METATYPE(QtMsgType)
+
+void tst_qmessagehandler::formatLogMessage_data()
+{
+    QTest::addColumn<QString>("pattern");
+    QTest::addColumn<QString>("result");
+
+    QTest::addColumn<QtMsgType>("type");
+    QTest::addColumn<QByteArray>("file");
+    QTest::addColumn<int>("line");
+    QTest::addColumn<QByteArray>("function");
+    QTest::addColumn<QByteArray>("category");
+    QTest::addColumn<QString>("message");
+
+#define BA QByteArrayLiteral
+
+    QTest::newRow("basic") << "%{type} %{file} %{line} %{function} %{message}"
+                           << "debug main.cpp 1 func msg"
+                           << QtDebugMsg << BA("main.cpp") << 1 << BA("func") << BA("") << "msg";
+
+    // test the if conditions
+    QString format = "[%{if-debug}D%{endif}%{if-info}I%{endif}%{if-warning}W%{endif}%{if-critical}C%{endif}%{if-fatal}F%{endif}] %{if-category}%{category}: %{endif}%{message}";
+    QTest::newRow("if-debug")
+            << format << "[D] msg"
+            << QtDebugMsg << BA("") << 0 << BA("func") << QByteArray() << "msg";
+    QTest::newRow("if_info")
+            << format << "[I] msg"
+            << QtInfoMsg << BA("") << 0 << BA("func") << QByteArray() << "msg";
+    QTest::newRow("if_warning")
+            << format << "[W] msg"
+            << QtWarningMsg << BA("") << 0 << BA("func") << QByteArray() << "msg";
+    QTest::newRow("if_critical")
+            << format << "[C] msg"
+            << QtCriticalMsg << BA("") << 0 << BA("func") << QByteArray() << "msg";
+    QTest::newRow("if_fatal")
+            << format << "[F] msg"
+            << QtFatalMsg << BA("") << 0 << BA("func") << QByteArray() << "msg";
+    QTest::newRow("if_cat")
+            << format << "[F] cat: msg"
+            << QtFatalMsg << BA("") << 0 << BA("func") << BA("cat") << "msg";
+}
+
+void tst_qmessagehandler::formatLogMessage()
+{
+    QFETCH(QString, pattern);
+    QFETCH(QString, result);
+
+    QFETCH(QtMsgType, type);
+    QFETCH(QByteArray, file);
+    QFETCH(int, line);
+    QFETCH(QByteArray, function);
+    QFETCH(QByteArray, category);
+    QFETCH(QString, message);
+
+    qSetMessagePattern(pattern);
+    QMessageLogContext ctxt(file, line, function, category.isEmpty() ? 0 : category.data());
+    QString r = qFormatLogMessage(type, ctxt, message);
+    QCOMPARE(r, result);
+}
+
 
 QTEST_MAIN(tst_qmessagehandler)
 #include "tst_qlogging.moc"

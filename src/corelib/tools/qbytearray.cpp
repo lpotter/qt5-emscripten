@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,10 +45,17 @@
 #include "qlist.h"
 #include "qlocale.h"
 #include "qlocale_p.h"
+#include "qlocale_tools_p.h"
+#include "private/qnumeric_p.h"
+#include "private/qsimd_p.h"
+#include "qstringalgorithms_p.h"
 #include "qscopedpointer.h"
+#include "qbytearray_p.h"
 #include <qdatastream.h>
+#include <qmath.h>
 
 #ifndef QT_NO_COMPRESS
+#include <zconf.h>
 #include <zlib.h>
 #endif
 #include <ctype.h>
@@ -61,34 +67,167 @@
 
 QT_BEGIN_NAMESPACE
 
+// Latin 1 case system, used by QByteArray::to{Upper,Lower}() and qstr(n)icmp():
+/*
+#!/usr/bin/perl -l
+use feature "unicode_strings";
+for (0..255) {
+    $up = uc(chr($_));
+    $up = chr($_) if ord($up) > 0x100 || length $up > 1;
+    printf "0x%02x,", ord($up);
+    print "" if ($_ & 0xf) == 0xf;
+}
+*/
+static const uchar latin1_uppercased[256] = {
+    0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
+    0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,
+    0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
+    0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
+    0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
+    0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5b,0x5c,0x5d,0x5e,0x5f,
+    0x60,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,
+    0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x7b,0x7c,0x7d,0x7e,0x7f,
+    0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8a,0x8b,0x8c,0x8d,0x8e,0x8f,
+    0x90,0x91,0x92,0x93,0x94,0x95,0x96,0x97,0x98,0x99,0x9a,0x9b,0x9c,0x9d,0x9e,0x9f,
+    0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,
+    0xb0,0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8,0xb9,0xba,0xbb,0xbc,0xbd,0xbe,0xbf,
+    0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xca,0xcb,0xcc,0xcd,0xce,0xcf,
+    0xd0,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7,0xd8,0xd9,0xda,0xdb,0xdc,0xdd,0xde,0xdf,
+    0xc0,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xca,0xcb,0xcc,0xcd,0xce,0xcf,
+    0xd0,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,0xf7,0xd8,0xd9,0xda,0xdb,0xdc,0xdd,0xde,0xff
+};
+
+/*
+#!/usr/bin/perl -l
+use feature "unicode_strings";
+for (0..255) {
+    $up = lc(chr($_));
+    $up = chr($_) if ord($up) > 0x100 || length $up > 1;
+    printf "0x%02x,", ord($up);
+    print "" if ($_ & 0xf) == 0xf;
+}
+*/
+static const uchar latin1_lowercased[256] = {
+    0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
+    0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,
+    0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
+    0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x3e,0x3f,
+    0x40,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
+    0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x5b,0x5c,0x5d,0x5e,0x5f,
+    0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,
+    0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x7b,0x7c,0x7d,0x7e,0x7f,
+    0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8a,0x8b,0x8c,0x8d,0x8e,0x8f,
+    0x90,0x91,0x92,0x93,0x94,0x95,0x96,0x97,0x98,0x99,0x9a,0x9b,0x9c,0x9d,0x9e,0x9f,
+    0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,
+    0xb0,0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8,0xb9,0xba,0xbb,0xbc,0xbd,0xbe,0xbf,
+    0xe0,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0xea,0xeb,0xec,0xed,0xee,0xef,
+    0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xd7,0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xdf,
+    0xe0,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0xea,0xeb,0xec,0xed,0xee,0xef,
+    0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xff
+};
 
 int qFindByteArray(
     const char *haystack0, int haystackLen, int from,
     const char *needle0, int needleLen);
 
+/*
+ * This pair of functions is declared in qtools_p.h and is used by the Qt
+ * containers to allocate memory and grow the memory block during append
+ * operations.
+ *
+ * They take size_t parameters and return size_t so they will change sizes
+ * according to the pointer width. However, knowing Qt containers store the
+ * container size and element indexes in ints, these functions never return a
+ * size larger than INT_MAX. This is done by casting the element count and
+ * memory block size to int in several comparisons: the check for negative is
+ * very fast on most platforms as the code only needs to check the sign bit.
+ *
+ * These functions return SIZE_MAX on overflow, which can be passed to malloc()
+ * and will surely cause a NULL return (there's no way you can allocate a
+ * memory block the size of your entire VM space).
+ */
 
-int qAllocMore(int alloc, int extra)
+/*!
+    \internal
+    \since 5.7
+
+    Returns the memory block size for a container containing \a elementCount
+    elements, each of \a elementSize bytes, plus a header of \a headerSize
+    bytes. That is, this function returns \c
+      {elementCount * elementSize + headerSize}
+
+    but unlike the simple calculation, it checks for overflows during the
+    multiplication and the addition.
+
+    Both \a elementCount and \a headerSize can be zero, but \a elementSize
+    cannot.
+
+    This function returns SIZE_MAX (~0) on overflow or if the memory block size
+    would not fit an int.
+*/
+size_t qCalculateBlockSize(size_t elementCount, size_t elementSize, size_t headerSize) Q_DECL_NOTHROW
 {
-    Q_ASSERT(alloc >= 0 && extra >= 0);
-    Q_ASSERT_X(alloc < (1 << 30) - extra, "qAllocMore", "Requested size is too large!");
+    unsigned count = unsigned(elementCount);
+    unsigned size = unsigned(elementSize);
+    unsigned header = unsigned(headerSize);
+    Q_ASSERT(elementSize);
+    Q_ASSERT(size == elementSize);
+    Q_ASSERT(header == headerSize);
 
-    unsigned nalloc = alloc + extra;
+    if (Q_UNLIKELY(count != elementCount))
+        return std::numeric_limits<size_t>::max();
 
-    // Round up to next power of 2
+    unsigned bytes;
+    if (Q_UNLIKELY(mul_overflow(size, count, &bytes)) ||
+            Q_UNLIKELY(add_overflow(bytes, header, &bytes)))
+        return std::numeric_limits<size_t>::max();
+    if (Q_UNLIKELY(int(bytes) < 0))     // catches bytes >= 2GB
+        return std::numeric_limits<size_t>::max();
 
-    // Assuming container is growing, always overshoot
-    //--nalloc;
+    return bytes;
+}
 
-    nalloc |= nalloc >> 1;
-    nalloc |= nalloc >> 2;
-    nalloc |= nalloc >> 4;
-    nalloc |= nalloc >> 8;
-    nalloc |= nalloc >> 16;
-    ++nalloc;
+/*!
+    \internal
+    \since 5.7
 
-    Q_ASSERT(nalloc > unsigned(alloc + extra));
+    Returns the memory block size and the number of elements that will fit in
+    that block for a container containing \a elementCount elements, each of \a
+    elementSize bytes, plus a header of \a headerSize bytes. This function
+    assumes the container will grow and pre-allocates a growth factor.
 
-    return nalloc - extra;
+    Both \a elementCount and \a headerSize can be zero, but \a elementSize
+    cannot.
+
+    This function returns SIZE_MAX (~0) on overflow or if the memory block size
+    would not fit an int.
+
+    \note The memory block may contain up to \a elementSize - 1 bytes more than
+    needed.
+*/
+CalculateGrowingBlockSizeResult
+qCalculateGrowingBlockSize(size_t elementCount, size_t elementSize, size_t headerSize) Q_DECL_NOTHROW
+{
+    CalculateGrowingBlockSizeResult result = {
+        std::numeric_limits<size_t>::max(),std::numeric_limits<size_t>::max()
+    };
+
+    unsigned bytes = unsigned(qCalculateBlockSize(elementCount, elementSize, headerSize));
+    if (int(bytes) < 0)     // catches std::numeric_limits<size_t>::max()
+        return result;
+
+    unsigned morebytes = qNextPowerOfTwo(bytes);
+    if (Q_UNLIKELY(int(morebytes) < 0)) {
+        // catches morebytes == 2GB
+        // grow by half the difference between bytes and morebytes
+        bytes += (morebytes - bytes) / 2;
+    } else {
+        bytes = morebytes;
+    }
+
+    result.elementCount = (bytes - unsigned(headerSize)) / unsigned(elementSize);
+    result.size = bytes;
+    return result;
 }
 
 /*****************************************************************************
@@ -100,7 +239,8 @@ int qAllocMore(int alloc, int extra)
     Returns a duplicate string.
 
     Allocates space for a copy of \a src, copies it, and returns a
-    pointer to the copy. If \a src is 0, it immediately returns 0.
+    pointer to the copy. If \a src is nullptr, it immediately returns
+    nullptr.
 
     Ownership is passed to the caller, so the returned string must be
     deleted using \c delete[].
@@ -109,7 +249,7 @@ int qAllocMore(int alloc, int extra)
 char *qstrdup(const char *src)
 {
     if (!src)
-        return 0;
+        return nullptr;
     char *dst = new char[strlen(src) + 1];
     return qstrcpy(dst, src);
 }
@@ -117,11 +257,13 @@ char *qstrdup(const char *src)
 /*! \relates QByteArray
 
     Copies all the characters up to and including the '\\0' from \a
-    src into \a dst and returns a pointer to \a dst. If \a src is 0,
-    it immediately returns 0.
+    src into \a dst and returns a pointer to \a dst. If \a src is
+    nullptr, it immediately returns nullptr.
 
     This function assumes that \a dst is large enough to hold the
     contents of \a src.
+
+    \note If \a dst and \a src overlap, the behavior is undefined.
 
     \sa qstrncpy()
 */
@@ -129,14 +271,14 @@ char *qstrdup(const char *src)
 char *qstrcpy(char *dst, const char *src)
 {
     if (!src)
-        return 0;
-#if defined(_MSC_VER) && _MSC_VER >= 1400
+        return nullptr;
+#ifdef Q_CC_MSVC
     const int len = int(strlen(src));
-	// This is actually not secure!!! It will be fixed
-	// properly in a later release!
+    // This is actually not secure!!! It will be fixed
+    // properly in a later release!
     if (len >= 0 && strcpy_s(dst, len+1, src) == 0)
-	    return dst;
-    return 0;
+        return dst;
+    return nullptr;
 #else
     return strcpy(dst, src);
 #endif
@@ -149,10 +291,12 @@ char *qstrcpy(char *dst, const char *src)
     Copies at most \a len bytes from \a src (stopping at \a len or the
     terminating '\\0' whichever comes first) into \a dst and returns a
     pointer to \a dst. Guarantees that \a dst is '\\0'-terminated. If
-    \a src or \a dst is 0, returns 0 immediately.
+    \a src or \a dst is nullptr, returns nullptr immediately.
 
     This function assumes that \a dst is at least \a len characters
     long.
+
+    \note If \a dst and \a src overlap, the behavior is undefined.
 
     \note When compiling with Visual C++ compiler version 14.00
     (Visual C++ 2005) or later, internally the function strncpy_s
@@ -164,14 +308,15 @@ char *qstrcpy(char *dst, const char *src)
 char *qstrncpy(char *dst, const char *src, uint len)
 {
     if (!src || !dst)
-        return 0;
-#if defined(_MSC_VER) && _MSC_VER >= 1400
-	strncpy_s(dst, len, src, len-1);
+        return nullptr;
+    if (len > 0) {
+#ifdef Q_CC_MSVC
+        strncpy_s(dst, len, src, len - 1);
 #else
-    strncpy(dst, src, len);
+        strncpy(dst, src, len);
 #endif
-    if (len > 0)
         dst[len-1] = '\0';
+    }
     return dst;
 }
 
@@ -181,7 +326,7 @@ char *qstrncpy(char *dst, const char *src, uint len)
     A safe \c strlen() function.
 
     Returns the number of characters that precede the terminating '\\0',
-    or 0 if \a str is 0.
+    or 0 if \a str is nullptr.
 
     \sa qstrnlen()
 */
@@ -193,7 +338,7 @@ char *qstrncpy(char *dst, const char *src, uint len)
     A safe \c strnlen() function.
 
     Returns the number of characters that precede the terminating '\\0', but
-    at most \a maxlen. If \a str is 0, returns 0.
+    at most \a maxlen. If \a str is nullptr, returns 0.
 
     \sa qstrlen()
 */
@@ -207,12 +352,13 @@ char *qstrncpy(char *dst, const char *src, uint len)
     is less than \a str2, 0 if \a str1 is equal to \a str2 or a
     positive value if \a str1 is greater than \a str2.
 
-    Special case 1: Returns 0 if \a str1 and \a str2 are both 0.
+    Special case 1: Returns 0 if \a str1 and \a str2 are both nullptr.
 
-    Special case 2: Returns an arbitrary non-zero value if \a str1 is 0
-    or \a str2 is 0 (but not both).
+    Special case 2: Returns an arbitrary non-zero value if \a str1 is
+    nullptr or \a str2 is nullptr (but not both).
 
-    \sa qstrncmp(), qstricmp(), qstrnicmp(), {8-bit Character Comparisons}
+    \sa qstrncmp(), qstricmp(), qstrnicmp(), {8-bit Character Comparisons},
+        QByteArray::compare()
 */
 int qstrcmp(const char *str1, const char *str2)
 {
@@ -232,12 +378,13 @@ int qstrcmp(const char *str1, const char *str2)
     str1 is equal to \a str2 or a positive value if \a str1 is greater
     than \a str2.
 
-    Special case 1: Returns 0 if \a str1 and \a str2 are both 0.
+    Special case 1: Returns 0 if \a str1 and \a str2 are both nullptr.
 
-    Special case 2: Returns a random non-zero value if \a str1 is 0
-    or \a str2 is 0 (but not both).
+    Special case 2: Returns a random non-zero value if \a str1 is nullptr
+    or \a str2 is nullptr (but not both).
 
-    \sa qstrcmp(), qstricmp(), qstrnicmp(), {8-bit Character Comparisons}
+    \sa qstrcmp(), qstricmp(), qstrnicmp(), {8-bit Character Comparisons},
+        QByteArray::compare()
 */
 
 /*! \relates QByteArray
@@ -251,26 +398,85 @@ int qstrcmp(const char *str1, const char *str2)
     str1 is equal to \a str2 or a positive value if \a str1 is greater
     than \a str2.
 
-    Special case 1: Returns 0 if \a str1 and \a str2 are both 0.
+    Special case 1: Returns 0 if \a str1 and \a str2 are both nullptr.
 
-    Special case 2: Returns a random non-zero value if \a str1 is 0
-    or \a str2 is 0 (but not both).
+    Special case 2: Returns a random non-zero value if \a str1 is nullptr
+    or \a str2 is nullptr (but not both).
 
-    \sa qstrcmp(), qstrncmp(), qstrnicmp(), {8-bit Character Comparisons}
+    \sa qstrcmp(), qstrncmp(), qstrnicmp(), {8-bit Character Comparisons},
+        QByteArray::compare()
 */
 
 int qstricmp(const char *str1, const char *str2)
 {
-    register const uchar *s1 = reinterpret_cast<const uchar *>(str1);
-    register const uchar *s2 = reinterpret_cast<const uchar *>(str2);
-    int res;
-    uchar c;
-    if (!s1 || !s2)
-        return s1 ? 1 : (s2 ? -1 : 0);
-    for (; !(res = (c = QChar::toLower((ushort)*s1)) - QChar::toLower((ushort)*s2)); s1++, s2++)
-        if (!c)                                // strings are equal
-            break;
-    return res;
+    const uchar *s1 = reinterpret_cast<const uchar *>(str1);
+    const uchar *s2 = reinterpret_cast<const uchar *>(str2);
+    if (!s1)
+        return s2 ? -1 : 0;
+    if (!s2)
+        return 1;
+
+    enum { Incomplete = 256 };
+    qptrdiff offset = 0;
+    auto innerCompare = [=, &offset](qptrdiff max, bool unlimited) {
+        max += offset;
+        do {
+            uchar c = latin1_lowercased[s1[offset]];
+            int res = c - latin1_lowercased[s2[offset]];
+            if (Q_UNLIKELY(res))
+                return res;
+            if (Q_UNLIKELY(!c))
+                return 0;
+            ++offset;
+        } while (unlimited || offset < max);
+        return int(Incomplete);
+    };
+
+#if defined(__SSE4_1__) && !(defined(__SANITIZE_ADDRESS__) || QT_HAS_FEATURE(address_sanitizer))
+    enum { PageSize = 4096, PageMask = PageSize - 1 };
+    const __m128i zero = _mm_setzero_si128();
+    forever {
+        // Calculate how many bytes we can load until we cross a page boundary
+        // for either source. This isn't an exact calculation, just something
+        // very quick.
+        quintptr u1 = quintptr(s1 + offset);
+        quintptr u2 = quintptr(s2 + offset);
+        uint n = PageSize - ((u1 | u2) & PageMask);
+
+        qptrdiff maxoffset = offset + n;
+        for ( ; offset + 16 <= maxoffset; offset += sizeof(__m128i)) {
+            // load 16 bytes from either source
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i *>(s1 + offset));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i *>(s2 + offset));
+
+            // compare the two against each oher
+            __m128i cmp = _mm_cmpeq_epi8(a, b);
+
+            // find NUL terminators too
+            cmp = _mm_min_epu8(cmp, a);
+            cmp = _mm_cmpeq_epi8(cmp, zero);
+
+            // was there any difference or a NUL?
+            uint mask = _mm_movemask_epi8(cmp);
+            if (mask) {
+                // yes, find out where
+                uint start = qCountTrailingZeroBits(mask);
+                uint end = sizeof(mask) * 8 - qCountLeadingZeroBits(mask);
+                Q_ASSUME(end >= start);
+                offset += start;
+                n = end - start;
+                break;
+            }
+        }
+
+        // using SIMD could cause a page fault, so iterate byte by byte
+        int res = innerCompare(n, false);
+        if (res != Incomplete)
+            return res;
+    }
+#endif
+
+    return innerCompare(-1, true);
 }
 
 /*! \relates QByteArray
@@ -285,24 +491,25 @@ int qstricmp(const char *str1, const char *str2)
     is equal to \a str2 or a positive value if \a str1 is greater than \a
     str2.
 
-    Special case 1: Returns 0 if \a str1 and \a str2 are both 0.
+    Special case 1: Returns 0 if \a str1 and \a str2 are both nullptr.
 
-    Special case 2: Returns a random non-zero value if \a str1 is 0
-    or \a str2 is 0 (but not both).
+    Special case 2: Returns a random non-zero value if \a str1 is nullptr
+    or \a str2 is nullptr (but not both).
 
-    \sa qstrcmp(), qstrncmp(), qstricmp(), {8-bit Character Comparisons}
+    \sa qstrcmp(), qstrncmp(), qstricmp(), {8-bit Character Comparisons},
+        QByteArray::compare()
 */
 
 int qstrnicmp(const char *str1, const char *str2, uint len)
 {
-    register const uchar *s1 = reinterpret_cast<const uchar *>(str1);
-    register const uchar *s2 = reinterpret_cast<const uchar *>(str2);
+    const uchar *s1 = reinterpret_cast<const uchar *>(str1);
+    const uchar *s2 = reinterpret_cast<const uchar *>(str2);
     int res;
     uchar c;
     if (!s1 || !s2)
         return s1 ? 1 : (s2 ? -1 : 0);
     for (; len--; s1++, s2++) {
-        if ((res = (c = QChar::toLower((ushort)*s1)) - QChar::toLower((ushort)*s2)))
+        if ((res = (c = latin1_lowercased[*s1]) - latin1_lowercased[*s2]))
             return res;
         if (!c)                                // strings are equal
             break;
@@ -312,6 +519,55 @@ int qstrnicmp(const char *str1, const char *str2, uint len)
 
 /*!
     \internal
+    \since 5.12
+
+    A helper for QByteArray::compare. Compares \a len1 bytes from \a str1 to \a
+    len2 bytes from \a str2. If \a len2 is -1, then \a str2 is expected to be
+    null-terminated.
+ */
+int qstrnicmp(const char *str1, qsizetype len1, const char *str2, qsizetype len2)
+{
+    Q_ASSERT(str1);
+    Q_ASSERT(len1 >= 0);
+    Q_ASSERT(len2 >= -1);
+    const uchar *s1 = reinterpret_cast<const uchar *>(str1);
+    const uchar *s2 = reinterpret_cast<const uchar *>(str2);
+    if (!s2)
+        return len1 == 0 ? 0 : 1;
+
+    int res;
+    uchar c;
+    if (len2 == -1) {
+        // null-terminated str2
+        qsizetype i;
+        for (i = 0; i < len1; ++i) {
+            c = latin1_lowercased[s2[i]];
+            if (!c)
+                return 1;
+
+            res = latin1_lowercased[s1[i]] - c;
+            if (res)
+                return res;
+        }
+        c = latin1_lowercased[s2[i]];
+        return c ? -1 : 0;
+    } else {
+        // not null-terminated
+        for (qsizetype i = 0; i < qMin(len1, len2); ++i) {
+            c = latin1_lowercased[s2[i]];
+            res = latin1_lowercased[s1[i]] - c;
+            if (res)
+                return res;
+        }
+        if (len1 == len2)
+            return 0;
+        return len1 < len2 ? -1 : 1;
+    }
+}
+
+/*!
+    \internal
+    ### Qt6: replace the QByteArray parameter with [pointer,len] pair
  */
 int qstrcmp(const QByteArray &str1, const char *str2)
 {
@@ -321,7 +577,7 @@ int qstrcmp(const QByteArray &str1, const char *str2)
     const char *str1data = str1.constData();
     const char *str1end = str1data + str1.length();
     for ( ; str1data < str1end && *str2; ++str1data, ++str2) {
-        register int diff = int(uchar(*str1data)) - uchar(*str2);
+        int diff = int(uchar(*str1data)) - uchar(*str2);
         if (diff)
             // found a difference
             return diff;
@@ -339,6 +595,7 @@ int qstrcmp(const QByteArray &str1, const char *str2)
 
 /*!
     \internal
+    ### Qt6: replace the QByteArray parameter with [pointer,len] pair
  */
 int qstrcmp(const QByteArray &str1, const QByteArray &str2)
 {
@@ -357,8 +614,8 @@ int qstrcmp(const QByteArray &str1, const QByteArray &str2)
 #if 0
 static void createCRC16Table()                        // build CRC16 lookup table
 {
-    register unsigned int i;
-    register unsigned int j;
+    unsigned int i;
+    unsigned int j;
     unsigned short crc_tbl[16];
     unsigned int v0, v1, v2, v3;
     for (i = 0; i < 16; i++) {
@@ -397,20 +654,45 @@ static const quint16 crc_tbl[16] = {
     0xc60c, 0xd68d, 0xe70e, 0xf78f
 };
 
-/*! 
+/*!
     \relates QByteArray
 
     Returns the CRC-16 checksum of the first \a len bytes of \a data.
 
-    The checksum is independent of the byte order (endianness).
+    The checksum is independent of the byte order (endianness) and will be
+    calculated accorded to the algorithm published in ISO 3309 (Qt::ChecksumIso3309).
 
     \note This function is a 16-bit cache conserving (16 entry table)
     implementation of the CRC-16-CCITT algorithm.
 */
-
 quint16 qChecksum(const char *data, uint len)
 {
-    register quint16 crc = 0xffff;
+    return qChecksum(data, len, Qt::ChecksumIso3309);
+}
+
+/*!
+    \relates QByteArray
+    \since 5.9
+
+    Returns the CRC-16 checksum of the first \a len bytes of \a data.
+
+    The checksum is independent of the byte order (endianness) and will
+    be calculated accorded to the algorithm published in \a standard.
+
+    \note This function is a 16-bit cache conserving (16 entry table)
+    implementation of the CRC-16-CCITT algorithm.
+*/
+quint16 qChecksum(const char *data, uint len, Qt::ChecksumType standard)
+{
+    quint16 crc = 0x0000;
+    switch (standard) {
+    case Qt::ChecksumIso3309:
+        crc = 0xffff;
+        break;
+    case Qt::ChecksumItuV41:
+        crc = 0x6363;
+        break;
+    }
     uchar c;
     const uchar *p = reinterpret_cast<const uchar *>(data);
     while (len--) {
@@ -419,10 +701,17 @@ quint16 qChecksum(const char *data, uint len)
         c >>= 4;
         crc = ((crc >> 4) & 0x0fff) ^ crc_tbl[((crc ^ c) & 15)];
     }
-    return ~crc & 0xffff;
+    switch (standard) {
+    case Qt::ChecksumIso3309:
+        crc = ~crc;
+        break;
+    case Qt::ChecksumItuV41:
+        break;
+    }
+    return crc & 0xffff;
 }
 
-/*!     
+/*!
     \fn QByteArray qCompress(const QByteArray& data, int compressionLevel)
 
     \relates QByteArray
@@ -446,8 +735,8 @@ quint16 qChecksum(const char *data, uint len)
 
     \overload
 
-    Compresses the first \a nbytes of \a data and returns the
-    compressed data in a new byte array.
+    Compresses the first \a nbytes of \a data at compression level
+    \a compressionLevel and returns the compressed data in a new byte array.
 */
 
 #ifndef QT_NO_COMPRESS
@@ -468,7 +757,7 @@ QByteArray qCompress(const uchar* data, int nbytes, int compressionLevel)
     int res;
     do {
         bazip.resize(len + 4);
-        res = ::compress2((uchar*)bazip.data()+4, &len, (uchar*)data, nbytes, compressionLevel);
+        res = ::compress2((uchar*)bazip.data()+4, &len, data, nbytes, compressionLevel);
 
         switch (res) {
         case Z_OK:
@@ -515,6 +804,21 @@ QByteArray qCompress(const uchar* data, int nbytes, int compressionLevel)
     \sa qCompress()
 */
 
+#ifndef QT_NO_COMPRESS
+namespace {
+struct QByteArrayDataDeleter
+{
+    static inline void cleanup(QTypedArrayData<char> *d)
+    { if (d) QTypedArrayData<char>::deallocate(d); }
+};
+}
+
+static QByteArray invalidCompressedData()
+{
+    qWarning("qUncompress: Input data is corrupted");
+    return QByteArray();
+}
+
 /*! \relates QByteArray
 
     \overload
@@ -522,8 +826,6 @@ QByteArray qCompress(const uchar* data, int nbytes, int compressionLevel)
     Uncompresses the first \a nbytes of \a data and returns a new byte
     array with the uncompressed data.
 */
-
-#ifndef QT_NO_COMPRESS
 QByteArray qUncompress(const uchar* data, int nbytes)
 {
     if (!data) {
@@ -535,57 +837,34 @@ QByteArray qUncompress(const uchar* data, int nbytes)
             qWarning("qUncompress: Input data is corrupted");
         return QByteArray();
     }
-    ulong expectedSize = (data[0] << 24) | (data[1] << 16) |
-                       (data[2] <<  8) | (data[3]      );
+    ulong expectedSize = uint((data[0] << 24) | (data[1] << 16) |
+                              (data[2] <<  8) | (data[3]      ));
     ulong len = qMax(expectedSize, 1ul);
-    QScopedPointer<QByteArray::Data, QScopedPointerPodDeleter> d;
+    const ulong maxPossibleSize = MaxAllocSize - sizeof(QByteArray::Data);
+    if (Q_UNLIKELY(len >= maxPossibleSize)) {
+        // QByteArray does not support that huge size anyway.
+        return invalidCompressedData();
+    }
 
+    QScopedPointer<QByteArray::Data, QByteArrayDataDeleter> d(QByteArray::Data::allocate(expectedSize + 1));
+    if (Q_UNLIKELY(d.data() == nullptr))
+        return invalidCompressedData();
+
+    d->size = expectedSize;
     forever {
         ulong alloc = len;
-        if (len  >= (1u << 31u) - sizeof(QByteArray::Data)) {
-            //QByteArray does not support that huge size anyway.
-            qWarning("qUncompress: Input data is corrupted");
-            return QByteArray();
-        }
-        QByteArray::Data *p = static_cast<QByteArray::Data *>(::realloc(d.data(), sizeof(QByteArray::Data) + alloc + 1));
-        if (!p) {
-            // we are not allowed to crash here when compiling with QT_NO_EXCEPTIONS
-            qWarning("qUncompress: could not allocate enough memory to uncompress data");
-            return QByteArray();
-        }
-        d.take(); // realloc was successful
-        d.reset(p);
-        d->offset = sizeof(QByteArrayData);
 
         int res = ::uncompress((uchar*)d->data(), &len,
-                               (uchar*)data+4, nbytes-4);
+                               data+4, nbytes-4);
 
         switch (res) {
         case Z_OK:
-            if (len != alloc) {
-                if (len  >= (1u << 31u) - sizeof(QByteArray::Data)) {
-                    //QByteArray does not support that huge size anyway.
-                    qWarning("qUncompress: Input data is corrupted");
-                    return QByteArray();
-                }
-                QByteArray::Data *p = static_cast<QByteArray::Data *>(::realloc(d.data(), sizeof(QByteArray::Data) + len + 1));
-                if (!p) {
-                    // we are not allowed to crash here when compiling with QT_NO_EXCEPTIONS
-                    qWarning("qUncompress: could not allocate enough memory to uncompress data");
-                    return QByteArray();
-                }
-                d.take(); // realloc was successful
-                d.reset(p);
-            }
-            d->ref.initializeOwned();
+            Q_ASSERT(len <= alloc);
+            Q_UNUSED(alloc);
             d->size = len;
-            d->alloc = uint(len) + 1u;
-            d->capacityReserved = false;
-            d->offset = sizeof(QByteArrayData);
             d->data()[len] = 0;
-
             {
-                QByteArrayDataPtr dataPtr = { reinterpret_cast<QByteArrayData *>(d.take()) };
+                QByteArrayDataPtr dataPtr = { d.take() };
                 return QByteArray(dataPtr);
             }
 
@@ -595,6 +874,17 @@ QByteArray qUncompress(const uchar* data, int nbytes)
 
         case Z_BUF_ERROR:
             len *= 2;
+            if (Q_UNLIKELY(len >= maxPossibleSize)) {
+                // QByteArray does not support that huge size anyway.
+                return invalidCompressedData();
+            } else {
+                // grow the block
+                QByteArray::Data *p = QByteArray::Data::reallocateUnaligned(d.data(), len + 1);
+                if (Q_UNLIKELY(p == nullptr))
+                    return invalidCompressedData();
+                d.take();   // don't free
+                d.reset(p);
+            }
             continue;
 
         case Z_DATA_ERROR:
@@ -604,19 +894,6 @@ QByteArray qUncompress(const uchar* data, int nbytes)
     }
 }
 #endif
-
-static inline bool qIsUpper(char c)
-{
-    return c >= 'A' && c <= 'Z';
-}
-
-static inline char qToLower(char c)
-{
-    if (c >= 'A' && c <= 'Z')
-        return c - 'A' + 'a';
-    else
-        return c;
-}
 
 /*!
     \class QByteArray
@@ -743,7 +1020,7 @@ static inline char qToLower(char c)
     occurrences of a particular value with another, use one of the
     two-parameter replace() overloads.
 
-    QByteArrays can be compared using overloaded operators such as
+    \l{QByteArray}s can be compared using overloaded operators such as
     operator<(), operator<=(), operator==(), operator>=(), and so on.
     The comparison is based exclusively on the numeric values
     of the characters and is very fast, but is not what a human would
@@ -786,54 +1063,139 @@ static inline char qToLower(char c)
     $LC_CTYPE is set, most Unix systems do "the right thing".)
     Functions that this affects include contains(), indexOf(),
     lastIndexOf(), operator<(), operator<=(), operator>(),
-    operator>=(), toLower() and toUpper().
+    operator>=(), isLower(), isUpper(), toLower() and toUpper().
 
-    This issue does not apply to QStrings since they represent
+    This issue does not apply to \l{QString}s since they represent
     characters using Unicode.
 
     \sa QString, QBitArray
 */
 
+/*!
+    \enum QByteArray::Base64Option
+    \since 5.2
+
+    This enum contains the options available for encoding and decoding Base64.
+    Base64 is defined by \l{RFC 4648}, with the following options:
+
+    \value Base64Encoding     (default) The regular Base64 alphabet, called simply "base64"
+    \value Base64UrlEncoding  An alternate alphabet, called "base64url", which replaces two
+                              characters in the alphabet to be more friendly to URLs.
+    \value KeepTrailingEquals (default) Keeps the trailing padding equal signs at the end
+                              of the encoded data, so the data is always a size multiple of
+                              four.
+    \value OmitTrailingEquals Omits adding the padding equal signs at the end of the encoded
+                              data.
+
+    QByteArray::fromBase64() ignores the KeepTrailingEquals and
+    OmitTrailingEquals options and will not flag errors in case they are
+    missing or if there are too many of them.
+*/
+
 /*! \fn QByteArray::iterator QByteArray::begin()
 
-    \internal
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the first character in
+    the byte-array.
+
+    \sa constBegin(), end()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::begin() const
 
-    \internal
+    \overload begin()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::cbegin() const
     \since 5.0
 
-    \internal
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first character
+    in the byte-array.
+
+    \sa begin(), cend()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::constBegin() const
 
-    \internal
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first character
+    in the byte-array.
+
+    \sa begin(), constEnd()
 */
 
 /*! \fn QByteArray::iterator QByteArray::end()
 
-    \internal
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the imaginary character
+    after the last character in the byte-array.
+
+    \sa begin(), constEnd()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::end() const
 
-    \internal
+    \overload end()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::cend() const
     \since 5.0
 
-    \internal
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
+    character after the last character in the list.
+
+    \sa cbegin(), end()
 */
 
 /*! \fn QByteArray::const_iterator QByteArray::constEnd() const
 
-    \internal
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
+    character after the last character in the list.
+
+    \sa constBegin(), end()
+*/
+
+/*! \fn QByteArray::reverse_iterator QByteArray::rbegin()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    character in the byte-array, in reverse order.
+
+    \sa begin(), crbegin(), rend()
+*/
+
+/*! \fn QByteArray::const_reverse_iterator QByteArray::rbegin() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn QByteArray::const_reverse_iterator QByteArray::crbegin() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    character in the byte-array, in reverse order.
+
+    \sa begin(), rbegin(), rend()
+*/
+
+/*! \fn QByteArray::reverse_iterator QByteArray::rend()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to one past
+    the last character in the byte-array, in reverse order.
+
+    \sa end(), crend(), rbegin()
+*/
+
+/*! \fn QByteArray::const_reverse_iterator QByteArray::rend() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn QByteArray::const_reverse_iterator QByteArray::crend() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to one
+    past the last character in the byte-array, in reverse order.
+
+    \sa end(), rend(), rbegin()
 */
 
 /*! \fn void QByteArray::push_back(const QByteArray &other)
@@ -876,6 +1238,13 @@ static inline char qToLower(char c)
     Same as prepend(\a ch).
 */
 
+/*! \fn void QByteArray::shrink_to_fit()
+    \since 5.10
+
+    This function is provided for STL compatibility. It is equivalent to
+    squeeze().
+*/
+
 /*! \fn QByteArray::QByteArray(const QByteArray &other)
 
     Constructs a copy of \a other.
@@ -886,6 +1255,15 @@ static inline char qToLower(char c)
     copied (copy-on-write), taking \l{linear time}.
 
     \sa operator=()
+*/
+
+/*!
+    \fn QByteArray::QByteArray(QByteArray &&other)
+
+    Move-constructs a QByteArray instance, making it point at the same
+    object that \a other was pointing to.
+
+    \since 5.2
 */
 
 /*! \fn QByteArray::QByteArray(QByteArrayDataPtr dd)
@@ -903,7 +1281,7 @@ static inline char qToLower(char c)
     Assigns \a other to this byte array and returns a reference to
     this byte array.
 */
-QByteArray &QByteArray::operator=(const QByteArray & other)
+QByteArray &QByteArray::operator=(const QByteArray & other) Q_DECL_NOTHROW
 {
     other.d->ref.ref();
     if (!d->ref.deref())
@@ -943,6 +1321,14 @@ QByteArray &QByteArray::operator=(const char *str)
     return *this;
 }
 
+/*!
+    \fn QByteArray &QByteArray::operator=(QByteArray &&other)
+
+    Move-assigns \a other to this QByteArray instance.
+
+    \since 5.2
+*/
+
 /*! \fn void QByteArray::swap(QByteArray &other)
     \since 4.8
 
@@ -970,7 +1356,7 @@ QByteArray &QByteArray::operator=(const char *str)
 
 /*! \fn bool QByteArray::isEmpty() const
 
-    Returns true if the byte array has size 0; otherwise returns false.
+    Returns \c true if the byte array has size 0; otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 7
@@ -1171,10 +1557,70 @@ QByteArray &QByteArray::operator=(const char *str)
     \overload
 */
 
+/*!
+    \fn char QByteArray::front() const
+    \since 5.10
+
+    Returns the first character in the byte array.
+    Same as \c{at(0)}.
+
+    This function is provided for STL compatibility.
+
+    \warning Calling this function on an empty byte array constitutes
+    undefined behavior.
+
+    \sa back(), at(), operator[]()
+*/
+
+/*!
+    \fn char QByteArray::back() const
+    \since 5.10
+
+    Returns the last character in the byte array.
+    Same as \c{at(size() - 1)}.
+
+    This function is provided for STL compatibility.
+
+    \warning Calling this function on an empty byte array constitutes
+    undefined behavior.
+
+    \sa front(), at(), operator[]()
+*/
+
+/*!
+    \fn QByteRef QByteArray::front()
+    \since 5.10
+
+    Returns a reference to the first character in the byte array.
+    Same as \c{operator[](0)}.
+
+    This function is provided for STL compatibility.
+
+    \warning Calling this function on an empty byte array constitutes
+    undefined behavior.
+
+    \sa back(), at(), operator[]()
+*/
+
+/*!
+    \fn QByteRef QByteArray::back()
+    \since 5.10
+
+    Returns a reference to the last character in the byte array.
+    Same as \c{operator[](size() - 1)}.
+
+    This function is provided for STL compatibility.
+
+    \warning Calling this function on an empty byte array constitutes
+    undefined behavior.
+
+    \sa front(), at(), operator[]()
+*/
+
 /*! \fn bool QByteArray::contains(const QByteArray &ba) const
 
-    Returns true if the byte array contains an occurrence of the byte
-    array \a ba; otherwise returns false.
+    Returns \c true if the byte array contains an occurrence of the byte
+    array \a ba; otherwise returns \c false.
 
     \sa indexOf(), count()
 */
@@ -1183,16 +1629,16 @@ QByteArray &QByteArray::operator=(const char *str)
 
     \overload
 
-    Returns true if the byte array contains the string \a str;
-    otherwise returns false.
+    Returns \c true if the byte array contains the string \a str;
+    otherwise returns \c false.
 */
 
 /*! \fn bool QByteArray::contains(char ch) const
 
     \overload
 
-    Returns true if the byte array contains the character \a ch;
-    otherwise returns false.
+    Returns \c true if the byte array contains the character \a ch;
+    otherwise returns \c false.
 */
 
 /*!
@@ -1241,13 +1687,13 @@ void QByteArray::chop(int n)
     \snippet code/src_corelib_tools_qbytearray.cpp 12
 
     Note: QByteArray is an \l{implicitly shared} class. Consequently,
-    if \e this is an empty QByteArray, then \e this will just share
-    the data held in \a ba. In this case, no copying of data is done,
+    if you append to an empty byte array, then the byte array will just
+    share the data held in \a ba. In this case, no copying of data is done,
     taking \l{constant time}. If a shared instance is modified, it will
     be copied (copy-on-write), taking \l{linear time}.
 
-    If \e this is not an empty QByteArray, a deep copy of the data is
-    performed, taking \l{linear time}.
+    If the byte array being appended to is not empty, a deep copy of the
+    data is performed, taking \l{linear time}.
 
     This operation typically does not suffer from allocation overhead,
     because QByteArray preallocates extra space at the end of the data
@@ -1264,12 +1710,10 @@ void QByteArray::chop(int n)
     returns a reference to this byte array. The Unicode data is
     converted into 8-bit characters using QString::toUtf8().
 
-    If the QString contains non-ASCII Unicode characters, using this
-    operator can lead to loss of information. You can disable this
-    operator by defining \c QT_NO_CAST_TO_ASCII when you compile your
-    applications. You then need to call QString::toUtf8() (or
-    QString::toLatin1() or QString::toUtf8() or QString::toLocal8Bit())
-    explicitly if you want to convert the data to \c{const char *}.
+    You can disable this function by defining \c QT_NO_CAST_TO_ASCII when you
+    compile your applications. You then need to call QString::toUtf8() (or
+    QString::toLatin1() or QString::toLocal8Bit()) explicitly if you want to
+    convert the data to \c{const char *}.
 */
 
 /*! \fn QByteArray &QByteArray::operator+=(const char *str)
@@ -1295,7 +1739,7 @@ void QByteArray::chop(int n)
 
 /*! \fn bool QByteArray::isNull() const
 
-    Returns true if this byte array is null; otherwise returns false.
+    Returns \c true if this byte array is null; otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 13
@@ -1370,7 +1814,7 @@ QByteArray::QByteArray(int size, char ch)
 }
 
 /*!
-    \internal 
+    \internal
 
     Constructs a byte array of size \a size with uninitialized contents.
 */
@@ -1467,12 +1911,8 @@ void QByteArray::reallocData(uint alloc, Data::AllocationOptions options)
             Data::deallocate(d);
         d = x;
     } else {
-        if (options & Data::Grow)
-            alloc = qAllocMore(alloc, sizeof(Data));
-        Data *x = static_cast<Data *>(::realloc(d, sizeof(Data) + alloc));
+        Data *x = Data::reallocateUnaligned(d, alloc, options);
         Q_CHECK_PTR(x);
-        x->alloc = alloc;
-        x->capacityReserved = (options & Data::CapacityReserved) ? 1 : 0;
         d = x;
     }
 }
@@ -1512,13 +1952,13 @@ QByteArray QByteArray::nulTerminated() const
     This is the same as insert(0, \a ba).
 
     Note: QByteArray is an \l{implicitly shared} class. Consequently,
-    if \e this is an empty QByteArray, then \e this will just share
-    the data held in \a ba. In this case, no copying of data is done,
+    if you prepend to an empty byte array, then the byte array will just
+    share the data held in \a ba. In this case, no copying of data is done,
     taking \l{constant time}. If a shared instance is modified, it will
     be copied (copy-on-write), taking \l{linear time}.
 
-    If \e this is not an empty QByteArray, a deep copy of the data is
-    performed, taking \l{linear time}.
+    If the byte array being prepended to is not empty, a deep copy of the
+    data is performed, taking \l{linear time}.
 
     \sa append(), insert()
 */
@@ -1566,6 +2006,14 @@ QByteArray &QByteArray::prepend(const char *str, int len)
     return *this;
 }
 
+/*! \fn QByteArray &QByteArray::prepend(int count, char ch)
+
+    \overload
+    \since 5.7
+
+    Prepends \a count copies of character \a ch to this byte array.
+*/
+
 /*!
     \overload
 
@@ -1592,13 +2040,13 @@ QByteArray &QByteArray::prepend(char ch)
     This is the same as insert(size(), \a ba).
 
     Note: QByteArray is an \l{implicitly shared} class. Consequently,
-    if \e this is an empty QByteArray, then \e this will just share
-    the data held in \a ba. In this case, no copying of data is done,
+    if you append to an empty byte array, then the byte array will just
+    share the data held in \a ba. In this case, no copying of data is done,
     taking \l{constant time}. If a shared instance is modified, it will
     be copied (copy-on-write), taking \l{linear time}.
 
-    If \e this is not an empty QByteArray, a deep copy of the data is
-    performed, taking \l{linear time}.
+    If the byte array being appended to is not empty, a deep copy of the
+    data is performed, taking \l{linear time}.
 
     This operation typically does not suffer from allocation overhead,
     because QByteArray preallocates extra space at the end of the data
@@ -1628,12 +2076,10 @@ QByteArray &QByteArray::append(const QByteArray &ba)
     Appends the string \a str to this byte array. The Unicode data is
     converted into 8-bit characters using QString::toUtf8().
 
-    If the QString contains non-ASCII Unicode characters, using this
-    function can lead to loss of information. You can disable this
-    function by defining \c QT_NO_CAST_TO_ASCII when you compile your
-    applications. You then need to call QString::toUtf8() (or
-    QString::toLatin1() or QString::toUtf8() or QString::toLocal8Bit())
-    explicitly if you want to convert the data to \c{const char *}.
+    You can disable this function by defining \c QT_NO_CAST_TO_ASCII when you
+    compile your applications. You then need to call QString::toUtf8() (or
+    QString::toLatin1() or QString::toLocal8Bit()) explicitly if you want to
+    convert the data to \c{const char *}.
 */
 
 /*!
@@ -1679,6 +2125,17 @@ QByteArray &QByteArray::append(const char *str, int len)
     }
     return *this;
 }
+
+/*! \fn QByteArray &QByteArray::append(int count, char ch)
+
+    \overload
+    \since 5.7
+
+    Appends \a count copies of character \a ch to this byte
+    array and returns a reference to this byte array.
+
+    If \a count is negative or zero nothing is appended to the byte array.
+*/
 
 /*!
     \overload
@@ -1796,6 +2253,33 @@ QByteArray &QByteArray::insert(int i, char ch)
     return qbytearray_insert(this, i, &ch, 1);
 }
 
+/*! \fn QByteArray &QByteArray::insert(int i, int count, char ch)
+
+    \overload
+    \since 5.7
+
+    Inserts \a count copies of character \a ch at index position \a i in the
+    byte array.
+
+    If \a i is greater than size(), the array is first extended using resize().
+*/
+
+QByteArray &QByteArray::insert(int i, int count, char ch)
+{
+    if (i < 0 || count <= 0)
+        return *this;
+
+    int oldsize = size();
+    resize(qMax(i, oldsize) + count);
+    char *dst = d->data();
+    if (i > oldsize)
+        ::memset(dst + oldsize, 0x20, i - oldsize);
+    else if (i < oldsize)
+        ::memmove(dst + i + count, dst + i, oldsize - i);
+    ::memset(dst + i, ch, count);
+    return *this;
+}
+
 /*!
     Removes \a len bytes from the array, starting at index position \a
     pos, and returns a reference to the array.
@@ -1812,10 +2296,10 @@ QByteArray &QByteArray::insert(int i, char ch)
 
 QByteArray &QByteArray::remove(int pos, int len)
 {
-    if (len <= 0  || pos >= d->size || pos < 0)
+    if (len <= 0  || uint(pos) >= uint(d->size))
         return *this;
     detach();
-    if (pos + len >= d->size) {
+    if (len >= d->size - pos) {
         resize(pos);
     } else {
         memmove(d->data() + pos, d->data() + pos + len, d->size - pos - len);
@@ -1904,7 +2388,7 @@ QByteArray &QByteArray::replace(const QByteArray &before, const QByteArray &afte
     QByteArray aft = after;
     if (after.d == d)
         aft.detach();
-    
+
     return replace(before.constData(), before.size(), aft.constData(), aft.size());
 }
 
@@ -1921,7 +2405,7 @@ QByteArray &QByteArray::replace(const char *c, const QByteArray &after)
     QByteArray aft = after;
     if (after.d == d)
         aft.detach();
-    
+
     return replace(c, qstrlen(c), aft.constData(), aft.size());
 }
 
@@ -1954,7 +2438,7 @@ QByteArray &QByteArray::replace(const char *before, int bsize, const char *after
         memcpy(copy, before, bsize);
         b = copy;
     }
-    
+
     QByteArrayMatcher matcher(before, bsize);
     int index = 0;
     int len = d->size;
@@ -2041,11 +2525,11 @@ QByteArray &QByteArray::replace(const char *before, int bsize, const char *after
     }
 
     if (a != after)
-        ::free((char *)a);
+        ::free(const_cast<char *>(a));
     if (b != before)
-        ::free((char *)b);
-    
-    
+        ::free(const_cast<char *>(b));
+
+
     return *this;
 }
 
@@ -2109,12 +2593,10 @@ QByteArray &QByteArray::replace(char before, const QByteArray &after)
     string \a after. The Unicode data is converted into 8-bit
     characters using QString::toUtf8().
 
-    If the QString contains non-ASCII Unicode characters, using this
-    function can lead to loss of information. You can disable this
-    function by defining \c QT_NO_CAST_TO_ASCII when you compile your
-    applications. You then need to call QString::toUtf8() (or
-    QString::toLatin1() or QString::toUtf8() or QString::toLocal8Bit())
-    explicitly if you want to convert the data to \c{const char *}.
+    You can disable this function by defining \c QT_NO_CAST_TO_ASCII when you
+    compile your applications. You then need to call QString::toUtf8() (or
+    QString::toLatin1() or QString::toLocal8Bit()) explicitly if you want to
+    convert the data to \c{const char *}.
 */
 
 /*! \fn QByteArray &QByteArray::replace(char before, const char *after)
@@ -2274,7 +2756,7 @@ int QByteArray::indexOf(const char *c, int from) const
     const int ol = qstrlen(c);
     if (ol == 1)
         return indexOf(*c, from);
-    
+
     const int l = d->size;
     if (from > d->size || ol + from > l)
         return -1;
@@ -2495,8 +2977,33 @@ int QByteArray::count(char ch) const
 */
 
 /*!
-    Returns true if this byte array starts with byte array \a ba;
-    otherwise returns false.
+    \fn int QByteArray::compare(const char *c, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
+    \since 5.12
+
+    Returns an integer less than, equal to, or greater than zero depending on
+    whether this QByteArray sorts before, at the same position, or after the
+    string pointed to by \a c. The comparison is performed according to case
+    sensitivity \a cs.
+
+    \sa operator==
+*/
+
+/*!
+    \fn int QByteArray::compare(const QByteArray &a, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
+    \overload
+    \since 5.12
+
+    Returns an integer less than, equal to, or greater than zero depending on
+    whether this QByteArray sorts before, at the same position, or after the
+    QByteArray \a a. The comparison is performed according to case sensitivity
+    \a cs.
+
+    \sa operator==
+*/
+
+/*!
+    Returns \c true if this byte array starts with byte array \a ba;
+    otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 25
@@ -2514,8 +3021,8 @@ bool QByteArray::startsWith(const QByteArray &ba) const
 
 /*! \overload
 
-    Returns true if this byte array starts with string \a str;
-    otherwise returns false.
+    Returns \c true if this byte array starts with string \a str;
+    otherwise returns \c false.
 */
 bool QByteArray::startsWith(const char *str) const
 {
@@ -2529,8 +3036,8 @@ bool QByteArray::startsWith(const char *str) const
 
 /*! \overload
 
-    Returns true if this byte array starts with character \a ch;
-    otherwise returns false.
+    Returns \c true if this byte array starts with character \a ch;
+    otherwise returns \c false.
 */
 bool QByteArray::startsWith(char ch) const
 {
@@ -2540,8 +3047,8 @@ bool QByteArray::startsWith(char ch) const
 }
 
 /*!
-    Returns true if this byte array ends with byte array \a ba;
-    otherwise returns false.
+    Returns \c true if this byte array ends with byte array \a ba;
+    otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 26
@@ -2559,8 +3066,8 @@ bool QByteArray::endsWith(const QByteArray &ba) const
 
 /*! \overload
 
-    Returns true if this byte array ends with string \a str; otherwise
-    returns false.
+    Returns \c true if this byte array ends with string \a str; otherwise
+    returns \c false.
 */
 bool QByteArray::endsWith(const char *str) const
 {
@@ -2572,10 +3079,82 @@ bool QByteArray::endsWith(const char *str) const
     return qstrncmp(d->data() + d->size - len, str, len) == 0;
 }
 
+/*!
+    Returns true if \a c is an uppercase Latin1 letter.
+    \note The multiplication sign 0xD7 and the sz ligature 0xDF are not
+    treated as uppercase Latin1.
+ */
+static inline bool isUpperCaseLatin1(char c)
+{
+    if (c >= 'A' && c <= 'Z')
+        return true;
+
+    return (uchar(c) >= 0xC0 && uchar(c) <= 0xDE && uchar(c) != 0xD7);
+}
+
+/*!
+    Returns \c true if this byte array contains only uppercase letters,
+    otherwise returns \c false. The byte array is interpreted as a Latin-1
+    encoded string.
+    \since 5.12
+
+    \sa isLower(), toUpper()
+*/
+bool QByteArray::isUpper() const
+{
+    if (isEmpty())
+        return false;
+
+    const char *d = data();
+
+    for (int i = 0, max = size(); i < max; ++i) {
+        if (!isUpperCaseLatin1(d[i]))
+            return false;
+    }
+
+    return true;
+}
+
+/*!
+    Returns true if \a c is an lowercase Latin1 letter.
+    \note The division sign 0xF7 is not treated as lowercase Latin1,
+    but the small y dieresis 0xFF is.
+ */
+static inline bool isLowerCaseLatin1(char c)
+{
+    if (c >= 'a' && c <= 'z')
+        return true;
+
+    return (uchar(c) >= 0xD0 && uchar(c) != 0xF7);
+}
+
+/*!
+    Returns \c true if this byte array contains only lowercase letters,
+    otherwise returns \c false. The byte array is interpreted as a Latin-1
+    encoded string.
+    \since 5.12
+
+    \sa isUpper(), toLower()
+ */
+bool QByteArray::isLower() const
+{
+    if (isEmpty())
+        return false;
+
+    const char *d = data();
+
+    for (int i = 0, max = size(); i < max; ++i) {
+        if (!isLowerCaseLatin1(d[i]))
+            return false;
+    }
+
+    return true;
+}
+
 /*! \overload
 
-    Returns true if this byte array ends with character \a ch;
-    otherwise returns false.
+    Returns \c true if this byte array ends with character \a ch;
+    otherwise returns \c false.
 */
 bool QByteArray::endsWith(char ch) const
 {
@@ -2594,7 +3173,7 @@ bool QByteArray::endsWith(char ch) const
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 27
 
-    \sa right(), mid(), startsWith(), truncate()
+    \sa startsWith(), right(), mid(), chopped(), chop(), truncate()
 */
 
 QByteArray QByteArray::left(int len)  const
@@ -2616,7 +3195,7 @@ QByteArray QByteArray::left(int len)  const
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 28
 
-    \sa endsWith(), left(), mid()
+    \sa endsWith(), left(), mid(), chopped(), chop(), truncate()
 */
 
 QByteArray QByteArray::right(int len) const
@@ -2639,76 +3218,122 @@ QByteArray QByteArray::right(int len) const
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 29
 
-    \sa left(), right()
+    \sa left(), right(), chopped(), chop(), truncate()
 */
 
 QByteArray QByteArray::mid(int pos, int len) const
 {
-    if ((d->size == 0 && d->ref.isStatic()) || pos > d->size)
+    using namespace QtPrivate;
+    switch (QContainerImplHelper::mid(size(), &pos, &len)) {
+    case QContainerImplHelper::Null:
         return QByteArray();
-    if (len < 0)
-        len = d->size - pos;
-    if (pos < 0) {
-        len += pos;
-        pos = 0;
+    case QContainerImplHelper::Empty:
+    {
+        QByteArrayDataPtr empty = { Data::allocate(0) };
+        return QByteArray(empty);
     }
-    if (len + pos > d->size)
-        len = d->size - pos;
-    if (pos == 0 && len == d->size)
+    case QContainerImplHelper::Full:
         return *this;
-    return QByteArray(d->data() + pos, len);
+    case QContainerImplHelper::Subset:
+        return QByteArray(d->data() + pos, len);
+    }
+    Q_UNREACHABLE();
+    return QByteArray();
 }
 
 /*!
+    \fn QByteArray::chopped(int len) const
+    \since 5.10
+
+    Returns a byte array that contains the leftmost size() - \a len bytes of
+    this byte array.
+
+    \note The behavior is undefined if \a len is negative or greater than size().
+
+    \sa endsWith(), left(), right(), mid(), chop(), truncate()
+*/
+
+/*!
+    \fn QByteArray QByteArray::toLower() const
+
     Returns a lowercase copy of the byte array. The bytearray is
     interpreted as a Latin-1 encoded string.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 30
 
-    \sa toUpper(), {8-bit Character Comparisons}
+    \sa isLower(), toUpper(), {8-bit Character Comparisons}
 */
-QByteArray QByteArray::toLower() const
+
+// prevent the compiler from inlining the function in each of
+// toLower and toUpper when the only difference is the table being used
+// (even with constant propagation, there's no gain in performance).
+template <typename T>
+Q_NEVER_INLINE
+static QByteArray toCase_template(T &input, const uchar * table)
 {
-    QByteArray s(*this);
-    register uchar *p = reinterpret_cast<uchar *>(s.data());
-    if (p) {
-        while (*p) {
-            *p = QChar::toLower((ushort)*p);
-            p++;
-        }
+    // find the first bad character in input
+    const char *orig_begin = input.constBegin();
+    const char *firstBad = orig_begin;
+    const char *e = input.constEnd();
+    for ( ; firstBad != e ; ++firstBad) {
+        uchar ch = uchar(*firstBad);
+        uchar converted = table[ch];
+        if (ch != converted)
+            break;
+    }
+
+    if (firstBad == e)
+        return qMove(input);
+
+    // transform the rest
+    QByteArray s = qMove(input);    // will copy if T is const QByteArray
+    char *b = s.begin();            // will detach if necessary
+    char *p = b + (firstBad - orig_begin);
+    e = b + s.size();
+    for ( ; p != e; ++p) {
+        *p = char(uchar(table[uchar(*p)]));
     }
     return s;
 }
 
+QByteArray QByteArray::toLower_helper(const QByteArray &a)
+{
+    return toCase_template(a, latin1_lowercased);
+}
+
+QByteArray QByteArray::toLower_helper(QByteArray &a)
+{
+    return toCase_template(a, latin1_lowercased);
+}
+
 /*!
+    \fn QByteArray QByteArray::toUpper() const
+
     Returns an uppercase copy of the byte array. The bytearray is
     interpreted as a Latin-1 encoded string.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 31
 
-    \sa toLower(), {8-bit Character Comparisons}
+    \sa isUpper(), toLower(), {8-bit Character Comparisons}
 */
 
-QByteArray QByteArray::toUpper() const
+QByteArray QByteArray::toUpper_helper(const QByteArray &a)
 {
-    QByteArray s(*this);
-    register uchar *p = reinterpret_cast<uchar *>(s.data());
-    if (p) {
-        while (*p) {
-            *p = QChar::toUpper((ushort)*p);
-            p++;
-        }
-    }
-    return s;
+    return toCase_template(a, latin1_uppercased);
+}
+
+QByteArray QByteArray::toUpper_helper(QByteArray &a)
+{
+    return toCase_template(a, latin1_uppercased);
 }
 
 /*! \fn void QByteArray::clear()
 
-    Clears the contents of the byte array and makes it empty.
+    Clears the contents of the byte array and makes it null.
 
-    \sa resize(), isEmpty()
+    \sa resize(), isNull()
 */
 
 void QByteArray::clear()
@@ -2773,8 +3398,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator==(const QString &str) const
 
-    Returns true if this byte array is equal to string \a str;
-    otherwise returns false.
+    Returns \c true if this byte array is equal to string \a str;
+    otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2790,8 +3415,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator!=(const QString &str) const
 
-    Returns true if this byte array is not equal to string \a str;
-    otherwise returns false.
+    Returns \c true if this byte array is not equal to string \a str;
+    otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2807,8 +3432,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator<(const QString &str) const
 
-    Returns true if this byte array is lexically less than string \a
-    str; otherwise returns false.
+    Returns \c true if this byte array is lexically less than string \a
+    str; otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2824,8 +3449,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator>(const QString &str) const
 
-    Returns true if this byte array is lexically greater than string
-    \a str; otherwise returns false.
+    Returns \c true if this byte array is lexically greater than string
+    \a str; otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2841,8 +3466,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator<=(const QString &str) const
 
-    Returns true if this byte array is lexically less than or equal
-    to string \a str; otherwise returns false.
+    Returns \c true if this byte array is lexically less than or equal
+    to string \a str; otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2858,8 +3483,8 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
 /*! \fn bool QByteArray::operator>=(const QString &str) const
 
-    Returns true if this byte array is greater than or equal to string
-    \a str; otherwise returns false.
+    Returns \c true if this byte array is greater than or equal to string
+    \a str; otherwise returns \c false.
 
     The Unicode data is converted into 8-bit characters using
     QString::toUtf8().
@@ -2878,8 +3503,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is equal to byte array \a a2;
-    otherwise returns false.
+    Returns \c true if byte array \a a1 is equal to byte array \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator==(const QByteArray &a1, const char *a2)
@@ -2887,8 +3514,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is equal to string \a a2;
-    otherwise returns false.
+    Returns \c true if byte array \a a1 is equal to string \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator==(const char *a1, const QByteArray &a2)
@@ -2896,8 +3525,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is equal to byte array \a a2;
-    otherwise returns false.
+    Returns \c true if string \a a1 is equal to byte array \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator!=(const QByteArray &a1, const QByteArray &a2)
@@ -2905,8 +3536,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is not equal to byte array \a a2;
-    otherwise returns false.
+    Returns \c true if byte array \a a1 is not equal to byte array \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator!=(const QByteArray &a1, const char *a2)
@@ -2914,8 +3547,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is not equal to string \a a2;
-    otherwise returns false.
+    Returns \c true if byte array \a a1 is not equal to string \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator!=(const char *a1, const QByteArray &a2)
@@ -2923,8 +3558,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is not equal to byte array \a a2;
-    otherwise returns false.
+    Returns \c true if string \a a1 is not equal to byte array \a a2;
+    otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator<(const QByteArray &a1, const QByteArray &a2)
@@ -2932,8 +3569,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically less than byte array
-    \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically less than byte array
+    \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn inline bool operator<(const QByteArray &a1, const char *a2)
@@ -2941,8 +3580,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically less than string
-    \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically less than string
+    \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator<(const char *a1, const QByteArray &a2)
@@ -2950,8 +3591,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is lexically less than byte array
-    \a a2; otherwise returns false.
+    Returns \c true if string \a a1 is lexically less than byte array
+    \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator<=(const QByteArray &a1, const QByteArray &a2)
@@ -2959,8 +3602,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically less than or equal
-    to byte array \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically less than or equal
+    to byte array \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator<=(const QByteArray &a1, const char *a2)
@@ -2968,8 +3613,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically less than or equal
-    to string \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically less than or equal
+    to string \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator<=(const char *a1, const QByteArray &a2)
@@ -2977,8 +3624,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is lexically less than or equal
-    to byte array \a a2; otherwise returns false.
+    Returns \c true if string \a a1 is lexically less than or equal
+    to byte array \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>(const QByteArray &a1, const QByteArray &a2)
@@ -2986,8 +3635,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically greater than byte
-    array \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically greater than byte
+    array \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>(const QByteArray &a1, const char *a2)
@@ -2995,8 +3646,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically greater than string
-    \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically greater than string
+    \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>(const char *a1, const QByteArray &a2)
@@ -3004,8 +3657,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is lexically greater than byte array
-    \a a2; otherwise returns false.
+    Returns \c true if string \a a1 is lexically greater than byte array
+    \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>=(const QByteArray &a1, const QByteArray &a2)
@@ -3013,8 +3668,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically greater than or
-    equal to byte array \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically greater than or
+    equal to byte array \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>=(const QByteArray &a1, const char *a2)
@@ -3022,8 +3679,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if byte array \a a1 is lexically greater than or
-    equal to string \a a2; otherwise returns false.
+    Returns \c true if byte array \a a1 is lexically greater than or
+    equal to string \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn bool operator>=(const char *a1, const QByteArray &a2)
@@ -3031,8 +3690,10 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \overload
 
-    Returns true if string \a a1 is lexically greater than or
-    equal to byte array \a a2; otherwise returns false.
+    Returns \c true if string \a a1 is lexically greater than or
+    equal to byte array \a a2; otherwise returns \c false.
+
+    \sa QByteArray::compare()
 */
 
 /*! \fn const QByteArray operator+(const QByteArray &a1, const QByteArray &a2)
@@ -3081,12 +3742,15 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 */
 
 /*!
+    \fn QByteArray QByteArray::simplified() const
+
     Returns a byte array that has whitespace removed from the start
     and the end, and which has each sequence of internal whitespace
     replaced with a single space.
 
     Whitespace means any character for which the standard C++
-    isspace() function returns true. This includes the ASCII
+    \c isspace() function returns \c true in the C locale. This includes the ASCII
+    isspace() function returns \c true in the C locale. This includes the ASCII
     characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' '.
 
     Example:
@@ -3094,68 +3758,43 @@ QDataStream &operator>>(QDataStream &in, QByteArray &ba)
 
     \sa trimmed()
 */
-QByteArray QByteArray::simplified() const
+QByteArray QByteArray::simplified_helper(const QByteArray &a)
 {
-    if (d->size == 0)
-        return *this;
-    QByteArray result(d->size, Qt::Uninitialized);
-    const char *from = d->data();
-    const char *fromend = from + d->size;
-    int outc=0;
-    char *to = result.d->data();
-    for (;;) {
-        while (from!=fromend && isspace(uchar(*from)))
-            from++;
-        while (from!=fromend && !isspace(uchar(*from)))
-            to[outc++] = *from++;
-        if (from!=fromend)
-            to[outc++] = ' ';
-        else
-            break;
-    }
-    if (outc > 0 && to[outc-1] == ' ')
-        outc--;
-    result.resize(outc);
-    return result;
+    return QStringAlgorithms<const QByteArray>::simplified_helper(a);
+}
+
+QByteArray QByteArray::simplified_helper(QByteArray &a)
+{
+    return QStringAlgorithms<QByteArray>::simplified_helper(a);
 }
 
 /*!
+    \fn QByteArray QByteArray::trimmed() const
+
     Returns a byte array that has whitespace removed from the start
     and the end.
 
     Whitespace means any character for which the standard C++
-    isspace() function returns true. This includes the ASCII
+    \c isspace() function returns \c true in the C locale. This includes the ASCII
     characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' '.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 33
 
-    Unlike simplified(), trimmed() leaves internal whitespace alone.
+    Unlike simplified(), \l {QByteArray::trimmed()}{trimmed()} leaves internal whitespace alone.
 
     \sa simplified()
 */
-QByteArray QByteArray::trimmed() const
+QByteArray QByteArray::trimmed_helper(const QByteArray &a)
 {
-    if (d->size == 0)
-        return *this;
-    const char *s = d->data();
-    if (!isspace(uchar(*s)) && !isspace(uchar(s[d->size-1])))
-        return *this;
-    int start = 0;
-    int end = d->size - 1;
-    while (start<=end && isspace(uchar(s[start])))  // skip white space from start
-        start++;
-    if (start <= end) {                          // only white space
-        while (end && isspace(uchar(s[end])))           // skip white space from end
-            end--;
-    }
-    int l = end - start + 1;
-    if (l <= 0) {
-        QByteArrayDataPtr empty = { reinterpret_cast<QByteArrayData *>(Data::allocate(0)) };
-        return QByteArray(empty);
-    }
-    return QByteArray(s+start, l);
+    return QStringAlgorithms<const QByteArray>::trimmed_helper(a);
 }
+
+QByteArray QByteArray::trimmed_helper(QByteArray &a)
+{
+    return QStringAlgorithms<QByteArray>::trimmed_helper(a);
+}
+
 
 /*!
     Returns a byte array of size \a width that contains this byte
@@ -3233,6 +3872,39 @@ QByteArray QByteArray::rightJustified(int width, char fill, bool truncate) const
 
 bool QByteArray::isNull() const { return d == QArrayData::sharedNull(); }
 
+static qlonglong toIntegral_helper(const char *data, bool *ok, int base, qlonglong)
+{
+    return QLocaleData::bytearrayToLongLong(data, base, ok);
+}
+
+static qulonglong toIntegral_helper(const char *data, bool *ok, int base, qulonglong)
+{
+    return QLocaleData::bytearrayToUnsLongLong(data, base, ok);
+}
+
+template <typename T> static inline
+T toIntegral_helper(const char *data, bool *ok, int base)
+{
+    // ### Qt6: use std::conditional<std::is_unsigned<T>::value, qulonglong, qlonglong>::type
+    const bool isUnsigned = T(0) < T(-1);
+    typedef typename QtPrivate::QConditional<isUnsigned, qulonglong, qlonglong>::Type Int64;
+
+#if defined(QT_CHECK_RANGE)
+    if (base != 0 && (base < 2 || base > 36)) {
+        qWarning("QByteArray::toIntegral: Invalid base %d", base);
+        base = 10;
+    }
+#endif
+
+    // we select the right overload by the last, unused parameter
+    Int64 val = toIntegral_helper(data, ok, base, Int64());
+    if (T(val) != val) {
+        if (ok)
+            *ok = false;
+        val = 0;
+    }
+    return T(val);
+}
 
 /*!
     Returns the byte array converted to a \c {long long} using base \a
@@ -3245,8 +3917,8 @@ bool QByteArray::isNull() const { return d == QArrayData::sharedNull(); }
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3256,14 +3928,7 @@ bool QByteArray::isNull() const { return d == QArrayData::sharedNull(); }
 
 qlonglong QByteArray::toLongLong(bool *ok, int base) const
 {
-#if defined(QT_CHECK_RANGE)
-    if (base != 0 && (base < 2 || base > 36)) {
-        qWarning("QByteArray::toLongLong: Invalid base %d", base);
-        base = 10;
-    }
-#endif
-
-    return QLocalePrivate::bytearrayToLongLong(nulTerminated().constData(), base, ok);
+    return toIntegral_helper<qlonglong>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3278,8 +3943,8 @@ qlonglong QByteArray::toLongLong(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3289,16 +3954,8 @@ qlonglong QByteArray::toLongLong(bool *ok, int base) const
 
 qulonglong QByteArray::toULongLong(bool *ok, int base) const
 {
-#if defined(QT_CHECK_RANGE)
-    if (base != 0 && (base < 2 || base > 36)) {
-        qWarning("QByteArray::toULongLong: Invalid base %d", base);
-        base = 10;
-    }
-#endif
-
-    return QLocalePrivate::bytearrayToUnsLongLong(nulTerminated().constData(), base, ok);
+    return toIntegral_helper<qulonglong>(nulTerminated().constData(), ok, base);
 }
-
 
 /*!
     Returns the byte array converted to an \c int using base \a
@@ -3311,8 +3968,8 @@ qulonglong QByteArray::toULongLong(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \snippet code/src_corelib_tools_qbytearray.cpp 36
 
@@ -3324,13 +3981,7 @@ qulonglong QByteArray::toULongLong(bool *ok, int base) const
 
 int QByteArray::toInt(bool *ok, int base) const
 {
-    qlonglong v = toLongLong(ok, base);
-    if (v < INT_MIN || v > INT_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return int(v);
+    return toIntegral_helper<int>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3344,8 +3995,8 @@ int QByteArray::toInt(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3355,13 +4006,7 @@ int QByteArray::toInt(bool *ok, int base) const
 
 uint QByteArray::toUInt(bool *ok, int base) const
 {
-    qulonglong v = toULongLong(ok, base);
-    if (v > UINT_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return uint(v);
+    return toIntegral_helper<uint>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3377,8 +4022,8 @@ uint QByteArray::toUInt(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \snippet code/src_corelib_tools_qbytearray.cpp 37
 
@@ -3389,13 +4034,7 @@ uint QByteArray::toUInt(bool *ok, int base) const
 */
 long QByteArray::toLong(bool *ok, int base) const
 {
-    qlonglong v = toLongLong(ok, base);
-    if (v < LONG_MIN || v > LONG_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return long(v);
+    return toIntegral_helper<long>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3411,8 +4050,8 @@ long QByteArray::toLong(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3421,13 +4060,7 @@ long QByteArray::toLong(bool *ok, int base) const
 */
 ulong QByteArray::toULong(bool *ok, int base) const
 {
-    qulonglong v = toULongLong(ok, base);
-    if (v > ULONG_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return ulong(v);
+    return toIntegral_helper<ulong>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3441,8 +4074,8 @@ ulong QByteArray::toULong(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3452,13 +4085,7 @@ ulong QByteArray::toULong(bool *ok, int base) const
 
 short QByteArray::toShort(bool *ok, int base) const
 {
-    qlonglong v = toLongLong(ok, base);
-    if (v < SHRT_MIN || v > SHRT_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return short(v);
+    return toIntegral_helper<short>(nulTerminated().constData(), ok, base);
 }
 
 /*!
@@ -3472,8 +4099,8 @@ short QByteArray::toShort(bool *ok, int base) const
 
     Returns 0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
@@ -3483,13 +4110,7 @@ short QByteArray::toShort(bool *ok, int base) const
 
 ushort QByteArray::toUShort(bool *ok, int base) const
 {
-    qulonglong v = toULongLong(ok, base);
-    if (v > USHRT_MAX) {
-        if (ok)
-            *ok = false;
-        v = 0;
-    }
-    return ushort(v);
+    return toIntegral_helper<ushort>(nulTerminated().constData(), ok, base);
 }
 
 
@@ -3498,20 +4119,34 @@ ushort QByteArray::toUShort(bool *ok, int base) const
 
     Returns 0.0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
 
     \snippet code/src_corelib_tools_qbytearray.cpp 38
 
+    \warning The QByteArray content may only contain valid numerical characters
+    which includes the plus/minus sign, the character e used in scientific
+    notation, and the decimal point. Including the unit or additional characters
+    leads to a conversion error.
+
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
+
+    This function ignores leading and trailing whitespace.
 
     \sa number()
 */
 
 double QByteArray::toDouble(bool *ok) const
 {
-    return QLocalePrivate::bytearrayToDouble(nulTerminated().constData(), ok);
+    QByteArray nulled = nulTerminated();
+    bool nonNullOk = false;
+    int processed = 0;
+    double d = qt_asciiToDouble(nulled.constData(), nulled.length(),
+                                nonNullOk, processed, WhitespacesAllowed);
+    if (ok)
+        *ok = nonNullOk;
+    return d;
 }
 
 /*!
@@ -3519,18 +4154,27 @@ double QByteArray::toDouble(bool *ok) const
 
     Returns 0.0 if the conversion fails.
 
-    If \a ok is not 0: if a conversion error occurs, *\a{ok} is set to
-    false; otherwise *\a{ok} is set to true.
+    If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
+    to \c false, and success by setting *\a{ok} to \c true.
+
+    \snippet code/src_corelib_tools_qbytearray.cpp 38float
+
+    \warning The QByteArray content may only contain valid numerical characters
+    which includes the plus/minus sign, the character e used in scientific
+    notation, and the decimal point. Including the unit or additional characters
+    leads to a conversion error.
 
     \note The conversion of the number is performed in the default C locale,
     irrespective of the user's locale.
+
+    This function ignores leading and trailing whitespace.
 
     \sa number()
 */
 
 float QByteArray::toFloat(bool *ok) const
 {
-    return float(toDouble(ok));
+    return QLocaleData::convertDoubleToFloat(toDouble(ok), ok);
 }
 
 /*!
@@ -3538,54 +4182,88 @@ float QByteArray::toFloat(bool *ok) const
 
     \snippet code/src_corelib_tools_qbytearray.cpp 39
 
-    The algorithm used to encode Base64-encoded data is defined in \l{RFC 2045}.
+    The algorithm used to encode Base64-encoded data is defined in \l{RFC 4648}.
 
     \sa fromBase64()
 */
 QByteArray QByteArray::toBase64() const
 {
-    const char alphabet[] = "ABCDEFGH" "IJKLMNOP" "QRSTUVWX" "YZabcdef"
-		            "ghijklmn" "opqrstuv" "wxyz0123" "456789+/";
+    return toBase64(Base64Encoding);
+}
+
+/*!
+    \since 5.2
+    \overload
+
+    Returns a copy of the byte array, encoded using the options \a options.
+
+    \snippet code/src_corelib_tools_qbytearray.cpp 39bis
+
+    The algorithm used to encode Base64-encoded data is defined in \l{RFC 4648}.
+
+    \sa fromBase64()
+*/
+QByteArray QByteArray::toBase64(Base64Options options) const
+{
+    const char alphabet_base64[] = "ABCDEFGH" "IJKLMNOP" "QRSTUVWX" "YZabcdef"
+                                   "ghijklmn" "opqrstuv" "wxyz0123" "456789+/";
+    const char alphabet_base64url[] = "ABCDEFGH" "IJKLMNOP" "QRSTUVWX" "YZabcdef"
+                                      "ghijklmn" "opqrstuv" "wxyz0123" "456789-_";
+    const char *const alphabet = options & Base64UrlEncoding ? alphabet_base64url : alphabet_base64;
     const char padchar = '=';
     int padlen = 0;
 
-    QByteArray tmp((d->size * 4) / 3 + 3, Qt::Uninitialized);
+    QByteArray tmp((d->size + 2) / 3 * 4, Qt::Uninitialized);
 
     int i = 0;
     char *out = tmp.data();
     while (i < d->size) {
-	int chunk = 0;
+        // encode 3 bytes at a time
+        int chunk = 0;
         chunk |= int(uchar(d->data()[i++])) << 16;
-	if (i == d->size) {
-	    padlen = 2;
-	} else {
+        if (i == d->size) {
+            padlen = 2;
+        } else {
             chunk |= int(uchar(d->data()[i++])) << 8;
-	    if (i == d->size) padlen = 1;
-            else chunk |= int(uchar(d->data()[i++]));
-	}
+            if (i == d->size)
+                padlen = 1;
+            else
+                chunk |= int(uchar(data()[i++]));
+        }
 
-	int j = (chunk & 0x00fc0000) >> 18;
-	int k = (chunk & 0x0003f000) >> 12;
-	int l = (chunk & 0x00000fc0) >> 6;
-	int m = (chunk & 0x0000003f);
-	*out++ = alphabet[j];
-	*out++ = alphabet[k];
-	if (padlen > 1) *out++ = padchar;
-	else *out++ = alphabet[l];
-	if (padlen > 0) *out++ = padchar;
-	else *out++ = alphabet[m];
+        int j = (chunk & 0x00fc0000) >> 18;
+        int k = (chunk & 0x0003f000) >> 12;
+        int l = (chunk & 0x00000fc0) >> 6;
+        int m = (chunk & 0x0000003f);
+        *out++ = alphabet[j];
+        *out++ = alphabet[k];
+
+        if (padlen > 1) {
+            if ((options & OmitTrailingEquals) == 0)
+                *out++ = padchar;
+        } else {
+            *out++ = alphabet[l];
+        }
+        if (padlen > 0) {
+            if ((options & OmitTrailingEquals) == 0)
+                *out++ = padchar;
+        } else {
+            *out++ = alphabet[m];
+        }
     }
-
-    tmp.truncate(out - tmp.data());
+    Q_ASSERT((options & OmitTrailingEquals) || (out == tmp.size() + tmp.data()));
+    if (options & OmitTrailingEquals)
+        tmp.truncate(out - tmp.data());
     return tmp;
 }
 
-/*! 
+/*!
     \fn QByteArray &QByteArray::setNum(int n, int base)
 
     Sets the byte array to the printed value of \a n in base \a base (10
     by default) and returns a reference to the byte array. The \a base can
-    be any value between 2 and 36.
+    be any value between 2 and 36. For bases other than 10, n is treated
+    as an unsigned integer.
 
     Example:
     \snippet code/src_corelib_tools_qbytearray.cpp 40
@@ -3596,34 +4274,28 @@ QByteArray QByteArray::toBase64() const
     \sa number(), toInt()
 */
 
-/*! 
+/*!
     \fn QByteArray &QByteArray::setNum(uint n, int base)
     \overload
 
     \sa toUInt()
 */
 
-/*! 
+/*!
     \fn QByteArray &QByteArray::setNum(short n, int base)
     \overload
 
     \sa toShort()
 */
 
-/*! 
+/*!
     \fn QByteArray &QByteArray::setNum(ushort n, int base)
     \overload
 
     \sa toUShort()
 */
 
-/*!
-    \overload
-
-    \sa toLongLong()
-*/
-
-QByteArray &QByteArray::setNum(qlonglong n, int base)
+static char *qulltoa2(char *p, qulonglong n, int base)
 {
 #if defined(QT_CHECK_RANGE)
     if (base < 2 || base > 36) {
@@ -3631,8 +4303,36 @@ QByteArray &QByteArray::setNum(qlonglong n, int base)
         base = 10;
     }
 #endif
-    QLocale locale(QLocale::C);
-    *this = locale.d->longLongToString(n, -1, base).toLatin1();
+    const char b = 'a' - 10;
+    do {
+        const int c = n % base;
+        n /= base;
+        *--p = c + (c < 10 ? '0' : b);
+    } while (n);
+
+    return p;
+}
+
+/*!
+    \overload
+
+    \sa toLongLong()
+*/
+QByteArray &QByteArray::setNum(qlonglong n, int base)
+{
+    const int buffsize = 66; // big enough for MAX_ULLONG in base 2
+    char buff[buffsize];
+    char *p;
+
+    if (n < 0 && base == 10) {
+        p = qulltoa2(buff + buffsize, qulonglong(-(1 + n)) + 1, base);
+        *--p = '-';
+    } else {
+        p = qulltoa2(buff + buffsize, qulonglong(n), base);
+    }
+
+    clear();
+    append(p, buffsize - (p - buff));
     return *this;
 }
 
@@ -3644,18 +4344,16 @@ QByteArray &QByteArray::setNum(qlonglong n, int base)
 
 QByteArray &QByteArray::setNum(qulonglong n, int base)
 {
-#if defined(QT_CHECK_RANGE)
-    if (base < 2 || base > 36) {
-        qWarning("QByteArray::setNum: Invalid base %d", base);
-        base = 10;
-    }
-#endif
-    QLocale locale(QLocale::C);
-    *this = locale.d->unsLongLongToString(n, -1, base).toLatin1();
+    const int buffsize = 66; // big enough for MAX_ULLONG in base 2
+    char buff[buffsize];
+    char *p = qulltoa2(buff + buffsize, n, base);
+
+    clear();
+    append(p, buffsize - (p - buff));
     return *this;
 }
 
-/*! 
+/*!
     \overload
 
     Sets the byte array to the printed value of \a n, formatted in format
@@ -3685,22 +4383,23 @@ QByteArray &QByteArray::setNum(qulonglong n, int base)
 
 QByteArray &QByteArray::setNum(double n, char f, int prec)
 {
-    QLocalePrivate::DoubleForm form = QLocalePrivate::DFDecimal;
-    uint flags = 0;
+    QLocaleData::DoubleForm form = QLocaleData::DFDecimal;
+    uint flags = QLocaleData::ZeroPadExponent;
 
-    if (qIsUpper(f))
-        flags = QLocalePrivate::CapitalEorX;
-    f = qToLower(f);
+    char lower = latin1_lowercased[uchar(f)];
+    if (f != lower)
+        flags |= QLocaleData::CapitalEorX;
+    f = lower;
 
     switch (f) {
         case 'f':
-            form = QLocalePrivate::DFDecimal;
+            form = QLocaleData::DFDecimal;
             break;
         case 'e':
-            form = QLocalePrivate::DFExponent;
+            form = QLocaleData::DFExponent;
             break;
         case 'g':
-            form = QLocalePrivate::DFSignificantDigits;
+            form = QLocaleData::DFSignificantDigits;
             break;
         default:
 #if defined(QT_CHECK_RANGE)
@@ -3709,12 +4408,11 @@ QByteArray &QByteArray::setNum(double n, char f, int prec)
             break;
     }
 
-    QLocale locale(QLocale::C);
-    *this = locale.d->doubleToString(n, prec, form, -1, flags).toLatin1();
+    *this = QLocaleData::c()->doubleToString(n, prec, form, -1, flags).toLatin1();
     return *this;
 }
 
-/*! 
+/*!
     \fn QByteArray &QByteArray::setNum(float n, char f, int prec)
     \overload
 
@@ -3784,7 +4482,7 @@ QByteArray QByteArray::number(qulonglong n, int base)
     return s;
 }
 
-/*! 
+/*!
     \overload
 
     Returns a byte array that contains the printed value of \a n,
@@ -3866,7 +4564,7 @@ QByteArray QByteArray::fromRawData(const char *data, int size)
         x = Data::fromRawData(data, size);
         Q_CHECK_PTR(x);
     }
-    QByteArrayDataPtr dataPtr = { reinterpret_cast<QByteArrayData *>(x) };
+    QByteArrayDataPtr dataPtr = { x };
     return QByteArray(dataPtr);
 }
 
@@ -3880,7 +4578,7 @@ QByteArray QByteArray::fromRawData(const char *data, int size)
     copies of it exist that have not been modified.
 
     This function can be used instead of fromRawData() to re-use
-    existings QByteArray objects to save memory re-allocations.
+    existing QByteArray objects to save memory re-allocations.
 
     \sa fromRawData(), data(), constData()
 */
@@ -3895,7 +4593,6 @@ QByteArray &QByteArray::setRawData(const char *data, uint size)
         } else {
             d->offset = sizeof(QByteArrayData);
             d->size = 0;
-            *d->data() = 0;
         }
     }
     return *this;
@@ -3910,11 +4607,33 @@ QByteArray &QByteArray::setRawData(const char *data, uint size)
 
     \snippet code/src_corelib_tools_qbytearray.cpp 44
 
-    The algorithm used to decode Base64-encoded data is defined in \l{RFC 2045}.
+    The algorithm used to decode Base64-encoded data is defined in \l{RFC 4648}.
 
     \sa toBase64()
 */
 QByteArray QByteArray::fromBase64(const QByteArray &base64)
+{
+    return fromBase64(base64, Base64Encoding);
+}
+
+/*!
+    \since 5.2
+    \overload
+
+    Returns a decoded copy of the Base64 array \a base64, using the alphabet
+    defined by \a options. Input is not checked for validity; invalid
+    characters in the input are skipped, enabling the decoding process to
+    continue with subsequent characters.
+
+    For example:
+
+    \snippet code/src_corelib_tools_qbytearray.cpp 44bis
+
+    The algorithm used to decode Base64-encoded data is defined in \l{RFC 4648}.
+
+    \sa toBase64()
+*/
+QByteArray QByteArray::fromBase64(const QByteArray &base64, Base64Options options)
 {
     unsigned int buf = 0;
     int nbits = 0;
@@ -3922,31 +4641,35 @@ QByteArray QByteArray::fromBase64(const QByteArray &base64)
 
     int offset = 0;
     for (int i = 0; i < base64.size(); ++i) {
-	int ch = base64.at(i);
-	int d;
+        int ch = base64.at(i);
+        int d;
 
-	if (ch >= 'A' && ch <= 'Z')
-	    d = ch - 'A';
-	else if (ch >= 'a' && ch <= 'z')
-	    d = ch - 'a' + 26;
-	else if (ch >= '0' && ch <= '9')
-	    d = ch - '0' + 52;
-	else if (ch == '+')
-	    d = 62;
-	else if (ch == '/')
-	    d = 63;
-	else
-	    d = -1;
+        if (ch >= 'A' && ch <= 'Z')
+            d = ch - 'A';
+        else if (ch >= 'a' && ch <= 'z')
+            d = ch - 'a' + 26;
+        else if (ch >= '0' && ch <= '9')
+            d = ch - '0' + 52;
+        else if (ch == '+' && (options & Base64UrlEncoding) == 0)
+            d = 62;
+        else if (ch == '-' && (options & Base64UrlEncoding) != 0)
+            d = 62;
+        else if (ch == '/' && (options & Base64UrlEncoding) == 0)
+            d = 63;
+        else if (ch == '_' && (options & Base64UrlEncoding) != 0)
+            d = 63;
+        else
+            d = -1;
 
-	if (d != -1) {
-	    buf = (buf << 6) | d;
-	    nbits += 6;
-	    if (nbits >= 8) {
-		nbits -= 8;
-		tmp[offset++] = buf >> nbits;
-		buf &= (1 << nbits) - 1;
-	    }
-	}
+        if (d != -1) {
+            buf = (buf << 6) | d;
+            nbits += 6;
+            if (nbits >= 8) {
+                nbits -= 8;
+                tmp[offset++] = buf >> nbits;
+                buf &= (1 << nbits) - 1;
+            }
+        }
     }
 
     tmp.truncate(offset);
@@ -3971,15 +4694,9 @@ QByteArray QByteArray::fromHex(const QByteArray &hexEncoded)
 
     bool odd_digit = true;
     for (int i = hexEncoded.size() - 1; i >= 0; --i) {
-        int ch = hexEncoded.at(i);
-        int tmp;
-        if (ch >= '0' && ch <= '9')
-            tmp = ch - '0';
-        else if (ch >= 'a' && ch <= 'f')
-            tmp = ch - 'a' + 10;
-        else if (ch >= 'A' && ch <= 'F')
-            tmp = ch - 'A' + 10;
-        else
+        uchar ch = uchar(hexEncoded.at(i));
+        int tmp = QtMiscUtils::fromHex(ch);
+        if (tmp == -1)
             continue;
         if (odd_digit) {
             --result;
@@ -4003,20 +4720,41 @@ QByteArray QByteArray::fromHex(const QByteArray &hexEncoded)
 */
 QByteArray QByteArray::toHex() const
 {
-    QByteArray hex(d->size * 2, Qt::Uninitialized);
+    return toHex('\0');
+}
+
+/*! \overload
+    \since 5.9
+
+    Returns a hex encoded copy of the byte array. The hex encoding uses the numbers 0-9 and
+    the letters a-f.
+
+    If \a separator is not '\0', the separator character is inserted between the hex bytes.
+
+    Example:
+    \code
+        QByteArray macAddress = QByteArray::fromHex("123456abcdef");
+        macAddress.toHex(':'); // returns "12:34:56:ab:cd:ef"
+        macAddress.toHex(0);   // returns "123456abcdef"
+    \endcode
+
+    \sa fromHex()
+*/
+QByteArray QByteArray::toHex(char separator) const
+{
+    if (!d->size)
+        return QByteArray();
+
+    const int length = separator ? (d->size * 3 - 1) : (d->size * 2);
+    QByteArray hex(length, Qt::Uninitialized);
     char *hexData = hex.data();
     const uchar *data = (const uchar *)d->data();
-    for (int i = 0; i < d->size; ++i) {
-        int j = (data[i] >> 4) & 0xf;
-        if (j <= 9)
-            hexData[i*2] = (j + '0');
-         else
-            hexData[i*2] = (j + 'a' - 10);
-        j = data[i] & 0xf;
-        if (j <= 9)
-            hexData[i*2+1] = (j + '0');
-         else
-            hexData[i*2+1] = (j + 'a' - 10);
+    for (int i = 0, o = 0; i < d->size; ++i) {
+        hexData[o++] = QtMiscUtils::toHexLower(data[i] >> 4);
+        hexData[o++] = QtMiscUtils::toHexLower(data[i] & 0xf);
+
+        if ((separator) && (o < length))
+            hexData[o++] = separator;
     }
     return hex;
 }
@@ -4079,6 +4817,10 @@ void q_fromPercentEncoding(QByteArray *ba)
         text.data();            // returns "Qt is great!"
     \endcode
 
+    \note Given invalid input (such as a string containing the sequence "%G5",
+    which is not a valid hexadecimal number) the output will be invalid as
+    well. As an example: the sequence "%G5" could be decoded to 'W'.
+
     \sa toPercentEncoding(), QUrl::fromPercentEncoding()
 */
 QByteArray QByteArray::fromPercentEncoding(const QByteArray &input, char percent)
@@ -4093,6 +4835,27 @@ QByteArray QByteArray::fromPercentEncoding(const QByteArray &input, char percent
     return tmp;
 }
 
+/*! \fn QByteArray QByteArray::fromStdString(const std::string &str)
+    \since 5.4
+
+    Returns a copy of the \a str string as a QByteArray.
+
+    \sa toStdString(), QString::fromStdString()
+*/
+
+/*!
+    \fn std::string QByteArray::toStdString() const
+    \since 5.4
+
+    Returns a std::string object with the data contained in this
+    QByteArray.
+
+    This operator is mostly useful to pass a QByteArray to a function
+    that accepts a std::string object.
+
+    \sa fromStdString(), QString::toStdString()
+*/
+
 static inline bool q_strchr(const char str[], char chr)
 {
     if (!str) return false;
@@ -4103,12 +4866,6 @@ static inline bool q_strchr(const char str[], char chr)
         if (c == chr)
             return true;
     return false;
-}
-
-static inline char toHexHelper(char c)
-{
-    static const char hexnumbers[] = "0123456789ABCDEF";
-    return hexnumbers[c & 0xf];
 }
 
 static void q_toPercentEncoding(QByteArray *ba, const char *dontEncode, const char *alsoEncode, char percent)
@@ -4143,8 +4900,8 @@ static void q_toPercentEncoding(QByteArray *ba, const char *dontEncode, const ch
                 output = ba->data();
             }
             output[length++] = percent;
-            output[length++] = toHexHelper((c & 0xf0) >> 4);
-            output[length++] = toHexHelper(c & 0xf);
+            output[length++] = QtMiscUtils::toHexUpper((c & 0xf0) >> 4);
+            output[length++] = QtMiscUtils::toHexUpper(c & 0xf);
         }
     }
     if (output)
@@ -4225,10 +4982,40 @@ QByteArray QByteArray::toPercentEncoding(const QByteArray &exclude, const QByteA
 */
 
 /*! \typedef QByteArray::const_iterator
-    \internal
+
+    This typedef provides an STL-style const iterator for QByteArray.
+
+    \sa QByteArray::const_reverse_iterator, QByteArray::iterator
 */
 
 /*! \typedef QByteArray::iterator
+
+    This typedef provides an STL-style non-const iterator for QByteArray.
+
+    \sa QByteArray::reverse_iterator, QByteArray::const_iterator
+*/
+
+/*! \typedef QByteArray::const_reverse_iterator
+    \since 5.6
+
+    This typedef provides an STL-style const reverse iterator for QByteArray.
+
+    \sa QByteArray::reverse_iterator, QByteArray::const_iterator
+*/
+
+/*! \typedef QByteArray::reverse_iterator
+    \since 5.6
+
+    This typedef provides an STL-style non-const reverse iterator for QByteArray.
+
+    \sa QByteArray::const_reverse_iterator, QByteArray::iterator
+*/
+
+/*! \typedef QByteArray::size_type
+    \internal
+*/
+
+/*! \typedef QByteArray::difference_type
     \internal
 */
 
@@ -4237,6 +5024,14 @@ QByteArray QByteArray::toPercentEncoding(const QByteArray &exclude, const QByteA
 */
 
 /*! \typedef QByteArray::reference
+    \internal
+*/
+
+/*! \typedef QByteArray::const_pointer
+    \internal
+*/
+
+/*! \typedef QByteArray::pointer
     \internal
 */
 
@@ -4252,6 +5047,28 @@ QByteArray QByteArray::toPercentEncoding(const QByteArray &exclude, const QByteA
 /*!
     \typedef QByteArray::DataPtr
     \internal
+*/
+
+/*!
+    \macro QByteArrayLiteral(ba)
+    \relates QByteArray
+
+    The macro generates the data for a QByteArray out of the string literal
+    \a ba at compile time. Creating a QByteArray from it is free in this case, and
+    the generated byte array data is stored in the read-only segment of the
+    compiled object file.
+
+    For instance:
+
+    \code
+    QByteArray ba = QByteArrayLiteral("byte array contents");
+    \endcode
+
+    Using QByteArrayLiteral instead of a double quoted plain C++ string literal
+    can significantly speed up creation of QByteArray instances from data known
+    at compile time.
+
+    \sa QStringLiteral
 */
 
 QT_END_NAMESPACE

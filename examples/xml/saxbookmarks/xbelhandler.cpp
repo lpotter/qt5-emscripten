@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,6 +52,10 @@
 
 #include "xbelhandler.h"
 
+static inline QString versionAttribute() { return QStringLiteral("version"); }
+static inline QString hrefAttribute() { return QStringLiteral("href"); }
+static inline QString foldedAttribute() { return QStringLiteral("folded"); }
+
 XbelHandler::XbelHandler(QTreeWidget *treeWidget)
     : treeWidget(treeWidget)
 {
@@ -62,32 +76,32 @@ bool XbelHandler::startElement(const QString & /* namespaceURI */,
                                const QString &qName,
                                const QXmlAttributes &attributes)
 {
-    if (!metXbelTag && qName != "xbel") {
+    if (!metXbelTag && qName != QLatin1String("xbel")) {
         errorStr = QObject::tr("The file is not an XBEL file.");
         return false;
     }
 
-    if (qName == "xbel") {
-        QString version = attributes.value("version");
-        if (!version.isEmpty() && version != "1.0") {
+    if (qName == QLatin1String("xbel")) {
+        QString version = attributes.value(versionAttribute());
+        if (!version.isEmpty() && version != QLatin1String("1.0")) {
             errorStr = QObject::tr("The file is not an XBEL version 1.0 file.");
             return false;
         }
         metXbelTag = true;
-    } else if (qName == "folder") {
+    } else if (qName == QLatin1String("folder")) {
         item = createChildItem(qName);
         item->setFlags(item->flags() | Qt::ItemIsEditable);
         item->setIcon(0, folderIcon);
         item->setText(0, QObject::tr("Folder"));
-        bool folded = (attributes.value("folded") != "no");
+        bool folded = (attributes.value(foldedAttribute()) != QLatin1String("no"));
         treeWidget->setItemExpanded(item, !folded);
-    } else if (qName == "bookmark") {
+    } else if (qName == QLatin1String("bookmark")) {
         item = createChildItem(qName);
         item->setFlags(item->flags() | Qt::ItemIsEditable);
         item->setIcon(0, bookmarkIcon);
         item->setText(0, QObject::tr("Unknown title"));
-        item->setText(1, attributes.value("href"));
-    } else if (qName == "separator") {
+        item->setText(1, attributes.value(hrefAttribute()));
+    } else if (qName == QLatin1String("separator")) {
         item = createChildItem(qName);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         item->setText(0, QString(30, 0xB7));
@@ -101,11 +115,11 @@ bool XbelHandler::endElement(const QString & /* namespaceURI */,
                              const QString & /* localName */,
                              const QString &qName)
 {
-    if (qName == "title") {
+    if (qName == QLatin1String("title")) {
         if (item)
             item->setText(0, currentText);
-    } else if (qName == "folder" || qName == "bookmark"
-               || qName == "separator") {
+    } else if (qName == QLatin1String("folder") || qName == QLatin1String("bookmark")
+               || qName == QLatin1String("separator")) {
         item = item->parent();
     }
     return true;

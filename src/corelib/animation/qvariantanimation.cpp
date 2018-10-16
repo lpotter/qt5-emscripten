@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,15 +54,13 @@ QT_BEGIN_NAMESPACE
     \class QVariantAnimation
     \inmodule QtCore
     \ingroup animation
-    \brief The QVariantAnimation class provides an abstract base class for animations.
+    \brief The QVariantAnimation class provides a base class for animations.
     \since 4.6
 
     This class is part of \l{The Animation Framework}. It serves as a
     base class for property and item animations, with functions for
     shared functionality.
 
-    QVariantAnimation cannot be used directly as it is an abstract
-    class; it has a pure virtual method called updateCurrentValue().
     The class performs interpolation over
     \l{QVariant}s, but leaves using the interpolated values to its
     subclasses. Currently, Qt provides QPropertyAnimation, which
@@ -77,7 +73,7 @@ QT_BEGIN_NAMESPACE
     start the animation. QVariantAnimation will interpolate the
     property of the target object and emit valueChanged(). To react to
     a change in the current value you have to reimplement the
-    updateCurrentValue() virtual function.
+    updateCurrentValue() virtual function or connect to said signal.
 
     It is also possible to set values at specified steps situated
     between the start and end value. The interpolation will then
@@ -87,7 +83,7 @@ QT_BEGIN_NAMESPACE
     There are two ways to affect how QVariantAnimation interpolates
     the values. You can set an easing curve by calling
     setEasingCurve(), and configure the duration by calling
-    setDuration(). You can change how the QVariants are interpolated
+    setDuration(). You can change how the \l{QVariant}s are interpolated
     by creating a subclass of QVariantAnimation, and reimplementing
     the virtual interpolated() function.
 
@@ -101,6 +97,7 @@ QT_BEGIN_NAMESPACE
 
     \list
         \li \l{QMetaType::}{Int}
+        \li \l{QMetaType::}{UInt}
         \li \l{QMetaType::}{Double}
         \li \l{QMetaType::}{Float}
         \li \l{QMetaType::}{QLine}
@@ -117,7 +114,7 @@ QT_BEGIN_NAMESPACE
     If you need to interpolate other variant types, including custom
     types, you have to implement interpolation for these yourself.
     To do this, you can register an interpolator function for a given
-    type. This function takes 3 parameters: the start value, the end value
+    type. This function takes 3 parameters: the start value, the end value,
     and the current progress.
 
     Example:
@@ -205,11 +202,11 @@ void QVariantAnimationPrivate::convertValues(int t)
     //this ensures that all the keyValues are of type t
     for (int i = 0; i < keyValues.count(); ++i) {
         QVariantAnimation::KeyValue &pair = keyValues[i];
-        pair.second.convert(static_cast<QVariant::Type>(t));
+        pair.second.convert(t);
     }
     //we also need update to the current interval if needed
-    currentInterval.start.second.convert(static_cast<QVariant::Type>(t));
-    currentInterval.end.second.convert(static_cast<QVariant::Type>(t));
+    currentInterval.start.second.convert(t);
+    currentInterval.end.second.convert(t);
 
     //... and the interpolator
     updateInterpolator();
@@ -222,7 +219,7 @@ void QVariantAnimationPrivate::updateInterpolator()
         interpolator = getInterpolator(type);
     else
         interpolator = 0;
-    
+
     //we make sure that the interpolator is always set to something
     if (!interpolator)
         interpolator = &defaultInterpolator;
@@ -252,7 +249,7 @@ void QVariantAnimationPrivate::recalculateCurrentInterval(bool force/*=false*/)
                                                                            qMakePair(progress, QVariant()),
                                                                            animationValueLessThan);
         if (it == keyValues.constBegin()) {
-            //the item pointed to by it is the start element in the range    
+            //the item pointed to by it is the start element in the range
             if (it->first == 0 && keyValues.count() > 1) {
                 currentInterval.start = *it;
                 currentInterval.end = *(it+1);
@@ -309,8 +306,8 @@ void QVariantAnimationPrivate::setCurrentValueForProgress(const qreal progress)
 QVariant QVariantAnimationPrivate::valueAt(qreal step) const
 {
     QVariantAnimation::KeyValues::const_iterator result =
-        qBinaryFind(keyValues.begin(), keyValues.end(), qMakePair(step, QVariant()), animationValueLessThan);
-    if (result != keyValues.constEnd())
+        std::lower_bound(keyValues.constBegin(), keyValues.constEnd(), qMakePair(step, QVariant()), animationValueLessThan);
+    if (result != keyValues.constEnd() && !animationValueLessThan(qMakePair(step, QVariant()), *result))
         return result->second;
 
     return QVariant();
@@ -385,8 +382,8 @@ QVariantAnimation::~QVariantAnimation()
     keyValues are referring to this effective progress.
 
     The easing curve is used with the interpolator, the interpolated()
-    virtual function, the animation's duration, and iterationCount, to
-    control how the current value changes as the animation progresses.
+    virtual function, and the animation's duration to control how the
+    current value changes as the animation progresses.
 */
 QEasingCurve QVariantAnimation::easingCurve() const
 {
@@ -406,7 +403,7 @@ Q_GLOBAL_STATIC(QInterpolatorVector, registeredInterpolators)
 static QBasicMutex registeredInterpolatorsMutex;
 
 /*!
-    \fn void qRegisterAnimationInterpolator(QVariant (*func)(const T &from, const T &to, qreal progress))
+    \fn template <typename T> void qRegisterAnimationInterpolator(QVariant (*func)(const T &from, const T &to, qreal progress))
     \relates QVariantAnimation
     \threadsafe
 
@@ -451,7 +448,7 @@ void QVariantAnimation::registerInterpolator(QVariantAnimation::Interpolator fun
 
 template<typename T> static inline QVariantAnimation::Interpolator castToInterpolator(QVariant (*func)(const T &from, const T &to, qreal progress))
 {
-     return reinterpret_cast<QVariantAnimation::Interpolator>(func);
+     return reinterpret_cast<QVariantAnimation::Interpolator>(reinterpret_cast<void(*)()>(func));
 }
 
 QVariantAnimation::Interpolator QVariantAnimationPrivate::getInterpolator(int interpolationType)
@@ -470,6 +467,8 @@ QVariantAnimation::Interpolator QVariantAnimationPrivate::getInterpolator(int in
     {
     case QMetaType::Int:
         return castToInterpolator(_q_interpolateVariant<int>);
+    case QMetaType::UInt:
+        return castToInterpolator(_q_interpolateVariant<uint>);
     case QMetaType::Double:
         return castToInterpolator(_q_interpolateVariant<double>);
     case QMetaType::Float:
@@ -617,7 +616,7 @@ void QVariantAnimation::setKeyValues(const KeyValues &keyValues)
 {
     Q_D(QVariantAnimation);
     d->keyValues = keyValues;
-    qSort(d->keyValues.begin(), d->keyValues.end(), animationValueLessThan);
+    std::sort(d->keyValues.begin(), d->keyValues.end(), animationValueLessThan);
     d->recalculateCurrentInterval(/*force=*/true);
 }
 

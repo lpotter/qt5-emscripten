@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the $MODULE$ of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -138,6 +125,9 @@ private slots:
     void scrollTo();
     void scroll();
     void overshoot();
+
+private:
+    QTouchDevice *m_touchScreen = QTest::createTouchDevice();
 };
 
 /*! \internal
@@ -153,7 +143,6 @@ void tst_QScroller::kineticScroll( tst_QScrollerWidget *sw, QPointF from, QPoint
     QCOMPARE( s1->state(), QScroller::Inactive );
 
     QScrollerProperties sp1 = QScroller::scroller(sw)->scrollerProperties();
-    int fps = 60;
 
     QTouchEvent::TouchPoint rawTouchPoint;
     rawTouchPoint.setId(0);
@@ -164,11 +153,8 @@ void tst_QScroller::kineticScroll( tst_QScrollerWidget *sw, QPointF from, QPoint
     touchPoint.setPos(touchStart);
     touchPoint.setScenePos(touchStart);
     touchPoint.setScreenPos(touchStart);
-    QTouchDevice *device = new QTouchDevice;
-    device->setType(QTouchDevice::TouchScreen);
-    QWindowSystemInterface::registerTouchDevice(device);
     QTouchEvent touchEvent1(QEvent::TouchBegin,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointPressed,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -182,7 +168,7 @@ void tst_QScroller::kineticScroll( tst_QScrollerWidget *sw, QPointF from, QPoint
     touchPoint.setScenePos(touchUpdate);
     touchPoint.setScreenPos(touchUpdate);
     QTouchEvent touchEvent2(QEvent::TouchUpdate,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointMoved,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -192,8 +178,7 @@ void tst_QScroller::kineticScroll( tst_QScrollerWidget *sw, QPointF from, QPoint
     QCOMPARE( sw->receivedPrepare, true );
 
 
-    QTest::qWait(1000 / fps * 2); // wait until the first scroll move
-    QCOMPARE( sw->receivedFirst, true );
+    QTRY_COMPARE( sw->receivedFirst, true );
     QCOMPARE( sw->receivedScroll, true );
     QCOMPARE( sw->receivedOvershoot, false );
 
@@ -207,7 +192,7 @@ void tst_QScroller::kineticScroll( tst_QScrollerWidget *sw, QPointF from, QPoint
     touchPoint.setScenePos(touchEnd);
     touchPoint.setScreenPos(touchEnd);
     QTouchEvent touchEvent5(QEvent::TouchEnd,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointReleased,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -238,11 +223,8 @@ void tst_QScroller::kineticScrollNoTest( tst_QScrollerWidget *sw, QPointF from, 
     touchPoint.setPos(touchStart);
     touchPoint.setScenePos(touchStart);
     touchPoint.setScreenPos(touchStart);
-    QTouchDevice *device = new QTouchDevice;
-    device->setType(QTouchDevice::TouchScreen);
-    QWindowSystemInterface::registerTouchDevice(device);
     QTouchEvent touchEvent1(QEvent::TouchBegin,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointPressed,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -254,7 +236,7 @@ void tst_QScroller::kineticScrollNoTest( tst_QScrollerWidget *sw, QPointF from, 
     touchPoint.setScenePos(touchUpdate);
     touchPoint.setScreenPos(touchUpdate);
     QTouchEvent touchEvent2(QEvent::TouchUpdate,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointMoved,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -267,7 +249,7 @@ void tst_QScroller::kineticScrollNoTest( tst_QScrollerWidget *sw, QPointF from, 
     touchPoint.setScenePos(touchEnd);
     touchPoint.setScreenPos(touchEnd);
     QTouchEvent touchEvent5(QEvent::TouchEnd,
-                            device,
+                            m_touchScreen,
                             Qt::NoModifier,
                             Qt::TouchPointReleased,
                             (QList<QTouchEvent::TouchPoint>() << touchPoint));
@@ -307,7 +289,7 @@ void tst_QScroller::staticScrollers()
         QScrollerProperties sp2 = QScroller::scroller(o2)->scrollerProperties();
 
         // default properties should be the same
-        QVERIFY(sp1 == sp2);
+        QCOMPARE(sp1, sp2);
 
         QCOMPARE(QScroller::scroller(o1)->scrollerProperties(), sp1);
 
@@ -365,6 +347,9 @@ void tst_QScroller::scrollerProperties()
 
 void tst_QScroller::scrollTo()
 {
+#ifdef Q_OS_MAC
+    QSKIP("Flakey test - QTBUG-29950");
+#endif
     {
         tst_QScrollerWidget *sw = new tst_QScrollerWidget();
         sw->scrollArea = QRectF( 0, 0, 1000, 1000 );
@@ -391,11 +376,9 @@ void tst_QScroller::scrollTo()
 
 void tst_QScroller::scroll()
 {
-#if defined(Q_OS_MACX) && (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
-    QSKIP("Mac OS X < 10.6 does not support QTouchEvents");
-    return;
+#ifdef Q_OS_MAC
+    QSKIP("Flakey test - QTBUG-30133");
 #endif
-
 #ifndef QT_NO_GESTURES
     // -- good case. normal scroll
     tst_QScrollerWidget *sw = new tst_QScrollerWidget();
@@ -406,13 +389,12 @@ void tst_QScroller::scroll()
     QScroller *s1 = QScroller::scroller(sw);
     kineticScroll(sw, QPointF(500, 500), QPoint(0, 0), QPoint(100, 100), QPoint(200, 200));
     // now we should be scrolling
-    QCOMPARE( s1->state(), QScroller::Scrolling );
+    QTRY_COMPARE( s1->state(), QScroller::Scrolling );
 
-    // wait until finished, check that no further first scroll is send
+    // wait until finished, check that no further first scroll is sent
     sw->receivedFirst = false;
     sw->receivedScroll = false;
-    while (s1->state() == QScroller::Scrolling)
-        QTest::qWait(100);
+    QTRY_VERIFY(s1->state() != QScroller::Scrolling);
 
     QCOMPARE( sw->receivedFirst, false );
     QCOMPARE( sw->receivedScroll, true );
@@ -426,8 +408,7 @@ void tst_QScroller::scroll()
     sw->scrollArea = QRectF(0, 0, 0, 1000);
     kineticScrollNoTest(sw, QPointF(0, 500), QPoint(0, 0), QPoint(100, 0), QPoint(200, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     QCOMPARE(sw->currentPos.x(), 0.0);
     QCOMPARE(sw->currentPos.y(), 500.0);
@@ -438,11 +419,9 @@ void tst_QScroller::scroll()
 
 void tst_QScroller::overshoot()
 {
-#if defined(Q_OS_MACX) && (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
-    QSKIP("Mac OS X < 10.6 does not support QTouchEvents");
-    return;
+#ifdef Q_OS_MAC
+    QSKIP("Flakey test - QTBUG-29950");
 #endif
-
 #ifndef QT_NO_GESTURES
     tst_QScrollerWidget *sw = new tst_QScrollerWidget();
     sw->scrollArea = QRectF(0, 0, 1000, 1000);
@@ -462,8 +441,7 @@ void tst_QScroller::overshoot()
     s1->setScrollerProperties(sp1);
     kineticScrollNoTest(sw, QPointF(500, 500), QPoint(0, 0), QPoint(400, 0), QPoint(490, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     //qDebug() << "Overshoot fuzzy: "<<sw->currentPos;
     QVERIFY(qFuzzyCompare( sw->currentPos.x(), 0 ));
@@ -478,8 +456,7 @@ void tst_QScroller::overshoot()
     s1->setScrollerProperties(sp1);
     kineticScrollNoTest(sw, QPointF(0, 500), QPoint(0, 0), QPoint(400, 0), QPoint(490, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     //qDebug() << "Overshoot fuzzy: "<<sw->currentPos;
     QVERIFY(qFuzzyCompare( sw->currentPos.x(), 0 ));
@@ -494,8 +471,7 @@ void tst_QScroller::overshoot()
     s1->setScrollerProperties(sp1);
     kineticScrollNoTest(sw, QPointF(0, 500), QPoint(0, 0), QPoint(400, 0), QPoint(490, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     //qDebug() << "Overshoot fuzzy: "<<sw->currentPos;
 
@@ -511,8 +487,7 @@ void tst_QScroller::overshoot()
     s1->setScrollerProperties(sp1);
     kineticScrollNoTest(sw, QPointF(500, 500), QPoint(0, 0), QPoint(400, 0), QPoint(490, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     QVERIFY(qFuzzyCompare( sw->currentPos.x(), 0 ));
     QVERIFY(qFuzzyCompare( sw->currentPos.y(), 500 ));
@@ -528,8 +503,7 @@ void tst_QScroller::overshoot()
     s1->setScrollerProperties(sp1);
     kineticScrollNoTest(sw, QPointF(500, 500), QPoint(0, 0), QPoint(400, 0), QPoint(490, 0));
 
-    while (s1->state() != QScroller::Inactive)
-        QTest::qWait(20);
+    QTRY_COMPARE(s1->state(), QScroller::Inactive);
 
     QVERIFY(qFuzzyCompare( sw->currentPos.x(), 0 ));
     QVERIFY(qFuzzyCompare( sw->currentPos.y(), 500 ));

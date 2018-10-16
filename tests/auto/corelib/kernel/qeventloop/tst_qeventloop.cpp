@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,6 +33,13 @@
 #include <qcoreevent.h>
 #include <qeventloop.h>
 #include <private/qeventloop_p.h>
+#if defined(Q_OS_UNIX)
+  #include <private/qeventdispatcher_unix_p.h>
+  #include <QtCore/private/qcore_unix_p.h>
+  #if defined(HAVE_GLIB)
+    #include <private/qeventdispatcher_glib_p.h>
+  #endif
+#endif
 #include <qmutex.h>
 #include <qthread.h>
 #include <qtimer.h>
@@ -159,21 +153,8 @@ public slots:
     }
 };
 
-#ifndef QT_NO_EXCEPTIONS
-class QEventLoopTestException { };
-
-class ExceptionThrower : public QObject
-{
-    Q_OBJECT
-public:
-    ExceptionThrower() : QObject() { }
-public slots:
-    void throwException()
-    {
-        QEventLoopTestException e;
-        throw e;
-    }
-};
+#ifdef QT_GUI_LIB
+  #define tst_QEventLoop tst_QGuiEventLoop
 #endif
 
 class tst_QEventLoop : public QObject
@@ -183,14 +164,13 @@ private slots:
     // This test *must* run first. See the definition for why.
     void processEvents();
     void exec();
-#if !defined(QT_NO_EXCEPTIONS) && !defined(Q_OS_WINCE_WM)
-    void throwInExec();
-#endif
     void reexec();
     void execAfterExit();
     void wakeUp();
     void quit();
+#if defined(Q_OS_UNIX)
     void processEventsExcludeSocket();
+#endif
     void processEventsExcludeTimers();
     void deliverInDefinedOrder();
 
@@ -205,11 +185,11 @@ protected:
 
 void tst_QEventLoop::processEvents()
 {
-    QSignalSpy spy1(QAbstractEventDispatcher::instance(), SIGNAL(aboutToBlock()));
-    QSignalSpy spy2(QAbstractEventDispatcher::instance(), SIGNAL(awake()));
+    QSignalSpy aboutToBlockSpy(QAbstractEventDispatcher::instance(), &QAbstractEventDispatcher::aboutToBlock);
+    QSignalSpy awakeSpy(QAbstractEventDispatcher::instance(), &QAbstractEventDispatcher::awake);
 
-    QVERIFY(spy1.isValid());
-    QVERIFY(spy2.isValid());
+    QVERIFY(aboutToBlockSpy.isValid());
+    QVERIFY(awakeSpy.isValid());
 
     QEventLoop eventLoop;
 
@@ -218,42 +198,30 @@ void tst_QEventLoop::processEvents()
     // process posted events, QEventLoop::processEvents() should return
     // true
     QVERIFY(eventLoop.processEvents());
-    QCOMPARE(spy1.count(), 0);
-    QCOMPARE(spy2.count(), 1);
+    QCOMPARE(aboutToBlockSpy.count(), 0);
+    QCOMPARE(awakeSpy.count(), 1);
 
     // allow any session manager to complete its handshake, so that
-    // there are no pending events left.
+    // there are no pending events left. This tests that we are able
+    // to process all events from the queue, otherwise it will hang.
     while (eventLoop.processEvents())
         ;
-
-    // On mac we get application started events at this point,
-    // so process events one more time just to be sure.
-    eventLoop.processEvents();
-
-    // no events to process, QEventLoop::processEvents() should return
-    // false
-    spy1.clear();
-    spy2.clear();
-    QVERIFY(!eventLoop.processEvents());
-    QCOMPARE(spy1.count(), 0);
-    QCOMPARE(spy2.count(), 1);
 
     // make sure the test doesn't block forever
     int timerId = startTimer(100);
 
     // wait for more events to process, QEventLoop::processEvents()
     // should return true
-    spy1.clear();
-    spy2.clear();
+    aboutToBlockSpy.clear();
+    awakeSpy.clear();
     QVERIFY(eventLoop.processEvents(QEventLoop::WaitForMoreEvents));
 
-    // Verify that the eventloop has blocked and woken up. Some eventloops
-    // may block and wake up multiple times.
-    QVERIFY(spy1.count() > 0);
-    QVERIFY(spy2.count() > 0);
     // We should get one awake for each aboutToBlock, plus one awake when
-    // processEvents is entered.
-    QVERIFY(spy2.count() >= spy1.count());
+    // processEvents is entered. There is no guarantee that that the
+    // processEvents call actually blocked, since the OS may introduce
+    // native events at any time.
+    QVERIFY(awakeSpy.count() > 0);
+    QVERIFY(awakeSpy.count() >= aboutToBlockSpy.count());
 
     killTimer(timerId);
 }
@@ -292,7 +260,7 @@ void tst_QEventLoop::exec()
         thread.cond.wait(&thread.mutex);
 
         // make sure the eventloop runs
-        QSignalSpy spy(QAbstractEventDispatcher::instance(&thread), SIGNAL(awake()));
+        QSignalSpy spy(QAbstractEventDispatcher::instance(&thread), &QAbstractEventDispatcher::awake);
         QVERIFY(spy.isValid());
         thread.cond.wakeOne();
         thread.cond.wait(&thread.mutex);
@@ -321,53 +289,6 @@ void tst_QEventLoop::exec()
         QCOMPARE(executor.returnCode, -1);
     }
 }
-
-#if !defined(QT_NO_EXCEPTIONS) && !defined(Q_OS_WINCE_WM)
-// Exceptions need to be enabled for this test
-// Q_OS_WINCE_WM case: this platform doesn't support propagating exceptions through the event loop
-// Windows Mobile cannot handle cross library exceptions
-// qobject.cpp will try to rethrow the exception after handling
-// which causes gwes.exe to crash
-void tst_QEventLoop::throwInExec()
-{
-// exceptions compiled in, runtime tests follow.
-#if defined(Q_OS_LINUX)
-    // C++ exceptions can't be passed through glib callbacks.  Skip the test if
-    // we're using the glib event loop.
-    QByteArray dispatcher = QAbstractEventDispatcher::instance()->metaObject()->className();
-    if (dispatcher.contains("Glib")) {
-        QSKIP(
-            qPrintable(QString(
-                "Throwing exceptions in exec() won't work if %1 event dispatcher is used.\n"
-                "Try running with QT_NO_GLIB=1 in environment."
-            ).arg(QString::fromLatin1(dispatcher)))
-        );
-    }
-#endif
-
-    {
-        // QEventLoop::exec() is exception safe
-        QEventLoop eventLoop;
-        int caughtExceptions = 0;
-
-        try {
-            ExceptionThrower exceptionThrower;
-            QTimer::singleShot(EXEC_TIMEOUT, &exceptionThrower, SLOT(throwException()));
-            (void) eventLoop.exec();
-        } catch (...) {
-            ++caughtExceptions;
-        }
-        try {
-            ExceptionThrower exceptionThrower;
-            QTimer::singleShot(EXEC_TIMEOUT, &exceptionThrower, SLOT(throwException()));
-            (void) eventLoop.exec();
-        } catch (...) {
-            ++caughtExceptions;
-        }
-        QCOMPARE(caughtExceptions, 2);
-    }
-}
-#endif
 
 void tst_QEventLoop::reexec()
 {
@@ -402,7 +323,7 @@ void tst_QEventLoop::wakeUp()
     thread.start();
     (void) eventLoop.exec();
 
-    QSignalSpy spy(QAbstractEventDispatcher::instance(&thread), SIGNAL(awake()));
+    QSignalSpy spy(QAbstractEventDispatcher::instance(&thread), &QAbstractEventDispatcher::awake);
     QVERIFY(spy.isValid());
     thread.eventLoop->wakeUp();
 
@@ -448,6 +369,7 @@ void tst_QEventLoop::customEvent(QEvent *e)
     }
 }
 
+#if defined(Q_OS_UNIX)
 class SocketEventsTester: public QObject
 {
     Q_OBJECT
@@ -456,8 +378,10 @@ public:
     {
         socket = 0;
         server = 0;
-        dataArrived = false;
+        dataSent = false;
+        dataReadable = false;
         testResult = false;
+        dataArrived = false;
     }
     ~SocketEventsTester()
     {
@@ -480,8 +404,10 @@ public:
 
     QTcpSocket *socket;
     QTcpServer *server;
-    bool dataArrived;
+    bool dataSent;
+    bool dataReadable;
     bool testResult;
+    bool dataArrived;
 public slots:
     void sendAck()
     {
@@ -493,12 +419,23 @@ public slots:
         qint64 size = sizeof(data);
 
         QTcpSocket *serverSocket = server->nextPendingConnection();
+        QCoreApplication::processEvents();
         serverSocket->write(data, size);
-        serverSocket->flush();
-        QTest::qSleep(200); //allow the TCP/IP stack time to loopback the data, so our socket is ready to read
-        QCoreApplication::processEvents(QEventLoop::ExcludeSocketNotifiers);
-        testResult = dataArrived;
-        QCoreApplication::processEvents(); //check the deferred event is processed
+        dataSent = serverSocket->waitForBytesWritten(-1);
+
+        if (dataSent) {
+            pollfd pfd = qt_make_pollfd(socket->socketDescriptor(), POLLIN);
+            dataReadable = (1 == qt_safe_poll(&pfd, 1, nullptr));
+        }
+
+        if (!dataReadable) {
+            testResult = dataArrived;
+        } else {
+            QCoreApplication::processEvents(QEventLoop::ExcludeSocketNotifiers);
+            testResult = dataArrived;
+            // to check if the deferred event is processed
+            QCoreApplication::processEvents();
+        }
         serverSocket->close();
         QThread::currentThread()->exit(0);
     }
@@ -514,12 +451,16 @@ public:
         SocketEventsTester *tester = new SocketEventsTester();
         if (tester->init())
             exec();
+        dataSent = tester->dataSent;
+        dataReadable = tester->dataReadable;
         testResult = tester->testResult;
         dataArrived = tester->dataArrived;
         delete tester;
     }
-     bool testResult;
-     bool dataArrived;
+    bool dataSent;
+    bool dataReadable;
+    bool testResult;
+    bool dataArrived;
 };
 
 void tst_QEventLoop::processEventsExcludeSocket()
@@ -527,9 +468,17 @@ void tst_QEventLoop::processEventsExcludeSocket()
     SocketTestThread thread;
     thread.start();
     QVERIFY(thread.wait());
+    QVERIFY(thread.dataSent);
+    QVERIFY(thread.dataReadable);
+  #if defined(HAVE_GLIB)
+    QAbstractEventDispatcher *eventDispatcher = QCoreApplication::eventDispatcher();
+    if (qobject_cast<QEventDispatcherGlib *>(eventDispatcher))
+        QEXPECT_FAIL("", "ExcludeSocketNotifiers is currently broken in the Glib dispatchers", Continue);
+  #endif
     QVERIFY(!thread.testResult);
     QVERIFY(thread.dataArrived);
 }
+#endif
 
 class TimerReceiver : public QObject
 {
@@ -558,11 +507,19 @@ void tst_QEventLoop::processEventsExcludeTimers()
     QCOMPARE(timerReceiver.gotTimerEvent, timerId);
     timerReceiver.gotTimerEvent = -1;
 
-    // normal process events will send timers
+    // but not if we exclude timers
     eventLoop.processEvents(QEventLoop::X11ExcludeTimers);
-#if !defined(Q_OS_UNIX)
-    QEXPECT_FAIL("", "X11ExcludeTimers only works on UN*X", Continue);
+
+#if defined(Q_OS_UNIX)
+    QAbstractEventDispatcher *eventDispatcher = QCoreApplication::eventDispatcher();
+    if (!qobject_cast<QEventDispatcherUNIX *>(eventDispatcher)
+  #if defined(HAVE_GLIB)
+        && !qobject_cast<QEventDispatcherGlib *>(eventDispatcher)
+  #endif
+        )
 #endif
+        QEXPECT_FAIL("", "X11ExcludeTimers only supported in the UNIX/Glib dispatchers", Continue);
+
     QCOMPARE(timerReceiver.gotTimerEvent, -1);
     timerReceiver.gotTimerEvent = -1;
 
@@ -571,8 +528,6 @@ void tst_QEventLoop::processEventsExcludeTimers()
     QCOMPARE(timerReceiver.gotTimerEvent, timerId);
     timerReceiver.gotTimerEvent = -1;
 }
-
-Q_DECLARE_METATYPE(QThread*)
 
 namespace DeliverInDefinedOrder {
     enum { NbThread = 3,  NbObject = 500, NbEventQueue = 5, NbEvent = 50 };
@@ -631,7 +586,6 @@ void tst_QEventLoop::deliverInDefinedOrder()
         }
     }
 
-    QTest::qWait(30);
     for (int o = 0; o < NbObject; o++) {
         QTRY_COMPARE(objects[o].count, int(NbEvent));
     }
@@ -649,7 +603,7 @@ class JobObject : public QObject
 public:
 
     explicit JobObject(QEventLoop *loop, QObject *parent = 0)
-        : QObject(parent), loop(loop), locker(loop)
+        : QObject(parent), locker(loop)
     {
     }
 
@@ -675,18 +629,12 @@ signals:
     void done();
 
 private:
-    QEventLoop *loop;
     QEventLoopLocker locker;
 };
 
 void tst_QEventLoop::testQuitLock()
 {
     QEventLoop eventLoop;
-
-    QTimer timer;
-    timer.setInterval(100);
-    QSignalSpy timerSpy(&timer, SIGNAL(timeout()));
-    timer.start();
 
     QEventLoopPrivate* privateClass = static_cast<QEventLoopPrivate*>(QObjectPrivate::get(&eventLoop));
 
@@ -701,9 +649,6 @@ void tst_QEventLoop::testQuitLock()
 
     QCOMPARE(privateClass->quitLockRef.load(), 0);
 
-    // The job takes long enough that the timer times out several times.
-    QVERIFY(timerSpy.count() > 3);
-    timerSpy.clear();
 
     job1 = new JobObject(&eventLoop, this);
     job1->start(200);
@@ -716,11 +661,6 @@ void tst_QEventLoop::testQuitLock()
     }
 
     eventLoop.exec();
-
-    qDebug() << timerSpy.count();
-    // The timer times out more if it has more subjobs to do.
-    // We run 10 jobs in sequence here of about 200ms each.
-    QVERIFY(timerSpy.count() > 17);
 }
 
 QTEST_MAIN(tst_QEventLoop)

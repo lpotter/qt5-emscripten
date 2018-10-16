@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,12 @@
 #ifndef QPROGRESSBAR_H
 #define QPROGRESSBAR_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qframe.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(progressbar);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_PROGRESSBAR
 
 class QProgressBarPrivate;
 class QStyleOptionProgressBar;
@@ -57,7 +53,6 @@ class QStyleOptionProgressBar;
 class Q_WIDGETS_EXPORT QProgressBar : public QWidget
 {
     Q_OBJECT
-    Q_ENUMS(Direction)
     Q_PROPERTY(int minimum READ minimum WRITE setMinimum)
     Q_PROPERTY(int maximum READ maximum WRITE setMaximum)
     Q_PROPERTY(QString text READ text)
@@ -67,12 +62,13 @@ class Q_WIDGETS_EXPORT QProgressBar : public QWidget
     Q_PROPERTY(Qt::Orientation orientation READ orientation WRITE setOrientation)
     Q_PROPERTY(bool invertedAppearance READ invertedAppearance WRITE setInvertedAppearance)
     Q_PROPERTY(Direction textDirection READ textDirection WRITE setTextDirection)
-    Q_PROPERTY(QString format READ format WRITE setFormat)
+    Q_PROPERTY(QString format READ format WRITE setFormat RESET resetFormat)
 
 public:
     enum Direction { TopToBottom, BottomToTop };
+    Q_ENUM(Direction)
 
-    explicit QProgressBar(QWidget *parent = 0);
+    explicit QProgressBar(QWidget *parent = nullptr);
     ~QProgressBar();
 
     int minimum() const;
@@ -87,8 +83,8 @@ public:
     Qt::Alignment alignment() const;
     void setAlignment(Qt::Alignment alignment);
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
     Qt::Orientation orientation() const;
 
@@ -98,6 +94,7 @@ public:
     QProgressBar::Direction textDirection() const;
 
     void setFormat(const QString &format);
+    void resetFormat();
     QString format() const;
 
 public Q_SLOTS:
@@ -112,8 +109,8 @@ Q_SIGNALS:
     void valueChanged(int value);
 
 protected:
-    bool event(QEvent *e);
-    void paintEvent(QPaintEvent *);
+    bool event(QEvent *e) override;
+    void paintEvent(QPaintEvent *) override;
     void initStyleOption(QStyleOptionProgressBar *option) const;
 
 private:
@@ -121,10 +118,6 @@ private:
     Q_DISABLE_COPY(QProgressBar)
 };
 
-#endif // QT_NO_PROGRESSBAR
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPROGRESSBAR_H

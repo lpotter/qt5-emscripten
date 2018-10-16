@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,11 +51,13 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "private/qabstractitemview_p.h"
 #include <QtCore/qvariantanimation.h>
 #include <QtCore/qabstractitemmodel.h>
+#include <QtCore/qvector.h>
 
-#ifndef QT_NO_TREEVIEW
+QT_REQUIRE_CONFIG(treeview);
 
 QT_BEGIN_NAMESPACE
 
@@ -89,15 +89,21 @@ public:
           uniformRowHeights(false), rootDecoration(true),
           itemsExpandable(true), sortingEnabled(false),
           expandsOnDoubleClick(true),
-          allColumnsShowFocus(false), current(0), spanning(false),
+          allColumnsShowFocus(false), customIndent(false), current(0), spanning(false),
           animationsEnabled(false), columnResizeTimerID(0),
-          autoExpandDelay(-1), hoverBranch(-1), geometryRecursionBlock(false), hasRemovedItems(false) {}
+          autoExpandDelay(-1), hoverBranch(-1), geometryRecursionBlock(false), hasRemovedItems(false),
+          treePosition(0) {}
 
     ~QTreeViewPrivate() {}
     void initialize();
+    int logicalIndexForTree() const;
+    inline bool isTreePosition(int logicalIndex) const
+    {
+        return logicalIndex == logicalIndexForTree();
+    }
 
-    QItemViewPaintPairs draggablePaintPairs(const QModelIndexList &indexes, QRect *r) const;
-    void adjustViewOptionsForIndex(QStyleOptionViewItem *option, const QModelIndex &current) const;
+    QItemViewPaintPairs draggablePaintPairs(const QModelIndexList &indexes, QRect *r) const override;
+    void adjustViewOptionsForIndex(QStyleOptionViewItem *option, const QModelIndex &current) const override;
 
 #ifndef QT_NO_ANIMATION
     struct AnimatedOperation : public QVariantAnimation
@@ -109,8 +115,8 @@ public:
         AnimatedOperation() : item(0) { setEasingCurve(QEasingCurve::InOutQuad); }
         int top() const { return startValue().toInt(); }
         QRect rect() const { QRect rect = viewport->rect(); rect.moveTop(top()); return rect; }
-        void updateCurrentValue(const QVariant &) { viewport->update(rect()); }
-        void updateState(State state, State) { if (state == Stopped) before = after = QPixmap(); }
+        void updateCurrentValue(const QVariant &) override { viewport->update(rect()); }
+        void updateState(State state, State) override { if (state == Stopped) before = after = QPixmap(); }
     } animatedOperation;
     void prepareAnimatedOperation(int item, QVariantAnimation::Direction d);
     void beginAnimatedOperation();
@@ -122,11 +128,11 @@ public:
     void expand(int item, bool emitSignal);
     void collapse(int item, bool emitSignal);
 
-    void _q_columnsAboutToBeRemoved(const QModelIndex &, int, int);
-    void _q_columnsRemoved(const QModelIndex &, int, int);
+    void _q_columnsAboutToBeRemoved(const QModelIndex &, int, int) override;
+    void _q_columnsRemoved(const QModelIndex &, int, int) override;
     void _q_modelAboutToBeReset();
     void _q_sortIndicatorChanged(int column, Qt::SortOrder order);
-    void _q_modelDestroyed();
+    void _q_modelDestroyed() override;
 
     void layout(int item, bool recusiveExpanding = false, bool afterIsUninitialized = false);
 
@@ -148,6 +154,7 @@ public:
 #endif
 
     int firstVisibleItem(int *offset = 0) const;
+    int lastVisibleItem(int firstVisual = -1, int offset = -1) const;
     int columnAt(int x) const;
     bool hasVisibleChildren( const QModelIndex& parent) const;
 
@@ -159,7 +166,7 @@ public:
     QRect itemDecorationRect(const QModelIndex &index) const;
 
 
-    QList<QPair<int, int> > columnRanges(const QModelIndex &topIndex, const QModelIndex &bottomIndex) const;
+    QVector<QPair<int, int> > columnRanges(const QModelIndex &topIndex, const QModelIndex &bottomIndex) const;
     void select(const QModelIndex &start, const QModelIndex &stop, QItemSelectionModel::SelectionFlags command);
 
     QPair<int,int> startAndEndColumns(const QRect &rect) const;
@@ -171,7 +178,7 @@ public:
     // logicalIndices: vector of currently visibly logical indices
     // itemPositions: vector of view item positions (beginning/middle/end/onlyone)
     void calcLogicalIndices(QVector<int> *logicalIndices, QVector<QStyleOptionViewItem::ViewItemPosition> *itemPositions, int left, int right) const;
-
+    int widthHintForIndex(const QModelIndex &index, int hint, const QStyleOptionViewItem &option, int i) const;
     QHeaderView *header;
     int indent;
 
@@ -184,6 +191,7 @@ public:
     bool sortingEnabled;
     bool expandsOnDoubleClick;
     bool allColumnsShowFocus;
+    bool customIndent;
 
     // used for drawing
     mutable QPair<int,int> leftAndRight;
@@ -203,13 +211,15 @@ public:
 
     inline bool isIndexExpanded(const QModelIndex &idx) const {
         //We first check if the idx is a QPersistentModelIndex, because creating QPersistentModelIndex is slow
-        return isPersistent(idx) && expandedIndexes.contains(idx);
+        return !(idx.flags() & Qt::ItemNeverHasChildren) && isPersistent(idx) && expandedIndexes.contains(idx);
     }
 
     // used when hiding and showing items
     QSet<QPersistentModelIndex> hiddenIndexes;
 
     inline bool isRowHidden(const QModelIndex &idx) const {
+        if (hiddenIndexes.isEmpty())
+            return false;
         //We first check if the idx is a QPersistentModelIndex, because creating QPersistentModelIndex is slow
         return isPersistent(idx) && hiddenIndexes.contains(idx);
     }
@@ -229,11 +239,15 @@ public:
         { viewItems[item].height = 0; }
 
     inline int accessibleTable2Index(const QModelIndex &index) const {
-        return (viewIndex(index) + (header ? 1 : 0)) * model->columnCount()+index.column() + 1;
+        return (viewIndex(index) + (header ? 1 : 0)) * model->columnCount()+index.column();
     }
 
+    int accessibleTree2Index(const QModelIndex &index) const;
+
+    void updateIndentationFromStyle();
+
     // used for spanning rows
-    QVector<QPersistentModelIndex> spanningIndexes;
+    QSet<QPersistentModelIndex> spanningIndexes;
 
     // used for updating resized columns
     int columnResizeTimerID;
@@ -251,10 +265,11 @@ public:
 
     // If we should clean the set
     bool hasRemovedItems;
+
+    // tree position
+    int treePosition;
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TREEVIEW
 
 #endif // QTREEVIEW_P_H

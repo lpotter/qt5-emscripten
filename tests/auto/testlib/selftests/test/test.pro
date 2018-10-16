@@ -1,7 +1,6 @@
 CONFIG += testcase
-CONFIG += parallel_test
 SOURCES += ../tst_selftests.cpp
-QT = core xml testlib-private
+QT = core testlib-private
 
 TARGET = ../tst_selftests
 
@@ -13,9 +12,10 @@ win32 {
   }
 }
 
-RESOURCES += ../selftests.qrc
+expected_files.files = $$files($$PWD/../expected_*)
+expected_files.base = $$PWD/..
+RESOURCES += expected_files
 
 include(../selftests.pri)
-for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../$${file}/$${file}"
+!android:!winrt: for(file, SUBPROGRAMS): TEST_HELPER_INSTALLS += "../$${file}/$${file}"
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

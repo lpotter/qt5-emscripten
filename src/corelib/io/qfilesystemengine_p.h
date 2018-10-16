@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,6 +73,7 @@ public:
     static QFileSystemEntry getLinkTarget(const QFileSystemEntry &link, QFileSystemMetaData &data);
     static QFileSystemEntry canonicalName(const QFileSystemEntry &entry, QFileSystemMetaData &data);
     static QFileSystemEntry absoluteName(const QFileSystemEntry &entry);
+    static QByteArray id(const QFileSystemEntry &entry);
     static QString resolveUserName(const QFileSystemEntry &entry, QFileSystemMetaData &data);
     static QString resolveGroupName(const QFileSystemEntry &entry, QFileSystemMetaData &data);
 
@@ -83,7 +82,7 @@ public:
     static QString resolveGroupName(uint groupId);
 #endif
 
-#if defined(Q_OS_MAC) && !defined(Q_OS_IOS)
+#if defined(Q_OS_DARWIN)
     static QString bundleName(const QFileSystemEntry &entry);
 #else
     static QString bundleName(const QFileSystemEntry &entry) { Q_UNUSED(entry) return QString(); }
@@ -92,7 +91,13 @@ public:
     static bool fillMetaData(const QFileSystemEntry &entry, QFileSystemMetaData &data,
                              QFileSystemMetaData::MetaDataFlags what);
 #if defined(Q_OS_UNIX)
+    static bool cloneFile(int srcfd, int dstfd, const QFileSystemMetaData &knownData);
     static bool fillMetaData(int fd, QFileSystemMetaData &data); // what = PosixStatFlags
+    static QByteArray id(int fd);
+    static bool setFileTime(int fd, const QDateTime &newDate,
+                            QAbstractFileEngine::FileTime whatTime, QSystemError &error);
+    static bool setPermissions(int fd, QFile::Permissions permissions, QSystemError &error,
+                               QFileSystemMetaData *data = nullptr);
 #endif
 #if defined(Q_OS_WIN)
 
@@ -103,6 +108,9 @@ public:
                              QFileSystemMetaData::MetaDataFlags what);
     static bool fillPermissions(const QFileSystemEntry &entry, QFileSystemMetaData &data,
                                 QFileSystemMetaData::MetaDataFlags what);
+    static QByteArray id(HANDLE fHandle);
+    static bool setFileTime(HANDLE fHandle, const QDateTime &newDate,
+                            QAbstractFileEngine::FileTime whatTime, QSystemError &error);
     static QString owner(const QFileSystemEntry &entry, QAbstractFileEngine::FileOwner own);
     static QString nativeAbsoluteFilePath(const QString &path);
 #endif
@@ -118,10 +126,15 @@ public:
 
     static bool copyFile(const QFileSystemEntry &source, const QFileSystemEntry &target, QSystemError &error);
     static bool renameFile(const QFileSystemEntry &source, const QFileSystemEntry &target, QSystemError &error);
+    static bool renameOverwriteFile(const QFileSystemEntry &source, const QFileSystemEntry &target, QSystemError &error);
     static bool removeFile(const QFileSystemEntry &entry, QSystemError &error);
 
     static bool setPermissions(const QFileSystemEntry &entry, QFile::Permissions permissions, QSystemError &error,
                                QFileSystemMetaData *data = 0);
+
+    // unused, therefore not implemented
+    static bool setFileTime(const QFileSystemEntry &entry, const QDateTime &newDate,
+                            QAbstractFileEngine::FileTime whatTime, QSystemError &error);
 
     static bool setCurrentPath(const QFileSystemEntry &entry);
     static QFileSystemEntry currentPath();

@@ -1,12 +1,10 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qpathclipper
 INCLUDEPATH += .
 HEADERS += paths.h
 SOURCES  += tst_qpathclipper.cpp paths.cpp
 QT += gui-private testlib
 
-requires(contains(QT_CONFIG,private_tests))
+requires(qtConfig(private_tests))
 
-unix:!mac:LIBS+=-lm
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+unix:!darwin:!haiku:!integrity: LIBS += -lm

@@ -1,22 +1,19 @@
 TARGET = qcocoa
 
-PLUGIN_TYPE = platforms
-load(qt_plugin)
-
-OBJECTIVE_SOURCES += main.mm \
+SOURCES += main.mm \
     qcocoaintegration.mm \
+    qcocoascreen.mm \
     qcocoatheme.mm \
     qcocoabackingstore.mm \
     qcocoawindow.mm \
     qnsview.mm \
-    qnsviewaccessibility.mm \
-    qcocoaautoreleasepool.mm \
+    qnswindow.mm \
     qnswindowdelegate.mm \
-    qcocoaglcontext.mm \
     qcocoanativeinterface.mm \
     qcocoaeventdispatcher.mm \
     qcocoaapplicationdelegate.mm \
     qcocoaapplication.mm \
+    qcocoansmenu.mm \
     qcocoamenu.mm \
     qcocoamenuitem.mm \
     qcocoamenubar.mm \
@@ -25,32 +22,32 @@ OBJECTIVE_SOURCES += main.mm \
     qmultitouch_mac.mm \
     qcocoaaccessibilityelement.mm \
     qcocoaaccessibility.mm \
-    qcocoacolordialoghelper.mm \
-    qcocoafiledialoghelper.mm \
-    qcocoafontdialoghelper.mm \
     qcocoacursor.mm \
     qcocoaclipboard.mm \
     qcocoadrag.mm \
     qmacclipboard.mm \
-    qmacmime.mm \
     qcocoasystemsettings.mm \
     qcocoainputcontext.mm \
     qcocoaservices.mm \
     qcocoasystemtrayicon.mm \
     qcocoaintrospection.mm \
+    qcocoakeymapper.mm \
+    qcocoamimetypes.mm \
+    messages.cpp
 
 HEADERS += qcocoaintegration.h \
+    qcocoascreen.h \
     qcocoatheme.h \
     qcocoabackingstore.h \
     qcocoawindow.h \
     qnsview.h \
-    qcocoaautoreleasepool.h \
+    qnswindow.h \
     qnswindowdelegate.h \
-    qcocoaglcontext.h \
     qcocoanativeinterface.h \
     qcocoaeventdispatcher.h \
     qcocoaapplicationdelegate.h \
     qcocoaapplication.h \
+    qcocoansmenu.h \
     qcocoamenu.h \
     qcocoamenuitem.h \
     qcocoamenubar.h \
@@ -59,55 +56,78 @@ HEADERS += qcocoaintegration.h \
     qmultitouch_mac_p.h \
     qcocoaaccessibilityelement.h \
     qcocoaaccessibility.h \
-    qcocoacolordialoghelper.h \
-    qcocoafiledialoghelper.h \
-    qcocoafontdialoghelper.h \
     qcocoacursor.h \
     qcocoaclipboard.h \
     qcocoadrag.h \
     qmacclipboard.h \
-    qmacmime.h \
     qcocoasystemsettings.h \
     qcocoainputcontext.h \
     qcocoaservices.h \
     qcocoasystemtrayicon.h \
     qcocoaintrospection.h \
+    qcocoakeymapper.h \
+    messages.h \
+    qcocoamimetypes.h
+
+qtConfig(opengl.*) {
+    SOURCES += qcocoaglcontext.mm
+    HEADERS += qcocoaglcontext.h
+}
+
+qtConfig(vulkan) {
+    SOURCES += qcocoavulkaninstance.mm
+    HEADERS += qcocoavulkaninstance.h
+}
 
 RESOURCES += qcocoaresources.qrc
 
-LIBS += -framework Cocoa -framework IOKit
+LIBS += -framework AppKit -framework CoreServices -framework Carbon -framework IOKit -framework QuartzCore -framework CoreVideo -framework Metal -lcups
 
-QT += core-private gui-private platformsupport-private
+QT += \
+    core-private gui-private \
+    accessibility_support-private clipboard_support-private theme_support-private \
+    fontdatabase_support-private graphics_support-private
 
-!contains(QT_CONFIG, no-widgets) {
-    OBJECTIVE_SOURCES += \
+qtConfig(vulkan): QT += vulkan_support-private
+
+CONFIG += no_app_extension_api_only
+
+qtHaveModule(widgets) {
+    QT_FOR_CONFIG += widgets
+
+    SOURCES += \
         qpaintengine_mac.mm \
         qprintengine_mac.mm \
         qcocoaprintersupport.mm \
+        qcocoaprintdevice.mm \
 
     HEADERS += \
         qpaintengine_mac_p.h \
         qprintengine_mac_p.h \
         qcocoaprintersupport.h \
+        qcocoaprintdevice.h \
+
+    qtConfig(colordialog) {
+        SOURCES += qcocoacolordialoghelper.mm
+        HEADERS += qcocoacolordialoghelper.h
+    }
+
+    qtConfig(filedialog) {
+        SOURCES += qcocoafiledialoghelper.mm
+        HEADERS += qcocoafiledialoghelper.h
+    }
+
+    qtConfig(fontdialog) {
+        SOURCES += qcocoafontdialoghelper.mm
+        HEADERS += qcocoafontdialoghelper.h
+    }
 
     QT += widgets-private printsupport-private
 }
 
 OTHER_FILES += cocoa.json
 
-# Build the release libqcocoa.dylib only, skip the debug version.
-# The Qt plugin loader will dlopen both if found, causing duplicate
-# Objective-c class definitions for the classes defined in the plugin.
-contains(QT_CONFIG,release):CONFIG -= debug
-contains(QT_CONFIG,debug_and_release):CONFIG -= debug_and_release
-contains(QT_CONFIG,build_all):CONFIG -= build_all
-
-# Acccessibility debug support
-# DEFINES += QT_COCOA_ENABLE_ACCESSIBILITY_INSPECTOR
-# include ($$PWD/../../../../util/accessibilityinspector/accessibilityinspector.pri)
-
-# Accessibility is currently unstable and disabled.
-DEFINES += QT_NO_COCOA_ACCESSIBILITY
-
-# Window debug support
-#DEFINES += QT_COCOA_ENABLE_WINDOW_DEBUG
+PLUGIN_TYPE = platforms
+PLUGIN_CLASS_NAME = QCocoaIntegrationPlugin
+!equals(TARGET, $$QT_DEFAULT_QPA_PLUGIN): PLUGIN_EXTENDS = -
+load(qt_plugin)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +40,19 @@
 #if !defined(QMETAOBJECT_P_H) && !defined(UTILS_H)
 # error "Include qmetaobject_p.h (or moc's utils.h) before including this file."
 #endif
+
+//
+//  W A R N I N G
+//  -------------
+//
+// This file is not part of the Qt API.  It exists purely as an
+// implementation detail.  This header file may change from version to
+// version without notice, or even be removed.
+//
+// We mean it.
+//
+
+#include <QtCore/private/qglobal_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -71,7 +82,7 @@ static QByteArray normalizeTypeInternal(const char *t, const char *e, bool fixSc
             break;
         }
         /*
-          We musn't convert 'char * const *' into 'const char **'
+          We mustn't convert 'char * const *' into 'const char **'
           and we must beware of 'Bar<const Bla>'.
         */
         if (t[i] == '&' || t[i] == '*' ||t[i] == '<')
@@ -155,21 +166,28 @@ static QByteArray normalizeTypeInternal(const char *t, const char *e, bool fixSc
             //template recursion
             const char* tt = t;
             int templdepth = 1;
+            int scopeDepth = 0;
             while (t != e) {
                 c = *t++;
-                if (c == '<')
-                    ++templdepth;
-                if (c == '>')
-                    --templdepth;
-                if (templdepth == 0 || (templdepth == 1 && c == ',')) {
-                    result += normalizeTypeInternal(tt, t-1, fixScope, false);
-                    result += c;
-                    if (templdepth == 0) {
-                        if (*t == '>')
-                            result += ' '; // avoid >>
-                        break;
+                if (c == '{' || c == '(' || c == '[')
+                    ++scopeDepth;
+                if (c == '}' || c == ')' || c == ']')
+                    --scopeDepth;
+                if (scopeDepth == 0) {
+                    if (c == '<')
+                        ++templdepth;
+                    if (c == '>')
+                        --templdepth;
+                    if (templdepth == 0 || (templdepth == 1 && c == ',')) {
+                        result += normalizeTypeInternal(tt, t-1, fixScope, false);
+                        result += c;
+                        if (templdepth == 0) {
+                            if (*t == '>')
+                                result += ' '; // avoid >>
+                            break;
+                        }
+                        tt = t;
                     }
-                    tt = t;
                 }
             }
         }

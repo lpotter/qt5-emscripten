@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,40 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qlocalsocket_p.h"
-
-#include <private/qthread_p.h>
-#include <qcoreapplication.h>
-#include <qdebug.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -67,7 +61,7 @@ void QLocalSocketPrivate::_q_winError(ulong windowsError, const QString &functio
     Q_Q(QLocalSocket);
     QLocalSocket::LocalSocketState currentState = state;
 
-    // If the connectToServer fails due to WaitNamedPipe() time-out, assume ConnectionError  
+    // If the connectToServer fails due to WaitNamedPipe() time-out, assume ConnectionError
     if (state == QLocalSocket::ConnectingState && windowsError == ERROR_SEM_TIMEOUT)
         windowsError = ERROR_NO_DATA;
 
@@ -113,6 +107,7 @@ QLocalSocketPrivate::QLocalSocketPrivate() : QIODevicePrivate(),
        error(QLocalSocket::UnknownSocketError),
        state(QLocalSocket::UnconnectedState)
 {
+    writeBufferChunkSize = QIODEVICE_BUFFERSIZE;
 }
 
 QLocalSocketPrivate::~QLocalSocketPrivate()
@@ -128,7 +123,7 @@ void QLocalSocketPrivate::destroyPipeHandles()
     }
 }
 
-void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
+void QLocalSocket::connectToServer(OpenMode openMode)
 {
     Q_D(QLocalSocket);
     if (state() == ConnectedState || state() == ConnectingState) {
@@ -141,7 +136,7 @@ void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
     d->errorString = QString();
     d->state = ConnectingState;
     emit stateChanged(d->state);
-    if (name.isEmpty()) {
+    if (d->serverName.isEmpty()) {
         d->error = QLocalSocket::ServerNotFoundError;
         setErrorString(QLocalSocket::tr("%1: Invalid name").arg(QLatin1String("QLocalSocket::connectToServer")));
         d->state = UnconnectedState;
@@ -150,17 +145,17 @@ void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
         return;
     }
 
-    QString pipePath = QLatin1String("\\\\.\\pipe\\");
-    if (name.startsWith(pipePath))
-        d->fullServerName = name;
+    const QLatin1String pipePath("\\\\.\\pipe\\");
+    if (d->serverName.startsWith(pipePath))
+        d->fullServerName = d->serverName;
     else
-        d->fullServerName = pipePath + name;
+        d->fullServerName = pipePath + d->serverName;
     // Try to open a named pipe
     HANDLE localSocket;
     forever {
         DWORD permissions = (openMode & QIODevice::ReadOnly) ? GENERIC_READ : 0;
         permissions |= (openMode & QIODevice::WriteOnly) ? GENERIC_WRITE : 0;
-        localSocket = CreateFile((const wchar_t *)d->fullServerName.utf16(),   // pipe name
+        localSocket = CreateFile(reinterpret_cast<const wchar_t *>(d->fullServerName.utf16()), // pipe name
                                  permissions,
                                  0,              // no sharing
                                  NULL,           // default security attributes
@@ -188,11 +183,8 @@ void QLocalSocket::connectToServer(const QString &name, OpenMode openMode)
     }
 
     // we have a valid handle
-    d->serverName = name;
-    if (setSocketDescriptor((qintptr)localSocket, ConnectedState, openMode)) {
-        d->handle = localSocket;
+    if (setSocketDescriptor(reinterpret_cast<qintptr>(localSocket), ConnectedState, openMode))
         emit connected();
-    }
 }
 
 // This is reading from the buffer
@@ -203,19 +195,34 @@ qint64 QLocalSocket::readData(char *data, qint64 maxSize)
     if (!maxSize)
         return 0;
 
-    return d->pipeReader->read(data, maxSize);
+    qint64 ret = d->pipeReader->read(data, maxSize);
+
+    // QWindowsPipeReader::read() returns error codes that don't match what we need
+    switch (ret) {
+    case 0:     // EOF -> transform to error
+        return -1;
+    case -2:    // EWOULDBLOCK -> no error, just no bytes
+        return 0;
+    default:
+        return ret;
+    }
 }
 
-qint64 QLocalSocket::writeData(const char *data, qint64 maxSize)
+qint64 QLocalSocket::writeData(const char *data, qint64 len)
 {
     Q_D(QLocalSocket);
+    if (len == 0)
+        return 0;
+    d->writeBuffer.append(data, len);
     if (!d->pipeWriter) {
         d->pipeWriter = new QWindowsPipeWriter(d->handle, this);
-        connect(d->pipeWriter, SIGNAL(canWrite()), this, SLOT(_q_canWrite()));
-        connect(d->pipeWriter, SIGNAL(bytesWritten(qint64)), this, SIGNAL(bytesWritten(qint64)));
-        d->pipeWriter->start();
+        connect(d->pipeWriter, &QWindowsPipeWriter::bytesWritten,
+                this, &QLocalSocket::bytesWritten);
+        QObjectPrivate::connect(d->pipeWriter, &QWindowsPipeWriter::canWrite,
+                                d, &QLocalSocketPrivate::_q_canWrite);
     }
-    return d->pipeWriter->write(data, maxSize);
+    d->_q_canWrite();
+    return len;
 }
 
 void QLocalSocket::abort()
@@ -266,7 +273,7 @@ qint64 QLocalSocket::bytesAvailable() const
 qint64 QLocalSocket::bytesToWrite() const
 {
     Q_D(const QLocalSocket);
-    return (d->pipeWriter) ? d->pipeWriter->bytesToWrite() : 0;
+    return d->writeBuffer.size() + (d->pipeWriter ? d->pipeWriter->bytesToWrite() : 0);
 }
 
 bool QLocalSocket::canReadLine() const
@@ -281,6 +288,7 @@ void QLocalSocket::close()
     if (openMode() == NotOpen)
         return;
 
+    d->setWriteChannelCount(0);
     QIODevice::close();
     d->serverName = QString();
     d->fullServerName = QString();
@@ -298,9 +306,10 @@ void QLocalSocket::close()
 bool QLocalSocket::flush()
 {
     Q_D(QLocalSocket);
-    if (d->pipeWriter)
-        return d->pipeWriter->waitForWrite(0);
-    return false;
+    bool written = false;
+    while (d->pipeWriter && d->pipeWriter->waitForWrite(0))
+        written = true;
+    return written;
 }
 
 void QLocalSocket::disconnectFromServer()
@@ -313,10 +322,11 @@ void QLocalSocket::disconnectFromServer()
         // It must be destroyed before close() to prevent an infinite loop.
         delete d->pipeWriter;
         d->pipeWriter = 0;
+        d->writeBuffer.clear();
     }
 
     flush();
-    if (d->pipeWriter && d->pipeWriter->bytesToWrite() != 0) {
+    if (bytesToWrite() != 0) {
         d->state = QLocalSocket::ClosingState;
         emit stateChanged(d->state);
     } else {
@@ -348,14 +358,20 @@ bool QLocalSocket::setSocketDescriptor(qintptr socketDescriptor,
 void QLocalSocketPrivate::_q_canWrite()
 {
     Q_Q(QLocalSocket);
-    if (state == QLocalSocket::ClosingState)
-        q->close();
+    if (writeBuffer.isEmpty()) {
+        if (state == QLocalSocket::ClosingState)
+            q->close();
+    } else {
+        Q_ASSERT(pipeWriter);
+        if (!pipeWriter->isWriteOperationActive())
+            pipeWriter->write(writeBuffer.read());
+    }
 }
 
 qintptr QLocalSocket::socketDescriptor() const
 {
     Q_D(const QLocalSocket);
-    return (qintptr)d->handle;
+    return reinterpret_cast<qintptr>(d->handle);
 }
 
 qint64 QLocalSocket::readBufferSize() const
@@ -379,8 +395,10 @@ bool QLocalSocket::waitForConnected(int msecs)
 bool QLocalSocket::waitForDisconnected(int msecs)
 {
     Q_D(QLocalSocket);
-    if (state() == UnconnectedState)
+    if (state() == UnconnectedState) {
+        qWarning("QLocalSocket::waitForDisconnected() is not allowed in UnconnectedState");
         return false;
+    }
     if (!openMode().testFlag(QIODevice::ReadOnly)) {
         qWarning("QLocalSocket::waitForDisconnected isn't supported for write only pipes.");
         return false;
@@ -401,9 +419,6 @@ bool QLocalSocket::isValid() const
 bool QLocalSocket::waitForReadyRead(int msecs)
 {
     Q_D(QLocalSocket);
-
-    if (bytesAvailable() > 0)
-        return true;
 
     if (d->state != QLocalSocket::ConnectedState)
         return false;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,7 +42,9 @@
 
 #include <QtCore/qnamespace.h>
 
-QT_BEGIN_HEADER
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+struct CGPoint;
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -59,22 +59,25 @@ public:
 
     Q_DECL_CONSTEXPR inline int x() const;
     Q_DECL_CONSTEXPR inline int y() const;
-    inline void setX(int x);
-    inline void setY(int y);
+    Q_DECL_RELAXED_CONSTEXPR inline void setX(int x);
+    Q_DECL_RELAXED_CONSTEXPR inline void setY(int y);
 
     Q_DECL_CONSTEXPR inline int manhattanLength() const;
 
-    inline int &rx();
-    inline int &ry();
+    Q_DECL_RELAXED_CONSTEXPR inline int &rx();
+    Q_DECL_RELAXED_CONSTEXPR inline int &ry();
 
-    inline QPoint &operator+=(const QPoint &p);
-    inline QPoint &operator-=(const QPoint &p);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator+=(const QPoint &p);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator-=(const QPoint &p);
 
-    inline QPoint &operator*=(float factor);
-    inline QPoint &operator*=(double factor);
-    inline QPoint &operator*=(int factor);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator*=(float factor);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator*=(double factor);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator*=(int factor);
 
-    inline QPoint &operator/=(qreal divisor);
+    Q_DECL_RELAXED_CONSTEXPR inline QPoint &operator/=(qreal divisor);
+
+    Q_DECL_CONSTEXPR static inline int dotProduct(const QPoint &p1, const QPoint &p2)
+    { return p1.xp * p2.xp + p1.yp * p2.yp; }
 
     friend Q_DECL_CONSTEXPR inline bool operator==(const QPoint &, const QPoint &);
     friend Q_DECL_CONSTEXPR inline bool operator!=(const QPoint &, const QPoint &);
@@ -89,6 +92,10 @@ public:
     friend Q_DECL_CONSTEXPR inline const QPoint operator+(const QPoint &);
     friend Q_DECL_CONSTEXPR inline const QPoint operator-(const QPoint &);
     friend Q_DECL_CONSTEXPR inline const QPoint operator/(const QPoint &, qreal);
+
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+    Q_REQUIRED_RESULT CGPoint toCGPoint() const Q_DECL_NOTHROW;
+#endif
 
 private:
     friend class QTransform;
@@ -123,34 +130,34 @@ Q_DECL_CONSTEXPR inline int QPoint::x() const
 Q_DECL_CONSTEXPR inline int QPoint::y() const
 { return yp; }
 
-inline void QPoint::setX(int xpos)
+Q_DECL_RELAXED_CONSTEXPR inline void QPoint::setX(int xpos)
 { xp = xpos; }
 
-inline void QPoint::setY(int ypos)
+Q_DECL_RELAXED_CONSTEXPR inline void QPoint::setY(int ypos)
 { yp = ypos; }
 
 inline int Q_DECL_CONSTEXPR QPoint::manhattanLength() const
 { return qAbs(x())+qAbs(y()); }
 
-inline int &QPoint::rx()
+Q_DECL_RELAXED_CONSTEXPR inline int &QPoint::rx()
 { return xp; }
 
-inline int &QPoint::ry()
+Q_DECL_RELAXED_CONSTEXPR inline int &QPoint::ry()
 { return yp; }
 
-inline QPoint &QPoint::operator+=(const QPoint &p)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator+=(const QPoint &p)
 { xp+=p.xp; yp+=p.yp; return *this; }
 
-inline QPoint &QPoint::operator-=(const QPoint &p)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator-=(const QPoint &p)
 { xp-=p.xp; yp-=p.yp; return *this; }
 
-inline QPoint &QPoint::operator*=(float factor)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator*=(float factor)
 { xp = qRound(xp*factor); yp = qRound(yp*factor); return *this; }
 
-inline QPoint &QPoint::operator*=(double factor)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator*=(double factor)
 { xp = qRound(xp*factor); yp = qRound(yp*factor); return *this; }
 
-inline QPoint &QPoint::operator*=(int factor)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator*=(int factor)
 { xp = xp*factor; yp = yp*factor; return *this; }
 
 Q_DECL_CONSTEXPR inline bool operator==(const QPoint &p1, const QPoint &p2)
@@ -189,7 +196,7 @@ Q_DECL_CONSTEXPR inline const QPoint operator+(const QPoint &p)
 Q_DECL_CONSTEXPR inline const QPoint operator-(const QPoint &p)
 { return QPoint(-p.xp, -p.yp); }
 
-inline QPoint &QPoint::operator/=(qreal c)
+Q_DECL_RELAXED_CONSTEXPR inline QPoint &QPoint::operator/=(qreal c)
 {
     xp = qRound(xp/c);
     yp = qRound(yp/c);
@@ -222,16 +229,19 @@ public:
 
     Q_DECL_CONSTEXPR inline qreal x() const;
     Q_DECL_CONSTEXPR inline qreal y() const;
-    inline void setX(qreal x);
-    inline void setY(qreal y);
+    Q_DECL_RELAXED_CONSTEXPR inline void setX(qreal x);
+    Q_DECL_RELAXED_CONSTEXPR inline void setY(qreal y);
 
-    inline qreal &rx();
-    inline qreal &ry();
+    Q_DECL_RELAXED_CONSTEXPR inline qreal &rx();
+    Q_DECL_RELAXED_CONSTEXPR inline qreal &ry();
 
-    inline QPointF &operator+=(const QPointF &p);
-    inline QPointF &operator-=(const QPointF &p);
-    inline QPointF &operator*=(qreal c);
-    inline QPointF &operator/=(qreal c);
+    Q_DECL_RELAXED_CONSTEXPR inline QPointF &operator+=(const QPointF &p);
+    Q_DECL_RELAXED_CONSTEXPR inline QPointF &operator-=(const QPointF &p);
+    Q_DECL_RELAXED_CONSTEXPR inline QPointF &operator*=(qreal c);
+    Q_DECL_RELAXED_CONSTEXPR inline QPointF &operator/=(qreal c);
+
+    Q_DECL_CONSTEXPR static inline qreal dotProduct(const QPointF &p1, const QPointF &p2)
+    { return p1.xp * p2.xp + p1.yp * p2.yp; }
 
     friend Q_DECL_CONSTEXPR inline bool operator==(const QPointF &, const QPointF &);
     friend Q_DECL_CONSTEXPR inline bool operator!=(const QPointF &, const QPointF &);
@@ -244,6 +254,11 @@ public:
     friend Q_DECL_CONSTEXPR inline const QPointF operator/(const QPointF &, qreal);
 
     Q_DECL_CONSTEXPR QPoint toPoint() const;
+
+#if defined(Q_OS_DARWIN) || defined(Q_QDOC)
+    Q_REQUIRED_RESULT static QPointF fromCGPoint(CGPoint point) Q_DECL_NOTHROW;
+    Q_REQUIRED_RESULT CGPoint toCGPoint() const Q_DECL_NOTHROW;
+#endif
 
 private:
     friend class QMatrix;
@@ -293,52 +308,59 @@ Q_DECL_CONSTEXPR inline qreal QPointF::y() const
     return yp;
 }
 
-inline void QPointF::setX(qreal xpos)
+Q_DECL_RELAXED_CONSTEXPR inline void QPointF::setX(qreal xpos)
 {
     xp = xpos;
 }
 
-inline void QPointF::setY(qreal ypos)
+Q_DECL_RELAXED_CONSTEXPR inline void QPointF::setY(qreal ypos)
 {
     yp = ypos;
 }
 
-inline qreal &QPointF::rx()
+Q_DECL_RELAXED_CONSTEXPR inline qreal &QPointF::rx()
 {
     return xp;
 }
 
-inline qreal &QPointF::ry()
+Q_DECL_RELAXED_CONSTEXPR inline qreal &QPointF::ry()
 {
     return yp;
 }
 
-inline QPointF &QPointF::operator+=(const QPointF &p)
+Q_DECL_RELAXED_CONSTEXPR inline QPointF &QPointF::operator+=(const QPointF &p)
 {
     xp+=p.xp;
     yp+=p.yp;
     return *this;
 }
 
-inline QPointF &QPointF::operator-=(const QPointF &p)
+Q_DECL_RELAXED_CONSTEXPR inline QPointF &QPointF::operator-=(const QPointF &p)
 {
     xp-=p.xp; yp-=p.yp; return *this;
 }
 
-inline QPointF &QPointF::operator*=(qreal c)
+Q_DECL_RELAXED_CONSTEXPR inline QPointF &QPointF::operator*=(qreal c)
 {
     xp*=c; yp*=c; return *this;
 }
 
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_CLANG("-Wfloat-equal")
+QT_WARNING_DISABLE_GCC("-Wfloat-equal")
+
 Q_DECL_CONSTEXPR inline bool operator==(const QPointF &p1, const QPointF &p2)
 {
-    return qFuzzyIsNull(p1.xp - p2.xp) && qFuzzyIsNull(p1.yp - p2.yp);
+    return ((!p1.xp || !p2.xp) ? qFuzzyIsNull(p1.xp - p2.xp) : qFuzzyCompare(p1.xp, p2.xp))
+        && ((!p1.yp || !p2.yp) ? qFuzzyIsNull(p1.yp - p2.yp) : qFuzzyCompare(p1.yp, p2.yp));
 }
 
 Q_DECL_CONSTEXPR inline bool operator!=(const QPointF &p1, const QPointF &p2)
 {
-    return !qFuzzyIsNull(p1.xp - p2.xp) || !qFuzzyIsNull(p1.yp - p2.yp);
+    return !(p1 == p2);
 }
+
+QT_WARNING_POP
 
 Q_DECL_CONSTEXPR inline const QPointF operator+(const QPointF &p1, const QPointF &p2)
 {
@@ -370,7 +392,7 @@ Q_DECL_CONSTEXPR inline const QPointF operator-(const QPointF &p)
     return QPointF(-p.xp, -p.yp);
 }
 
-inline QPointF &QPointF::operator/=(qreal divisor)
+Q_DECL_RELAXED_CONSTEXPR inline QPointF &QPointF::operator/=(qreal divisor)
 {
     xp/=divisor;
     yp/=divisor;
@@ -392,7 +414,5 @@ Q_CORE_EXPORT QDebug operator<<(QDebug d, const QPointF &p);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPOINT_H

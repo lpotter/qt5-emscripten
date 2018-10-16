@@ -1,7 +1,7 @@
 /***************************************************************************
 **
 ** Copyright (C) 2011 - 2012 Research In Motion
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,7 +54,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef QQNXVIRTUALKEYBOARD_DEBUG
+#if defined(QQNXVIRTUALKEYBOARD_DEBUG)
 #define qVirtualKeyboardDebug qDebug
 #else
 #define qVirtualKeyboardDebug QT_NO_QDEBUG_MACRO
@@ -66,9 +64,6 @@ QT_BEGIN_NAMESPACE
 
 const char  *QQnxVirtualKeyboardPps::ms_PPSPath = "/pps/services/input/control";
 const size_t QQnxVirtualKeyboardPps::ms_bufferSize = 2048;
-
-// Huge hack for keyboard shadow (see QNX PR 88400). Should be removed ASAP.
-#define KEYBOARD_SHADOW_HEIGHT 8
 
 QQnxVirtualKeyboardPps::QQnxVirtualKeyboardPps()
     : m_encoder(0),
@@ -86,14 +81,9 @@ QQnxVirtualKeyboardPps::~QQnxVirtualKeyboardPps()
 
 void QQnxVirtualKeyboardPps::start()
 {
-    qVirtualKeyboardDebug() << Q_FUNC_INFO << "starting keyboard event processing";
+    qVirtualKeyboardDebug("starting keyboard event processing");
     if (!connect())
         return;
-}
-
-void QQnxVirtualKeyboardPps::applyKeyboardMode(KeyboardMode mode)
-{
-    applyKeyboardModeOptions(mode);
 }
 
 void QQnxVirtualKeyboardPps::close()
@@ -136,15 +126,16 @@ bool QQnxVirtualKeyboardPps::connect()
     m_fd = ::open(ms_PPSPath, O_RDWR);
     if (m_fd == -1)
     {
-        qCritical("QQnxVirtualKeyboard: Unable to open \"%s\" for keyboard: %s (%d).",
-                ms_PPSPath, strerror(errno), errno);
+        qVirtualKeyboardDebug() << "Unable to open" << ms_PPSPath
+                                               << ':' << strerror(errno);
         close();
         return false;
     }
 
     m_buffer = new char[ms_bufferSize];
-    if (!m_buffer) {
-        qCritical("QQnxVirtualKeyboard: Unable to allocate buffer of %d bytes. Size is unavailable.",  ms_bufferSize);
+    if (Q_UNLIKELY(!m_buffer)) {
+        qCritical("QQnxVirtualKeyboard: Unable to allocate buffer of %d bytes. "
+                  "Size is unavailable.",  ms_bufferSize);
         return false;
     }
 
@@ -159,25 +150,21 @@ bool QQnxVirtualKeyboardPps::connect()
 
 bool QQnxVirtualKeyboardPps::queryPPSInfo()
 {
+    if (!prepareToSend())
+        return false;
+
     // Request info, requires id to regenerate res message.
     pps_encoder_add_string(m_encoder, "msg", "info");
-    pps_encoder_add_string(m_encoder, "id", "libWebView");
+    pps_encoder_add_string(m_encoder, "id", "1");
 
-    if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
-        close();
-        return false;
-    }
-
-    pps_encoder_reset(m_encoder);
-
-    return true;
+    return writeCurrentPPSEncoder();
 }
 
 void QQnxVirtualKeyboardPps::ppsDataReady()
 {
     ssize_t nread = qt_safe_read(m_fd, m_buffer, ms_bufferSize - 1);
 
-    qVirtualKeyboardDebug() << Q_FUNC_INFO << "keyboardMessage size: " << nread;
+    qVirtualKeyboardDebug("keyboardMessage size: %zd", nread);
     if (nread < 0){
         connect(); // reconnect
         return;
@@ -189,7 +176,7 @@ void QQnxVirtualKeyboardPps::ppsDataReady()
         return;
 
     // nread is the real space necessary, not the amount read.
-    if (static_cast<size_t>(nread) > ms_bufferSize - 1) {
+    if (Q_UNLIKELY(static_cast<size_t>(nread) > ms_bufferSize - 1)) {
         qCritical("QQnxVirtualKeyboard: Keyboard buffer size too short; need %u.", nread + 1);
         connect(); // reconnect
         return;
@@ -203,19 +190,20 @@ void QQnxVirtualKeyboardPps::ppsDataReady()
 #endif
 
     const char *value;
-    if (pps_decoder_get_string(m_decoder, "error", &value) == PPS_DECODER_OK) {
+    if (Q_UNLIKELY(pps_decoder_get_string(m_decoder, "error", &value) == PPS_DECODER_OK)) {
         qCritical("QQnxVirtualKeyboard: Keyboard PPS decoder error: %s", value ? value : "[null]");
         return;
     }
 
     if (pps_decoder_get_string(m_decoder, "msg", &value) == PPS_DECODER_OK) {
-        if (strcmp(value, "show") == 0) {
+        if (strcmp(value, "show") == 0)
             setVisible(true);
-        } else if (strcmp(value, "hide") == 0) {
+        else if (strcmp(value, "hide") == 0)
             setVisible(false);
-        } else if (strcmp(value, "info") == 0)
+        else if (strcmp(value, "info") == 0)
             handleKeyboardInfoMessage();
-        else if (strcmp(value, "connect") == 0) { }
+        else if (strcmp(value, "connect") == 0)
+            qVirtualKeyboardDebug("Unhandled command 'connect'");
         else
             qCritical("QQnxVirtualKeyboard: Unexpected keyboard PPS msg value: %s", value ? value : "[null]");
     } else if (pps_decoder_get_string(m_decoder, "res", &value) == PPS_DECODER_OK) {
@@ -223,60 +211,38 @@ void QQnxVirtualKeyboardPps::ppsDataReady()
             handleKeyboardInfoMessage();
         else
             qCritical("QQnxVirtualKeyboard: Unexpected keyboard PPS res value: %s", value ? value : "[null]");
-    } else
+    } else {
         qCritical("QQnxVirtualKeyboard: Unexpected keyboard PPS message type");
+    }
 }
 
 void QQnxVirtualKeyboardPps::handleKeyboardInfoMessage()
 {
     int newHeight = 0;
-    const char *value;
 
-    if (pps_decoder_push(m_decoder, "dat") != PPS_DECODER_OK) {
+    if (Q_UNLIKELY(pps_decoder_push(m_decoder, "dat") != PPS_DECODER_OK)) {
         qCritical("QQnxVirtualKeyboard: Keyboard PPS dat object not found");
         return;
     }
-    if (pps_decoder_get_int(m_decoder, "size", &newHeight) != PPS_DECODER_OK) {
+    if (Q_UNLIKELY(pps_decoder_get_int(m_decoder, "size", &newHeight) != PPS_DECODER_OK)) {
         qCritical("QQnxVirtualKeyboard: Keyboard PPS size field not found");
         return;
     }
-    if (pps_decoder_push(m_decoder, "locale") != PPS_DECODER_OK) {
-        qCritical("QQnxVirtualKeyboard: Keyboard PPS locale object not found");
-        return;
-    }
-    if (pps_decoder_get_string(m_decoder, "languageId", &value) != PPS_DECODER_OK) {
-        qCritical("QQnxVirtualKeyboard: Keyboard PPS languageId field not found");
-        return;
-    }
-    const QString languageId = QString::fromLatin1(value);
-    if (pps_decoder_get_string(m_decoder, "countryId", &value) != PPS_DECODER_OK) {
-        qCritical("QQnxVirtualKeyboard: Keyboard PPS size countryId not found");
-        return;
-    }
-    const QString countryId = QString::fromLatin1(value);
-
-    // HUGE hack, should be removed ASAP.
-    newHeight -= KEYBOARD_SHADOW_HEIGHT; // We want to ignore the 8 pixel shadow above the keyboard. (PR 88400)
-
     setHeight(newHeight);
 
-    const QLocale locale = QLocale(languageId + QLatin1Char('_') + countryId);
-    setLocale(locale);
-
-    qVirtualKeyboardDebug() << Q_FUNC_INFO << "size=" << newHeight << "locale=" << locale;
+    qVirtualKeyboardDebug("size=%d", newHeight);
 }
 
 bool QQnxVirtualKeyboardPps::showKeyboard()
 {
-    qVirtualKeyboardDebug() << Q_FUNC_INFO;
+    qVirtualKeyboardDebug();
 
-    // Try to connect.
-    if (m_fd == -1 && !connect())
+    if (!prepareToSend())
         return false;
 
     // NOTE:  This must be done everytime the keyboard is shown even if there is no change because
     // hiding the keyboard wipes the setting.
-    applyKeyboardModeOptions(keyboardMode());
+    applyKeyboardOptions();
 
     if (isVisible())
         return true;
@@ -286,141 +252,110 @@ bool QQnxVirtualKeyboardPps::showKeyboard()
     // Send the show message.
     pps_encoder_add_string(m_encoder, "msg", "show");
 
-    if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
-        close();
-        return false;
-    }
-
-    pps_encoder_reset(m_encoder);
-
-    // Return true if no error occurs.  Sizing response will be triggered when confirmation of
-    // the change arrives.
-    return true;
+    return writeCurrentPPSEncoder();
 }
 
 bool QQnxVirtualKeyboardPps::hideKeyboard()
 {
-    qVirtualKeyboardDebug() << Q_FUNC_INFO;
+    qVirtualKeyboardDebug();
 
-    if (m_fd == -1 && !connect())
+    if (!prepareToSend())
         return false;
 
     pps_encoder_add_string(m_encoder, "msg", "hide");
 
-    if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
-        close();
+    return writeCurrentPPSEncoder();
+}
 
-        //Try again.
-        if (connect()) {
-            if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
-                close();
-                return false;
-            }
-        }
-        else
-            return false;
-    }
+bool QQnxVirtualKeyboardPps::prepareToSend()
+{
+    if (m_fd == -1 && !connect())
+        return false;
 
     pps_encoder_reset(m_encoder);
-
-    // Return true if no error occurs.  Sizing response will be triggered when confirmation of
-    // the change arrives.
     return true;
 }
 
-void QQnxVirtualKeyboardPps::applyKeyboardModeOptions(KeyboardMode mode)
+bool QQnxVirtualKeyboardPps::writeCurrentPPSEncoder()
 {
-    // Try to connect.
-    if (m_fd == -1 && !connect())
+    if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
+        close();
+        return false;
+    }
+    return true;
+}
+
+void QQnxVirtualKeyboardPps::applyKeyboardOptions()
+{
+    if (!prepareToSend())
         return;
 
     // Send the options message.
     pps_encoder_add_string(m_encoder, "msg", "options");
-
     pps_encoder_start_object(m_encoder, "dat");
-    switch (mode) {
-    case Url:
-        addUrlModeOptions();
-        break;
-    case Email:
-        addEmailModeOptions();
-        break;
-    case Web:
-        addWebModeOptions();
-        break;
-    case NumPunc:
-        addNumPuncModeOptions();
-        break;
-    case Symbol:
-        addSymbolModeOptions();
-        break;
-    case Phone:
-        addPhoneModeOptions();
-        break;
-    case Pin:
-        addPinModeOptions();
-        break;
-    case Default:
-    default:
-        addDefaultModeOptions();
-        break;
-    }
+
+    pps_encoder_add_string(m_encoder, "enter", enterKeyTypeStr());
+    pps_encoder_add_string(m_encoder, "type", keyboardModeStr());
 
     pps_encoder_end_object(m_encoder);
 
-    if (::write(m_fd, pps_encoder_buffer(m_encoder), pps_encoder_length(m_encoder)) == -1) {
-        close();
+    writeCurrentPPSEncoder();
+}
+
+const char* QQnxVirtualKeyboardPps::keyboardModeStr() const
+{
+    switch (keyboardMode()) {
+    case Url:
+        return "url";
+    case Email:
+        return "email";
+    case Web:
+        return "web";
+    case NumPunc:
+        return "num_punc";
+    case Number:
+        return "number";
+    case Symbol:
+        return "symbol";
+    case Phone:
+        return "phone";
+    case Pin:
+        return "pin";
+    case Password:
+        return "password";
+    case Alphanumeric:
+        return "alphanumeric";
+    case Default:
+        return "default";
     }
 
-    pps_encoder_reset(m_encoder);
+    return "";
 }
 
-void QQnxVirtualKeyboardPps::addDefaultModeOptions()
+const char* QQnxVirtualKeyboardPps::enterKeyTypeStr() const
 {
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "default");
-}
+    switch (enterKeyType()) {
+    case DefaultReturn:
+        return "enter.default";
+    case Connect:
+        return "enter.connect";
+    case Done:
+        return "enter.done";
+    case Go:
+        return "enter.go";
+    case Join:
+        return "enter.join";
+    case Next:
+        return "enter.next";
+    case Search:
+        return "enter.search";
+    case Send:
+        return "enter.send";
+    case Submit:
+        return "enter.submit";
+    }
 
-void QQnxVirtualKeyboardPps::addUrlModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "url");
-}
-
-void QQnxVirtualKeyboardPps::addEmailModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "email");
-}
-
-void QQnxVirtualKeyboardPps::addWebModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "web");
-}
-
-void QQnxVirtualKeyboardPps::addNumPuncModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "numPunc");
-}
-
-void QQnxVirtualKeyboardPps::addPhoneModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "phone");
-}
-
-void QQnxVirtualKeyboardPps::addPinModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "pin");
-}
-
-void QQnxVirtualKeyboardPps::addSymbolModeOptions()
-{
-    pps_encoder_add_string(m_encoder, "enter", "enter.default");
-    pps_encoder_add_string(m_encoder, "type", "symbol");
+    return "";
 }
 
 QT_END_NAMESPACE

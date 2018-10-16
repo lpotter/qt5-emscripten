@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +32,7 @@
 #include <qlist.h>
 #include <qpair.h>
 #include <qheaderview.h>
+#include <qlineedit.h>
 
 #include <qtablewidget.h>
 
@@ -59,14 +47,11 @@ class tst_QTableWidget : public QObject
 
 public:
     tst_QTableWidget();
-    ~tst_QTableWidget();
 
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
     void init();
-    void cleanup();
-private slots:
     void getSetCheck();
     void clear();
     void clearContents();
@@ -97,10 +82,13 @@ private slots:
     void itemData();
     void setItemData();
     void cellWidget();
+    void cellWidgetGeometry();
     void task231094();
     void task219380_removeLastRow();
     void task262056_sortDuplicate();
     void itemWithHeaderItems();
+    void mimeData();
+    void selectedRowAfterSorting();
 
 private:
     QTableWidget *testWidget;
@@ -110,10 +98,7 @@ typedef QPair<int, int> IntPair;
 typedef QList<int> IntList;
 typedef QList<IntPair> IntIntList;
 
-Q_DECLARE_METATYPE(IntList)
-Q_DECLARE_METATYPE(IntIntList)
 Q_DECLARE_METATYPE(QTableWidgetSelectionRange)
-Q_DECLARE_METATYPE(QModelIndex)
 
 
 // Testing get/set functions
@@ -170,13 +155,8 @@ tst_QTableWidget::tst_QTableWidget(): testWidget(0)
 {
 }
 
-tst_QTableWidget::~tst_QTableWidget()
-{
-}
-
 void tst_QTableWidget::initTestCase()
 {
-    qRegisterMetaType<QModelIndex>("QModelIndex");
     testWidget = new QTableWidget();
     testWidget->show();
 }
@@ -198,18 +178,13 @@ void tst_QTableWidget::init()
         testWidget->showColumn(column);
 }
 
-void tst_QTableWidget::cleanup()
-{
-
-}
-
 void tst_QTableWidget::clearContents()
 {
     QTableWidgetItem *item = new QTableWidgetItem("test");
     testWidget->setHorizontalHeaderItem(0, item);
-    QVERIFY(testWidget->horizontalHeaderItem(0) == item);
+    QCOMPARE(testWidget->horizontalHeaderItem(0), item);
     testWidget->clearContents();
-    QVERIFY(testWidget->horizontalHeaderItem(0) == item);
+    QCOMPARE(testWidget->horizontalHeaderItem(0), item);
 }
 
 void tst_QTableWidget::clear()
@@ -292,21 +267,21 @@ void tst_QTableWidget::itemAssignment()
 {
     QTableWidgetItem itemInWidget("inWidget");
     testWidget->setItem(0, 0, &itemInWidget);
-    itemInWidget.setFlags(itemInWidget.flags() | Qt::ItemIsTristate);
+    itemInWidget.setFlags(itemInWidget.flags() | Qt::ItemIsUserTristate);
     QTableWidgetItem itemOutsideWidget("outsideWidget");
 
     QVERIFY(itemInWidget.tableWidget());
     QCOMPARE(itemInWidget.text(), QString("inWidget"));
-    QVERIFY(itemInWidget.flags() & Qt::ItemIsTristate);
+    QVERIFY(itemInWidget.flags() & Qt::ItemIsUserTristate);
 
     QVERIFY(!itemOutsideWidget.tableWidget());
     QCOMPARE(itemOutsideWidget.text(), QString("outsideWidget"));
-    QVERIFY(!(itemOutsideWidget.flags() & Qt::ItemIsTristate));
+    QVERIFY(!(itemOutsideWidget.flags() & Qt::ItemIsUserTristate));
 
     itemOutsideWidget = itemInWidget;
     QVERIFY(!itemOutsideWidget.tableWidget());
     QCOMPARE(itemOutsideWidget.text(), QString("inWidget"));
-    QVERIFY(itemOutsideWidget.flags() & Qt::ItemIsTristate);
+    QVERIFY(itemOutsideWidget.flags() & Qt::ItemIsUserTristate);
 }
 
 void tst_QTableWidget::item_data()
@@ -836,13 +811,13 @@ void tst_QTableWidget::itemOwnership()
     headerItem = new QObjectTableItem();
     testWidget->setVerticalHeaderItem(0, headerItem);
     delete headerItem;
-    QCOMPARE(testWidget->verticalHeaderItem(0), (QTableWidgetItem *)0);
+    QCOMPARE(testWidget->verticalHeaderItem(0), nullptr);
 
     //delete horizontal headeritem from outside
     headerItem = new QObjectTableItem();
     testWidget->setHorizontalHeaderItem(0, headerItem);
     delete headerItem;
-    QCOMPARE(testWidget->horizontalHeaderItem(0), (QTableWidgetItem *)0);
+    QCOMPARE(testWidget->horizontalHeaderItem(0), nullptr);
 
     //setItem
     item = new QObjectTableItem();
@@ -1370,27 +1345,45 @@ void tst_QTableWidget::setItemWithSorting()
     }
 }
 
+class QTableWidgetDataChanged : public QTableWidget
+{
+    Q_OBJECT
+public:
+    using QTableWidget::QTableWidget;
+
+    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles) override
+    {
+        QTableWidget::dataChanged(topLeft, bottomRight, roles);
+        currentRoles = roles;
+    }
+    QVector<int> currentRoles;
+};
+
 void tst_QTableWidget::itemData()
 {
-    QTableWidget widget(2, 2);
+    QTableWidgetDataChanged widget(2, 2);
     widget.setItem(0, 0, new QTableWidgetItem());
     QTableWidgetItem *item = widget.item(0, 0);
     QVERIFY(item);
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     item->setData(Qt::DisplayRole,  QString("0"));
+    QCOMPARE(widget.currentRoles, QVector<int>({Qt::DisplayRole, Qt::EditRole}));
     item->setData(Qt::CheckStateRole, Qt::PartiallyChecked);
-    item->setData(Qt::UserRole + 0, QString("1"));
-    item->setData(Qt::UserRole + 1, QString("2"));
-    item->setData(Qt::UserRole + 2, QString("3"));
-    item->setData(Qt::UserRole + 3, QString("4"));
+    QCOMPARE(widget.currentRoles, {Qt::CheckStateRole});
+    for (int i = 0; i < 4; ++i)
+    {
+        item->setData(Qt::UserRole + i, QString::number(i + 1));
+        QCOMPARE(widget.currentRoles, {Qt::UserRole + i});
+    }
     QMap<int, QVariant> flags = widget.model()->itemData(widget.model()->index(0, 0));
     QCOMPARE(flags.count(), 6);
-    QCOMPARE(flags[(Qt::UserRole + 0)].toString(), QString("1"));
+    for (int i = 0; i < 4; ++i)
+        QCOMPARE(flags[Qt::UserRole + i].toString(), QString::number(i + 1));
 }
 
 void tst_QTableWidget::setItemData()
 {
-    QTableWidget table(10, 10);
+    QTableWidgetDataChanged table(10, 10);
     table.setSortingEnabled(false);
     QSignalSpy dataChangedSpy(table.model(), SIGNAL(dataChanged(QModelIndex,QModelIndex)));
 
@@ -1403,6 +1396,7 @@ void tst_QTableWidget::setItemData()
     data.insert(Qt::DisplayRole, QLatin1String("Display"));
     data.insert(Qt::ToolTipRole, QLatin1String("ToolTip"));
     table.model()->setItemData(idx, data);
+    QCOMPARE(table.currentRoles, QVector<int>({Qt::DisplayRole, Qt::EditRole, Qt::ToolTipRole}));
 
     QCOMPARE(table.model()->data(idx, Qt::DisplayRole).toString(), QLatin1String("Display"));
     QCOMPARE(table.model()->data(idx, Qt::ToolTipRole).toString(), QLatin1String("ToolTip"));
@@ -1431,6 +1425,28 @@ void tst_QTableWidget::cellWidget()
     QCOMPARE(table.cellWidget(5, 5), static_cast<QWidget*>(0));
 }
 
+void tst_QTableWidget::cellWidgetGeometry()
+{
+    QTableWidget tw(3,2);
+    tw.show();
+    // make sure the next row added is not completely visibile
+    tw.resize(300, tw.rowHeight(0) * 3 + tw.rowHeight(0) / 2);
+    QVERIFY(QTest::qWaitForWindowExposed(&tw));
+
+    tw.scrollToBottom();
+    tw.setRowCount(tw.rowCount() + 1);
+    auto item = new QTableWidgetItem("Hello");
+    tw.setItem(0,0,item);
+    auto le = new QLineEdit("world");
+    tw.setCellWidget(0,1,le);
+    // process delayedPendingLayout triggered by setting the row count
+    tw.doItemsLayout();
+    // so y pos is 0 for the first row
+    tw.scrollToTop();
+    // check if updateEditorGeometries has set the correct y pos for the editors
+    QCOMPARE(tw.visualItemRect(item).top(), le->geometry().top());
+}
+
 void tst_QTableWidget::task231094()
 {
     QTableWidget tw(5, 3);
@@ -1448,7 +1464,7 @@ void tst_QTableWidget::task231094()
     tw.setCurrentCell(1, 1);
     QCOMPARE(tw.currentRow(), 1);
     QCOMPARE(tw.currentColumn(), 1);
-	
+
     //this would provoke a end-less loop
     QTest::keyClick(&tw, '1');
 
@@ -1483,7 +1499,7 @@ void tst_QTableWidget::task262056_sortDuplicate()
     for (int i = 0; i<8; i++ ) {
         QTableWidgetItem *twi = new QTableWidgetItem(items.at(i));
         testWidget->setItem(i,0,twi);
-        testWidget->setItem(i,1,new QTableWidgetItem(QString("item %1").arg(i)));
+        testWidget->setItem(i,1,new QTableWidgetItem(QLatin1String("item ") + QString::number(i)));
     }
     testWidget->sortItems(0, Qt::AscendingOrder);
     QSignalSpy layoutChangedSpy(testWidget->model(), SIGNAL(layoutChanged()));
@@ -1507,6 +1523,91 @@ void tst_QTableWidget::itemWithHeaderItems()
     table.setItem(1, 0, item1_0);
 
     QCOMPARE(table.item(0, 1), static_cast<QTableWidgetItem *>(0));
+}
+
+class TestTableWidget : public QTableWidget
+{
+    Q_OBJECT
+public:
+    TestTableWidget(int rows, int columns, QWidget *parent = 0)
+        : QTableWidget(rows, columns, parent)
+    {
+    }
+
+    using QTableWidget::mimeData;
+    using QTableWidget::indexFromItem;
+};
+
+void tst_QTableWidget::mimeData()
+{
+    TestTableWidget table(10, 10);
+
+    for (int x = 0; x < 10; ++x) {
+        for (int y = 0; y < 10; ++y) {
+            QTableWidgetItem *item = new QTableWidgetItem(QStringLiteral("123"));
+            table.setItem(y, x, item);
+        }
+    }
+
+    QList<QTableWidgetItem *> tableWidgetItemList;
+    QModelIndexList modelIndexList;
+
+    // do these checks more than once to ensure that the "cached indexes" work as expected
+    QVERIFY(!table.mimeData(tableWidgetItemList));
+    QVERIFY(!table.model()->mimeData(modelIndexList));
+    QVERIFY(!table.model()->mimeData(modelIndexList));
+    QVERIFY(!table.mimeData(tableWidgetItemList));
+
+    tableWidgetItemList << table.item(1, 1);
+    modelIndexList << table.indexFromItem(table.item(1, 1));
+
+    QMimeData *data;
+
+    QVERIFY((data = table.mimeData(tableWidgetItemList)));
+    delete data;
+
+    QVERIFY((data = table.model()->mimeData(modelIndexList)));
+    delete data;
+
+    QVERIFY((data = table.model()->mimeData(modelIndexList)));
+    delete data;
+
+    QVERIFY((data = table.mimeData(tableWidgetItemList)));
+    delete data;
+
+    // check the saved data is actually the same
+
+    QMimeData *data2;
+
+    data = table.mimeData(tableWidgetItemList);
+    data2 = table.model()->mimeData(modelIndexList);
+
+    const QString format = QStringLiteral("application/x-qabstractitemmodeldatalist");
+
+    QVERIFY(data->hasFormat(format));
+    QVERIFY(data2->hasFormat(format));
+    QCOMPARE(data->data(format), data2->data(format));
+
+    delete data;
+    delete data2;
+}
+
+void tst_QTableWidget::selectedRowAfterSorting()
+{
+    TestTableWidget table(3,3);
+    table.setSelectionBehavior(QAbstractItemView::SelectRows);
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            table.setItem(r,c,new QTableWidgetItem(QStringLiteral("0")));
+    QHeaderView *localHorizontalHeader = table.horizontalHeader();
+    localHorizontalHeader->setSortIndicator(1,Qt::DescendingOrder);
+    table.setProperty("sortingEnabled",true);
+    table.selectRow(1);
+    table.item(1,1)->setText("9");
+    QCOMPARE(table.selectedItems().count(),3);
+    foreach (QTableWidgetItem *item, table.selectedItems()) {
+        QCOMPARE(item->row(),0);
+    }
 }
 
 QTEST_MAIN(tst_QTableWidget)

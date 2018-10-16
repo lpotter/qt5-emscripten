@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,9 @@
 
 #ifndef QFUNCTIONS_VXWORKS_H
 #define QFUNCTIONS_VXWORKS_H
+
+#include <QtCore/qglobal.h>
+
 #ifdef Q_OS_VXWORKS
 
 #include <unistd.h>
@@ -52,24 +53,60 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#if defined(_WRS_KERNEL)
 #include <sys/times.h>
+#else
+#include <sys/time.h>
+#endif
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <netinet/in.h>
-#ifndef QT_NO_IPV6IFNAME
-#include <net/if.h>
+
+// VxWorks has public header mbuf.h which defines following variables for DKM.
+// Let's undef those to because they overlap with Qt variable names-
+// File mbuf.h is included in headers <netinet/in.h> <net/if.h>, so make sure
+// that those are included before undef's.
+#if defined(mbuf)
+#  undef mbuf
+#endif
+#if defined(m_data)
+#  undef m_data
+#endif
+#if defined(m_type)
+#  undef m_type
+#endif
+#if defined(m_next)
+#  undef m_next
+#endif
+#if defined(m_len)
+#  undef m_len
+#endif
+#if defined(m_flags)
+#  undef m_flags
+#endif
+#if defined(m_hdr)
+#  undef m_hdr
+#endif
+#if defined(m_ext)
+#  undef m_ext
+#endif
+#if defined(m_act)
+#  undef m_act
+#endif
+#if defined(m_nextpkt)
+#  undef m_nextpkt
+#endif
+#if defined(m_pkthdr)
+#  undef m_pkthdr
 #endif
 
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
 
 #ifdef QT_BUILD_CORE_LIB
 #endif
 
 QT_END_NAMESPACE
-QT_END_HEADER
-
 
 #ifndef RTLD_LOCAL
 #define RTLD_LOCAL  0
@@ -95,17 +132,23 @@ void *lfind(const void* key, const void* base, size_t* elements, size_t size,
 // no rand_r(), but rand()
 // NOTE: this implementation is wrong for multi threaded applications,
 // but there is no way to get it right on VxWorks (in kernel mode)
+#if defined(_WRS_KERNEL)
 int rand_r(unsigned int * /*seedp*/);
+#endif
 
 // no usleep() support
 int usleep(unsigned int);
 
+#if defined(VXWORKS_DKM) || defined(VXWORKS_RTP)
+int gettimeofday(struct timeval *, void *);
+#else
 // gettimeofday() is declared, but is missing from the library.
 // It IS however defined in the Curtis-Wright X11 libraries, so
 // we have to make the symbol 'weak'
 int gettimeofday(struct timeval *tv, void /*struct timezone*/ *) __attribute__((weak));
+#endif
 
-// neither getpagesize() or sysconf(_SC_PAGESIZE) are available
+// getpagesize() not available
 int getpagesize();
 
 // symlinks are not supported (lstat is now just a call to stat - see qplatformdefs.h)

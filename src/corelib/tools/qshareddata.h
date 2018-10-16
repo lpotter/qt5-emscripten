@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +42,10 @@
 
 #include <QtCore/qglobal.h>
 #include <QtCore/qatomic.h>
-
-QT_BEGIN_HEADER
+#if QT_DEPRECATED_SINCE(5, 6)
+#include <QtCore/qhash.h>
+#endif
+#include <QtCore/qhashfunctions.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -85,10 +85,10 @@ public:
     inline bool operator==(const QSharedDataPointer<T> &other) const { return d == other.d; }
     inline bool operator!=(const QSharedDataPointer<T> &other) const { return d != other.d; }
 
-    inline QSharedDataPointer() { d = 0; }
+    inline QSharedDataPointer() { d = nullptr; }
     inline ~QSharedDataPointer() { if (d && !d->ref.deref()) delete d; }
 
-    explicit QSharedDataPointer(T *data);
+    explicit QSharedDataPointer(T *data) Q_DECL_NOTHROW;
     inline QSharedDataPointer(const QSharedDataPointer<T> &o) : d(o.d) { if (d) d->ref.ref(); }
     inline QSharedDataPointer<T> & operator=(const QSharedDataPointer<T> &o) {
         if (o.d != d) {
@@ -113,14 +113,18 @@ public:
         return *this;
     }
 #ifdef Q_COMPILER_RVALUE_REFS
-    QSharedDataPointer(QSharedDataPointer &&o) : d(o.d) { o.d = 0; }
-    inline QSharedDataPointer<T> &operator=(QSharedDataPointer<T> &&other)
-    { qSwap(d, other.d); return *this; }
+    QSharedDataPointer(QSharedDataPointer &&o) Q_DECL_NOTHROW : d(o.d) { o.d = nullptr; }
+    inline QSharedDataPointer<T> &operator=(QSharedDataPointer<T> &&other) Q_DECL_NOTHROW
+    {
+        QSharedDataPointer moved(std::move(other));
+        swap(moved);
+        return *this;
+    }
 #endif
 
     inline bool operator!() const { return !d; }
 
-    inline void swap(QSharedDataPointer &other)
+    inline void swap(QSharedDataPointer &other) Q_DECL_NOTHROW
     { qSwap(d, other.d); }
 
 protected:
@@ -131,6 +135,18 @@ private:
 
     T *d;
 };
+
+template <class T> inline bool operator==(std::nullptr_t p1, const QSharedDataPointer<T> &p2)
+{
+    Q_UNUSED(p1);
+    return !p2;
+}
+
+template <class T> inline bool operator==(const QSharedDataPointer<T> &p1, std::nullptr_t p2)
+{
+    Q_UNUSED(p2);
+    return !p1;
+}
 
 template <class T> class QExplicitlySharedDataPointer
 {
@@ -143,6 +159,7 @@ public:
     inline T *operator->() const { return d; }
     inline T *data() const { return d; }
     inline const T *constData() const { return d; }
+    inline T *take() { T *x = d; d = nullptr; return x; }
 
     inline void detach() { if (d && d->ref.load() != 1) detach_helper(); }
 
@@ -151,24 +168,29 @@ public:
         if(d && !d->ref.deref())
             delete d;
 
-        d = 0;
+        d = nullptr;
     }
 
-    inline operator bool () const { return d != 0; }
+    inline operator bool () const { return d != nullptr; }
 
     inline bool operator==(const QExplicitlySharedDataPointer<T> &other) const { return d == other.d; }
     inline bool operator!=(const QExplicitlySharedDataPointer<T> &other) const { return d != other.d; }
     inline bool operator==(const T *ptr) const { return d == ptr; }
     inline bool operator!=(const T *ptr) const { return d != ptr; }
 
-    inline QExplicitlySharedDataPointer() { d = 0; }
+    inline QExplicitlySharedDataPointer() { d = nullptr; }
     inline ~QExplicitlySharedDataPointer() { if (d && !d->ref.deref()) delete d; }
 
-    explicit QExplicitlySharedDataPointer(T *data);
+    explicit QExplicitlySharedDataPointer(T *data) Q_DECL_NOTHROW;
     inline QExplicitlySharedDataPointer(const QExplicitlySharedDataPointer<T> &o) : d(o.d) { if (d) d->ref.ref(); }
 
     template<class X>
-    inline QExplicitlySharedDataPointer(const QExplicitlySharedDataPointer<X> &o) : d(static_cast<T *>(o.data()))
+    inline QExplicitlySharedDataPointer(const QExplicitlySharedDataPointer<X> &o)
+#ifdef QT_ENABLE_QEXPLICITLYSHAREDDATAPOINTER_STATICCAST
+        : d(static_cast<T *>(o.data()))
+#else
+        : d(o.data())
+#endif
     {
         if(d)
             d->ref.ref();
@@ -197,14 +219,18 @@ public:
         return *this;
     }
 #ifdef Q_COMPILER_RVALUE_REFS
-    inline QExplicitlySharedDataPointer(QExplicitlySharedDataPointer &&o) : d(o.d) { o.d = 0; }
-    inline QExplicitlySharedDataPointer<T> &operator=(QExplicitlySharedDataPointer<T> &&other)
-    { qSwap(d, other.d); return *this; }
+    inline QExplicitlySharedDataPointer(QExplicitlySharedDataPointer &&o) Q_DECL_NOTHROW : d(o.d) { o.d = nullptr; }
+    inline QExplicitlySharedDataPointer<T> &operator=(QExplicitlySharedDataPointer<T> &&other) Q_DECL_NOTHROW
+    {
+        QExplicitlySharedDataPointer moved(std::move(other));
+        swap(moved);
+        return *this;
+    }
 #endif
 
     inline bool operator!() const { return !d; }
 
-    inline void swap(QExplicitlySharedDataPointer &other)
+    inline void swap(QExplicitlySharedDataPointer &other) Q_DECL_NOTHROW
     { qSwap(d, other.d); }
 
 protected:
@@ -217,7 +243,8 @@ private:
 };
 
 template <class T>
-Q_INLINE_TEMPLATE QSharedDataPointer<T>::QSharedDataPointer(T *adata) : d(adata)
+Q_INLINE_TEMPLATE QSharedDataPointer<T>::QSharedDataPointer(T *adata) Q_DECL_NOTHROW
+    : d(adata)
 { if (d) d->ref.ref(); }
 
 template <class T>
@@ -253,8 +280,21 @@ Q_OUTOFLINE_TEMPLATE void QExplicitlySharedDataPointer<T>::detach_helper()
 }
 
 template <class T>
-Q_INLINE_TEMPLATE QExplicitlySharedDataPointer<T>::QExplicitlySharedDataPointer(T *adata) : d(adata)
+Q_INLINE_TEMPLATE QExplicitlySharedDataPointer<T>::QExplicitlySharedDataPointer(T *adata) Q_DECL_NOTHROW
+    : d(adata)
 { if (d) d->ref.ref(); }
+
+template <class T> inline bool operator==(std::nullptr_t p1, const QExplicitlySharedDataPointer<T> &p2)
+{
+    Q_UNUSED(p1);
+    return !p2;
+}
+
+template <class T> inline bool operator==(const QExplicitlySharedDataPointer<T> &p1, std::nullptr_t p2)
+{
+    Q_UNUSED(p2);
+    return !p1;
+}
 
 template <class T>
 Q_INLINE_TEMPLATE void qSwap(QSharedDataPointer<T> &p1, QSharedDataPointer<T> &p2)
@@ -276,11 +316,20 @@ namespace std {
 }
 QT_BEGIN_NAMESPACE
 
+template <class T>
+Q_INLINE_TEMPLATE uint qHash(const QSharedDataPointer<T> &ptr, uint seed = 0) Q_DECL_NOTHROW
+{
+    return qHash(ptr.data(), seed);
+}
+template <class T>
+Q_INLINE_TEMPLATE uint qHash(const QExplicitlySharedDataPointer<T> &ptr, uint seed = 0) Q_DECL_NOTHROW
+{
+    return qHash(ptr.data(), seed);
+}
+
 template<typename T> Q_DECLARE_TYPEINFO_BODY(QSharedDataPointer<T>, Q_MOVABLE_TYPE);
 template<typename T> Q_DECLARE_TYPEINFO_BODY(QExplicitlySharedDataPointer<T>, Q_MOVABLE_TYPE);
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QSHAREDDATA_H

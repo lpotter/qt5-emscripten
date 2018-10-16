@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +31,7 @@
 
 
 #include <qapplication.h>
+#include <qfontdatabase.h>
 #include <qfontinfo.h>
 #include <qtimer.h>
 #include <qmainwindow.h>
@@ -66,6 +54,7 @@ public slots:
     void postKeyReturn();
     void testGetFont();
     void testSetFont();
+    void testNonStandardFontSize();
 
 public slots:
     void initTestCase();
@@ -76,6 +65,11 @@ private slots:
     void defaultOkButton();
     void setFont();
     void task256466_wrongStyle();
+    void setNonStandardFontSize();
+#ifndef QT_NO_STYLE_STYLESHEET
+    void qtbug_41513_stylesheetStyle();
+#endif
+
 
 private:
     void runSlotWithFailsafeTimer(const char *member);
@@ -108,11 +102,11 @@ void tst_QFontDialog::cleanup()
 void tst_QFontDialog::postKeyReturn() {
     QWidgetList list = QApplication::topLevelWidgets();
     for (int i=0; i<list.count(); ++i) {
-	QFontDialog *dialog = qobject_cast<QFontDialog*>(list[i]);
-	if (dialog) {
-	    QTest::keyClick( list[i], Qt::Key_Return, Qt::NoModifier );
-	    return;
-	}
+        QFontDialog *dialog = qobject_cast<QFontDialog*>(list[i]);
+        if (dialog) {
+            QTest::keyClick( list[i], Qt::Key_Return, Qt::NoModifier );
+            return;
+        }
     }
 }
 
@@ -194,17 +188,77 @@ void tst_QFontDialog::task256466_wrongStyle()
     for (int i = 0; i < familyList->model()->rowCount(); ++i) {
         QModelIndex currentFamily = familyList->model()->index(i, 0);
         familyList->setCurrentIndex(currentFamily);
+        int expectedSize = sizeList->currentIndex().data().toInt();
         const QFont current = dialog.currentFont(),
                     expected = fdb.font(currentFamily.data().toString(),
-            styleList->currentIndex().data().toString(), sizeList->currentIndex().data().toInt());
+            styleList->currentIndex().data().toString(), expectedSize);
         QCOMPARE(current.family(), expected.family());
         QCOMPARE(current.style(), expected.style());
+        if (expectedSize == 0 && !QFontDatabase().isScalable(current.family(), current.styleName()))
+            QEXPECT_FAIL("", "QTBUG-53299: Smooth sizes for unscalable font contains unsupported size", Continue);
         QCOMPARE(current.pointSizeF(), expected.pointSizeF());
     }
 }
 
+void tst_QFontDialog::setNonStandardFontSize()
+{
+    runSlotWithFailsafeTimer(SLOT(testNonStandardFontSize()));
+}
+#ifndef QT_NO_STYLE_STYLESHEET
+static const QString offendingStyleSheet = QStringLiteral("* { font-family: \"QtBidiTestFont\"; }");
 
+void tst_QFontDialog::qtbug_41513_stylesheetStyle()
+{
+    if (QFontDatabase::addApplicationFont(QFINDTESTDATA("test.ttf")) < 0)
+        QSKIP("Test fonts not found.");
+    if (QFontDatabase::addApplicationFont(QFINDTESTDATA("testfont.ttf")) < 0)
+        QSKIP("Test fonts not found.");
+    QFont testFont = QFont(QStringLiteral("QtsSpecialTestFont"));
+    qApp->setStyleSheet(offendingStyleSheet);
+    bool accepted = false;
+    QTimer::singleShot(2000, this, SLOT(postKeyReturn()));
+    QFont resultFont = QFontDialog::getFont(&accepted, testFont,
+        QApplication::activeWindow(),
+        QLatin1String("QFontDialog - Stylesheet Test"),
+        QFontDialog::DontUseNativeDialog);
+    QVERIFY(accepted);
 
+    // The fontdialog sets the styleName, when the fontdatabase knows the style name.
+    resultFont.setStyleName(testFont.styleName());
+    QCOMPARE(resultFont, testFont);
+
+    // reset stylesheet
+    qApp->setStyleSheet(QString());
+}
+#endif // QT_NO_STYLE_STYLESHEET
+
+void tst_QFontDialog::testNonStandardFontSize()
+{
+    QList<int> standardSizesList = QFontDatabase::standardSizes();
+    int nonStandardFontSize;
+    if (!standardSizesList.isEmpty()) {
+        nonStandardFontSize = standardSizesList.at(standardSizesList.count()-1); // get the maximum standard size.
+        nonStandardFontSize += 1; // the increment of 1 to mock a non-standard font size.
+    } else {
+        QSKIP("QFontDatabase::standardSizes() is empty.");
+    }
+
+    QFont testFont;
+    testFont.setPointSize(nonStandardFontSize);
+
+    bool accepted = false;
+    QTimer::singleShot(2000, this, SLOT(postKeyReturn()));
+    QFont resultFont = QFontDialog::getFont(&accepted, testFont,
+        QApplication::activeWindow(),
+        QLatin1String("QFontDialog - NonStandardFontSize Test"),
+        QFontDialog::DontUseNativeDialog);
+    QVERIFY(accepted);
+
+    if (accepted)
+        QCOMPARE(testFont.pointSize(), resultFont.pointSize());
+    else
+        QWARN("Fail using a non-standard font size.");
+}
 
 QTEST_MAIN(tst_QFontDialog)
 #include "tst_qfontdialog.moc"

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,39 +50,39 @@
 
 #include <QWindow>
 
-#include <QtGui/qopengl.h>
-#include <QtGui/qopenglshaderprogram.h>
-
 #include <QColor>
-#include <QTime>
+#include <QMutex>
+#include <QOpenGLShaderProgram>
+#include <QOpenGLBuffer>
 #include <QSharedPointer>
+#include <QTimer>
 
-QT_BEGIN_NAMESPACE
-class QOpenGLContext;
-class QTimer;
-QT_END_NAMESPACE
+class HelloWindow;
 
 class Renderer : public QObject
 {
     Q_OBJECT
+
 public:
     explicit Renderer(const QSurfaceFormat &format, Renderer *share = 0, QScreen *screen = 0);
 
     QSurfaceFormat format() const { return m_format; }
 
+    void setAnimating(HelloWindow *window, bool animating);
+
 public slots:
-    void render(QSurface *surface, const QColor &color, const QSize &viewSize);
+    void render();
 
 private:
     void initialize();
 
-    qreal m_fAngle;
-    bool m_showBubbles;
-    void paintQtLogo();
     void createGeometry();
     void createBubbles(int number);
     void quad(qreal x1, qreal y1, qreal x2, qreal y2, qreal x3, qreal y3, qreal x4, qreal y4);
     void extrude(qreal x1, qreal y1, qreal x2, qreal y2);
+
+    qreal m_fAngle;
+
     QVector<QVector3D> vertices;
     QVector<QVector3D> normals;
     int vertexAttr;
@@ -84,29 +94,31 @@ private:
     QSurfaceFormat m_format;
     QOpenGLContext *m_context;
     QOpenGLShaderProgram *m_program;
+    QOpenGLBuffer m_vbo;
+
+    QList<HelloWindow *> m_windows;
+    int m_currentWindow;
+
+    QMutex m_windowLock;
+
+    QColor m_backgroundColor;
 };
 
 class HelloWindow : public QWindow
 {
-    Q_OBJECT
 public:
-    explicit HelloWindow(const QSharedPointer<Renderer> &renderer);
+    explicit HelloWindow(const QSharedPointer<Renderer> &renderer, QScreen *screen = 0);
 
+    QColor color() const;
     void updateColor();
 
-    void exposeEvent(QExposeEvent *event);
-
-signals:
-    void needRender(QSurface *surface, const QColor &color, const QSize &viewSize);
-
-private slots:
-    void render();
+    void exposeEvent(QExposeEvent *event) override;
 
 private:
-    void mousePressEvent(QMouseEvent *);
+    void mousePressEvent(QMouseEvent *) override;
 
     int m_colorIndex;
     QColor m_color;
     const QSharedPointer<Renderer> m_renderer;
-    QTimer *m_timer;
+    mutable QMutex m_colorLock;
 };

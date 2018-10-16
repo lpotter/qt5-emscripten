@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,7 +28,8 @@
 /*!
     \example tools/echoplugin
     \title Echo Plugin Example
-    \group examples-widgets-tools
+    \ingroup examples-widgets-tools
+    \ingroup examples-layout
 
     \brief This example shows how to create a Qt plugin.
 
@@ -46,7 +47,7 @@
     System}{meta-object system}. The plugin \l{How to Create Qt
     Plugins}{overview document} gives a high-level introduction to
     plugins.
-    
+
     We have implemented a plugin, the \c EchoPlugin, which implements
     the \c EchoInterface. The interface consists of \c echo(), which
     takes a QString as argument. The \c EchoPlugin returns the string
@@ -68,8 +69,8 @@
     \snippet tools/echoplugin/echowindow/echowindow.h 0
 
     We load the plugin in \c loadPlugin() and cast it to \c
-    EchoInterface. When the user clicks the \c button we take the 
-    text in \c lineEdit and call the interface's \c echo() with it. 
+    EchoInterface. When the user clicks the \c button we take the
+    text in \c lineEdit and call the interface's \c echo() with it.
 
 
     \section1 EchoWindow Class Implementation
@@ -136,16 +137,16 @@
     System}{Qt's meta object system} aware of the interface. We do
     this so that it will be possible to identify plugins that
     implements the interface at run-time. The second argument is a
-    string that must identify the interface in a unique way. 
+    string that must identify the interface in a unique way.
 
 
     \section1 EchoPlugin Class Definition
 
     We inherit both QObject and \c EchoInterface to make this class a
     plugin. The Q_INTERFACES macro tells Qt which interfaces the class
-    implements. In our case we only implement the \c EchoInterface. 
-    If a class implements more than one interface, they are given as 
-    a comma separated list. The Q_PLUGIN_METADATA macro is included next
+    implements. In our case we only implement the \c EchoInterface.
+    If a class implements more than one interface, they are given as
+    a space separated list. The Q_PLUGIN_METADATA macro is included next
     to the Q_OBJECT macro. It contains the plugins IID and a filename
     pointing to a json file containing the metadata for the plugin.
     The json file is compiled into the plugin and does not need to be installed.
@@ -158,7 +159,7 @@
 
     \snippet tools/echoplugin/plugin/echoplugin.cpp 0
 
-    We simply return the functions parameter. 
+    We simply return the functions parameter.
 
     \section1 The \c main() function
 
@@ -169,7 +170,7 @@
     \section1 The Profiles
 
     When creating plugins the profiles need to be adjusted.
-    We show here what changes need to be done. 
+    We show here what changes need to be done.
 
     The profile in the echoplugin directory uses the \c subdirs
     template and simply includes includes to directories in which
@@ -192,12 +193,12 @@
     the platform. By convention the target should have the same name
     as the plugin (set with Q_EXPORT_PLUGIN2)
 
-    \section1 Further reading and examples
+    \section1 Further Reading and Examples
 
-    You can find an overview of the macros needed to create plugins
-    \l{Macros for Defining Plugins}{here}.
-    
-    We give an example of a plugin that extend Qt in the \l{Style
+    The \l {qtplugin-defining-plugins}{Defining Plugins} page presents an overview of the macros needed to
+    create plugins.
+
+    We give an example of a plugin that extends Qt in the \l{Style
     Plugin Example}{style plugin} example. The \l{Plug & Paint
     Example}{plug and paint} example shows how to create static
     plugins.

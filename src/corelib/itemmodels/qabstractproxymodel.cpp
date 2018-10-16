@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,39 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qabstractproxymodel.h"
-
-#ifndef QT_NO_PROXYMODEL
-
 #include "qitemselectionmodel.h"
 #include <private/qabstractproxymodel_p.h>
 #include <QtCore/QSize>
@@ -85,12 +80,13 @@ QT_BEGIN_NAMESPACE
 /*!
     \property QAbstractProxyModel::sourceModel
 
-    \brief the source model this proxy model.
+    \brief the source model of this proxy model.
 */
 
 //detects the deletion of the source model
 void QAbstractProxyModelPrivate::_q_sourceModelDestroyed()
 {
+    invalidatePersistentIndexes();
     model = QAbstractItemModelPrivate::staticEmptyModel();
 }
 
@@ -124,6 +120,10 @@ QAbstractProxyModel::~QAbstractProxyModel()
 
 /*!
     Sets the given \a sourceModel to be processed by the proxy model.
+
+    Subclasses should call beginResetModel() at the beginning of the method,
+    disconnect from the old model, call this method, connect to the new model,
+    and call endResetModel().
 */
 void QAbstractProxyModel::setSourceModel(QAbstractItemModel *sourceModel)
 {
@@ -141,6 +141,15 @@ void QAbstractProxyModel::setSourceModel(QAbstractItemModel *sourceModel)
         d->roleNames = d->model->roleNames();
         emit sourceModelChanged(QPrivateSignal());
     }
+}
+
+/*!
+    Clears the roleNames of this proxy model.
+*/
+void QAbstractProxyModel::resetInternalData()
+{
+    Q_D(QAbstractProxyModel);
+    d->roleNames = d->model->roleNames();
 }
 
 /*!
@@ -258,8 +267,7 @@ QVariant QAbstractProxyModel::headerData(int section, Qt::Orientation orientatio
  */
 QMap<int, QVariant> QAbstractProxyModel::itemData(const QModelIndex &proxyIndex) const
 {
-    Q_D(const QAbstractProxyModel);
-    return d->model->itemData(mapToSource(proxyIndex));
+    return QAbstractItemModel::itemData(proxyIndex);
 }
 
 /*!
@@ -285,8 +293,7 @@ bool QAbstractProxyModel::setData(const QModelIndex &index, const QVariant &valu
  */
 bool QAbstractProxyModel::setItemData(const QModelIndex &index, const QMap< int, QVariant >& roles)
 {
-    Q_D(QAbstractProxyModel);
-    return d->model->setItemData(mapToSource(index), roles);
+    return QAbstractItemModel::setItemData(index, roles);
 }
 
 /*!
@@ -365,8 +372,7 @@ bool QAbstractProxyModel::hasChildren(const QModelIndex &parent) const
  */
 QModelIndex QAbstractProxyModel::sibling(int row, int column, const QModelIndex &idx) const
 {
-    Q_D(const QAbstractProxyModel);
-    return mapFromSource(d->model->sibling(row, column, mapToSource(idx)));
+    return index(row, column, idx.parent());
 }
 
 /*!
@@ -376,9 +382,60 @@ QMimeData* QAbstractProxyModel::mimeData(const QModelIndexList &indexes) const
 {
     Q_D(const QAbstractProxyModel);
     QModelIndexList list;
-    foreach(const QModelIndex &index, indexes)
+    list.reserve(indexes.count());
+    for (const QModelIndex &index : indexes)
         list << mapToSource(index);
     return d->model->mimeData(list);
+}
+
+void QAbstractProxyModelPrivate::mapDropCoordinatesToSource(int row, int column, const QModelIndex &parent,
+                                                            int *sourceRow, int *sourceColumn, QModelIndex *sourceParent) const
+{
+    Q_Q(const QAbstractProxyModel);
+    *sourceRow = -1;
+    *sourceColumn = -1;
+    if (row == -1 && column == -1) {
+        *sourceParent = q->mapToSource(parent);
+    } else if (row == q->rowCount(parent)) {
+        *sourceParent = q->mapToSource(parent);
+        *sourceRow = model->rowCount(*sourceParent);
+    } else {
+        QModelIndex proxyIndex = q->index(row, column, parent);
+        QModelIndex sourceIndex = q->mapToSource(proxyIndex);
+        *sourceRow = sourceIndex.row();
+        *sourceColumn = sourceIndex.column();
+        *sourceParent = sourceIndex.parent();
+    }
+}
+
+/*!
+    \reimp
+    \since 5.4
+ */
+bool QAbstractProxyModel::canDropMimeData(const QMimeData *data, Qt::DropAction action,
+                                          int row, int column, const QModelIndex &parent) const
+{
+    Q_D(const QAbstractProxyModel);
+    int sourceDestinationRow;
+    int sourceDestinationColumn;
+    QModelIndex sourceParent;
+    d->mapDropCoordinatesToSource(row, column, parent, &sourceDestinationRow, &sourceDestinationColumn, &sourceParent);
+    return d->model->canDropMimeData(data, action, sourceDestinationRow, sourceDestinationColumn, sourceParent);
+}
+
+/*!
+    \reimp
+    \since 5.4
+ */
+bool QAbstractProxyModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
+                                       int row, int column, const QModelIndex &parent)
+{
+    Q_D(QAbstractProxyModel);
+    int sourceDestinationRow;
+    int sourceDestinationColumn;
+    QModelIndex sourceParent;
+    d->mapDropCoordinatesToSource(row, column, parent, &sourceDestinationRow, &sourceDestinationColumn, &sourceParent);
+    return d->model->dropMimeData(data, action, sourceDestinationRow, sourceDestinationColumn, sourceParent);
 }
 
 /*!
@@ -393,6 +450,15 @@ QStringList QAbstractProxyModel::mimeTypes() const
 /*!
     \reimp
  */
+Qt::DropActions QAbstractProxyModel::supportedDragActions() const
+{
+    Q_D(const QAbstractProxyModel);
+    return d->model->supportedDragActions();
+}
+
+/*!
+    \reimp
+ */
 Qt::DropActions QAbstractProxyModel::supportedDropActions() const
 {
     Q_D(const QAbstractProxyModel);
@@ -402,5 +468,3 @@ Qt::DropActions QAbstractProxyModel::supportedDropActions() const
 QT_END_NAMESPACE
 
 #include "moc_qabstractproxymodel.cpp"
-
-#endif // QT_NO_PROXYMODEL

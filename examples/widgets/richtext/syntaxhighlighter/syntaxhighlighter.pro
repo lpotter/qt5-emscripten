@@ -1,3 +1,6 @@
+QT += widgets
+requires(qtConfig(filedialog))
+
 HEADERS         = highlighter.h \
                   mainwindow.h
 SOURCES         = highlighter.cpp \
@@ -7,12 +10,3 @@ SOURCES         = highlighter.cpp \
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/widgets/richtext/syntaxhighlighter
 INSTALLS += target
-
-
-wince*: {
-   addFiles.files = main.cpp mainwindow.cpp
-   addFiles.path = .
-   DEPLOYMENT += addFiles
-}
-QT += widgets
-

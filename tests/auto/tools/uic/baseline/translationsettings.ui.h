@@ -1,8 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'translationsettings.ui'
 **
-** Created: Fri Sep 4 10:17:15 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -11,15 +10,12 @@
 #define TRANSLATIONSETTINGS_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QGroupBox>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QVBoxLayout>
 
@@ -40,7 +36,7 @@ public:
     void setupUi(QDialog *TranslationSettings)
     {
         if (TranslationSettings->objectName().isEmpty())
-            TranslationSettings->setObjectName(QStringLiteral("TranslationSettings"));
+            TranslationSettings->setObjectName(QString::fromUtf8("TranslationSettings"));
         TranslationSettings->resize(346, 125);
         vboxLayout = new QVBoxLayout(TranslationSettings);
 #ifndef Q_OS_MAC
@@ -49,9 +45,9 @@ public:
 #ifndef Q_OS_MAC
         vboxLayout->setContentsMargins(9, 9, 9, 9);
 #endif
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         groupBox = new QGroupBox(TranslationSettings);
-        groupBox->setObjectName(QStringLiteral("groupBox"));
+        groupBox->setObjectName(QString::fromUtf8("groupBox"));
         gridLayout = new QGridLayout(groupBox);
 #ifndef Q_OS_MAC
         gridLayout->setSpacing(6);
@@ -59,24 +55,24 @@ public:
 #ifndef Q_OS_MAC
         gridLayout->setContentsMargins(9, 9, 9, 9);
 #endif
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         cbLanguageList = new QComboBox(groupBox);
-        cbLanguageList->setObjectName(QStringLiteral("cbLanguageList"));
+        cbLanguageList->setObjectName(QString::fromUtf8("cbLanguageList"));
 
         gridLayout->addWidget(cbLanguageList, 0, 1, 1, 1);
 
         label = new QLabel(groupBox);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
 
         gridLayout->addWidget(label, 0, 0, 1, 1);
 
         cbCountryList = new QComboBox(groupBox);
-        cbCountryList->setObjectName(QStringLiteral("cbCountryList"));
+        cbCountryList->setObjectName(QString::fromUtf8("cbCountryList"));
 
         gridLayout->addWidget(cbCountryList, 1, 1, 1, 1);
 
         lblCountry = new QLabel(groupBox);
-        lblCountry->setObjectName(QStringLiteral("lblCountry"));
+        lblCountry->setObjectName(QString::fromUtf8("lblCountry"));
 
         gridLayout->addWidget(lblCountry, 1, 0, 1, 1);
 
@@ -84,7 +80,7 @@ public:
         vboxLayout->addWidget(groupBox);
 
         buttonBox = new QDialogButtonBox(TranslationSettings);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::NoButton|QDialogButtonBox::Ok);
 
@@ -103,10 +99,10 @@ public:
 
     void retranslateUi(QDialog *TranslationSettings)
     {
-        TranslationSettings->setWindowTitle(QApplication::translate("TranslationSettings", "Qt Linguist - Translation file settings", 0));
-        groupBox->setTitle(QApplication::translate("TranslationSettings", "Target language", 0));
-        label->setText(QApplication::translate("TranslationSettings", "Language", 0));
-        lblCountry->setText(QApplication::translate("TranslationSettings", "Country/Region", 0));
+        TranslationSettings->setWindowTitle(QApplication::translate("TranslationSettings", "Qt Linguist - Translation file settings", nullptr));
+        groupBox->setTitle(QApplication::translate("TranslationSettings", "Target language", nullptr));
+        label->setText(QApplication::translate("TranslationSettings", "Language", nullptr));
+        lblCountry->setText(QApplication::translate("TranslationSettings", "Country/Region", nullptr));
     } // retranslateUi
 
 };

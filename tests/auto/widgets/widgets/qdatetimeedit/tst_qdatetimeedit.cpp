@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -83,6 +70,7 @@
 #include <QSignalSpy>
 #include <QTestEventList>
 #include <QDateEdit>
+#include <QProxyStyle>
 
 #include <private/qdatetimeedit_p.h>
 
@@ -93,37 +81,9 @@
 #endif
 
 
-Q_DECLARE_METATYPE(QDate);
 Q_DECLARE_METATYPE(Qt::Key);
 Q_DECLARE_METATYPE(Qt::KeyboardModifiers);
 Q_DECLARE_METATYPE(Qt::KeyboardModifier);
-Q_DECLARE_METATYPE(QDateTime);
-Q_DECLARE_METATYPE(QTime);
-Q_DECLARE_METATYPE(QList<int>);
-
-#if defined(Q_OS_WINCE)
-#ifndef SPI_GETPLATFORMTYPE
-#define SPI_GETPLATFORMTYPE 257
-#endif
-
-bool qt_wince_is_platform(const QString &platformString) {
-    wchar_t tszPlatform[64];
-    if (SystemParametersInfo(SPI_GETPLATFORMTYPE,
-                             sizeof(tszPlatform)/sizeof(*tszPlatform),tszPlatform,0))
-      if (0 == _tcsicmp(reinterpret_cast<const wchar_t *> (platformString.utf16()), tszPlatform))
-            return true;
-    return false;
-}
-bool qt_wince_is_pocket_pc() {
-    return qt_wince_is_platform(QString::fromLatin1("PocketPC"));
-}
-bool qt_wince_is_smartphone() {
-       return qt_wince_is_platform(QString::fromLatin1("Smartphone"));
-}
-bool qt_wince_is_mobile() {
-     return (qt_wince_is_smartphone() || qt_wince_is_pocket_pc());
-}
-#endif
 
 class EditorDateEdit : public QDateTimeEdit
 {
@@ -134,18 +94,56 @@ public:
     friend class tst_QDateTimeEdit;
 };
 
-class tst_QDateTimeEdit : public QObject
+class PressAndHoldStyle : public QProxyStyle
 {
     Q_OBJECT
 public:
-    tst_QDateTimeEdit();
-    virtual ~tst_QDateTimeEdit();
-public slots:
+    using QProxyStyle::QProxyStyle;
+
+    int styleHint(QStyle::StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr, QStyleHintReturn *returnData = nullptr) const override
+    {
+        switch (hint) {
+        case QStyle::SH_SpinBox_ClickAutoRepeatRate:
+            return 5;
+        case QStyle::SH_SpinBox_ClickAutoRepeatThreshold:
+            return 10;
+        default:
+            return QProxyStyle::styleHint(hint, option, widget, returnData);
+        }
+    }
+};
+
+class StepModifierStyle : public QProxyStyle
+{
+    Q_OBJECT
+public:
+    using QProxyStyle::QProxyStyle;
+
+    int styleHint(QStyle::StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr, QStyleHintReturn *returnData = nullptr) const override
+    {
+        switch (hint) {
+        case QStyle::SH_SpinBox_StepModifier:
+            return stepModifier;
+        default:
+            return QProxyStyle::styleHint(hint, option, widget, returnData);
+        }
+    }
+
+    Qt::KeyboardModifier stepModifier = Qt::ControlModifier;
+};
+
+class tst_QDateTimeEdit : public QObject
+{
+    Q_OBJECT
+
+private slots:
     void initTestCase();
     void init();
     void cleanup();
     void cleanupTestCase();
-private slots:
+
     void cachedDayTest();
     void getSetCheck();
     void constructor_qwidget();
@@ -248,6 +246,7 @@ private slots:
     void reverseTest();
 
     void ddMMMMyyyy();
+    void wheelEvent_data();
     void wheelEvent();
 
     void specialValueCornerCase();
@@ -262,6 +261,7 @@ private slots:
     void timeSpec_data();
     void timeSpec();
     void timeSpecBug();
+    void timeSpecInit();
 
     void monthEdgeCase();
     void setLocale();
@@ -279,25 +279,116 @@ private slots:
 
     void deleteCalendarWidget();
 
+    void setLocaleOnCalendarWidget();
+
 #ifdef QT_BUILD_INTERNAL
     void dateEditCorrectSectionSize_data();
     void dateEditCorrectSectionSize();
 #endif
+
+    void stepModifierKeys_data();
+    void stepModifierKeys();
+
+    void stepModifierButtons_data();
+    void stepModifierButtons();
+
+    void stepModifierPressAndHold_data();
+    void stepModifierPressAndHold();
 private:
     EditorDateEdit* testWidget;
     QWidget *testFocusWidget;
 };
 
+typedef QList<QDate> DateList;
 typedef QList<QTime> TimeList;
 typedef QList<Qt::Key> KeyList;
 
-Q_DECLARE_METATYPE(TimeList)
-Q_DECLARE_METATYPE(KeyList)
+static QLatin1String modifierToName(Qt::KeyboardModifier modifier)
+{
+    switch (modifier) {
+    case Qt::NoModifier:
+        return QLatin1Literal("No");
+        break;
+    case Qt::ControlModifier:
+        return QLatin1Literal("Ctrl");
+        break;
+    case Qt::ShiftModifier:
+        return QLatin1Literal("Shift");
+        break;
+    case Qt::AltModifier:
+        return QLatin1Literal("Alt");
+        break;
+    case Qt::MetaModifier:
+        return QLatin1Literal("Meta");
+        break;
+    default:
+        qFatal("Unexpected keyboard modifier");
+        return QLatin1String();
+    }
+}
+
+static QLatin1String sectionToName(const QDateTimeEdit::Section section)
+{
+    switch (section) {
+    case QDateTimeEdit::SecondSection:
+        return QLatin1Literal("Second");
+    case QDateTimeEdit::MinuteSection:
+        return QLatin1Literal("Minute");
+    case QDateTimeEdit::HourSection:
+        return QLatin1Literal("Hours");
+    case QDateTimeEdit::DaySection:
+        return QLatin1Literal("Day");
+    case QDateTimeEdit::MonthSection:
+        return QLatin1Literal("Month");
+    case QDateTimeEdit::YearSection:
+        return QLatin1Literal("Year");
+    default:
+        qFatal("Unexpected section");
+        return QLatin1String();
+    }
+}
+
+static QDate stepDate(const QDate& startDate, const QDateTimeEdit::Section section,
+                      const int steps)
+{
+    switch (section) {
+    case QDateTimeEdit::DaySection:
+        return startDate.addDays(steps);
+    case QDateTimeEdit::MonthSection:
+        return startDate.addMonths(steps);
+    case QDateTimeEdit::YearSection:
+        return startDate.addYears(steps);
+    default:
+        qFatal("Unexpected section");
+        return QDate();
+    }
+}
+
+static QTime stepTime(const QTime& startTime, const QDateTimeEdit::Section section,
+                      const int steps)
+{
+    switch (section) {
+    case QDateTimeEdit::SecondSection:
+        return startTime.addSecs(steps);
+    case QDateTimeEdit::MinuteSection:
+        return QTime(startTime.hour(),
+                     startTime.minute() + steps,
+                     startTime.second());
+    case QDateTimeEdit::HourSection:
+        return QTime(startTime.hour() + steps,
+                     startTime.minute(),
+                     startTime.second());
+    default:
+        qFatal("Unexpected section");
+        return QTime();
+    }
+}
 
 // Testing get/set functions
 void tst_QDateTimeEdit::getSetCheck()
 {
     QDateTimeEdit obj1;
+    QCOMPARE(obj1.inputMethodQuery(Qt::ImHints), QVariant(int(Qt::ImhPreferNumbers)));
     obj1.setDisplayFormat("dd/MM/yyyy hh:mm:ss.zzz d/M/yy h:m:s.z AP");
     // Section QDateTimeEdit::currentSection()
     // void QDateTimeEdit::setCurrentSection(Section)
@@ -319,18 +410,11 @@ void tst_QDateTimeEdit::getSetCheck()
     QCOMPARE(QDateTimeEdit::MonthSection, obj1.currentSection());
     obj1.setCurrentSection(QDateTimeEdit::YearSection);
     QCOMPARE(QDateTimeEdit::YearSection, obj1.currentSection());
-}
 
-tst_QDateTimeEdit::tst_QDateTimeEdit()
-{
-    qRegisterMetaType<QDate>("QDate");
-    qRegisterMetaType<QTime>("QTime");
-    qRegisterMetaType<QDateTime>("QDateTime");
-    qRegisterMetaType<QList<int> >("QList<int>");
-}
-
-tst_QDateTimeEdit::~tst_QDateTimeEdit()
-{
+    QDateEdit dateEdit;
+    QCOMPARE(dateEdit.inputMethodQuery(Qt::ImHints), QVariant(int(Qt::ImhPreferNumbers)));
+    QTimeEdit timeEdit;
+    QCOMPARE(timeEdit.inputMethodQuery(Qt::ImHints), QVariant(int(Qt::ImhPreferNumbers)));
 }
 
 void tst_QDateTimeEdit::initTestCase()
@@ -357,7 +441,7 @@ void tst_QDateTimeEdit::cleanupTestCase()
 void tst_QDateTimeEdit::init()
 {
     QLocale::setDefault(QLocale(QLocale::C));
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     SetThreadLocale(MAKELCID(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), SORT_DEFAULT));
 #endif
     testWidget->setDisplayFormat("dd/MM/yyyy"); // Nice default to have
@@ -373,6 +457,8 @@ void tst_QDateTimeEdit::cleanup()
     testWidget->setTimeSpec(Qt::LocalTime);
     testWidget->setSpecialValueText(QString());
     testWidget->setWrapping(false);
+    // Restore the default.
+    testWidget->setCalendarPopup(false);
 }
 
 void tst_QDateTimeEdit::constructor_qwidget()
@@ -383,7 +469,7 @@ void tst_QDateTimeEdit::constructor_qwidget()
     QCOMPARE(dte.dateTime(), QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0, 0)));
     QCOMPARE(dte.minimumDate(), QDate(1752, 9, 14));
     QCOMPARE(dte.minimumTime(), QTime(0, 0, 0, 0));
-    QCOMPARE(dte.maximumDate(), QDate(7999, 12, 31));
+    QCOMPARE(dte.maximumDate(), QDate(9999, 12, 31));
     QCOMPARE(dte.maximumTime(), QTime(23, 59, 59, 999));
 }
 
@@ -399,12 +485,12 @@ void tst_QDateTimeEdit::constructor_qdatetime_data()
     QTest::newRow("normal") << QDateTime(QDate(2004, 6, 16), QTime(13, 46, 32, 764))
                             << QDateTime(QDate(2004, 6, 16), QTime(13, 46, 32, 764))
                             << QDate(1752, 9, 14) << QTime(0, 0, 0, 0)
-                            << QDate(7999, 12, 31) << QTime(23, 59, 59, 999);
+                            << QDate(9999, 12, 31) << QTime(23, 59, 59, 999);
 
     QTest::newRow("invalid") << QDateTime(QDate(9999, 99, 99), QTime(13, 46, 32, 764))
                              << QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0, 0))
                              << QDate(1752, 9, 14) << QTime(0, 0, 0, 0)
-                             << QDate(7999, 12, 31) << QTime(23, 59, 59, 999);
+                             << QDate(9999, 12, 31) << QTime(23, 59, 59, 999);
 }
 
 void tst_QDateTimeEdit::constructor_qdatetime()
@@ -439,12 +525,12 @@ void tst_QDateTimeEdit::constructor_qdate_data()
     QTest::newRow("normal") << QDate(2004, 6, 16)
                             << QDateTime(QDate(2004, 6, 16), QTime(0, 0, 0, 0))
                             << QDate(1752, 9, 14) << QTime(0, 0, 0, 0)
-                            << QDate(7999, 12, 31) << QTime(23, 59, 59, 999);
+                            << QDate(9999, 12, 31) << QTime(23, 59, 59, 999);
 
     QTest::newRow("invalid") << QDate(9999, 99, 99)
                              << QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0, 0))
                              << QDate(1752, 9, 14) << QTime(0, 0, 0, 0)
-                             << QDate(7999, 12, 31) << QTime(23, 59, 59, 999);
+                             << QDate(9999, 12, 31) << QTime(23, 59, 59, 999);
 }
 
 void tst_QDateTimeEdit::constructor_qdate()
@@ -514,7 +600,7 @@ void tst_QDateTimeEdit::minimumDate_data()
 
     QTest::newRow("normal-0") << QDate(2004, 5, 10) << QDate(2004, 5, 10);
     QTest::newRow("normal-1") << QDate(2002, 3, 15) << QDate(2002, 3, 15);
-    QTest::newRow("normal-2") << QDate(7999, 12, 31) << QDate(7999, 12, 31);
+    QTest::newRow("normal-2") << QDate(9999, 12, 31) << QDate(9999, 12, 31);
     QTest::newRow("normal-3") << QDate(1753, 1, 1) << QDate(1753, 1, 1);
     QTest::newRow("invalid-0") << QDate(0, 0, 0) << QDate(1752, 9, 14);
     QTest::newRow("old") << QDate(1492, 8, 3) << QDate(1492, 8, 3);
@@ -575,7 +661,7 @@ void tst_QDateTimeEdit::maximumDateTime_data()
                               << QDateTime(QDate(2007, 5, 10), QTime(22, 23, 23));
     QTest::newRow("normal-4") << QDateTime(QDate(2008, 5, 10), QTime(2, 3, 1))
                               << QDateTime(QDate(2008, 5, 10), QTime(2, 3, 1));
-    QTest::newRow("invalid-0") << QDateTime() << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
+    QTest::newRow("invalid-0") << QDateTime() << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
 }
 
 void tst_QDateTimeEdit::maximumDateTime()
@@ -594,9 +680,9 @@ void tst_QDateTimeEdit::maximumDate_data()
 
     QTest::newRow("normal-0") << QDate(2004, 05, 10) << QDate(2004, 5, 10);
     QTest::newRow("normal-1") << QDate(2002, 03, 15) << QDate(2002, 3, 15);
-    QTest::newRow("normal-2") << QDate(7999, 12, 31) << QDate(7999, 12, 31);
+    QTest::newRow("normal-2") << QDate(9999, 12, 31) << QDate(9999, 12, 31);
     QTest::newRow("normal-3") << QDate(1753, 1, 1) << QDate(1753, 1, 1);
-    QTest::newRow("invalid-0") << QDate(0, 0, 0) << QDate(7999, 12, 31);
+    QTest::newRow("invalid-0") << QDate(0, 0, 0) << QDate(9999, 12, 31);
 }
 
 void tst_QDateTimeEdit::maximumDate()
@@ -616,7 +702,7 @@ void tst_QDateTimeEdit::clearMinimumDate_data()
 
     QTest::newRow("normal-0") << QDate(2004, 05, 10) << true << QDate(1752, 9, 14);
     QTest::newRow("normal-1") << QDate(2002, 3, 15) << true << QDate(1752, 9, 14);
-    QTest::newRow("normal-2") << QDate(7999, 12, 31) << true << QDate(1752, 9, 14);
+    QTest::newRow("normal-2") << QDate(9999, 12, 31) << true << QDate(1752, 9, 14);
     QTest::newRow("normal-3") << QDate(1753, 1, 1) << true << QDate(1752, 9, 14);
     QTest::newRow("invalid-0") << QDate(0, 0, 0) << false << QDate(1752, 9, 14);
 }
@@ -644,7 +730,7 @@ void tst_QDateTimeEdit::clearMinimumDateTime_data()
                               << true << QDateTime(QDate(1752, 9, 14), QTime(0, 0));
     QTest::newRow("normal-1") << QDateTime(QDate(2002, 3, 15), QTime(13, 13, 13))
                               << true << QDateTime(QDate(1752, 9, 14), QTime(0, 0));
-    QTest::newRow("normal-2") << QDateTime(QDate(7999, 12, 31), QTime(14, 14, 14))
+    QTest::newRow("normal-2") << QDateTime(QDate(9999, 12, 31), QTime(14, 14, 14))
                               << true << QDateTime(QDate(1752, 9, 14), QTime(0, 0));
     QTest::newRow("normal-3") << QDateTime(QDate(1753, 1, 1), QTime(15, 15, 15))
                               << true << QDateTime(QDate(1752, 9, 14), QTime(0, 0));
@@ -673,15 +759,15 @@ void tst_QDateTimeEdit::clearMaximumDateTime_data()
     QTest::addColumn<QDateTime>("expectedMinDateTimeAfterClear");
 
     QTest::newRow("normal-0") << QDateTime(QDate(2004, 05, 10), QTime(12, 12, 12))
-                              << true << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
+                              << true << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
     QTest::newRow("normal-1") << QDateTime(QDate(2002, 3, 15), QTime(13, 13, 13))
-                              << true << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
-    QTest::newRow("normal-2") << QDateTime(QDate(7999, 12, 31), QTime(14, 14, 14))
-                              << true << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
+                              << true << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
+    QTest::newRow("normal-2") << QDateTime(QDate(9999, 12, 31), QTime(14, 14, 14))
+                              << true << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
     QTest::newRow("normal-3") << QDateTime(QDate(1753, 1, 1), QTime(15, 15, 15))
-                              << true << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
+                              << true << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
     QTest::newRow("invalid-0") << QDateTime()
-                               << false << QDateTime(QDate(7999, 12, 31), QTime(23, 59, 59, 999));
+                               << false << QDateTime(QDate(9999, 12, 31), QTime(23, 59, 59, 999));
 }
 
 void tst_QDateTimeEdit::clearMaximumDateTime()
@@ -703,11 +789,11 @@ void tst_QDateTimeEdit::clearMaximumDate_data()
     QTest::addColumn<bool>("valid");
     QTest::addColumn<QDate>("expectedMaxDateAfterClear");
 
-    QTest::newRow("normal-0") << QDate(2004, 05, 10) << true << QDate(7999, 12, 31);
-    QTest::newRow("normal-1") << QDate(2002, 03, 15) << true << QDate(7999, 12, 31);
-    QTest::newRow("normal-2") << QDate(7999, 12, 31) << true << QDate(7999, 12, 31);
-    QTest::newRow("normal-3") << QDate(2000, 1, 1) << true << QDate(7999, 12, 31);
-    QTest::newRow("invalid-0") << QDate(0, 0, 0) << false << QDate(7999, 12, 31);
+    QTest::newRow("normal-0") << QDate(2004, 05, 10) << true << QDate(9999, 12, 31);
+    QTest::newRow("normal-1") << QDate(2002, 03, 15) << true << QDate(9999, 12, 31);
+    QTest::newRow("normal-2") << QDate(9999, 12, 31) << true << QDate(9999, 12, 31);
+    QTest::newRow("normal-3") << QDate(2000, 1, 1) << true << QDate(9999, 12, 31);
+    QTest::newRow("invalid-0") << QDate(0, 0, 0) << false << QDate(9999, 12, 31);
 }
 
 void tst_QDateTimeEdit::clearMaximumDate()
@@ -769,6 +855,11 @@ void tst_QDateTimeEdit::displayFormat()
 
 void tst_QDateTimeEdit::selectAndScrollWithKeys()
 {
+#ifdef Q_OS_MAC
+    QSKIP("QTBUG-23674");
+    return;
+#endif
+
     qApp->setActiveWindow(testWidget);
     testWidget->setDate(QDate(2004, 05, 11));
     testWidget->setDisplayFormat("dd/MM/yyyy");
@@ -779,9 +870,6 @@ void tst_QDateTimeEdit::selectAndScrollWithKeys()
     QTest::keyClick(testWidget, Qt::Key_Home);
 #endif
     QTest::keyClick(testWidget, Qt::Key_Right, Qt::ShiftModifier);
-#ifdef Q_OS_MAC
-    QEXPECT_FAIL("", "QTBUG-23674", Abort);
-#endif
     QCOMPARE(testWidget->lineEdit()->selectedText(), QString("1"));
     QTest::keyClick(testWidget, Qt::Key_Right, Qt::ShiftModifier);
     QCOMPARE(testWidget->lineEdit()->selectedText(), QString("11"));
@@ -2431,7 +2519,7 @@ void tst_QDateTimeEdit::displayedSections()
     QFETCH(uint, section);
 
     testWidget->setDisplayFormat(format);
-    QVERIFY((QDateTimeEdit::Section)section == testWidget->displayedSections());
+    QCOMPARE(QDateTimeEdit::Sections(section), testWidget->displayedSections());
 }
 
 void tst_QDateTimeEdit::currentSection_data()
@@ -2475,7 +2563,7 @@ void tst_QDateTimeEdit::currentSection()
     if ((QDateTimeEdit::Section)section == QDateTimeEdit::NoSection)
         testWidget->setCurrentSection(QDateTimeEdit::YearSection); // Ensure it's not reset (see above)
     testWidget->setCurrentSection((QDateTimeEdit::Section)section);
-    QVERIFY((QDateTimeEdit::Section)currentSection == testWidget->currentSection());
+    QCOMPARE((QDateTimeEdit::Section)currentSection, testWidget->currentSection());
 }
 
 void tst_QDateTimeEdit::readOnly()
@@ -2827,7 +2915,7 @@ void tst_QDateTimeEdit::calendarPopup()
     opt.subControls = QStyle::SC_ComboBoxArrow;
     QRect rect = style->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, testWidget);
     QTest::mouseClick(testWidget, Qt::LeftButton, 0, QPoint(rect.left()+rect.width()/2, rect.top()+rect.height()/2));
-    QWidget *wid = qFindChild<QWidget *>(testWidget, "qt_datetimedit_calendar");
+    QWidget *wid = testWidget->findChild<QWidget *>("qt_datetimedit_calendar");
     QVERIFY(wid != 0);
     testWidget->hide();
 
@@ -2839,8 +2927,8 @@ void tst_QDateTimeEdit::calendarPopup()
     opt.subControls = QStyle::SC_ComboBoxArrow;
     rect = style->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, &timeEdit);
     QTest::mouseClick(&timeEdit, Qt::LeftButton, 0, QPoint(rect.left()+rect.width()/2, rect.top()+rect.height()/2));
-    QWidget *wid2 = qFindChild<QWidget *>(&timeEdit, "qt_datetimedit_calendar");
-    QVERIFY(wid2 == 0);
+    QWidget *wid2 = timeEdit.findChild<QWidget *>("qt_datetimedit_calendar");
+    QVERIFY(!wid2);
     timeEdit.hide();
 
 
@@ -2853,8 +2941,8 @@ void tst_QDateTimeEdit::calendarPopup()
     opt.subControls = QStyle::SC_ComboBoxArrow;
     rect = style->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, &dateEdit);
     QTest::mouseClick(&dateEdit, Qt::LeftButton, 0, QPoint(rect.left()+rect.width()/2, rect.top()+rect.height()/2));
-    QWidget *wid3 = qFindChild<QWidget *>(&dateEdit, "qt_datetimedit_calendar");
-    QVERIFY(wid3 == 0);
+    QWidget *wid3 = dateEdit.findChild<QWidget *>("qt_datetimedit_calendar");
+    QVERIFY(!wid3);
     dateEdit.hide();
 }
 
@@ -3045,17 +3133,175 @@ void tst_QDateTimeEdit::ddMMMMyyyy()
     QCOMPARE(testWidget->lineEdit()->text(), "01." + QDate::longMonthName(1) + ".200");
 }
 
+void tst_QDateTimeEdit::wheelEvent_data()
+{
+#if QT_CONFIG(wheelevent)
+    QTest::addColumn<QPoint>("angleDelta");
+    QTest::addColumn<int>("qt4Delta");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<Qt::MouseEventSource>("source");
+    QTest::addColumn<QDateTimeEdit::Section>("section");
+    QTest::addColumn<QDate>("startDate");
+    QTest::addColumn<DateList>("expectedDates");
+
+    const auto fractions = {false, true};
+
+    const auto directions = {true, false};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    const auto sources = {Qt::MouseEventNotSynthesized,
+                          Qt::MouseEventSynthesizedBySystem,
+                          Qt::MouseEventSynthesizedByQt,
+                          Qt::MouseEventSynthesizedByApplication};
+
+    const auto sections = {QDateTimeEdit::DaySection,
+                           QDateTimeEdit::MonthSection,
+                           QDateTimeEdit::YearSection};
+
+    for (auto fraction : fractions) {
+        for (auto up : directions) {
+
+            const QDate startDate(2000, up ? 2 : 12, 17);
+
+            const int units = (fraction ? 60 : 120) * (up ? 1 : -1);
+
+            for (auto modifier : modifierList) {
+
+                const Qt::KeyboardModifiers modifiers(modifier);
+
+                const auto modifierName = modifierToName(modifier);
+                if (modifierName.isEmpty())
+                    continue;
+
+                for (auto stepModifier : validStepModifierList) {
+
+                    const auto stepModifierName = modifierToName(stepModifier);
+                    if (stepModifierName.isEmpty())
+                        continue;
+
+                    const int steps = (modifier & stepModifier ? 10 : 1)
+                            * (up ? 1 : -1);
+
+                    for (auto source : sources) {
+
+#ifdef Q_OS_MACOS
+                        QPoint angleDelta;
+                        if ((modifier & Qt::ShiftModifier) &&
+                                source == Qt::MouseEventNotSynthesized) {
+                            // On macOS the Shift modifier converts vertical
+                            // mouse wheel events to horizontal.
+                            angleDelta = { units, 0 };
+                        } else {
+                            // However, this is not the case for trackpad scroll
+                            // events.
+                            angleDelta = { 0, units };
+                        }
+#else
+                        const QPoint angleDelta(0, units);
+#endif
+
+                        QLatin1String sourceName;
+                        switch (source) {
+                        case Qt::MouseEventNotSynthesized:
+                            sourceName = QLatin1Literal("NotSynthesized");
+                            break;
+                        case Qt::MouseEventSynthesizedBySystem:
+                            sourceName = QLatin1Literal("SynthesizedBySystem");
+                            break;
+                        case Qt::MouseEventSynthesizedByQt:
+                            sourceName = QLatin1Literal("SynthesizedByQt");
+                            break;
+                        case Qt::MouseEventSynthesizedByApplication:
+                            sourceName = QLatin1Literal("SynthesizedByApplication");
+                            break;
+                        default:
+                            qFatal("Unexpected wheel event source");
+                            continue;
+                        }
+
+                        for (const auto section : sections) {
+
+                            DateList expectedDates;
+                            if (fraction)
+                                expectedDates << startDate;
+
+                            const auto expectedDate = stepDate(startDate, section, steps);
+                            if (!expectedDate.isValid())
+                                continue;
+
+                            expectedDates << expectedDate;
+
+                            const QLatin1String sectionName = sectionToName(section);
+
+                            QTest::addRow("%s%s%s%sWith%sKeyboardModifier%s",
+                                          fraction ? "half" : "full",
+                                          up ? "Up" : "Down",
+                                          stepModifierName.latin1(),
+                                          sectionName.latin1(),
+                                          modifierName.latin1(),
+                                          sourceName.latin1())
+                                    << angleDelta
+                                    << units
+                                    << static_cast<int>(stepModifier)
+                                    << modifiers
+                                    << source
+                                    << section
+                                    << startDate
+                                    << expectedDates;
+                        }
+                    }
+                }
+            }
+        }
+    }
+#else
+    QSKIP("Built with --no-feature-wheelevent");
+#endif
+}
+
 void tst_QDateTimeEdit::wheelEvent()
 {
-    testWidget->setDisplayFormat("dddd/MM");
-    testWidget->setDate(QDate(2000, 2, 21));
-    testWidget->setCurrentSection(QDateTimeEdit::DaySection);
-    QWheelEvent w(testWidget->lineEdit()->geometry().center(), 120, 0, 0);
-    qApp->sendEvent(testWidget, &w);
-    QCOMPARE(testWidget->date(), QDate(2000, 2, 22));
-    testWidget->setCurrentSection(QDateTimeEdit::MonthSection);
-    qApp->sendEvent(testWidget, &w);
-    QCOMPARE(testWidget->date(), QDate(2000, 3, 22));
+#if QT_CONFIG(wheelevent)
+    QFETCH(QPoint, angleDelta);
+    QFETCH(int, qt4Delta);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(Qt::MouseEventSource, source);
+    QFETCH(QDateTimeEdit::Section, section);
+    QFETCH(QDate, startDate);
+    QFETCH(DateList, expectedDates);
+
+    EditorDateEdit edit(0);
+    edit.setDate(startDate);
+    edit.setCurrentSection(section);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    edit.setStyle(style.data());
+
+    QWheelEvent event(QPointF(), QPointF(), QPoint(), angleDelta, qt4Delta,
+                      Qt::Vertical, Qt::NoButton, modifiers, Qt::NoScrollPhase,
+                      source);
+
+    QCOMPARE(edit.date(), startDate);
+    for (QDate expected : expectedDates) {
+        qApp->sendEvent(&edit, &event);
+        QCOMPARE(edit.date(), expected);
+    }
+#else
+    QSKIP("Built with --no-feature-wheelevent");
+#endif // QT_CONFIG(wheelevent)
 }
 
 void tst_QDateTimeEdit::specialValueCornerCase()
@@ -3129,7 +3375,7 @@ void tst_QDateTimeEdit::nextPrevSection_data()
 
     // 1. mac doesn't do these,
     // 2. some WinCE devices do not have modifiers
-#if !defined(Q_OS_MAC) && !defined(WINCE_NO_MODIFIER_KEYS)
+#if !defined(Q_OS_DARWIN)
     QTest::newRow("ctrl-right") << Qt::Key_Right << (Qt::KeyboardModifiers)Qt::ControlModifier << QString("56");
     QTest::newRow("ctrl-left") << Qt::Key_Left << (Qt::KeyboardModifiers)Qt::ControlModifier << QString("12");
 #endif
@@ -3222,13 +3468,20 @@ void tst_QDateTimeEdit::timeSpecBug()
     QCOMPARE(oldText, testWidget->text());
 }
 
+void tst_QDateTimeEdit::timeSpecInit()
+{
+    QDateTime utc(QDate(2000, 1, 1), QTime(12, 0, 0), Qt::UTC);
+    QDateTimeEdit widget(utc);
+    QCOMPARE(widget.dateTime(), utc);
+}
+
 void tst_QDateTimeEdit::cachedDayTest()
 {
     testWidget->setDisplayFormat("MM/dd");
     testWidget->setDate(QDate(2007, 1, 30));
     testWidget->setCurrentSection(QDateTimeEdit::DaySection);
     //QTest::keyClick(testWidget->lineEdit(), Qt::Key_Up); // this doesn't work
-    //on Mac. QTestLib bug? ###
+    //on Mac. Qt Test bug? ###
     QTest::keyClick(testWidget, Qt::Key_Up);
     testWidget->setCurrentSection(QDateTimeEdit::MonthSection);
     QTest::keyClick(testWidget, Qt::Key_Up);
@@ -3436,14 +3689,33 @@ void tst_QDateTimeEdit::deleteCalendarWidget()
         edit.setCalendarPopup(true);
         QVERIFY(edit.calendarWidget());
         edit.calendarWidget()->setObjectName("cw1");;
-        
+
         // delete
         cw = edit.calendarWidget();
         delete cw;
-        
+
         // it should create a new widget
         QVERIFY(edit.calendarWidget());
-        QVERIFY(edit.calendarWidget()->objectName() != "cw1");
+        QVERIFY(edit.calendarWidget()->objectName() != QLatin1String("cw1"));
+    }
+}
+
+void tst_QDateTimeEdit::setLocaleOnCalendarWidget()
+{
+    QDateEdit dateEdit;
+    QList<QLocale> allLocales = QLocale::matchingLocales(
+                QLocale::AnyLanguage,
+                QLocale::AnyScript,
+                QLocale::AnyCountry);
+    QLocale c = QLocale::c();
+    dateEdit.setCalendarPopup(true);
+    dateEdit.setLocale(c);
+    for (const QLocale& l : allLocales) {
+        dateEdit.setLocale(l);
+        const QLocale locCal = dateEdit.calendarWidget()->locale();
+        const QLocale locEdit = dateEdit.locale();
+        QCOMPARE(locCal.name(), locEdit.name());
+        QVERIFY(locCal == locEdit);
     }
 }
 
@@ -3452,9 +3724,7 @@ void tst_QDateTimeEdit::deleteCalendarWidget()
 typedef QPair<Qt::Key, Qt::KeyboardModifier> KeyPair;
 typedef QList<KeyPair> KeyPairList;
 
-Q_DECLARE_METATYPE(QLocale)
 Q_DECLARE_METATYPE(KeyPair)
-Q_DECLARE_METATYPE(KeyPairList)
 
 static inline KeyPair key(Qt::Key key, Qt::KeyboardModifier modifier = Qt::NoModifier) {
     return KeyPair(key, modifier);
@@ -3578,7 +3848,7 @@ void tst_QDateTimeEdit::dateEditCorrectSectionSize_data()
         << threeDigitDayIssueKeypresses_DayName << QString::fromLatin1("00/2/Tuesday");
 
     QTest::newRow("no fixday, leap, yy/M/ddd") << defaultLocale << defaultDate << QString::fromLatin1("yy/M/ddd")
-        << threeDigitDayIssueKeypresses_DayName << QString::fromLatin1("00/2/Tue");
+        << threeDigitDayIssueKeypresses_DayName << QString::fromLatin1("00/2/Tue.");
 
     QTest::newRow("no fixday, leap, yy/MM/dddd") << defaultLocale << defaultDate << QString::fromLatin1("yy/MM/dddd")
         << threeDigitDayIssueKeypresses_DayName << QString::fromLatin1("00/02/Tuesday");
@@ -3626,13 +3896,13 @@ void tst_QDateTimeEdit::dateEditCorrectSectionSize_data()
         << threeDigitDayIssueKeypresses_YearDayMonth << QString::fromLatin1("2000/29/2");
 
     QTest::newRow("fixday, leap, yyyy/MMM/dd") << defaultLocale << defaultDate << QString::fromLatin1("yyyy/MMM/dd")
-        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("2000/Feb/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("2000/Feb./29");
 
     QTest::newRow("fixday, leap, yyyy/MMM/d") << defaultLocale << defaultDate << QString::fromLatin1("yyyy/MMM/d")
-        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("2000/Feb/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("2000/Feb./29");
 
     QTest::newRow("fixday, leap, yy/MMM/dd") << defaultLocale << defaultDate << QString::fromLatin1("yy/MMM/dd")
-        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("00/Feb/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName << QString::fromLatin1("00/Feb./29");
 
     QTest::newRow("fixday, leap, yyyy/dddd/M") << defaultLocale << defaultDate << QString::fromLatin1("yyyy/dddd/M")
         << threeDigitDayIssueKeypresses_DayName_YearDayMonth << QString::fromLatin1("2000/Tuesday/2");
@@ -3707,16 +3977,16 @@ void tst_QDateTimeEdit::dateEditCorrectSectionSize_data()
         << threeDigitDayIssueKeypresses_MonthYearDay << QString::fromLatin1("02/2000/29");
 
     QTest::newRow("fixday, leap, MMM/yy/d") << defaultLocale << defaultDate << QString::fromLatin1("MMM/yy/d")
-        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb/00/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb./00/29");
 
     QTest::newRow("fixday, leap, MMM/yyyy/d") << defaultLocale << defaultDate << QString::fromLatin1("MMM/yyyy/d")
-        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb/2000/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb./2000/29");
 
     QTest::newRow("fixday, MMM/yyyy/d") << defaultLocale << defaultDate.addYears(1) << QString::fromLatin1("MMM/yyyy/d")
-        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb/2001/28");
+        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb./2001/28");
 
     QTest::newRow("fixday, leap, MMM/yyyy/dd") << defaultLocale << defaultDate << QString::fromLatin1("MMM/yyyy/dd")
-        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb/2000/29");
+        << threeDigitDayIssueKeypresses_ShortMonthName_MonthYearDay << QString::fromLatin1("Feb./2000/29");
 
     QTest::newRow("fixday, leap, dddd, dd. MMMM yyyy") << defaultLocale
         << defaultDate << QString::fromLatin1("dddd, dd. MMMM yyyy")
@@ -3750,9 +4020,312 @@ void tst_QDateTimeEdit::dateEditCorrectSectionSize()
         QTest::keyClick(&edit, keyPair.first, keyPair.second);
 
     QDateTimeEditPrivate* edit_d_ptr(static_cast<QDateTimeEditPrivate*>(qt_widget_private(&edit)));
-    QCOMPARE(edit_d_ptr->text, expectedDisplayString);
+    QCOMPARE(edit_d_ptr->QDateTimeParser::displayText(), expectedDisplayString);
 }
 #endif
+
+void tst_QDateTimeEdit::stepModifierKeys_data()
+{
+    QTest::addColumn<QDate>("startDate");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<QDateTimeEdit::Section>("section");
+    QTest::addColumn<QTestEventList>("keys");
+    QTest::addColumn<QDate>("expectedDate");
+
+    const auto keyList = {Qt::Key_Up, Qt::Key_Down};
+
+    const auto modifierList = {Qt::NoModifier,
+                                   Qt::ShiftModifier,
+                                   Qt::ControlModifier,
+                                   Qt::AltModifier,
+                                   Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    const auto sections = {QDateTimeEdit::DaySection,
+                           QDateTimeEdit::MonthSection,
+                           QDateTimeEdit::YearSection};
+
+    for (auto key : keyList) {
+
+        const bool up = key == Qt::Key_Up;
+        Q_ASSERT(up || key == Qt::Key_Down);
+
+        const QDate startDate(2000, up ? 2 : 12, 17);
+
+        for (auto modifier : modifierList) {
+
+            QTestEventList keys;
+            keys.addKeyClick(key, modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                for (const auto section : sections) {
+
+                    const auto expectedDate = stepDate(startDate, section, steps);
+                    if (!expectedDate.isValid())
+                        continue;
+
+                    const auto sectionName = sectionToName(section);
+
+                    QTest::addRow("%s%s%sWith%sKeyboardModifier",
+                                  up ? "up" : "down",
+                                  stepModifierName.latin1(),
+                                  sectionName.latin1(),
+                                  modifierName.latin1())
+                            << startDate
+                            << static_cast<int>(stepModifier)
+                            << section
+                            << keys
+                            << expectedDate;
+                }
+            }
+        }
+    }
+}
+
+void tst_QDateTimeEdit::stepModifierKeys()
+{
+    QFETCH(QDate, startDate);
+    QFETCH(int, stepModifier);
+    QFETCH(QDateTimeEdit::Section, section);
+    QFETCH(QTestEventList, keys);
+    QFETCH(QDate, expectedDate);
+
+    // This can interfere with our stuff.
+    testWidget->hide();
+
+    QDateTimeEdit edit(0);
+    edit.setDate(startDate);
+    edit.show();
+    QVERIFY(QTest::qWaitForWindowActive(&edit));
+    edit.setCurrentSection(section);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    edit.setStyle(style.data());
+
+    QCOMPARE(edit.date(), startDate);
+    keys.simulate(&edit);
+    QCOMPARE(edit.date(), expectedDate);
+}
+
+void tst_QDateTimeEdit::stepModifierButtons_data()
+{
+    QTest::addColumn<QStyle::SubControl>("subControl");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<QDateTimeEdit::Section>("section");
+    QTest::addColumn<QTime>("startTime");
+    QTest::addColumn<QTime>("expectedTime");
+
+    const auto subControls = {QStyle::SC_SpinBoxUp, QStyle::SC_SpinBoxDown};
+
+    const auto modifierList = {Qt::NoModifier,
+                                   Qt::ShiftModifier,
+                                   Qt::ControlModifier,
+                                   Qt::AltModifier,
+                                   Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    const auto sections = {QDateTimeEdit::SecondSection,
+                           QDateTimeEdit::MinuteSection,
+                           QDateTimeEdit::HourSection};
+
+    const QTime startTime(12, 36, 24);
+
+    for (auto subControl : subControls) {
+
+        const bool up = subControl == QStyle::SC_SpinBoxUp;
+        Q_ASSERT(up || subControl == QStyle::SC_SpinBoxDown);
+
+        for (auto modifier : modifierList) {
+
+            const Qt::KeyboardModifiers modifiers(modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                for (const auto section : sections) {
+
+                    const auto expectedTime = stepTime(startTime, section, steps);
+                    if (!expectedTime.isValid())
+                        continue;
+
+                    const auto sectionName = sectionToName(section);
+
+                    QTest::addRow("%s%s%sWith%sKeyboardModifier",
+                                  up ? "up" : "down",
+                                  stepModifierName.latin1(),
+                                  sectionName.latin1(),
+                                  modifierName.latin1())
+                            << subControl
+                            << static_cast<int>(stepModifier)
+                            << modifiers
+                            << section
+                            << startTime
+                            << expectedTime;
+                }
+            }
+        }
+    }
+}
+
+void tst_QDateTimeEdit::stepModifierButtons()
+{
+    QFETCH(QStyle::SubControl, subControl);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(QDateTimeEdit::Section, section);
+    QFETCH(QTime, startTime);
+    QFETCH(QTime, expectedTime);
+
+    testWidget->hide();
+
+    EditorDateEdit edit(0);
+    edit.setTime(startTime);
+    edit.show();
+    QVERIFY(QTest::qWaitForWindowActive(&edit));
+    edit.setCurrentSection(section);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    edit.setStyle(style.data());
+
+    QStyleOptionSpinBox spinBoxStyleOption;
+    edit.initStyleOption(&spinBoxStyleOption);
+
+    const QRect buttonRect = edit.style()->subControlRect(
+                QStyle::CC_SpinBox, &spinBoxStyleOption, subControl, &edit);
+
+    QCOMPARE(edit.time(), startTime);
+    QTest::mouseClick(&edit, Qt::LeftButton, modifiers, buttonRect.center());
+    QCOMPARE(edit.time(), expectedTime);
+}
+
+void tst_QDateTimeEdit::stepModifierPressAndHold_data()
+{
+    QTest::addColumn<QStyle::SubControl>("subControl");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<int>("expectedStepModifier");
+
+    const auto subControls = {QStyle::SC_SpinBoxUp, QStyle::SC_SpinBoxDown};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    for (auto subControl : subControls) {
+
+        const bool up = subControl == QStyle::SC_SpinBoxUp;
+        Q_ASSERT(up || subControl == QStyle::SC_SpinBoxDown);
+
+        for (auto modifier : modifierList) {
+
+            const Qt::KeyboardModifiers modifiers(modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                QTest::addRow("%s%sWith%sKeyboardModifier",
+                              up ? "up" : "down",
+                              stepModifierName.latin1(),
+                              modifierName.latin1())
+                        << subControl
+                        << static_cast<int>(stepModifier)
+                        << modifiers
+                        << steps;
+            }
+        }
+    }
+}
+
+void tst_QDateTimeEdit::stepModifierPressAndHold()
+{
+    QFETCH(QStyle::SubControl, subControl);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(int, expectedStepModifier);
+
+    const QDate startDate(2000, 1, 1);
+
+    testWidget->hide();
+
+    EditorDateEdit edit(0);
+    edit.setDate(startDate);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> stepModifierStyle(
+                new StepModifierStyle(new PressAndHoldStyle));
+    stepModifierStyle->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    edit.setStyle(stepModifierStyle.data());
+
+    QSignalSpy spy(&edit, &EditorDateEdit::dateChanged);
+
+    edit.show();
+    QVERIFY(QTest::qWaitForWindowActive(&edit));
+    edit.setCurrentSection(QDateTimeEdit::YearSection);
+
+    QStyleOptionSpinBox spinBoxStyleOption;
+    edit.initStyleOption(&spinBoxStyleOption);
+
+    const QRect buttonRect = edit.style()->subControlRect(
+                QStyle::CC_SpinBox, &spinBoxStyleOption, subControl, &edit);
+
+    QTest::mousePress(&edit, Qt::LeftButton, modifiers, buttonRect.center());
+    QTRY_VERIFY(spy.length() >= 3);
+    QTest::mouseRelease(&edit, Qt::LeftButton, modifiers, buttonRect.center());
+
+    const auto value = spy.last().at(0);
+    QVERIFY(value.type() == QVariant::Date);
+    const QDate expectedDate = startDate.addYears(spy.length() *
+                                                  expectedStepModifier);
+    QCOMPARE(value.toDate(), expectedDate);
+}
 
 QTEST_MAIN(tst_QDateTimeEdit)
 #include "tst_qdatetimeedit.moc"

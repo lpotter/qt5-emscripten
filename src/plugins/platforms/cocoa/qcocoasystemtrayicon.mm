@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
+** Copyright (C) 2016 The Qt Company Ltd.
 ** Copyright (C) 2012 Klaralvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Christoph Schleifenbaum <christoph.schleifenbaum@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -11,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -74,9 +72,10 @@
 **
 ****************************************************************************/
 
-#define QT_MAC_SYSTEMTRAY_USE_GROWL
-
 #include "qcocoasystemtrayicon.h"
+
+#ifndef QT_NO_SYSTEMTRAYICON
+
 #include <qtemporaryfile.h>
 #include <qimagewriter.h>
 #include <qdebug.h>
@@ -85,59 +84,46 @@
 
 #include "qt_mac_p.h"
 #include "qcocoahelpers.h"
+#include "qcocoaintegration.h"
+#include "qcocoascreen.h"
+#include <QtGui/private/qcoregraphics_p.h>
 
 #import <AppKit/AppKit.h>
 
 QT_USE_NAMESPACE
 
-@class QT_MANGLE_NAMESPACE(QNSMenu);
 @class QT_MANGLE_NAMESPACE(QNSImageView);
 
-@interface QT_MANGLE_NAMESPACE(QNSStatusItem) : NSObject {
-@public
-    QCocoaSystemTrayIcon *systray;
-    NSStatusItem *item;
-    QCocoaMenu *menu;
-    bool menuVisible;
-    QIcon icon;
-    QT_MANGLE_NAMESPACE(QNSImageView) *imageCell;
-}
--(id)initWithSysTray:(QCocoaSystemTrayIcon *)systray;
--(void)dealloc;
--(NSStatusItem*)item;
--(QRectF)geometry;
+@interface QT_MANGLE_NAMESPACE(QNSStatusItem) : NSObject <NSUserNotificationCenterDelegate>
+@property (nonatomic, assign) QCocoaMenu *menu;
+@property (nonatomic, assign) QIcon icon;
+@property (nonatomic, readonly) NSStatusItem *item;
+@property (nonatomic, readonly) QRectF geometry;
+- (instancetype)initWithSysTray:(QCocoaSystemTrayIcon *)systray;
 - (void)triggerSelector:(id)sender button:(Qt::MouseButton)mouseButton;
 - (void)doubleClickSelector:(id)sender;
 @end
 
-@interface QT_MANGLE_NAMESPACE(QNSImageView) : NSImageView {
-    BOOL down;
-    QT_MANGLE_NAMESPACE(QNSStatusItem) *parent;
-}
--(id)initWithParent:(QT_MANGLE_NAMESPACE(QNSStatusItem)*)myParent;
--(void)menuTrackingDone:(NSNotification*)notification;
--(void)mousePressed:(NSEvent *)mouseEvent button:(Qt::MouseButton)mouseButton;
+@interface QT_MANGLE_NAMESPACE(QNSImageView) : NSImageView
 @end
 
-@interface QT_MANGLE_NAMESPACE(QNSMenu) : NSMenu <NSMenuDelegate> {
-    QPlatformMenu *qmenu;
-}
--(QPlatformMenu*)menu;
--(id)initWithQMenu:(QPlatformMenu*)qmenu;
-@end
+QT_NAMESPACE_ALIAS_OBJC_CLASS(QNSStatusItem);
+QT_NAMESPACE_ALIAS_OBJC_CLASS(QNSImageView);
 
 QT_BEGIN_NAMESPACE
 class QSystemTrayIconSys
 {
 public:
     QSystemTrayIconSys(QCocoaSystemTrayIcon *sys) {
-        item = [[QT_MANGLE_NAMESPACE(QNSStatusItem) alloc] initWithSysTray:sys];
+        item = [[QNSStatusItem alloc] initWithSysTray:sys];
+        [[NSUserNotificationCenter defaultUserNotificationCenter] setDelegate:item];
     }
     ~QSystemTrayIconSys() {
         [[[item item] view] setHidden: YES];
+        [[NSUserNotificationCenter defaultUserNotificationCenter] setDelegate:nil];
         [item release];
     }
-    QT_MANGLE_NAMESPACE(QNSStatusItem) *item;
+    QNSStatusItem *item;
 };
 
 void QCocoaSystemTrayIcon::init()
@@ -161,7 +147,15 @@ QRect QCocoaSystemTrayIcon::geometry() const
 void QCocoaSystemTrayIcon::cleanup()
 {
     delete m_sys;
-    m_sys = 0;
+    m_sys = nullptr;
+}
+
+static bool heightCompareFunction (QSize a, QSize b) { return (a.height() < b.height()); }
+static QList<QSize> sortByHeight(const QList<QSize> &sizes)
+{
+    QList<QSize> sorted = sizes;
+    std::sort(sorted.begin(), sorted.end(), heightCompareFunction);
+    return sorted;
 }
 
 void QCocoaSystemTrayIcon::updateIcon(const QIcon &icon)
@@ -169,20 +163,68 @@ void QCocoaSystemTrayIcon::updateIcon(const QIcon &icon)
     if (!m_sys)
         return;
 
-    m_sys->item->icon = icon;
+    m_sys->item.icon = icon;
 
-    const bool menuVisible = m_sys->item->menu && m_sys->item->menuVisible;
+    // The reccomended maximum title bar icon height is 18 points
+    // (device independent pixels). The menu height on past and
+    // current OS X versions is 22 points. Provide some future-proofing
+    // by deriving the icon height from the menu height.
+    const int padding = 4;
+    const int menuHeight = [[NSStatusBar systemStatusBar] thickness];
+    const int maxImageHeight = menuHeight - padding;
 
-    CGFloat hgt = [[[NSApplication sharedApplication] mainMenu] menuBarHeight];
-    const short scale = hgt - 4;
-
-    QPixmap pm = m_sys->item->icon.pixmap(QSize(scale, scale),
-                                          menuVisible ? QIcon::Selected : QIcon::Normal);
-    if (pm.isNull()) {
-        pm = QPixmap(scale, scale);
-        pm.fill(Qt::transparent);
+    // Select pixmap based on the device pixel height. Ideally we would use
+    // the devicePixelRatio of the target screen, but that value is not
+    // known until draw time. Use qApp->devicePixelRatio, which returns the
+    // devicePixelRatio for the "best" screen on the system.
+    qreal devicePixelRatio = qApp->devicePixelRatio();
+    const int maxPixmapHeight = maxImageHeight * devicePixelRatio;
+    QSize selectedSize;
+    Q_FOREACH (const QSize& size, sortByHeight(icon.availableSizes())) {
+        // Select a pixmap based on the height. We want the largest pixmap
+        // with a height smaller or equal to maxPixmapHeight. The pixmap
+        // may rectangular; assume it has a reasonable size. If there is
+        // not suitable pixmap use the smallest one the icon can provide.
+        if (size.height() <= maxPixmapHeight) {
+            selectedSize = size;
+        } else {
+            if (!selectedSize.isValid())
+                selectedSize = size;
+            break;
+        }
     }
-    NSImage *nsimage = static_cast<NSImage *>(qt_mac_create_nsimage(pm));
+
+    // Handle SVG icons, which do not return anything for availableSizes().
+    if (!selectedSize.isValid())
+        selectedSize = icon.actualSize(QSize(maxPixmapHeight, maxPixmapHeight));
+
+    QPixmap pixmap = icon.pixmap(selectedSize);
+
+    // Draw a low-resolution icon if there is not enough pixels for a retina
+    // icon. This prevents showing a small icon on retina displays.
+    if (devicePixelRatio > 1.0 && selectedSize.height() < maxPixmapHeight / 2)
+        devicePixelRatio = 1.0;
+
+    // Scale large pixmaps to fit the available menu bar area.
+    if (pixmap.height() > maxPixmapHeight)
+        pixmap = pixmap.scaledToHeight(maxPixmapHeight, Qt::SmoothTransformation);
+
+    // The icon will be stretched over the full height of the menu bar
+    // therefore we create a second pixmap which has the full height
+    QSize fullHeightSize(!pixmap.isNull() ? pixmap.width():
+                                            menuHeight * devicePixelRatio,
+                         menuHeight * devicePixelRatio);
+    QPixmap fullHeightPixmap(fullHeightSize);
+    fullHeightPixmap.fill(Qt::transparent);
+    if (!pixmap.isNull()) {
+        QPainter p(&fullHeightPixmap);
+        QRect r = pixmap.rect();
+        r.moveCenter(fullHeightPixmap.rect().center());
+        p.drawPixmap(r, pixmap);
+    }
+
+    NSImage *nsimage = static_cast<NSImage *>(qt_mac_create_nsimage(fullHeightPixmap));
+    [nsimage setTemplate:icon.isMask()];
     [(NSImageView*)[[m_sys->item item] view] setImage: nsimage];
     [nsimage release];
 }
@@ -192,8 +234,8 @@ void QCocoaSystemTrayIcon::updateMenu(QPlatformMenu *menu)
     if (!m_sys)
         return;
 
-    m_sys->item->menu = static_cast<QCocoaMenu *>(menu);
-    if (menu && [m_sys->item->menu->nsMenu() numberOfItems] > 0) {
+    m_sys->item.menu = static_cast<QCocoaMenu *>(menu);
+    if (menu && [m_sys->item.menu->nsMenu() numberOfItems] > 0) {
         [[m_sys->item item] setHighlightMode:YES];
     } else {
         [[m_sys->item item] setHighlightMode:NO];
@@ -204,7 +246,7 @@ void QCocoaSystemTrayIcon::updateToolTip(const QString &toolTip)
 {
     if (!m_sys)
         return;
-    [[[m_sys->item item] view] setToolTip:QCFString::toNSString(toolTip)];
+    [[[m_sys->item item] view] setToolTip:toolTip.toNSString()];
 }
 
 bool QCocoaSystemTrayIcon::isSystemTrayAvailable() const
@@ -220,128 +262,60 @@ bool QCocoaSystemTrayIcon::supportsMessages() const
 void QCocoaSystemTrayIcon::showMessage(const QString &title, const QString &message,
                                        const QIcon& icon, MessageIcon, int)
 {
+    Q_UNUSED(icon);
     if (!m_sys)
         return;
 
-#ifdef QT_MAC_SYSTEMTRAY_USE_GROWL
-    // Make sure that we have Growl installed on the machine we are running on.
-    QCFType<CFURLRef> cfurl;
-    OSStatus status = LSGetApplicationForInfo(kLSUnknownType, kLSUnknownCreator,
-                                              CFSTR("growlTicket"), kLSRolesAll, 0, &cfurl);
-    if (status == kLSApplicationNotFoundErr)
-        return;
-    QCFType<CFBundleRef> bundle = CFBundleCreate(0, cfurl);
+    NSUserNotification *notification = [[NSUserNotification alloc] init];
+    notification.title = [NSString stringWithUTF8String:title.toUtf8().data()];
+    notification.informativeText = [NSString stringWithUTF8String:message.toUtf8().data()];
 
-    if (CFStringCompare(CFBundleGetIdentifier(bundle), CFSTR("com.Growl.GrowlHelperApp"),
-                kCFCompareCaseInsensitive |  kCFCompareBackwards) != kCFCompareEqualTo)
-        return;
-    QPixmap notificationIconPixmap = icon.pixmap(32, 32);
-    QTemporaryFile notificationIconFile;
-    QString notificationType(QLatin1String("Notification")), notificationIcon, notificationApp(qt_mac_applicationName());
-    if (notificationApp.isEmpty())
-        notificationApp = QLatin1String("Application");
-    if (!notificationIconPixmap.isNull() && notificationIconFile.open()) {
-        QImageWriter writer(&notificationIconFile, "PNG");
-        if (writer.write(notificationIconPixmap.toImage()))
-            notificationIcon = QLatin1String("image from location \"file://") + notificationIconFile.fileName() + QLatin1String("\"");
-    }
-    const QString script(QLatin1String(
-        "tell application \"System Events\"\n"
-        "set isRunning to (count of (every process whose bundle identifier is \"com.Growl.GrowlHelperApp\")) > 0\n"
-        "end tell\n"
-        "if isRunning\n"
-        "tell application id \"com.Growl.GrowlHelperApp\"\n"
-        "-- Make a list of all the notification types (all)\n"
-        "set the allNotificationsList to {\"") + notificationType + QLatin1String("\"}\n"
-
-        "-- Make a list of the notifications (enabled)\n"
-        "set the enabledNotificationsList to {\"") + notificationType + QLatin1String("\"}\n"
-
-        "-- Register our script with growl.\n"
-        "register as application \"") + notificationApp + QLatin1String("\" all notifications allNotificationsList default notifications enabledNotificationsList\n"
-
-        "-- Send a Notification...\n") +
-        QLatin1String("notify with name \"") + notificationType +
-        QLatin1String("\" title \"") + title +
-        QLatin1String("\" description \"") + message +
-        QLatin1String("\" application name \"") + notificationApp +
-        QLatin1String("\" ")  + notificationIcon +
-        QLatin1String("\nend tell\nend if"));
-    qt_mac_execute_apple_script(script, 0);
-#else
-    Q_UNUSED(icon);
-    Q_UNUSED(title);
-    Q_UNUSED(message);
-#endif
+    [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
 }
 QT_END_NAMESPACE
 
 @implementation NSStatusItem (Qt)
 @end
 
-@implementation QT_MANGLE_NAMESPACE(QNSImageView)
--(id)initWithParent:(QT_MANGLE_NAMESPACE(QNSStatusItem)*)myParent {
+@implementation QNSImageView {
+    BOOL down;
+    QT_MANGLE_NAMESPACE(QNSStatusItem) *parent;
+}
+
+- (instancetype)initWithParent:(QNSStatusItem *)myParent {
     self = [super init];
     parent = myParent;
     down = NO;
     return self;
 }
 
--(void)menuTrackingDone:(NSNotification*)notification
+- (void)menuTrackingDone:(NSNotification *)__unused notification
 {
-    Q_UNUSED(notification);
     down = NO;
-
-    CGFloat hgt = [[[NSApplication sharedApplication] mainMenu] menuBarHeight];
-    const short scale = hgt - 4;
-
-    QPixmap pm = parent->icon.pixmap(QSize(scale, scale), QIcon::Normal);
-    if (pm.isNull()) {
-        pm = QPixmap(scale, scale);
-        pm.fill(Qt::transparent);
-    }
-    NSImage *nsaltimage = static_cast<NSImage *>(qt_mac_create_nsimage(pm));
-    [self setImage: nsaltimage];
-    [nsaltimage release];
-
-    parent->menuVisible = false;
 
     [self setNeedsDisplay:YES];
 }
 
--(void)mousePressed:(NSEvent *)mouseEvent button:(Qt::MouseButton)mouseButton
+- (void)mousePressed:(NSEvent *)mouseEvent
 {
     down = YES;
     int clickCount = [mouseEvent clickCount];
     [self setNeedsDisplay:YES];
 
-    CGFloat hgt = [[[NSApplication sharedApplication] mainMenu] menuBarHeight];
-    const short scale = hgt - 4;
-
-    QPixmap pm = parent->icon.pixmap(QSize(scale, scale),
-                                     parent->menuVisible ? QIcon::Selected : QIcon::Normal);
-    if (pm.isNull()) {
-        pm = QPixmap(scale, scale);
-        pm.fill(Qt::transparent);
-    }
-    NSImage *nsaltimage = static_cast<NSImage *>(qt_mac_create_nsimage(pm));
-    [self setImage: nsaltimage];
-    [nsaltimage release];
-
     if (clickCount == 2) {
         [self menuTrackingDone:nil];
         [parent doubleClickSelector:self];
     } else {
-        [parent triggerSelector:self button:mouseButton];
+        [parent triggerSelector:self button:cocoaButton2QtButton(mouseEvent)];
     }
 }
 
--(void)mouseDown:(NSEvent *)mouseEvent
+- (void)mouseDown:(NSEvent *)mouseEvent
 {
-    [self mousePressed:mouseEvent button:Qt::LeftButton];
+    [self mousePressed:mouseEvent];
 }
 
--(void)mouseUp:(NSEvent *)mouseEvent
+- (void)mouseUp:(NSEvent *)mouseEvent
 {
     Q_UNUSED(mouseEvent);
     [self menuTrackingDone:nil];
@@ -349,10 +323,10 @@ QT_END_NAMESPACE
 
 - (void)rightMouseDown:(NSEvent *)mouseEvent
 {
-    [self mousePressed:mouseEvent button:Qt::RightButton];
+    [self mousePressed:mouseEvent];
 }
 
--(void)rightMouseUp:(NSEvent *)mouseEvent
+- (void)rightMouseUp:(NSEvent *)mouseEvent
 {
     Q_UNUSED(mouseEvent);
     [self menuTrackingDone:nil];
@@ -360,53 +334,59 @@ QT_END_NAMESPACE
 
 - (void)otherMouseDown:(NSEvent *)mouseEvent
 {
-    [self mousePressed:mouseEvent button:cocoaButton2QtButton([mouseEvent buttonNumber])];
+    [self mousePressed:mouseEvent];
 }
 
--(void)otherMouseUp:(NSEvent *)mouseEvent
+- (void)otherMouseUp:(NSEvent *)mouseEvent
 {
     Q_UNUSED(mouseEvent);
     [self menuTrackingDone:nil];
 }
 
--(void)drawRect:(NSRect)rect {
+- (void)drawRect:(NSRect)rect {
     [[parent item] drawStatusBarBackgroundInRect:rect withHighlight:down];
     [super drawRect:rect];
 }
 @end
 
-@implementation QT_MANGLE_NAMESPACE(QNSStatusItem)
+@implementation QNSStatusItem {
+    QCocoaSystemTrayIcon *systray;
+    NSStatusItem *item;
+    QT_MANGLE_NAMESPACE(QNSImageView) *imageCell;
+}
 
--(id)initWithSysTray:(QCocoaSystemTrayIcon *)sys
+@synthesize menu = menu;
+@synthesize icon = icon;
+
+- (instancetype)initWithSysTray:(QCocoaSystemTrayIcon *)sys
 {
     self = [super init];
     if (self) {
         item = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength] retain];
-        menu = 0;
-        menuVisible = false;
+        menu = nullptr;
         systray = sys;
-        imageCell = [[QT_MANGLE_NAMESPACE(QNSImageView) alloc] initWithParent:self];
+        imageCell = [[QNSImageView alloc] initWithParent:self];
         [item setView: imageCell];
     }
     return self;
 }
 
--(void)dealloc {
+- (void)dealloc {
     [[NSStatusBar systemStatusBar] removeStatusItem:item];
+    [[NSNotificationCenter defaultCenter] removeObserver:imageCell];
     [imageCell release];
     [item release];
     [super dealloc];
-
 }
 
--(NSStatusItem*)item {
+- (NSStatusItem *)item {
     return item;
 }
--(QRectF)geometry {
+
+- (QRectF)geometry {
     if (NSWindow *window = [[item view] window]) {
-        NSRect screenRect = [[window screen] frame];
-        NSRect windowRect = [window frame];
-        return QRectF(windowRect.origin.x, screenRect.size.height-windowRect.origin.y-windowRect.size.height, windowRect.size.width, windowRect.size.height);
+        if (QCocoaScreen *screen = QCocoaIntegration::instance()->screenForNSScreen([window screen]))
+            return screen->mapFromNative([window frame]);
     }
     return QRectF();
 }
@@ -427,7 +407,6 @@ QT_END_NAMESPACE
          selector:@selector(menuTrackingDone:)
              name:NSMenuDidEndTrackingNotification
                  object:m];
-        menuVisible = true;
         [item popUpStatusItemMenu: m];
     }
 }
@@ -439,26 +418,18 @@ QT_END_NAMESPACE
     emit systray->activated(QPlatformSystemTrayIcon::DoubleClick);
 }
 
+- (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center shouldPresentNotification:(NSUserNotification *)notification {
+    Q_UNUSED(center);
+    Q_UNUSED(notification);
+    return YES;
+}
+
+- (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification {
+    Q_UNUSED(center);
+    Q_UNUSED(notification);
+    emit systray->messageClicked();
+}
+
 @end
 
-class QSystemTrayIconQMenu : public QPlatformMenu
-{
-public:
-    void doAboutToShow() { emit aboutToShow(); }
-private:
-    QSystemTrayIconQMenu();
-};
-
-@implementation QT_MANGLE_NAMESPACE(QNSMenu)
--(id)initWithQMenu:(QPlatformMenu*)qm {
-    self = [super init];
-    if (self) {
-        self->qmenu = qm;
-        [self setDelegate:self];
-    }
-    return self;
-}
--(QPlatformMenu*)menu {
-    return qmenu;
-}
-@end
+#endif // QT_NO_SYSTEMTRAYICON

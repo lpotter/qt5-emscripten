@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -67,6 +65,7 @@ typedef QSqlRelationalTableModelSql Sql;
 
 /*!
     \class QSqlRelation
+    \inmodule QtSql
     \brief The QSqlRelation class stores information about an SQL foreign key.
 
     QSqlRelation is a helper class for QSqlRelationalTableModel. See
@@ -101,6 +100,12 @@ typedef QSqlRelationalTableModelSql Sql;
 */
 
 /*!
+  \fn void QSqlRelation::swap(QSqlRelation &other)
+
+  Swaps \c this with \a other.
+ */
+
+/*!
     \fn QString QSqlRelation::tableName() const
 
     Returns the name of the table to which a foreign key refers.
@@ -123,8 +128,8 @@ typedef QSqlRelationalTableModelSql Sql;
 /*!
     \fn bool QSqlRelation::isValid() const
 
-    Returns true if the QSqlRelation object is valid; otherwise
-    returns false.
+    Returns \c true if the QSqlRelation object is valid; otherwise
+    returns \c false.
 */
 
 class QRelatedTableModel;
@@ -157,7 +162,7 @@ class QRelatedTableModel : public QSqlTableModel
 {
 public:
     QRelatedTableModel(QRelation *rel, QObject *parent = 0, QSqlDatabase db = QSqlDatabase());
-    bool select();
+    bool select() override;
 private:
     bool firstSelect;
     QRelation *relation;
@@ -240,7 +245,7 @@ bool QRelation::isValid()
 
 
 
-QRelatedTableModel::QRelatedTableModel(QRelation *rel, QObject *parent, QSqlDatabase db) : 
+QRelatedTableModel::QRelatedTableModel(QRelation *rel, QObject *parent, QSqlDatabase db) :
     QSqlTableModel(parent, db), firstSelect(true), relation(rel)
 {
 }
@@ -269,12 +274,12 @@ public:
     {}
     QString fullyQualifiedFieldName(const QString &tableName, const QString &fieldName) const;
 
-    int nameToIndex(const QString &name) const;
+    int nameToIndex(const QString &name) const override;
     mutable QVector<QRelation> relations;
     QSqlRecord baseRec; // the record without relations
     void clearChanges();
-    void clearCache();
-    void revertCachedRow(int row);
+    void clearCache() override;
+    void revertCachedRow(int row) override;
 
     void translateFieldNames(QSqlRecord &values) const;
     QSqlRelationalTableModel::JoinMode joinMode;
@@ -304,9 +309,6 @@ int QSqlRelationalTableModelPrivate::nameToIndex(const QString &name) const
     return idx;
 }
 
-/*!
-    \reimp
-*/
 void QSqlRelationalTableModelPrivate::clearCache()
 {
     for (int i = 0; i < relations.count(); ++i)
@@ -457,12 +459,12 @@ QVariant QSqlRelationalTableModel::data(const QModelIndex &index, int role) cons
     value might be applied to the database at once, or it may be
     cached in the model.
 
-    Returns true if the value could be set, or false on error (for
+    Returns \c true if the value could be set, or false on error (for
     example, if \a index is out of bounds).
 
     For relational columns, \a value must be the index, not the
     display value. The index must also exist in the referenced
-    table, otherwise the function returns false.
+    table, otherwise the function returns \c false.
 
     \sa editStrategy(), data(), submit(), revertRow()
 */
@@ -588,7 +590,8 @@ QString QSqlRelationalTableModel::selectStatement() const
                 QString displayColumn = relation.displayColumn();
                 if (d->db.driver()->isIdentifierEscaped(displayColumn, QSqlDriver::FieldName))
                     displayColumn = d->db.driver()->stripDelimiters(displayColumn, QSqlDriver::FieldName);
-                const QString alias = QString::fromLatin1("%1_%2_%3").arg(relTableName).arg(displayColumn).arg(fieldNames.value(fieldList[i]));
+                const QString alias = QString::fromLatin1("%1_%2_%3")
+                                      .arg(relTableName, displayColumn, QString::number(fieldNames.value(fieldList[i])));
                 displayTableField = Sql::as(displayTableField, alias);
                 --fieldNames[fieldList[i]];
             }
@@ -659,9 +662,11 @@ void QSqlRelationalTableModel::revertRow(int row)
 void QSqlRelationalTableModel::clear()
 {
     Q_D(QSqlRelationalTableModel);
+    beginResetModel();
     d->clearChanges();
     d->relations.clear();
     QSqlTableModel::clear();
+    endResetModel();
 }
 
 
@@ -670,7 +675,7 @@ void QSqlRelationalTableModel::clear()
     \value InnerJoin - Inner join mode, return rows when there is at least one match in both tables.
     \value LeftJoin - Left join mode, returns all rows from the left table (table_name1), even if there are no matches in the right table (table_name2).
 
-    \sa QSqlRelationalTableModel::setJoinMode
+    \sa QSqlRelationalTableModel::setJoinMode()
     \since 4.8
 */
 

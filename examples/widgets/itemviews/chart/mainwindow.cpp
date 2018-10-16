@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -56,14 +66,14 @@ MainWindow::MainWindow()
     setupModel();
     setupViews();
 
-    connect(openAction, SIGNAL(triggered()), this, SLOT(openFile()));
-    connect(saveAction, SIGNAL(triggered()), this, SLOT(saveFile()));
-    connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(openAction, &QAction::triggered, this, &MainWindow::openFile);
+    connect(saveAction, &QAction::triggered, this, &MainWindow::saveFile);
+    connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
 
     menuBar()->addMenu(fileMenu);
     statusBar();
 
-    openFile(":/Charts/qtdata.cht");
+    loadFile(":/Charts/qtdata.cht");
 
     setWindowTitle(tr("Chart"));
     resize(870, 550);
@@ -99,17 +109,16 @@ void MainWindow::setupViews()
     setCentralWidget(splitter);
 }
 
-void MainWindow::openFile(const QString &path)
+void MainWindow::openFile()
 {
-    QString fileName;
-    if (path.isNull())
-        fileName = QFileDialog::getOpenFileName(this, tr("Choose a data file"), "", "*.cht");
-    else
-        fileName = path;
+    const QString fileName =
+        QFileDialog::getOpenFileName(this, tr("Choose a data file"), "", "*.cht");
+    if (!fileName.isEmpty())
+        loadFile(fileName);
+}
 
-    if (fileName.isEmpty())
-        return;
-
+void MainWindow::loadFile(const QString &fileName)
+{
     QFile file(fileName);
     if (!file.open(QFile::ReadOnly | QFile::Text))
         return;
@@ -125,7 +134,7 @@ void MainWindow::openFile(const QString &path)
         if (!line.isEmpty()) {
             model->insertRows(row, 1, QModelIndex());
 
-            QStringList pieces = line.split(",", QString::SkipEmptyParts);
+            QStringList pieces = line.split(',', QString::SkipEmptyParts);
             model->setData(model->index(row, 0, QModelIndex()),
                            pieces.value(0));
             model->setData(model->index(row, 1, QModelIndex()),

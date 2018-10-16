@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -61,6 +48,8 @@ private slots:
     void getSetCheck();
     void maximumBlockCount();
     void anchorAt();
+    void imageAt();
+    void formatAt();
 };
 
 tst_QAbstractTextDocumentLayout::tst_QAbstractTextDocumentLayout()
@@ -169,7 +158,7 @@ void tst_QAbstractTextDocumentLayout::anchorAt()
 
     // anchorAt on start returns link
     QRect linkBr = metrics.boundingRect("foo");
-    QPointF linkPoint(linkBr.width() + blockStart.x(), (linkBr.height() / 2) + blockStart.y());
+    QPointF linkPoint((linkBr.width() / 2) + blockStart.x(), (linkBr.height() / 2) + blockStart.y());
     QCOMPARE(documentLayout->anchorAt(linkPoint), QString("link"));
 
     // anchorAt() on top of preedit at end should not assert
@@ -182,6 +171,62 @@ void tst_QAbstractTextDocumentLayout::anchorAt()
     preeditBr = metrics.boundingRect("xx");
     preeditPoint = QPointF(preeditBr.width() + blockStart.x(), (preeditBr.height() / 2) + blockStart.y());
     QCOMPARE(documentLayout->anchorAt(preeditPoint), QString());
+}
+
+void tst_QAbstractTextDocumentLayout::imageAt()
+{
+    QTextDocument doc;
+    doc.setHtml("foo<a href=\"link\"><img src=\"image\" width=\"50\" height=\"50\"/></a>");
+    QAbstractTextDocumentLayout *documentLayout = doc.documentLayout();
+    QTextBlock firstBlock = doc.begin();
+    QTextLayout *layout = firstBlock.layout();
+    layout->setPreeditArea(doc.toPlainText().length(), "xxx");
+
+    doc.setPageSize(QSizeF(1000, 1000));
+    QFontMetrics metrics(layout->font());
+    QPointF blockStart = documentLayout->blockBoundingRect(firstBlock).topLeft();
+
+    QRect fooBr = metrics.boundingRect("foo");
+    QPointF imagePoint(fooBr.width() + blockStart.x() + 25, blockStart.y() + 25);
+    // imageAt on image returns source
+    QCOMPARE(documentLayout->imageAt(imagePoint), QString("image"));
+    // anchorAt on image returns link
+    QCOMPARE(documentLayout->anchorAt(imagePoint), QString("link"));
+
+    // imageAt on start returns nothing (there's the "foo" text)
+    QPointF fooPoint(blockStart.x() + (fooBr.width() / 2), (fooBr.height() / 2) + blockStart.y());
+    QCOMPARE(documentLayout->imageAt(fooPoint), QString());
+}
+
+void tst_QAbstractTextDocumentLayout::formatAt()
+{
+    QTextDocument doc;
+    doc.setHtml("foo<i><a href=\"link\"><img src=\"image\" width=\"50\" height=\"50\"/></a></i>");
+    QAbstractTextDocumentLayout *documentLayout = doc.documentLayout();
+    QTextBlock firstBlock = doc.begin();
+    QTextLayout *layout = firstBlock.layout();
+    layout->setPreeditArea(doc.toPlainText().length(), "xxx");
+
+    doc.setPageSize(QSizeF(1000, 1000));
+    QFontMetrics metrics(layout->font());
+    QPointF blockStart = documentLayout->blockBoundingRect(firstBlock).topLeft();
+
+    QRect fooBr = metrics.boundingRect("foo");
+    QPointF imagePoint(fooBr.width() + blockStart.x() + 25, blockStart.y() + 25);
+
+    QTextFormat format = documentLayout->formatAt(imagePoint);
+    QVERIFY(format.isCharFormat());
+    QVERIFY(format.toCharFormat().isAnchor());
+    QVERIFY(format.toCharFormat().fontItalic());
+    QVERIFY(format.isImageFormat());
+
+    // move over the unformatted "foo" text)
+    QPointF fooPoint(blockStart.x() + (fooBr.width() / 2), (fooBr.height() / 2) + blockStart.y());
+    format = documentLayout->formatAt(fooPoint);
+    QVERIFY(format.isCharFormat());
+    QVERIFY(!format.toCharFormat().isAnchor());
+    QVERIFY(!format.toCharFormat().fontItalic());
+    QVERIFY(!format.isImageFormat());
 }
 
 QTEST_MAIN(tst_QAbstractTextDocumentLayout)

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,10 +44,10 @@
 #include "qscrollbar.h"
 #include "qstyle.h"
 #include "qstyleoption.h"
+#if QT_CONFIG(menu)
 #include "qmenu.h"
+#endif
 #include <QtCore/qelapsedtimer.h>
-
-#ifndef QT_NO_SCROLLBAR
 
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
@@ -189,15 +187,6 @@ QT_BEGIN_NAMESPACE
     Most GUI styles use the pageStep() value to calculate the size of the
     slider.
 
-    \table 100%
-    \row \li \inlineimage macintosh-horizontalscrollbar.png Screenshot of a Macintosh style scroll bar
-         \li A scroll bar shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-    \row \li \inlineimage windowsxp-horizontalscrollbar.png Screenshot of a Windows XP style scroll bar
-         \li A scroll bar shown in the \l{Windows XP Style Widget Gallery}{Windows XP widget style}.
-    \row \li \inlineimage fusion-horizontalscrollbar.png Screenshot of a Fusion style scroll bar
-         \li A scroll bar shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \endtable
-
     \sa QScrollArea, QSlider, QDial, QSpinBox, {fowler}{GUI Design Handbook: Scroll Bar}, {Sliders Example}
 */
 
@@ -234,10 +223,10 @@ void QScrollBarPrivate::setTransient(bool value)
     Q_Q(QScrollBar);
     if (transient != value) {
         transient = value;
-        if (transient) {
-            if (q->isVisible() && q->style()->styleHint(QStyle::SH_ScrollBar_Transient))
+        if (q->isVisible()) {
+            if (q->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, q))
                 q->update();
-        } else if (!q->isVisible()) {
+        } else if (!transient) {
             q->show();
         }
     }
@@ -246,10 +235,15 @@ void QScrollBarPrivate::setTransient(bool value)
 void QScrollBarPrivate::flash()
 {
     Q_Q(QScrollBar);
-    if (!flashed && q->style()->styleHint(QStyle::SH_ScrollBar_Transient)) {
+    if (!flashed && q->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, q)) {
         flashed = true;
-        q->show();
+        if (!q->isVisible())
+            q->show();
+        else
+            q->update();
     }
+    if (!flashTimer)
+        flashTimer = q->startTimer(0);
 }
 
 void QScrollBarPrivate::activateControl(uint control, int threshold)
@@ -325,7 +319,7 @@ void QScrollBar::initStyleOption(QStyleOptionSlider *option) const
     option->upsideDown = d->invertedAppearance;
     if (d->orientation == Qt::Horizontal)
         option->state |= QStyle::State_Horizontal;
-    if (d->flashed || !d->transient)
+    if ((d->flashed || !d->transient) && style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, this))
         option->state |= QStyle::State_On;
 }
 
@@ -345,10 +339,8 @@ void QScrollBar::initStyleOption(QStyleOptionSlider *option) const
     initial \l {QAbstractSlider::value} {value} of 0.
 */
 QScrollBar::QScrollBar(QWidget *parent)
-    : QAbstractSlider(*new QScrollBarPrivate, parent)
+    : QScrollBar(Qt::Vertical, parent)
 {
-    d_func()->orientation = Qt::Vertical;
-    d_func()->init();
 }
 
 /*!
@@ -384,8 +376,9 @@ void QScrollBarPrivate::init()
     invertedControls = true;
     pressedControl = hoverControl = QStyle::SC_None;
     pointerOutsidePressedControl = false;
-    transient = q->style()->styleHint(QStyle::SH_ScrollBar_Transient);
+    transient = q->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, q);
     flashed = false;
+    flashTimer = 0;
     q->setFocusPolicy(Qt::NoFocus);
     QSizePolicy sp(QSizePolicy::Minimum, QSizePolicy::Fixed, QSizePolicy::Slider);
     if (orientation == Qt::Vertical)
@@ -393,12 +386,6 @@ void QScrollBarPrivate::init()
     q->setSizePolicy(sp);
     q->setAttribute(Qt::WA_WState_OwnSizePolicy, false);
     q->setAttribute(Qt::WA_OpaquePaintEvent);
-
-#if !defined(QT_NO_CONTEXTMENU) && defined(Q_OS_WINCE)
-    if (!q->style()->styleHint(QStyle::SH_ScrollBar_ContextMenu, 0, q)) {
-        q->setContextMenuPolicy(Qt::PreventContextMenu);
-    }
-#endif
 }
 
 #ifndef QT_NO_CONTEXTMENU
@@ -410,7 +397,7 @@ void QScrollBar::contextMenuEvent(QContextMenuEvent *event)
         return ;
     }
 
-#ifndef QT_NO_MENU
+#if QT_CONFIG(menu)
     bool horiz = HORIZONTAL;
     QPointer<QMenu> menu = new QMenu(this);
     QAction *actScrollHere = menu->addAction(tr("Scroll here"));
@@ -441,7 +428,7 @@ void QScrollBar::contextMenuEvent(QContextMenuEvent *event)
         triggerAction(QAbstractSlider::SliderSingleStepSub);
     else if (actionSelected == actScrollDn)
         triggerAction(QAbstractSlider::SliderSingleStepAdd);
-#endif // QT_NO_MENU
+#endif // QT_CONFIG(menu)
 }
 #endif // QT_NO_CONTEXTMENU
 
@@ -476,15 +463,26 @@ void QScrollBar::sliderChange(SliderChange change)
 */
 bool QScrollBar::event(QEvent *event)
 {
+    Q_D(QScrollBar);
     switch(event->type()) {
     case QEvent::HoverEnter:
     case QEvent::HoverLeave:
     case QEvent::HoverMove:
-    if (const QHoverEvent *he = static_cast<const QHoverEvent *>(event))
-        d_func()->updateHoverControl(he->pos());
+        if (const QHoverEvent *he = static_cast<const QHoverEvent *>(event))
+            d_func()->updateHoverControl(he->pos());
         break;
     case QEvent::StyleChange:
-        d_func()->setTransient(style()->styleHint(QStyle::SH_ScrollBar_Transient));
+        d_func()->setTransient(style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, this));
+        break;
+    case QEvent::Timer:
+        if (static_cast<QTimerEvent *>(event)->timerId() == d->flashTimer) {
+            if (d->flashed && style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, this)) {
+                d->flashed = false;
+                update();
+            }
+            killTimer(d->flashTimer);
+            d->flashTimer = 0;
+        }
         break;
     default:
         break;
@@ -495,7 +493,7 @@ bool QScrollBar::event(QEvent *event)
 /*!
     \reimp
 */
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
 void QScrollBar::wheelEvent(QWheelEvent *event)
 {
     event->ignore();
@@ -510,6 +508,11 @@ void QScrollBar::wheelEvent(QWheelEvent *event)
     Q_D(QScrollBar);
     if (d->scrollByDelta(event->orientation(), event->modifiers(), delta))
         event->accept();
+
+    if (event->phase() == Qt::ScrollBegin)
+        d->setTransient(false);
+    else if (event->phase() == Qt::ScrollEnd)
+        d->setTransient(true);
 }
 #endif
 
@@ -531,10 +534,6 @@ void QScrollBar::paintEvent(QPaintEvent *)
         opt.activeSubControls = (QStyle::SubControl)d->hoverControl;
     }
     style()->drawComplexControl(QStyle::CC_ScrollBar, &opt, &p, this);
-    if (d->flashed && style()->styleHint(QStyle::SH_ScrollBar_Transient)) {
-        d->flashed = false;
-        update();
-    }
 }
 
 /*!
@@ -583,13 +582,14 @@ void QScrollBar::mousePressEvent(QMouseEvent *e)
         d->clickOffset = sliderLength / 2;
     }
     const int initialDelay = 500; // default threshold
-    d->activateControl(d->pressedControl, initialDelay);
     QElapsedTimer time;
     time.start();
+    d->activateControl(d->pressedControl, initialDelay);
     repaint(style()->subControlRect(QStyle::CC_ScrollBar, &opt, d->pressedControl, this));
     if (time.elapsed() >= initialDelay && d->repeatActionTimer.isActive()) {
-        // It took more than 500ms (the initial timer delay) to process the repaint(), we
-        // therefore need to restart the timer in case we have a pending mouse release event;
+        // It took more than 500ms (the initial timer delay) to process
+        // the control activation and repaint(), we therefore need
+        // to restart the timer in case we have a pending mouse release event;
         // otherwise we'll get a timer event right before the release event,
         // causing the repeat action to be invoked twice on a single mouse click.
         // 50ms is the default repeat time (see activateControl/setRepeatAction).
@@ -727,4 +727,4 @@ Q_WIDGETS_EXPORT QStyleOptionSlider qt_qscrollbarStyleOption(QScrollBar *scrollb
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_SCROLLBAR
+#include "moc_qscrollbar.cpp"

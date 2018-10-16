@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,13 +51,14 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
+#include <QtGui/qscreen.h>
 #include <QtGui/qwindow.h>
 #include <qpa/qplatformwindow.h>
 
 #include <QtCore/private/qobject_p.h>
+#include <QtCore/qelapsedtimer.h>
 #include <QtGui/QIcon>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -83,21 +82,30 @@ public:
         , parentWindow(0)
         , platformWindow(0)
         , visible(false)
+        , visibilityOnDestroy(false)
         , exposed(false)
         , windowState(Qt::WindowNoState)
+        , visibility(QWindow::Hidden)
         , resizeEventPending(true)
         , receivedExpose(false)
         , positionPolicy(WindowFrameExclusive)
+        , positionAutomatic(true)
         , contentOrientation(Qt::PrimaryOrientation)
-        , windowOrientation(Qt::PrimaryOrientation)
+        , opacity(qreal(1.0))
         , minimumSize(0, 0)
         , maximumSize(QWINDOWSIZE_MAX, QWINDOWSIZE_MAX)
         , modality(Qt::NonModal)
         , blockedByModalWindow(false)
+        , updateRequestPending(false)
         , transientParent(0)
-        , screen(0)
+        , topLevelScreen(0)
 #ifndef QT_NO_CURSOR
         , cursor(Qt::ArrowCursor)
+        , hasCursor(false)
+#endif
+        , compositing(false)
+#if QT_CONFIG(vulkan)
+        , vulkanInstance(nullptr)
 #endif
     {
         isWindow = true;
@@ -107,36 +115,72 @@ public:
     {
     }
 
+    void init(QScreen *targetScreen = nullptr);
+
     void maybeQuitOnLastWindowClosed();
 #ifndef QT_NO_CURSOR
-    void applyCursor();
+    void setCursor(const QCursor *c = 0);
+    bool applyCursor();
 #endif
 
-    QPoint globalPosition() const {
-        Q_Q(const QWindow);
-        QPoint offset = q->position();
-        for (const QWindow *p = q->parent(); p; p = p->parent())
-            offset += p->position();
-        return offset;
-    }
+    QPoint globalPosition() const;
+
+    QWindow *topLevelWindow(QWindow::AncestorMode mode = QWindow::IncludeTransients) const;
+
+#if QT_CONFIG(opengl)
+    virtual QOpenGLContext *shareContext() const;
+#endif
+
+    virtual QWindow *eventReceiver() { Q_Q(QWindow); return q; }
+
+    virtual void setVisible(bool visible);
+    void updateVisibility();
+    void _q_clearAlert();
+
+    enum SiblingPosition { PositionTop, PositionBottom };
+    void updateSiblingPosition(SiblingPosition);
+
+    bool windowRecreationRequired(QScreen *newScreen) const;
+    void create(bool recursive, WId nativeHandle = 0);
+    void destroy();
+    void setTopLevelScreen(QScreen *newScreen, bool recreate);
+    void connectToScreen(QScreen *topLevelScreen);
+    void disconnectFromScreen();
+    void emitScreenChangedRecursion(QScreen *newScreen);
+    QScreen *screenForGeometry(const QRect &rect);
+
+    virtual void clearFocusObject();
+    virtual QRectF closestAcceptableGeometry(const QRectF &rect) const;
+
+    virtual void processSafeAreaMarginsChanged() {};
+
+    bool isPopup() const { return (windowFlags & Qt::WindowType_Mask) == Qt::Popup; }
+
+    static QWindowPrivate *get(QWindow *window) { return window->d_func(); }
+
+    static Qt::WindowState effectiveState(Qt::WindowStates);
 
     QWindow::SurfaceType surfaceType;
     Qt::WindowFlags windowFlags;
     QWindow *parentWindow;
     QPlatformWindow *platformWindow;
     bool visible;
+    bool visibilityOnDestroy;
     bool exposed;
     QSurfaceFormat requestedFormat;
     QString windowTitle;
     QString windowFilePath;
     QIcon windowIcon;
     QRect geometry;
-    Qt::WindowState windowState;
+    Qt::WindowStates windowState;
+    QWindow::Visibility visibility;
     bool resizeEventPending;
     bool receivedExpose;
     PositionPolicy positionPolicy;
+    bool positionAutomatic;
     Qt::ScreenOrientation contentOrientation;
-    Qt::ScreenOrientation windowOrientation;
+    qreal opacity;
+    QRegion mask;
 
     QSize minimumSize;
     QSize maximumSize;
@@ -146,17 +190,25 @@ public:
     Qt::WindowModality modality;
     bool blockedByModalWindow;
 
+    bool updateRequestPending;
+
     QPointer<QWindow> transientParent;
-    QScreen *screen;
+    QPointer<QScreen> topLevelScreen;
 
 #ifndef QT_NO_CURSOR
     QCursor cursor;
+    bool hasCursor;
+#endif
+
+    bool compositing;
+    QElapsedTimer lastComposeTime;
+
+#if QT_CONFIG(vulkan)
+    QVulkanInstance *vulkanInstance;
 #endif
 };
 
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QWINDOW_P_H

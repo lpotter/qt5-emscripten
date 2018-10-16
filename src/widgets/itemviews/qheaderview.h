@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,14 +40,12 @@
 #ifndef QHEADERVIEW_H
 #define QHEADERVIEW_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qabstractitemview.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(itemviews);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_ITEMVIEWS
 
 class QHeaderViewPrivate;
 class QStyleOptionHeader;
@@ -57,14 +53,15 @@ class QStyleOptionHeader;
 class Q_WIDGETS_EXPORT QHeaderView : public QAbstractItemView
 {
     Q_OBJECT
+    Q_PROPERTY(bool firstSectionMovable READ isFirstSectionMovable WRITE setFirstSectionMovable)
     Q_PROPERTY(bool showSortIndicator READ isSortIndicatorShown WRITE setSortIndicatorShown)
     Q_PROPERTY(bool highlightSections READ highlightSections WRITE setHighlightSections)
     Q_PROPERTY(bool stretchLastSection READ stretchLastSection WRITE setStretchLastSection)
     Q_PROPERTY(bool cascadingSectionResizes READ cascadingSectionResizes WRITE setCascadingSectionResizes)
-    Q_PROPERTY(int defaultSectionSize READ defaultSectionSize WRITE setDefaultSectionSize)
+    Q_PROPERTY(int defaultSectionSize READ defaultSectionSize WRITE setDefaultSectionSize RESET resetDefaultSectionSize)
     Q_PROPERTY(int minimumSectionSize READ minimumSectionSize WRITE setMinimumSectionSize)
+    Q_PROPERTY(int maximumSectionSize READ maximumSectionSize WRITE setMaximumSectionSize)
     Q_PROPERTY(Qt::Alignment defaultAlignment READ defaultAlignment WRITE setDefaultAlignment)
-    Q_ENUMS(ResizeMode)
 
 public:
 
@@ -76,16 +73,18 @@ public:
         ResizeToContents,
         Custom = Fixed
     };
+    Q_ENUM(ResizeMode)
 
-    explicit QHeaderView(Qt::Orientation orientation, QWidget *parent = 0);
+    explicit QHeaderView(Qt::Orientation orientation, QWidget *parent = nullptr);
     virtual ~QHeaderView();
 
-    void setModel(QAbstractItemModel *model);
+    void setModel(QAbstractItemModel *model) override;
 
     Qt::Orientation orientation() const;
     int offset() const;
     int length() const;
-    QSize sizeHint() const;
+    QSize sizeHint() const override;
+    void setVisible(bool v) override;
     int sectionSizeHint(int logicalIndex) const;
 
     int visualIndexAt(int position) const;
@@ -120,6 +119,8 @@ public:
     inline QT_DEPRECATED void setMovable(bool movable) { setSectionsMovable(movable); }
     inline QT_DEPRECATED bool isMovable() const { return sectionsMovable(); }
 #endif
+    void setFirstSectionMovable(bool movable);
+    bool isFirstSectionMovable() const;
 
     void setSectionsClickable(bool clickable);
     bool sectionsClickable() const;
@@ -134,6 +135,10 @@ public:
     ResizeMode sectionResizeMode(int logicalIndex) const;
     void setSectionResizeMode(ResizeMode mode);
     void setSectionResizeMode(int logicalIndex, ResizeMode mode);
+
+    void setResizeContentsPrecision(int precision);
+    int  resizeContentsPrecision() const;
+
 #if QT_DEPRECATED_SINCE(5, 0)
     inline QT_DEPRECATED void setResizeMode(ResizeMode mode)
         { setSectionResizeMode(mode); }
@@ -160,14 +165,17 @@ public:
 
     int defaultSectionSize() const;
     void setDefaultSectionSize(int size);
+    void resetDefaultSectionSize();
 
     int minimumSectionSize() const;
     void setMinimumSectionSize(int size);
+    int maximumSectionSize() const;
+    void setMaximumSectionSize(int size);
 
     Qt::Alignment defaultAlignment() const;
     void setDefaultAlignment(Qt::Alignment alignment);
 
-    void doItemsLayout();
+    void doItemsLayout() override;
     bool sectionsMoved() const;
     bool sectionsHidden() const;
 
@@ -176,7 +184,7 @@ public:
     bool restoreState(const QByteArray &state);
 #endif
 
-    void reset();
+    void reset() override;
 
 public Q_SLOTS:
     void setOffset(int offset);
@@ -203,49 +211,55 @@ protected Q_SLOTS:
     void sectionsAboutToBeRemoved(const QModelIndex &parent, int logicalFirst, int logicalLast);
 
 protected:
-    QHeaderView(QHeaderViewPrivate &dd, Qt::Orientation orientation, QWidget *parent = 0);
+    QHeaderView(QHeaderViewPrivate &dd, Qt::Orientation orientation, QWidget *parent = nullptr);
     void initialize();
 
     void initializeSections();
     void initializeSections(int start, int end);
-    void currentChanged(const QModelIndex &current, const QModelIndex &old);
+    void currentChanged(const QModelIndex &current, const QModelIndex &old) override;
 
-    bool event(QEvent *e);
-    void paintEvent(QPaintEvent *e);
-    void mousePressEvent(QMouseEvent *e);
-    void mouseMoveEvent(QMouseEvent *e);
-    void mouseReleaseEvent(QMouseEvent *e);
-    void mouseDoubleClickEvent(QMouseEvent *e);
-    bool viewportEvent(QEvent *e);
+    bool event(QEvent *e) override;
+    void paintEvent(QPaintEvent *e) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *e) override;
+    void mouseDoubleClickEvent(QMouseEvent *e) override;
+    bool viewportEvent(QEvent *e) override;
 
     virtual void paintSection(QPainter *painter, const QRect &rect, int logicalIndex) const;
     virtual QSize sectionSizeFromContents(int logicalIndex) const;
 
-    int horizontalOffset() const;
-    int verticalOffset() const;
-    void updateGeometries();
-    void scrollContentsBy(int dx, int dy);
+    int horizontalOffset() const override;
+    int verticalOffset() const override;
+    void updateGeometries() override;
+    void scrollContentsBy(int dx, int dy) override;
 
-    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles = QVector<int>());
-    void rowsInserted(const QModelIndex &parent, int start, int end);
+    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles = QVector<int>()) override;
+    void rowsInserted(const QModelIndex &parent, int start, int end) override;
 
-    QRect visualRect(const QModelIndex &index) const;
-    void scrollTo(const QModelIndex &index, ScrollHint hint);
+    QRect visualRect(const QModelIndex &index) const override;
+    void scrollTo(const QModelIndex &index, ScrollHint hint) override;
 
-    QModelIndex indexAt(const QPoint &p) const;
-    bool isIndexHidden(const QModelIndex &index) const;
+    QModelIndex indexAt(const QPoint &p) const override;
+    bool isIndexHidden(const QModelIndex &index) const override;
 
-    QModelIndex moveCursor(CursorAction, Qt::KeyboardModifiers);
-    void setSelection(const QRect& rect, QItemSelectionModel::SelectionFlags flags);
-    QRegion visualRegionForSelection(const QItemSelection &selection) const;
+    QModelIndex moveCursor(CursorAction, Qt::KeyboardModifiers) override;
+    void setSelection(const QRect& rect, QItemSelectionModel::SelectionFlags flags) override;
+    QRegion visualRegionForSelection(const QItemSelection &selection) const override;
     void initStyleOption(QStyleOptionHeader *option) const;
 
     friend class QTableView;
     friend class QTreeView;
 
 private:
+    // ### Qt6: make them protected slots in QHeaderViewPrivate
     Q_PRIVATE_SLOT(d_func(), void _q_sectionsRemoved(const QModelIndex &parent, int logicalFirst, int logicalLast))
-    Q_PRIVATE_SLOT(d_func(), void _q_layoutAboutToBeChanged())
+    Q_PRIVATE_SLOT(d_func(), void _q_sectionsAboutToBeMoved(const QModelIndex &sourceParent, int logicalStart, int logicalEnd, const QModelIndex &destinationParent, int logicalDestination))
+    Q_PRIVATE_SLOT(d_func(), void _q_sectionsMoved(const QModelIndex &sourceParent, int logicalStart, int logicalEnd, const QModelIndex &destinationParent, int logicalDestination))
+    Q_PRIVATE_SLOT(d_func(), void _q_sectionsAboutToBeChanged(const QList<QPersistentModelIndex> &parents = QList<QPersistentModelIndex>(),
+                                                              QAbstractItemModel::LayoutChangeHint hint = QAbstractItemModel::NoLayoutChangeHint))
+    Q_PRIVATE_SLOT(d_func(), void _q_sectionsChanged(const QList<QPersistentModelIndex> &parents = QList<QPersistentModelIndex>(),
+                                                     QAbstractItemModel::LayoutChangeHint hint = QAbstractItemModel::NoLayoutChangeHint))
     Q_DECLARE_PRIVATE(QHeaderView)
     Q_DISABLE_COPY(QHeaderView)
 };
@@ -259,10 +273,6 @@ inline void QHeaderView::hideSection(int alogicalIndex)
 inline void QHeaderView::showSection(int alogicalIndex)
 { setSectionHidden(alogicalIndex, false); }
 
-#endif // QT_NO_ITEMVIEWS
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QHEADERVIEW_H

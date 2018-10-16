@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,16 +39,16 @@
 
 #include "qstyleditemdelegate.h"
 
-#ifndef QT_NO_ITEMVIEWS
 #include <qabstractitemmodel.h>
 #include <qapplication.h>
-#include <qpa/qplatformintegration.h>
-#include <qpa/qplatformdrag.h>
-#include <private/qguiapplication_p.h>
 #include <qbrush.h>
+#if QT_CONFIG(lineedit)
 #include <qlineedit.h>
+#endif
+#if QT_CONFIG(textedit)
 #include <qtextedit.h>
 #include <qplaintextedit.h>
+#endif
 #include <qpainter.h>
 #include <qpalette.h>
 #include <qpoint.h>
@@ -67,20 +65,20 @@
 #include <private/qitemeditorfactory_p.h>
 #include <qmetaobject.h>
 #include <qtextlayout.h>
-#include <private/qobject_p.h>
-#include <private/qdnd_p.h>
+#include <private/qabstractitemdelegate_p.h>
 #include <private/qtextengine_p.h>
 #include <private/qlayoutengine_p.h>
 #include <qdebug.h>
 #include <qlocale.h>
-#include <qdialog.h>
+#if QT_CONFIG(tableview)
 #include <qtableview.h>
+#endif
 
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
 
-class QStyledItemDelegatePrivate : public QObjectPrivate
+class QStyledItemDelegatePrivate : public QAbstractItemDelegatePrivate
 {
     Q_DECLARE_PUBLIC(QStyledItemDelegate)
 
@@ -97,12 +95,6 @@ public:
         return factory ? factory : QItemEditorFactory::defaultFactory();
     }
 
-    void _q_commitDataAndCloseEditor(QWidget *editor)
-    {
-        Q_Q(QStyledItemDelegate);
-        emit q->commitData(editor);
-        emit q->closeEditor(editor, QAbstractItemDelegate::SubmitModelCache);
-    }
     QItemEditorFactory *factory;
 };
 
@@ -273,41 +265,7 @@ QStyledItemDelegate::~QStyledItemDelegate()
 */
 QString QStyledItemDelegate::displayText(const QVariant &value, const QLocale& locale) const
 {
-    QString text;
-    switch (value.userType()) {
-    case QMetaType::Float:
-    case QVariant::Double:
-        text = locale.toString(value.toReal());
-        break;
-    case QVariant::Int:
-    case QVariant::LongLong:
-        text = locale.toString(value.toLongLong());
-        break;
-    case QVariant::UInt:
-    case QVariant::ULongLong:
-        text = locale.toString(value.toULongLong());
-        break;
-    case QVariant::Date:
-        text = locale.toString(value.toDate(), QLocale::ShortFormat);
-        break;
-    case QVariant::Time:
-        text = locale.toString(value.toTime(), QLocale::ShortFormat);
-        break;
-    case QVariant::DateTime:
-        text = locale.toString(value.toDateTime().date(), QLocale::ShortFormat);
-        text += QLatin1Char(' ');
-        text += locale.toString(value.toDateTime().time(), QLocale::ShortFormat);
-        break;
-    default:
-        // convert new lines into line separators
-        text = value.toString();
-        for (int i = 0; i < text.count(); ++i) {
-            if (text.at(i) == QLatin1Char('\n'))
-                text[i] = QChar::LineSeparator;
-        }
-        break;
-    }
-    return text;
+    return d_func()->textForRole(Qt::DisplayRole, value, locale);
 }
 
 /*!
@@ -355,7 +313,10 @@ void QStyledItemDelegate::initStyleOption(QStyleOptionViewItem *option,
             else
                 mode = QIcon::Normal;
             QIcon::State state = option->state & QStyle::State_Open ? QIcon::On : QIcon::Off;
-            option->decorationSize = option->icon.actualSize(option->decorationSize, mode, state);
+            QSize actualSize = option->icon.actualSize(option->decorationSize, mode, state);
+            // For highdpi icons actualSize might be larger than decorationSize, which we don't want. Clamp it to decorationSize.
+            option->decorationSize = QSize(qMin(option->decorationSize.width(), actualSize.width()),
+                                           qMin(option->decorationSize.height(), actualSize.height()));
             break;
         }
         case QVariant::Color: {
@@ -367,13 +328,13 @@ void QStyledItemDelegate::initStyleOption(QStyleOptionViewItem *option,
         case QVariant::Image: {
             QImage image = qvariant_cast<QImage>(value);
             option->icon = QIcon(QPixmap::fromImage(image));
-            option->decorationSize = image.size();
+            option->decorationSize = image.size() / image.devicePixelRatio();
             break;
         }
         case QVariant::Pixmap: {
             QPixmap pixmap = qvariant_cast<QPixmap>(value);
             option->icon = QIcon(pixmap);
-            option->decorationSize = pixmap.size();
+            option->decorationSize = pixmap.size() / pixmap.devicePixelRatio();
             break;
         }
         default:
@@ -388,6 +349,9 @@ void QStyledItemDelegate::initStyleOption(QStyleOptionViewItem *option,
     }
 
     option->backgroundBrush = qvariant_cast<QBrush>(index.data(Qt::BackgroundRole));
+
+    // disable style animations for checkboxes etc. within itemviews (QTBUG-30146)
+    option->styleObject = 0;
 }
 
 /*!
@@ -406,7 +370,7 @@ void QStyledItemDelegate::initStyleOption(QStyleOptionViewItem *option,
     if it is enabled or selected.
 
     After painting, you should ensure that the painter is returned to
-    its the state it was supplied in when this function was called.
+    the state it was supplied in when this function was called.
     For example, it may be useful to call QPainter::save() before
     painting and QPainter::restore() afterwards.
 
@@ -541,7 +505,7 @@ void QStyledItemDelegate::updateEditorGeometry(QWidget *editor,
     // let the editor take up all available space
     //if the editor is not a QLineEdit
     //or it is in a QTableView
-#if !defined(QT_NO_TABLEVIEW) && !defined(QT_NO_LINEEDIT)
+#if QT_CONFIG(tableview) && QT_CONFIG(lineedit)
     if (qobject_cast<QExpandingLineEdit*>(editor) && !qobject_cast<const QTableView*>(widget))
         opt.showDecorationSelected = editor->style()->styleHint(QStyle::SH_ItemView_ShowDecorationSelected, 0, editor);
     else
@@ -550,12 +514,13 @@ void QStyledItemDelegate::updateEditorGeometry(QWidget *editor,
 
     QStyle *style = widget ? widget->style() : QApplication::style();
     QRect geom = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, widget);
-    if ( editor->layoutDirection() == Qt::RightToLeft) {
-        const int delta = qSmartMinSize(editor).width() - geom.width();
-        if (delta > 0) {
-            //we need to widen the geometry
+    const int delta = qSmartMinSize(editor).width() - geom.width();
+    if (delta > 0) {
+        //we need to widen the geometry
+        if (editor->layoutDirection() == Qt::RightToLeft)
             geom.adjust(-delta, 0, 0, 0);
-        }
+        else
+            geom.adjust(0, 0, delta, 0);
     }
 
     editor->setGeometry(geom);
@@ -590,8 +555,8 @@ void QStyledItemDelegate::setItemEditorFactory(QItemEditorFactory *factory)
 /*!
     \fn bool QStyledItemDelegate::eventFilter(QObject *editor, QEvent *event)
 
-    Returns true if the given \a editor is a valid QWidget and the
-    given \a event is handled; otherwise returns false. The following
+    Returns \c true if the given \a editor is a valid QWidget and the
+    given \a event is handled; otherwise returns \c false. The following
     key press events are handled by default:
 
     \list
@@ -602,8 +567,11 @@ void QStyledItemDelegate::setItemEditorFactory(QItemEditorFactory *factory)
         \li \uicontrol Esc
     \endlist
 
+    If the \a editor's type is QTextEdit or QPlainTextEdit then \uicontrol Enter and
+    \uicontrol Return keys are \e not handled.
+
     In the case of \uicontrol Tab, \uicontrol Backtab, \uicontrol Enter and \uicontrol Return
-    key press events, the \a editor's data is comitted to the model
+    key press events, the \a editor's data is committed to the model
     and the editor is closed. If the \a event is a \uicontrol Tab key press
     the view will open an editor on the next item in the
     view. Likewise, if the \a event is a \uicontrol Backtab key press the
@@ -616,74 +584,8 @@ void QStyledItemDelegate::setItemEditorFactory(QItemEditorFactory *factory)
 */
 bool QStyledItemDelegate::eventFilter(QObject *object, QEvent *event)
 {
-    QWidget *editor = qobject_cast<QWidget*>(object);
-    if (!editor)
-        return false;
-    if (event->type() == QEvent::KeyPress) {
-        switch (static_cast<QKeyEvent *>(event)->key()) {
-        case Qt::Key_Tab:
-            emit commitData(editor);
-            emit closeEditor(editor, QAbstractItemDelegate::EditNextItem);
-            return true;
-        case Qt::Key_Backtab:
-            emit commitData(editor);
-            emit closeEditor(editor, QAbstractItemDelegate::EditPreviousItem);
-            return true;
-        case Qt::Key_Enter:
-        case Qt::Key_Return:
-#ifndef QT_NO_TEXTEDIT
-            if (qobject_cast<QTextEdit *>(editor) || qobject_cast<QPlainTextEdit *>(editor))
-                return false; // don't filter enter key events for QTextEdit
-            // We want the editor to be able to process the key press
-            // before committing the data (e.g. so it can do
-            // validation/fixup of the input).
-#endif // QT_NO_TEXTEDIT
-#ifndef QT_NO_LINEEDIT
-            if (QLineEdit *e = qobject_cast<QLineEdit*>(editor))
-                if (!e->hasAcceptableInput())
-                    return false;
-#endif // QT_NO_LINEEDIT
-            QMetaObject::invokeMethod(this, "_q_commitDataAndCloseEditor",
-                                      Qt::QueuedConnection, Q_ARG(QWidget*, editor));
-            return false;
-        case Qt::Key_Escape:
-            // don't commit data
-            emit closeEditor(editor, QAbstractItemDelegate::RevertModelCache);
-            break;
-        default:
-            return false;
-        }
-        if (editor->parentWidget())
-            editor->parentWidget()->setFocus();
-        return true;
-    } else if (event->type() == QEvent::FocusOut || (event->type() == QEvent::Hide && editor->isWindow())) {
-        //the Hide event will take care of he editors that are in fact complete dialogs
-        if (!editor->isActiveWindow() || (QApplication::focusWidget() != editor)) {
-            QWidget *w = QApplication::focusWidget();
-            while (w) { // don't worry about focus changes internally in the editor
-                if (w == editor)
-                    return false;
-                w = w->parentWidget();
-            }
-#ifndef QT_NO_DRAGANDDROP
-            // The window may lose focus during an drag operation.
-            // i.e when dragging involves the taskbar on Windows.
-            QPlatformDrag *platformDrag = QGuiApplicationPrivate::instance()->platformIntegration()->drag();
-            if (platformDrag && platformDrag->currentDrag()) {
-                return false;
-            }
-#endif
-
-            emit commitData(editor);
-            emit closeEditor(editor, NoHint);
-        }
-    } else if (event->type() == QEvent::ShortcutOverride) {
-        if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
-            event->accept();
-            return true;
-        }
-    }
-    return false;
+    Q_D(QStyledItemDelegate);
+    return d->editorEventFilter(object, event);
 }
 
 /*!
@@ -734,13 +636,14 @@ bool QStyledItemDelegate::editorEvent(QEvent *event,
         return false;
     }
 
-    Qt::CheckState state = (static_cast<Qt::CheckState>(value.toInt()) == Qt::Checked
-                            ? Qt::Unchecked : Qt::Checked);
+    Qt::CheckState state = static_cast<Qt::CheckState>(value.toInt());
+    if (flags & Qt::ItemIsUserTristate)
+        state = ((Qt::CheckState)((state + 1) % 3));
+    else
+        state = (state == Qt::Checked) ? Qt::Unchecked : Qt::Checked;
     return model->setData(index, state, Qt::CheckStateRole);
 }
 
 QT_END_NAMESPACE
 
 #include "moc_qstyleditemdelegate.cpp"
-
-#endif // QT_NO_ITEMVIEWS

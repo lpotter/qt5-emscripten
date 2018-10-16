@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -50,23 +60,23 @@
 
 #include <qtconcurrentmap.h>
 
-#ifndef QT_NO_CONCURRENT
-
 using namespace QtConcurrent;
 
 /*
     Utility function that recursivily searches for files.
 */
-QStringList findFiles(const QString &startDir, QStringList filters)
+QStringList findFiles(const QString &startDir, const QStringList &filters)
 {
     QStringList names;
     QDir dir(startDir);
 
-    foreach (QString file, dir.entryList(filters, QDir::Files))
-        names += startDir + "/" + file;
+    const auto files = dir.entryList(filters, QDir::Files);
+    for (const QString &file : files)
+        names += startDir + '/' + file;
 
-    foreach (QString subdir, dir.entryList(QDir::AllDirs | QDir::NoDotAndDotDot))
-        names += findFiles(startDir + "/" + subdir, filters);
+    const auto subdirs =  dir.entryList(QDir::AllDirs | QDir::NoDotAndDotDot);
+    for (const QString &subdir : subdirs)
+        names += findFiles(startDir + '/' + subdir, filters);
     return names;
 }
 
@@ -75,17 +85,18 @@ typedef QMap<QString, int> WordCount;
 /*
     Single threaded word counter function.
 */
-WordCount singleThreadedWordCount(QStringList files)
+WordCount singleThreadedWordCount(const QStringList &files)
 {
     WordCount wordCount;
-    foreach (QString file, files) {
+    for (const QString &file : files) {
         QFile f(file);
         f.open(QIODevice::ReadOnly);
         QTextStream textStream(&f);
-        while (textStream.atEnd() == false)
-            foreach(QString word, textStream.readLine().split(" "))
+        while (!textStream.atEnd()) {
+            const auto words =  textStream.readLine().split(' ');
+            for (const QString &word : words)
                 wordCount[word] += 1;
-
+        }
     }
     return wordCount;
 }
@@ -101,9 +112,11 @@ WordCount countWords(const QString &file)
     QTextStream textStream(&f);
     WordCount wordCount;
 
-    while (textStream.atEnd() == false)
-        foreach (QString word, textStream.readLine().split(" "))
+    while (!textStream.atEnd()) {
+        const auto words =  textStream.readLine().split(' ');
+        for (const QString &word : words)
             wordCount[word] += 1;
+    }
 
     return wordCount;
 }
@@ -129,8 +142,6 @@ int main(int argc, char** argv)
 
     qDebug() << "warmup";
     {
-        QTime time;
-        time.start();
         WordCount total = singleThreadedWordCount(files);
     }
 
@@ -155,23 +166,3 @@ int main(int argc, char** argv)
     }
     qDebug() << "MapReduce speedup x" << ((double)singleThreadTime - (double)mapReduceTime) / (double)mapReduceTime + 1;
 }
-
-#else
-
-#include <QLabel>
-
-int main(int argc, char *argv[])
-{
-    QApplication app(argc, argv);
-    QString text("Qt Concurrent is not yet supported on this platform");
-
-    QLabel *label = new QLabel(text);
-    label->setWordWrap(true);
-
-    label->show();
-    qDebug() << text;
-
-    app.exec();
-}
-
-#endif

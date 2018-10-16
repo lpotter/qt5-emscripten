@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,81 +45,7 @@
 #include "qvariant.h"
 #include "qreadwritelock.h"
 
-#if defined(Q_OS_BLACKBERRY)
-#include <QtCore/private/qcore_unix_p.h>
-#include <QCoreApplication>
-
-#include <unistd.h>
-#include <errno.h>
-#include <sys/pps.h>
-#endif
-
 QT_BEGIN_NAMESPACE
-
-#if defined(Q_OS_BLACKBERRY)
-static const char ppsServicePath[] = "/pps/services/locale/uom";
-static const size_t ppsBufferSize = 256;
-
-QQNXLocaleData::QQNXLocaleData()
-    :ppsNotifier(0)
-    ,ppsFd(-1)
-{
-    readPPSLocale();
-}
-
-QQNXLocaleData::~QQNXLocaleData()
-{
-    if (ppsFd != -1)
-        qt_safe_close(ppsFd);
-}
-
-void QQNXLocaleData::updateMeasurementSystem()
-{
-    char buffer[ppsBufferSize];
-
-    errno = 0;
-    int bytes = qt_safe_read(ppsFd, buffer, ppsBufferSize - 1);
-    if (bytes == -1) {
-        qWarning("Failed to read Locale pps, errno=%d", errno);
-        return;
-    }
-    // ensure data is null terminated
-    buffer[bytes] = '\0';
-
-    pps_decoder_t ppsDecoder;
-    pps_decoder_initialize(&ppsDecoder, 0);
-    if (pps_decoder_parse_pps_str(&ppsDecoder, buffer) == PPS_DECODER_OK) {
-        pps_decoder_push(&ppsDecoder, 0);
-        const char *measurementBuff;
-        if (pps_decoder_get_string(&ppsDecoder, "uom", &measurementBuff) == PPS_DECODER_OK) {
-            if (qstrcmp(measurementBuff, "imperial") == 0) {
-                pps_decoder_cleanup(&ppsDecoder);
-                ppsMeasurement = QLocale::ImperialSystem;
-                return;
-            }
-        }
-    }
-
-    pps_decoder_cleanup(&ppsDecoder);
-    ppsMeasurement = QLocale::MetricSystem;
-}
-
-void QQNXLocaleData::readPPSLocale()
-{
-    errno = 0;
-    ppsFd = qt_safe_open(ppsServicePath, O_RDONLY);
-    if (ppsFd == -1) {
-        qWarning("Failed to open Locale pps, errno=%d", errno);
-        return;
-    }
-
-    updateMeasurementSystem();
-    if (QCoreApplication::instance()) {
-        ppsNotifier = new QSocketNotifier(ppsFd, QSocketNotifier::Read, this);
-        QObject::connect(ppsNotifier, SIGNAL(activated(int)), this, SLOT(updateMeasurementSystem()));
-    }
-}
-#endif
 
 #ifndef QT_NO_SYSTEMLOCALE
 struct QSystemLocaleData
@@ -177,45 +101,66 @@ void QSystemLocaleData::readEnvironment()
     lc_messages = QLocale(QString::fromLatin1(lc_messages_var));
 }
 
-
 Q_GLOBAL_STATIC(QSystemLocaleData, qSystemLocaleData)
-#if defined(Q_OS_BLACKBERRY)
-    Q_GLOBAL_STATIC(QQNXLocaleData, qqnxLocaleData)
-#endif
 
 #endif
 
 #ifndef QT_NO_SYSTEMLOCALE
 
+static bool contradicts(const QString &maybe, const QString &known)
+{
+    if (maybe.isEmpty())
+        return false;
+
+    /*
+      If \a known (our current best shot at deciding which language to use)
+      provides more information (e.g. script, country) than \a maybe (a
+      candidate to replace \a known) and \a maybe agrees with \a known in what
+      it does provide, we keep \a known; this happens when \a maybe comes from
+      LANGUAGE (usually a simple language code) and LANG includes script and/or
+      country.  A textual comparison won't do because, for example, bn (Bengali)
+      isn't a prefix of ben_IN, but the latter is a refinement of the former.
+      (Meanwhile, bn is a prefix of bnt, Bantu; and a prefix of ben is be,
+      Belarusian.  There are many more such prefixings between two- and
+      three-letter codes.)
+     */
+    QLocale::Language langm, langk;
+    QLocale::Script scriptm, scriptk;
+    QLocale::Country landm, landk;
+    QLocalePrivate::getLangAndCountry(maybe, langm, scriptm, landm);
+    QLocalePrivate::getLangAndCountry(known, langk, scriptk, landk);
+    return (langm != QLocale::AnyLanguage && langm != langk)
+        || (scriptm != QLocale::AnyScript && scriptm != scriptk)
+        || (landm != QLocale::AnyCountry && landm != landk);
+}
+
 QLocale QSystemLocale::fallbackUiLocale() const
 {
-    QByteArray lang = qgetenv("LC_ALL");
+    // See man 7 locale for precedence - LC_ALL beats LC_MESSAGES beats LANG:
+    QString lang = qEnvironmentVariable("LC_ALL");
     if (lang.isEmpty())
-        lang = qgetenv("LC_MESSAGES");
+        lang = qEnvironmentVariable("LC_MESSAGES");
     if (lang.isEmpty())
-        lang = qgetenv("LANG");
+        lang = qEnvironmentVariable("LANG");
     // if the locale is the "C" locale, then we can return the language we found here:
-    if (lang.isEmpty() || lang == QByteArray("C") || lang == QByteArray("POSIX"))
-        return QLocale(QString::fromLatin1(lang));
+    if (lang.isEmpty() || lang == QLatin1String("C") || lang == QLatin1String("POSIX"))
+        return QLocale(lang);
 
-    // if the locale is not the "C" locale and LANGUAGE is not empty, return
-    // the first part of LANGUAGE if LANGUAGE is set and has a first part:
-    QByteArray language = qgetenv("LANGUAGE");
+    // ... otherwise, if the first part of LANGUAGE says more than or
+    // contradicts what we have, use that:
+    QString language = qEnvironmentVariable("LANGUAGE");
     if (!language.isEmpty()) {
-        language = language.split(':').first();
-        if (!language.isEmpty())
-            return QLocale(QString::fromLatin1(language));
+        language = language.split(QLatin1Char(':')).constFirst();
+        if (contradicts(language, lang))
+            return QLocale(language);
     }
 
-    return QLocale(QString::fromLatin1(lang));
+    return QLocale(lang);
 }
 
 QVariant QSystemLocale::query(QueryType type, QVariant in) const
 {
     QSystemLocaleData *d = qSystemLocaleData();
-#if defined(Q_OS_BLACKBERRY)
-    QQNXLocaleData *qnxd = qqnxLocaleData();
-#endif
 
     if (type == LocaleChanged) {
         d->readEnvironment();
@@ -254,6 +199,10 @@ QVariant QSystemLocale::query(QueryType type, QVariant in) const
         return lc_time.monthName(in.toInt(), QLocale::LongFormat);
     case MonthNameShort:
         return lc_time.monthName(in.toInt(), QLocale::ShortFormat);
+    case StandaloneMonthNameLong:
+        return lc_time.standaloneMonthName(in.toInt(), QLocale::LongFormat);
+    case StandaloneMonthNameShort:
+        return lc_time.standaloneMonthName(in.toInt(), QLocale::ShortFormat);
     case DateToStringLong:
         return lc_time.toString(in.toDate(), QLocale::LongFormat);
     case DateToStringShort:
@@ -303,9 +252,6 @@ QVariant QSystemLocale::query(QueryType type, QVariant in) const
             return QLocale::MetricSystem;
         if (meas_locale.compare(QLatin1String("Other"), Qt::CaseInsensitive) == 0)
             return QLocale::MetricSystem;
-#if defined(Q_OS_BLACKBERRY)
-        return qnxd->ppsMeasurement;
-#endif
         return QVariant((int)QLocale(meas_locale).measurementSystem());
     }
     case UILanguages: {
@@ -335,7 +281,7 @@ QVariant QSystemLocale::query(QueryType type, QVariant in) const
     case StringToAlternateQuotation:
         return lc_messages.quoteString(in.value<QStringRef>(), QLocale::AlternateQuotation);
     case ListToSeparatedString:
-        return lc_messages.createSeparatedList(in.value<QStringList>());
+        return lc_messages.createSeparatedList(in.toStringList());
     case LocaleChanged:
         Q_ASSERT(false);
     default:

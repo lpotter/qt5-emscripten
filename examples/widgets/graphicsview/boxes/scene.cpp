@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +50,10 @@
 
 #include <QDebug>
 #include "scene.h"
+#include <QtCore/QRandomGenerator>
 #include <QtGui/qmatrix4x4.h>
 #include <QtGui/qvector3d.h>
+#include <qmath.h>
 
 #include "3rdparty/fbm.h"
 
@@ -118,7 +129,7 @@ void ColorEdit::mousePressEvent(QMouseEvent *event)
         QColorDialog dialog(color, 0);
         dialog.setOption(QColorDialog::ShowAlphaChannel, true);
 // The ifdef block is a workaround for the beta, TODO: remove when bug 238525 is fixed
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         dialog.setOption(QColorDialog::DontUseNativeDialog, true);
 #endif
         dialog.move(280, 120);
@@ -186,10 +197,10 @@ TwoSidedGraphicsWidget::TwoSidedGraphicsWidget(QGraphicsScene *scene)
 void TwoSidedGraphicsWidget::setWidget(int index, QWidget *widget)
 {
     if (index < 0 || index >= 2)
-	{
-		qWarning("TwoSidedGraphicsWidget::setWidget: Index out of bounds, index == %d", index);
-		return;
-	}
+    {
+        qWarning("TwoSidedGraphicsWidget::setWidget: Index out of bounds, index == %d", index);
+        return;
+    }
 
     GraphicsWidget *proxy = new GraphicsWidget;
     proxy->setWidget(widget);
@@ -210,10 +221,10 @@ void TwoSidedGraphicsWidget::setWidget(int index, QWidget *widget)
 QWidget *TwoSidedGraphicsWidget::widget(int index)
 {
     if (index < 0 || index >= 2)
-	{
-		qWarning("TwoSidedGraphicsWidget::widget: Index out of bounds, index == %d", index);
-		return 0;
-	}
+    {
+        qWarning("TwoSidedGraphicsWidget::widget: Index out of bounds, index == %d", index);
+        return 0;
+    }
     return m_proxyWidgets[index]->widget();
 }
 
@@ -326,9 +337,9 @@ RenderOptionsDialog::RenderOptionsDialog()
                 while (++it != tokens.end()) {
                     m_parameterNames << name;
                     if (!singleElement) {
-                        m_parameterNames.back() += "[";
+                        m_parameterNames.back() += '[';
                         m_parameterNames.back() += counter + counterPos;
-                        m_parameterNames.back() += "]";
+                        m_parameterNames.back() += ']';
                         int j = 8; // position of last digit
                         ++counter[j];
                         while (j > 0 && counter[j] > '9') {
@@ -567,7 +578,7 @@ void Scene::initGL()
     m_environmentProgram->link();
 
     const int NOISE_SIZE = 128; // for a different size, B and BM in fbm.c must also be changed
-    m_noise = new GLTexture3D(NOISE_SIZE, NOISE_SIZE, NOISE_SIZE); 
+    m_noise = new GLTexture3D(NOISE_SIZE, NOISE_SIZE, NOISE_SIZE);
     QRgb *data = new QRgb[NOISE_SIZE * NOISE_SIZE * NOISE_SIZE];
     memset(data, 0, NOISE_SIZE * NOISE_SIZE * NOISE_SIZE * sizeof(QRgb));
     QRgb *p = data;
@@ -858,13 +869,14 @@ void Scene::renderCubemaps()
 
     QVector3D center;
 
+    const float eachAngle = 2 * M_PI / m_cubemaps.size();
     for (int i = m_frame % N; i < m_cubemaps.size(); i += N) {
         if (0 == m_cubemaps[i])
             continue;
 
-        float angle = 2.0f * PI * i / m_cubemaps.size();
+        float angle = i * eachAngle;
 
-        center = m_trackBalls[1].rotation().rotatedVector(QVector3D(cos(angle), sin(angle), 0.0f));
+        center = m_trackBalls[1].rotation().rotatedVector(QVector3D(std::cos(angle), std::sin(angle), 0.0f));
 
         for (int face = 0; face < 6; ++face) {
             m_cubemaps[i]->begin(face);
@@ -918,7 +930,7 @@ void Scene::drawBackground(QPainter *painter, const QRectF &)
 
     QMatrix4x4 view;
     view.rotate(m_trackBalls[2].rotation());
-    view(2, 3) -= 2.0f * exp(m_distExp / 1200.0f);
+    view(2, 3) -= 2.0f * std::exp(m_distExp / 1200.0f);
     renderBoxes(view);
 
     defaultStates();
@@ -940,17 +952,17 @@ void Scene::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
         return;
 
     if (event->buttons() & Qt::LeftButton) {
-        m_trackBalls[0].move(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[0].move(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     } else {
-        m_trackBalls[0].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[0].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
     }
 
     if (event->buttons() & Qt::RightButton) {
-        m_trackBalls[1].move(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[1].move(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     } else {
-        m_trackBalls[1].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[1].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
     }
 
     if (event->buttons() & Qt::MidButton) {
@@ -968,12 +980,12 @@ void Scene::mousePressEvent(QGraphicsSceneMouseEvent *event)
         return;
 
     if (event->buttons() & Qt::LeftButton) {
-        m_trackBalls[0].push(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[0].push(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     }
 
     if (event->buttons() & Qt::RightButton) {
-        m_trackBalls[1].push(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[1].push(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     }
 
@@ -990,12 +1002,12 @@ void Scene::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
         return;
 
     if (event->button() == Qt::LeftButton) {
-        m_trackBalls[0].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[0].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     }
 
     if (event->button() == Qt::RightButton) {
-        m_trackBalls[1].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugate());
+        m_trackBalls[1].release(pixelPosToViewPos(event->scenePos()), m_trackBalls[2].rotation().conjugated());
         event->accept();
     }
 
@@ -1061,13 +1073,16 @@ void Scene::newItem(ItemDialog::ItemType type)
     QSize size = sceneRect().size().toSize();
     switch (type) {
     case ItemDialog::QtBoxItem:
-        addItem(new QtBox(64, rand() % (size.width() - 64) + 32, rand() % (size.height() - 64) + 32));
+        addItem(new QtBox(64, QRandomGenerator::global()->bounded(size.width() - 64) + 32,
+                          QRandomGenerator::global()->bounded(size.height() - 64) + 32));
         break;
     case ItemDialog::CircleItem:
-        addItem(new CircleItem(64, rand() % (size.width() - 64) + 32, rand() % (size.height() - 64) + 32));
+        addItem(new CircleItem(64, QRandomGenerator::global()->bounded(size.width() - 64) + 32,
+                               QRandomGenerator::global()->bounded(size.height() - 64) + 32));
         break;
     case ItemDialog::SquareItem:
-        addItem(new SquareItem(64, rand() % (size.width() - 64) + 32, rand() % (size.height() - 64) + 32));
+        addItem(new SquareItem(64, QRandomGenerator::global()->bounded(size.width() - 64) + 32,
+                               QRandomGenerator::global()->bounded(size.height() - 64) + 32));
         break;
     default:
         break;

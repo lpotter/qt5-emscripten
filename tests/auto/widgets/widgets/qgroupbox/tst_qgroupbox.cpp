@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,6 +33,7 @@
 #include <QStyleOptionGroupBox>
 #include <QVBoxLayout>
 #include <QRadioButton>
+#include <QDialog>
 
 #include "qgroupbox.h"
 
@@ -71,6 +59,7 @@ private slots:
     void setChecked_data();
     void setChecked();
     void enabledPropagation();
+    void enabledChildPropagation();
     void sizeHint();
     void toggled();
     void clicked_data();
@@ -78,7 +67,8 @@ private slots:
     void toggledVsClicked();
     void childrenAreDisabled();
     void propagateFocus();
-    void task_QTBUG_19170_ignoreMouseReleseEvent();
+    void task_QTBUG_19170_ignoreMouseReleaseEvent();
+    void task_QTBUG_15519_propagateMouseEvents();
 
 private:
     bool checked;
@@ -86,6 +76,7 @@ private:
     qint64 clickTimeStamp;
     qint64 toggleTimeStamp;
 
+    static void sendMouseMoveEvent(QWidget *widget, const QPoint &localPos);
 };
 
 tst_QGroupBox::tst_QGroupBox()
@@ -288,6 +279,23 @@ void tst_QGroupBox::enabledPropagation()
     delete testWidget;
 }
 
+void tst_QGroupBox::enabledChildPropagation()
+{
+    QGroupBox testWidget;
+    testWidget.setCheckable(true);
+    testWidget.setChecked(true);
+    // The value of isChecked() should be reflected in the isEnabled() of newly
+    // added child widgets, but not in top level widgets.
+    QWidget *childWidget = new QWidget(&testWidget);
+    QVERIFY(childWidget->isEnabled());
+    QDialog *dialog = new QDialog(&testWidget);
+    QVERIFY(dialog->isEnabled());
+    testWidget.setChecked(false);
+    childWidget = new QWidget(&testWidget);
+    QVERIFY(!childWidget->isEnabled());
+    dialog = new QDialog(&testWidget);
+    QVERIFY(dialog->isEnabled());
+}
 
 void tst_QGroupBox::sizeHint()
 {
@@ -469,7 +477,7 @@ void tst_QGroupBox::propagateFocus()
     QTRY_COMPARE(qApp->focusWidget(), static_cast<QWidget*>(&lineEdit));
 }
 
-void tst_QGroupBox::task_QTBUG_19170_ignoreMouseReleseEvent()
+void tst_QGroupBox::task_QTBUG_19170_ignoreMouseReleaseEvent()
 {
     QGroupBox box;
     box.setCheckable(true);
@@ -489,6 +497,115 @@ void tst_QGroupBox::task_QTBUG_19170_ignoreMouseReleseEvent()
     box.setChecked(false);
     QTest::mouseRelease(&box, Qt::LeftButton, 0, rect.center());
     QCOMPARE(box.isChecked(), false);
+}
+
+class MouseEventTestWidget : public QWidget
+{
+public:
+    bool mousePressed;
+    bool mouseReleased;
+    bool mouseMoved;
+
+    void reset()
+    {
+        mousePressed = false;
+        mouseReleased = false;
+        mouseMoved = false;
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent*)
+    {
+        mousePressed = true;
+    }
+
+    void mouseReleaseEvent(QMouseEvent*)
+    {
+        mouseReleased = true;
+    }
+
+    void mouseMoveEvent(QMouseEvent*)
+    {
+        mouseMoved = true;
+    }
+};
+
+void tst_QGroupBox::task_QTBUG_15519_propagateMouseEvents()
+{
+    MouseEventTestWidget parent;
+    QGroupBox box(&parent);
+    parent.setMouseTracking(true);
+    box.setMouseTracking(true);
+    box.resize(100, 100);
+    box.setTitle("This is a test for QTBUG-15519");
+    box.show();
+
+    QStyleOptionGroupBox option;
+    option.initFrom(&box);
+    option.subControls = QStyle::SubControls(QStyle::SC_All);
+    QRect checkBoxRect = box.style()->subControlRect(QStyle::CC_GroupBox, &option,
+                                                     QStyle::SC_GroupBoxCheckBox, &box);
+
+    // Without a checkbox, all mouse events should propagate
+
+    parent.reset();
+    QTest::mousePress(&box, Qt::LeftButton, 0, checkBoxRect.center());
+    QCOMPARE(parent.mousePressed, true);
+
+    parent.reset();
+    QTest::mousePress(&box, Qt::LeftButton, 0, box.rect().center());
+    QCOMPARE(parent.mousePressed, true);
+
+    parent.reset();
+    QTest::mouseRelease(&box, Qt::LeftButton, 0, checkBoxRect.center());
+    QCOMPARE(parent.mouseReleased, true);
+
+    parent.reset();
+    QTest::mouseRelease(&box, Qt::LeftButton, 0, box.rect().center());
+    QCOMPARE(parent.mouseReleased, true);
+
+    parent.reset();
+    sendMouseMoveEvent(&box, checkBoxRect.center());
+    QCOMPARE(parent.mouseMoved, true);
+
+    parent.reset();
+    sendMouseMoveEvent(&box, box.rect().center());
+    QCOMPARE(parent.mouseMoved, true);
+
+    // With a checkbox, presses and releases to the checkbox should not propagate
+
+    box.setCheckable(true);
+
+    parent.reset();
+    QTest::mousePress(&box, Qt::LeftButton, 0, checkBoxRect.center());
+    QCOMPARE(parent.mousePressed, false);
+
+    parent.reset();
+    QTest::mousePress(&box, Qt::LeftButton, 0, box.rect().center());
+    QCOMPARE(parent.mousePressed, true);
+
+    parent.reset();
+    QTest::mouseRelease(&box, Qt::LeftButton, 0, checkBoxRect.center());
+    QCOMPARE(parent.mouseReleased, false);
+
+    parent.reset();
+    QTest::mouseRelease(&box, Qt::LeftButton, 0, box.rect().center());
+    QCOMPARE(parent.mouseReleased, true);
+
+    parent.reset();
+    sendMouseMoveEvent(&box, checkBoxRect.center());
+    QCOMPARE(parent.mouseMoved, true);
+
+    parent.reset();
+    sendMouseMoveEvent(&box, box.rect().center());
+    QCOMPARE(parent.mouseMoved, true);
+}
+
+void tst_QGroupBox::sendMouseMoveEvent(QWidget *widget, const QPoint &localPos)
+{
+    // Send a MouseMove event without actually moving the pointer
+    QMouseEvent event(QEvent::MouseMove, localPos, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(widget, &event);
 }
 
 QTEST_MAIN(tst_QGroupBox)

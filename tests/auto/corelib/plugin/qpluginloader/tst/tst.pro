@@ -1,8 +1,8 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET  = ../tst_qpluginloader
 QT = core testlib
-SOURCES = ../tst_qpluginloader.cpp
+qtConfig(private_tests): QT += core-private
+SOURCES = ../tst_qpluginloader.cpp ../fakeplugin.cpp
 HEADERS = ../theplugin/plugininterface.h
 
 win32 {
@@ -13,5 +13,4 @@ win32 {
     }
 }
 
-TESTDATA += ../elftest
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+TESTDATA += ../elftest ../machtest

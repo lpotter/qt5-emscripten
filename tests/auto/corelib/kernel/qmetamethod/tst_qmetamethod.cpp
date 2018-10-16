@@ -1,39 +1,27 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2014 Olivier Goffart <ogoffart@woboq.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,6 +46,8 @@ private slots:
     void comparisonOperators();
 
     void fromSignal();
+
+    void gadget();
 };
 
 struct CustomType { };
@@ -205,7 +195,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>())
             << (QList<QByteArray>())
             << (QList<QByteArray>())
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokable")
@@ -241,7 +231,7 @@ void tst_QMetaMethod::method_data()
             << QList<int>()
             << QList<QByteArray>()
             << QList<QByteArray>()
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidSignalInt")
@@ -250,7 +240,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << int(QMetaType::Int))
             << (QList<QByteArray>() << QByteArray("int"))
             << (QList<QByteArray>() << QByteArray("voidSignalIntArg"))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableInt")
@@ -286,7 +276,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << qMetaTypeId<qreal>())
             << (QList<QByteArray>() << QByteArray("qreal"))
             << (QList<QByteArray>() << QByteArray("voidSignalQRealArg"))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableQReal")
@@ -322,7 +312,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << int(QMetaType::QString))
             << (QList<QByteArray>() << QByteArray("QString"))
             << (QList<QByteArray>() << QByteArray("voidSignalQStringArg"))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableQString")
@@ -358,7 +348,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << qMetaTypeId<CustomType>())
             << (QList<QByteArray>() << QByteArray("CustomType"))
             << (QList<QByteArray>() << QByteArray("voidSignalCustomTypeArg"))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableCustomType")
@@ -394,7 +384,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << 0)
             << (QList<QByteArray>() << QByteArray("CustomUnregisteredType"))
             << (QList<QByteArray>() << QByteArray("voidSignalCustomUnregisteredTypeArg"))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableCustomUnregisteredType")
@@ -430,7 +420,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>())
             << (QList<QByteArray>())
             << (QList<QByteArray>())
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("boolInvokable")
@@ -457,7 +447,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>())
             << (QList<QByteArray>())
             << (QList<QByteArray>())
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("qrealInvokable")
@@ -484,7 +474,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>())
             << (QList<QByteArray>())
             << (QList<QByteArray>())
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("qstringInvokable")
@@ -529,7 +519,7 @@ void tst_QMetaMethod::method_data()
                               "bool,int,uint,qlonglong,qulonglong,double,long,short,char,ulong,ushort,uchar,float)")
                 << int(QMetaType::QVariant) << QByteArray("QVariant")
                 << parameterTypes << parameterTypeNames << parameterNames
-                << QMetaMethod::Protected
+                << QMetaMethod::Public
                 << QMetaMethod::Signal;
 
         QTest::newRow("qvariantInvokableBoolIntUIntLonglongULonglongDoubleLongShortCharUlongUshortUcharFloat")
@@ -562,7 +552,7 @@ void tst_QMetaMethod::method_data()
             << (QList<int>() << int(QMetaType::Bool) << int(QMetaType::Int))
             << (QList<QByteArray>() << QByteArray("bool") << QByteArray("int"))
             << (QList<QByteArray>() << QByteArray("") << QByteArray(""))
-            << QMetaMethod::Protected
+            << QMetaMethod::Public
             << QMetaMethod::Signal;
 
     QTest::newRow("voidInvokableNoParameterNames")
@@ -604,8 +594,8 @@ void tst_QMetaMethod::method()
     QFETCH(QMetaMethod::MethodType, methodType);
     QFETCH(QMetaMethod::Access, access);
 
-    QVERIFY(parameterTypes.size() == parameterTypeNames.size());
-    QVERIFY(parameterTypes.size() == parameterNames.size());
+    QCOMPARE(parameterTypes.size(), parameterTypeNames.size());
+    QCOMPARE(parameterTypes.size(), parameterNames.size());
 
     const QMetaObject *mo = &MethodTestObject::staticMetaObject;
     int index = (methodType == QMetaMethod::Constructor)
@@ -734,6 +724,52 @@ void tst_QMetaMethod::fromSignal()
 
 #undef FROMSIGNAL_HELPER
 }
+
+class MyGadget {
+    Q_GADGET
+public:
+    QString m_value;
+    Q_INVOKABLE void setValue(const QString &value) { m_value = value; }
+    Q_INVOKABLE QString getValue() { return m_value; }
+};
+
+void tst_QMetaMethod::gadget()
+{
+    int idx;
+
+    idx = MyGadget::staticMetaObject.indexOfMethod("setValue(QString)");
+    QVERIFY(idx >= 0);
+    QMetaMethod setValueMethod = MyGadget::staticMetaObject.method(idx);
+    QVERIFY(setValueMethod.isValid());
+
+    idx = MyGadget::staticMetaObject.indexOfMethod("getValue()");
+    QVERIFY(idx >= 0);
+    QMetaMethod getValueMethod = MyGadget::staticMetaObject.method(idx);
+    QVERIFY(getValueMethod.isValid());
+
+    {
+        MyGadget gadget;
+        QString string;
+
+        QVERIFY(getValueMethod.invokeOnGadget(&gadget, Q_RETURN_ARG(QString, string)));
+        QCOMPARE(string, gadget.m_value);
+
+        QVERIFY(setValueMethod.invokeOnGadget(&gadget, Q_ARG(QString, QLatin1String("hello"))));
+        QCOMPARE(gadget.m_value, QLatin1String("hello"));
+
+        QVERIFY(getValueMethod.invokeOnGadget(&gadget, Q_RETURN_ARG(QString, string)));
+        QCOMPARE(string, gadget.m_value);
+    }
+
+    {
+        // Call with null should not crash
+        MyGadget *gadget = nullptr;
+        QString string;
+        QVERIFY(!setValueMethod.invokeOnGadget(gadget, Q_ARG(QString, QLatin1String("hi"))));
+        QVERIFY(!getValueMethod.invokeOnGadget(gadget, Q_RETURN_ARG(QString, string)));
+    }
+}
+
 
 QTEST_MAIN(tst_QMetaMethod)
 #include "tst_qmetamethod.moc"

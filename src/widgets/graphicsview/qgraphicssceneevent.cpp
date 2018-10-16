@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -151,7 +149,7 @@
     platforms, this means the right mouse button was clicked.
 
     \value Keyboard The keyboard caused this event to be sent. On
-    Windows and Mac OS X, this means the menu button was pressed.
+    Windows and \macos, this means the menu button was pressed.
 
     \value Other The event was sent by some other means (i.e. not
     by the mouse or keyboard).
@@ -261,10 +259,9 @@
 
 #include "qgraphicssceneevent.h"
 
-#ifndef QT_NO_GRAPHICSVIEW
-
-#ifndef QT_NO_DEBUG
+#ifndef QT_NO_DEBUG_STREAM
 #include <QtCore/qdebug.h>
+#include <private/qdebug_p.h>
 #endif
 #include <QtCore/qmap.h>
 #include <QtCore/qpoint.h>
@@ -348,7 +345,7 @@ class QGraphicsSceneMouseEventPrivate : public QGraphicsSceneEventPrivate
 public:
     inline QGraphicsSceneMouseEventPrivate()
         : button(Qt::NoButton),
-          buttons(0), modifiers(0)
+          buttons(0), modifiers(0), source(Qt::MouseEventNotSynthesized), flags(0)
     { }
 
     QPointF pos;
@@ -363,6 +360,8 @@ public:
     Qt::MouseButton button;
     Qt::MouseButtons buttons;
     Qt::KeyboardModifiers modifiers;
+    Qt::MouseEventSource source;
+    Qt::MouseEventFlags flags;
 };
 
 /*!
@@ -626,6 +625,60 @@ Qt::KeyboardModifiers QGraphicsSceneMouseEvent::modifiers() const
 }
 
 /*!
+  \since 5.4
+
+  Returns information about the mouse event source.
+
+  The mouse event source can be used to distinguish between genuine
+  and artificial mouse events. The latter are events that are
+  synthesized from touch events by the operating system or Qt itself.
+
+  \sa Qt::MouseEventSource
+  \sa QMouseEvent::source()
+ */
+Qt::MouseEventSource QGraphicsSceneMouseEvent::source() const
+{
+    Q_D(const QGraphicsSceneMouseEvent);
+    return d->source;
+}
+
+/*!
+    \since 5.4
+    \internal
+ */
+void QGraphicsSceneMouseEvent::setSource(Qt::MouseEventSource source)
+{
+    Q_D(QGraphicsSceneMouseEvent);
+    d->source = source;
+}
+
+/*!
+     \since 5.4
+
+     Returns the mouse event flags.
+
+     The mouse event flags provide additional information about a mouse event.
+
+     \sa Qt::MouseEventFlag
+     \sa QMouseEvent::flags()
+ */
+Qt::MouseEventFlags QGraphicsSceneMouseEvent::flags() const
+{
+    Q_D(const QGraphicsSceneMouseEvent);
+    return d->flags;
+}
+
+/*!
+    \since 5.4
+    \internal
+ */
+void QGraphicsSceneMouseEvent::setFlags(Qt::MouseEventFlags flags)
+{
+    Q_D(QGraphicsSceneMouseEvent);
+    d->flags = flags;
+}
+
+/*!
     \internal
 */
 void QGraphicsSceneMouseEvent::setModifiers(Qt::KeyboardModifiers modifiers)
@@ -874,7 +927,7 @@ void QGraphicsSceneContextMenuEvent::setPos(const QPointF &pos)
 
 /*!
     Returns the position of the mouse cursor in scene coordinates at the moment the
-    the context menu was requested.
+    context menu was requested.
 
     \sa pos(), screenPos()
 */
@@ -899,7 +952,7 @@ void QGraphicsSceneContextMenuEvent::setScenePos(const QPointF &pos)
 
 /*!
     Returns the position of the mouse cursor in screen coordinates at the moment the
-    the context menu was requested.
+    context menu was requested.
 
     \sa pos(), scenePos()
 */
@@ -1678,6 +1731,99 @@ void QGraphicsSceneMoveEvent::setNewPos(const QPointF &pos)
     d->newPos = pos;
 }
 
-QT_END_NAMESPACE
+#ifndef QT_NO_DEBUG_STREAM
+template <class Event>
+static inline void formatPositions(QDebug &debug, const Event *event)
+{
+    debug << ", pos=";
+    QtDebugUtils::formatQPoint(debug, event->pos());
+    debug << ", scenePos=";
+    QtDebugUtils::formatQPoint(debug, event->scenePos());
+    debug << ", screenPos=";
+    QtDebugUtils::formatQPoint(debug, event->screenPos());
+}
 
-#endif // QT_NO_GRAPHICSVIEW
+QDebug operator<<(QDebug debug, const QGraphicsSceneEvent *event)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    if (!event) {
+        debug << "QGraphicsSceneEvent(0)";
+        return debug;
+    }
+
+    const QEvent::Type type = event->type();
+    switch (type) {
+    case QEvent::GraphicsSceneMouseMove:
+    case QEvent::GraphicsSceneMousePress:
+    case QEvent::GraphicsSceneMouseRelease:
+    case QEvent::GraphicsSceneMouseDoubleClick: {
+        const QGraphicsSceneMouseEvent *me = static_cast<const QGraphicsSceneMouseEvent *>(event);
+        const Qt::MouseButton button = me->button();
+        const Qt::MouseButtons buttons = me->buttons();
+        debug << "QGraphicsSceneMouseEvent(";
+        QtDebugUtils::formatQEnum(debug, type);
+        if (type != QEvent::GraphicsSceneMouseMove) {
+            debug << ", ";
+            QtDebugUtils::formatQEnum(debug, button);
+        }
+        if (buttons && button != buttons) {
+            debug << ", buttons=";
+            QtDebugUtils::formatQFlags(debug, buttons);
+        }
+        QtDebugUtils::formatNonNullQFlags(debug, ", ", me->modifiers());
+        formatPositions(debug, me);
+        QtDebugUtils::formatNonNullQEnum(debug, ", ", me->source());
+        QtDebugUtils::formatNonNullQFlags(debug, ", flags=", me->flags());
+        debug << ')';
+    }
+        break;
+    case QEvent::GraphicsSceneContextMenu: {
+        const QGraphicsSceneContextMenuEvent *ce = static_cast<const QGraphicsSceneContextMenuEvent *>(event);
+        debug << "QGraphicsSceneContextMenuEvent(reason=" << ce->reason();
+        QtDebugUtils::formatNonNullQFlags(debug, ", ", ce->modifiers());
+        formatPositions(debug, ce);
+        debug << ')';
+    }
+        break;
+    case QEvent::GraphicsSceneHoverEnter:
+    case QEvent::GraphicsSceneHoverMove:
+    case QEvent::GraphicsSceneHoverLeave:
+        debug << "QGraphicsSceneHoverEvent(";
+        formatPositions(debug, static_cast<const QGraphicsSceneHoverEvent *>(event));
+        debug << ')';
+        break;
+    case QEvent::GraphicsSceneHelp:
+        break;
+    case QEvent::GraphicsSceneDragEnter:
+    case QEvent::GraphicsSceneDragMove:
+    case QEvent::GraphicsSceneDragLeave:
+    case QEvent::GraphicsSceneDrop: {
+        const QGraphicsSceneDragDropEvent *de = static_cast<const QGraphicsSceneDragDropEvent *>(event);
+        debug << "QGraphicsSceneDragDropEvent(proposedAction=";
+        QtDebugUtils::formatQEnum(debug, de->proposedAction());
+        debug << ", possibleActions=";
+        QtDebugUtils::formatQFlags(debug, de->possibleActions());
+        debug << ", source=" << de->source();
+        QtDebugUtils::formatNonNullQFlags(debug, ", buttons=", de->buttons());
+        QtDebugUtils::formatNonNullQFlags(debug, ", ", de->modifiers());
+        formatPositions(debug, de);
+    }
+        break;
+    case QEvent::GraphicsSceneWheel: {
+        const QGraphicsSceneWheelEvent *we = static_cast<const QGraphicsSceneWheelEvent *>(event);
+        debug << "QGraphicsSceneWheelEvent(";
+        QtDebugUtils::formatNonNullQFlags(debug, ", buttons=", we->buttons());
+        QtDebugUtils::formatNonNullQFlags(debug, ", ", we->modifiers());
+        formatPositions(debug, we);
+        debug << ')';
+    }
+        break;
+    default:
+        break;
+    }
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
+
+QT_END_NAMESPACE

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -56,7 +66,7 @@ PaintedWindow::PaintedWindow()
     format.setSamples(4);
 
     setSurfaceType(QWindow::OpenGLSurface);
-    setFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    setFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
     setFormat(format);
 
     create();
@@ -70,12 +80,10 @@ PaintedWindow::PaintedWindow()
     m_animation->setEndValue(qreal(1));
     m_animation->setDuration(500);
 
-    requestOrientation(Qt::PortraitOrientation);
-
     QRect screenGeometry = screen()->availableGeometry();
 
     QPoint center = screenGeometry.center();
-    QRect windowRect = screen()->isLandscape(orientation()) ? QRect(0, 0, 640, 480) : QRect(0, 0, 480, 640);
+    QRect windowRect = screen()->isLandscape(screen()->orientation()) ? QRect(0, 0, 640, 480) : QRect(0, 0, 480, 640);
     setGeometry(QRect(center - windowRect.center(), windowRect.size()));
 
     m_rotation = 0;
@@ -85,19 +93,15 @@ PaintedWindow::PaintedWindow()
     m_targetOrientation = contentOrientation();
     m_nextTargetOrientation = Qt::PrimaryOrientation;
 
-    connect(screen(), SIGNAL(orientationChanged(Qt::ScreenOrientation)), this, SLOT(orientationChanged(Qt::ScreenOrientation)));
-    connect(m_animation, SIGNAL(finished()), this, SLOT(rotationDone()));
-    connect(this, SIGNAL(rotationChanged(qreal)), this, SLOT(paint()));
-}
-
-void PaintedWindow::resizeEvent(QResizeEvent *)
-{
-    paint();
+    connect(screen(), &QScreen::orientationChanged, this, &PaintedWindow::orientationChanged);
+    connect(m_animation, &QAbstractAnimation::finished, this, &PaintedWindow::rotationDone);
+    connect(this, &PaintedWindow::rotationChanged, this, QOverload<>::of(&PaintedWindow::paint));
 }
 
 void PaintedWindow::exposeEvent(QExposeEvent *)
 {
-    paint();
+    if (isExposed())
+        paint();
 }
 
 void PaintedWindow::mousePressEvent(QMouseEvent *)
@@ -142,13 +146,13 @@ void PaintedWindow::orientationChanged(Qt::ScreenOrientation newOrientation)
 
     QPainter p;
     p.begin(&m_prevImage);
-    p.setTransform(screen()->transformBetween(contentOrientation(), orientation(), rect));
-    paint(&p, screen()->mapBetween(contentOrientation(), orientation(), rect));
+    p.setTransform(screen()->transformBetween(contentOrientation(), screen()->orientation(), rect));
+    paint(&p, screen()->mapBetween(contentOrientation(), screen()->orientation(), rect));
     p.end();
 
     p.begin(&m_nextImage);
-    p.setTransform(screen()->transformBetween(newOrientation, orientation(), rect));
-    paint(&p, screen()->mapBetween(newOrientation, orientation(), rect));
+    p.setTransform(screen()->transformBetween(newOrientation, screen()->orientation(), rect));
+    paint(&p, screen()->mapBetween(newOrientation, screen()->orientation(), rect));
     p.end();
 
     m_deltaRotation = screen()->angleBetween(newOrientation, contentOrientation());
@@ -181,9 +185,9 @@ void PaintedWindow::paint()
 {
     m_context->makeCurrent(this);
 
-    QRect rect(0, 0, width(), height());
+    QRect rect(0, 0, width() * devicePixelRatio(), height() * devicePixelRatio());
 
-    QOpenGLPaintDevice device(size());
+    QOpenGLPaintDevice device(size() * devicePixelRatio());
     QPainter painter(&device);
 
     QPainterPath path;
@@ -207,9 +211,9 @@ void PaintedWindow::paint()
         painter.setOpacity(m_rotation);
         painter.drawImage(0, 0, m_nextImage);
     } else {
-        QRect mapped = screen()->mapBetween(contentOrientation(), orientation(), rect);
+        QRect mapped = screen()->mapBetween(contentOrientation(), screen()->orientation(), rect);
 
-        painter.setTransform(screen()->transformBetween(contentOrientation(), orientation(), rect));
+        painter.setTransform(screen()->transformBetween(contentOrientation(), screen()->orientation(), rect));
         paint(&painter, mapped);
         painter.end();
     }

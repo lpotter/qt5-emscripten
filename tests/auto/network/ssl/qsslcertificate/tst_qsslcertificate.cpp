@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -70,17 +57,16 @@ class tst_QSslCertificate : public QObject
     void compareCertificates(const QSslCertificate & cert1, const QSslCertificate & cert2);
 #endif
 
-    QString oldCurrentDir;
-
 public slots:
     void initTestCase();
-    void cleanupTestCase();
 
 #ifndef QT_NO_SSL
 private slots:
+    void hash();
     void emptyConstructor();
     void constructor_data();
     void constructor();
+    void constructor_device();
     void constructingGarbage();
     void copyAndAssign_data();
     void copyAndAssign();
@@ -104,12 +90,17 @@ private slots:
     void largeSerialNumber();
     void largeExpirationDate();
     void blacklistedCertificates();
+    void selfsignedCertificates();
     void toText();
     void multipleCommonNames();
     void subjectAndIssuerAttributes();
     void verify();
     void extensions();
+    void extensionsCritical();
     void threadSafeConstMethods();
+    void version_data();
+    void version();
+    void pkcs12();
 
     // helper for verbose test failure messages
     QString toString(const QList<QSslError>&);
@@ -126,14 +117,10 @@ void tst_QSslCertificate::initTestCase()
     testDataDir = QFileInfo(QFINDTESTDATA("certificates")).absolutePath();
     if (testDataDir.isEmpty())
         testDataDir = QCoreApplication::applicationDirPath();
+    if (!testDataDir.endsWith(QLatin1String("/")))
+        testDataDir += QLatin1String("/");
 
-    if (QDir::current().absolutePath() != testDataDir) {
-        oldCurrentDir = QDir::current().absolutePath();
-        QVERIFY2(QDir::setCurrent(testDataDir),
-                 qPrintable(QString("Cannot change directory to %1").arg(testDataDir)));
-    }
-
-    QDir dir(testDataDir + "/certificates");
+    QDir dir(testDataDir + "certificates");
     QFileInfoList fileInfoList = dir.entryInfoList(QDir::Files | QDir::Readable);
     QRegExp rxCert(QLatin1String("^.+\\.(pem|der)$"));
     QRegExp rxSan(QLatin1String("^(.+\\.(?:pem|der))\\.san$"));
@@ -157,14 +144,15 @@ void tst_QSslCertificate::initTestCase()
     }
 }
 
-void tst_QSslCertificate::cleanupTestCase()
-{
-    if (!oldCurrentDir.isEmpty()) {
-        QDir::setCurrent(oldCurrentDir);
-    }
-}
-
 #ifndef QT_NO_SSL
+
+void tst_QSslCertificate::hash()
+{
+    // mostly a compile-only test, to check that qHash(QSslCertificate) is found.
+    QSet<QSslCertificate> certs;
+    certs << QSslCertificate();
+    QCOMPARE(certs.size(), 1);
+}
 
 static QByteArray readFile(const QString &absFilePath)
 {
@@ -223,6 +211,47 @@ void tst_QSslCertificate::constructor()
     QByteArray encoded = readFile(absFilePath);
     QSslCertificate certificate(encoded, format);
     QVERIFY(!certificate.isNull());
+}
+
+void tst_QSslCertificate::constructor_device()
+{
+    if (!QSslSocket::supportsSsl())
+        return;
+
+    QFile f(testDataDir + "verify-certs/test-ocsp-good-cert.pem");
+    bool ok = f.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslCertificate cert(&f);
+    QVERIFY(!cert.isNull());
+    f.close();
+
+    // Check opening a DER as a PEM fails
+    QFile f2(testDataDir + "certificates/cert.der");
+    ok = f2.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslCertificate cert2(&f2);
+    QVERIFY(cert2.isNull());
+    f2.close();
+
+    // Check opening a DER as a DER works
+    QFile f3(testDataDir + "certificates/cert.der");
+    ok = f3.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslCertificate cert3(&f3, QSsl::Der);
+    QVERIFY(!cert3.isNull());
+    f3.close();
+
+    // Check opening a PEM as a DER fails
+    QFile f4(testDataDir + "verify-certs/test-ocsp-good-cert.pem");
+    ok = f4.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslCertificate cert4(&f4, QSsl::Der);
+    QVERIFY(cert4.isNull());
+    f4.close();
 }
 
 void tst_QSslCertificate::constructingGarbage()
@@ -375,15 +404,15 @@ void tst_QSslCertificate::subjectAlternativeNames()
     QMapIterator<QSsl::AlternativeNameEntryType, QString> it(altSubjectNames);
     while (it.hasNext()) {
         it.next();
-        QString type;
+        QByteArray type;
         if (it.key() == QSsl::EmailEntry)
-            type = QLatin1String("email");
+            type = "email";
         else if (it.key() == QSsl::DnsEntry)
-            type = QLatin1String("DNS");
+            type = "DNS";
         else
             QFAIL("unsupported alternative name type");
-        QString entry = QString("%1:%2").arg(type).arg(it.value());
-        QVERIFY(fileContents.contains(entry.toLatin1()));
+        const QByteArray entry = type + ':' + it.value().toLatin1();
+        QVERIFY(fileContents.contains(entry));
     }
 
     // verify that each entry in fileContents is present in subjAltNames
@@ -402,7 +431,7 @@ void tst_QSslCertificate::subjectAlternativeNames()
 
 void tst_QSslCertificate::utf8SubjectNames()
 {
-    QSslCertificate cert = QSslCertificate::fromPath("certificates/cert-ss-san-utf8.pem", QSsl::Pem,
+    QSslCertificate cert = QSslCertificate::fromPath(testDataDir + "certificates/cert-ss-san-utf8.pem", QSsl::Pem,
                                                      QRegExp::FixedString).first();
     QVERIFY(!cert.isNull());
 
@@ -446,12 +475,20 @@ void tst_QSslCertificate::publicKey()
     QFETCH(QSsl::EncodingFormat, format);
     QFETCH(QString, pubkeyFilePath);
 
+    QSsl::KeyAlgorithm algorithm;
+    if (QFileInfo(pubkeyFilePath).fileName().startsWith("dsa-"))
+        algorithm = QSsl::Dsa;
+    else if (QFileInfo(pubkeyFilePath).fileName().startsWith("ec-"))
+        algorithm = QSsl::Ec;
+    else
+        algorithm = QSsl::Rsa;
+
     QByteArray encodedCert = readFile(certFilePath);
     QSslCertificate certificate(encodedCert, format);
     QVERIFY(!certificate.isNull());
 
     QByteArray encodedPubkey = readFile(pubkeyFilePath);
-    QSslKey pubkey(encodedPubkey, QSsl::Rsa, format, QSsl::PublicKey); // ### support DSA as well!
+    QSslKey pubkey(encodedPubkey, algorithm, format, QSsl::PublicKey);
     QVERIFY(!pubkey.isNull());
 
     QCOMPARE(certificate.publicKey(), pubkey);
@@ -517,60 +554,60 @@ void tst_QSslCertificate::fromPath_data()
     QTest::newRow("empty regexp der") << QString() << int(QRegExp::RegExp) << false << 0;
     QTest::newRow("empty wildcard pem") << QString() << int(QRegExp::Wildcard) << true << 0;
     QTest::newRow("empty wildcard der") << QString() << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"certificates\" fixed pem") << QString("certificates") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"certificates\" fixed der") << QString("certificates") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"certificates\" regexp pem") << QString("certificates") << int(QRegExp::RegExp) << true << 0;
-    QTest::newRow("\"certificates\" regexp der") << QString("certificates") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"certificates\" wildcard pem") << QString("certificates") << int(QRegExp::Wildcard) << true << 0;
-    QTest::newRow("\"certificates\" wildcard der") << QString("certificates") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"certificates/cert.pem\" fixed pem") << QString("certificates/cert.pem") << int(QRegExp::FixedString) << true << 1;
-    QTest::newRow("\"certificates/cert.pem\" fixed der") << QString("certificates/cert.pem") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"certificates/cert.pem\" regexp pem") << QString("certificates/cert.pem") << int(QRegExp::RegExp) << true << 1;
-    QTest::newRow("\"certificates/cert.pem\" regexp der") << QString("certificates/cert.pem") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"certificates/cert.pem\" wildcard pem") << QString("certificates/cert.pem") << int(QRegExp::Wildcard) << true << 1;
-    QTest::newRow("\"certificates/cert.pem\" wildcard der") << QString("certificates/cert.pem") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"certificates/*\" fixed pem") << QString("certificates/*") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"certificates/*\" fixed der") << QString("certificates/*") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"certificates/*\" regexp pem") << QString("certificates/*") << int(QRegExp::RegExp) << true << 0;
-    QTest::newRow("\"certificates/*\" regexp der") << QString("certificates/*") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"certificates/*\" wildcard pem") << QString("certificates/*") << int(QRegExp::Wildcard) << true << 5;
-    QTest::newRow("\"certificates/ca*\" wildcard pem") << QString("certificates/ca*") << int(QRegExp::Wildcard) << true << 1;
-    QTest::newRow("\"certificates/cert*\" wildcard pem") << QString("certificates/cert*") << int(QRegExp::Wildcard) << true << 4;
-    QTest::newRow("\"certificates/cert-[sure]*\" wildcard pem") << QString("certificates/cert-[sure]*") << int(QRegExp::Wildcard) << true << 3;
-    QTest::newRow("\"certificates/cert-[not]*\" wildcard pem") << QString("certificates/cert-[not]*") << int(QRegExp::Wildcard) << true << 0;
-    QTest::newRow("\"certificates/*\" wildcard der") << QString("certificates/*") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"c*/c*.pem\" fixed pem") << QString("c*/c*.pem") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"c*/c*.pem\" fixed der") << QString("c*/c*.pem") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"c*/c*.pem\" regexp pem") << QString("c*/c*.pem") << int(QRegExp::RegExp) << true << 0;
-    QTest::newRow("\"c*/c*.pem\" regexp der") << QString("c*/c*.pem") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"c*/c*.pem\" wildcard pem") << QString("c*/c*.pem") << int(QRegExp::Wildcard) << true << 5;
-    QTest::newRow("\"c*/c*.pem\" wildcard der") << QString("c*/c*.pem") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"d*/c*.pem\" fixed pem") << QString("d*/c*.pem") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"d*/c*.pem\" fixed der") << QString("d*/c*.pem") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"d*/c*.pem\" regexp pem") << QString("d*/c*.pem") << int(QRegExp::RegExp) << true << 0;
-    QTest::newRow("\"d*/c*.pem\" regexp der") << QString("d*/c*.pem") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"d*/c*.pem\" wildcard pem") << QString("d*/c*.pem") << int(QRegExp::Wildcard) << true << 0;
-    QTest::newRow("\"d*/c*.pem\" wildcard der") << QString("d*/c*.pem") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"c.*/c.*.pem\" fixed pem") << QString("c.*/c.*.pem") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"c.*/c.*.pem\" fixed der") << QString("c.*/c.*.pem") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"c.*/c.*.pem\" regexp pem") << QString("c.*/c.*.pem") << int(QRegExp::RegExp) << true << 5;
-    QTest::newRow("\"c.*/c.*.pem\" regexp der") << QString("c.*/c.*.pem") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"c.*/c.*.pem\" wildcard pem") << QString("c.*/c.*.pem") << int(QRegExp::Wildcard) << true << 0;
-    QTest::newRow("\"c.*/c.*.pem\" wildcard der") << QString("c.*/c.*.pem") << int(QRegExp::Wildcard) << false << 0;
-    QTest::newRow("\"d.*/c.*.pem\" fixed pem") << QString("d.*/c.*.pem") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("\"d.*/c.*.pem\" fixed der") << QString("d.*/c.*.pem") << int(QRegExp::FixedString) << false << 0;
-    QTest::newRow("\"d.*/c.*.pem\" regexp pem") << QString("d.*/c.*.pem") << int(QRegExp::RegExp) << true << 0;
-    QTest::newRow("\"d.*/c.*.pem\" regexp der") << QString("d.*/c.*.pem") << int(QRegExp::RegExp) << false << 0;
-    QTest::newRow("\"d.*/c.*.pem\" wildcard pem") << QString("d.*/c.*.pem") << int(QRegExp::Wildcard) << true << 0;
-    QTest::newRow("\"d.*/c.*.pem\" wildcard der") << QString("d.*/c.*.pem") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"certificates\" fixed pem") << (testDataDir + "certificates") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"certificates\" fixed der") << (testDataDir + "certificates") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"certificates\" regexp pem") << (testDataDir + "certificates") << int(QRegExp::RegExp) << true << 0;
+    QTest::newRow("\"certificates\" regexp der") << (testDataDir + "certificates") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"certificates\" wildcard pem") << (testDataDir + "certificates") << int(QRegExp::Wildcard) << true << 0;
+    QTest::newRow("\"certificates\" wildcard der") << (testDataDir + "certificates") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"certificates/cert.pem\" fixed pem") << (testDataDir + "certificates/cert.pem") << int(QRegExp::FixedString) << true << 1;
+    QTest::newRow("\"certificates/cert.pem\" fixed der") << (testDataDir + "certificates/cert.pem") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"certificates/cert.pem\" regexp pem") << (testDataDir + "certificates/cert.pem") << int(QRegExp::RegExp) << true << 1;
+    QTest::newRow("\"certificates/cert.pem\" regexp der") << (testDataDir + "certificates/cert.pem") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"certificates/cert.pem\" wildcard pem") << (testDataDir + "certificates/cert.pem") << int(QRegExp::Wildcard) << true << 1;
+    QTest::newRow("\"certificates/cert.pem\" wildcard der") << (testDataDir + "certificates/cert.pem") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"certificates/*\" fixed pem") << (testDataDir + "certificates/*") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"certificates/*\" fixed der") << (testDataDir + "certificates/*") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"certificates/*\" regexp pem") << (testDataDir + "certificates/*") << int(QRegExp::RegExp) << true << 0;
+    QTest::newRow("\"certificates/*\" regexp der") << (testDataDir + "certificates/*") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"certificates/*\" wildcard pem") << (testDataDir + "certificates/*") << int(QRegExp::Wildcard) << true << 7;
+    QTest::newRow("\"certificates/ca*\" wildcard pem") << (testDataDir + "certificates/ca*") << int(QRegExp::Wildcard) << true << 1;
+    QTest::newRow("\"certificates/cert*\" wildcard pem") << (testDataDir + "certificates/cert*") << int(QRegExp::Wildcard) << true << 4;
+    QTest::newRow("\"certificates/cert-[sure]*\" wildcard pem") << (testDataDir + "certificates/cert-[sure]*") << int(QRegExp::Wildcard) << true << 3;
+    QTest::newRow("\"certificates/cert-[not]*\" wildcard pem") << (testDataDir + "certificates/cert-[not]*") << int(QRegExp::Wildcard) << true << 0;
+    QTest::newRow("\"certificates/*\" wildcard der") << (testDataDir + "certificates/*") << int(QRegExp::Wildcard) << false << 2;
+    QTest::newRow("\"c*/c*.pem\" fixed pem") << (testDataDir + "c*/c*.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"c*/c*.pem\" fixed der") << (testDataDir + "c*/c*.pem") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"c*/c*.pem\" regexp pem") << (testDataDir + "c*/c*.pem") << int(QRegExp::RegExp) << true << 0;
+    QTest::newRow("\"c*/c*.pem\" regexp der") << (testDataDir + "c*/c*.pem") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"c*/c*.pem\" wildcard pem") << (testDataDir + "c*/c*.pem") << int(QRegExp::Wildcard) << true << 5;
+    QTest::newRow("\"c*/c*.pem\" wildcard der") << (testDataDir + "c*/c*.pem") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"d*/c*.pem\" fixed pem") << (testDataDir + "d*/c*.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"d*/c*.pem\" fixed der") << (testDataDir + "d*/c*.pem") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"d*/c*.pem\" regexp pem") << (testDataDir + "d*/c*.pem") << int(QRegExp::RegExp) << true << 0;
+    QTest::newRow("\"d*/c*.pem\" regexp der") << (testDataDir + "d*/c*.pem") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"d*/c*.pem\" wildcard pem") << (testDataDir + "d*/c*.pem") << int(QRegExp::Wildcard) << true << 0;
+    QTest::newRow("\"d*/c*.pem\" wildcard der") << (testDataDir + "d*/c*.pem") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"c.*/c.*.pem\" fixed pem") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"c.*/c.*.pem\" fixed der") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"c.*/c.*.pem\" regexp pem") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::RegExp) << true << 5;
+    QTest::newRow("\"c.*/c.*.pem\" regexp der") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"c.*/c.*.pem\" wildcard pem") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::Wildcard) << true << 0;
+    QTest::newRow("\"c.*/c.*.pem\" wildcard der") << (testDataDir + "c.*/c.*.pem") << int(QRegExp::Wildcard) << false << 0;
+    QTest::newRow("\"d.*/c.*.pem\" fixed pem") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("\"d.*/c.*.pem\" fixed der") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::FixedString) << false << 0;
+    QTest::newRow("\"d.*/c.*.pem\" regexp pem") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::RegExp) << true << 0;
+    QTest::newRow("\"d.*/c.*.pem\" regexp der") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::RegExp) << false << 0;
+    QTest::newRow("\"d.*/c.*.pem\" wildcard pem") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::Wildcard) << true << 0;
+    QTest::newRow("\"d.*/c.*.pem\" wildcard der") << (testDataDir + "d.*/c.*.pem") << int(QRegExp::Wildcard) << false << 0;
 #ifdef Q_OS_LINUX
-    QTest::newRow("absolute path wildcard pem") << (testDataDir + "/certificates/*.pem") << int(QRegExp::Wildcard) << true << 5;
+    QTest::newRow("absolute path wildcard pem") << (testDataDir + "certificates/*.pem") << int(QRegExp::Wildcard) << true << 7;
 #endif
 
-    QTest::newRow("trailing-whitespace") << QString("more-certificates/trailing-whitespace.pem") << int(QRegExp::FixedString) << true << 1;
-    QTest::newRow("no-ending-newline") << QString("more-certificates/no-ending-newline.pem") << int(QRegExp::FixedString) << true << 1;
-    QTest::newRow("malformed-just-begin") << QString("more-certificates/malformed-just-begin.pem") << int(QRegExp::FixedString) << true << 0;
-    QTest::newRow("malformed-just-begin-no-newline") << QString("more-certificates/malformed-just-begin-no-newline.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("trailing-whitespace") << (testDataDir + "more-certificates/trailing-whitespace.pem") << int(QRegExp::FixedString) << true << 1;
+    QTest::newRow("no-ending-newline") << (testDataDir + "more-certificates/no-ending-newline.pem") << int(QRegExp::FixedString) << true << 1;
+    QTest::newRow("malformed-just-begin") << (testDataDir + "more-certificates/malformed-just-begin.pem") << int(QRegExp::FixedString) << true << 0;
+    QTest::newRow("malformed-just-begin-no-newline") << (testDataDir + "more-certificates/malformed-just-begin-no-newline.pem") << int(QRegExp::FixedString) << true << 0;
 }
 
 void tst_QSslCertificate::fromPath()
@@ -671,7 +708,7 @@ void tst_QSslCertificate::certInfo()
         "dc:c2:eb:b7:bb:50:18:05:ba:ad:af:08:49:fe:98:63"
         "55:ba:e7:fb:95:5d:91";
 
-    QSslCertificate cert =  QSslCertificate::fromPath("certificates/cert.pem", QSsl::Pem,
+    QSslCertificate cert =  QSslCertificate::fromPath(testDataDir + "certificates/cert.pem", QSsl::Pem,
                                                       QRegExp::FixedString).first();
     QVERIFY(!cert.isNull());
 
@@ -719,7 +756,7 @@ void tst_QSslCertificate::certInfo()
     QVERIFY(cert.expiryDate() < QDateTime::currentDateTime());   // cert has expired
 
     QSslCertificate copy = cert;
-    QVERIFY(cert == copy);
+    QCOMPARE(cert, copy);
     QVERIFY(!(cert != copy));
 
     QCOMPARE(cert, QSslCertificate(pem, QSsl::Pem));
@@ -728,7 +765,7 @@ void tst_QSslCertificate::certInfo()
 
 void tst_QSslCertificate::certInfoQByteArray()
 {
-    QSslCertificate cert =  QSslCertificate::fromPath("certificates/cert.pem", QSsl::Pem,
+    QSslCertificate cert =  QSslCertificate::fromPath(testDataDir + "certificates/cert.pem", QSsl::Pem,
                                                       QRegExp::FixedString).first();
     QVERIFY(!cert.isNull());
 
@@ -777,15 +814,18 @@ void tst_QSslCertificate::task256066toPem()
 
 void tst_QSslCertificate::nulInCN()
 {
+#if defined(QT_SECURETRANSPORT) || defined(Q_OS_WINRT)
+    QSKIP("Generic QSslCertificatePrivate fails this test");
+#endif
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/badguy-nul-cn.crt");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/badguy-nul-cn.crt");
     QCOMPARE(certList.size(), 1);
 
     const QSslCertificate &cert = certList.at(0);
     QVERIFY(!cert.isNull());
 
     QString cn = cert.subjectInfo(QSslCertificate::CommonName)[0];
-    QVERIFY(cn != "www.bank.com");
+    QVERIFY(cn != QLatin1String("www.bank.com"));
 
     static const char realCN[] = "www.bank.com\0.badguy.com";
     QCOMPARE(cn, QString::fromLatin1(realCN, sizeof realCN - 1));
@@ -793,8 +833,11 @@ void tst_QSslCertificate::nulInCN()
 
 void tst_QSslCertificate::nulInSan()
 {
+#if defined(QT_SECURETRANSPORT) || defined(Q_OS_WINRT)
+    QSKIP("Generic QSslCertificatePrivate fails this test");
+#endif
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/badguy-nul-san.crt");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/badguy-nul-san.crt");
     QCOMPARE(certList.size(), 1);
 
     const QSslCertificate &cert = certList.at(0);
@@ -814,7 +857,7 @@ void tst_QSslCertificate::nulInSan()
 void tst_QSslCertificate::largeSerialNumber()
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/cert-large-serial-number.pem");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/cert-large-serial-number.pem");
 
     QCOMPARE(certList.size(), 1);
 
@@ -826,7 +869,7 @@ void tst_QSslCertificate::largeSerialNumber()
 void tst_QSslCertificate::largeExpirationDate() // QTBUG-12489
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/cert-large-expiration-date.pem");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/cert-large-expiration-date.pem");
 
     QCOMPARE(certList.size(), 1);
 
@@ -839,47 +882,67 @@ void tst_QSslCertificate::largeExpirationDate() // QTBUG-12489
 
 void tst_QSslCertificate::blacklistedCertificates()
 {
-    QList<QSslCertificate> blacklistedCerts = QSslCertificate::fromPath("more-certificates/blacklisted*.pem", QSsl::Pem, QRegExp::Wildcard);
-    QVERIFY2(blacklistedCerts.count() > 0, "Please run this test from the source directory");
+    QList<QSslCertificate> blacklistedCerts = QSslCertificate::fromPath(testDataDir + "more-certificates/blacklisted*.pem", QSsl::Pem, QRegExp::Wildcard);
+    QVERIFY(blacklistedCerts.count() > 0);
     for (int a = 0; a < blacklistedCerts.count(); a++) {
         QVERIFY(blacklistedCerts.at(a).isBlacklisted());
     }
 }
 
+void tst_QSslCertificate::selfsignedCertificates()
+{
+    QVERIFY(QSslCertificate::fromPath(testDataDir + "certificates/cert-ss.pem").first().isSelfSigned());
+    QVERIFY(!QSslCertificate::fromPath(testDataDir + "certificates/cert.pem").first().isSelfSigned());
+    QVERIFY(!QSslCertificate().isSelfSigned());
+}
+
 void tst_QSslCertificate::toText()
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/cert-large-expiration-date.pem");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/cert-large-expiration-date.pem");
 
     QCOMPARE(certList.size(), 1);
     const QSslCertificate &cert = certList.at(0);
 
     // Openssl's cert dump method changed slightly between 0.9.8, 1.0.0 and 1.01 versions, so we want it to match any output
 
-    QFile f098(testDataDir + "/more-certificates/cert-large-expiration-date.txt.0.9.8");
+    QFile f098(testDataDir + "more-certificates/cert-large-expiration-date.txt.0.9.8");
     QVERIFY(f098.open(QIODevice::ReadOnly | QFile::Text));
     QByteArray txt098 = f098.readAll();
 
-    QFile f100(testDataDir + "/more-certificates/cert-large-expiration-date.txt.1.0.0");
+    QFile f100(testDataDir + "more-certificates/cert-large-expiration-date.txt.1.0.0");
     QVERIFY(f100.open(QIODevice::ReadOnly | QFile::Text));
     QByteArray txt100 = f100.readAll();
 
-    QFile f101(testDataDir + "/more-certificates/cert-large-expiration-date.txt.1.0.1");
+    QFile f101(testDataDir + "more-certificates/cert-large-expiration-date.txt.1.0.1");
     QVERIFY(f101.open(QIODevice::ReadOnly | QFile::Text));
     QByteArray txt101 = f101.readAll();
 
+    QFile f101c(testDataDir + "more-certificates/cert-large-expiration-date.txt.1.0.1c");
+    QVERIFY(f101c.open(QIODevice::ReadOnly | QFile::Text));
+    QByteArray txt101c = f101c.readAll();
+
+    QFile f111(testDataDir + "more-certificates/cert-large-expiration-date.txt.1.1.1");
+    QVERIFY(f111.open(QIODevice::ReadOnly | QFile::Text));
+    QByteArray txt111 = f111.readAll();
+
     QString txtcert = cert.toText();
 
+#ifdef QT_NO_OPENSSL
+    QEXPECT_FAIL("", "QTBUG-40884: QSslCertificate::toText is not implemented on WinRT", Continue);
+#endif
     QVERIFY(QString::fromLatin1(txt098) == txtcert ||
             QString::fromLatin1(txt100) == txtcert ||
-            QString::fromLatin1(txt101) == txtcert );
+            QString::fromLatin1(txt101) == txtcert ||
+            QString::fromLatin1(txt101c) == txtcert ||
+            QString::fromLatin1(txt111) == txtcert );
 }
 
 void tst_QSslCertificate::multipleCommonNames()
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/test-cn-two-cns-cert.pem");
-    QVERIFY2(certList.count() > 0, "Please run this test from the source directory");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/test-cn-two-cns-cert.pem");
+    QVERIFY(certList.count() > 0);
 
     QStringList commonNames = certList[0].subjectInfo(QSslCertificate::CommonName);
     QVERIFY(commonNames.contains(QString("www.example.com")));
@@ -889,15 +952,15 @@ void tst_QSslCertificate::multipleCommonNames()
 void tst_QSslCertificate::subjectAndIssuerAttributes()
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/test-cn-with-drink-cert.pem");
-    QVERIFY2(certList.count() > 0, "Please run this test from the source directory");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/test-cn-with-drink-cert.pem");
+    QVERIFY(certList.count() > 0);
 
     QList<QByteArray> attributes = certList[0].subjectInfoAttributes();
     QVERIFY(attributes.contains(QByteArray("favouriteDrink")));
     attributes.clear();
 
-    certList = QSslCertificate::fromPath(testDataDir + "/more-certificates/natwest-banking.pem");
-    QVERIFY2(certList.count() > 0, "Please run this test from the source directory");
+    certList = QSslCertificate::fromPath(testDataDir + "more-certificates/natwest-banking.pem");
+    QVERIFY(certList.count() > 0);
 
     attributes = certList[0].subjectInfoAttributes();
     QVERIFY(attributes.contains(QByteArray("1.3.6.1.4.1.311.60.2.1.3")));
@@ -905,6 +968,9 @@ void tst_QSslCertificate::subjectAndIssuerAttributes()
 
 void tst_QSslCertificate::verify()
 {
+#ifdef QT_SECURETRANSPORT
+    QSKIP("Not implemented in SecureTransport");
+#endif
     QList<QSslError> errors;
     QList<QSslCertificate> toVerify;
 
@@ -914,6 +980,9 @@ void tst_QSslCertificate::verify()
         qPrintable(QString("errors: %1").arg(toString(errors))) \
     )
 
+#ifdef QT_NO_OPENSSL
+    QEXPECT_FAIL("", "QTBUG-40884: WinRT API does not yet support verifying a chain", Abort);
+#endif
     // Empty chain is unspecified error
     errors = QSslCertificate::verify(toVerify);
     VERIFY_VERBOSE(errors.count() == 1);
@@ -921,17 +990,17 @@ void tst_QSslCertificate::verify()
     errors.clear();
 
     // Verify a valid cert signed by a CA
-    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(testDataDir + "/verify-certs/cacert.pem");
+    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(testDataDir + "verify-certs/cacert.pem");
     QSslSocket::addDefaultCaCertificate(caCerts.first());
 
-    toVerify = QSslCertificate::fromPath(testDataDir + "/verify-certs/test-ocsp-good-cert.pem");
+    toVerify = QSslCertificate::fromPath(testDataDir + "verify-certs/test-ocsp-good-cert.pem");
 
     errors = QSslCertificate::verify(toVerify);
     VERIFY_VERBOSE(errors.count() == 0);
     errors.clear();
 
     // Test a blacklisted certificate
-    toVerify = QSslCertificate::fromPath(testDataDir + "/verify-certs/test-addons-mozilla-org-cert.pem");
+    toVerify = QSslCertificate::fromPath(testDataDir + "verify-certs/test-addons-mozilla-org-cert.pem");
     errors = QSslCertificate::verify(toVerify);
     bool foundBlack = false;
     foreach (const QSslError &error, errors) {
@@ -944,7 +1013,7 @@ void tst_QSslCertificate::verify()
     errors.clear();
 
     // This one is expired and untrusted
-    toVerify = QSslCertificate::fromPath(testDataDir + "/more-certificates/cert-large-serial-number.pem");
+    toVerify = QSslCertificate::fromPath(testDataDir + "more-certificates/cert-large-serial-number.pem");
     errors = QSslCertificate::verify(toVerify);
     VERIFY_VERBOSE(errors.contains(QSslError(QSslError::SelfSignedCertificate, toVerify[0])));
     VERIFY_VERBOSE(errors.contains(QSslError(QSslError::CertificateExpired, toVerify[0])));
@@ -952,15 +1021,15 @@ void tst_QSslCertificate::verify()
     toVerify.clear();
 
     // This one is signed by a valid cert, but the signer is not a valid CA
-    toVerify << QSslCertificate::fromPath(testDataDir + "/verify-certs/test-intermediate-not-ca-cert.pem").first();
-    toVerify << QSslCertificate::fromPath(testDataDir + "/verify-certs/test-ocsp-good-cert.pem").first();
+    toVerify << QSslCertificate::fromPath(testDataDir + "verify-certs/test-intermediate-not-ca-cert.pem").first();
+    toVerify << QSslCertificate::fromPath(testDataDir + "verify-certs/test-ocsp-good-cert.pem").first();
     errors = QSslCertificate::verify(toVerify);
     VERIFY_VERBOSE(errors.contains(QSslError(QSslError::InvalidCaCertificate, toVerify[1])));
     toVerify.clear();
 
     // This one is signed by a valid cert, and the signer is a valid CA
-    toVerify << QSslCertificate::fromPath(testDataDir + "/verify-certs/test-intermediate-is-ca-cert.pem").first();
-    toVerify << QSslCertificate::fromPath(testDataDir + "/verify-certs/test-intermediate-ca-cert.pem").first();
+    toVerify << QSslCertificate::fromPath(testDataDir + "verify-certs/test-intermediate-is-ca-cert.pem").first();
+    toVerify << QSslCertificate::fromPath(testDataDir + "verify-certs/test-intermediate-ca-cert.pem").first();
     errors = QSslCertificate::verify(toVerify);
     VERIFY_VERBOSE(errors.count() == 0);
 
@@ -981,7 +1050,7 @@ QString tst_QSslCertificate::toString(const QList<QSslError>& errors)
     QStringList errorStrings;
 
     foreach (const QSslError& error, errors) {
-        errorStrings.append(QLatin1String("\"") + error.errorString() + QLatin1String("\""));
+        errorStrings.append(QLatin1Char('"') + error.errorString() + QLatin1Char('"'));
     }
 
     return QLatin1String("[ ") + errorStrings.join(QLatin1String(", ")) + QLatin1String(" ]");
@@ -990,12 +1059,12 @@ QString tst_QSslCertificate::toString(const QList<QSslError>& errors)
 void tst_QSslCertificate::extensions()
 {
     QList<QSslCertificate> certList =
-        QSslCertificate::fromPath(testDataDir + "/more-certificates/natwest-banking.pem");
-    QVERIFY2(certList.count() > 0, "Please run this test from the source directory");
+        QSslCertificate::fromPath(testDataDir + "more-certificates/natwest-banking.pem");
+    QVERIFY(certList.count() > 0);
 
     QSslCertificate cert = certList[0];
     QList<QSslCertificateExtension> extensions = cert.extensions();
-    QVERIFY(extensions.count() == 9);
+    QCOMPARE(extensions.count(), 9);
 
     int unknown_idx = -1;
     int authority_info_idx = -1;
@@ -1027,8 +1096,10 @@ void tst_QSslCertificate::extensions()
 
     // Unknown
     QSslCertificateExtension unknown = extensions[unknown_idx];
-    QVERIFY(unknown.oid() == QStringLiteral("1.3.6.1.5.5.7.1.12"));
-    QVERIFY(unknown.name() == QStringLiteral("1.3.6.1.5.5.7.1.12"));
+    QCOMPARE(unknown.oid(), QStringLiteral("1.3.6.1.5.5.7.1.12"));
+    QCOMPARE(unknown.name(), QStringLiteral("1.3.6.1.5.5.7.1.12"));
+    QVERIFY(!unknown.isCritical());
+    QVERIFY(!unknown.isSupported());
 
     QByteArray unknownValue = QByteArray::fromHex(
                         "3060A15EA05C305A305830561609696D6167652F6769663021301F300706052B0E03021A0414" \
@@ -1038,39 +1109,93 @@ void tst_QSslCertificate::extensions()
 
     // Authority Info Access
     QSslCertificateExtension aia = extensions[authority_info_idx];
-    QVERIFY(aia.oid() == QStringLiteral("1.3.6.1.5.5.7.1.1"));
-    QVERIFY(aia.name() == QStringLiteral("authorityInfoAccess"));
+    QCOMPARE(aia.oid(), QStringLiteral("1.3.6.1.5.5.7.1.1"));
+    QCOMPARE(aia.name(), QStringLiteral("authorityInfoAccess"));
+    QVERIFY(!aia.isCritical());
+    QVERIFY(aia.isSupported());
 
     QVariantMap aiaValue = aia.value().toMap();
+    QCOMPARE(aiaValue.keys(), QList<QString>() << QStringLiteral("OCSP") << QStringLiteral("caIssuers"));
     QString ocsp = aiaValue[QStringLiteral("OCSP")].toString();
     QString caIssuers = aiaValue[QStringLiteral("caIssuers")].toString();
 
-    QVERIFY(ocsp == QStringLiteral("http://EVIntl-ocsp.verisign.com"));
-    QVERIFY(caIssuers == QStringLiteral("http://EVIntl-aia.verisign.com/EVIntl2006.cer"));
+    QCOMPARE(ocsp, QStringLiteral("http://EVIntl-ocsp.verisign.com"));
+    QCOMPARE(caIssuers, QStringLiteral("http://EVIntl-aia.verisign.com/EVIntl2006.cer"));
 
     // Basic constraints
     QSslCertificateExtension basic = extensions[basic_constraints_idx];
-    QVERIFY(basic.oid() == QStringLiteral("2.5.29.19"));
-    QVERIFY(basic.name() == QStringLiteral("basicConstraints"));
+    QCOMPARE(basic.oid(), QStringLiteral("2.5.29.19"));
+    QCOMPARE(basic.name(), QStringLiteral("basicConstraints"));
+    QVERIFY(!basic.isCritical());
+    QVERIFY(basic.isSupported());
 
     QVariantMap basicValue = basic.value().toMap();
-    QVERIFY(basicValue[QStringLiteral("ca")].toBool() == false);
+    QCOMPARE(basicValue.keys(), QList<QString>() << QStringLiteral("ca"));
+    QVERIFY(!basicValue[QStringLiteral("ca")].toBool());
 
     // Subject key identifier
     QSslCertificateExtension subjectKey = extensions[subject_key_idx];
-    QVERIFY(subjectKey.oid() == QStringLiteral("2.5.29.14"));
-    QVERIFY(subjectKey.name() == QStringLiteral("subjectKeyIdentifier"));
-    QVERIFY(subjectKey.value().toString() == QStringLiteral("5F:90:23:CD:24:CA:52:C9:36:29:F0:7E:9D:B1:FE:08:E0:EE:69:F0"));
+    QCOMPARE(subjectKey.oid(), QStringLiteral("2.5.29.14"));
+    QCOMPARE(subjectKey.name(), QStringLiteral("subjectKeyIdentifier"));
+    QVERIFY(!subjectKey.isCritical());
+    QVERIFY(subjectKey.isSupported());
+    QCOMPARE(subjectKey.value().toString(), QStringLiteral("5F:90:23:CD:24:CA:52:C9:36:29:F0:7E:9D:B1:FE:08:E0:EE:69:F0"));
 
     // Authority key identifier
     QSslCertificateExtension authKey = extensions[auth_key_idx];
-    QVERIFY(authKey.oid() == QStringLiteral("2.5.29.35"));
-    QVERIFY(authKey.name() == QStringLiteral("authorityKeyIdentifier"));
+    QCOMPARE(authKey.oid(), QStringLiteral("2.5.29.35"));
+    QCOMPARE(authKey.name(), QStringLiteral("authorityKeyIdentifier"));
+    QVERIFY(!authKey.isCritical());
+    QVERIFY(authKey.isSupported());
 
     QVariantMap authValue = authKey.value().toMap();
+    QCOMPARE(authValue.keys(), QList<QString>() << QStringLiteral("keyid"));
     QVERIFY(authValue[QStringLiteral("keyid")].toByteArray() ==
             QByteArray("4e43c81d76ef37537a4ff2586f94f338e2d5bddf"));
+}
 
+void tst_QSslCertificate::extensionsCritical()
+{
+    QList<QSslCertificate> certList =
+        QSslCertificate::fromPath(testDataDir + "verify-certs/test-addons-mozilla-org-cert.pem");
+    QVERIFY(certList.count() > 0);
+
+    QSslCertificate cert = certList[0];
+    QList<QSslCertificateExtension> extensions = cert.extensions();
+    QCOMPARE(extensions.count(), 9);
+
+    int basic_constraints_idx = -1;
+    int key_usage_idx = -1;
+
+    for (int i=0; i < extensions.length(); ++i) {
+        QSslCertificateExtension ext = extensions[i];
+
+        if (ext.name() == QStringLiteral("basicConstraints"))
+            basic_constraints_idx = i;
+        if (ext.name() == QStringLiteral("keyUsage"))
+            key_usage_idx = i;
+    }
+
+    QVERIFY(basic_constraints_idx != -1);
+    QVERIFY(key_usage_idx != -1);
+
+    // Basic constraints
+    QSslCertificateExtension basic = extensions[basic_constraints_idx];
+    QCOMPARE(basic.oid(), QStringLiteral("2.5.29.19"));
+    QCOMPARE(basic.name(), QStringLiteral("basicConstraints"));
+    QVERIFY(basic.isCritical());
+    QVERIFY(basic.isSupported());
+
+    QVariantMap basicValue = basic.value().toMap();
+    QCOMPARE(basicValue.keys(), QList<QString>() << QStringLiteral("ca"));
+    QVERIFY(!basicValue[QStringLiteral("ca")].toBool());
+
+    // Key Usage
+    QSslCertificateExtension keyUsage = extensions[key_usage_idx];
+    QCOMPARE(keyUsage.oid(), QStringLiteral("2.5.29.15"));
+    QCOMPARE(keyUsage.name(), QStringLiteral("keyUsage"));
+    QVERIFY(keyUsage.isCritical());
+    QVERIFY(!keyUsage.isSupported());
 }
 
 class TestThread : public QThread
@@ -1115,7 +1240,7 @@ void tst_QSslCertificate::threadSafeConstMethods()
     if (!QSslSocket::supportsSsl())
         return;
 
-    QByteArray encoded = readFile(testDataDir + "/certificates/cert.pem");
+    QByteArray encoded = readFile(testDataDir + "certificates/cert.pem");
     QSslCertificate certificate(encoded);
     QVERIFY(!certificate.isNull());
 
@@ -1127,22 +1252,104 @@ void tst_QSslCertificate::threadSafeConstMethods()
     t2.start();
     QVERIFY(t1.wait(5000));
     QVERIFY(t2.wait(5000));
-    QVERIFY(t1.cert == t2.cert);
-    QVERIFY(t1.effectiveDate == t2.effectiveDate);
-    QVERIFY(t1.expiryDate == t2.expiryDate);
+    QCOMPARE(t1.cert, t2.cert);
+    QCOMPARE(t1.effectiveDate, t2.effectiveDate);
+    QCOMPARE(t1.expiryDate, t2.expiryDate);
     //QVERIFY(t1.extensions == t2.extensions); // no equality operator, so not tested
-    QVERIFY(t1.isBlacklisted == t2.isBlacklisted);
-    QVERIFY(t1.issuerInfo == t2.issuerInfo);
-    QVERIFY(t1.issuerInfoAttributes == t2.issuerInfoAttributes);
-    QVERIFY(t1.publicKey == t2.publicKey);
-    QVERIFY(t1.serialNumber == t2.serialNumber);
-    QVERIFY(t1.subjectInfo == t2.subjectInfo);
-    QVERIFY(t1.subjectInfoAttributes == t2.subjectInfoAttributes);
-    QVERIFY(t1.toDer == t2.toDer);
-    QVERIFY(t1.toPem == t2.toPem);
-    QVERIFY(t1.toText == t2.toText);
-    QVERIFY(t1.version == t2.version);
+    QCOMPARE(t1.isBlacklisted, t2.isBlacklisted);
+    QCOMPARE(t1.issuerInfo, t2.issuerInfo);
+    QCOMPARE(t1.issuerInfoAttributes, t2.issuerInfoAttributes);
+    QCOMPARE(t1.publicKey, t2.publicKey);
+    QCOMPARE(t1.serialNumber, t2.serialNumber);
+    QCOMPARE(t1.subjectInfo, t2.subjectInfo);
+    QCOMPARE(t1.subjectInfoAttributes, t2.subjectInfoAttributes);
+    QCOMPARE(t1.toDer, t2.toDer);
+    QCOMPARE(t1.toPem, t2.toPem);
+    QCOMPARE(t1.toText, t2.toText);
+    QCOMPARE(t1.version, t2.version);
 
+}
+
+void tst_QSslCertificate::version_data()
+{
+    QTest::addColumn<QSslCertificate>("certificate");
+    QTest::addColumn<QByteArray>("result");
+
+    QTest::newRow("null certificate") << QSslCertificate() << QByteArray();
+
+    QList<QSslCertificate> certs;
+    certs << QSslCertificate::fromPath(testDataDir + "verify-certs/test-ocsp-good-cert.pem");
+
+    QTest::newRow("v3 certificate") << certs.first() << QByteArrayLiteral("3");
+
+    certs.clear();
+    certs << QSslCertificate::fromPath(testDataDir + "certificates/cert.pem");
+    QTest::newRow("v1 certificate") << certs.first() << QByteArrayLiteral("1");
+}
+
+void tst_QSslCertificate::version()
+{
+    if (!QSslSocket::supportsSsl())
+        return;
+
+    QFETCH(QSslCertificate, certificate);
+    QFETCH(QByteArray, result);
+    QCOMPARE(certificate.version(), result);
+}
+
+void tst_QSslCertificate::pkcs12()
+{
+    // See pkcs12/README for how to generate the PKCS12 files used here.
+    if (!QSslSocket::supportsSsl()) {
+        qWarning("SSL not supported, skipping test");
+        return;
+    }
+
+    QFile f(testDataDir + QLatin1String("pkcs12/leaf.p12"));
+    bool ok = f.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslKey key;
+    QSslCertificate cert;
+    QList<QSslCertificate> caCerts;
+
+#ifdef QT_NO_OPENSSL
+    QEXPECT_FAIL("", "QTBUG-40884: WinRT API does not support pkcs12 imports", Abort);
+#endif
+    ok = QSslCertificate::importPkcs12(&f, &key, &cert, &caCerts);
+    QVERIFY(ok);
+    f.close();
+
+    QList<QSslCertificate> leafCert = QSslCertificate::fromPath(testDataDir + QLatin1String("pkcs12/leaf.crt"));
+    QVERIFY(!leafCert.isEmpty());
+
+    QCOMPARE(cert, leafCert.first());
+
+    QFile f2(testDataDir + QLatin1String("pkcs12/leaf.key"));
+    ok = f2.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+
+    QSslKey leafKey(&f2, QSsl::Rsa);
+    f2.close();
+
+    QVERIFY(!leafKey.isNull());
+    QCOMPARE(key, leafKey);
+
+    QList<QSslCertificate> caCert = QSslCertificate::fromPath(testDataDir + QLatin1String("pkcs12/inter.crt"));
+    QVERIFY(!caCert.isEmpty());
+
+    QVERIFY(!caCerts.isEmpty());
+    QCOMPARE(caCerts.first(), caCert.first());
+    QCOMPARE(caCerts, caCert);
+
+    // QTBUG-62335 - Fail (found no private key) but don't crash:
+    QFile nocert(testDataDir + QLatin1String("pkcs12/leaf-nokey.p12"));
+    ok = nocert.open(QIODevice::ReadOnly);
+    QVERIFY(ok);
+    QTest::ignoreMessage(QtWarningMsg, "Unable to convert private key");
+    ok = QSslCertificate::importPkcs12(&nocert, &key, &cert, &caCerts);
+    QVERIFY(!ok);
+    nocert.close();
 }
 
 #endif // QT_NO_SSL

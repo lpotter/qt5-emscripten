@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,63 +42,16 @@
 
 #include <QtConcurrent/qtconcurrent_global.h>
 
-#ifndef QT_NO_CONCURRENT
+#if !defined(QT_NO_CONCURRENT) || defined(Q_CLANG_QDOC)
 
 #include <QtConcurrent/qtconcurrentfilterkernel.h>
 #include <QtConcurrent/qtconcurrentfunctionwrappers.h>
 
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
 
-
-#ifdef qdoc
-
 namespace QtConcurrent {
 
-    QFuture<void> filter(Sequence &sequence, FilterFunction filterFunction);
-
-    template <typename T>
-    QFuture<T> filtered(const Sequence &sequence, FilterFunction filterFunction);
-    template <typename T>
-    QFuture<T> filtered(ConstIterator begin, ConstIterator end, FilterFunction filterFunction);
-
-    template <typename T>
-    QFuture<T> filteredReduced(const Sequence &sequence,
-                               FilterFunction filterFunction,
-                               ReduceFunction reduceFunction,
-                               QtConcurrent::ReduceOptions reduceOptions = UnorderedReduce | SequentialReduce);
-    template <typename T>
-    QFuture<T> filteredReduced(ConstIterator begin,
-                               ConstIterator end,
-                               FilterFunction filterFunction,
-                               ReduceFunction reduceFunction,
-                               QtConcurrent::ReduceOptions reduceOptions = UnorderedReduce | SequentialReduce);
-
-    void blockingFilter(Sequence &sequence, FilterFunction filterFunction);
-
-    template <typename Sequence>
-    Sequence blockingFiltered(const Sequence &sequence, FilterFunction filterFunction);
-    template <typename Sequence>
-    Sequence blockingFiltered(ConstIterator begin, ConstIterator end, FilterFunction filterFunction);
-
-    template <typename T>
-    T blockingFilteredReduced(const Sequence &sequence,
-                              FilterFunction filterFunction,
-                              ReduceFunction reduceFunction,
-                              QtConcurrent::ReduceOptions reduceOptions = UnorderedReduce | SequentialReduce);
-    template <typename T>
-    T blockingFilteredReduced(ConstIterator begin,
-                              ConstIterator end,
-                              FilterFunction filterFunction,
-                              ReduceFunction reduceFunction,
-                              QtConcurrent::ReduceOptions reduceOptions = UnorderedReduce | SequentialReduce);
-
-} // namespace QtConcurrent
-
-#else
-
-namespace QtConcurrent {
-
+//! [QtConcurrent-1]
 template <typename Sequence, typename KeepFunctor, typename ReduceFunctor>
 ThreadEngineStarter<void> filterInternal(Sequence &sequence, KeepFunctor keep, ReduceFunctor reduce)
 {
@@ -125,6 +76,7 @@ QFuture<ResultType> filteredReduced(const Sequence &sequence,
     return startFilteredReduced<ResultType>(sequence, QtPrivate::createFunctionWrapper(keep), QtPrivate::createFunctionWrapper(reduce), options);
 }
 
+#ifndef Q_CLANG_QDOC
 template <typename Sequence, typename KeepFunctor, typename ReduceFunctor>
 QFuture<typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType> filteredReduced(const Sequence &sequence,
                                     KeepFunctor keep,
@@ -137,6 +89,7 @@ QFuture<typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType> filtere
              QtPrivate::createFunctionWrapper(reduce),
              options);
 }
+#endif
 
 // filteredReduced() on iterators
 template <typename ResultType, typename Iterator, typename KeepFunctor, typename ReduceFunctor>
@@ -149,6 +102,7 @@ QFuture<ResultType> filteredReduced(Iterator begin,
    return startFilteredReduced<ResultType>(begin, end, QtPrivate::createFunctionWrapper(keep), QtPrivate::createFunctionWrapper(reduce), options);
 }
 
+#ifndef Q_CLANG_QDOC
 template <typename Iterator, typename KeepFunctor, typename ReduceFunctor>
 QFuture<typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType> filteredReduced(Iterator begin,
                                     Iterator end,
@@ -162,6 +116,7 @@ QFuture<typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType> filtere
             QtPrivate::createFunctionWrapper(reduce),
             options);
 }
+#endif
 
 // filtered() on sequences
 template <typename Sequence, typename KeepFunctor>
@@ -195,6 +150,7 @@ ResultType blockingFilteredReduced(const Sequence &sequence,
         .startBlocking();
 }
 
+#ifndef Q_CLANG_QDOC
 template <typename Sequence, typename KeepFunctor, typename ReduceFunctor>
 typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType blockingFilteredReduced(const Sequence &sequence,
                                    KeepFunctor keep,
@@ -207,6 +163,7 @@ typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType blockingFiltered
          QtPrivate::createFunctionWrapper(reduce),
          options);
 }
+#endif
 
 // blocking filteredReduced() on iterators
 template <typename ResultType, typename Iterator, typename KeepFunctor, typename ReduceFunctor>
@@ -224,6 +181,7 @@ ResultType blockingFilteredReduced(Iterator begin,
         .startBlocking();
 }
 
+#ifndef Q_CLANG_QDOC
 template <typename Iterator, typename KeepFunctor, typename ReduceFunctor>
 typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType blockingFilteredReduced(Iterator begin,
                                    Iterator end,
@@ -238,6 +196,7 @@ typename QtPrivate::ReduceResultType<ReduceFunctor>::ResultType blockingFiltered
          options)
         .startBlocking();
 }
+#endif
 
 // blocking filtered() on sequences
 template <typename Sequence, typename KeepFunctor>
@@ -258,10 +217,7 @@ OutputSequence blockingFiltered(Iterator begin, Iterator end, KeepFunctor keep)
 
 } // namespace QtConcurrent
 
-#endif // qdoc
-
 QT_END_NAMESPACE
-QT_END_HEADER
 
 #endif // QT_NO_CONCURRENT
 

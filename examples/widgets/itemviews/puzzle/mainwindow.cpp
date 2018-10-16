@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -57,26 +67,34 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(tr("Puzzle"));
 }
 
-void MainWindow::openImage(const QString &path)
+void MainWindow::openImage()
 {
-    QString fileName = path;
+    const QString directory =
+        QStandardPaths::standardLocations(QStandardPaths::PicturesLocation).value(0, QDir::homePath());
+    QFileDialog dialog(this, tr("Open Image"), directory);
+    dialog.setAcceptMode(QFileDialog::AcceptOpen);
+    dialog.setFileMode(QFileDialog::ExistingFile);
+    QStringList mimeTypeFilters;
+    for (const QByteArray &mimeTypeName : QImageReader::supportedMimeTypes())
+        mimeTypeFilters.append(mimeTypeName);
+    mimeTypeFilters.sort();
+    dialog.setMimeTypeFilters(mimeTypeFilters);
+    dialog.selectMimeTypeFilter("image/jpeg");
+    if (dialog.exec() == QDialog::Accepted)
+        loadImage(dialog.selectedFiles().constFirst());
+}
 
-    if (fileName.isNull()) {
-        fileName = QFileDialog::getOpenFileName(this,
-            tr("Open Image"), "", tr("Image Files (*.png *.jpg *.bmp)"));
+void MainWindow::loadImage(const QString &fileName)
+{
+    QPixmap newImage;
+    if (!newImage.load(fileName)) {
+        QMessageBox::warning(this, tr("Open Image"),
+                             tr("The image file could not be loaded."),
+                             QMessageBox::Close);
+        return;
     }
-
-    if (!fileName.isEmpty()) {
-        QPixmap newImage;
-        if (!newImage.load(fileName)) {
-            QMessageBox::warning(this, tr("Open Image"),
-                                 tr("The image file could not be loaded."),
-                                 QMessageBox::Cancel);
-            return;
-        }
-        puzzleImage = newImage;
-        setupPuzzle();
-    }
+    puzzleImage = newImage;
+    setupPuzzle();
 }
 
 void MainWindow::setCompleted()
@@ -96,8 +114,6 @@ void MainWindow::setupPuzzle()
         (puzzleImage.height() - size) / 2, size, size).scaled(puzzleWidget->imageSize(),
             puzzleWidget->imageSize(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
-    qsrand(QCursor::pos().x() ^ QCursor::pos().y());
-
     model->addPieces(puzzleImage);
     puzzleWidget->clear();
 }
@@ -106,19 +122,15 @@ void MainWindow::setupMenus()
 {
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
 
-    QAction *openAction = fileMenu->addAction(tr("&Open..."));
+    QAction *openAction = fileMenu->addAction(tr("&Open..."), this, &MainWindow::openImage);
     openAction->setShortcuts(QKeySequence::Open);
 
-    QAction *exitAction = fileMenu->addAction(tr("E&xit"));
+    QAction *exitAction = fileMenu->addAction(tr("E&xit"), qApp, &QCoreApplication::quit);
     exitAction->setShortcuts(QKeySequence::Quit);
 
     QMenu *gameMenu = menuBar()->addMenu(tr("&Game"));
 
-    QAction *restartAction = gameMenu->addAction(tr("&Restart"));
-
-    connect(openAction, SIGNAL(triggered()), this, SLOT(openImage()));
-    connect(exitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
-    connect(restartAction, SIGNAL(triggered()), this, SLOT(setupPuzzle()));
+    gameMenu->addAction(tr("&Restart"), this, &MainWindow::setupPuzzle);
 }
 
 void MainWindow::setupWidgets()
@@ -141,8 +153,8 @@ void MainWindow::setupWidgets()
     PiecesModel *model = new PiecesModel(puzzleWidget->pieceSize(), this);
     piecesList->setModel(model);
 
-    connect(puzzleWidget, SIGNAL(puzzleCompleted()),
-            this, SLOT(setCompleted()), Qt::QueuedConnection);
+    connect(puzzleWidget, &PuzzleWidget::puzzleCompleted,
+            this, &MainWindow::setCompleted, Qt::QueuedConnection);
 
     frameLayout->addWidget(piecesList);
     frameLayout->addWidget(puzzleWidget);

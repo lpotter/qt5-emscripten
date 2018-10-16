@@ -1,5 +1,13 @@
 SOURCES += crashOnExit.cpp
-DESTDIR = ./
+debug_and_release {
+    CONFIG(debug, debug|release) {
+        TARGET = ../../debug/crashOnExit_helper
+    } else {
+        TARGET = ../../release/crashOnExit_helper
+    }
+} else {
+    TARGET = ../crashOnExit_helper
+}
 QT = core
 CONFIG -= app_bundle
 CONFIG += console
@@ -7,4 +15,3 @@ CONFIG += console
 # This app is testdata for tst_qthreadstorage
 target.path = $$[QT_INSTALL_TESTS]/tst_qthreadstorage/$$TARGET
 INSTALLS += target
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

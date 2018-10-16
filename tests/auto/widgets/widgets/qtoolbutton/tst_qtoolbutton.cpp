@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,6 +35,8 @@
 #include <qmenu.h>
 #include <qaction.h>
 #include <qstyleoption.h>
+#include <qscreen.h>
+#include <qlabel.h>
 
 class tst_QToolButton : public QObject
 {
@@ -63,11 +52,13 @@ private slots:
     void collapseTextOnPriority();
     void task230994_iconSize();
     void task176137_autoRepeatOfAction();
+    void qtbug_26956_popupTimerDone();
+    void qtbug_34759_sizeHintResetWhenSettingMenu();
 
 protected slots:
     void sendMouseClick();
 private:
-    QWidget *w;
+    QPointer<QWidget> m_menu;
 };
 
 tst_QToolButton::tst_QToolButton()
@@ -117,34 +108,41 @@ void tst_QToolButton::getSetCheck()
     delete var4;
 }
 
-Q_DECLARE_METATYPE(QAction*)
-
 void tst_QToolButton::triggered()
 {
     qRegisterMetaType<QAction *>("QAction *");
-    QToolButton tb;
-    tb.show();
-    QSignalSpy spy(&tb,SIGNAL(triggered(QAction*)));
-    QMenu *menu = new QMenu("Menu");
+    QWidget mainWidget;
+    mainWidget.setWindowTitle(QStringLiteral("triggered"));
+    mainWidget.resize(200, 200);
+    mainWidget.move(QGuiApplication::primaryScreen()->availableGeometry().center() - QPoint(100, 100));
+    QToolButton *toolButton = new QToolButton(&mainWidget);
+    QSignalSpy spy(toolButton,SIGNAL(triggered(QAction*)));
+    QScopedPointer<QMenu> menu(new QMenu(QStringLiteral("Menu")));
     QAction *one = menu->addAction("one");
     menu->addAction("two");
-    QAction *def = new QAction("def", this);
+    QAction *defaultAction = new QAction(QStringLiteral("def"), this);
 
-    tb.setMenu(menu);
-    tb.setDefaultAction(def);
+    toolButton->setMenu(menu.data());
+    toolButton->setDefaultAction(defaultAction);
 
+    mainWidget.show();
+    QApplication::setActiveWindow(&mainWidget);
+    QVERIFY(QTest::qWaitForWindowActive(&mainWidget));
 
-    def->trigger();
+    defaultAction->trigger();
     QCOMPARE(spy.count(),1);
-    QCOMPARE(qvariant_cast<QAction *>(spy.at(0).at(0)), def);
+    QCOMPARE(qvariant_cast<QAction *>(spy.at(0).at(0)), defaultAction);
 
-    w = menu;
-    QTimer::singleShot(30, this, SLOT(sendMouseClick()));
-    tb.showMenu();
-    QTest::qWait(20);
-    QCOMPARE(spy.count(),2);
+    m_menu = menu.data();
+
+    QTimer *timer = new QTimer(this);
+    timer->setInterval(50);
+    connect(timer, SIGNAL(timeout()), this, SLOT(sendMouseClick()));
+    timer->start();
+    QTimer::singleShot(10000, &mainWidget, SLOT(close())); // Emergency bail-out
+    toolButton->showMenu();
+    QTRY_COMPARE(spy.count(),2);
     QCOMPARE(qvariant_cast<QAction *>(spy.at(1).at(0)), one);
-    delete menu;
 }
 
 void tst_QToolButton::collapseTextOnPriority()
@@ -166,10 +164,10 @@ void tst_QToolButton::collapseTextOnPriority()
 
     QStyleOptionToolButton option;
     button.initStyleOption(&option);
-    QVERIFY(option.toolButtonStyle == Qt::ToolButtonTextBesideIcon);
+    QCOMPARE(option.toolButtonStyle, Qt::ToolButtonTextBesideIcon);
     action.setPriority(QAction::LowPriority);
     button.initStyleOption(&option);
-    QVERIFY(option.toolButtonStyle == Qt::ToolButtonIconOnly);
+    QCOMPARE(option.toolButtonStyle, Qt::ToolButtonIconOnly);
 }
 
 
@@ -196,20 +194,30 @@ void tst_QToolButton::task230994_iconSize()
 void tst_QToolButton::task176137_autoRepeatOfAction()
 {
     QAction action(0);
-    QToolButton tb;
-    tb.setDefaultAction (&action);
-    tb.show();
+    QWidget mainWidget;
+    mainWidget.setWindowTitle(QStringLiteral("task176137_autoRepeatOfAction"));
+    mainWidget.resize(200, 200);
+    mainWidget.move(QGuiApplication::primaryScreen()->availableGeometry().center() - QPoint(100, 100));
+    QToolButton *toolButton = new QToolButton(&mainWidget);
+    toolButton->setDefaultAction (&action);
+    QLabel *label = new QLabel(QStringLiteral("This test takes a while."), &mainWidget);
+    label->move(0, 50);
+
+    mainWidget.show();
+    QApplication::setActiveWindow(&mainWidget);
+    QVERIFY(QTest::qWaitForWindowActive(&mainWidget));
+
     QSignalSpy spy(&action,SIGNAL(triggered()));
-    QTest::mousePress ( &tb, Qt::LeftButton);
-    QTest::mouseRelease ( &tb, Qt::LeftButton, 0, QPoint (), 2000);
+    QTest::mousePress (toolButton, Qt::LeftButton);
+    QTest::mouseRelease (toolButton, Qt::LeftButton, 0, QPoint (), 2000);
     QCOMPARE(spy.count(),1);
 
     // try again with auto repeat
-    tb.setAutoRepeat (true);
+    toolButton->setAutoRepeat (true);
     QSignalSpy repeatSpy(&action,SIGNAL(triggered())); // new spy
-    QTest::mousePress ( &tb, Qt::LeftButton);
-    QTest::mouseRelease ( &tb, Qt::LeftButton, 0, QPoint (), 3000);
-    qreal expected = (3000 - tb.autoRepeatDelay()) / tb.autoRepeatInterval() + 1;
+    QTest::mousePress (toolButton, Qt::LeftButton);
+    QTest::mouseRelease (toolButton, Qt::LeftButton, 0, QPoint (), 3000);
+    const qreal expected = (3000 - toolButton->autoRepeatDelay()) / toolButton->autoRepeatInterval() + 1;
     //we check that the difference is small (on some systems timers are not super accurate)
     qreal diff = (expected - repeatSpy.count()) / expected;
     QVERIFY2(qAbs(diff) < 0.2, qPrintable(
@@ -222,7 +230,56 @@ void tst_QToolButton::task176137_autoRepeatOfAction()
 
 void tst_QToolButton::sendMouseClick()
 {
-    QTest::mouseClick(w, Qt::LeftButton, 0, QPoint(7,7));
+    if (m_menu.isNull()) {
+        qWarning("m_menu is NULL");
+        return;
+    }
+    if (!m_menu->isVisible())
+        return;
+    QTest::mouseClick(m_menu.data(), Qt::LeftButton, 0, QPoint(7, 7));
+    if (QTimer *timer = qobject_cast<QTimer *>(sender())) {
+        timer->stop();
+        timer->deleteLater();
+    }
+}
+
+void tst_QToolButton::qtbug_26956_popupTimerDone()
+{
+    QToolButton *tb = new QToolButton;
+    tb->setMenu(new QMenu(tb));
+    tb->menu()->addAction("Qt");
+    tb->deleteLater();
+    tb->showMenu();
+}
+
+void tst_QToolButton::qtbug_34759_sizeHintResetWhenSettingMenu()
+{
+    // There is no reliable way of checking what's ultimately a style-dependent
+    // sizing. So the idea is checking if the size is the "correct" size w.r.t.
+    // another toolbutton which has had a menu set before it was shown for the first time
+
+    QToolButton button1;
+    QToolButton button2;
+
+    button1.setToolButtonStyle(Qt::ToolButtonIconOnly);
+    button1.setPopupMode(QToolButton::MenuButtonPopup);
+
+    button2.setToolButtonStyle(Qt::ToolButtonIconOnly);
+    button2.setPopupMode(QToolButton::MenuButtonPopup);
+
+    button2.setMenu(new QMenu(&button2));
+
+    button1.show();
+    button2.show();
+
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Winrt does not support more than 1 native top level widget.", Abort);
+#endif
+    QVERIFY(QTest::qWaitForWindowExposed(&button1));
+    QVERIFY(QTest::qWaitForWindowExposed(&button2));
+
+    button1.setMenu(new QMenu(&button1));
+    QTRY_COMPARE(button1.sizeHint(), button2.sizeHint());
 }
 
 QTEST_MAIN(tst_QToolButton)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -101,8 +99,8 @@ QT_BEGIN_NAMESPACE
 /*!
     \fn bool QLine::isNull() const
 
-    Returns true if the line is not set up with valid start and end point;
-    otherwise returns false.
+    Returns \c true if the line is not set up with valid start and end point;
+    otherwise returns \c false.
 */
 
 /*!
@@ -172,7 +170,7 @@ QT_BEGIN_NAMESPACE
 /*!
     \fn bool QLine::operator!=(const QLine &line) const
 
-    Returns true if the given \a line is not the same as \e this line.
+    Returns \c true if the given \a line is not the same as \e this line.
 
     A line is different from another line if any of their start or
     end points differ, or the internal order of the points is different.
@@ -181,7 +179,7 @@ QT_BEGIN_NAMESPACE
 /*!
     \fn bool QLine::operator==(const QLine &line) const
 
-    Returns true if the given \a line is the same as \e this line.
+    Returns \c true if the given \a line is the same as \e this line.
 
     A line is identical to another line if the start and end points
     are identical, and the internal order of the points is the same.
@@ -216,6 +214,14 @@ QT_BEGIN_NAMESPACE
     Returns this line translated the distance specified by \a dx and \a dy.
 */
 
+/*!
+    \fn QPoint QLine::center() const
+
+    \since 5.8
+
+    Returns the center point of this line. This is equivalent to
+    (p1() + p2()) / 2, except it will never overflow.
+*/
 
 /*!
     \fn void QLine::setP1(const QPoint &p1)
@@ -259,10 +265,11 @@ QT_BEGIN_NAMESPACE
 
 
 #ifndef QT_NO_DEBUG_STREAM
-QDebug operator<<(QDebug d, const QLine &p)
+QDebug operator<<(QDebug dbg, const QLine &p)
 {
-    d << "QLine(" << p.p1() << ',' << p.p2() << ')';
-    return d;
+    QDebugStateSaver saver(dbg);
+    dbg.nospace() << "QLine(" << p.p1() << ',' << p.p2() << ')';
+    return dbg;
 }
 #endif
 
@@ -341,7 +348,7 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
     or a null line.
 
     The intersect() function determines the IntersectType for this
-    line and a given line, while the angle() function returns the
+    line and a given line, while the angleTo() function returns the
     angle between the lines. In addition, the unitVector() function
     returns a line that has the same starting point as this line, but
     with a length of only 1, while the normalVector() function returns
@@ -351,6 +358,12 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
     Finally, the line can be translated a given offset using the
     translate() function, and can be traversed using the pointAt()
     function.
+
+    \section1 Constraints
+
+    QLine is limited to the minimum and maximum values for the
+    \c int type. Operations on a QLine that could potentially result
+    in values outside this range will result in undefined behavior.
 
     \sa QLine, QPolygonF, QRectF
 */
@@ -374,7 +387,7 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
 
     \value UnboundedIntersection The two lines intersect, but not
     within the range defined by their lengths. This will be the case
-    if the lines are not parallel. 
+    if the lines are not parallel.
 
     intersect() will also return this value if the intersect point is
     within the start and end point of only one of the lines.
@@ -416,8 +429,8 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
 /*!
     \fn bool QLineF::isNull() const
 
-    Returns true if the line is not set up with valid start and end point;
-    otherwise returns false.
+    Returns \c true if the line is not set up with valid start and end point;
+    otherwise returns \c false.
 */
 
 /*!
@@ -495,13 +508,13 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
 */
 
 /*!
-    \fn QLineF::setLength(qreal length)
+    \fn void QLineF::setLength(qreal length)
 
     Sets the length of the line to the given \a length. QLineF will
     move the end point - p2() - of the line to give the line its new length.
-    
+
     If the line is a null line, the length will remain zero regardless
-    of the length specified. 
+    of the length specified.
 
     \sa length(), isNull()
 */
@@ -520,7 +533,7 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
 /*!
     \fn bool QLineF::operator!=(const QLineF &line) const
 
-    Returns true if the given \a line is not the same as \e this line.
+    Returns \c true if the given \a line is not the same as \e this line.
 
     A line is different from another line if their start or end points
     differ, or the internal order of the points is different.
@@ -529,7 +542,7 @@ QDataStream &operator>>(QDataStream &stream, QLine &line)
 /*!
     \fn bool QLineF::operator==(const QLineF &line) const
 
-    Returns true if the given \a line is the same as this line.
+    Returns \c true if the given \a line is the same as this line.
 
     A line is identical to another line if the start and end points
     are identical, and the internal order of the points is the same.
@@ -712,6 +725,15 @@ QLineF::IntersectType QLineF::intersect(const QLineF &l, QPointF *intersectionPo
 */
 
 /*!
+    \fn QPointF QLineF::center() const
+
+    \since 5.8
+
+    Returns the center point of this line. This is equivalent to
+    0.5 * p1() + 0.5 * p2().
+*/
+
+/*!
     \fn void QLineF::setP1(const QPointF &p1)
     \since 4.4
 
@@ -819,10 +841,11 @@ qreal QLineF::angle(const QLineF &l) const
 
 
 #ifndef QT_NO_DEBUG_STREAM
-QDebug operator<<(QDebug d, const QLineF &p)
+QDebug operator<<(QDebug dbg, const QLineF &p)
 {
-    d << "QLineF(" << p.p1() << ',' << p.p2() << ')';
-    return d;
+    QDebugStateSaver saver(dbg);
+    dbg.nospace() << "QLineF(" << p.p1() << ',' << p.p2() << ')';
+    return dbg;
 }
 #endif
 

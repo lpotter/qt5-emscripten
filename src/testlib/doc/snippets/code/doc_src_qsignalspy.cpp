@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -59,23 +69,32 @@ myCustomObject->doSomething(); // trigger emission of the signal
 
 QList<QVariant> arguments = spy.takeFirst();
 QVERIFY(arguments.at(0).type() == QVariant::Int);
-QVERIFY(arguments.at(1).type() == QVariant::QString);
+QVERIFY(arguments.at(1).type() == QVariant::String);
 QVERIFY(arguments.at(2).type() == QVariant::double);
 //! [1]
 
 
 //! [2]
-qRegisterMetaType<QModelIndex>("QModelIndex");
-QSignalSpy spy(&model, SIGNAL(whatever(QModelIndex)));
+qRegisterMetaType<SomeStruct>();
+QSignalSpy spy(&model, SIGNAL(whatever(SomeStruct)));
 //! [2]
 
 
 //! [3]
 // get the first argument from the first received signal:
-QModelIndex result = qvariant_cast<QModelIndex>(spy.at(0).at(0));
+SomeStruct result = qvariant_cast<SomeStruct>(spy.at(0).at(0));
 //! [3]
 
 
 //! [4]
 QSignalSpy spy(myPushButton, SIGNAL(clicked(bool)));
 //! [4]
+
+//! [5]
+QVERIFY(spy.wait(1000));
+//! [5]
+
+//! [6]
+QSignalSpy spy(myPushButton, &QPushButton::clicked);
+//! [6]
+

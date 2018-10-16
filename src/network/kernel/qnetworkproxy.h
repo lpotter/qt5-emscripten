@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,13 +40,12 @@
 #ifndef QNETWORKPROXY_H
 #define QNETWORKPROXY_H
 
+#include <QtNetwork/qtnetworkglobal.h>
 #include <QtNetwork/qhostaddress.h>
 #include <QtNetwork/qnetworkrequest.h>
 #include <QtCore/qshareddata.h>
 
 #ifndef QT_NO_NETWORKPROXY
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -59,13 +56,18 @@ class QNetworkConfiguration;
 class QNetworkProxyQueryPrivate;
 class Q_NETWORK_EXPORT QNetworkProxyQuery
 {
+    Q_GADGET
+
 public:
     enum QueryType {
         TcpSocket,
         UdpSocket,
+        SctpSocket,
         TcpServer = 100,
-        UrlRequest
+        UrlRequest,
+        SctpServer
     };
+    Q_ENUM(QueryType)
 
     QNetworkProxyQuery();
     explicit QNetworkProxyQuery(const QUrl &requestUrl, QueryType queryType = UrlRequest);
@@ -73,21 +75,27 @@ public:
                        QueryType queryType = TcpSocket);
     explicit QNetworkProxyQuery(quint16 bindPort, const QString &protocolTag = QString(),
                        QueryType queryType = TcpServer);
-    QNetworkProxyQuery(const QNetworkProxyQuery &other);
-#ifndef QT_NO_BEARERMANAGEMENT
+#if !defined(QT_NO_BEARERMANAGEMENT) && QT_DEPRECATED_SINCE(5, 10)
+    Q_DECL_DEPRECATED_X("QNetworkConfiguration support in QNetworkProxy is deprecated")
     QNetworkProxyQuery(const QNetworkConfiguration &networkConfiguration,
                        const QUrl &requestUrl, QueryType queryType = UrlRequest);
+    Q_DECL_DEPRECATED_X("QNetworkConfiguration support in QNetworkProxy is deprecated")
     QNetworkProxyQuery(const QNetworkConfiguration &networkConfiguration,
                        const QString &hostname, int port, const QString &protocolTag = QString(),
                        QueryType queryType = TcpSocket);
+    Q_DECL_DEPRECATED_X("QNetworkConfiguration support in QNetworkProxy is deprecated")
     QNetworkProxyQuery(const QNetworkConfiguration &networkConfiguration,
                        quint16 bindPort, const QString &protocolTag = QString(),
                        QueryType queryType = TcpServer);
 #endif
-    ~QNetworkProxyQuery();
+    QNetworkProxyQuery(const QNetworkProxyQuery &other);
+#ifdef Q_COMPILER_RVALUE_REFS
+    QNetworkProxyQuery &operator=(QNetworkProxyQuery &&other) Q_DECL_NOTHROW { swap(other); return *this; }
+#endif
     QNetworkProxyQuery &operator=(const QNetworkProxyQuery &other);
+    ~QNetworkProxyQuery();
 
-    void swap(QNetworkProxyQuery &other) { qSwap(d, other.d); }
+    void swap(QNetworkProxyQuery &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     bool operator==(const QNetworkProxyQuery &other) const;
     inline bool operator!=(const QNetworkProxyQuery &other) const
@@ -111,8 +119,10 @@ public:
     QUrl url() const;
     void setUrl(const QUrl &url);
 
-#ifndef QT_NO_BEARERMANAGEMENT
+#if !defined(QT_NO_BEARERMANAGEMENT) && QT_DEPRECATED_SINCE(5, 10)
+    Q_DECL_DEPRECATED_X("QNetworkConfiguration support in QNetworkProxy is deprecated")
     QNetworkConfiguration networkConfiguration() const;
+    Q_DECL_DEPRECATED_X("QNetworkConfiguration support in QNetworkProxy is deprecated")
     void setNetworkConfiguration(const QNetworkConfiguration &networkConfiguration);
 #endif
 
@@ -141,7 +151,9 @@ public:
         ListeningCapability = 0x0002,
         UdpTunnelingCapability = 0x0004,
         CachingCapability = 0x0008,
-        HostNameLookupCapability = 0x0010
+        HostNameLookupCapability = 0x0010,
+        SctpTunnelingCapability = 0x00020,
+        SctpListeningCapability = 0x00040
     };
     Q_DECLARE_FLAGS(Capabilities, Capability)
 
@@ -149,10 +161,13 @@ public:
     QNetworkProxy(ProxyType type, const QString &hostName = QString(), quint16 port = 0,
                   const QString &user = QString(), const QString &password = QString());
     QNetworkProxy(const QNetworkProxy &other);
+#ifdef Q_COMPILER_RVALUE_REFS
+    QNetworkProxy &operator=(QNetworkProxy &&other) Q_DECL_NOTHROW { swap(other); return *this; }
+#endif
     QNetworkProxy &operator=(const QNetworkProxy &other);
     ~QNetworkProxy();
 
-    void swap(QNetworkProxy &other) { qSwap(d, other.d); }
+    void swap(QNetworkProxy &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     bool operator==(const QNetworkProxy &other) const;
     inline bool operator!=(const QNetworkProxy &other) const
@@ -206,6 +221,7 @@ public:
 
     virtual QList<QNetworkProxy> queryProxy(const QNetworkProxyQuery &query = QNetworkProxyQuery()) = 0;
 
+    static bool usesSystemConfiguration();
     static void setUseSystemConfiguration(bool enable);
     static void setApplicationProxyFactory(QNetworkProxyFactory *factory);
     static QList<QNetworkProxy> proxyForQuery(const QNetworkProxyQuery &query);
@@ -214,13 +230,12 @@ public:
 
 #ifndef QT_NO_DEBUG_STREAM
 Q_NETWORK_EXPORT QDebug operator<<(QDebug debug, const QNetworkProxy &proxy);
+Q_NETWORK_EXPORT QDebug operator<<(QDebug debug, const QNetworkProxyQuery &proxyQuery);
 #endif
 
 QT_END_NAMESPACE
 
 Q_DECLARE_METATYPE(QNetworkProxy)
-
-QT_END_HEADER
 
 #endif // QT_NO_NETWORKPROXY
 

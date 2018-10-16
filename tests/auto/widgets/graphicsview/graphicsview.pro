@@ -19,14 +19,16 @@ SUBDIRS=\
    qgraphicsview \
    qgraphicswidget \
 
-!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+!qtConfig(private_tests): SUBDIRS -= \
            qgraphicsanchorlayout \
            qgraphicsanchorlayout1 \
            qgraphicsitem \
            qgraphicsscene \
            qgraphicssceneindex \
 
-# These tests require the cleanlooks style
-!contains(styles, cleanlooks):SUBDIRS -= \
+# These tests require the fusion style
+!contains(styles, fusion):SUBDIRS -= \
     qgraphicsproxywidget \
     qgraphicswidget \
+
+winrt: SUBDIRS -= qgraphicsview # QTBUG-68297

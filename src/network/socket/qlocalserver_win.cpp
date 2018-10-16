@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -91,7 +89,7 @@ bool QLocalServerPrivate::addListener()
         DWORD dwBufferSize = 0;
         GetTokenInformation(hToken, TokenUser, 0, 0, &dwBufferSize);
         tokenUserBuffer.fill(0, dwBufferSize);
-        PTOKEN_USER pTokenUser = (PTOKEN_USER)tokenUserBuffer.data();
+        auto pTokenUser = reinterpret_cast<PTOKEN_USER>(tokenUserBuffer.data());
         if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwBufferSize, &dwBufferSize)) {
             setError(QLatin1String("QLocalServerPrivate::addListener"));
             CloseHandle(hToken);
@@ -101,7 +99,7 @@ bool QLocalServerPrivate::addListener()
         dwBufferSize = 0;
         GetTokenInformation(hToken, TokenPrimaryGroup, 0, 0, &dwBufferSize);
         tokenGroupBuffer.fill(0, dwBufferSize);
-        PTOKEN_PRIMARY_GROUP pTokenGroup = (PTOKEN_PRIMARY_GROUP)tokenGroupBuffer.data();
+        auto pTokenGroup = reinterpret_cast<PTOKEN_PRIMARY_GROUP>(tokenGroupBuffer.data());
         if (!GetTokenInformation(hToken, TokenPrimaryGroup, pTokenGroup, dwBufferSize, &dwBufferSize)) {
             setError(QLatin1String("QLocalServerPrivate::addListener"));
             CloseHandle(hToken);
@@ -142,7 +140,7 @@ bool QLocalServerPrivate::addListener()
         aclSize = (aclSize + (sizeof(DWORD) - 1)) & 0xfffffffc;
 
         aclBuffer.fill(0, aclSize);
-        PACL acl = (PACL)aclBuffer.data();
+        auto acl = reinterpret_cast<PACL>(aclBuffer.data());
         InitializeAcl(acl, aclSize, ACL_REVISION_DS);
 
         if (socketOptions & QLocalServer::UserAccessOption) {
@@ -178,7 +176,7 @@ bool QLocalServerPrivate::addListener()
     }
 
     listener.handle = CreateNamedPipe(
-                 (const wchar_t *)fullServerName.utf16(), // pipe name
+                 reinterpret_cast<const wchar_t *>(fullServerName.utf16()), // pipe name
                  PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,       // read/write access
                  PIPE_TYPE_BYTE |          // byte type pipe
                  PIPE_READMODE_BYTE |      // byte-read mode
@@ -200,6 +198,9 @@ bool QLocalServerPrivate::addListener()
 
     memset(&listener.overlapped, 0, sizeof(listener.overlapped));
     listener.overlapped.hEvent = eventHandle;
+
+    // Beware! ConnectNamedPipe will reset the eventHandle to non-signaled.
+    // Callers of addListener must check all listeners for connections.
     if (!ConnectNamedPipe(listener.handle, &listener.overlapped)) {
         switch (GetLastError()) {
         case ERROR_IO_PENDING:
@@ -207,7 +208,6 @@ bool QLocalServerPrivate::addListener()
             break;
         case ERROR_PIPE_CONNECTED:
             listener.connected = true;
-            SetEvent(eventHandle);
             break;
         default:
             CloseHandle(listener.handle);
@@ -225,7 +225,7 @@ bool QLocalServerPrivate::addListener()
 void QLocalServerPrivate::setError(const QString &function)
 {
     int windowsError = GetLastError();
-    errorString = QString::fromLatin1("%1: %2").arg(function).arg(qt_error_string(windowsError));
+    errorString = QString::fromLatin1("%1: %2").arg(function, qt_error_string(windowsError));
     error = QAbstractSocket::UnknownSocketError;
 }
 
@@ -243,7 +243,7 @@ bool QLocalServerPrivate::listen(const QString &name)
 {
     Q_Q(QLocalServer);
 
-    QString pipePath = QLatin1String("\\\\.\\pipe\\");
+    const QLatin1String pipePath("\\\\.\\pipe\\");
     if (name.startsWith(pipePath))
         fullServerName = name;
     else
@@ -259,6 +259,8 @@ bool QLocalServerPrivate::listen(const QString &name)
     for (int i = 0; i < SYSTEM_MAX_PENDING_SOCKETS; ++i)
         if (!addListener())
             return false;
+
+    _q_onNewConnection();
     return true;
 }
 
@@ -272,37 +274,43 @@ void QLocalServerPrivate::_q_onNewConnection()
 {
     Q_Q(QLocalServer);
     DWORD dummy;
+    bool tryAgain;
+    do {
+        tryAgain = false;
 
-    // Reset first, otherwise we could reset an event which was asserted
-    // immediately after we checked the conn status.
-    ResetEvent(eventHandle);
+        // Reset first, otherwise we could reset an event which was asserted
+        // immediately after we checked the conn status.
+        ResetEvent(eventHandle);
 
-    // Testing shows that there is indeed absolutely no guarantee which listener gets
-    // a client connection first, so there is no way around polling all of them.
-    for (int i = 0; i < listeners.size(); ) {
-        HANDLE handle = listeners[i].handle;
-        if (listeners[i].connected
-            || GetOverlappedResult(handle, &listeners[i].overlapped, &dummy, FALSE))
-        {
-            listeners.removeAt(i);
+        // Testing shows that there is indeed absolutely no guarantee which listener gets
+        // a client connection first, so there is no way around polling all of them.
+        for (int i = 0; i < listeners.size(); ) {
+            HANDLE handle = listeners[i].handle;
+            if (listeners[i].connected
+                || GetOverlappedResult(handle, &listeners[i].overlapped, &dummy, FALSE))
+            {
+                listeners.removeAt(i);
 
-            addListener();
+                addListener();
 
-            if (pendingConnections.size() > maxPendingConnections)
-                connectionEventNotifier->setEnabled(false);
+                if (pendingConnections.size() > maxPendingConnections)
+                    connectionEventNotifier->setEnabled(false);
+                else
+                    tryAgain = true;
 
-            // Make this the last thing so connected slots can wreak the least havoc
-            q->incomingConnection((quintptr)handle);
-        } else {
-            if (GetLastError() != ERROR_IO_INCOMPLETE) {
-                q->close();
-                setError(QLatin1String("QLocalServerPrivate::_q_onNewConnection"));
-                return;
+                // Make this the last thing so connected slots can wreak the least havoc
+                q->incomingConnection(reinterpret_cast<quintptr>(handle));
+            } else {
+                if (GetLastError() != ERROR_IO_INCOMPLETE) {
+                    q->close();
+                    setError(QLatin1String("QLocalServerPrivate::_q_onNewConnection"));
+                    return;
+                }
+
+                ++i;
             }
-
-            ++i;
         }
-    }
+    } while (tryAgain);
 }
 
 void QLocalServerPrivate::closeServer()

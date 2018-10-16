@@ -1,7 +1,11 @@
 TARGET = qsqlite2
 
-SOURCES = smain.cpp
-OTHER_FILES += sqlite2.json
-include(../../../sql/drivers/sqlite2/qsql_sqlite2.pri)
+HEADERS += $$PWD/qsql_sqlite2_p.h
+SOURCES += $$PWD/qsql_sqlite2.cpp $$PWD/smain.cpp
 
+QMAKE_USE += sqlite2
+
+OTHER_FILES += sqlite2.json
+
+PLUGIN_CLASS_NAME = QSQLite2DriverPlugin
 include(../qsqldriverbase.pri)

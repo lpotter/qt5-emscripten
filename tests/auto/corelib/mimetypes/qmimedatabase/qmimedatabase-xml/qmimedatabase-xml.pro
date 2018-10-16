@@ -1,15 +1,17 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
+
+requires(qtConfig(private_tests))
 
 TARGET = tst_qmimedatabase-xml
 
 QT = core testlib concurrent
 
-CONFIG += depend_includepath
-
 SOURCES += tst_qmimedatabase-xml.cpp
 HEADERS += ../tst_qmimedatabase.h
 
-DEFINES += CORE_SOURCES='"\\"$$QT.core.sources\\""'
+RESOURCES += $$QT_SOURCE_TREE/src/corelib/mimetypes/mimetypes.qrc
+RESOURCES += ../testdata.qrc
 
 *-g++*:QMAKE_CXXFLAGS += -W -Wall -Wextra -Wshadow -Wno-long-long -Wnon-virtual-dtor
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+
+unix:!mac:!qnx: DEFINES += USE_XDG_DATA_DIRS

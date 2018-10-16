@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -60,19 +70,17 @@ MainWindow::MainWindow(QWidget *parent)
     for (int column = 0; column < model->columnCount(); ++column)
         view->resizeColumnToContents(column);
 
-    connect(exitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(exitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
 
-    connect(view->selectionModel(),
-            SIGNAL(selectionChanged(const QItemSelection &,
-                                    const QItemSelection &)),
-            this, SLOT(updateActions()));
+    connect(view->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::updateActions);
 
-    connect(actionsMenu, SIGNAL(aboutToShow()), this, SLOT(updateActions()));
-    connect(insertRowAction, SIGNAL(triggered()), this, SLOT(insertRow()));
-    connect(insertColumnAction, SIGNAL(triggered()), this, SLOT(insertColumn()));
-    connect(removeRowAction, SIGNAL(triggered()), this, SLOT(removeRow()));
-    connect(removeColumnAction, SIGNAL(triggered()), this, SLOT(removeColumn()));
-    connect(insertChildAction, SIGNAL(triggered()), this, SLOT(insertChild()));
+    connect(actionsMenu, &QMenu::aboutToShow, this, &MainWindow::updateActions);
+    connect(insertRowAction, &QAction::triggered, this, &MainWindow::insertRow);
+    connect(insertColumnAction, &QAction::triggered, this, &MainWindow::insertColumn);
+    connect(removeRowAction, &QAction::triggered, this, &MainWindow::removeRow);
+    connect(removeColumnAction, &QAction::triggered, this, &MainWindow::removeColumn);
+    connect(insertChildAction, &QAction::triggered, this, &MainWindow::insertChild);
 
     updateActions();
 }
@@ -102,13 +110,13 @@ void MainWindow::insertChild()
     updateActions();
 }
 
-bool MainWindow::insertColumn(const QModelIndex &parent)
+bool MainWindow::insertColumn()
 {
     QAbstractItemModel *model = view->model();
     int column = view->selectionModel()->currentIndex().column();
 
     // Insert a column in the parent item.
-    bool changed = model->insertColumn(column + 1, parent);
+    bool changed = model->insertColumn(column + 1);
     if (changed)
         model->setHeaderData(column + 1, Qt::Horizontal, QVariant("[No header]"), Qt::EditRole);
 
@@ -133,15 +141,15 @@ void MainWindow::insertRow()
     }
 }
 
-bool MainWindow::removeColumn(const QModelIndex &parent)
+bool MainWindow::removeColumn()
 {
     QAbstractItemModel *model = view->model();
     int column = view->selectionModel()->currentIndex().column();
 
     // Insert columns in each child of the parent item.
-    bool changed = model->removeColumn(column, parent);
+    bool changed = model->removeColumn(column);
 
-    if (!parent.isValid() && changed)
+    if (changed)
         updateActions();
 
     return changed;

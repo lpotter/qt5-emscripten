@@ -53,8 +53,8 @@ macro(QT5_MAKE_OUTPUT_FILE infile prefix ext outfile )
     else()
         file(RELATIVE_PATH rel ${CMAKE_CURRENT_SOURCE_DIR} ${infile})
     endif()
-    if(WIN32 AND rel MATCHES "^[a-zA-Z]:") # absolute path
-        string(REGEX REPLACE "^([a-zA-Z]):(.*)$" "\\1_\\2" rel "${rel}")
+    if(WIN32 AND rel MATCHES "^([a-zA-Z]):(.*)$") # absolute path
+        set(rel "${CMAKE_MATCH_1}_${CMAKE_MATCH_2}")
     endif()
     set(_outfile "${CMAKE_CURRENT_BINARY_DIR}/${rel}")
     string(REPLACE ".." "__" _outfile ${_outfile})
@@ -90,39 +90,57 @@ macro(QT5_GET_MOC_FLAGS _moc_flags)
     if(WIN32)
         set(${_moc_flags} ${${_moc_flags}} -DWIN32)
     endif()
+    if (MSVC)
+        set(${_moc_flags} ${${_moc_flags}} --compiler-flavor=msvc)
+    endif()
 endmacro()
 
 
 # helper macro to set up a moc rule
-macro(QT5_CREATE_MOC_COMMAND infile outfile moc_flags moc_options)
-    # For Windows, create a parameters file to work around command line length limit
-    if(WIN32)
-        # Pass the parameters in a file.  Set the working directory to
-        # be that containing the parameters file and reference it by
-        # just the file name.  This is necessary because the moc tool on
-        # MinGW builds does not seem to handle spaces in the path to the
-        # file given with the @ syntax.
-        get_filename_component(_moc_outfile_name "${outfile}" NAME)
-        get_filename_component(_moc_outfile_dir "${outfile}" PATH)
-        if(_moc_outfile_dir)
-          set(_moc_working_dir WORKING_DIRECTORY ${_moc_outfile_dir})
-        endif()
-        set(_moc_parameters_file ${outfile}_parameters)
-        set(_moc_parameters ${moc_flags} ${moc_options} -o "${outfile}" "${infile}")
-        string(REPLACE ";" "\n" _moc_parameters "${_moc_parameters}")
-        file(WRITE ${_moc_parameters_file} "${_moc_parameters}")
-        add_custom_command(OUTPUT ${outfile}
-                           COMMAND ${Qt5Core_MOC_EXECUTABLE} @${_moc_outfile_name}_parameters
-                           DEPENDS ${infile}
-                           ${_moc_working_dir}
-                           VERBATIM)
-    else()
-        add_custom_command(OUTPUT ${outfile}
-                           COMMAND ${Qt5Core_MOC_EXECUTABLE}
-                           ARGS ${moc_flags} ${moc_options} -o ${outfile} ${infile}
-                           DEPENDS ${infile} VERBATIM)
+function(QT5_CREATE_MOC_COMMAND infile outfile moc_flags moc_options moc_target moc_depends)
+    # Pass the parameters in a file.  Set the working directory to
+    # be that containing the parameters file and reference it by
+    # just the file name.  This is necessary because the moc tool on
+    # MinGW builds does not seem to handle spaces in the path to the
+    # file given with the @ syntax.
+    get_filename_component(_moc_outfile_name "${outfile}" NAME)
+    get_filename_component(_moc_outfile_dir "${outfile}" PATH)
+    if(_moc_outfile_dir)
+        set(_moc_working_dir WORKING_DIRECTORY ${_moc_outfile_dir})
     endif()
-endmacro()
+    set (_moc_parameters_file ${outfile}_parameters)
+    set (_moc_parameters ${moc_flags} ${moc_options} -o "${outfile}" "${infile}")
+    string (REPLACE ";" "\n" _moc_parameters "${_moc_parameters}")
+
+    if(moc_target)
+        set(_moc_parameters_file ${_moc_parameters_file}$<$<BOOL:$<CONFIGURATION>>:_$<CONFIGURATION>>)
+        set(targetincludes "$<TARGET_PROPERTY:${moc_target},INCLUDE_DIRECTORIES>")
+        set(targetdefines "$<TARGET_PROPERTY:${moc_target},COMPILE_DEFINITIONS>")
+
+        set(targetincludes "$<$<BOOL:${targetincludes}>:-I$<JOIN:${targetincludes},\n-I>\n>")
+        set(targetdefines "$<$<BOOL:${targetdefines}>:-D$<JOIN:${targetdefines},\n-D>\n>")
+
+        file (GENERATE
+            OUTPUT ${_moc_parameters_file}
+            CONTENT "${targetdefines}${targetincludes}${_moc_parameters}\n"
+        )
+
+        set(targetincludes)
+        set(targetdefines)
+    else()
+        file(WRITE ${_moc_parameters_file} "${_moc_parameters}\n")
+    endif()
+
+    set(_moc_extra_parameters_file @${_moc_parameters_file})
+    add_custom_command(OUTPUT ${outfile}
+                       COMMAND ${Qt5Core_MOC_EXECUTABLE} ${_moc_extra_parameters_file}
+                       DEPENDS ${infile} ${moc_depends}
+                       ${_moc_working_dir}
+                       VERBATIM)
+    set_source_files_properties(${infile} PROPERTIES SKIP_AUTOMOC ON)
+    set_source_files_properties(${outfile} PROPERTIES SKIP_AUTOMOC ON)
+    set_source_files_properties(${outfile} PROPERTIES SKIP_AUTOUIC ON)
+endfunction()
 
 
 function(QT5_GENERATE_MOC infile outfile )
@@ -133,8 +151,10 @@ function(QT5_GENERATE_MOC infile outfile )
     if(NOT IS_ABSOLUTE "${outfile}")
         set(_outfile "${CMAKE_CURRENT_BINARY_DIR}/${outfile}")
     endif()
-    qt5_create_moc_command(${abs_infile} ${_outfile} "${moc_flags}" "")
-    set_source_files_properties(${outfile} PROPERTIES SKIP_AUTOMOC TRUE)  # dont run automoc on this file
+    if ("x${ARGV2}" STREQUAL "xTARGET")
+        set(moc_target ${ARGV3})
+    endif()
+    qt5_create_moc_command(${abs_infile} ${_outfile} "${moc_flags}" "" "${moc_target}" "")
 endfunction()
 
 
@@ -145,20 +165,94 @@ function(QT5_WRAP_CPP outfiles )
     qt5_get_moc_flags(moc_flags)
 
     set(options)
-    set(oneValueArgs)
-    set(multiValueArgs OPTIONS)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs OPTIONS DEPENDS)
 
     cmake_parse_arguments(_WRAP_CPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     set(moc_files ${_WRAP_CPP_UNPARSED_ARGUMENTS})
     set(moc_options ${_WRAP_CPP_OPTIONS})
+    set(moc_target ${_WRAP_CPP_TARGET})
+    set(moc_depends ${_WRAP_CPP_DEPENDS})
+
     foreach(it ${moc_files})
         get_filename_component(it ${it} ABSOLUTE)
         qt5_make_output_file(${it} moc_ cpp outfile)
-        qt5_create_moc_command(${it} ${outfile} "${moc_flags}" "${moc_options}")
+        qt5_create_moc_command(${it} ${outfile} "${moc_flags}" "${moc_options}" "${moc_target}" "${moc_depends}")
         list(APPEND ${outfiles} ${outfile})
     endforeach()
     set(${outfiles} ${${outfiles}} PARENT_SCOPE)
+endfunction()
+
+
+
+# _qt5_parse_qrc_file(infile _out_depends _rc_depends)
+# internal
+
+function(_QT5_PARSE_QRC_FILE infile _out_depends _rc_depends)
+    get_filename_component(rc_path ${infile} PATH)
+
+    if(EXISTS "${infile}")
+        #  parse file for dependencies
+        #  all files are absolute paths or relative to the location of the qrc file
+        file(READ "${infile}" RC_FILE_CONTENTS)
+        string(REGEX MATCHALL "<file[^<]+" RC_FILES "${RC_FILE_CONTENTS}")
+        foreach(RC_FILE ${RC_FILES})
+            string(REGEX REPLACE "^<file[^>]*>" "" RC_FILE "${RC_FILE}")
+            if(NOT IS_ABSOLUTE "${RC_FILE}")
+                set(RC_FILE "${rc_path}/${RC_FILE}")
+            endif()
+            set(RC_DEPENDS ${RC_DEPENDS} "${RC_FILE}")
+        endforeach()
+        # Since this cmake macro is doing the dependency scanning for these files,
+        # let's make a configured file and add it as a dependency so cmake is run
+        # again when dependencies need to be recomputed.
+        qt5_make_output_file("${infile}" "" "qrc.depends" out_depends)
+        configure_file("${infile}" "${out_depends}" COPYONLY)
+    else()
+        # The .qrc file does not exist (yet). Let's add a dependency and hope
+        # that it will be generated later
+        set(out_depends)
+    endif()
+
+    set(${_out_depends} ${out_depends} PARENT_SCOPE)
+    set(${_rc_depends} ${RC_DEPENDS} PARENT_SCOPE)
+endfunction()
+
+
+# qt5_add_binary_resources(target inputfiles ... )
+
+function(QT5_ADD_BINARY_RESOURCES target )
+
+    set(options)
+    set(oneValueArgs DESTINATION)
+    set(multiValueArgs OPTIONS)
+
+    cmake_parse_arguments(_RCC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    set(rcc_files ${_RCC_UNPARSED_ARGUMENTS})
+    set(rcc_options ${_RCC_OPTIONS})
+    set(rcc_destination ${_RCC_DESTINATION})
+
+    if(NOT rcc_destination)
+        set(rcc_destination ${CMAKE_CURRENT_BINARY_DIR}/${target}.rcc)
+    endif()
+
+    foreach(it ${rcc_files})
+        get_filename_component(infile ${it} ABSOLUTE)
+
+        _QT5_PARSE_QRC_FILE(${infile} _out_depends _rc_depends)
+        set_source_files_properties(${infile} PROPERTIES SKIP_AUTORCC ON)
+        set(infiles ${infiles} ${infile})
+        set(out_depends ${out_depends} ${_out_depends})
+        set(rc_depends ${rc_depends} ${_rc_depends})
+    endforeach()
+
+    add_custom_command(OUTPUT ${rcc_destination}
+                       COMMAND ${Qt5Core_RCC_EXECUTABLE}
+                       ARGS ${rcc_options} --binary --name ${target} --output ${rcc_destination} ${infiles}
+                       DEPENDS ${rc_depends} ${out_depends} ${infiles} VERBATIM)
+    add_custom_target(${target} ALL DEPENDS ${rcc_destination})
 endfunction()
 
 
@@ -175,49 +269,89 @@ function(QT5_ADD_RESOURCES outfiles )
     set(rcc_files ${_RCC_UNPARSED_ARGUMENTS})
     set(rcc_options ${_RCC_OPTIONS})
 
+    if("${rcc_options}" MATCHES "-binary")
+        message(WARNING "Use qt5_add_binary_resources for binary option")
+    endif()
+
     foreach(it ${rcc_files})
         get_filename_component(outfilename ${it} NAME_WE)
         get_filename_component(infile ${it} ABSOLUTE)
-        get_filename_component(rc_path ${infile} PATH)
         set(outfile ${CMAKE_CURRENT_BINARY_DIR}/qrc_${outfilename}.cpp)
 
-        set(_RC_DEPENDS)
-        if(EXISTS "${infile}")
-            #  parse file for dependencies
-            #  all files are absolute paths or relative to the location of the qrc file
-            file(READ "${infile}" _RC_FILE_CONTENTS)
-            string(REGEX MATCHALL "<file[^<]+" _RC_FILES "${_RC_FILE_CONTENTS}")
-            foreach(_RC_FILE ${_RC_FILES})
-                string(REGEX REPLACE "^<file[^>]*>" "" _RC_FILE "${_RC_FILE}")
-                if(NOT IS_ABSOLUTE "${_RC_FILE}")
-                    set(_RC_FILE "${rc_path}/${_RC_FILE}")
-                endif()
-                set(_RC_DEPENDS ${_RC_DEPENDS} "${_RC_FILE}")
-            endforeach()
-            # Since this cmake macro is doing the dependency scanning for these files,
-            # let's make a configured file and add it as a dependency so cmake is run
-            # again when dependencies need to be recomputed.
-            qt5_make_output_file("${infile}" "" "qrc.depends" out_depends)
-            configure_file("${infile}" "${out_depends}" COPY_ONLY)
-        else()
-            # The .qrc file does not exist (yet). Let's add a dependency and hope
-            # that it will be generated later
-            set(out_depends)
-        endif()
+        _QT5_PARSE_QRC_FILE(${infile} _out_depends _rc_depends)
+        set_source_files_properties(${infile} PROPERTIES SKIP_AUTORCC ON)
 
         add_custom_command(OUTPUT ${outfile}
                            COMMAND ${Qt5Core_RCC_EXECUTABLE}
-                           ARGS ${rcc_options} -name ${outfilename} -o ${outfile} ${infile}
+                           ARGS ${rcc_options} --name ${outfilename} --output ${outfile} ${infile}
                            MAIN_DEPENDENCY ${infile}
-                           DEPENDS ${_RC_DEPENDS} "${out_depends}" VERBATIM)
+                           DEPENDS ${_rc_depends} "${out_depends}" VERBATIM)
+        set_source_files_properties(${outfile} PROPERTIES SKIP_AUTOMOC ON)
+        set_source_files_properties(${outfile} PROPERTIES SKIP_AUTOUIC ON)
         list(APPEND ${outfiles} ${outfile})
     endforeach()
     set(${outfiles} ${${outfiles}} PARENT_SCOPE)
 endfunction()
 
+# qt5_add_big_resources(outfiles inputfile ... )
+
+function(QT5_ADD_BIG_RESOURCES outfiles )
+
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs OPTIONS)
+
+    cmake_parse_arguments(_RCC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    set(rcc_files ${_RCC_UNPARSED_ARGUMENTS})
+    set(rcc_options ${_RCC_OPTIONS})
+
+    if("${rcc_options}" MATCHES "-binary")
+        message(WARNING "Use qt5_add_binary_resources for binary option")
+    endif()
+
+    foreach(it ${rcc_files})
+        get_filename_component(outfilename ${it} NAME_WE)
+        get_filename_component(infile ${it} ABSOLUTE)
+        set(tmpoutfile ${CMAKE_CURRENT_BINARY_DIR}/qrc_${outfilename}tmp.cpp)
+        set(outfile ${CMAKE_CURRENT_BINARY_DIR}/qrc_${outfilename}.o)
+
+        _QT5_PARSE_QRC_FILE(${infile} _out_depends _rc_depends)
+        set_source_files_properties(${infile} PROPERTIES SKIP_AUTORCC ON)
+        add_custom_command(OUTPUT ${tmpoutfile}
+                           COMMAND ${Qt5Core_RCC_EXECUTABLE} ${rcc_options} --name ${outfilename} --pass 1 --output ${tmpoutfile} ${infile}
+                           DEPENDS ${infile} ${_rc_depends} "${out_depends}" VERBATIM)
+        set_source_files_properties(${tmpoutfile} PROPERTIES SKIP_AUTOMOC ON)
+        set_source_files_properties(${tmpoutfile} PROPERTIES SKIP_AUTOUIC ON)
+        add_custom_target(big_resources_${outfilename} ALL DEPENDS ${tmpoutfile})
+        add_library(rcc_object_${outfilename} OBJECT ${tmpoutfile})
+        add_dependencies(rcc_object_${outfilename} big_resources_${outfilename})
+        add_custom_command(OUTPUT ${outfile}
+                           COMMAND ${Qt5Core_RCC_EXECUTABLE}
+                           ARGS ${rcc_options} --name ${outfilename} --pass 2 --temp $<TARGET_OBJECTS:rcc_object_${outfilename}> --output ${outfile} ${infile}
+                           DEPENDS rcc_object_${outfilename}
+                           VERBATIM)
+       list(APPEND ${outfiles} ${outfile})
+    endforeach()
+    set(${outfiles} ${${outfiles}} PARENT_SCOPE)
+endfunction()
+
+set(_Qt5_COMPONENT_PATH "${CMAKE_CURRENT_LIST_DIR}/..")
 
 if (NOT CMAKE_VERSION VERSION_LESS 2.8.9)
     macro(qt5_use_modules _target _link_type)
+        if(NOT CMAKE_MINIMUM_REQUIRED_VERSION VERSION_LESS 2.8.11)
+            if(CMAKE_WARN_DEPRECATED)
+                set(messageType WARNING)
+            endif()
+            if(CMAKE_ERROR_DEPRECATED)
+                set(messageType FATAL_ERROR)
+            endif()
+            if(messageType)
+                message(${messageType} "The qt5_use_modules macro is obsolete. Use target_link_libraries with IMPORTED targets instead.")
+            endif()
+        endif()
+
         if (NOT TARGET ${_target})
             message(FATAL_ERROR "The first argument to qt5_use_modules must be an existing target.")
         endif()
@@ -234,7 +368,7 @@ if (NOT CMAKE_VERSION VERSION_LESS 2.8.9)
 
         foreach(_module ${_qt5_modules})
             if (NOT Qt5${_module}_FOUND)
-                find_package(Qt5${_module} PATHS ${_qt5_corelib_install_prefix} NO_DEFAULT_PATH)
+                find_package(Qt5${_module} PATHS "${_Qt5_COMPONENT_PATH}" NO_DEFAULT_PATH)
                 if (NOT Qt5${_module}_FOUND)
                     message(FATAL_ERROR "Can not use \"${_module}\" module which has not yet been found.")
                 endif()
@@ -243,8 +377,12 @@ if (NOT CMAKE_VERSION VERSION_LESS 2.8.9)
             set_property(TARGET ${_target} APPEND PROPERTY INCLUDE_DIRECTORIES ${Qt5${_module}_INCLUDE_DIRS})
             set_property(TARGET ${_target} APPEND PROPERTY COMPILE_DEFINITIONS ${Qt5${_module}_COMPILE_DEFINITIONS})
             set_property(TARGET ${_target} APPEND PROPERTY COMPILE_DEFINITIONS_RELEASE QT_NO_DEBUG)
-
-            if (Qt5_POSITION_INDEPENDENT_CODE)
+            set_property(TARGET ${_target} APPEND PROPERTY COMPILE_DEFINITIONS_RELWITHDEBINFO QT_NO_DEBUG)
+            set_property(TARGET ${_target} APPEND PROPERTY COMPILE_DEFINITIONS_MINSIZEREL QT_NO_DEBUG)
+            if (Qt5_POSITION_INDEPENDENT_CODE
+                    AND (CMAKE_VERSION VERSION_LESS 2.8.12
+                        AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+                        OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)))
                 set_property(TARGET ${_target} PROPERTY POSITION_INDEPENDENT_CODE ${Qt5_POSITION_INDEPENDENT_CODE})
             endif()
         endforeach()

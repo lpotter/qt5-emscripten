@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -83,17 +70,13 @@ private slots:
     void rangeReplace2();
     void matchReplace2();
 
-#ifdef HAVE_JSC
     void simpleFindJSC();
     void rangeReplaceJSC();
     void matchReplaceJSC();
-#endif
 
-#ifdef HAVE_BOOST
     void simpleFindBoost();
     void rangeReplaceBoost();
     void matchReplaceBoost();
-#endif
 
 /* those apply an (incorrect) regexp on entire source
    (this main.cpp). JSC appears to handle this
@@ -103,14 +86,10 @@ private slots:
     void horribleReplace1();
     void horribleReplace2();
     void horribleWrongReplace2();
-#ifdef HAVE_JSC
     void horribleWrongReplaceJSC();
     void horribleReplaceJSC();
-#endif
-#ifdef HAVE_BOOST
     void horribleWrongReplaceBoost();
     void horribleReplaceBoost();
-#endif
 private:
     QString str1;
     QString str2;
@@ -139,13 +118,13 @@ void tst_qregexp::escape_data()
 
     QTest::newRow("escape 0") << "Hello world" << "Hello world";
     QTest::newRow("escape 1") << "(Hello world)" << "\\(Hello world\\)";
-    { 
+    {
         QString s;
         for (int i = 0; i < 10; ++i)
             s += "(escape)";
         QTest::newRow("escape 10") << s << QRegExp::escape(s);
     }
-    { 
+    {
         QString s;
         for (int i = 0; i < 100; ++i)
             s += "(escape)";
@@ -242,7 +221,7 @@ void tst_qregexp::escape_new2()
             *quotedData = c;
             ++quotedData;
         }
-        quoted.resize(pattern.size() + escaped); 
+        quoted.resize(pattern.size() + escaped);
 
         verify(quoted, expected);
     }
@@ -329,7 +308,7 @@ void tst_qregexp::escape_new4()
         const QLatin1Char backslash('\\');
         QString quoted(n * 2, backslash);
         QChar *quotedData = quoted.data();
-        for (int j = 0; j != i; ++j) 
+        for (int j = 0; j != i; ++j)
             *quotedData++ = *patternData++;
         int escaped = 0;
         for (; i != n; ++i) {
@@ -342,7 +321,7 @@ void tst_qregexp::escape_new4()
             ++quotedData;
             ++patternData;
         }
-        quoted.resize(n + escaped); 
+        quoted.resize(n + escaped);
         verify(quoted, expected);
         // "return quoted"
     }
@@ -459,9 +438,9 @@ void tst_qregexp::horribleReplace2()
     }
     QCOMPARE(r, QString("1.2.3"));
 }
-#ifdef HAVE_JSC
 void tst_qregexp::simpleFindJSC()
 {
+#ifdef HAVE_JSC
     int numr;
     const char * errmsg="  ";
     QString rxs("happy");
@@ -475,10 +454,14 @@ void tst_qregexp::simpleFindJSC()
     jsRegExpFree(rx);
     QCOMPARE(numr, 1);
     QCOMPARE(offsetVector[0], 11);
+#else
+    QSKIP("JSC is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::rangeReplaceJSC()
 {
+#ifdef HAVE_JSC
     QScriptValue r;
     QScriptEngine engine;
     engine.globalObject().setProperty("s", str1);
@@ -488,10 +471,14 @@ void tst_qregexp::rangeReplaceJSC()
         r = replaceFunc.call(QScriptValue());
     }
     QCOMPARE(r.toString(), QString("W- -r- -ll h-ppy monk-ys"));
+#else
+    QSKIP("JSC is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::matchReplaceJSC()
 {
+#ifdef HAVE_JSC
     QScriptValue r;
     QScriptEngine engine;
     engine.globalObject().setProperty("s", str1);
@@ -501,10 +488,14 @@ void tst_qregexp::matchReplaceJSC()
         r = replaceFunc.call(QScriptValue());
     }
     QCOMPARE(r.toString(), QString("eaeaae"));
+#else
+    QSKIP("JSC is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::horribleWrongReplaceJSC()
 {
+#ifdef HAVE_JSC
     QScriptValue r;
     QScriptEngine engine;
     engine.globalObject().setProperty("s", str2);
@@ -514,10 +505,14 @@ void tst_qregexp::horribleWrongReplaceJSC()
         r = replaceFunc.call(QScriptValue());
     }
     QCOMPARE(r.toString(), str2);
+#else
+    QSKIP("JSC is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::horribleReplaceJSC()
 {
+#ifdef HAVE_JSC
     QScriptValue r;
     QScriptEngine engine;
     // the m flag doesn't actually work here; dunno
@@ -528,11 +523,14 @@ void tst_qregexp::horribleReplaceJSC()
         r = replaceFunc.call(QScriptValue());
     }
     QCOMPARE(r.toString(), QString("1.2.3"));
-}
+#else
+    QSKIP("JSC is not enabled for this platform");
 #endif
+}
 
+void tst_qregexp::simpleFindBoost()
+{
 #ifdef HAVE_BOOST
-void tst_qregexp::simpleFindBoost(){
     int roff;
     boost::regex rx ("happy", boost::regex_constants::perl);
     std::string s = str1.toStdString();
@@ -546,10 +544,15 @@ void tst_qregexp::simpleFindBoost(){
         roff = (what[0].first)-start;
     }
     QCOMPARE(roff, 11);
+#else
+    QSKIP("Boost is not enabled for this platform");
+#endif
+
 }
 
 void tst_qregexp::rangeReplaceBoost()
 {
+#ifdef HAVE_BOOST
     boost::regex pattern ("[a-f]", boost::regex_constants::perl);
     std::string s = str1.toStdString();
     std::string r;
@@ -557,10 +560,14 @@ void tst_qregexp::rangeReplaceBoost()
         r = boost::regex_replace (s, pattern, "-");
     }
     QCOMPARE(r, std::string("W- -r- -ll h-ppy monk-ys"));
+#else
+    QSKIP("Boost is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::matchReplaceBoost()
 {
+#ifdef HAVE_BOOST
     boost::regex pattern ("[^a-f]*([a-f]+)[^a-f]*",boost::regex_constants::perl);
     std::string s = str1.toStdString();
     std::string r;
@@ -568,10 +575,14 @@ void tst_qregexp::matchReplaceBoost()
         r = boost::regex_replace (s, pattern, "$1");
     }
     QCOMPARE(r, std::string("eaeaae"));
+#else
+    QSKIP("Boost is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::horribleWrongReplaceBoost()
 {
+#ifdef HAVE_BOOST
     boost::regex pattern (".*#""define ZLIB_VERSION \"([0-9]+)\\.([0-9]+)\\.([0-9]+)\".*", boost::regex_constants::perl);
     std::string s = str2.toStdString();
     std::string r;
@@ -579,10 +590,14 @@ void tst_qregexp::horribleWrongReplaceBoost()
         r = boost::regex_replace (s, pattern, "$1.$2.$3");
     }
     QCOMPARE(r, s);
+#else
+    QSKIP("Boost is not enabled for this platform");
+#endif
 }
 
 void tst_qregexp::horribleReplaceBoost()
 {
+#ifdef HAVE_BOOST
     boost::regex pattern (".*#""define ZLIB_VERSION \"([0-9]+)\\.([0-9]+)\\.([0-9]+).*", boost::regex_constants::perl);
     std::string s = str2.toStdString();
     std::string r;
@@ -590,8 +605,10 @@ void tst_qregexp::horribleReplaceBoost()
         r = boost::regex_replace (s, pattern, "$1.$2.$3");
     }
     QCOMPARE(r, std::string("1.2.3"));
+#else
+    QSKIP("Boost is not enabled for this platform");
+#endif
 }
-#endif //HAVE_BOOST
 
 QTEST_MAIN(tst_qregexp)
 

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -99,9 +86,20 @@ private slots:
     void rawFontSetPixelSize();
 
     void multipleRawFontsFromData();
+
+    void rawFontFromInvalidData();
+
+    void kernedAdvances();
+
+    void fallbackFontsOrder();
+
+    void qtbug65923_partal_clone_data();
+    void qtbug65923_partal_clone();
+
 private:
     QString testFont;
     QString testFontBoldItalic;
+    QString testFontOs2V1;
 #endif // QT_NO_RAWFONT
 };
 
@@ -119,6 +117,7 @@ void tst_QRawFont::initTestCase()
 {
     testFont = QFINDTESTDATA("testfont.ttf");
     testFontBoldItalic = QFINDTESTDATA("testfont_bold_italic.ttf");
+    testFontOs2V1 = QFINDTESTDATA("testfont_os2_v1.ttf");
     if (testFont.isEmpty() || testFontBoldItalic.isEmpty())
         QFAIL("qrawfont unittest font files not found!");
 
@@ -193,6 +192,7 @@ void tst_QRawFont::correctFontData_data()
     QTest::addColumn<QFont::HintingPreference>("hintingPreference");
     QTest::addColumn<qreal>("unitsPerEm");
     QTest::addColumn<qreal>("pixelSize");
+    QTest::addColumn<int>("capHeight");
 
     int hintingPreferences[] = {
         int(QFont::PreferDefaultHinting),
@@ -215,8 +215,9 @@ void tst_QRawFont::correctFontData_data()
                 << QFont::StyleNormal
                 << QFont::Normal
                 << QFont::HintingPreference(*hintingPreference)
-                << 1000.0
-                << 10.0;
+                << qreal(1000.0)
+                << qreal(10.0)
+                << 7;
 
         fileName = testFontBoldItalic;
         title = fileName
@@ -229,8 +230,24 @@ void tst_QRawFont::correctFontData_data()
                 << QFont::StyleItalic
                 << QFont::Bold
                 << QFont::HintingPreference(*hintingPreference)
-                << 1000.0
-                << 10.0;
+                << qreal(1000.0)
+                << qreal(10.0)
+                << 7;
+
+        fileName = testFontOs2V1;
+        title = fileName
+              + QLatin1String(": hintingPreference=")
+              + QString::number(*hintingPreference);
+
+        QTest::newRow(qPrintable(title))
+                << fileName
+                << QString::fromLatin1("QtBidiTestFont")
+                << QFont::StyleNormal
+                << QFont::Normal
+                << QFont::HintingPreference(*hintingPreference)
+                << qreal(1000.0)
+                << qreal(10.0)
+                << 7;
 
         ++hintingPreference;
     }
@@ -245,6 +262,7 @@ void tst_QRawFont::correctFontData()
     QFETCH(QFont::HintingPreference, hintingPreference);
     QFETCH(qreal, unitsPerEm);
     QFETCH(qreal, pixelSize);
+    QFETCH(int, capHeight);
 
     QRawFont font(fileName, 10, hintingPreference);
     QVERIFY(font.isValid());
@@ -255,6 +273,11 @@ void tst_QRawFont::correctFontData()
     QCOMPARE(font.hintingPreference(), hintingPreference);
     QCOMPARE(font.unitsPerEm(), unitsPerEm);
     QCOMPARE(font.pixelSize(), pixelSize);
+
+    // Some platforms return the actual fractional height of the
+    // H character when the value is missing from the OS/2 table,
+    // so we ceil it off to match (any touched pixel counts).
+    QCOMPARE(qCeil(font.capHeight()), capHeight);
 }
 
 void tst_QRawFont::glyphIndices()
@@ -312,17 +335,23 @@ void tst_QRawFont::advances()
 
     bool supportsSubPixelPositions = font_d->fontEngine->supportsSubPixelPositions();
     QVector<QPointF> advances = font.advancesForGlyphIndexes(glyphIndices);
-    for (int i=0; i<glyphIndices.size(); ++i) {
-#ifdef Q_OS_WIN
-        // In Windows, freetype engine returns advance of 9 when full hinting is used (default) for
-        // some of the glyphs.
-        if (font_d->fontEngine->type() == QFontEngine::Freetype
-            && (hintingPreference == QFont::PreferFullHinting || hintingPreference == QFont::PreferDefaultHinting)
-            && (i == 0 || i == 5)) {
-            QEXPECT_FAIL("", "Advance for some glyphs is not the expected with Windows Freetype engine (9 instead of 8)", Continue);
+
+    bool mayDiffer = font_d->fontEngine->type() == QFontEngine::Freetype
+                     && (hintingPreference == QFont::PreferFullHinting
+                      || hintingPreference == QFont::PreferDefaultHinting);
+
+    for (int i = 0; i < glyphIndices.size(); ++i) {
+        if ((i == 0 || i == 5) && mayDiffer) {
+            QVERIFY2(qRound(advances.at(i).x()) == 8
+                        || qRound(advances.at(i).x()) == 9,
+                     qPrintable(QStringLiteral("%1 != %2 && %1 != %3")
+                                .arg(qRound(advances.at(i).x()))
+                                .arg(8)
+                                .arg(9)));
+        } else {
+            QCOMPARE(qRound(advances.at(i).x()), 8);
         }
-#endif
-        QVERIFY(qFuzzyCompare(qRound(advances.at(i).x()), 8.0));
+
         if (supportsSubPixelPositions)
             QVERIFY(advances.at(i).x() > 8.0);
 
@@ -339,17 +368,18 @@ void tst_QRawFont::advances()
 
     QVERIFY(font.advancesForGlyphIndexes(glyphIndices.constData(), advances.data(), numGlyphs));
 
-    for (int i=0; i<glyphIndices.size(); ++i) {
-#ifdef Q_OS_WIN
-        // In Windows, freetype engine returns advance of 9 when full hinting is used (default) for
-        // some of the glyphs.
-        if (font_d->fontEngine->type() == QFontEngine::Freetype
-            && (hintingPreference == QFont::PreferFullHinting || hintingPreference == QFont::PreferDefaultHinting)
-            && (i == 0 || i == 5)) {
-            QEXPECT_FAIL("", "Advance for some glyphs is not the expected with Windows Freetype engine (9 instead of 8)", Continue);
+    for (int i = 0; i < glyphIndices.size(); ++i) {
+        if ((i == 0 || i == 5) && mayDiffer) {
+            QVERIFY2(qRound(advances.at(i).x()) == 8
+                        || qRound(advances.at(i).x()) == 9,
+                     qPrintable(QStringLiteral("%1 != %2 && %1 != %3")
+                                .arg(qRound(advances.at(i).x()))
+                                .arg(8)
+                                .arg(9)));
+        } else {
+            QCOMPARE(qRound(advances.at(i).x()), 8);
         }
-#endif
-        QVERIFY(qFuzzyCompare(qRound(advances.at(i).x()), 8.0));
+
         if (supportsSubPixelPositions)
             QVERIFY(advances.at(i).x() > 8.0);
 
@@ -863,7 +893,7 @@ void tst_QRawFont::unsupportedWritingSystem()
     QCOMPARE(rawFont.familyName(), QString::fromLatin1("QtBidiTestFont"));
     QCOMPARE(rawFont.pixelSize(), 12.0);
 
-    QString arabicText = QFontDatabase::writingSystemSample(QFontDatabase::Arabic);
+    QString arabicText = QFontDatabase::writingSystemSample(QFontDatabase::Arabic).simplified().remove(QLatin1Char(' '));
 
     QTextLayout layout;
     layout.setFont(font);
@@ -937,6 +967,123 @@ void tst_QRawFont::multipleRawFontsFromData()
 
     QVERIFY(testFont.familyName() != (testFontBoldItalic.familyName())
             || testFont.style() != (testFontBoldItalic.style()));
+}
+
+void tst_QRawFont::rawFontFromInvalidData()
+{
+    QByteArray invalidData("foobar");
+    QRawFont font;
+    font.loadFromData(invalidData, 10, QFont::PreferDefaultHinting);
+
+    QVERIFY(!font.isValid());
+
+    invalidData.fill(char(255), 1024);
+    font.loadFromData(invalidData, 10, QFont::PreferDefaultHinting);
+
+    QVERIFY(!font.isValid());
+}
+
+#define FUZZY_LTEQ(X, Y) (X < Y || qFuzzyCompare(X, Y))
+
+void tst_QRawFont::kernedAdvances()
+{
+    const int emSquareSize = 1000;
+    const qreal pixelSize = 16.0;
+    const int underScoreAW = 500;
+    const int underscoreTwoKerning = -500;
+    const qreal errorMargin = 1.0 / 16.0; // Fixed point error margin
+
+    QRawFont font(testFont, pixelSize);
+    QVERIFY(font.isValid());
+
+    QVector<quint32> glyphIndexes = font.glyphIndexesForString(QStringLiteral("__"));
+    QCOMPARE(glyphIndexes.size(), 2);
+
+    QVector<QPointF> advances = font.advancesForGlyphIndexes(glyphIndexes, QRawFont::KernedAdvances);
+    QCOMPARE(advances.size(), 2);
+
+    qreal expectedAdvanceWidth = pixelSize * underScoreAW / emSquareSize;
+    QVERIFY(FUZZY_LTEQ(qAbs(advances.at(0).x() - expectedAdvanceWidth), errorMargin));
+
+    glyphIndexes = font.glyphIndexesForString(QStringLiteral("_2"));
+    QCOMPARE(glyphIndexes.size(), 2);
+
+    advances = font.advancesForGlyphIndexes(glyphIndexes, QRawFont::KernedAdvances);
+    QCOMPARE(advances.size(), 2);
+
+    expectedAdvanceWidth = pixelSize * (underScoreAW + underscoreTwoKerning) / emSquareSize;
+    QVERIFY(FUZZY_LTEQ(qAbs(advances.at(0).x() - expectedAdvanceWidth), errorMargin));
+}
+
+void tst_QRawFont::fallbackFontsOrder()
+{
+    QFontDatabase fontDatabase;
+    int id = fontDatabase.addApplicationFont(testFont);
+
+    QFont font("QtBidiTestFont");
+    font.setPixelSize(12.0);
+
+    QString arabicText = QFontDatabase::writingSystemSample(QFontDatabase::Arabic);
+
+    // If this fails, then the writing system sample has changed and we need to create
+    // a new text containing both a space and Arabic characters.
+    QVERIFY(arabicText.contains(QLatin1Char(' ')));
+
+    QTextLayout layout;
+    layout.setFont(font);
+    layout.setText(arabicText);
+    layout.setCacheEnabled(true);
+    layout.beginLayout();
+    layout.createLine();
+    layout.endLayout();
+
+    QList<QGlyphRun> glyphRuns = layout.glyphRuns();
+
+#ifdef Q_OS_ANDROID
+    QEXPECT_FAIL("", "QTBUG-69217", Continue);
+#endif
+    // Since QtBidiTestFont does not support Arabic nor the space, both should map to
+    // the same font. If this fails, it is an indication that the list of fallbacks fonts
+    // is not sorted by writing system support.
+    QCOMPARE(glyphRuns.size(), 1);
+
+    fontDatabase.removeApplicationFont(id);
+}
+
+void tst_QRawFont::qtbug65923_partal_clone_data()
+{
+    QTest::addColumn<bool>("shouldClone");
+
+    QTest::newRow("Without cloning font engine") << false;
+    QTest::newRow("Cloning font engine") << true;
+}
+
+void tst_QRawFont::qtbug65923_partal_clone()
+{
+    QFile file(testFont);
+    file.open(QIODevice::ReadOnly);
+    QByteArray fontData = file.readAll();
+
+    QRawFont outerFont;
+
+    {
+        QRawFont innerFont(fontData, 16, QFont::PreferDefaultHinting);
+
+        QFETCH(bool, shouldClone);
+        if (shouldClone) {
+            // This will trigger QFontEngine::cloneWithSize
+            innerFont.setPixelSize(innerFont.pixelSize() + 1);
+        }
+
+        outerFont = innerFont;
+    }
+
+    // This will detach if data is shared with the raw font. If the raw font has
+    // a naked reference to the data, without informing Qt of it via the ref count
+    // of the byte array, this will result in clearing 'live' data.
+    fontData.fill('\0');
+
+    QVERIFY(!outerFont.boundingRect(42).isEmpty());
 }
 
 #endif // QT_NO_RAWFONT

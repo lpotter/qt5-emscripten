@@ -1,0 +1,10 @@
+QGuiApplicationPrivate_init_entry()
+QGuiApplicationPrivate_init_exit()
+
+QGuiApplicationPrivate_processWindowSystemEvent_entry(int type)
+QGuiApplicationPrivate_processWindowSystemEvent_exit(int type)
+
+QFontDatabase_addApplicationFont(const QString &filename)
+QFontDatabase_load(const QString &family, int pointSize)
+QFontDatabase_loadEngine(const QString &family, int pointSize)
+QFontDatabasePrivate_addAppFont(const QString &fileName)

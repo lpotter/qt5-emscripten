@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +47,7 @@ const int QNetworkReplyPrivate::progressSignalInterval = 100;
 
 QNetworkReplyPrivate::QNetworkReplyPrivate()
     : readBufferMaxSize(0),
+      emitAllUploadProgressSignals(false),
       operation(QNetworkAccessManager::UnknownOperation),
       errorCode(QNetworkReply::NoError)
     , isFinished(false)
@@ -62,7 +61,7 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     \class QNetworkReply
     \since 4.4
     \brief The QNetworkReply class contains the data and headers for a request
-    sent with QNetworkAccessManager
+    sent with QNetworkAccessManager.
 
     \reentrant
     \ingroup network
@@ -139,6 +138,16 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     \value BackgroundRequestNotAllowedError the background request
     is not currently allowed due to platform policy.
 
+    \value TooManyRedirectsError       while following redirects, the maximum
+    limit was reached. The limit is by default set to 50 or as set by
+    QNetworkRequest::setMaxRedirectsAllowed().
+    (This value was introduced in 5.6.)
+
+    \value InsecureRedirectError       while following redirects, the network
+    access API detected a redirect from a encrypted protocol (https) to an
+    unencrypted one (http).
+    (This value was introduced in 5.6.)
+
     \value ProxyConnectionRefusedError the connection to the proxy
     server was refused (the proxy server is not accepting requests)
 
@@ -157,7 +166,7 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     any credentials offered (if any)
 
     \value ContentAccessDenied          the access to the remote
-    content was denied (similar to HTTP error 401)
+    content was denied (similar to HTTP error 403)
 
     \value ContentOperationNotPermittedError the operation requested
     on the remote content is not permitted
@@ -172,6 +181,21 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     \value ContentReSendError          the request needed to be sent
     again, but this failed for example because the upload data
     could not be read a second time.
+
+    \value ContentConflictError         the request could not be completed due
+    to a conflict with the current state of the resource.
+
+    \value ContentGoneError             the requested resource is no longer
+    available at the server.
+
+    \value InternalServerError          the server encountered an unexpected
+    condition which prevented it from fulfilling the request.
+
+    \value OperationNotImplementedError the server does not support the
+    functionality required to fulfill the request.
+
+    \value ServiceUnavailableError      the server is unable to handle the
+    request at this time.
 
     \value ProtocolUnknownError         the Network Access API cannot
     honor the request because the protocol is not known
@@ -191,7 +215,35 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     \value ProtocolFailure              a breakdown in protocol was
     detected (parsing error, invalid or unexpected responses, etc.)
 
+    \value UnknownServerError           an unknown error related to
+    the server response was detected
+
     \sa error()
+*/
+
+/*!
+    \fn void QNetworkReply::encrypted()
+    \since 5.1
+
+    This signal is emitted when an SSL/TLS session has successfully
+    completed the initial handshake. At this point, no user data
+    has been transmitted. The signal can be used to perform
+    additional checks on the certificate chain, for example to
+    notify users when the certificate for a website has changed.
+    If the reply does not match the expected criteria then it should
+    be aborted by calling QNetworkReply::abort() by a slot connected
+    to this signal. The SSL configuration in use can be inspected
+    using the QNetworkReply::sslConfiguration() method.
+
+    Internally, QNetworkAccessManager may open multiple connections
+    to a server, in order to allow it process requests in parallel.
+    These connections may be reused, which means that the encrypted()
+    signal would not be emitted. This means that you are only
+    guaranteed to receive this signal for the first connection to a
+    site in the lifespan of the QNetworkAccessManager.
+
+    \sa QSslSocket::encrypted()
+    \sa QNetworkAccessManager::encrypted()
 */
 
 /*!
@@ -218,6 +270,55 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
 */
 
 /*!
+    \fn void QNetworkReply::preSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *authenticator)
+    \since 5.5
+
+    This signal is emitted if the SSL/TLS handshake negotiates a PSK
+    ciphersuite, and therefore a PSK authentication is then required.
+
+    When using PSK, the client must send to the server a valid identity and a
+    valid pre shared key, in order for the SSL handshake to continue.
+    Applications can provide this information in a slot connected to this
+    signal, by filling in the passed \a authenticator object according to their
+    needs.
+
+    \note Ignoring this signal, or failing to provide the required credentials,
+    will cause the handshake to fail, and therefore the connection to be aborted.
+
+    \note The \a authenticator object is owned by the reply and must not be
+    deleted by the application.
+
+    \sa QSslPreSharedKeyAuthenticator
+*/
+
+/*!
+    \fn void QNetworkReply::redirected(const QUrl &url)
+    \since 5.6
+
+    This signal is emitted if the QNetworkRequest::FollowRedirectsAttribute was
+    set in the request and the server responded with a 3xx status (specifically
+    301, 302, 303, 305, 307 or 308 status code) with a valid url in the location
+    header, indicating a HTTP redirect. The \a url parameter contains the new
+    redirect url as returned by the server in the location header.
+
+    \sa QNetworkRequest::FollowRedirectsAttribute
+*/
+
+/*!
+    \fn void QNetworkReply::redirectAllowed()
+    \since 5.9
+
+    When client code handling the redirected() signal has verified the new URL,
+    it emits this signal to allow the redirect to go ahead.  This protocol applies
+    to network requests whose redirects policy is set to
+    QNetworkRequest::UserVerifiedRedirectPolicy
+
+    \sa QNetworkRequest::UserVerifiedRedirectPolicy,
+    QNetworkAccessManager::setRedirectPolicy(),
+    QNetworkRequest::RedirectPolicyAttribute
+*/
+
+/*!
     \fn void QNetworkReply::metaDataChanged()
 
     \omit FIXME: Update name? \endomit
@@ -240,7 +341,7 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     processing. After this signal is emitted, there will be no more
     updates to the reply's data or metadata.
 
-    Unless close() has been called, the reply will be still be opened
+    Unless close() or abort() have been called, the reply will be still be opened
     for reading, so the data can be retrieved by calls to read() or
     readAll(). In particular, if no calls to read() were made as a
     result of readyRead(), a call to readAll() will retrieve the full
@@ -329,7 +430,9 @@ QNetworkReplyPrivate::QNetworkReplyPrivate()
     connections still open. Uploads still in progress are also
     aborted.
 
-    \sa close()
+    The finished() signal will also be emitted.
+
+    \sa close(), finished()
 */
 
 /*!
@@ -438,7 +541,7 @@ QNetworkAccessManager *QNetworkReply::manager() const
 */
 QNetworkRequest QNetworkReply::request() const
 {
-    return d_func()->request;
+    return d_func()->originalRequest;
 }
 
 /*!
@@ -465,7 +568,7 @@ QNetworkReply::NetworkError QNetworkReply::error() const
 /*!
     \since 4.6
 
-    Returns true when the reply has finished or was aborted.
+    Returns \c true when the reply has finished or was aborted.
 
     \sa isRunning()
 */
@@ -477,7 +580,7 @@ bool QNetworkReply::isFinished() const
 /*!
     \since 4.6
 
-    Returns true when the request is still processing and the
+    Returns \c true when the request is still processing and the
     reply has not finished or was aborted yet.
 
     \sa isFinished()
@@ -489,9 +592,12 @@ bool QNetworkReply::isRunning() const
 
 /*!
     Returns the URL of the content downloaded or uploaded. Note that
-    the URL may be different from that of the original request.
+    the URL may be different from that of the original request. If the
+    QNetworkRequest::FollowRedirectsAttribute was set in the request, then this
+    function returns the current url that the network API is accessing, i.e the
+    url emitted in the QNetworkReply::redirected signal.
 
-    \sa request(), setUrl(), QNetworkRequest::url()
+    \sa request(), setUrl(), QNetworkRequest::url(), redirected()
 */
 QUrl QNetworkReply::url() const
 {
@@ -511,7 +617,7 @@ QVariant QNetworkReply::header(QNetworkRequest::KnownHeaders header) const
 }
 
 /*!
-    Returns true if the raw header of name \a headerName was sent by
+    Returns \c true if the raw header of name \a headerName was sent by
     the remote server
 
     \sa rawHeader()
@@ -568,7 +674,7 @@ QList<QByteArray> QNetworkReply::rawHeaderList() const
 
 /*!
     Returns the attribute associated with the code \a code. If the
-    attribute has not been set, it returns an invalid QVariant (type QMetaType::Unknown).
+    attribute has not been set, it returns an invalid QVariant (type QMetaType::UnknownType).
 
     You can expect the default values listed in
     QNetworkRequest::Attribute to be applied to the values returned by
@@ -614,7 +720,8 @@ void QNetworkReply::setSslConfiguration(const QSslConfiguration &config)
     If this function is called, the SSL errors given in \a errors
     will be ignored.
 
-    Note that you can set the expected certificate in the SSL error:
+    \note Because most SSL errors are associated with a certificate, for most
+    of them you must set the expected certificate this SSL error is related to.
     If, for instance, you want to issue a request to a server that uses
     a self-signed certificate, consider the following snippet:
 
@@ -625,7 +732,11 @@ void QNetworkReply::setSslConfiguration(const QSslConfiguration &config)
     You can clear the list of errors you want to ignore by calling this
     function with an empty list.
 
-    \sa sslConfiguration(), sslErrors(), QSslSocket::ignoreSslErrors()
+    \note If HTTP Strict Transport Security is enabled for QNetworkAccessManager,
+    this function has no effect.
+
+    \sa sslConfiguration(), sslErrors(), QSslSocket::ignoreSslErrors(),
+    QNetworkAccessManager::setStrictTransportSecurityEnabled()
 */
 void QNetworkReply::ignoreSslErrors(const QList<QSslError> &errors)
 {
@@ -680,12 +791,20 @@ void QNetworkReply::ignoreSslErrorsImplementation(const QList<QSslError> &)
     connection will be ignored, including certificate validation
     errors.
 
-    Note that calling this function without restraint may pose a
-    security risk for your application. Use it with care.
+    \warning Be sure to always let the user inspect the errors
+    reported by the sslErrors() signal, and only call this method
+    upon confirmation from the user that proceeding is ok.
+    If there are unexpected errors, the reply should be aborted.
+    Calling this method without inspecting the actual errors will
+    most likely pose a security risk for your application. Use it
+    with great care!
 
     This function can be called from the slot connected to the
     sslErrors() signal, which indicates which errors were
     found.
+
+    \note If HTTP Strict Transport Security is enabled for QNetworkAccessManager,
+    this function has no effect.
 
     \sa sslConfiguration(), sslErrors(), QSslSocket::ignoreSslErrors()
 */
@@ -705,7 +824,7 @@ qint64 QNetworkReply::writeData(const char *, qint64)
     Sets the associated operation for this object to be \a
     operation. This value will be returned by operation().
 
-    Note: the operation should be set when this object is created and
+    \note The operation should be set when this object is created and
     not changed again.
 
     \sa operation(), setRequest()
@@ -720,7 +839,7 @@ void QNetworkReply::setOperation(QNetworkAccessManager::Operation operation)
     Sets the associated request for this object to be \a request. This
     value will be returned by request().
 
-    Note: the request should be set when this object is created and
+    \note The request should be set when this object is created and
     not changed again.
 
     \sa request(), setOperation()
@@ -728,7 +847,7 @@ void QNetworkReply::setOperation(QNetworkAccessManager::Operation operation)
 void QNetworkReply::setRequest(const QNetworkRequest &request)
 {
     Q_D(QNetworkReply);
-    d->request = request;
+    d->originalRequest = request;
 }
 
 /*!

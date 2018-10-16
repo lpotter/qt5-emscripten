@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -40,10 +40,13 @@
     \code
     #include <QtNetwork>
     \endcode
+
+    \if !defined(qtforpython)
     To link against the Qt Network module, add this line to the project file:
     \code
     QT += network
     \endcode
+    \endif
 
     \section1 Articles and Guides
 
@@ -60,12 +63,43 @@
     \list
     \li \l{Qt Network C++ Classes}{C++ Classes}
     \endlist
+
+    \section1 Licenses and Attributions
+
+    Qt Network is available under commercial licenses from \l{The Qt Company}.
+    In addition, it is available under the
+    \l{GNU Lesser General Public License, version 3}, or
+    the \l{GNU General Public License, version 2}.
+    See \l{Qt Licensing} for further details.
+
+    Qt Network can use the \l{OpenSSL Toolkit} as a backend. The library is then
+    linked against OpenSSL in a way that requires compliance with the \l{OpenSSL
+    License}. To allow linking OpenSSL with Qt Network under the GPL, following
+    exceptions to the GPL do apply:
+
+    \badcode
+    In addition, as a special exception, the copyright holders listed above give
+    permission to link the code of its release of Qt with the OpenSSL project's
+    "OpenSSL" library (or modified versions of the "OpenSSL" library that use the
+    same license as the original version), and distribute the linked executables.
+
+    You must comply with the GNU General Public License version 2 in all
+    respects for all of the code used other than the "OpenSSL" code.  If you
+    modify this file, you may extend this exception to your version of the file,
+    but you are not obligated to do so.  If you do not wish to do so, delete
+    this exception statement from your version of this file.
+    \endcode
+
+    Also note shipping OpenSSL might cause \l{Import and Export Restrictions}
+    to apply.
 */
+
 /*!
     \module QtNetwork
     \title Qt Network C++ Classes
     \ingroup modules
-    \brief Provides classes to make network programming easier and portable
+    \qtvariable network
+    \brief Provides classes to make network programming easier and portable.
 
     To include the definitions of the module's classes, use the
     following directive:

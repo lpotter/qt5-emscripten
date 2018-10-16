@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -68,6 +55,8 @@ private slots:
     void viewportCrash();
     void task214488_layoutDirection_data();
     void task214488_layoutDirection();
+
+    void margins();
 };
 
 tst_QAbstractScrollArea::tst_QAbstractScrollArea()
@@ -238,17 +227,17 @@ void tst_QAbstractScrollArea::setScrollBars2()
 
     // Hide the OLD scroll bar and ensure that the NEW one is hidden.
     hbar->hide();
-    scrollArea.setHorizontalScrollBar(new QScrollBar);
-    qApp->processEvents();
-    QVERIFY(!scrollArea.horizontalScrollBar()->isVisible());
+    hbar = new QScrollBar(&scrollArea);
+    scrollArea.setHorizontalScrollBar(hbar);
+    QVERIFY(!hbar->isVisibleTo(hbar->parentWidget()));
 
     vbar->hide();
-    scrollArea.setVerticalScrollBar(new QScrollBar);
-    qApp->processEvents();
-    QVERIFY(!scrollArea.verticalScrollBar()->isVisible());
+    vbar = new QScrollBar(&scrollArea);
+    scrollArea.setVerticalScrollBar(vbar);
+    QVERIFY(!vbar->isVisibleTo(vbar->parentWidget()));
 
-    scrollArea.verticalScrollBar()->show();
-    scrollArea.horizontalScrollBar()->show();
+    vbar->show();
+    hbar->show();
 
     // Hide the NEW scroll bar and ensure that it's visible
     // (because the OLD one is visible).
@@ -345,6 +334,10 @@ void tst_QAbstractScrollArea::task214488_layoutDirection()
 
     int refValue = hbar->value();
     qApp->sendEvent(&scrollArea, new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier));
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "WinRT: Scrollbar is not guaranteed to be visible, as QWidget::resize does not"
+                 "work", Abort);
+#endif
     QVERIFY(lessThan ? (hbar->value() < refValue) : (hbar->value() > refValue));
 }
 
@@ -357,6 +350,7 @@ void tst_QAbstractScrollArea::patternBackground()
     widget.resize(600, 600);
     scrollArea.setWidget(&widget);
     topLevel.show();
+    QVERIFY(QTest::qWaitForWindowActive(&topLevel));
 
     QLinearGradient linearGrad(QPointF(250, 250), QPointF(300, 300));
     linearGrad.setColorAt(0, Qt::yellow);
@@ -365,7 +359,6 @@ void tst_QAbstractScrollArea::patternBackground()
     scrollArea.viewport()->setPalette(QPalette(Qt::black, bg, bg, bg, bg, bg, bg, bg, bg));
     widget.setPalette(Qt::transparent);
 
-    QTest::qWait(50);
 
     QImage image(200, 200, QImage::Format_ARGB32);
     scrollArea.render(&image);
@@ -377,10 +370,26 @@ void tst_QAbstractScrollArea::patternBackground()
     QScrollBar *vbar = scrollArea.verticalScrollBar();
     vbar->setValue(vbar->maximum());
 
-    QTest::qWait(50);
 
     scrollArea.render(&image);
     QCOMPARE(image.pixel(QPoint(20,20)) , QColor(Qt::red).rgb());
+}
+
+class ScrollArea : public QAbstractScrollArea
+{
+public:
+    using QAbstractScrollArea::setViewportMargins;
+    using QAbstractScrollArea::viewportMargins;
+};
+
+void tst_QAbstractScrollArea::margins()
+{
+    ScrollArea area;
+    QCOMPARE(area.viewportMargins(), QMargins());
+
+    QMargins margins(10, 20, 30, 40);
+    area.setViewportMargins(margins);
+    QCOMPARE(area.viewportMargins(), margins);
 }
 
 QTEST_MAIN(tst_QAbstractScrollArea)

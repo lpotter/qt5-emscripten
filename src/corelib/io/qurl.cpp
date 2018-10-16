@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Copyright (C) 2012 Intel Corporation.
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -11,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -65,7 +63,8 @@
     unencoded representation is suitable for showing to users, but
     the encoded representation is typically what you would send to
     a web server. For example, the unencoded URL
-    "http://b\\uuml\c{}hler.example.com" would be sent to the server as
+    "http://bühler.example.com/List of applicants.xml"
+    would be sent to the server as
     "http://xn--bhler-kva.example.com/List%20of%20applicants.xml".
 
     A URL can also be constructed piece by piece by calling
@@ -75,8 +74,10 @@
     password, host and port. setUserInfo() sets the user name and
     password at once.
 
-    Call isValid() to check if the URL is valid. This can be done at
-    any point during the constructing of a URL.
+    Call isValid() to check if the URL is valid. This can be done at any point
+    during the constructing of a URL. If isValid() returns \c false, you should
+    clear() the URL before proceeding, or start over by parsing a new URL with
+    setUrl().
 
     Constructing a query is particularly convenient through the use of the \l
     QUrlQuery class and its methods QUrlQuery::setQueryItems(),
@@ -87,12 +88,7 @@
     For the convenience of generating encoded URL strings or query
     strings, there are two static functions called
     fromPercentEncoding() and toPercentEncoding() which deal with
-    percent encoding and decoding of QStrings.
-
-    Calling isRelative() will tell whether or not the URL is
-    relative. A relative URL can be resolved by passing it as argument
-    to resolved(), which returns an absolute URL. isParentOf() is used
-    for determining whether one URL is a parent of another.
+    percent encoding and decoding of QString objects.
 
     fromLocalFile() constructs a QUrl by parsing a local
     file path. toLocalFile() converts a URL to a local file path.
@@ -101,20 +97,57 @@
     toString(). This representation is appropriate for displaying a
     URL to a user in unencoded form. The encoded form however, as
     returned by toEncoded(), is for internal use, passing to web
-    servers, mail clients and so on.
+    servers, mail clients and so on. Both forms are technically correct
+    and represent the same URL unambiguously -- in fact, passing either
+    form to QUrl's constructor or to setUrl() will yield the same QUrl
+    object.
 
     QUrl conforms to the URI specification from
     \l{RFC 3986} (Uniform Resource Identifier: Generic Syntax), and includes
     scheme extensions from \l{RFC 1738} (Uniform Resource Locators). Case
     folding rules in QUrl conform to \l{RFC 3491} (Nameprep: A Stringprep
-    Profile for Internationalized Domain Names (IDN)).
+    Profile for Internationalized Domain Names (IDN)). It is also compatible with the
+    \l{http://freedesktop.org/wiki/Specifications/file-uri-spec/}{file URI specification}
+    from freedesktop.org, provided that the locale encodes file names using
+    UTF-8 (required by IDN).
+
+    \section2 Relative URLs vs Relative Paths
+
+    Calling isRelative() will return whether or not the URL is relative.
+    A relative URL has no \l {scheme}. For example:
+
+    \code
+    qDebug() << QUrl("main.qml").isRelative();          // true: no scheme
+    qDebug() << QUrl("qml/main.qml").isRelative();      // true: no scheme
+    qDebug() << QUrl("file:main.qml").isRelative();     // false: has "file" scheme
+    qDebug() << QUrl("file:qml/main.qml").isRelative(); // false: has "file" scheme
+    \endcode
+
+    Notice that a URL can be absolute while containing a relative path, and
+    vice versa:
+
+    \code
+    // Absolute URL, relative path
+    QUrl url("file:file.txt");
+    qDebug() << url.isRelative();                 // false: has "file" scheme
+    qDebug() << QDir::isAbsolutePath(url.path()); // false: relative path
+
+    // Relative URL, absolute path
+    url = QUrl("/home/user/file.txt");
+    qDebug() << url.isRelative();                 // true: has no scheme
+    qDebug() << QDir::isAbsolutePath(url.path()); // true: absolute path
+    \endcode
+
+    A relative URL can be resolved by passing it as an argument to resolved(),
+    which returns an absolute URL. isParentOf() is used for determining whether
+    one URL is a parent of another.
 
     \section2 Error checking
 
     QUrl is capable of detecting many errors in URLs while parsing it or when
     components of the URL are set with individual setter methods (like
     setScheme(), setHost() or setPath()). If the parsing or setter function is
-    succesful, any previously recorded error conditions will be discarded.
+    successful, any previously recorded error conditions will be discarded.
 
     By default, QUrl setter methods operate in QUrl::TolerantMode, which means
     they accept some common mistakes and mis-representation of data. An
@@ -148,7 +181,7 @@
     dealing with URLs and strings:
 
     \list
-    \li When creating an QString to contain a URL from a QByteArray or a
+    \li When creating a QString to contain a URL from a QByteArray or a
        char*, always use QString::fromUtf8().
     \endlist
 */
@@ -170,6 +203,8 @@
                        of a percent-encoded sequence. This mode is only valid for the
                        setters setting components of a URL; it is not permitted in
                        the QUrl constructor, in fromEncoded() or in setUrl().
+                       For more information on this mode, see the documentation for
+                       \l {QUrl::ComponentFormattingOption}{QUrl::FullyDecoded}.
 
     In TolerantMode, the parser has the following behaviour:
 
@@ -186,11 +221,12 @@
     \li Reserved and unreserved characters: An encoded URL should only
     contain a few characters as literals; all other characters should
     be percent-encoded. In TolerantMode, these characters will be
-    automatically percent-encoded where they are not allowed:
+    accepted if they are found in the URL:
             space / double-quote / "<" / ">" / "\" /
             "^" / "`" / "{" / "|" / "}"
     Those same characters can be decoded again by passing QUrl::DecodeReserved
-    to toString() or toEncoded().
+    to toString() or toEncoded(). In the getters of individual components,
+    those characters are often returned in decoded form.
 
     \endlist
 
@@ -225,9 +261,14 @@
     \value RemoveQuery  The query part of the URL (following a '?' character)
                         is removed.
     \value RemoveFragment
+    \value RemoveFilename The filename (i.e. everything after the last '/' in the path) is removed.
+            The trailing '/' is kept, unless StripTrailingSlash is set.
+            Only valid if RemovePath is not set.
     \value PreferLocalFile If the URL is a local file according to isLocalFile()
      and contains no query or fragment, a local file path is returned.
-    \value StripTrailingSlash  The trailing slash is removed if one is present.
+    \value StripTrailingSlash  The trailing slash is removed from the path, if one is present.
+    \value NormalizePathSegments  Modifies the path to remove redundant directory separators,
+             and to resolve "."s and ".."s (as far as possible).
 
     Note that the case folding rules in \l{RFC 3491}{Nameprep}, which QUrl
     conforms to, require host names to always be converted to lower case,
@@ -263,11 +304,15 @@
                             would appear in the URL when the full URL is
                             represented as text. The delimiters are affected
                             by this option change from component to component.
+                            This flag has no effect in toString() or toEncoded().
 
-    \value EncodeReserved  Leave the US-ASCII reserved characters in their encoded
-                           forms.
+    \value EncodeReserved  Leave US-ASCII characters not permitted in the URL by
+                           the specification in their encoded form. This is the
+                           default on toString() and toEncoded().
 
-    \value DecodeReserved   Decode the US-ASCII reserved characters.
+    \value DecodeReserved  Decode the US-ASCII characters that the URL specification
+                           does not allow to appear in the URL. This is the
+                           default on the getters of individual components.
 
     \value FullyEncoded    Leave all characters in their properly-encoded form,
                            as this component would appear as part of a URL. When
@@ -279,30 +324,107 @@
                            components of the URL, this decodes every percent
                            encoding sequence, including control characters (U+0000
                            to U+001F) and UTF-8 sequences found in percent-encoded form.
-                           Note: if the component contains non-US-ASCII sequences
-                           that aren't valid UTF-8 sequences, the behaviour is
-                           undefined since QString cannot represent those values
-                           (data will be lost!)
-                           This mode is should not be used in functions where more
-                           than one URL component is returned (userInfo() and authority())
-                           and it is not allowed in url() and toString().
+                           Use of this mode may cause data loss, see below for more information.
 
     The values of EncodeReserved and DecodeReserved should not be used together
-    in one call. The behaviour is undefined if that happens. They are provided
-    as separate values because the behaviour of the "pretty mode" with regards
+    in one call. The behavior is undefined if that happens. They are provided
+    as separate values because the behavior of the "pretty mode" with regards
     to reserved characters is different on certain components and specially on
     the full URL.
 
-    The FullyDecoded mode is similar to the behaviour of the functions
-    returning QString in Qt 4.x, including the fact that they will most likely
-    cause data loss if the component in question contains a non-UTF-8
-    percent-encoded sequence. Fortunately, those cases aren't common, so this
-    mode should be used when the component in question is used in a non-URL
-    context. For example, in an FTP client application, the path to the remote
-    file could be stored in a QUrl object, and the string to be transmitted to
-    the FTP server should be obtained using this flag.
+    \section2 Full decoding
+
+    The FullyDecoded mode is similar to the behavior of the functions returning
+    QString in Qt 4.x, in that every character represents itself and never has
+    any special meaning. This is true even for the percent character ('%'),
+    which should be interpreted to mean a literal percent, not the beginning of
+    a percent-encoded sequence. The same actual character, in all other
+    decoding modes, is represented by the sequence "%25".
+
+    Whenever re-applying data obtained with QUrl::FullyDecoded into a QUrl,
+    care must be taken to use the QUrl::DecodedMode parameter to the setters
+    (like setPath() and setUserName()). Failure to do so may cause
+    re-interpretation of the percent character ('%') as the beginning of a
+    percent-encoded sequence.
+
+    This mode is quite useful when portions of a URL are used in a non-URL
+    context. For example, to extract the username, password or file paths in an
+    FTP client application, the FullyDecoded mode should be used.
+
+    This mode should be used with care, since there are two conditions that
+    cannot be reliably represented in the returned QString. They are:
+
+    \list
+      \li \b{Non-UTF-8 sequences:} URLs may contain sequences of
+      percent-encoded characters that do not form valid UTF-8 sequences. Since
+      URLs need to be decoded using UTF-8, any decoder failure will result in
+      the QString containing one or more replacement characters where the
+      sequence existed.
+
+      \li \b{Encoded delimiters:} URLs are also allowed to make a distinction
+      between a delimiter found in its literal form and its equivalent in
+      percent-encoded form. This is most commonly found in the query, but is
+      permitted in most parts of the URL.
+    \endlist
+
+    The following example illustrates the problem:
+
+    \code
+        QUrl original("http://example.com/?q=a%2B%3Db%26c");
+        QUrl copy(original);
+        copy.setQuery(copy.query(QUrl::FullyDecoded), QUrl::DecodedMode);
+
+        qDebug() << original.toString();   // prints: http://example.com/?q=a%2B%3Db%26c
+        qDebug() << copy.toString();       // prints: http://example.com/?q=a+=b&c
+    \endcode
+
+    If the two URLs were used via HTTP GET, the interpretation by the web
+    server would probably be different. In the first case, it would interpret
+    as one parameter, with a key of "q" and value "a+=b&c". In the second
+    case, it would probably interpret as two parameters, one with a key of "q"
+    and value "a =b", and the second with a key "c" and no value.
 
     \sa QUrl::FormattingOptions
+*/
+
+/*!
+    \enum QUrl::UserInputResolutionOption
+    \since 5.4
+
+    The user input resolution options define how fromUserInput() should
+    interpret strings that could either be a relative path or the short
+    form of a HTTP URL. For instance \c{file.pl} can be either a local file
+    or the URL \c{http://file.pl}.
+
+    \value DefaultResolution  The default resolution mechanism is to check
+                              whether a local file exists, in the working
+                              directory given to fromUserInput, and only
+                              return a local path in that case. Otherwise a URL
+                              is assumed.
+    \value AssumeLocalFile    This option makes fromUserInput() always return
+                              a local path unless the input contains a scheme, such as
+                              \c{http://file.pl}. This is useful for applications
+                              such as text editors, which are able to create
+                              the file if it doesn't exist.
+
+    \sa fromUserInput()
+*/
+
+/*!
+    \fn QUrl::QUrl(QUrl &&other)
+
+    Move-constructs a QUrl instance, making it point at the same
+    object that \a other was pointing to.
+
+    \since 5.2
+*/
+
+/*!
+    \fn QUrl &QUrl::operator=(QUrl &&other)
+
+    Move-assigns \a other to this QUrl instance.
+
+    \since 5.2
 */
 
 #include "qurl.h"
@@ -313,14 +435,16 @@
 #include "qdebug.h"
 #include "qhash.h"
 #include "qdir.h"         // for QDir::fromNativeSeparators
+#include "qdatastream.h"
+#if QT_CONFIG(topleveldomain)
 #include "qtldurl_p.h"
+#endif
 #include "private/qipaddress_p.h"
 #include "qurlquery.h"
-#if defined(Q_OS_WINCE_WM)
-#pragma optimize("g", off)
-#endif
 
 QT_BEGIN_NAMESPACE
+extern QString qt_normalizePathSegments(const QString &name, bool allowUncPaths,
+                                        bool *ok = nullptr); // qdir.cpp
 
 inline static bool isHex(char c)
 {
@@ -333,20 +457,25 @@ static inline QString ftpScheme()
     return QStringLiteral("ftp");
 }
 
-static inline QString httpScheme()
-{
-    return QStringLiteral("http");
-}
-
 static inline QString fileScheme()
 {
     return QStringLiteral("file");
 }
 
+static inline QString webDavScheme()
+{
+    return QStringLiteral("webdavs");
+}
+
+static inline QString webDavSslTag()
+{
+    return QStringLiteral("@SSL");
+}
+
 class QUrlPrivate
 {
 public:
-    enum Section {
+    enum Section : uchar {
         Scheme = 0x01,
         UserName = 0x02,
         Password = 0x04,
@@ -361,8 +490,13 @@ public:
         FullUrl = 0xff
     };
 
+    enum Flags : uchar {
+        IsLocalFile = 0x01
+    };
+
     enum ErrorCode {
         // the high byte of the error code matches the Section
+        // the first item in each value must be the generic "Invalid xxx Error"
         InvalidSchemeError = Scheme << 8,
 
         InvalidUserNameError = UserName << 8,
@@ -372,6 +506,7 @@ public:
         InvalidRegNameError = Host << 8,
         InvalidIPv4AddressError,
         InvalidIPv6AddressError,
+        InvalidCharacterInIPv6Error,
         InvalidIPvFutureError,
         HostMissingEndBracket,
 
@@ -384,9 +519,10 @@ public:
 
         InvalidFragmentError = Fragment << 8,
 
-        // the following two cases are only possible in combination
-        // with presence/absence of the authority and scheme. See validityError().
+        // the following three cases are only possible in combination with
+        // presence/absence of the path, authority and scheme. See validityError().
         AuthorityPresentAndPathIsRelative = Authority << 8 | Path << 8 | 0x10000,
+        AuthorityAbsentAndPathIsDoubleSlash,
         RelativeUrlPathContainsColonBeforeSlash = Scheme << 8 | Authority << 8 | Path << 8 | 0x10000,
 
         NoError = 0
@@ -410,6 +546,9 @@ public:
     void clearError();
     void setError(ErrorCode errorCode, const QString &source, int supplement = -1);
     ErrorCode validityError(QString *source = 0, int *position = 0) const;
+    bool validateComponent(Section section, const QString &input, int begin, int end);
+    bool validateComponent(Section section, const QString &input)
+    { return validateComponent(section, input, 0, uint(input.length())); }
 
     // no QString scheme() const;
     void appendAuthority(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const;
@@ -419,7 +558,7 @@ public:
     void appendHost(QString &appendTo, QUrl::FormattingOptions options) const;
     void appendPath(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const;
     void appendQuery(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const;
-    void appendFragment(QString &appendTo, QUrl::FormattingOptions options) const;
+    void appendFragment(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const;
 
     // the "end" parameters are like STL iterators: they point to one past the last valid element
     bool setScheme(const QString &value, int len, bool doSetError);
@@ -443,6 +582,9 @@ public:
     inline bool hasQuery() const { return sectionIsPresent & Query; }
     inline bool hasFragment() const { return sectionIsPresent & Fragment; }
 
+    inline bool isLocalFile() const { return flags & IsLocalFile; }
+    QString toLocalFile(QUrl::FormattingOptions options) const;
+
     QString mergePaths(const QString &relativePath) const;
 
     QAtomicInt ref;
@@ -463,12 +605,17 @@ public:
     //  - Path (there's no path delimiter, so we optimize its use out of existence)
     // Schemes are never supposed to be empty, but we keep the flag anyway
     uchar sectionIsPresent;
+    uchar flags;
+
+    // 32-bit: 2 bytes tail padding available
+    // 64-bit: 6 bytes tail padding available
 };
 
 inline QUrlPrivate::QUrlPrivate()
     : ref(1), port(-1),
       error(0),
-      sectionIsPresent(0)
+      sectionIsPresent(0),
+      flags(0)
 {
 }
 
@@ -482,7 +629,8 @@ inline QUrlPrivate::QUrlPrivate(const QUrlPrivate &copy)
       query(copy.query),
       fragment(copy.fragment),
       error(copy.cloneError()),
-      sectionIsPresent(copy.sectionIsPresent)
+      sectionIsPresent(copy.sectionIsPresent),
+      flags(copy.flags)
 {
 }
 
@@ -514,7 +662,7 @@ inline void QUrlPrivate::setError(ErrorCode errorCode, const QString &source, in
     error->position = supplement;
 }
 
-// From RFC 3896, Appendix A Collected ABNF for URI
+// From RFC 3986, Appendix A Collected ABNF for URI
 //    URI           = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
 //[...]
 //    scheme        = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
@@ -542,46 +690,62 @@ inline void QUrlPrivate::setError(ErrorCode errorCode, const QString &source, in
 // the path component has a complex ABNF that basically boils down to
 // slash-separated segments of "pchar"
 
-// The above is the strict definition of the URL components and it is what we
-// return encoded as FullyEncoded. However, we store the equivalent to
-// PrettyDecoded internally, as that is the default formatting mode and most
-// likely to be used. PrettyDecoded decodes spaces, unicode sequences and
-// unambiguous delimiters.
+// The above is the strict definition of the URL components and we mostly
+// adhere to it, with few exceptions. QUrl obeys the following behavior:
+//  - percent-encoding sequences always use uppercase HEXDIG;
+//  - unreserved characters are *always* decoded, no exceptions;
+//  - the space character and bytes with the high bit set are controlled by
+//    the EncodeSpaces and EncodeUnicode bits;
+//  - control characters, the percent sign itself, and bytes with the high
+//    bit set that don't form valid UTF-8 sequences are always encoded,
+//    except in FullyDecoded mode;
+//  - sub-delims are always left alone, except in FullyDecoded mode;
+//  - gen-delim change behavior depending on which section of the URL (or
+//    the entire URL) we're looking at; see below;
+//  - characters not mentioned above, like "<", and ">", are usually
+//    decoded in individual sections of the URL, but encoded when the full
+//    URL is put together (we can change on subjective definition of
+//    "pretty").
 //
-// An ambiguous delimiter is a delimiter that, if appeared decoded, would be
-// interpreted as the beginning of a new component. The exact delimiters that
-// match that definition change according to the use. When each field is
-// considered in isolation from the rest, there are no ambiguities. In other
-// words, we always store the most decoded form (except for the query, see
-// below).
+// The behavior for the delimiters bears some explanation. The spec says in
+// section 2.2:
+//     URIs that differ in the replacement of a reserved character with its
+//     corresponding percent-encoded octet are not equivalent.
+// (note: QUrl API mistakenly uses the "reserved" term, so we will refer to
+// them here as "delimiters").
 //
-// The ambiguities arise when components are put together. From last to first
-// component of a full URL, the ambiguities are:
-//  - fragment: none, since it's the last.
-//  - query: the "#" character is ambiguous, as it starts the fragment. In
-//    addition, the "+" character is treated specially, as should be both
-//    intra-query delimiters. Since we don't know which ones they are, we
-//    keep all reserved characters untouched.
-//  - path: the "#" and "?" characters are ambigous. In addition to them,
-//    the slash itself is considered special.
+// For that reason, we cannot encode delimiters found in decoded form and we
+// cannot decode the ones found in encoded form if that would change the
+// interpretation. Conversely, we *can* perform the transformation if it would
+// not change the interpretation. From the last component of a URL to the first,
+// here are the gen-delims we can unambiguously transform when the field is
+// taken in isolation:
+//  - fragment: none, since it's the last
+//  - query: "#" is unambiguous
+//  - path: "#" and "?" are unambiguous
 //  - host: completely special but never ambiguous, see setHost() below.
-//  - password: the "#", "?", "/", "[", "]" and "@" characters are ambiguous
-//  - username: the "#", "?", "/", "[", "]", "@", and ":" characters are ambiguous
+//  - password: the "#", "?", "/", "[", "]" and "@" characters are unambiguous
+//  - username: the "#", "?", "/", "[", "]", "@", and ":" characters are unambiguous
 //  - scheme: doesn't accept any delimiter, see setScheme() below.
 //
-// When the authority component is considered in isolation, the ambiguities of
-// its components are:
-//  - host: special, never ambiguous
-//  - password: "[", "]", "@" are ambiguous
-//  - username: "[", "]", "@", ":" are ambiguous
+// Internally, QUrl stores each component in the format that corresponds to the
+// default mode (PrettyDecoded). It deviates from the "strict" FullyEncoded
+// mode in the following way:
+//  - spaces are decoded
+//  - valid UTF-8 sequences are decoded
+//  - gen-delims that can be unambiguously transformed are decoded
+//  - characters controlled by DecodeReserved are often decoded, though this behavior
+//    can change depending on the subjective definition of "pretty"
 //
-// Finally, when the userinfo is considered in isolation, the ambiguities of its
-// components are:
-//  - password: none, since it's the last
-//  - username: ":" is ambiguous
+// Note that the list of gen-delims that we can transform is different for the
+// user info (user name + password) and the authority (user info + host +
+// port).
+
 
 // list the recoding table modifications to be used with the recodeFromUser and
-// appendToUser functions, according to the rules above.
+// appendToUser functions, according to the rules above. Spaces and UTF-8
+// sequences are handled outside the tables.
+
 // the encodedXXX tables are run with the delimiters set to "leave" by default;
 // the decodedXXX tables are run with the delimiters set to "decode" by default
 // (except for the query, which doesn't use these functions)
@@ -590,107 +754,92 @@ inline void QUrlPrivate::setError(ErrorCode errorCode, const QString &source, in
 #define leave(x)  ushort(0x100 | (x))
 #define encode(x) ushort(0x200 | (x))
 
-static const ushort encodedUserNameActions[] = {
-    // first field, everything must be encoded, including the ":"
-    //    userinfo      = *( unreserved / pct-encoded / sub-delims / ":" )
-    encode('/'), // 0
-    encode('?'), // 1
-    encode('#'), // 2
+static const ushort userNameInIsolation[] = {
+    decode(':'), // 0
+    decode('@'), // 1
+    decode(']'), // 2
+    decode('['), // 3
+    decode('/'), // 4
+    decode('?'), // 5
+    decode('#'), // 6
+
+    decode('"'), // 7
+    decode('<'),
+    decode('>'),
+    decode('^'),
+    decode('\\'),
+    decode('|'),
+    decode('{'),
+    decode('}'),
+    0
+};
+static const ushort * const passwordInIsolation = userNameInIsolation + 1;
+static const ushort * const pathInIsolation = userNameInIsolation + 5;
+static const ushort * const queryInIsolation = userNameInIsolation + 6;
+static const ushort * const fragmentInIsolation = userNameInIsolation + 7;
+
+static const ushort userNameInUserInfo[] =  {
+    encode(':'), // 0
+    decode('@'), // 1
+    decode(']'), // 2
+    decode('['), // 3
+    decode('/'), // 4
+    decode('?'), // 5
+    decode('#'), // 6
+
+    decode('"'), // 7
+    decode('<'),
+    decode('>'),
+    decode('^'),
+    decode('\\'),
+    decode('|'),
+    decode('{'),
+    decode('}'),
+    0
+};
+static const ushort * const passwordInUserInfo = userNameInUserInfo + 1;
+
+static const ushort userNameInAuthority[] = {
+    encode(':'), // 0
+    encode('@'), // 1
+    encode(']'), // 2
     encode('['), // 3
-    encode(']'), // 4
-    encode('@'), // 5
-    encode(':'), // 6
+    decode('/'), // 4
+    decode('?'), // 5
+    decode('#'), // 6
+
+    decode('"'), // 7
+    decode('<'),
+    decode('>'),
+    decode('^'),
+    decode('\\'),
+    decode('|'),
+    decode('{'),
+    decode('}'),
     0
 };
-static const ushort * const decodedUserNameInAuthorityActions = encodedUserNameActions + 3;
-static const ushort * const decodedUserNameInUserInfoActions = encodedUserNameActions + 6;
-static const ushort * const decodedUserNameInUrlActions = encodedUserNameActions;
-static const ushort * const decodedUserNameInIsolationActions = 0;
+static const ushort * const passwordInAuthority = userNameInAuthority + 1;
 
-static const ushort encodedPasswordActions[] = {
-    // same as encodedUserNameActions, but decode ":"
-    //    userinfo      = *( unreserved / pct-encoded / sub-delims / ":" )
-    encode('/'), // 0
-    encode('?'), // 1
-    encode('#'), // 2
+static const ushort userNameInUrl[] = {
+    encode(':'), // 0
+    encode('@'), // 1
+    encode(']'), // 2
     encode('['), // 3
-    encode(']'), // 4
-    encode('@'), // 5
-    0
-};
-static const ushort * const decodedPasswordInAuthorityActions = encodedPasswordActions + 3;
-static const ushort * const decodedPasswordInUserInfoActions = 0;
-static const ushort * const decodedPasswordInUrlActions = encodedPasswordActions;
-static const ushort * const decodedPasswordInIsolationActions = 0;
+    encode('/'), // 4
+    encode('?'), // 5
+    encode('#'), // 6
 
-static const ushort encodedPathActions[] = {
-    //    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-    encode('['), // 0
-    encode(']'), // 1
-    encode('?'), // 2
-    encode('#'), // 3
-    leave('/'),  // 4
+    // no need to list encode(x) for the other characters
     0
 };
-static const ushort decodedPathInUrlActions[] = {
-    decode('{'), // 0
-    decode('}'), // 1
-    encode('?'), // 2
-    encode('#'), // 3
-    leave('/'),  // 4
-    0
-};
-static const ushort * const decodedPathInIsolationActions = encodedPathActions + 4; // leave('/')
-
-static const ushort encodedFragmentActions[] = {
-    //    fragment      = *( pchar / "/" / "?" )
-    // gen-delims permitted: ":" / "@" / "/" / "?"
-    //   ->   must encode: "[" / "]" / "#"
-    // HOWEVER: we allow "#" to remain decoded
-    decode('#'), // 0
-    decode(':'), // 1
-    decode('@'), // 2
-    decode('/'), // 3
-    decode('?'), // 4
-    encode('['), // 5
-    encode(']'), // 6
-    0
-};
-static const ushort * const decodedFragmentInUrlActions = 0;
-static const ushort * const decodedFragmentInIsolationActions = 0;
-
-// the query is handled specially: the decodedQueryXXX tables are run with
-// the delimiters set to "leave" by default and the others set to "encode"
-static const ushort encodedQueryActions[] = {
-    //    query         = *( pchar / "/" / "?" )
-    // gen-delims permitted: ":" / "@" / "/" / "?"
-    // HOWEVER: we leave alone them alone, plus "[" and "]"
-    //   ->   must encode: "#"
-    encode('#'), // 0
-    0
-};
-static const ushort decodedQueryInIsolationActions[] = {
-    decode('"'), // 0
-    decode('<'), // 1
-    decode('>'), // 2
-    decode('^'), // 3
-    decode('\\'),// 4
-    decode('|'), // 5
-    decode('{'), // 6
-    decode('}'), // 7
-    decode('#'), // 8
-    0
-};
-static const ushort decodedQueryInUrlActions[] = {
-    decode('{'), // 6
-    decode('}'), // 7
-    encode('#'), // 8
-    0
-};
+static const ushort * const passwordInUrl = userNameInUrl + 1;
+static const ushort * const pathInUrl = userNameInUrl + 5;
+static const ushort * const queryInUrl = userNameInUrl + 6;
+static const ushort * const fragmentInUrl = userNameInUrl + 6;
 
 static inline void parseDecodedComponent(QString &data)
 {
-    data.replace(QLatin1Char('%'), QStringLiteral("%25"));
+    data.replace(QLatin1Char('%'), QLatin1String("%25"));
 }
 
 static inline QString
@@ -699,36 +848,32 @@ recodeFromUser(const QString &input, const ushort *actions, int from, int to)
     QString output;
     const QChar *begin = input.constData() + from;
     const QChar *end = input.constData() + to;
-    if (qt_urlRecode(output, begin, end,
-                     QUrl::DecodeReserved, actions))
+    if (qt_urlRecode(output, begin, end, 0, actions))
         return output;
 
     return input.mid(from, to - from);
 }
 
-// appendXXXX functions:
-// the internal value is stored in its most decoded form, so that case is easy.
-// DecodeUnicode and DecodeSpaces are handled by qt_urlRecode.
-// That leaves these functions to handle two cases related to delimiters:
-//  1) encoded                           encodedXXXX tables
-//  2) decoded                           decodedXXXX tables
-static inline void appendToUser(QString &appendTo, const QString &value, QUrl::FormattingOptions options,
-                                const ushort *encodedActions, const ushort *decodedActions)
+// appendXXXX functions: copy from the internal form to the external, user form.
+// the internal value is stored in its PrettyDecoded form, so that case is easy.
+static inline void appendToUser(QString &appendTo, const QStringRef &value, QUrl::FormattingOptions options,
+                                const ushort *actions)
 {
     if (options == QUrl::PrettyDecoded) {
         appendTo += value;
         return;
     }
 
-    const ushort *actions = 0;
-    if (options & QUrl::EncodeDelimiters)
-        actions = encodedActions;
-    else
-        actions = decodedActions;
-
-    if (!qt_urlRecode(appendTo, value.constData(), value.constEnd(), options, actions))
+    if (!qt_urlRecode(appendTo, value.data(), value.end(), options, actions))
         appendTo += value;
 }
+
+static inline void appendToUser(QString &appendTo, const QString &value, QUrl::FormattingOptions options,
+                                const ushort *actions)
+{
+    appendToUser(appendTo, QStringRef(&value), options, actions);
+}
+
 
 inline void QUrlPrivate::appendAuthority(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const
 {
@@ -752,30 +897,31 @@ inline void QUrlPrivate::appendUserInfo(QString &appendTo, QUrl::FormattingOptio
     const ushort *userNameActions;
     const ushort *passwordActions;
     if (options & QUrl::EncodeDelimiters) {
-        userNameActions = encodedUserNameActions;
-        passwordActions = encodedPasswordActions;
+        userNameActions = userNameInUrl;
+        passwordActions = passwordInUrl;
     } else {
         switch (appendingTo) {
         case UserInfo:
-            userNameActions = decodedUserNameInUserInfoActions;
-            passwordActions = decodedPasswordInUserInfoActions;
+            userNameActions = userNameInUserInfo;
+            passwordActions = passwordInUserInfo;
             break;
 
         case Authority:
-            userNameActions = decodedUserNameInAuthorityActions;
-            passwordActions = decodedPasswordInAuthorityActions;
+            userNameActions = userNameInAuthority;
+            passwordActions = passwordInAuthority;
             break;
 
         case FullUrl:
+            userNameActions = userNameInUrl;
+            passwordActions = passwordInUrl;
+            break;
+
         default:
-            userNameActions = decodedUserNameInUrlActions;
-            passwordActions = decodedPasswordInUrlActions;
+            // can't happen
+            Q_UNREACHABLE();
             break;
         }
     }
-
-    if ((options & QUrl::EncodeReserved) == 0)
-        options |= QUrl::DecodeReserved;
 
     if (!qt_urlRecode(appendTo, userName.constData(), userName.constEnd(), options, userNameActions))
         appendTo += userName;
@@ -790,51 +936,53 @@ inline void QUrlPrivate::appendUserInfo(QString &appendTo, QUrl::FormattingOptio
 
 inline void QUrlPrivate::appendUserName(QString &appendTo, QUrl::FormattingOptions options) const
 {
-    appendToUser(appendTo, userName, options, encodedUserNameActions, decodedUserNameInIsolationActions);
+    // only called from QUrl::userName()
+    appendToUser(appendTo, userName, options,
+                 options & QUrl::EncodeDelimiters ? userNameInUrl : userNameInIsolation);
 }
 
 inline void QUrlPrivate::appendPassword(QString &appendTo, QUrl::FormattingOptions options) const
 {
-    appendToUser(appendTo, password, options, encodedPasswordActions, decodedPasswordInIsolationActions);
+    // only called from QUrl::password()
+    appendToUser(appendTo, password, options,
+                 options & QUrl::EncodeDelimiters ? passwordInUrl : passwordInIsolation);
 }
 
 inline void QUrlPrivate::appendPath(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const
 {
-    if (appendingTo != Path && !(options & QUrl::EncodeDelimiters)) {
-        if (!qt_urlRecode(appendTo, path.constData(), path.constEnd(), options, decodedPathInUrlActions))
-            appendTo += path;
-
-    } else {
-        appendToUser(appendTo, path, options, encodedPathActions, decodedPathInIsolationActions);
+    QString thePath = path;
+    if (options & QUrl::NormalizePathSegments) {
+        thePath = qt_normalizePathSegments(path, false);
     }
+
+    QStringRef thePathRef(&thePath);
+    if (options & QUrl::RemoveFilename) {
+        const int slash = path.lastIndexOf(QLatin1Char('/'));
+        if (slash == -1)
+            return;
+        thePathRef = path.leftRef(slash + 1);
+    }
+    // check if we need to remove trailing slashes
+    if (options & QUrl::StripTrailingSlash) {
+        while (thePathRef.length() > 1 && thePathRef.endsWith(QLatin1Char('/')))
+            thePathRef.chop(1);
+    }
+
+    appendToUser(appendTo, thePathRef, options,
+                 appendingTo == FullUrl || options & QUrl::EncodeDelimiters ? pathInUrl : pathInIsolation);
 }
 
-inline void QUrlPrivate::appendFragment(QString &appendTo, QUrl::FormattingOptions options) const
+inline void QUrlPrivate::appendFragment(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const
 {
-    appendToUser(appendTo, fragment, options, encodedFragmentActions, decodedFragmentInIsolationActions);
+    appendToUser(appendTo, fragment, options,
+                 options & QUrl::EncodeDelimiters ? fragmentInUrl :
+                 appendingTo == FullUrl ? 0 : fragmentInIsolation);
 }
 
 inline void QUrlPrivate::appendQuery(QString &appendTo, QUrl::FormattingOptions options, Section appendingTo) const
 {
-    // almost the same code as the previous functions
-    // except we prefer not to touch the delimiters
-    if (options == QUrl::PrettyDecoded && appendingTo == Query) {
-        appendTo += query;
-        return;
-    }
-
-    const ushort *actions = 0;
-    if (options & QUrl::EncodeDelimiters) {
-        actions = encodedQueryActions;
-    } else {
-        // reset to default qt_urlRecode behaviour (leave delimiters alone)
-        options |= QUrl::EncodeDelimiters;
-        actions = appendingTo == Query ? decodedQueryInIsolationActions : decodedQueryInUrlActions;
-    }
-
-    if (!qt_urlRecode(appendTo, query.constData(), query.constData() + query.length(),
-                      options, actions))
-        appendTo += query;
+    appendToUser(appendTo, query, options,
+                 appendingTo == FullUrl || options & QUrl::EncodeDelimiters ? queryInUrl : queryInIsolation);
 }
 
 // setXXX functions
@@ -864,10 +1012,12 @@ inline bool QUrlPrivate::setScheme(const QString &value, int len, bool doSetErro
             needsLowercasing = i;
             continue;
         }
-        if (p[i] >= '0' && p[i] <= '9' && i > 0)
-            continue;
-        if (p[i] == '+' || p[i] == '-' || p[i] == '.')
-            continue;
+        if (i) {
+            if (p[i] >= '0' && p[i] <= '9')
+                continue;
+            if (p[i] == '+' || p[i] == '-' || p[i] == '.')
+                continue;
+        }
 
         // found something else
         // don't call setError needlessly:
@@ -883,10 +1033,21 @@ inline bool QUrlPrivate::setScheme(const QString &value, int len, bool doSetErro
         // schemes are ASCII only, so we don't need the full Unicode toLower
         QChar *schemeData = scheme.data(); // force detaching here
         for (int i = needsLowercasing; i >= 0; --i) {
-            register ushort c = schemeData[i].unicode();
+            ushort c = schemeData[i].unicode();
             if (c >= 'A' && c <= 'Z')
                 schemeData[i] = c + 0x20;
         }
+    }
+
+    // did we set to the file protocol?
+    if (scheme == fileScheme()
+#ifdef Q_OS_WIN
+        || scheme == webDavScheme()
+#endif
+       ) {
+        flags |= IsLocalFile;
+    } else {
+        flags &= ~IsLocalFile;
     }
     return true;
 }
@@ -895,58 +1056,69 @@ inline void QUrlPrivate::setAuthority(const QString &auth, int from, int end, QU
 {
     sectionIsPresent &= ~Authority;
     sectionIsPresent |= Host;
-    if (from == end) {
-        userName.clear();
-        password.clear();
-        host.clear();
-        port = -1;
-        return;
-    }
+    port = -1;
 
-    int userInfoIndex = auth.indexOf(QLatin1Char('@'), from);
-    if (uint(userInfoIndex) < uint(end)) {
-        setUserInfo(auth, from, userInfoIndex);
-        from = userInfoIndex + 1;
-    }
-
-    int colonIndex = auth.lastIndexOf(QLatin1Char(':'), end - 1);
-    if (colonIndex < from)
-        colonIndex = -1;
-
-    if (uint(colonIndex) < uint(end)) {
-        if (auth.at(from).unicode() == '[') {
-            // check if colonIndex isn't inside the "[...]" part
-            int closingBracket = auth.indexOf(QLatin1Char(']'), from);
-            if (uint(closingBracket) > uint(colonIndex))
-                colonIndex = -1;
-        }
-    }
-
-    if (colonIndex == end - 1) {
-        // found a colon but no digits after it
-        setError(PortEmptyError, auth, colonIndex + 1);
-    } else if (uint(colonIndex) < uint(end)) {
-        unsigned long x = 0;
-        for (int i = colonIndex + 1; i < end; ++i) {
-            ushort c = auth.at(i).unicode();
-            if (c >= '0' && c <= '9') {
-                x *= 10;
-                x += c - '0';
-            } else {
-                x = ulong(-1); // x != ushort(x)
+    // we never actually _loop_
+    while (from != end) {
+        int userInfoIndex = auth.indexOf(QLatin1Char('@'), from);
+        if (uint(userInfoIndex) < uint(end)) {
+            setUserInfo(auth, from, userInfoIndex);
+            if (mode == QUrl::StrictMode && !validateComponent(UserInfo, auth, from, userInfoIndex))
                 break;
+            from = userInfoIndex + 1;
+        }
+
+        int colonIndex = auth.lastIndexOf(QLatin1Char(':'), end - 1);
+        if (colonIndex < from)
+            colonIndex = -1;
+
+        if (uint(colonIndex) < uint(end)) {
+            if (auth.at(from).unicode() == '[') {
+                // check if colonIndex isn't inside the "[...]" part
+                int closingBracket = auth.indexOf(QLatin1Char(']'), from);
+                if (uint(closingBracket) > uint(colonIndex))
+                    colonIndex = -1;
             }
         }
-        if (x == ushort(x)) {
-            port = ushort(x);
-        } else {
-            setError(InvalidPortError, auth, colonIndex + 1);
-        }
-    } else {
-        port = -1;
-    }
 
-    setHost(auth, from, qMin<uint>(end, colonIndex), mode);
+        if (uint(colonIndex) < uint(end) - 1) {
+            // found a colon with digits after it
+            unsigned long x = 0;
+            for (int i = colonIndex + 1; i < end; ++i) {
+                ushort c = auth.at(i).unicode();
+                if (c >= '0' && c <= '9') {
+                    x *= 10;
+                    x += c - '0';
+                } else {
+                    x = ulong(-1); // x != ushort(x)
+                    break;
+                }
+            }
+            if (x == ushort(x)) {
+                port = ushort(x);
+            } else {
+                setError(InvalidPortError, auth, colonIndex + 1);
+                if (mode == QUrl::StrictMode)
+                    break;
+            }
+        }
+
+        setHost(auth, from, qMin<uint>(end, colonIndex), mode);
+        if (mode == QUrl::StrictMode && !validateComponent(Host, auth, from, qMin<uint>(end, colonIndex))) {
+            // clear host too
+            sectionIsPresent &= ~Authority;
+            break;
+        }
+
+        // success
+        return;
+    }
+    // clear all sections but host
+    sectionIsPresent &= ~Authority | Host;
+    userName.clear();
+    password.clear();
+    host.clear();
+    port = -1;
 }
 
 inline void QUrlPrivate::setUserInfo(const QString &userInfo, int from, int end)
@@ -965,42 +1137,31 @@ inline void QUrlPrivate::setUserInfo(const QString &userInfo, int from, int end)
 inline void QUrlPrivate::setUserName(const QString &value, int from, int end)
 {
     sectionIsPresent |= UserName;
-    userName = recodeFromUser(value, decodedUserNameInIsolationActions, from, end);
+    userName = recodeFromUser(value, userNameInIsolation, from, end);
 }
 
 inline void QUrlPrivate::setPassword(const QString &value, int from, int end)
 {
     sectionIsPresent |= Password;
-    password = recodeFromUser(value, decodedPasswordInIsolationActions, from, end);
+    password = recodeFromUser(value, passwordInIsolation, from, end);
 }
 
 inline void QUrlPrivate::setPath(const QString &value, int from, int end)
 {
     // sectionIsPresent |= Path; // not used, save some cycles
-    path = recodeFromUser(value, decodedPathInIsolationActions, from, end);
+    path = recodeFromUser(value, pathInIsolation, from, end);
 }
 
 inline void QUrlPrivate::setFragment(const QString &value, int from, int end)
 {
     sectionIsPresent |= Fragment;
-    fragment = recodeFromUser(value, decodedFragmentInIsolationActions, from, end);
+    fragment = recodeFromUser(value, fragmentInIsolation, from, end);
 }
 
 inline void QUrlPrivate::setQuery(const QString &value, int from, int iend)
 {
     sectionIsPresent |= Query;
-
-    // use the default actions for the query (don't set QUrl::DecodeAllDelimiters)
-    QString output;
-    const QChar *begin = value.constData() + from;
-    const QChar *end = value.constData() + iend;
-
-    // leave delimiters alone but decode the rest
-    if (qt_urlRecode(output, begin, end, QUrl::EncodeDelimiters,
-                     decodedQueryInIsolationActions))
-        query = output;
-    else
-        query = value.mid(from, iend - from);
+    query = recodeFromUser(value, queryInIsolation, from, iend);
 }
 
 // Host handling
@@ -1035,18 +1196,19 @@ inline void QUrlPrivate::setQuery(const QString &value, int from, int iend)
 
 inline void QUrlPrivate::appendHost(QString &appendTo, QUrl::FormattingOptions options) const
 {
-    // this is the only flag that matters
-    options &= QUrl::EncodeUnicode;
     if (host.isEmpty())
         return;
     if (host.at(0).unicode() == '[') {
-        // IPv6Address and IPvFuture address never require any transformation
+        // IPv6 addresses might contain a zone-id which needs to be recoded
+        if (options != 0)
+            if (qt_urlRecode(appendTo, host.constBegin(), host.constEnd(), options, 0))
+                return;
         appendTo += host;
     } else {
         // this is either an IPv4Address or a reg-name
         // if it is a reg-name, it is already stored in Unicode form
-        if (options == QUrl::EncodeUnicode)
-            appendTo += qt_ACE_do(host, ToAceOnly);
+        if (options & QUrl::EncodeUnicode && !(options & 0x4000000))
+            appendTo += qt_ACE_do(host, ToAceOnly, AllowLeadingDot);
         else
             appendTo += host;
     }
@@ -1054,7 +1216,7 @@ inline void QUrlPrivate::appendHost(QString &appendTo, QUrl::FormattingOptions o
 
 // the whole IPvFuture is passed and parsed here, including brackets;
 // returns null if the parsing was successful, or the QChar of the first failure
-static const QChar *parseIpFuture(QString &host, const QChar *begin, const QChar *end)
+static const QChar *parseIpFuture(QString &host, const QChar *begin, const QChar *end, QUrl::ParsingMode mode)
 {
     //    IPvFuture     = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
     static const char acceptable[] =
@@ -1063,19 +1225,25 @@ static const QChar *parseIpFuture(QString &host, const QChar *begin, const QChar
             "-._~";       // unreserved
 
     // the brackets and the "v" have been checked
+    const QChar *const origBegin = begin;
     if (begin[3].unicode() != '.')
         return &begin[3];
-    if ((begin[2].unicode() >= 'A' && begin[2].unicode() >= 'F') ||
+    if ((begin[2].unicode() >= 'A' && begin[2].unicode() <= 'F') ||
             (begin[2].unicode() >= 'a' && begin[2].unicode() <= 'f') ||
             (begin[2].unicode() >= '0' && begin[2].unicode() <= '9')) {
         // this is so unlikely that we'll just go down the slow path
         // decode the whole string, skipping the "[vH." and "]" which we already know to be there
         host += QString::fromRawData(begin, 4);
+
+        // uppercase the version, if necessary
+        if (begin[2].unicode() >= 'a')
+            host[host.length() - 2] = begin[2].unicode() - 0x20;
+
         begin += 4;
         --end;
 
         QString decoded;
-        if (qt_urlRecode(decoded, begin, end, QUrl::FullyEncoded, 0)) {
+        if (mode == QUrl::TolerantMode && qt_urlRecode(decoded, begin, end, QUrl::FullyDecoded, 0)) {
             begin = decoded.constBegin();
             end = decoded.constEnd();
         }
@@ -1090,37 +1258,57 @@ static const QChar *parseIpFuture(QString &host, const QChar *begin, const QChar
             else if (begin->unicode() < 0x80 && strchr(acceptable, begin->unicode()) != 0)
                 host += *begin;
             else
-                return begin;
+                return decoded.isEmpty() ? begin : &origBegin[2];
         }
         host += QLatin1Char(']');
         return 0;
     }
-    return &begin[2];
+    return &origBegin[2];
 }
 
 // ONLY the IPv6 address is parsed here, WITHOUT the brackets
-static bool parseIp6(QString &host, const QChar *begin, const QChar *end)
+static const QChar *parseIp6(QString &host, const QChar *begin, const QChar *end, QUrl::ParsingMode mode)
 {
-    QIPAddressUtils::IPv6Address address;
-    if (!QIPAddressUtils::parseIp6(address, begin, end)) {
-        // IPv6 failed parsing, check if it was a percent-encoded character in
-        // the middle and try again
-        QString decoded;
-        if (!qt_urlRecode(decoded, begin, end, QUrl::FullyEncoded, 0)) {
-            // no transformation, nothing to re-parse
-            return false;
-        }
-
-        // recurse
-        // if the parsing fails again, the qt_urlRecode above will return 0
-        return parseIp6(host, decoded.constBegin(), decoded.constEnd());
+    // ### Update to use QStringView once QStringView::indexOf and QStringView::lastIndexOf exists
+    QString decoded;
+    if (mode == QUrl::TolerantMode) {
+        // this struct is kept in automatic storage because it's only 4 bytes
+        const ushort decodeColon[] = { decode(':'), 0 };
+        if (qt_urlRecode(decoded, begin, end, QUrl::ComponentFormattingOption::PrettyDecoded, decodeColon) == 0)
+            decoded = QString(begin, end-begin);
+    } else {
+      decoded = QString(begin, end-begin);
     }
 
-    host.reserve(host.size() + (end - begin));
+    const QLatin1String zoneIdIdentifier("%25");
+    QIPAddressUtils::IPv6Address address;
+    QString zoneId;
+
+    const QChar *endBeforeZoneId = decoded.constEnd();
+
+    int zoneIdPosition = decoded.indexOf(zoneIdIdentifier);
+    if ((zoneIdPosition != -1) && (decoded.lastIndexOf(zoneIdIdentifier) == zoneIdPosition)) {
+        zoneId = decoded.mid(zoneIdPosition + zoneIdIdentifier.size());
+        endBeforeZoneId = decoded.constBegin() + zoneIdPosition;
+
+        if (zoneId.isEmpty())
+            return end;
+    }
+
+    const QChar *ret = QIPAddressUtils::parseIp6(address, decoded.constBegin(), endBeforeZoneId);
+    if (ret)
+        return begin + (ret - decoded.constBegin());
+
+    host.reserve(host.size() + (decoded.constEnd() - decoded.constBegin()));
     host += QLatin1Char('[');
     QIPAddressUtils::toString(host, address);
+
+    if (!zoneId.isEmpty()) {
+        host += zoneIdIdentifier;
+        host += zoneId;
+    }
     host += QLatin1Char(']');
-    return true;
+    return 0;
 }
 
 inline bool QUrlPrivate::setHost(const QString &value, int from, int iend, QUrl::ParsingMode mode)
@@ -1144,17 +1332,22 @@ inline bool QUrlPrivate::setHost(const QString &value, int from, int iend, QUrl:
         }
 
         if (len > 5 && begin[1].unicode() == 'v') {
-            const QChar *c = parseIpFuture(host, begin, end);
+            const QChar *c = parseIpFuture(host, begin, end, mode);
             if (c)
                 setError(InvalidIPvFutureError, value, c - value.constData());
             return !c;
+        } else if (begin[1].unicode() == 'v') {
+            setError(InvalidIPvFutureError, value, from);
         }
 
-        if (parseIp6(host, begin + 1, end - 1))
+        const QChar *c = parseIp6(host, begin + 1, end - 1, mode);
+        if (!c)
             return true;
 
-        setError(begin[1].unicode() == 'v' ? InvalidIPvFutureError : InvalidIPv6AddressError,
-                 value, from);
+        if (c == end - 1)
+            setError(InvalidIPv6AddressError, value, from);
+        else
+            setError(InvalidCharacterInIPv6Error, value, c - value.constData());
         return false;
     }
 
@@ -1181,7 +1374,7 @@ inline bool QUrlPrivate::setHost(const QString &value, int from, int iend, QUrl:
 
     // check for percent-encoding first
     QString s;
-    if (mode == QUrl::TolerantMode && qt_urlRecode(s, begin, end, QUrl::DecodeReserved, 0)) {
+    if (mode == QUrl::TolerantMode && qt_urlRecode(s, begin, end, 0, 0)) {
         // something was decoded
         // anything encoded left?
         int pos = s.indexOf(QChar(0x25)); // '%'
@@ -1194,7 +1387,7 @@ inline bool QUrlPrivate::setHost(const QString &value, int from, int iend, QUrl:
         return setHost(s, 0, s.length(), QUrl::StrictMode);
     }
 
-    s = qt_ACE_do(QString::fromRawData(begin, len), NormalizeAce);
+    s = qt_ACE_do(QString::fromRawData(begin, len), NormalizeAce, ForbidLeadingDot);
     if (s.isEmpty()) {
         setError(InvalidRegNameError, value);
         return false;
@@ -1220,6 +1413,7 @@ inline void QUrlPrivate::parse(const QString &url, QUrl::ParsingMode parsingMode
     //                 /  other path types here
 
     sectionIsPresent = 0;
+    flags = 0;
     clearError();
 
     // find the important delimiters
@@ -1231,7 +1425,7 @@ inline void QUrlPrivate::parse(const QString &url, QUrl::ParsingMode parsingMode
     const ushort *const data = reinterpret_cast<const ushort *>(begin);
 
     for (int i = 0; i < len; ++i) {
-        register uint uc = data[i];
+        uint uc = data[i];
         if (uc == '#' && hash == -1) {
             hash = i;
 
@@ -1297,61 +1491,45 @@ inline void QUrlPrivate::parse(const QString &url, QUrl::ParsingMode parsingMode
     if (error || parsingMode == QUrl::TolerantMode)
         return;
 
-    // The parsing so far was tolerant of errors, so the StrictMode
-    // parsing is actually implemented here, as an extra post-check.
-    // We only execute it if we haven't found any errors so far.
+    // The parsing so far was partially tolerant of errors, except for the
+    // scheme parser (which is always strict) and the authority (which was
+    // executed in strict mode).
+    // If we haven't found any errors so far, continue the strict-mode parsing
+    // from the path component onwards.
 
-    // What we need to look out for, that the regular parser tolerates:
-    //  - percent signs not followed by two hex digits
-    //  - forbidden characters, which should always appear encoded
-    //    '"' / '<' / '>' / '\' / '^' / '`' / '{' / '|' / '}' / BKSP
-    //    control characters
-    //  - delimiters not allowed in certain positions
-    //    . scheme: parser is already strict
-    //    . user info: gen-delims (except for ':') disallowed
-    //    . host: parser is stricter than the standard
-    //    . port: parser is stricter than the standard
-    //    . path: all delimiters allowed
-    //    . fragment: all delimiters allowed
-    //    . query: all delimiters allowed
-    //    We would only need to check the user-info. However, the presence
-    //    of the disallowed gen-delims changes the parsing, so we don't
-    //    actually need to do anything
-    static const char forbidden[] = "\"<>\\^`{|}\x7F";
-    for (uint i = 0; i < uint(len); ++i) {
-        register uint uc = data[i];
-        if (uc >= 0x80)
-            continue;
+    if (!validateComponent(Path, url, pathStart, hierEnd))
+        return;
+    if (uint(question) < uint(hash) && !validateComponent(Query, url, question + 1, qMin<uint>(hash, len)))
+        return;
+    if (hash != -1)
+        validateComponent(Fragment, url, hash + 1, len);
+}
 
-        if ((uc == '%' && (uint(len) < i + 2 || !isHex(data[i + 1]) || !isHex(data[i + 2])))
-                || uc <= 0x20 || strchr(forbidden, uc)) {
-            // found an error
-            ErrorCode errorCode;
+QString QUrlPrivate::toLocalFile(QUrl::FormattingOptions options) const
+{
+    QString tmp;
+    QString ourPath;
+    appendPath(ourPath, options, QUrlPrivate::Path);
 
-            // where are we?
-            if (i > uint(hash)) {
-                errorCode = InvalidFragmentError;
-            } else if (i > uint(question)) {
-                errorCode = InvalidQueryError;
-            } else if (i > uint(pathStart)) {
-                // pathStart is never -1
-                errorCode = InvalidPathError;
-            } else {
-                // It must be in the authority, since the scheme is strict.
-                // Since the port and hostname parsers are also strict,
-                // the error can only have happened in the user info.
-                int pos = url.indexOf(QLatin1Char(':'), hierStart);
-                if (i > uint(pos)) {
-                    errorCode = InvalidPasswordError;
-                } else {
-                    errorCode = InvalidUserNameError;
-                }
-            }
-
-            setError(errorCode, url, i);
-            return;
-        }
+    // magic for shared drive on windows
+    if (!host.isEmpty()) {
+        tmp = QLatin1String("//") + host;
+#ifdef Q_OS_WIN // QTBUG-42346, WebDAV is visible as local file on Windows only.
+        if (scheme == webDavScheme())
+            tmp += webDavSslTag();
+#endif
+        if (!ourPath.isEmpty() && !ourPath.startsWith(QLatin1Char('/')))
+            tmp += QLatin1Char('/');
+        tmp += ourPath;
+    } else {
+        tmp = ourPath;
+#ifdef Q_OS_WIN
+        // magic for drives on windows
+        if (ourPath.length() > 2 && ourPath.at(0) == QLatin1Char('/') && ourPath.at(2) == QLatin1Char(':'))
+            tmp.remove(0, 1);
+#endif
     }
+    return tmp;
 }
 
 /*
@@ -1477,19 +1655,31 @@ inline QUrlPrivate::ErrorCode QUrlPrivate::validityError(QString *source, int *p
         return error->code;
     }
 
-    // There are two more cases of invalid URLs that QUrl recognizes and they
+    // There are three more cases of invalid URLs that QUrl recognizes and they
     // are only possible with constructed URLs (setXXX methods), not with
     // parsing. Therefore, they are tested here.
     //
-    // The two cases are a non-empty path that doesn't start with a slash and:
+    // Two cases are a non-empty path that doesn't start with a slash and:
     //  - with an authority
     //  - without an authority, without scheme but the path with a colon before
     //    the first slash
+    // The third case is an empty authority and a non-empty path that starts
+    // with "//".
     // Those cases are considered invalid because toString() would produce a URL
     // that wouldn't be parsed back to the same QUrl.
 
-    if (path.isEmpty() || path.at(0) == QLatin1Char('/'))
+    if (path.isEmpty())
         return NoError;
+    if (path.at(0) == QLatin1Char('/')) {
+        if (hasAuthority() || path.length() == 1 || path.at(1) != QLatin1Char('/'))
+            return NoError;
+        if (source) {
+            *source = path;
+            *position = 0;
+        }
+        return AuthorityAbsentAndPathIsDoubleSlash;
+    }
+
     if (sectionIsPresent & QUrlPrivate::Host) {
         if (source) {
             *source = path;
@@ -1502,7 +1692,7 @@ inline QUrlPrivate::ErrorCode QUrlPrivate::validityError(QString *source, int *p
 
     // check for a path of "text:text/"
     for (int i = 0; i < path.length(); ++i) {
-        register ushort c = path.at(i).unicode();
+        ushort c = path.at(i).unicode();
         if (c == '/') {
             // found the slash before the colon
             return NoError;
@@ -1517,6 +1707,67 @@ inline QUrlPrivate::ErrorCode QUrlPrivate::validityError(QString *source, int *p
         }
     }
     return NoError;
+}
+
+bool QUrlPrivate::validateComponent(QUrlPrivate::Section section, const QString &input,
+                                    int begin, int end)
+{
+    // What we need to look out for, that the regular parser tolerates:
+    //  - percent signs not followed by two hex digits
+    //  - forbidden characters, which should always appear encoded
+    //    '"' / '<' / '>' / '\' / '^' / '`' / '{' / '|' / '}' / BKSP
+    //    control characters
+    //  - delimiters not allowed in certain positions
+    //    . scheme: parser is already strict
+    //    . user info: gen-delims except ":" disallowed ("/" / "?" / "#" / "[" / "]" / "@")
+    //    . host: parser is stricter than the standard
+    //    . port: parser is stricter than the standard
+    //    . path: all delimiters allowed
+    //    . fragment: all delimiters allowed
+    //    . query: all delimiters allowed
+    static const char forbidden[] = "\"<>\\^`{|}\x7F";
+    static const char forbiddenUserInfo[] = ":/?#[]@";
+
+    Q_ASSERT(section != Authority && section != Hierarchy && section != FullUrl);
+
+    const ushort *const data = reinterpret_cast<const ushort *>(input.constData());
+    for (uint i = uint(begin); i < uint(end); ++i) {
+        uint uc = data[i];
+        if (uc >= 0x80)
+            continue;
+
+        bool error = false;
+        if ((uc == '%' && (uint(end) < i + 2 || !isHex(data[i + 1]) || !isHex(data[i + 2])))
+                || uc <= 0x20 || strchr(forbidden, uc)) {
+            // found an error
+            error = true;
+        } else if (section & UserInfo) {
+            if (section == UserInfo && strchr(forbiddenUserInfo + 1, uc))
+                error = true;
+            else if (section != UserInfo && strchr(forbiddenUserInfo, uc))
+                error = true;
+        }
+
+        if (!error)
+            continue;
+
+        ErrorCode errorCode = ErrorCode(int(section) << 8);
+        if (section == UserInfo) {
+            // is it the user name or the password?
+            errorCode = InvalidUserNameError;
+            for (uint j = uint(begin); j < i; ++j)
+                if (data[j] == ':') {
+                    errorCode = InvalidPasswordError;
+                    break;
+                }
+        }
+
+        setError(errorCode, input, i);
+        return false;
+    }
+
+    // no errors
+    return true;
 }
 
 #if 0
@@ -1552,87 +1803,6 @@ inline void QUrlPrivate::validate() const
         }
     }
 }
-
-inline const QByteArray &QUrlPrivate::normalized() const
-{
-    if (QURL_HASFLAG(stateFlags, QUrlPrivate::Normalized))
-        return encodedNormalized;
-
-    QUrlPrivate *that = const_cast<QUrlPrivate *>(this);
-    QURL_SETFLAG(that->stateFlags, QUrlPrivate::Normalized);
-
-    QUrlPrivate tmp = *this;
-    tmp.scheme = tmp.scheme.toLower();
-    tmp.host = tmp.canonicalHost();
-
-    // ensure the encoded and normalized parts of the URL
-    tmp.ensureEncodedParts();
-    if (tmp.encodedUserName.contains('%'))
-        q_normalizePercentEncoding(&tmp.encodedUserName, userNameExcludeChars);
-    if (tmp.encodedPassword.contains('%'))
-        q_normalizePercentEncoding(&tmp.encodedPassword, passwordExcludeChars);
-    if (tmp.encodedFragment.contains('%'))
-        q_normalizePercentEncoding(&tmp.encodedFragment, fragmentExcludeChars);
-
-    if (tmp.encodedPath.contains('%')) {
-        // the path is a bit special:
-        // the slashes shouldn't be encoded or decoded.
-        // They should remain exactly like they are right now
-        //
-        // treat the path as a slash-separated sequence of pchar
-        QByteArray result;
-        result.reserve(tmp.encodedPath.length());
-        if (tmp.encodedPath.startsWith('/'))
-            result.append('/');
-
-        const char *data = tmp.encodedPath.constData();
-        int lastSlash = 0;
-        int nextSlash;
-        do {
-            ++lastSlash;
-            nextSlash = tmp.encodedPath.indexOf('/', lastSlash);
-            int len;
-            if (nextSlash == -1)
-                len = tmp.encodedPath.length() - lastSlash;
-            else
-                len = nextSlash - lastSlash;
-
-            if (memchr(data + lastSlash, '%', len)) {
-                // there's at least one percent before the next slash
-                QByteArray block = QByteArray(data + lastSlash, len);
-                q_normalizePercentEncoding(&block, pathExcludeChars);
-                result.append(block);
-            } else {
-                // no percents in this path segment, append wholesale
-                result.append(data + lastSlash, len);
-            }
-
-            // append the slash too, if it's there
-            if (nextSlash != -1)
-                result.append('/');
-
-            lastSlash = nextSlash;
-        } while (lastSlash != -1);
-
-        tmp.encodedPath = result;
-    }
-
-    if (!tmp.scheme.isEmpty()) // relative test
-        removeDotsFromPath(&tmp.encodedPath);
-
-    int qLen = tmp.query.length();
-    for (int i = 0; i < qLen; i++) {
-        if (qLen - i > 2 && tmp.query.at(i) == '%') {
-            ++i;
-            tmp.query[i] = qToLower(tmp.query.at(i));
-            ++i;
-            tmp.query[i] = qToLower(tmp.query.at(i));
-        }
-    }
-    encodedNormalized = tmp.toEncoded();
-
-    return encodedNormalized;
-}
 #endif
 
 /*!
@@ -1661,7 +1831,9 @@ inline const QByteArray &QUrlPrivate::normalized() const
 /*!
     Constructs a URL by parsing \a url. QUrl will automatically percent encode
     all characters that are not allowed in a URL and decode the percent-encoded
-    sequences that represent a character that is allowed in a URL.
+    sequences that represent an unreserved character (letters, digits, hyphens,
+    undercores, dots and tildes). All other characters are left in their
+    original forms.
 
     Parses the \a url using the parser mode \a parsingMode. In TolerantMode
     (the default), QUrl will correct certain mistakes, notably the presence of
@@ -1718,7 +1890,7 @@ QUrl::~QUrl()
 }
 
 /*!
-    Returns true if the URL is non-empty and valid; otherwise returns false.
+    Returns \c true if the URL is non-empty and valid; otherwise returns \c false.
 
     The URL is run through a conformance test. Every part of the URL
     must conform to the standard encoding rules of the URI standard
@@ -1736,7 +1908,7 @@ bool QUrl::isValid() const
 }
 
 /*!
-    Returns true if the URL has no data; otherwise returns false.
+    Returns \c true if the URL has no data; otherwise returns \c false.
 
     \sa clear()
 */
@@ -1763,8 +1935,9 @@ void QUrl::clear()
 /*!
     Parses \a url and sets this object to that value. QUrl will automatically
     percent encode all characters that are not allowed in a URL and decode the
-    percent-encoded sequences that represent a character that is allowed in a
-    URL.
+    percent-encoded sequences that represent an unreserved character (letters,
+    digits, hyphens, undercores, dots and tildes). All other characters are
+    left in their original forms.
 
     Parses the \a url using the parser mode \a parsingMode. In TolerantMode
     (the default), QUrl will correct certain mistakes, notably the presence of
@@ -1808,11 +1981,20 @@ void QUrl::setUrl(const QString &url, ParsingMode parsingMode)
     input. It must also start with an ASCII letter.
 
     The scheme describes the type (or protocol) of the URL. It's
-    represented by one or more ASCII characters at the start the URL,
-    and is followed by a ':'. The following example shows a URL where
-    the scheme is "ftp":
+    represented by one or more ASCII characters at the start the URL.
+
+    A scheme is strictly \l {http://www.ietf.org/rfc/rfc3986.txt} {RFC 3986}-compliant:
+        \tt {scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )}
+
+    The following example shows a URL where the scheme is "ftp":
 
     \image qurl-authority2.png
+
+    To set the scheme, the following call is used:
+    \code
+        QUrl url;
+        url.setScheme("ftp");
+    \endcode
 
     The scheme can also be empty, in which case the URL is interpreted
     as relative.
@@ -1826,6 +2008,7 @@ void QUrl::setScheme(const QString &scheme)
     if (scheme.isEmpty()) {
         // schemes are not allowed to be empty
         d->sectionIsPresent &= ~QUrlPrivate::Scheme;
+        d->flags &= ~QUrlPrivate::IsLocalFile;
         d->scheme.clear();
     } else {
         d->setScheme(scheme, scheme.length(), /* do set error */ true);
@@ -1838,6 +2021,7 @@ void QUrl::setScheme(const QString &scheme)
 
     The scheme can only contain US-ASCII letters or digits, which means it
     cannot contain any character that would otherwise require encoding.
+    Additionally, schemes are always returned in lowercase form.
 
     \sa setScheme(), isRelative()
 */
@@ -1869,10 +2053,11 @@ QString QUrl::scheme() const
     and some characters (including space) are not allowed in undecoded form. In
     TolerantMode (the default), all characters are accepted in undecoded form
     and the tolerant parser will correct stray '%' not followed by two hex
-    characters. In DecodedMode, '%' stand for themselves and encoded characters
-    are not possible. Because of that, in DecodedMode, it is not possible to
-    use the delimiter characters as non-delimiters (e.g., a password containing
-    a '@').
+    characters.
+
+    This function does not allow \a mode to be QUrl::DecodedMode. To set fully
+    decoded data, call setUserName(), setPassword(), setHost() and setPort()
+    individually.
 
     \sa setUserInfo(), setHost(), setPort()
 */
@@ -1880,13 +2065,13 @@ void QUrl::setAuthority(const QString &authority, ParsingMode mode)
 {
     detach();
     d->clearError();
-    QString data = authority;
+
     if (mode == DecodedMode) {
-        parseDecodedComponent(data);
-        mode = TolerantMode;
+        qWarning("QUrl::setAuthority(): QUrl::DecodedMode is not permitted in this function");
+        return;
     }
 
-    d->setAuthority(data, 0, data.length(), mode);
+    d->setAuthority(authority, 0, authority.length(), mode);
     if (authority.isNull()) {
         // QUrlPrivate::setAuthority cleared almost everything
         // but it leaves the Host bit set
@@ -1898,21 +2083,28 @@ void QUrl::setAuthority(const QString &authority, ParsingMode mode)
     Returns the authority of the URL if it is defined; otherwise
     an empty string is returned.
 
-    The \a options argument controls how to format the authority portion of the
-    URL. The value of QUrl::FullyDecoded should be avoided, since it may
-    produce an ambiguous return value (for example, if the username contains a
-    colon ':' or either the username or password contain an at-sign '@'). In
-    all other cases, this function returns an unambiguous value, which may
-    contain those characters still percent-encoded, plus some control
-    sequences not representable in decoded form in QString.
+    This function returns an unambiguous value, which may contain that
+    characters still percent-encoded, plus some control sequences not
+    representable in decoded form in QString.
+
+    The \a options argument controls how to format the user info component. The
+    value of QUrl::FullyDecoded is not permitted in this function. If you need
+    to obtain fully decoded data, call userName(), password(), host() and
+    port() individually.
 
     \sa setAuthority(), userInfo(), userName(), password(), host(), port()
 */
 QString QUrl::authority(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
+    if (!d)
+        return result;
+
+    if (options == QUrl::FullyDecoded) {
+        qWarning("QUrl::authority(): QUrl::FullyDecoded is not permitted in this function");
+        return result;
+    }
+
     d->appendAuthority(result, options, QUrlPrivate::Authority);
     return result;
 }
@@ -1933,9 +2125,10 @@ QString QUrl::authority(ComponentFormattingOptions options) const
     and some characters (including space) are not allowed in undecoded form. In
     TolerantMode (the default), all characters are accepted in undecoded form
     and the tolerant parser will correct stray '%' not followed by two hex
-    characters. In DecodedMode, '%' stand for themselves and encoded characters
-    are not possible. Because of that, in DecodedMode, it is not possible to
-    use the ':' delimiter characters as non-delimiter in the user name.
+    characters.
+
+    This function does not allow \a mode to be QUrl::DecodedMode. To set fully
+    decoded data, call setUserName() and setPassword() individually.
 
     \sa userInfo(), setUserName(), setPassword(), setAuthority()
 */
@@ -1945,8 +2138,8 @@ void QUrl::setUserInfo(const QString &userInfo, ParsingMode mode)
     d->clearError();
     QString trimmed = userInfo.trimmed();
     if (mode == DecodedMode) {
-        parseDecodedComponent(trimmed);
-        mode = TolerantMode;
+        qWarning("QUrl::setUserInfo(): QUrl::DecodedMode is not permitted in this function");
+        return;
     }
 
     d->setUserInfo(trimmed, 0, trimmed.length());
@@ -1954,6 +2147,10 @@ void QUrl::setUserInfo(const QString &userInfo, ParsingMode mode)
         // QUrlPrivate::setUserInfo cleared almost everything
         // but it leaves the UserName bit set
         d->sectionIsPresent &= ~QUrlPrivate::UserInfo;
+    } else if (mode == StrictMode && !d->validateComponent(QUrlPrivate::UserInfo, userInfo)) {
+        d->sectionIsPresent &= ~QUrlPrivate::UserInfo;
+        d->userName.clear();
+        d->password.clear();
     }
 }
 
@@ -1961,20 +2158,27 @@ void QUrl::setUserInfo(const QString &userInfo, ParsingMode mode)
     Returns the user info of the URL, or an empty string if the user
     info is undefined.
 
+    This function returns an unambiguous value, which may contain that
+    characters still percent-encoded, plus some control sequences not
+    representable in decoded form in QString.
+
     The \a options argument controls how to format the user info component. The
-    value of QUrl::FullyDecoded should be avoided, since it may produce an
-    ambiguous return value (for example, if the username contains a colon ':').
-    In all other cases, this function returns an unambiguous value, which may
-    contain that characters still percent-encoded, plus some control sequences
-    not representable in decoded form in QString.
+    value of QUrl::FullyDecoded is not permitted in this function. If you need
+    to obtain fully decoded data, call userName() and password() individually.
 
     \sa setUserInfo(), userName(), password(), authority()
 */
 QString QUrl::userInfo(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
+    if (!d)
+        return result;
+
+    if (options == QUrl::FullyDecoded) {
+        qWarning("QUrl::userInfo(): QUrl::FullyDecoded is not permitted in this function");
+        return result;
+    }
+
     d->appendUserInfo(result, options, QUrlPrivate::UserInfo);
     return result;
 }
@@ -2010,10 +2214,11 @@ void QUrl::setUserName(const QString &userName, ParsingMode mode)
         mode = TolerantMode;
     }
 
-
     d->setUserName(data, 0, data.length());
     if (userName.isNull())
         d->sectionIsPresent &= ~QUrlPrivate::UserName;
+    else if (mode == StrictMode && !d->validateComponent(QUrlPrivate::UserName, userName))
+        d->userName.clear();
 }
 
 /*!
@@ -2035,10 +2240,9 @@ void QUrl::setUserName(const QString &userName, ParsingMode mode)
 */
 QString QUrl::userName(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendUserName(result, options);
+    if (d)
+        d->appendUserName(result, options);
     return result;
 }
 
@@ -2105,6 +2309,8 @@ void QUrl::setPassword(const QString &password, ParsingMode mode)
     d->setPassword(data, 0, data.length());
     if (password.isNull())
         d->sectionIsPresent &= ~QUrlPrivate::Password;
+    else if (mode == StrictMode && !d->validateComponent(QUrlPrivate::Password, password))
+        d->password.clear();
 }
 
 /*!
@@ -2126,10 +2332,9 @@ void QUrl::setPassword(const QString &password, ParsingMode mode)
 */
 QString QUrl::password(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendPassword(result, options);
+    if (d)
+        d->appendPassword(result, options);
     return result;
 }
 
@@ -2225,7 +2430,7 @@ void QUrl::setHost(const QString &host, ParsingMode mode)
     as DNS requests or in HTTP request headers). If that flag is not present,
     this function returns the International Domain Name (IDN) in Unicode form,
     according to the list of permissible top-level domains (see
-    idnWhiteList()).
+    idnWhitelist()).
 
     All other flags are ignored. Host names cannot contain control or percent
     characters, so the returned value can be considered fully decoded.
@@ -2234,12 +2439,12 @@ void QUrl::setHost(const QString &host, ParsingMode mode)
 */
 QString QUrl::host(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendHost(result, options);
-    if (result.startsWith(QLatin1Char('[')))
-        return result.mid(1, result.length() - 2);
+    if (d) {
+        d->appendHost(result, options);
+        if (result.startsWith(QLatin1Char('[')))
+            result = result.mid(1, result.length() - 2);
+    }
     return result;
 }
 
@@ -2290,11 +2495,13 @@ void QUrl::setPort(int port)
     d->clearError();
 
     if (port < -1 || port > 65535) {
-        port = -1;
         d->setError(QUrlPrivate::InvalidPortError, QString::number(port), 0);
+        port = -1;
     }
 
     d->port = port;
+    if (port != -1)
+        d->sectionIsPresent |= QUrlPrivate::Host;
 }
 
 /*!
@@ -2327,7 +2534,7 @@ int QUrl::port(int defaultPort) const
     The \a path data is interpreted according to \a mode: in StrictMode,
     any '%' characters must be followed by exactly two hexadecimal characters
     and some characters (including space) are not allowed in undecoded form. In
-    TolerantMode (the default), all characters are accepted in undecoded form and the
+    TolerantMode, all characters are accepted in undecoded form and the
     tolerant parser will correct stray '%' not followed by two hex characters.
     In DecodedMode, '%' stand for themselves and encoded characters are not
     possible.
@@ -2354,10 +2561,19 @@ void QUrl::setPath(const QString &path, ParsingMode mode)
     // optimized out, since there is no path delimiter
 //    if (path.isNull())
 //        d->sectionIsPresent &= ~QUrlPrivate::Path;
+//    else
+    if (mode == StrictMode && !d->validateComponent(QUrlPrivate::Path, path))
+        d->path.clear();
 }
 
 /*!
     Returns the path of the URL.
+
+    \code
+    qDebug() << QUrl("file:file.txt").path();                   // "file.txt"
+    qDebug() << QUrl("/home/user/file.txt").path();             // "/home/user/file.txt"
+    qDebug() << QUrl("http://www.example.com/test/123").path(); // "/test/123"
+    \endcode
 
     The \a options argument controls how to format the path component. All
     values produce an unambiguous result. With QUrl::FullyDecoded, all
@@ -2369,14 +2585,38 @@ void QUrl::setPath(const QString &path, ParsingMode mode)
     sequences are present. It is recommended to use that value when the result
     will be used in a non-URL context, such as sending to an FTP server.
 
+    An example of data loss is when you have non-Unicode percent-encoded sequences
+    and use FullyDecoded (the default):
+
+    \code
+    qDebug() << QUrl("/foo%FFbar").path();
+    \endcode
+
+    In this example, there will be some level of data loss because the \c %FF cannot
+    be converted.
+
+    Data loss can also occur when the path contains sub-delimiters (such as \c +):
+
+    \code
+    qDebug() << QUrl("/foo+bar%2B").path(); // "/foo+bar+"
+    \endcode
+
+    Other decoding examples:
+
+    \code
+    const QUrl url("/tmp/Mambo %235%3F.mp3");
+    qDebug() << url.path(QUrl::FullyDecoded);  // "/tmp/Mambo #5?.mp3"
+    qDebug() << url.path(QUrl::PrettyDecoded); // "/tmp/Mambo #5?.mp3"
+    qDebug() << url.path(QUrl::FullyEncoded);  // "/tmp/Mambo%20%235%3F.mp3"
+    \endcode
+
     \sa setPath()
 */
 QString QUrl::path(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendPath(result, options, QUrlPrivate::Path);
+    if (d)
+        d->appendPath(result, options, QUrlPrivate::Path);
     return result;
 }
 
@@ -2417,9 +2657,39 @@ QString QUrl::path(ComponentFormattingOptions options) const
 */
 
 /*!
+    \since 5.2
+
+    Returns the name of the file, excluding the directory path.
+
+    Note that, if this QUrl object is given a path ending in a slash, the name of the file is considered empty.
+
+    If the path doesn't contain any slash, it is fully returned as the fileName.
+
+    Example:
+
+    \snippet code/src_corelib_io_qurl.cpp 7
+
+    The \a options argument controls how to format the file name component. All
+    values produce an unambiguous result. With QUrl::FullyDecoded, all
+    percent-encoded sequences are decoded; otherwise, the returned value may
+    contain some percent-encoded sequences for some control sequences not
+    representable in decoded form in QString.
+
+    \sa path()
+*/
+QString QUrl::fileName(ComponentFormattingOptions options) const
+{
+    const QString ourPath = path(options);
+    const int slash = ourPath.lastIndexOf(QLatin1Char('/'));
+    if (slash == -1)
+        return ourPath;
+    return ourPath.mid(slash + 1);
+}
+
+/*!
     \since 4.2
 
-    Returns true if this URL contains a Query (i.e., if ? was seen on it).
+    Returns \c true if this URL contains a Query (i.e., if ? was seen on it).
 
     \sa setQuery(), query(), hasFragment()
 */
@@ -2474,6 +2744,8 @@ void QUrl::setQuery(const QString &query, ParsingMode mode)
     d->setQuery(data, 0, data.length());
     if (query.isNull())
         d->sectionIsPresent &= ~QUrlPrivate::Query;
+    else if (mode == StrictMode && !d->validateComponent(QUrlPrivate::Query, query))
+        d->query.clear();
 }
 
 /*!
@@ -2530,8 +2802,8 @@ void QUrl::setQuery(const QUrlQuery &query)
     Sets the query string of the URL to an encoded version of \a
     query. The contents of \a query are converted to a string
     internally, each pair delimited by the character returned by
-    pairDelimiter(), and the key and value are delimited by
-    valueDelimiter().
+    \l {QUrlQuery::queryPairDelimiter()}{queryPairDelimiter()}, and the key and value are delimited by
+    \l {QUrlQuery::queryValueDelimiter()}{queryValueDelimiter()}
 
     \note This method does not encode spaces (ASCII 0x20) as plus (+) signs,
     like HTML forms do. If you need that kind of encoding, you must encode
@@ -2550,8 +2822,8 @@ void QUrl::setQuery(const QUrlQuery &query)
     Sets the query string of the URL to the encoded version of \a
     query. The contents of \a query are converted to a string
     internally, each pair delimited by the character returned by
-    pairDelimiter(), and the key and value are delimited by
-    valueDelimiter().
+    \l {QUrlQuery::queryPairDelimiter()}{queryPairDelimiter()}, and the key and value are delimited by
+    \l {QUrlQuery::queryValueDelimiter()}{queryValueDelimiter()}.
 
     \obsolete Use QUrlQuery and setQuery().
 
@@ -2565,11 +2837,12 @@ void QUrl::setQuery(const QUrlQuery &query)
     Inserts the pair \a key = \a value into the query string of the
     URL.
 
-    The key/value pair is encoded before it is added to the query. The
+    The key-value pair is encoded before it is added to the query. The
     pair is converted into separate strings internally. The \a key and
     \a value is first encoded into UTF-8 and then delimited by the
-    character returned by valueDelimiter(). Each key/value pair is
-    delimited by the character returned by pairDelimiter().
+    character returned by \l {QUrlQuery::queryValueDelimiter()}{queryValueDelimiter()}.
+    Each key-value pair is delimited by the character returned by
+    \l {QUrlQuery::queryPairDelimiter()}{queryPairDelimiter()}
 
     \note This method does not encode spaces (ASCII 0x20) as plus (+) signs,
     like HTML forms do. If you need that kind of encoding, you must encode
@@ -2624,7 +2897,7 @@ void QUrl::setQuery(const QUrlQuery &query)
     \fn bool QUrl::hasQueryItem(const QString &key) const
     \deprecated
 
-    Returns true if there is a query string pair whose key is equal
+    Returns \c true if there is a query string pair whose key is equal
     to \a key from the URL.
 
     \obsolete Use QUrlQuery.
@@ -2637,7 +2910,7 @@ void QUrl::setQuery(const QUrlQuery &query)
     \deprecated
     \since 4.4
 
-    Returns true if there is a query string pair whose key is equal
+    Returns \c true if there is a query string pair whose key is equal
     to \a key from the URL.
 
     \obsolete Use QUrlQuery.
@@ -2783,12 +3056,12 @@ void QUrl::setQuery(const QUrlQuery &query)
 */
 QString QUrl::query(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendQuery(result, options, QUrlPrivate::Query);
-    if (d->hasQuery() && result.isNull())
-        result.detach();
+    if (d) {
+        d->appendQuery(result, options, QUrlPrivate::Query);
+        if (d->hasQuery() && result.isNull())
+            result.detach();
+    }
     return result;
 }
 
@@ -2803,9 +3076,8 @@ QString QUrl::query(ComponentFormattingOptions options) const
     The fragment is sometimes also referred to as the URL "reference".
 
     Passing an argument of QString() (a null QString) will unset the fragment.
-    Passing an argument of QString("") (an empty but not null QString)
-    will set the fragment to an empty string (as if the original URL
-    had a lone "#").
+    Passing an argument of QString("") (an empty but not null QString) will set the
+    fragment to an empty string (as if the original URL had a lone "#").
 
     The \a fragment data is interpreted according to \a mode: in StrictMode,
     any '%' characters must be followed by exactly two hexadecimal characters
@@ -2835,6 +3107,8 @@ void QUrl::setFragment(const QString &fragment, ParsingMode mode)
     d->setFragment(data, 0, data.length());
     if (fragment.isNull())
         d->sectionIsPresent &= ~QUrlPrivate::Fragment;
+    else if (mode == StrictMode && !d->validateComponent(QUrlPrivate::Fragment, fragment))
+        d->fragment.clear();
 }
 
 /*!
@@ -2855,12 +3129,12 @@ void QUrl::setFragment(const QString &fragment, ParsingMode mode)
 */
 QString QUrl::fragment(ComponentFormattingOptions options) const
 {
-    if (!d) return QString();
-
     QString result;
-    d->appendFragment(result, options);
-    if (d->hasFragment() && result.isNull())
-        result.detach();
+    if (d) {
+        d->appendFragment(result, options, QUrlPrivate::Fragment);
+        if (d->hasFragment() && result.isNull())
+            result.detach();
+    }
     return result;
 }
 
@@ -2878,10 +3152,10 @@ QString QUrl::fragment(ComponentFormattingOptions options) const
 
     The fragment is sometimes also referred to as the URL "reference".
 
-    Passing an argument of QByteArray() (a null QByteArray) will unset
-    the fragment.  Passing an argument of QByteArray("") (an empty but
-    not null QByteArray) will set the fragment to an empty string (as
-    if the original URL had a lone "#").
+    Passing an argument of QByteArray() (a null QByteArray) will unset the fragment.
+    Passing an argument of QByteArray("") (an empty but not null QByteArray)
+    will set the fragment to an empty string (as if the original URL
+    had a lone "#").
 
     \obsolete Use setFragment(), which has the same behavior of null / empty.
 
@@ -2906,7 +3180,7 @@ QString QUrl::fragment(ComponentFormattingOptions options) const
 /*!
     \since 4.2
 
-    Returns true if this URL contains a fragment (i.e., if # was seen on it).
+    Returns \c true if this URL contains a fragment (i.e., if # was seen on it).
 
     \sa fragment(), setFragment()
 */
@@ -2916,6 +3190,7 @@ bool QUrl::hasFragment() const
     return d->hasFragment();
 }
 
+#if QT_CONFIG(topleveldomain)
 /*!
     \since 4.8
 
@@ -2924,6 +3199,21 @@ bool QUrl::hasFragment() const
     URL does not contain a valid TLD, in which case the function returns
     an empty string.
 
+    Note that this function considers a TLD to be any domain that allows users
+    to register subdomains under, including many home, dynamic DNS websites and
+    blogging providers. This is useful for determining whether two websites
+    belong to the same infrastructure and communication should be allowed, such
+    as browser cookies: two domains should be considered part of the same
+    website if they share at least one label in addition to the value
+    returned by this function.
+
+    \list
+      \li \c{foo.co.uk} and \c{foo.com} do not share a top-level domain
+      \li \c{foo.co.uk} and \c{bar.co.uk} share the \c{.co.uk} domain, but the next label is different
+      \li \c{www.foo.co.uk} and \c{ftp.foo.co.uk} share the same top-level domain and one more label,
+          so they are considered part of the same site
+    \endlist
+
     If \a options includes EncodeUnicode, the returned string will be in
     ASCII Compatible Encoding.
 */
@@ -2931,10 +3221,11 @@ QString QUrl::topLevelDomain(ComponentFormattingOptions options) const
 {
     QString tld = qTopLevelDomain(host());
     if (options & EncodeUnicode) {
-        return qt_ACE_do(tld, ToAceOnly);
+        return qt_ACE_do(tld, ToAceOnly, AllowLeadingDot);
     }
     return tld;
 }
+#endif
 
 /*!
     Returns the result of the merge of this URL with \a relative. This
@@ -2961,8 +3252,7 @@ QUrl QUrl::resolved(const QUrl &relative) const
     if (!relative.d) return *this;
 
     QUrl t;
-    // be non strict and allow scheme in relative url
-    if (!relative.d->scheme.isEmpty() && relative.d->scheme != d->scheme) {
+    if (!relative.d->scheme.isEmpty()) {
         t = relative;
         t.detach();
     } else {
@@ -3003,6 +3293,7 @@ QUrl QUrl::resolved(const QUrl &relative) const
             t.d->sectionIsPresent |= QUrlPrivate::Scheme;
         else
             t.d->sectionIsPresent &= ~QUrlPrivate::Scheme;
+        t.d->flags |= d->flags & QUrlPrivate::IsLocalFile;
     }
     t.d->fragment = relative.d->fragment;
     if (relative.d->hasFragment())
@@ -3022,11 +3313,13 @@ QUrl QUrl::resolved(const QUrl &relative) const
 }
 
 /*!
-    Returns true if the URL is relative; otherwise returns false. A URL is
+    Returns \c true if the URL is relative; otherwise returns \c false. A URL is
     relative reference if its scheme is undefined; this function is therefore
     equivalent to calling scheme().isEmpty().
 
     Relative references are defined in RFC 3986 section 4.2.
+
+    \sa {Relative URLs vs Relative Paths}
 */
 bool QUrl::isRelative() const
 {
@@ -3061,9 +3354,10 @@ QString QUrl::url(FormattingOptions options) const
 */
 QString QUrl::toString(FormattingOptions options) const
 {
+    QString url;
     if (!isValid()) {
         // also catches isEmpty()
-        return QString();
+        return url;
     }
     if (options == QUrl::FullyDecoded) {
         qWarning("QUrl: QUrl::FullyDecoded is not permitted when reconstructing the full URL");
@@ -3076,15 +3370,13 @@ QString QUrl::toString(FormattingOptions options) const
     //  - there's no query or fragment to return
     //    that is, either they aren't present, or we're removing them
     //  - it's a local file
-    //    (test done last since it's the most expensive)
     if (options.testFlag(QUrl::PreferLocalFile) && !options.testFlag(QUrl::RemovePath)
             && (!d->hasQuery() || options.testFlag(QUrl::RemoveQuery))
             && (!d->hasFragment() || options.testFlag(QUrl::RemoveFragment))
             && isLocalFile()) {
-        return path(options);
+        url = d->toLocalFile(options);
+        return url;
     }
-
-    QString url;
 
     // for the full URL, we consider that the reserved characters are prettier if encoded
     if (options & DecodeReserved)
@@ -3100,15 +3392,12 @@ QString QUrl::toString(FormattingOptions options) const
         url += QLatin1String("//");
         d->appendAuthority(url, options, QUrlPrivate::FullUrl);
     } else if (isLocalFile() && pathIsAbsolute) {
+        // Comply with the XDG file URI spec, which requires triple slashes.
         url += QLatin1String("//");
     }
 
-    if (!(options & QUrl::RemovePath)) {
+    if (!(options & QUrl::RemovePath))
         d->appendPath(url, options, QUrlPrivate::FullUrl);
-        // check if we need to remove trailing slashes
-        if ((options & StripTrailingSlash) && !d->path.isEmpty() && d->path != QLatin1String("/") && url.endsWith(QLatin1Char('/')))
-            url.chop(1);
-    }
 
     if (!(options & QUrl::RemoveQuery) && d->hasQuery()) {
         url += QLatin1Char('?');
@@ -3116,7 +3405,7 @@ QString QUrl::toString(FormattingOptions options) const
     }
     if (!(options & QUrl::RemoveFragment) && d->hasFragment()) {
         url += QLatin1Char('#');
-        d->appendFragment(url, options);
+        d->appendFragment(url, options, QUrlPrivate::FullUrl);
     }
 
     return url;
@@ -3143,6 +3432,53 @@ QString QUrl::toDisplayString(FormattingOptions options) const
 }
 
 /*!
+    \since 5.2
+
+    Returns an adjusted version of the URL.
+    The output can be customized by passing flags with \a options.
+
+    The encoding options from QUrl::ComponentFormattingOption don't make
+    much sense for this method, nor does QUrl::PreferLocalFile.
+
+    This is always equivalent to QUrl(url.toString(options)).
+
+    \sa FormattingOptions, toEncoded(), toString()
+*/
+QUrl QUrl::adjusted(QUrl::FormattingOptions options) const
+{
+    if (!isValid()) {
+        // also catches isEmpty()
+        return QUrl();
+    }
+    QUrl that = *this;
+    if (options & RemoveScheme)
+        that.setScheme(QString());
+    if ((options & RemoveAuthority) == RemoveAuthority) {
+        that.setAuthority(QString());
+    } else {
+        if ((options & RemoveUserInfo) == RemoveUserInfo)
+            that.setUserInfo(QString());
+        else if (options & RemovePassword)
+            that.setPassword(QString());
+        if (options & RemovePort)
+            that.setPort(-1);
+    }
+    if (options & RemoveQuery)
+        that.setQuery(QString());
+    if (options & RemoveFragment)
+        that.setFragment(QString());
+    if (options & RemovePath) {
+        that.setPath(QString());
+    } else if (options & (StripTrailingSlash | RemoveFilename | NormalizePathSegments)) {
+        that.detach();
+        QString path;
+        d->appendPath(path, options | FullyEncoded, QUrlPrivate::Path);
+        that.d->setPath(path, 0, path.length());
+    }
+    return that;
+}
+
+/*!
     Returns the encoded representation of the URL if it's valid;
     otherwise an empty QByteArray is returned. The output can be
     customized by passing flags with \a options.
@@ -3154,8 +3490,7 @@ QString QUrl::toDisplayString(FormattingOptions options) const
 QByteArray QUrl::toEncoded(FormattingOptions options) const
 {
     options &= ~(FullyDecoded | FullyEncoded);
-    QString stringForm = toString(options | FullyEncoded);
-    return stringForm.toLatin1();
+    return toString(options | FullyEncoded).toLatin1();
 }
 
 /*!
@@ -3177,6 +3512,10 @@ QUrl QUrl::fromEncoded(const QByteArray &input, ParsingMode mode)
 /*!
     Returns a decoded copy of \a input. \a input is first decoded from
     percent encoding, then converted from UTF-8 to unicode.
+
+    \note Given invalid input (such as a string containing the sequence "%G5",
+    which is not a valid hexadecimal number) the output will be invalid as
+    well. As an example: the sequence "%G5" could be decoded to 'W'.
 */
 QString QUrl::fromPercentEncoding(const QByteArray &input)
 {
@@ -3192,7 +3531,7 @@ QString QUrl::fromPercentEncoding(const QByteArray &input)
     them to \a include.
 
     Unreserved is defined as:
-       ALPHA / DIGIT / "-" / "." / "_" / "~"
+       \tt {ALPHA / DIGIT / "-" / "." / "_" / "~"}
 
     \snippet code/src_corelib_io_qurl.cpp 6
 */
@@ -3251,7 +3590,7 @@ QString QUrl::fromEncodedComponent_helper(const QByteArray &ba)
 */
 QString QUrl::fromAce(const QByteArray &domain)
 {
-    return qt_ACE_do(QString::fromLatin1(domain), NormalizeAce);
+    return qt_ACE_do(QString::fromLatin1(domain), NormalizeAce, ForbidLeadingDot /*FIXME: make configurable*/);
 }
 
 /*!
@@ -3266,20 +3605,19 @@ QString QUrl::fromAce(const QByteArray &domain)
     (like \c "example.com") to be written using international
     characters.
 
-    This function return an empty QByteArra if \a domain is not a valid
+    This function returns an empty QByteArray if \a domain is not a valid
     hostname. Note, in particular, that IPv6 literals are not valid domain
     names.
 */
 QByteArray QUrl::toAce(const QString &domain)
 {
-    QString result = qt_ACE_do(domain, ToAceOnly);
-    return result.toLatin1();
+    return qt_ACE_do(domain, ToAceOnly, ForbidLeadingDot /*FIXME: make configurable*/).toLatin1();
 }
 
 /*!
     \internal
 
-    Returns true if this URL is "less than" the given \a url. This
+    Returns \c true if this URL is "less than" the given \a url. This
     provides a means of ordering URLs.
 */
 bool QUrl::operator <(const QUrl &url) const
@@ -3331,8 +3669,8 @@ bool QUrl::operator <(const QUrl &url) const
 }
 
 /*!
-    Returns true if this URL and the given \a url are equal;
-    otherwise returns false.
+    Returns \c true if this URL and the given \a url are equal;
+    otherwise returns \c false.
 */
 bool QUrl::operator ==(const QUrl &url) const
 {
@@ -3343,9 +3681,13 @@ bool QUrl::operator ==(const QUrl &url) const
     if (!url.d)
         return d->isEmpty();
 
-    // Compare which sections are present, but ignore Host
-    // which is set by parsing but not by construction, when empty.
-    const int mask = QUrlPrivate::FullUrl & ~QUrlPrivate::Host;
+    // First, compare which sections are present, since it speeds up the
+    // processing considerably. We just have to ignore the host-is-present flag
+    // for local files (the "file" protocol), due to the requirements of the
+    // XDG file URI specification.
+    int mask = QUrlPrivate::FullUrl;
+    if (isLocalFile())
+        mask &= ~QUrlPrivate::Host;
     return (d->sectionIsPresent & mask) == (url.d->sectionIsPresent & mask) &&
             d->scheme == url.d->scheme &&
             d->userName == url.d->userName &&
@@ -3358,8 +3700,84 @@ bool QUrl::operator ==(const QUrl &url) const
 }
 
 /*!
-    Returns true if this URL and the given \a url are not equal;
-    otherwise returns false.
+    \since 5.2
+
+    Returns \c true if this URL and the given \a url are equal after
+    applying \a options to both; otherwise returns \c false.
+
+    This is equivalent to calling adjusted(options) on both URLs
+    and comparing the resulting urls, but faster.
+
+*/
+bool QUrl::matches(const QUrl &url, FormattingOptions options) const
+{
+    if (!d && !url.d)
+        return true;
+    if (!d)
+        return url.d->isEmpty();
+    if (!url.d)
+        return d->isEmpty();
+
+    // First, compare which sections are present, since it speeds up the
+    // processing considerably. We just have to ignore the host-is-present flag
+    // for local files (the "file" protocol), due to the requirements of the
+    // XDG file URI specification.
+    int mask = QUrlPrivate::FullUrl;
+    if (isLocalFile())
+        mask &= ~QUrlPrivate::Host;
+
+    if (options.testFlag(QUrl::RemoveScheme))
+        mask &= ~QUrlPrivate::Scheme;
+    else if (d->scheme != url.d->scheme)
+        return false;
+
+    if (options.testFlag(QUrl::RemovePassword))
+        mask &= ~QUrlPrivate::Password;
+    else if (d->password != url.d->password)
+        return false;
+
+    if (options.testFlag(QUrl::RemoveUserInfo))
+        mask &= ~QUrlPrivate::UserName;
+    else if (d->userName != url.d->userName)
+        return false;
+
+    if (options.testFlag(QUrl::RemovePort))
+        mask &= ~QUrlPrivate::Port;
+    else if (d->port != url.d->port)
+        return false;
+
+    if (options.testFlag(QUrl::RemoveAuthority))
+        mask &= ~QUrlPrivate::Host;
+    else if (d->host != url.d->host)
+        return false;
+
+    if (options.testFlag(QUrl::RemoveQuery))
+        mask &= ~QUrlPrivate::Query;
+    else if (d->query != url.d->query)
+        return false;
+
+    if (options.testFlag(QUrl::RemoveFragment))
+        mask &= ~QUrlPrivate::Fragment;
+    else if (d->fragment != url.d->fragment)
+        return false;
+
+    if ((d->sectionIsPresent & mask) != (url.d->sectionIsPresent & mask))
+        return false;
+
+    if (options.testFlag(QUrl::RemovePath))
+        return true;
+
+    // Compare paths, after applying path-related options
+    QString path1;
+    d->appendPath(path1, options, QUrlPrivate::Path);
+    QString path2;
+    url.d->appendPath(path2, options, QUrlPrivate::Path);
+    return path1 == path2;
+}
+
+/*!
+    Returns \c true if this URL and the given \a url are not equal;
+    otherwise returns \c false.
 */
 bool QUrl::operator !=(const QUrl &url) const
 {
@@ -3439,12 +3857,51 @@ bool QUrl::isDetached() const
     "//servername/path/to/file.txt". Note that only certain platforms can
     actually open this file using QFile::open().
 
+    An empty \a localFile leads to an empty URL (since Qt 5.4).
+
+    \code
+    qDebug() << QUrl::fromLocalFile("file.txt");            // QUrl("file:file.txt")
+    qDebug() << QUrl::fromLocalFile("/home/user/file.txt"); // QUrl("file:///home/user/file.txt")
+    qDebug() << QUrl::fromLocalFile("file:file.txt");       // doesn't make sense; expects path, not url with scheme
+    \endcode
+
+    In the first line in snippet above, a file URL is constructed from a
+    local, relative path. A file URL with a relative path only makes sense
+    if there is a base URL to resolve it against. For example:
+
+    \code
+    QUrl url = QUrl::fromLocalFile("file.txt");
+    QUrl baseUrl = QUrl("file:/home/user/");
+    // wrong: prints QUrl("file:file.txt"), as url already has a scheme
+    qDebug() << baseUrl.resolved(url);
+    \endcode
+
+    To resolve such a URL, it's necessary to remove the scheme beforehand:
+
+    \code
+    // correct: prints QUrl("file:///home/user/file.txt")
+    url.setScheme(QString());
+    qDebug() << baseUrl.resolved(url);
+    \endcode
+
+    For this reason, it is better to use a relative URL (that is, no scheme)
+    for relative file paths:
+
+    \code
+    QUrl url = QUrl("file.txt");
+    QUrl baseUrl = QUrl("file:/home/user/");
+    // prints QUrl("file:///home/user/file.txt")
+    qDebug() << baseUrl.resolved(url);
+    \endcode
+
     \sa toLocalFile(), isLocalFile(), QDir::toNativeSeparators()
 */
 QUrl QUrl::fromLocalFile(const QString &localFile)
 {
     QUrl url;
-    url.setScheme(fileScheme());
+    if (localFile.isEmpty())
+        return url;
+    QString scheme = fileScheme();
     QString deslashified = QDir::fromNativeSeparators(localFile);
 
     // magic for drives on windows
@@ -3453,13 +3910,21 @@ QUrl QUrl::fromLocalFile(const QString &localFile)
     } else if (deslashified.startsWith(QLatin1String("//"))) {
         // magic for shared drive on windows
         int indexOfPath = deslashified.indexOf(QLatin1Char('/'), 2);
-        url.setHost(deslashified.mid(2, indexOfPath - 2));
+        QStringRef hostSpec = deslashified.midRef(2, indexOfPath - 2);
+        // Check for Windows-specific WebDAV specification: "//host@SSL/path".
+        if (hostSpec.endsWith(webDavSslTag(), Qt::CaseInsensitive)) {
+            hostSpec.truncate(hostSpec.size() - 4);
+            scheme = webDavScheme();
+        }
+        url.setHost(hostSpec.toString());
+
         if (indexOfPath > 2)
             deslashified = deslashified.right(deslashified.length() - indexOfPath);
         else
             deslashified.clear();
     }
 
+    url.setScheme(scheme);
     url.setPath(deslashified, DecodedMode);
     return url;
 }
@@ -3473,6 +3938,12 @@ QUrl QUrl::fromLocalFile(const QString &localFile)
     returned value in the form found on SMB networks (for example,
     "//servername/path/to/file.txt").
 
+    \code
+    qDebug() << QUrl("file:file.txt").toLocalFile();            // "file:file.txt"
+    qDebug() << QUrl("file:/home/user/file.txt").toLocalFile(); // "file:///home/user/file.txt"
+    qDebug() << QUrl("file.txt").toLocalFile();                 // ""; wasn't a local file as it had no scheme
+    \endcode
+
     Note: if the path component of this URL contains a non-UTF-8 binary
     sequence (such as %80), the behaviour of this function is undefined.
 
@@ -3484,27 +3955,12 @@ QString QUrl::toLocalFile() const
     if (!isLocalFile())
         return QString();
 
-    QString tmp;
-    QString ourPath = path(QUrl::FullyDecoded);
-
-    // magic for shared drive on windows
-    if (!d->host.isEmpty()) {
-        tmp = QStringLiteral("//") + host() + (ourPath.length() > 0 && ourPath.at(0) != QLatin1Char('/')
-                                               ? QLatin1Char('/') + ourPath :  ourPath);
-    } else {
-        tmp = ourPath;
-#ifdef Q_OS_WIN
-        // magic for drives on windows
-        if (ourPath.length() > 2 && ourPath.at(0) == QLatin1Char('/') && ourPath.at(2) == QLatin1Char(':'))
-            tmp.remove(0, 1);
-#endif
-    }
-    return tmp;
+    return d->toLocalFile(QUrl::FullyDecoded);
 }
 
 /*!
     \since 4.8
-    Returns true if this URL is pointing to a local file path. A URL is a
+    Returns \c true if this URL is pointing to a local file path. A URL is a
     local file path if the scheme is "file".
 
     Note that this function considers URLs with hostnames to be local file
@@ -3515,15 +3971,11 @@ QString QUrl::toLocalFile() const
 */
 bool QUrl::isLocalFile() const
 {
-    if (!d) return false;
-
-    if (d->scheme != fileScheme())
-        return false;   // not file
-    return true;
+    return d && d->isLocalFile();
 }
 
 /*!
-    Returns true if this URL is a parent of \a childUrl. \a childUrl is a child
+    Returns \c true if this URL is a parent of \a childUrl. \a childUrl is a child
     of this URL if the two URLs share the same scheme and authority,
     and this URL's path is a parent of the path of \a childUrl.
 */
@@ -3583,8 +4035,9 @@ QDataStream &operator>>(QDataStream &in, QUrl &url)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug d, const QUrl &url)
 {
-    d.maybeSpace() << "QUrl(" << url.toDisplayString() << ')';
-    return d.space();
+    QDebugStateSaver saver(d);
+    d.nospace() << "QUrl(" << url.toDisplayString() << ')';
+    return d;
 }
 #endif
 
@@ -3623,8 +4076,10 @@ static QString errorMessage(QUrlPrivate::ErrorCode errorCode, const QString &err
         return QString(); // doesn't happen yet
     case QUrlPrivate::InvalidIPv6AddressError:
         return QStringLiteral("Invalid IPv6 address");
+    case QUrlPrivate::InvalidCharacterInIPv6Error:
+        return QStringLiteral("Invalid IPv6 address (character '%1' not permitted)").arg(c);
     case QUrlPrivate::InvalidIPvFutureError:
-        return QStringLiteral("Invalid IPvFuture address");
+        return QStringLiteral("Invalid IPvFuture address (character '%1' not permitted)").arg(c);
     case QUrlPrivate::HostMissingEndBracket:
         return QStringLiteral("Expected ']' to match '[' in hostname");
 
@@ -3647,6 +4102,8 @@ static QString errorMessage(QUrlPrivate::ErrorCode errorCode, const QString &err
 
     case QUrlPrivate::AuthorityPresentAndPathIsRelative:
         return QStringLiteral("Path component is relative and authority is present");
+    case QUrlPrivate::AuthorityAbsentAndPathIsDoubleSlash:
+        return QStringLiteral("Path component starts with '//' and authority is absent");
     case QUrlPrivate::RelativeUrlPathContainsColonBeforeSlash:
         return QStringLiteral("Relative URL's path component contains ':' before any '/'");
     }
@@ -3672,7 +4129,7 @@ static inline void appendComponentIfPresent(QString &msg, bool present, const ch
 
     Returns an error message if the last operation that modified this QUrl
     object ran into a parsing error. If no error was detected, this function
-    returns an empty string and isValid() returns true.
+    returns an empty string and isValid() returns \c true.
 
     The error message returned by this function is technical in nature and may
     not be understood by end users. It is mostly useful to developers trying to
@@ -3682,16 +4139,17 @@ static inline void appendComponentIfPresent(QString &msg, bool present, const ch
 */
 QString QUrl::errorString() const
 {
+    QString msg;
     if (!d)
-        return QString();
+        return msg;
 
     QString errorSource;
-    int errorPosition;
+    int errorPosition = 0;
     QUrlPrivate::ErrorCode errorCode = d->validityError(&errorSource, &errorPosition);
     if (errorCode == QUrlPrivate::NoError)
-        return QString();
+        return msg;
 
-    QString msg = errorMessage(errorCode, errorSource, errorPosition);
+    msg += errorMessage(errorCode, errorSource, errorPosition);
     msg += QLatin1String("; source was \"");
     msg += errorSource;
     msg += QLatin1String("\";");
@@ -3712,6 +4170,36 @@ QString QUrl::errorString() const
     if (msg.endsWith(QLatin1Char(',')))
         msg.chop(1);
     return msg;
+}
+
+/*!
+    \since 5.1
+
+    Converts a list of \a urls into a list of QString objects, using toString(\a options).
+*/
+QStringList QUrl::toStringList(const QList<QUrl> &urls, FormattingOptions options)
+{
+    QStringList lst;
+    lst.reserve(urls.size());
+    for (const QUrl &url : urls)
+        lst.append(url.toString(options));
+    return lst;
+
+}
+
+/*!
+    \since 5.1
+
+    Converts a list of strings representing \a urls into a list of urls, using QUrl(str, \a mode).
+    Note that this means all strings must be urls, not for instance local paths.
+*/
+QList<QUrl> QUrl::fromStringList(const QStringList &urls, ParsingMode mode)
+{
+    QList<QUrl> lst;
+    lst.reserve(urls.size());
+    for (const QString &str : urls)
+        lst.append(QUrl(str, mode));
+    return lst;
 }
 
 /*!
@@ -3749,42 +4237,68 @@ uint qHash(const QUrl &url, uint seed) Q_DECL_NOTHROW
 static QUrl adjustFtpPath(QUrl url)
 {
     if (url.scheme() == ftpScheme()) {
-        QString path = url.path();
+        QString path = url.path(QUrl::PrettyDecoded);
         if (path.startsWith(QLatin1String("//")))
-            url.setPath(QLatin1String("/%2F") + path.midRef(2));
+            url.setPath(QLatin1String("/%2F") + path.midRef(2), QUrl::TolerantMode);
     }
     return url;
 }
 
+static bool isIp6(const QString &text)
+{
+    QIPAddressUtils::IPv6Address address;
+    return !text.isEmpty() && QIPAddressUtils::parseIp6(address, text.begin(), text.end()) == 0;
+}
 
-// The following code has the following copyright:
-/*
-   Copyright (C) Research In Motion Limited 2009. All rights reserved.
+/*!
+    Returns a valid URL from a user supplied \a userInput string if one can be
+    deducted. In the case that is not possible, an invalid QUrl() is returned.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-    * Neither the name of Research In Motion Limited nor the
-      names of its contributors may be used to endorse or promote products
-      derived from this software without specific prior written permission.
+    This overload takes a \a workingDirectory path, in order to be able to
+    handle relative paths. This is especially useful when handling command
+    line arguments.
+    If \a workingDirectory is empty, no handling of relative paths will be done,
+    so this method will behave like its one argument overload.
 
-THIS SOFTWARE IS PROVIDED BY Research In Motion Limited ''AS IS'' AND ANY
-EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL Research In Motion Limited BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    By default, an input string that looks like a relative path will only be treated
+    as such if the file actually exists in the given working directory.
 
+    If the application can handle files that don't exist yet, it should pass the
+    flag AssumeLocalFile in \a options.
+
+    \since 5.4
 */
+QUrl QUrl::fromUserInput(const QString &userInput, const QString &workingDirectory,
+                         UserInputResolutionOptions options)
+{
+    QString trimmedString = userInput.trimmed();
 
+    if (trimmedString.isEmpty())
+        return QUrl();
+
+
+    // Check for IPv6 addresses, since a path starting with ":" is absolute (a resource)
+    // and IPv6 addresses can start with "c:" too
+    if (isIp6(trimmedString)) {
+        QUrl url;
+        url.setHost(trimmedString);
+        url.setScheme(QStringLiteral("http"));
+        return url;
+    }
+
+    const QFileInfo fileInfo(QDir(workingDirectory), userInput);
+    if (fileInfo.exists()) {
+        return QUrl::fromLocalFile(fileInfo.absoluteFilePath());
+    }
+
+    QUrl url = QUrl(userInput, QUrl::TolerantMode);
+    // Check both QUrl::isRelative (to detect full URLs) and QDir::isAbsolutePath (since on Windows drive letters can be interpreted as schemes)
+    if ((options & AssumeLocalFile) && url.isRelative() && !QDir::isAbsolutePath(userInput)) {
+        return QUrl::fromLocalFile(fileInfo.absoluteFilePath());
+    }
+
+    return fromUserInput(trimmedString);
+}
 
 /*!
     Returns a valid URL from a user supplied \a userInput string if one can be
@@ -3811,8 +4325,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     \section1 Examples:
 
     \list
-    \li qt.nokia.com becomes http://qt.nokia.com
-    \li ftp.qt.nokia.com becomes ftp://ftp.qt.nokia.com
+    \li qt-project.org becomes http://qt-project.org
+    \li ftp.qt-project.org becomes ftp://ftp.qt-project.org
     \li hostname becomes http://hostname
     \li /home/user/test.html becomes file:///home/user/test.html
     \endlist
@@ -3821,19 +4335,27 @@ QUrl QUrl::fromUserInput(const QString &userInput)
 {
     QString trimmedString = userInput.trimmed();
 
+    // Check for IPv6 addresses, since a path starting with ":" is absolute (a resource)
+    // and IPv6 addresses can start with "c:" too
+    if (isIp6(trimmedString)) {
+        QUrl url;
+        url.setHost(trimmedString);
+        url.setScheme(QStringLiteral("http"));
+        return url;
+    }
+
     // Check first for files, since on Windows drive letters can be interpretted as schemes
     if (QDir::isAbsolutePath(trimmedString))
         return QUrl::fromLocalFile(trimmedString);
 
     QUrl url = QUrl(trimmedString, QUrl::TolerantMode);
-    QUrl urlPrepended = QUrl(QStringLiteral("http://") + trimmedString, QUrl::TolerantMode);
+    QUrl urlPrepended = QUrl(QLatin1String("http://") + trimmedString, QUrl::TolerantMode);
 
-    // Check the most common case of a valid url with scheme and host
+    // Check the most common case of a valid url with a scheme
     // We check if the port would be valid by adding the scheme to handle the case host:port
     // where the host would be interpretted as the scheme
     if (url.isValid()
         && !url.scheme().isEmpty()
-        && (!url.host().isEmpty() || !url.path().isEmpty())
         && urlPrepended.port() == -1)
         return adjustFtpPath(url);
 
@@ -3841,14 +4363,13 @@ QUrl QUrl::fromUserInput(const QString &userInput)
     if (urlPrepended.isValid() && (!urlPrepended.host().isEmpty() || !urlPrepended.path().isEmpty()))
     {
         int dotIndex = trimmedString.indexOf(QLatin1Char('.'));
-        const QString hostscheme = trimmedString.left(dotIndex).toLower();
-        if (hostscheme == ftpScheme())
+        const QStringRef hostscheme = trimmedString.leftRef(dotIndex);
+        if (hostscheme.compare(ftpScheme(), Qt::CaseInsensitive) == 0)
             urlPrepended.setScheme(ftpScheme());
         return adjustFtpPath(urlPrepended);
     }
 
     return QUrl();
 }
-// end of BSD code
 
 QT_END_NAMESPACE

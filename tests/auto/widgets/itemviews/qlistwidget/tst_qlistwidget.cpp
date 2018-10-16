@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,7 +30,6 @@
 #include <QtTest/QtTest>
 #include <QtGui/QtGui>
 #include <QtWidgets/QtWidgets>
-#include <qeventloop.h>
 #include <qlist.h>
 
 #include <qlistwidget.h>
@@ -55,7 +41,6 @@ class tst_QListWidget : public QObject
 
 public:
     tst_QListWidget();
-    ~tst_QListWidget();
 
     enum ModelChanged {
         RowsAboutToBeInserted,
@@ -68,13 +53,10 @@ public:
         ColumnsRemoved
     };
 
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
     void init();
-    void cleanup();
-
-private slots:
     void addItem();
     void addItem2();
     void addItems();
@@ -132,7 +114,8 @@ private slots:
     void task258949_keypressHangup();
     void QTBUG8086_currentItemChangedOnClick();
     void QTBUG14363_completerWithAnyKeyPressedEditTriggers();
-
+    void mimeData();
+    void QTBUG50891_ensureSelectionModelSignalConnectionsAreSet();
 
 protected slots:
     void rowsAboutToBeInserted(const QModelIndex &parent, int first, int last)
@@ -166,14 +149,8 @@ private:
 
 
 typedef QList<int> IntList;
-Q_DECLARE_METATYPE(IntList)
-Q_DECLARE_METATYPE(QVariantList)
 
 tst_QListWidget::tst_QListWidget(): testWidget(0), rcParent(8), rcFirst(8,0), rcLast(8,0)
-{
-}
-
-tst_QListWidget::~tst_QListWidget()
 {
 }
 
@@ -211,25 +188,14 @@ void tst_QListWidget::cleanupTestCase()
 void tst_QListWidget::init()
 {
     testWidget->clear();
-
-    if (testWidget->viewport()->children().count() > 0) {
-        QEventLoop eventLoop;
-        for (int i=0; i < testWidget->viewport()->children().count(); ++i)
-            connect(testWidget->viewport()->children().at(i), SIGNAL(destroyed()), &eventLoop, SLOT(quit()));
-        QTimer::singleShot(100, &eventLoop, SLOT(quit()));
-        eventLoop.exec();
-    }
+    QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
 }
 
 void tst_QListWidget::checkDefaultValues()
 {
-    QCOMPARE(testWidget->currentItem(), (QListWidgetItem *)0);
+    QCOMPARE(testWidget->currentItem(), nullptr);
     QCOMPARE(testWidget->currentRow(), -1);
     QCOMPARE(testWidget->count(), 0);
-}
-
-void tst_QListWidget::cleanup()
-{
 }
 
 void tst_QListWidget::populate()
@@ -248,7 +214,7 @@ void tst_QListWidget::populate()
 void tst_QListWidget::addItem()
 {
     int count = testWidget->count();
-    QString label = QString("%1").arg(count);
+    const QString label = QString::number(count);
     testWidget->addItem(label);
     QCOMPARE(testWidget->count(), ++count);
     QCOMPARE(testWidget->item(testWidget->count()-1)->text(), label);
@@ -262,7 +228,7 @@ void tst_QListWidget::addItem2()
     testWidget->addItem(0);
     QCOMPARE(testWidget->count(), count);
 
-    QListWidgetItem *item = new QListWidgetItem(QString("%1").arg(count));
+    QListWidgetItem *item = new QListWidgetItem(QString::number(count));
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     testWidget->addItem(item);
     QCOMPARE(testWidget->count(), ++count);
@@ -279,10 +245,10 @@ void tst_QListWidget::addItems()
     QCOMPARE(testWidget->count(), count);
 
     QStringList stringList;
-    QString label = QString("%1").arg(count);
-    stringList << QString("%1").arg(testWidget->count() + 1)
-               << QString("%1").arg(testWidget->count() + 2)
-               << QString("%1").arg(testWidget->count() + 3)
+    QString label = QString::number(count);
+    stringList << QString::number(testWidget->count() + 1)
+               << QString::number(testWidget->count() + 2)
+               << QString::number(testWidget->count() + 3)
                << label;
     testWidget->addItems(stringList);
     QCOMPARE(testWidget->count(), count + stringList.count());
@@ -294,7 +260,7 @@ void tst_QListWidget::openPersistentEditor()
 {
     // Boundary checking
     testWidget->openPersistentEditor(0);
-    QListWidgetItem *item = new QListWidgetItem(QString("%1").arg(testWidget->count()));
+    QListWidgetItem *item = new QListWidgetItem(QString::number(testWidget->count()));
     testWidget->openPersistentEditor(item);
 
     int childCount = testWidget->viewport()->children().count();
@@ -308,7 +274,7 @@ void tst_QListWidget::closePersistentEditor()
     // Boundary checking
     int childCount = testWidget->viewport()->children().count();
     testWidget->closePersistentEditor(0);
-    QListWidgetItem *item = new QListWidgetItem(QString("%1").arg(testWidget->count()));
+    QListWidgetItem *item = new QListWidgetItem(QString::number(testWidget->count()));
     testWidget->closePersistentEditor(item);
     QCOMPARE(childCount, testWidget->viewport()->children().count());
 
@@ -319,12 +285,7 @@ void tst_QListWidget::closePersistentEditor()
     // actual test
     childCount = testWidget->viewport()->children().count();
     testWidget->closePersistentEditor(item);
-    // Spin the event loop and hopefully it will die.
-    QEventLoop eventLoop;
-    for (int i=0; i < childCount; ++i)
-        connect(testWidget->viewport()->children().at(i), SIGNAL(destroyed()), &eventLoop, SLOT(quit()));
-    QTimer::singleShot(100, &eventLoop, SLOT(quit()));
-    eventLoop.exec();
+    QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
     QCOMPARE(testWidget->viewport()->children().count(), childCount - 1);
 }
 
@@ -339,7 +300,7 @@ void tst_QListWidget::setItemHidden()
         if (testWidget->isItemHidden(testWidget->item(i)))
             totalHidden++;
 
-    QListWidgetItem *item = new QListWidgetItem(QString("%1").arg(testWidget->count()));
+    QListWidgetItem *item = new QListWidgetItem(QString::number(testWidget->count()));
     testWidget->addItem(item);
 
     // Check that nothing else changed
@@ -385,7 +346,7 @@ void tst_QListWidget::setCurrentItem()
 {
     QFETCH(int, fill);
     for (int i = 0; i < fill; ++i)
-        testWidget->addItem(QString("%1").arg(i));
+        testWidget->addItem(QString::number(i));
 
     // Boundary checking
     testWidget->setCurrentItem((QListWidgetItem *)0);
@@ -417,7 +378,7 @@ void tst_QListWidget::setCurrentRow()
 {
     QFETCH(int, fill);
     for (int i = 0; i < fill; ++i)
-        testWidget->addItem(QString("%1").arg(i));
+        testWidget->addItem(QString::number(i));
 
     // Boundary checking
     testWidget->setCurrentRow(-1);
@@ -450,9 +411,9 @@ void tst_QListWidget::currentItem()
     // actual test
     QModelIndex currentIndex = testWidget->selectionModel()->currentIndex();
     if (currentIndex.isValid())
-        QVERIFY(testWidget->currentItem() == testWidget->item(currentIndex.row()));
+        QCOMPARE(testWidget->currentItem(), testWidget->item(currentIndex.row()));
     else
-        QVERIFY(testWidget->currentItem() == (QListWidgetItem*)0);
+        QCOMPARE(testWidget->currentItem(), nullptr);
 }
 
 void tst_QListWidget::currentRow()
@@ -478,7 +439,7 @@ void tst_QListWidget::editItem()
 {
     // Boundary checking
     testWidget->editItem(0);
-    QListWidgetItem *item = new QListWidgetItem(QString("%1").arg(testWidget->count()));
+    QListWidgetItem *item = new QListWidgetItem(QString::number(testWidget->count()));
     testWidget->editItem(item);
 
     QFETCH(bool, editable);
@@ -628,21 +589,21 @@ void tst_QListWidget::insertItems()
 void tst_QListWidget::itemAssignment()
 {
     QListWidgetItem itemInWidget("inWidget", testWidget);
-    itemInWidget.setFlags(itemInWidget.flags() | Qt::ItemIsTristate);
+    itemInWidget.setFlags(itemInWidget.flags() | Qt::ItemIsUserTristate);
     QListWidgetItem itemOutsideWidget("outsideWidget");
 
     QVERIFY(itemInWidget.listWidget());
     QCOMPARE(itemInWidget.text(), QString("inWidget"));
-    QVERIFY(itemInWidget.flags() & Qt::ItemIsTristate);
+    QVERIFY(itemInWidget.flags() & Qt::ItemIsUserTristate);
 
     QVERIFY(!itemOutsideWidget.listWidget());
     QCOMPARE(itemOutsideWidget.text(), QString("outsideWidget"));
-    QVERIFY(!(itemOutsideWidget.flags() & Qt::ItemIsTristate));
+    QVERIFY(!(itemOutsideWidget.flags() & Qt::ItemIsUserTristate));
 
     itemOutsideWidget = itemInWidget;
     QVERIFY(!itemOutsideWidget.listWidget());
     QCOMPARE(itemOutsideWidget.text(), QString("inWidget"));
-    QVERIFY(itemOutsideWidget.flags() & Qt::ItemIsTristate);
+    QVERIFY(itemOutsideWidget.flags() & Qt::ItemIsUserTristate);
 }
 
 void tst_QListWidget::item_data()
@@ -670,10 +631,10 @@ void tst_QListWidget::item()
 
     QListWidgetItem *item = testWidget->item(row);
     if (outOfBounds) {
-        QCOMPARE(item, static_cast<QListWidgetItem*>(0));
+        QCOMPARE(item, nullptr);
         QCOMPARE(testWidget->count(), 3);
     } else {
-        QCOMPARE(item->text(), QString("item%1").arg(row));
+        QCOMPARE(item->text(), QStringLiteral("item") + QString::number(row));
         QCOMPARE(testWidget->count(), 3);
     }
 }
@@ -703,10 +664,10 @@ void tst_QListWidget::takeItem()
 
     QListWidgetItem *item = testWidget->takeItem(row);
     if (outOfBounds) {
-        QCOMPARE(item, static_cast<QListWidgetItem*>(0));
+        QCOMPARE(item, nullptr);
         QCOMPARE(testWidget->count(), 3);
     } else {
-        QCOMPARE(item->text(), QString("item%1").arg(row));
+        QCOMPARE(item->text(), QStringLiteral("item") + QString::number(row));
         QCOMPARE(testWidget->count(), 2);
     }
 
@@ -765,11 +726,11 @@ void tst_QListWidget::selectedItems()
     QFETCH(IntList, selectedRows);
     QFETCH(IntList, expectedRows);
 
-    QVERIFY(testWidget->count() == 0);
+    QCOMPARE(testWidget->count(), 0);
 
     //insert items
     for (int i=0; i<itemCount; ++i)
-        new QListWidgetItem(QString("Item%1").arg(i), testWidget);
+        new QListWidgetItem(QStringLiteral("Item") + QString::number(i), testWidget);
 
     //test the selection
     testWidget->setSelectionMode(QListWidget::SingleSelection);
@@ -1103,8 +1064,11 @@ public:
 
     bool isEditingState(QListWidgetItem *item) {
         Q_UNUSED(item);
-        return (QListWidget::state() == QListWidget::EditingState ? true : false);
+        return QListWidget::state() == QListWidget::EditingState;
     }
+
+    using QListWidget::mimeData;
+    using QListWidget::indexFromItem;
 };
 
 void tst_QListWidget::closeEditor()
@@ -1178,9 +1142,8 @@ void tst_QListWidget::setData()
     QFETCH(QVariantList, values);
     QFETCH(int, expectedSignalCount);
     qRegisterMetaType<QListWidgetItem *>("QListWidgetItem*");
-    qRegisterMetaType<QModelIndex>("QModelIndex");
 
-    QVERIFY(roles.count() == values.count());
+    QCOMPARE(roles.count(), values.count());
 
     for (int manipulateModel=0; manipulateModel<2; ++manipulateModel) {
         testWidget->clear();
@@ -1266,8 +1229,8 @@ void tst_QListWidget::insertItemsWithSorting_data()
         QStringList ascendingItems;
         QStringList reverseItems;
         for (int i = 'a'; i <= 'z'; ++i) {
-            ascendingItems << QString("%0").arg(QLatin1Char(i));
-            reverseItems << QString("%0").arg(QLatin1Char('z' - i + 'a'));
+            ascendingItems << QString(1, QLatin1Char(i));
+            reverseItems << QString(1, QLatin1Char('z' - i + 'a'));
             ascendingRows << i - 'a';
             reverseRows << 'z' - i + 'a';
         }
@@ -1418,20 +1381,38 @@ void tst_QListWidget::changeDataWithSorting_data()
         << false;
 }
 
+class QListWidgetDataChanged : public QListWidget
+{
+    Q_OBJECT
+public:
+    using QListWidget::QListWidget;
+
+    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles) override
+    {
+        QListWidget::dataChanged(topLeft, bottomRight, roles);
+        currentRoles = roles;
+    }
+    QVector<int> currentRoles;
+};
+
 void tst_QListWidget::itemData()
 {
-    QListWidget widget;
+    QListWidgetDataChanged widget;
     QListWidgetItem item(&widget);
     item.setFlags(item.flags() | Qt::ItemIsEditable);
     item.setData(Qt::DisplayRole,  QString("0"));
+    QCOMPARE(widget.currentRoles, QVector<int>({Qt::DisplayRole, Qt::EditRole}));
     item.setData(Qt::CheckStateRole, Qt::PartiallyChecked);
-    item.setData(Qt::UserRole + 0, QString("1"));
-    item.setData(Qt::UserRole + 1, QString("2"));
-    item.setData(Qt::UserRole + 2, QString("3"));
-    item.setData(Qt::UserRole + 3, QString("4"));
+    QCOMPARE(widget.currentRoles, {Qt::CheckStateRole});
+    for (int i = 0; i < 4; ++i)
+    {
+        item.setData(Qt::UserRole + i, QString::number(i + 1));
+        QCOMPARE(widget.currentRoles, {Qt::UserRole + i});
+    }
     QMap<int, QVariant> flags = widget.model()->itemData(widget.model()->index(0, 0));
     QCOMPARE(flags.count(), 6);
-    QCOMPARE(flags[Qt::UserRole + 0].toString(), QString("1"));
+    for (int i = 0; i < 4; ++i)
+        QCOMPARE(flags[Qt::UserRole + i].toString(), QString::number(i + 1));
 }
 
 void tst_QListWidget::changeDataWithSorting()
@@ -1482,11 +1463,11 @@ void tst_QListWidget::itemWidget()
     QListWidgetItem *item = new QListWidgetItem(&list);
 
 
-    QCOMPARE(list.itemWidget(item), static_cast<QWidget*>(0));
+    QCOMPARE(list.itemWidget(item), nullptr);
     list.setItemWidget(item, &widget);
     QCOMPARE(list.itemWidget(item), &widget);
     list.removeItemWidget(item);
-    QCOMPARE(list.itemWidget(item), static_cast<QWidget*>(0));
+    QCOMPARE(list.itemWidget(item), nullptr);
 }
 
 #ifndef Q_OS_MAC
@@ -1511,7 +1492,7 @@ void tst_QListWidget::fastScroll()
     QWidget topLevel;
     MyListWidget widget(&topLevel);
     for (int i = 0; i < 50; ++i)
-        widget.addItem(QString("Item %1").arg(i));
+        widget.addItem(QStringLiteral("Item ") + QString::number(i));
 
     topLevel.resize(300, 300); // toplevel needs to be wide enough for the item
     topLevel.show();
@@ -1584,14 +1565,14 @@ void tst_QListWidget::task217070_scrollbarsAdjusted()
     v.setResizeMode(QListView::Adjust);
     v.setUniformItemSizes(true);
     v.resize(160,100);
-    QTest::qWait(50);
+    QVERIFY(QTest::qWaitForWindowActive(&v));
     QScrollBar *hbar = v.horizontalScrollBar();
     QScrollBar *vbar = v.verticalScrollBar();
     QVERIFY(hbar && vbar);
     for(int f=150; f>90 ; f--) {
         v.resize(f,100);
         QTest::qWait(30);
-        QVERIFY(vbar->style()->styleHint(QStyle::SH_ScrollBar_Transient) || vbar->isVisible());
+        QVERIFY(vbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, vbar) || vbar->isVisible());
         //the horizontal scrollbar must not be visible.
         QVERIFY(!hbar->isVisible());
     }
@@ -1649,29 +1630,29 @@ void tst_QListWidget::QTBUG8086_currentItemChangedOnClick()
 class ItemDelegate : public QItemDelegate
 {
 public:
-	ItemDelegate(QObject *parent = 0) : QItemDelegate(parent)
-	{}
-	virtual QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const
-	{
-		QLineEdit *lineEdit = new QLineEdit(parent);
-		lineEdit->setFrame(false);
-		QCompleter *completer = new QCompleter(QStringList() << "completer", lineEdit);
-		completer->setCompletionMode(QCompleter::InlineCompletion);
-		lineEdit->setCompleter(completer);
-		return lineEdit;
-	}
+    ItemDelegate(QObject *parent = 0) : QItemDelegate(parent)
+    {}
+    virtual QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const
+    {
+        QLineEdit *lineEdit = new QLineEdit(parent);
+        lineEdit->setFrame(false);
+        QCompleter *completer = new QCompleter(QStringList() << "completer", lineEdit);
+        completer->setCompletionMode(QCompleter::InlineCompletion);
+        lineEdit->setCompleter(completer);
+        return lineEdit;
+    }
 };
 
 void tst_QListWidget::QTBUG14363_completerWithAnyKeyPressedEditTriggers()
 {
-	QListWidget listWidget;
-	listWidget.setEditTriggers(QAbstractItemView::AnyKeyPressed);
-    listWidget.setItemDelegate(new ItemDelegate);
+    QListWidget listWidget;
+    listWidget.setEditTriggers(QAbstractItemView::AnyKeyPressed);
+    listWidget.setItemDelegate(new ItemDelegate(&listWidget));
     QListWidgetItem *item = new QListWidgetItem(QLatin1String("select an item (don't start editing)"), &listWidget);
     item->setFlags(Qt::ItemIsEnabled|Qt::ItemIsSelectable|Qt::ItemIsEditable);
     new QListWidgetItem(QLatin1String("try to type the letter 'c'"), &listWidget);
     new QListWidgetItem(QLatin1String("completer"), &listWidget);
-	listWidget.show();
+    listWidget.show();
     listWidget.setCurrentItem(item);
     qApp->setActiveWindow(&listWidget);
     QVERIFY(QTest::qWaitForWindowActive(&listWidget));
@@ -1686,7 +1667,81 @@ void tst_QListWidget::QTBUG14363_completerWithAnyKeyPressedEditTriggers()
     QCOMPARE(le->completer()->currentCompletion(), QString("completer"));
 }
 
+void tst_QListWidget::mimeData()
+{
+    TestListWidget list;
 
+    for (int x = 0; x < 10; ++x) {
+        QListWidgetItem *item = new QListWidgetItem(QStringLiteral("123"));
+        list.addItem(item);
+    }
+
+    QList<QListWidgetItem *> tableWidgetItemList;
+    QModelIndexList modelIndexList;
+
+    // do these checks more than once to ensure that the "cached indexes" work as expected
+    QVERIFY(!list.mimeData(tableWidgetItemList));
+    QVERIFY(!list.model()->mimeData(modelIndexList));
+    QVERIFY(!list.model()->mimeData(modelIndexList));
+    QVERIFY(!list.mimeData(tableWidgetItemList));
+
+    tableWidgetItemList << list.item(1);
+    modelIndexList << list.indexFromItem(list.item(1));
+
+    QMimeData *data;
+
+    QVERIFY((data = list.mimeData(tableWidgetItemList)));
+    delete data;
+
+    QVERIFY((data = list.model()->mimeData(modelIndexList)));
+    delete data;
+
+    QVERIFY((data = list.model()->mimeData(modelIndexList)));
+    delete data;
+
+    QVERIFY((data = list.mimeData(tableWidgetItemList)));
+    delete data;
+
+    // check the saved data is actually the same
+
+    QMimeData *data2;
+
+    data = list.mimeData(tableWidgetItemList);
+    data2 = list.model()->mimeData(modelIndexList);
+
+    const QString format = QStringLiteral("application/x-qabstractitemmodeldatalist");
+
+    QVERIFY(data->hasFormat(format));
+    QVERIFY(data2->hasFormat(format));
+    QCOMPARE(data->data(format), data2->data(format));
+
+    delete data;
+    delete data2;
+}
+
+void tst_QListWidget::QTBUG50891_ensureSelectionModelSignalConnectionsAreSet()
+{
+    qRegisterMetaType<QListWidgetItem*>("QListWidgetItem*");
+    QListWidget list;
+    for (int i = 0 ; i < 4; ++i)
+        new QListWidgetItem(QString::number(i), &list);
+
+    list.setSelectionModel(new QItemSelectionModel(list.model()));
+    list.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&list));
+
+    QSignalSpy currentItemChangedSpy(&list, SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)));
+    QSignalSpy itemSelectionChangedSpy(&list, SIGNAL(itemSelectionChanged()));
+
+    QCOMPARE(currentItemChangedSpy.count(), 0);
+    QCOMPARE(itemSelectionChangedSpy.count(), 0);
+
+    QTest::mouseClick(list.viewport(), Qt::LeftButton, 0, list.visualItemRect(list.item(2)).center());
+
+    QCOMPARE(currentItemChangedSpy.count(), 1);
+    QCOMPARE(itemSelectionChangedSpy.count(), 1);
+
+}
 
 QTEST_MAIN(tst_QListWidget)
 #include "tst_qlistwidget.moc"

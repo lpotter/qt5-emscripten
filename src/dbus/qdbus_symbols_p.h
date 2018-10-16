@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,10 +53,19 @@
 #ifndef QDBUS_SYMBOLS_P_H
 #define QDBUS_SYMBOLS_P_H
 
-#include <QtCore/qglobal.h>
-#include <dbus/dbus.h>
+#include <QtDBus/private/qtdbusglobal_p.h>
 
 #ifndef QT_NO_DBUS
+
+#ifdef QT_LINKED_LIBDBUS
+#  include <dbus/dbus.h>
+#else
+#  include "dbus_minimal_p.h"
+#endif
+
+#ifdef interface
+#  undef interface
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -67,14 +75,103 @@ void (*qdbus_resolve_conditionally(const char *name))(); // doesn't print a warn
 void (*qdbus_resolve_me(const char *name))(); // prints a warning
 bool qdbus_loadLibDBus();
 
+//# define TRACE_DBUS_CALLS
+# ifdef TRACE_DBUS_CALLS
+namespace QtDBusCallTracing {
+struct TraceDBusCall
+{
+    struct ThreadData {
+        TraceDBusCall *ptr;
+        int level;
+        bool finishedPrinted;
+    };
+
+    static inline ThreadData &td()
+    {
+        static thread_local ThreadData value;
+        return value;
+    }
+
+    ThreadData savedData;
+    QDebug s;
+    TraceDBusCall(QDebug s, const char *fname)
+        : savedData(td()), s(s.nospace() << QByteArray(savedData.level * 3, ' ').constData() << fname)
+    {
+        if (savedData.ptr && !savedData.finishedPrinted) {
+            savedData.ptr->s << " ...unfinished";
+            savedData.ptr->s = qDebug().nospace() << QByteArray(savedData.level * 3 - 3, ' ').constData();
+            savedData.finishedPrinted = true;
+        }
+        ThreadData &data = td();
+        data.ptr = this;
+        data.level++;
+        data.finishedPrinted = false;
+    }
+    ~TraceDBusCall()
+    {
+        td() = savedData;
+    }
+
+    void operator()() { s << ")"; }
+    template <typename... Args> void operator()(const char *arg1, Args &&... args)
+    {
+        s << '"' << arg1 << '"';
+        if (sizeof...(args))
+            s << ", ";
+        operator()(args...);
+    }
+    template <typename Arg1, typename... Args> void operator()(Arg1 &&arg1, Args &&... args)
+    {
+        s << arg1;
+        if (sizeof...(args))
+            s << ", ";
+        operator()(args...);
+    }
+};
+template <typename T> T operator,(TraceDBusCall &&tc, T &&ret)
+{
+    tc.s << " = " << ret;
+    return ret;
+}
+inline const char *operator,(TraceDBusCall &&tc, const char *ret)
+{
+    tc.s << " = \"" << ret << '"';
+    return ret;
+}
+
+template <typename T> struct TraceReturn { typedef TraceDBusCall Type; };
+template <>           struct TraceReturn<void> { typedef void Type; };
+}
+
+#  define DEBUGCALL(name, argcall)   QtDBusCallTracing::TraceDBusCall tc(qDebug(), name "("); tc argcall
+#  define DEBUGRET(ret)              (QtDBusCallTracing::TraceReturn<ret>::Type) tc ,
+# else
+#  define DEBUGCALL(name, argcall)
+#  define DEBUGRET(ret)
+# endif
+
 # define DEFINEFUNC(ret, func, args, argcall, funcret)          \
     typedef ret (* _q_PTR_##func) args;                         \
     static inline ret q_##func args                             \
     {                                                           \
         static _q_PTR_##func ptr;                               \
+        DEBUGCALL(#func, argcall);                              \
         if (!ptr)                                               \
             ptr = (_q_PTR_##func) qdbus_resolve_me(#func);      \
-        funcret ptr argcall;                                    \
+        funcret DEBUGRET(ret) ptr argcall;                      \
+    }
+
+# define DEFINEFUNC_CONDITIONALLY(ret, func, args, argcall, funcret, failret)  \
+    typedef ret (* _q_PTR_##func) args;                               \
+    static inline ret q_##func args                                   \
+    {                                                                 \
+        static _q_PTR_##func ptr;                                     \
+        DEBUGCALL(#func, argcall);                                    \
+        if (!ptr)                                                     \
+            ptr = (_q_PTR_##func) qdbus_resolve_conditionally(#func); \
+        if (!ptr)                                                     \
+            failret;                                                  \
+        funcret DEBUGRET(ret) ptr argcall;                            \
     }
 
 #else // defined QT_LINKED_LIBDBUS
@@ -132,11 +229,6 @@ DEFINEFUNC(dbus_bool_t        , dbus_connection_send_with_reply, (DBusConnection
                                                                   DBusPendingCall           **pending_return,
                                                                   int                         timeout_milliseconds),
            (connection, message, pending_return, timeout_milliseconds), return)
-DEFINEFUNC(DBusMessage *      , dbus_connection_send_with_reply_and_block, (DBusConnection             *connection,
-                                                                            DBusMessage                *message,
-                                                                            int                         timeout_milliseconds,
-                                                                            DBusError                  *error),
-           (connection, message, timeout_milliseconds, error), return)
 DEFINEFUNC(void               , dbus_connection_set_exit_on_disconnect, (DBusConnection             *connection,
                                                                          dbus_bool_t                 exit_on_disconnect),
            (connection, exit_on_disconnect), )
@@ -176,13 +268,16 @@ DEFINEFUNC(dbus_bool_t , dbus_timeout_handle, (DBusTimeout      *timeout),
 
 DEFINEFUNC(dbus_bool_t  , dbus_watch_get_enabled, (DBusWatch        *watch),
            (watch), return)
-DEFINEFUNC(int , dbus_watch_get_fd, (DBusWatch        *watch),
+DEFINEFUNC(int , dbus_watch_get_unix_fd, (DBusWatch        *watch),
            (watch), return)
 DEFINEFUNC(unsigned int , dbus_watch_get_flags, (DBusWatch        *watch),
            (watch), return)
 DEFINEFUNC(dbus_bool_t  , dbus_watch_handle, (DBusWatch        *watch,
                                               unsigned int      flags),
            (watch, flags), return)
+DEFINEFUNC(void         , dbus_connection_set_allow_anonymous, (DBusConnection             *connection,
+                                                                dbus_bool_t                 value),
+           (connection, value), return)
 
 /* dbus-errors.h */
 DEFINEFUNC(void        , dbus_error_free, (DBusError       *error),
@@ -218,6 +313,26 @@ DEFINEFUNC(const char*   , dbus_message_get_signature, (DBusMessage   *message),
            (message), return)
 DEFINEFUNC(int           , dbus_message_get_type, (DBusMessage   *message),
            (message), return)
+
+#if !defined QT_LINKED_LIBDBUS
+
+DEFINEFUNC_CONDITIONALLY(dbus_bool_t   , dbus_message_get_allow_interactive_authorization, (DBusMessage   *message),
+                         (message), return, return false)
+
+#else // defined QT_LINKED_LIBDBUS
+
+static inline dbus_bool_t q_dbus_message_get_allow_interactive_authorization(DBusMessage *message)
+{
+#ifdef DBUS_HEADER_FLAG_ALLOW_INTERACTIVE_AUTHORIZATION
+    return dbus_message_get_allow_interactive_authorization(message);
+#else
+    Q_UNUSED(message);
+    return false;
+#endif
+}
+
+#endif // defined QT_LINKED_LIBDBUS
+
 DEFINEFUNC(dbus_bool_t , dbus_message_iter_append_basic, (DBusMessageIter *iter,
                                                           int              type,
                                                           const void      *value),
@@ -296,8 +411,32 @@ DEFINEFUNC(dbus_bool_t   , dbus_message_set_sender, (DBusMessage   *message,
 DEFINEFUNC(void          , dbus_message_unref, (DBusMessage   *message),
            (message), )
 
+#if !defined QT_LINKED_LIBDBUS
+
+DEFINEFUNC_CONDITIONALLY(void, dbus_message_set_allow_interactive_authorization,
+                         (DBusMessage *message, dbus_bool_t allow), (message, allow), return, return)
+
+
+#else // defined QT_LINKED_LIBDBUS
+
+static inline void q_dbus_message_set_allow_interactive_authorization(DBusMessage *message, dbus_bool_t allow)
+{
+#ifdef DBUS_HEADER_FLAG_ALLOW_INTERACTIVE_AUTHORIZATION
+    dbus_message_set_allow_interactive_authorization(message, allow);
+#else
+    Q_UNUSED(message);
+    Q_UNUSED(allow);
+#endif
+}
+
+#endif // defined QT_LINKED_LIBDBUS
+
 /* dbus-misc.h */
 DEFINEFUNC(char*         , dbus_get_local_machine_id ,  (void), (), return)
+
+DEFINEFUNC(void          , dbus_get_version          ,  (int *major_version, int *minor_version, int *micro_version)
+                                                     ,  (major_version, minor_version, micro_version)
+                                                     ,  return)
 
 
 /* dbus-pending-call.h */
@@ -319,6 +458,8 @@ DEFINEFUNC(void         , dbus_pending_call_unref, (DBusPendingCall             
 
 /* dbus-server.h */
 DEFINEFUNC(dbus_bool_t , dbus_server_allocate_data_slot, (dbus_int32_t     *slot_p),
+           (slot_p), return)
+DEFINEFUNC(void        , dbus_server_free_data_slot,     (dbus_int32_t     *slot_p),
            (slot_p), return)
 DEFINEFUNC(void        , dbus_server_disconnect, (DBusServer     *server),
            (server), )

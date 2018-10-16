@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -172,19 +170,19 @@ QAbstractEventDispatcher::~QAbstractEventDispatcher()
 QAbstractEventDispatcher *QAbstractEventDispatcher::instance(QThread *thread)
 {
     QThreadData *data = thread ? QThreadData::get2(thread) : QThreadData::current();
-    return data->eventDispatcher;
+    return data->eventDispatcher.load();
 }
 
 /*!
     \fn bool QAbstractEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
 
     Processes pending events that match \a flags until there are no
-    more events to process. Returns true if an event was processed;
-    otherwise returns false.
+    more events to process. Returns \c true if an event was processed;
+    otherwise returns \c false.
 
     This function is especially useful if you have a long running
-    operation and want to show its progress without allowing user
-    input; i.e. by using the QEventLoop::ExcludeUserInputEvents flag.
+    operation, and want to show its progress without allowing user
+    input by using the QEventLoop::ExcludeUserInputEvents flag.
 
     If the QEventLoop::WaitForMoreEvents flag is set in \a flags, the
     behavior of this function is as follows:
@@ -210,9 +208,11 @@ QAbstractEventDispatcher *QAbstractEventDispatcher::instance(QThread *thread)
 */
 
 /*! \fn bool QAbstractEventDispatcher::hasPendingEvents()
+    \deprecated
 
-    Returns true if there is an event waiting; otherwise returns
-    false.
+    Returns \c true if there is an event waiting; otherwise returns false. This
+    function is an implementation detail for
+    QCoreApplication::hasPendingEvents() and must not be called directly.
 */
 
 /*!
@@ -271,7 +271,7 @@ int QAbstractEventDispatcher::registerTimer(int interval, Qt::TimerType timerTyp
     \fn bool QAbstractEventDispatcher::unregisterTimer(int timerId)
 
     Unregisters the timer with the given \a timerId.
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
     \sa registerTimer(), unregisterTimers()
 */
@@ -280,7 +280,7 @@ int QAbstractEventDispatcher::registerTimer(int interval, Qt::TimerType timerTyp
     \fn bool QAbstractEventDispatcher::unregisterTimers(QObject *object)
 
     Unregisters all the timers associated with the given \a object.
-    Returns true if all timers were successful removed; otherwise returns false.
+    Returns \c true if all timers were successful removed; otherwise returns \c false.
 
     \sa unregisterTimer(), registeredTimers()
 */
@@ -309,20 +309,30 @@ int QAbstractEventDispatcher::registerTimer(int interval, Qt::TimerType timerTyp
 
     Wakes up the event loop.
 
+    \omit
+    ### FIXME - QTBUG-70229
+    On Unix and Glib event dispatchers, if the dispatcher is already awake when
+    this function is called, it is ensured that the current iteration won't block
+    waiting for more events, but will instead do another event loop iteration.
+
+    ### TODO - does other event dispatchers behave the same?
+    \endomit
+
     \sa awake()
 */
 
 /*!
     \fn void QAbstractEventDispatcher::interrupt()
 
-    Interrupts event dispatching; i.e. the event dispatcher will
+    Interrupts event dispatching.  The event dispatcher will
     return from processEvents() as soon as possible.
 */
 
 /*! \fn void QAbstractEventDispatcher::flush()
+    \deprecated
 
-    Flushes the event queue. This normally returns almost
-    immediately. Does nothing on platforms other than X11.
+    Depending from the event dispatcher implementation does nothing or
+    calls QApplication::sendPostedEvents().
 */
 
 // ### DOC: Are these called when the _application_ starts/stops or just
@@ -374,14 +384,13 @@ void QAbstractEventDispatcher::closingDown()
 */
 
 /*!
-    Installs an event filter \a filterObj for all native event filters
-    received by the application.
+    Installs an event filter \a filterObj for all native events received by the application.
 
-    The event filter \a filterObj receives events via its nativeEventFilter()
+    The event filter \a filterObj receives events via its \l {QAbstractNativeEventFilter::}{nativeEventFilter()}
     function, which is called for all events received by all threads.
 
-    The nativeEventFilter() function should return true if the event should
-    be filtered, (i.e. stopped). It should return false to allow
+    The  \l {QAbstractNativeEventFilter::}{nativeEventFilter()} function should return true
+    if the event should be filtered, (in this case, stopped). It should return false to allow
     normal Qt processing to continue: the native event can then be translated
     into a QEvent and handled by the standard Qt \l{QEvent} {event} filtering,
     e.g. QObject::installEventFilter().
@@ -390,9 +399,9 @@ void QAbstractEventDispatcher::closingDown()
     is activated first.
 
     \note The filter function set here receives native messages,
-    i.e. MSG or XEvent structs.
+    that is, MSG or XEvent structs.
 
-    For maximum portability, you should always try to use QEvents
+    For maximum portability, you should always try to use QEvent objects
     and QObject::installEventFilter() whenever possible.
 
     \sa QObject::installEventFilter()
@@ -416,8 +425,8 @@ void QAbstractEventDispatcher::installNativeEventFilter(QAbstractNativeEventFilt
     All event filters for this object are automatically removed when
     this object is destroyed.
 
-    It is always safe to remove an event filter, even during event
-    filter activation (i.e. from the nativeEventFilter() function).
+    It is always safe to remove an event filter, even during event filter
+    filter activation (that is, even from within the \l {QAbstractNativeEventFilter::}{nativeEventFilter()} function).
 
     \sa installNativeEventFilter(), QAbstractNativeEventFilter
     \since 5.0
@@ -435,8 +444,8 @@ void QAbstractEventDispatcher::removeNativeEventFilter(QAbstractNativeEventFilte
 
 /*!
     Sends \a message through the event filters that were set by
-    installNativeEventFilter().  This function returns true as soon as an
-    event filter returns true, and false otherwise to indicate that
+    installNativeEventFilter().  This function returns \c true as soon as an
+    event filter returns \c true, and false otherwise to indicate that
     the processing of the event should continue.
 
     Subclasses of QAbstractEventDispatcher \e must call this function
@@ -458,7 +467,7 @@ bool QAbstractEventDispatcher::filterNativeEvent(const QByteArray &eventType, vo
     if (!d->eventFilters.isEmpty()) {
         // Raise the loopLevel so that deleteLater() calls in or triggered
         // by event_filter() will be processed from the main event loop.
-        QScopedLoopLevelCounter loopLevelCounter(d->threadData);
+        QScopedScopeLevelCounter scopeLevelCounter(d->threadData);
         for (int i = 0; i < d->eventFilters.size(); ++i) {
             QAbstractNativeEventFilter *filter = d->eventFilters.at(i);
             if (!filter)
@@ -474,17 +483,17 @@ bool QAbstractEventDispatcher::filterNativeEvent(const QByteArray &eventType, vo
     \deprecated
 
     Calls filterNativeEvent() with an empty eventType and \a message.
-    This function returns true as soon as an
-    event filter returns true, and false otherwise to indicate that
+    This function returns \c true as soon as an
+    event filter returns \c true, and false otherwise to indicate that
     the processing of the event should continue.
 */
 
-/*! \fn bool QAbstractEventDispatcher::registerEventNotifier(QWinEventNotifier *notifier);
+/*! \fn bool QAbstractEventDispatcher::registerEventNotifier(QWinEventNotifier *notifier)
 
   This pure virtual method exists on windows only and has to be reimplemented by a Windows specific
   event dispatcher implementation. \a notifier is the QWinEventNotifier instance to be registered.
 
-  The method should return true if the registration of \a notifier was sucessful, otherwise false.
+  The method should return true if the registration of \a notifier was successful, otherwise false.
 
   QWinEventNotifier calls this method in it's constructor and there should never be a need to call this
   method directly.
@@ -492,7 +501,7 @@ bool QAbstractEventDispatcher::filterNativeEvent(const QByteArray &eventType, vo
   \sa QWinEventNotifier, unregisterEventNotifier()
 */
 
-/*! \fn bool QAbstractEventDispatcher::unregisterEventNotifier(QWinEventNotifier *notifier);
+/*! \fn bool QAbstractEventDispatcher::unregisterEventNotifier(QWinEventNotifier *notifier)
 
   This pure virtual method exists on windows only and has to be reimplemented by a Windows specific
   event dispatcher implementation. \a notifier is the QWinEventNotifier instance to be unregistered.
@@ -520,3 +529,5 @@ bool QAbstractEventDispatcher::filterNativeEvent(const QByteArray &eventType, vo
 */
 
 QT_END_NAMESPACE
+
+#include "moc_qabstracteventdispatcher.cpp"

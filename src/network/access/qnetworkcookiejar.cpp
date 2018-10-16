@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,7 +43,9 @@
 #include "QtNetwork/qnetworkcookie.h"
 #include "QtCore/qurl.h"
 #include "QtCore/qdatetime.h"
+#if QT_CONFIG(topleveldomain)
 #include "private/qtldurl_p.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -54,7 +54,7 @@ QT_BEGIN_NAMESPACE
     \since 4.4
     \inmodule QtNetwork
 
-    \brief The QNetworkCookieJar class implements a simple jar of QNetworkCookie objects
+    \brief The QNetworkCookieJar class implements a simple jar of QNetworkCookie objects.
 
     Cookies are small bits of information that stateless protocols
     like HTTP use to maintain some persistent information across
@@ -138,9 +138,9 @@ void QNetworkCookieJar::setAllCookies(const QList<QNetworkCookie> &cookieList)
     d->allCookies = cookieList;
 }
 
-static inline bool isParentPath(QString path, QString reference)
+static inline bool isParentPath(const QString &path, const QString &reference)
 {
-    if (path.startsWith(reference)) {
+    if ((path.isEmpty() && reference == QLatin1String("/")) || path.startsWith(reference)) {
         //The cookie-path and the request-path are identical.
         if (path.length() == reference.length())
             return true;
@@ -157,19 +157,19 @@ static inline bool isParentPath(QString path, QString reference)
     return false;
 }
 
-static inline bool isParentDomain(QString domain, QString reference)
+static inline bool isParentDomain(const QString &domain, const QString &reference)
 {
     if (!reference.startsWith(QLatin1Char('.')))
         return domain == reference;
 
-    return domain.endsWith(reference) || domain == reference.mid(1);
+    return domain.endsWith(reference) || domain == reference.midRef(1);
 }
 
 /*!
     Adds the cookies in the list \a cookieList to this cookie
     jar. Before being inserted cookies are normalized.
 
-    Returns true if one or more cookies are set for \a url,
+    Returns \c true if one or more cookies are set for \a url,
     otherwise false.
 
     If a cookie already exists in the cookie jar, it will be
@@ -190,7 +190,7 @@ bool QNetworkCookieJar::setCookiesFromUrl(const QList<QNetworkCookie> &cookieLis
                                           const QUrl &url)
 {
     bool added = false;
-    foreach (QNetworkCookie cookie, cookieList) {
+    for (QNetworkCookie cookie : cookieList) {
         cookie.normalize(url);
         if (validateCookie(cookie, url) && insertCookie(cookie))
             added = true;
@@ -224,9 +224,9 @@ QList<QNetworkCookie> QNetworkCookieJar::cookiesForUrl(const QUrl &url) const
 //     It does not implement a very good cross-domain verification yet.
 
     Q_D(const QNetworkCookieJar);
-    QDateTime now = QDateTime::currentDateTime();
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     QList<QNetworkCookie> result;
-    bool isEncrypted = url.scheme().toLower() == QLatin1String("https");
+    bool isEncrypted = url.scheme() == QLatin1String("https");
 
     // scan our cookies for something that matches
     QList<QNetworkCookie>::ConstIterator it = d->allCookies.constBegin(),
@@ -240,6 +240,17 @@ QList<QNetworkCookie> QNetworkCookieJar::cookiesForUrl(const QUrl &url) const
             continue;
         if ((*it).isSecure() && !isEncrypted)
             continue;
+
+        QString domain = it->domain();
+        if (domain.startsWith(QLatin1Char('.'))) /// Qt6?: remove when compliant with RFC6265
+            domain = domain.mid(1);
+#if QT_CONFIG(topleveldomain)
+        if (qIsEffectiveTLD(domain) && url.host() != domain)
+            continue;
+#else
+        if (!domain.contains(QLatin1Char('.')) && url.host() != domain)
+            continue;
+#endif // topleveldomain
 
         // insert this cookie into result, sorted by path
         QList<QNetworkCookie>::Iterator insertIt = result.begin();
@@ -265,7 +276,7 @@ QList<QNetworkCookie> QNetworkCookieJar::cookiesForUrl(const QUrl &url) const
     \since 5.0
     Adds \a cookie to this cookie jar.
 
-    Returns true if \a cookie was added, false otherwise.
+    Returns \c true if \a cookie was added, false otherwise.
 
     If a cookie with the same identifier already exists in the
     cookie jar, it will be overridden.
@@ -273,7 +284,7 @@ QList<QNetworkCookie> QNetworkCookieJar::cookiesForUrl(const QUrl &url) const
 bool QNetworkCookieJar::insertCookie(const QNetworkCookie &cookie)
 {
     Q_D(QNetworkCookieJar);
-    QDateTime now = QDateTime::currentDateTime();
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     bool isDeletion = !cookie.isSessionCookie() &&
                       cookie.expirationDate() < now;
 
@@ -291,7 +302,7 @@ bool QNetworkCookieJar::insertCookie(const QNetworkCookie &cookie)
     If a cookie with the same identifier as \a cookie exists in this cookie jar
     it will be updated. This function uses insertCookie().
 
-    Returns true if \a cookie was updated, false if no cookie in the jar matches
+    Returns \c true if \a cookie was updated, false if no cookie in the jar matches
     the identifier of \a cookie.
 
     \sa QNetworkCookie::hasSameIdentifier()
@@ -307,7 +318,7 @@ bool QNetworkCookieJar::updateCookie(const QNetworkCookie &cookie)
     \since 5.0
     Deletes from cookie jar the cookie found to have the same identifier as \a cookie.
 
-    Returns true if a cookie was deleted, false otherwise.
+    Returns \c true if a cookie was deleted, false otherwise.
 
     \sa QNetworkCookie::hasSameIdentifier()
 */
@@ -315,31 +326,47 @@ bool QNetworkCookieJar::deleteCookie(const QNetworkCookie &cookie)
 {
     Q_D(QNetworkCookieJar);
     QList<QNetworkCookie>::Iterator it;
-    for (it = d->allCookies.begin(); it != d->allCookies.end(); it++)
+    for (it = d->allCookies.begin(); it != d->allCookies.end(); ++it) {
         if (it->hasSameIdentifier(cookie)) {
             d->allCookies.erase(it);
             return true;
         }
+    }
     return false;
 }
 
 /*!
     \since 5.0
-    Returns true if the domain and path of \a cookie are valid, false otherwise.
+    Returns \c true if the domain and path of \a cookie are valid, false otherwise.
     The \a url parameter is used to determine if the domain specified in the cookie
     is allowed.
 */
 bool QNetworkCookieJar::validateCookie(const QNetworkCookie &cookie, const QUrl &url) const
 {
     QString domain = cookie.domain();
-    if (!(isParentDomain(domain, url.host()) || isParentDomain(url.host(), domain)))
+    const QString host = url.host();
+    if (!isParentDomain(domain, host) && !isParentDomain(host, domain))
         return false; // not accepted
 
+    if (domain.startsWith(QLatin1Char('.')))
+        domain = domain.mid(1);
+
+    // We shouldn't reject if:
+    // "[...] the domain-attribute is identical to the canonicalized request-host"
+    // https://tools.ietf.org/html/rfc6265#section-5.3 step 5
+    if (host == domain)
+        return true;
+#if QT_CONFIG(topleveldomain)
     // the check for effective TLDs makes the "embedded dot" rule from RFC 2109 section 4.3.2
     // redundant; the "leading dot" rule has been relaxed anyway, see QNetworkCookie::normalize()
     // we remove the leading dot for this check if it's present
-    if (qIsEffectiveTLD(domain.startsWith('.') ? domain.remove(0, 1) : domain))
+    if (qIsEffectiveTLD(domain))
         return false; // not accepted
+#else
+    // provide minimal checking by not accepting cookies on real TLDs
+    if (!domain.contains(QLatin1Char('.')))
+        return false;
+#endif
 
     return true;
 }

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,7 +39,6 @@ class tst_QStandardItemModel : public QObject
 
 public:
     tst_QStandardItemModel();
-    virtual ~tst_QStandardItemModel();
 
     enum ModelChanged {
         RowsAboutToBeInserted,
@@ -112,6 +98,7 @@ private slots:
     void checkChildren();
     void data();
     void clear();
+    void clearItemData();
     void sort_data();
     void sort();
     void sortRole_data();
@@ -130,6 +117,9 @@ private slots:
     void useCase2();
     void useCase3();
 
+    void setNullChild();
+    void deleteChild();
+
     void rootItemFlags();
 #ifdef QT_BUILD_INTERNAL
     void treeDragAndDrop();
@@ -137,13 +127,18 @@ private slots:
     void removeRowsAndColumns();
 
     void itemRoleNames();
+    void getMimeDataWithInvalidModelIndex();
+    void supportedDragDropActions();
+
+    void taskQTBUG_45114_setItemData();
 
 private:
-    QAbstractItemModel *m_model;
+    QStandardItemModel *m_model;
     QPersistentModelIndex persistent;
     QVector<QModelIndex> rcParent;
     QVector<int> rcFirst;
     QVector<int> rcLast;
+    QVector<int> currentRoles;
 
     //return true if models have the same structure, and all child have the same text
     bool compareModels(QStandardItemModel *model1, QStandardItemModel *model2);
@@ -153,17 +148,13 @@ private:
 
 static const int defaultSize = 3;
 
-Q_DECLARE_METATYPE(QModelIndex)
 Q_DECLARE_METATYPE(QStandardItem*)
 Q_DECLARE_METATYPE(Qt::Orientation)
-Q_DECLARE_METATYPE(QVariantList)
 
 tst_QStandardItemModel::tst_QStandardItemModel() : m_model(0), rcParent(8), rcFirst(8,0), rcLast(8,0)
 {
-}
-
-tst_QStandardItemModel::~tst_QStandardItemModel()
-{
+    qRegisterMetaType<QStandardItem*>("QStandardItem*");
+    qRegisterMetaType<Qt::Orientation>("Qt::Orientation");
 }
 
 /*
@@ -178,10 +169,6 @@ tst_QStandardItemModel::~tst_QStandardItemModel()
 */
 void tst_QStandardItemModel::init()
 {
-    qRegisterMetaType<QModelIndex>("QModelIndex");
-    qRegisterMetaType<QStandardItem*>("QStandardItem*");
-    qRegisterMetaType<Qt::Orientation>("Qt::Orientation");
-
     m_model = new QStandardItemModel(defaultSize, defaultSize);
     connect(m_model, SIGNAL(rowsAboutToBeInserted(QModelIndex,int,int)),
             this, SLOT(rowsAboutToBeInserted(QModelIndex,int,int)));
@@ -200,6 +187,12 @@ void tst_QStandardItemModel::init()
             this, SLOT(columnsAboutToBeRemoved(QModelIndex,int,int)));
     connect(m_model, SIGNAL(columnsRemoved(QModelIndex,int,int)),
             this, SLOT(columnsRemoved(QModelIndex,int,int)));
+
+    connect(m_model, &QAbstractItemModel::dataChanged,
+            this, [this](const QModelIndex &, const QModelIndex &, const QVector<int> &roles)
+    {
+        currentRoles = roles;
+    });
 
     rcFirst.fill(-1);
     rcLast.fill(-1);
@@ -266,7 +259,7 @@ void tst_QStandardItemModel::insertRow()
         QCOMPARE(rcLast[RowsInserted], expectedRow);
 
         //check that the inserted item has different DisplayRole than initial items
-        QVERIFY(m_model->data(m_model->index(expectedRow, 0), Qt::DisplayRole).toString() != "initialitem");
+        QVERIFY(m_model->data(m_model->index(expectedRow, 0), Qt::DisplayRole).toString() != QLatin1String("initialitem"));
     } else {
         // We inserted something outside the bounds, do nothing
         QCOMPARE(m_model->rowCount(), defaultSize);
@@ -300,6 +293,12 @@ void tst_QStandardItemModel::insertRows()
 
     // check header data has moved
     QCOMPARE(m_model->headerData(3, Qt::Vertical).toString(), headerLabel);
+
+    // do not assert on empty list
+    QStandardItem *si = m_model->invisibleRootItem();
+    si->insertRow(0, QList<QStandardItem*>());
+    si->insertRows(0, 0);
+    si->insertRows(0, QList<QStandardItem*>());
 }
 
 void tst_QStandardItemModel::insertRowsItems()
@@ -310,7 +309,7 @@ void tst_QStandardItemModel::insertRowsItems()
     QStandardItemModel *m = qobject_cast<QStandardItemModel*>(m_model);
     QStandardItem *hiddenRoot = m->invisibleRootItem();
     for (int i = 0; i < 3; ++i)
-        items.append(new QStandardItem(QString("%1").arg(i + 10)));
+        items.append(new QStandardItem(QString::number(i + 10)));
     hiddenRoot->appendRows(items);
     QCOMPARE(m_model->rowCount(), rowCount + 3);
     QCOMPARE(m_model->index(rowCount + 0, 0).data().toInt(), 10);
@@ -375,7 +374,7 @@ void tst_QStandardItemModel::insertColumn()
         QCOMPARE(rcLast[ColumnsInserted], expectedColumn);
 
         //check that the inserted item has different DisplayRole than initial items
-        QVERIFY(m_model->data(m_model->index(0, expectedColumn), Qt::DisplayRole).toString() != "initialitem");
+        QVERIFY(m_model->data(m_model->index(0, expectedColumn), Qt::DisplayRole).toString() != QLatin1String("initialitem"));
     } else {
         // We inserted something outside the bounds, do nothing
         QCOMPARE(m_model->columnCount(), defaultSize);
@@ -410,6 +409,11 @@ void tst_QStandardItemModel::insertColumns()
 
     // check header data has moved
     QCOMPARE(m_model->headerData(3, Qt::Horizontal).toString(), headerLabel);
+
+    // do not assert on empty list
+    QStandardItem *si = m_model->invisibleRootItem();
+    si->insertColumn(0, QList<QStandardItem*>());
+    si->insertColumns(0, 0);
 }
 
 void tst_QStandardItemModel::removeRows()
@@ -721,25 +725,57 @@ void tst_QStandardItemModel::checkChildren()
     QVERIFY(!model.hasChildren());
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 1);
+
+    QVERIFY(!model.index(0,0).sibling(100,100).isValid());
 }
 
 void tst_QStandardItemModel::data()
 {
+    currentRoles.clear();
     // bad args
     m_model->setData(QModelIndex(), "bla", Qt::DisplayRole);
+    QCOMPARE(currentRoles, {});
 
     QIcon icon;
     for (int r=0; r < m_model->rowCount(); ++r) {
         for (int c=0; c < m_model->columnCount(); ++c) {
             m_model->setData(m_model->index(r,c), "initialitem", Qt::DisplayRole);
+            QCOMPARE(currentRoles, QVector<int>({Qt::DisplayRole, Qt::EditRole}));
             m_model->setData(m_model->index(r,c), "tooltip", Qt::ToolTipRole);
+            QCOMPARE(currentRoles, {Qt::ToolTipRole});
             m_model->setData(m_model->index(r,c), icon, Qt::DecorationRole);
+            QCOMPARE(currentRoles, {Qt::DecorationRole});
         }
     }
 
-    QVERIFY(m_model->data(m_model->index(0, 0), Qt::DisplayRole).toString() == "initialitem");
-    QVERIFY(m_model->data(m_model->index(0, 0), Qt::ToolTipRole).toString() == "tooltip");
+    QCOMPARE(m_model->data(m_model->index(0, 0), Qt::DisplayRole).toString(), QLatin1String("initialitem"));
+    QCOMPARE(m_model->data(m_model->index(0, 0), Qt::ToolTipRole).toString(), QLatin1String("tooltip"));
+    const QMap<int, QVariant> itmData = m_model->itemData(m_model->index(0, 0));
+    QCOMPARE(itmData.value(Qt::DisplayRole), QLatin1String("initialitem"));
+    QCOMPARE(itmData.value(Qt::ToolTipRole), QLatin1String("tooltip"));
+    QVERIFY(!itmData.contains(Qt::UserRole - 1));
+    QVERIFY(m_model->itemData(QModelIndex()).isEmpty());
+}
 
+void tst_QStandardItemModel::clearItemData()
+{
+    currentRoles.clear();
+    QVERIFY(!m_model->clearItemData(QModelIndex()));
+    QCOMPARE(currentRoles, {});
+    const QModelIndex idx = m_model->index(0, 0);
+    const QMap<int, QVariant> oldData = m_model->itemData(idx);
+    m_model->setData(idx, QLatin1String("initialitem"), Qt::DisplayRole);
+    m_model->setData(idx, QLatin1String("tooltip"), Qt::ToolTipRole);
+    m_model->setData(idx, 5, Qt::UserRole);
+    currentRoles.clear();
+    QVERIFY(m_model->clearItemData(idx));
+    QCOMPARE(idx.data(Qt::UserRole), QVariant());
+    QCOMPARE(idx.data(Qt::ToolTipRole), QVariant());
+    QCOMPARE(idx.data(Qt::DisplayRole), QVariant());
+    QCOMPARE(idx.data(Qt::EditRole), QVariant());
+    QCOMPARE(currentRoles, {});
+    m_model->setItemData(idx, oldData);
+    currentRoles.clear();
 }
 
 void tst_QStandardItemModel::clear()
@@ -753,6 +789,9 @@ void tst_QStandardItemModel::clear()
     QSignalSpy modelResetSpy(&model, SIGNAL(modelReset()));
     QSignalSpy layoutChangedSpy(&model, SIGNAL(layoutChanged()));
     QSignalSpy rowsRemovedSpy(&model, SIGNAL(rowsRemoved(QModelIndex,int,int)));
+
+    QAbstractItemModelTester mt(&model);
+
     model.clear();
 
     QCOMPARE(modelResetSpy.count(), 1);
@@ -882,7 +921,7 @@ void tst_QStandardItemModel::sort_data()
                                      << "zulu");
     QStringList list;
     for (int i=1000; i < 2000; ++i)
-        list.append(QString("Number: %1").arg(i));
+        list.append(QStringLiteral("Number: ") + QString::number(i));
     QTest::newRow("large set ascending") <<  static_cast<int>(Qt::AscendingOrder) << list << list;
 }
 
@@ -1344,7 +1383,7 @@ void tst_QStandardItemModel::useCase3()
     // create the tree structure first
     QStandardItem *childItem = 0;
     for (int i = 0; i < 100; ++i) {
-        QStandardItem *item = new QStandardItem(QString("item %0").arg(i));
+        QStandardItem *item = new QStandardItem(QStringLiteral("item ") + QString::number(i));
         if (childItem)
             item->appendRow(childItem);
         childItem = item;
@@ -1378,6 +1417,30 @@ void tst_QStandardItemModel::useCase3()
     delete childItem;
 }
 
+void tst_QStandardItemModel::setNullChild()
+{
+    QStandardItemModel model;
+    model.setColumnCount(2);
+    createChildren(&model, model.invisibleRootItem(), 0);
+    QStandardItem *item = model.item(0);
+    QSignalSpy spy(&model, SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)));
+    item->setChild(0, nullptr);
+    QCOMPARE(item->child(0), nullptr);
+    QCOMPARE(spy.count(), 1);
+}
+
+void tst_QStandardItemModel::deleteChild()
+{
+    QStandardItemModel model;
+    model.setColumnCount(2);
+    createChildren(&model, model.invisibleRootItem(), 0);
+    QStandardItem *item = model.item(0);
+    QSignalSpy spy(&model, SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)));
+    delete item->child(0);
+    QCOMPARE(item->child(0), nullptr);
+    QCOMPARE(spy.count(), 1);
+}
+
 void tst_QStandardItemModel::rootItemFlags()
 {
     QStandardItemModel model(6, 4);
@@ -1389,7 +1452,7 @@ void tst_QStandardItemModel::rootItemFlags()
     QCOMPARE(model.invisibleRootItem()->flags() , f);
     QCOMPARE(model.invisibleRootItem()->flags() , model.flags(QModelIndex()));
 
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     model.invisibleRootItem()->setDropEnabled(false);
 #endif
     QCOMPARE(model.invisibleRootItem()->flags() , Qt::ItemIsEnabled);
@@ -1469,11 +1532,43 @@ static QModelIndex indexFromText(QStandardItemModel *model, const QString &text)
 struct FriendlyTreeView : public QTreeView
 {
     friend class tst_QStandardItemModel;
-	Q_DECLARE_PRIVATE(QTreeView)
+    Q_DECLARE_PRIVATE(QTreeView)
 };
 #endif
 
 #ifdef QT_BUILD_INTERNAL
+
+static void populateDragAndDropModel(QStandardItemModel &model, int nRow, int nCol)
+{
+    const QString item = QStringLiteral("item ");
+    const QString dash = QStringLiteral(" - ");
+    for (int i = 0; i < nRow; ++i) {
+        const QString iS = QString::number(i);
+        QList<QStandardItem *> colItems1;
+        for (int c = 0 ; c < nCol; c ++)
+            colItems1 << new QStandardItem(item + iS + dash + QString::number(c));
+        model.appendRow(colItems1);
+
+        for (int j = 0; j < nRow; ++j) {
+            const QString jS = QString::number(j);
+            QList<QStandardItem *> colItems2;
+            for (int c = 0 ; c < nCol; c ++)
+                colItems2 << new QStandardItem(item + iS + QLatin1Char('/') + jS + dash + QString::number(c));
+            colItems1.at(0)->appendRow(colItems2);
+
+            for (int k = 0; k < nRow; ++k) {
+                QList<QStandardItem *> colItems3;
+                const QString kS = QString::number(k);
+                for (int c = 0 ; c < nCol; c ++)
+                    colItems3 << new QStandardItem(item + iS + QLatin1Char('/') + jS
+                                                   + QLatin1Char('/') + kS
+                                                   + dash + QString::number(c));
+                colItems2.at(0)->appendRow(colItems3);
+            }
+        }
+    }
+}
+
 void tst_QStandardItemModel::treeDragAndDrop()
 {
     const int nRow = 5;
@@ -1482,47 +1577,8 @@ void tst_QStandardItemModel::treeDragAndDrop()
     QStandardItemModel model;
     QStandardItemModel checkModel;
 
-    for (int i = 0; i < nRow; ++i) {
-        QList<QStandardItem *> colItems1;
-        for (int c = 0 ; c < nCol; c ++)
-            colItems1 << new QStandardItem(QString("item %1 - %0").arg(c).arg(i));
-        model.appendRow(colItems1);
-
-        for (int j = 0; j < nRow; ++j) {
-            QList<QStandardItem *> colItems2;
-            for (int c = 0 ; c < nCol; c ++)
-                colItems2 << new QStandardItem(QString("item %1/%2 - %0").arg(c).arg(i).arg(j));
-            colItems1.at(0)->appendRow(colItems2);
-
-            for (int k = 0; k < nRow; ++k) {
-                QList<QStandardItem *> colItems3;
-                for (int c = 0 ; c < nCol; c ++)
-                    colItems3 << new QStandardItem(QString("item %1/%2/%3 - %0").arg(c).arg(i).arg(j).arg(k));
-                colItems2.at(0)->appendRow(colItems3);
-            }
-        }
-    }
-
-    for (int i = 0; i < nRow; ++i) {
-        QList<QStandardItem *> colItems1;
-        for (int c = 0 ; c < nCol; c ++)
-            colItems1 << new QStandardItem(QString("item %1 - %0").arg(c).arg(i));
-        checkModel.appendRow(colItems1);
-
-        for (int j = 0; j < nRow; ++j) {
-            QList<QStandardItem *> colItems2;
-            for (int c = 0 ; c < nCol; c ++)
-                colItems2 << new QStandardItem(QString("item %1/%2 - %0").arg(c).arg(i).arg(j));
-            colItems1.at(0)->appendRow(colItems2);
-
-            for (int k = 0; k < nRow; ++k) {
-                QList<QStandardItem *> colItems3;
-                for (int c = 0 ; c < nCol; c ++)
-                    colItems3 << new QStandardItem(QString("item %1/%2/%3 - %0").arg(c).arg(i).arg(j).arg(k));
-                colItems2.at(0)->appendRow(colItems3);
-            }
-        }
-    }
+    populateDragAndDropModel(model, nRow, nCol);
+    populateDragAndDropModel(checkModel, nRow, nCol);
 
     QVERIFY(compareModels(&model, &checkModel));
 
@@ -1530,7 +1586,7 @@ void tst_QStandardItemModel::treeDragAndDrop()
     view.setModel(&model);
     view.expandAll();
     view.show();
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     view.setDragDropMode(QAbstractItemView::InternalMove);
 #endif
     view.setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -1621,14 +1677,14 @@ void tst_QStandardItemModel::removeRowsAndColumns()
 #define VERIFY_MODEL \
     for (int c = 0; c < col_list.count(); c++) \
         for (int r = 0; r < row_list.count(); r++) \
-            QCOMPARE(model.item(r,c)->text() , row_list[r] + "x" + col_list[c]);
+            QCOMPARE(model.item(r,c)->text() , row_list[r] + QLatin1Char('x') + col_list[c]);
 
     QVector<QString> row_list = QString("1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20").split(',').toVector();
     QVector<QString> col_list = row_list;
     QStandardItemModel model;
     for (int c = 0; c < col_list.count(); c++)
         for (int r = 0; r < row_list.count(); r++)
-            model.setItem(r, c, new QStandardItem(row_list[r] + "x" + col_list[c]));
+            model.setItem(r, c, new QStandardItem(row_list[r] + QLatin1Char('x') + col_list[c]));
     VERIFY_MODEL
 
     row_list.remove(3);
@@ -1650,14 +1706,14 @@ void tst_QStandardItemModel::removeRowsAndColumns()
     QList<QStandardItem *> row_taken = model.takeRow(6);
     QCOMPARE(row_taken.count(), col_list.count());
     for (int c = 0; c < col_list.count(); c++)
-        QCOMPARE(row_taken[c]->text() , row_list[6] + "x" + col_list[c]);
+        QCOMPARE(row_taken[c]->text() , row_list[6] + QLatin1Char('x') + col_list[c]);
     row_list.remove(6);
     VERIFY_MODEL
 
     QList<QStandardItem *> col_taken = model.takeColumn(10);
     QCOMPARE(col_taken.count(), row_list.count());
     for (int r = 0; r < row_list.count(); r++)
-        QCOMPARE(col_taken[r]->text() , row_list[r] + "x" + col_list[10]);
+        QCOMPARE(col_taken[r]->text() , row_list[r] + QLatin1Char('x') + col_list[10]);
     col_list.remove(10);
     VERIFY_MODEL
 }
@@ -1669,7 +1725,7 @@ void tst_QStandardItemModel::itemRoleNames()
     QStandardItemModel model;
     for (int c = 0; c < col_list.count(); c++)
         for (int r = 0; r < row_list.count(); r++)
-            model.setItem(r, c, new QStandardItem(row_list[r] + "x" + col_list[c]));
+            model.setItem(r, c, new QStandardItem(row_list[r] + QLatin1Char('x') + col_list[c]));
     VERIFY_MODEL
 
     QHash<int, QByteArray> newRoleNames;
@@ -1680,6 +1736,80 @@ void tst_QStandardItemModel::itemRoleNames()
     VERIFY_MODEL
 }
 
+void tst_QStandardItemModel::getMimeDataWithInvalidModelIndex()
+{
+    QStandardItemModel model;
+    QTest::ignoreMessage(QtWarningMsg, "QStandardItemModel::mimeData: No item associated with invalid index");
+    QMimeData *data = model.mimeData(QModelIndexList() << QModelIndex());
+    QVERIFY(!data);
+}
+
+void tst_QStandardItemModel::supportedDragDropActions()
+{
+    QStandardItemModel model;
+    QCOMPARE(model.supportedDragActions(), Qt::CopyAction | Qt::MoveAction);
+    QCOMPARE(model.supportedDropActions(), Qt::CopyAction | Qt::MoveAction);
+}
+
+void tst_QStandardItemModel::taskQTBUG_45114_setItemData()
+{
+    QStandardItemModel model;
+    QSignalSpy spy(&model, &QStandardItemModel::itemChanged);
+
+    QStandardItem *item = new QStandardItem("item");
+    item->setData(1, Qt::UserRole + 1);
+    item->setData(2, Qt::UserRole + 2);
+    model.appendRow(item);
+
+    QModelIndex index = item->index();
+    QCOMPARE(model.itemData(index).size(), 3);
+
+    QCOMPARE(spy.count(), 0);
+
+    QMap<int, QVariant> roles;
+
+    roles.insert(Qt::UserRole + 1, 1);
+    roles.insert(Qt::UserRole + 2, 2);
+    model.setItemData(index, roles);
+
+    QCOMPARE(spy.count(), 0);
+
+    roles.insert(Qt::UserRole + 1, 1);
+    roles.insert(Qt::UserRole + 2, 2);
+    roles.insert(Qt::UserRole + 3, QVariant());
+    model.setItemData(index, roles);
+
+    QCOMPARE(spy.count(), 0);
+
+    roles.clear();
+    roles.insert(Qt::UserRole + 1, 10);
+    roles.insert(Qt::UserRole + 3, 12);
+    model.setItemData(index, roles);
+
+    QCOMPARE(spy.count(), 1);
+    QMap<int, QVariant> itemRoles = model.itemData(index);
+
+    QCOMPARE(itemRoles.size(), 4);
+    QCOMPARE(itemRoles[Qt::UserRole + 1].toInt(), 10);
+    QCOMPARE(itemRoles[Qt::UserRole + 2].toInt(), 2);
+    QCOMPARE(itemRoles[Qt::UserRole + 3].toInt(), 12);
+
+    roles.clear();
+    roles.insert(Qt::UserRole + 3, 1);
+    model.setItemData(index, roles);
+
+    QCOMPARE(spy.count(), 2);
+
+    roles.clear();
+    roles.insert(Qt::UserRole + 3, QVariant());
+    model.setItemData(index, roles);
+
+    QCOMPARE(spy.count(), 3);
+
+    itemRoles = model.itemData(index);
+    QCOMPARE(itemRoles.size(), 3);
+    QVERIFY(!itemRoles.keys().contains(Qt::UserRole + 3));
+}
 
 QTEST_MAIN(tst_QStandardItemModel)
 #include "tst_qstandarditemmodel.moc"

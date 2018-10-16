@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,6 +36,10 @@
 #include <qevent.h>
 #include <qlineedit.h>
 #include <QBoxLayout>
+#include <QSysInfo>
+
+#include <qpa/qplatformintegration.h>
+#include <private/qguiapplication_p.h>
 
 QT_FORWARD_DECLARE_CLASS(QWidget)
 
@@ -72,14 +63,14 @@ protected:
     {
         QLineEdit::focusInEvent( e );
         focusInEventReason = e->reason();
-	    focusInEventGotFocus = e->gotFocus();
+        focusInEventGotFocus = e->gotFocus();
         focusInEventRecieved = true;
     }
     void focusOutEvent( QFocusEvent* e )
     {
         QLineEdit::focusOutEvent( e );
         focusOutEventReason = e->reason();
-	    focusOutEventLostFocus = !e->gotFocus();
+        focusOutEventLostFocus = !e->gotFocus();
         focusOutEventRecieved = true;
     }
 };
@@ -89,18 +80,12 @@ class tst_QFocusEvent : public QObject
     Q_OBJECT
 
 public:
-    tst_QFocusEvent();
-    virtual ~tst_QFocusEvent();
-
-
     void initWidget();
 
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
-    void init();
     void cleanup();
-private slots:
     void checkReason_Tab();
     void checkReason_ShiftTab();
     void checkReason_BackTab();
@@ -110,22 +95,16 @@ private slots:
     void checkReason_ActiveWindow();
 
 private:
-    QWidget* testFocusWidget;
+    QWidget* testFocusWidget = nullptr;
     FocusLineEdit* childFocusWidgetOne;
     FocusLineEdit* childFocusWidgetTwo;
 };
 
-tst_QFocusEvent::tst_QFocusEvent()
-{
-}
-
-tst_QFocusEvent::~tst_QFocusEvent()
-{
-
-}
-
 void tst_QFocusEvent::initTestCase()
 {
+    if (!QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::WindowActivation))
+        QSKIP("QWindow::requestActivate() is not supported on this platform.");
+
     testFocusWidget = new QWidget( 0 );
     childFocusWidgetOne = new FocusLineEdit( testFocusWidget );
     childFocusWidgetOne->setGeometry( 10, 10, 180, 20 );
@@ -145,10 +124,6 @@ void tst_QFocusEvent::initTestCase()
 void tst_QFocusEvent::cleanupTestCase()
 {
     delete testFocusWidget;
-}
-
-void tst_QFocusEvent::init()
-{
 }
 
 void tst_QFocusEvent::cleanup()
@@ -227,7 +202,6 @@ void tst_QFocusEvent::checkReason_BackTab()
 
     // Now test the backtab key
     QTest::keyClick( childFocusWidgetOne, Qt::Key_Backtab );
-    QTest::qWait(200);
 
     QTRY_VERIFY(childFocusWidgetOne->focusOutEventRecieved);
     QVERIFY(childFocusWidgetTwo->focusInEventRecieved);
@@ -248,7 +222,6 @@ void tst_QFocusEvent::checkReason_Popup()
     QMenu* popupMenu = new QMenu( testFocusWidget );
     popupMenu->addMenu( "Test" );
     popupMenu->popup( QPoint(0,0) );
-    QTest::qWait(50);
 
     QTRY_VERIFY(childFocusWidgetOne->focusOutEventLostFocus);
 
@@ -318,7 +291,7 @@ void tst_QFocusEvent::checkReason_Shortcut()
 void tst_QFocusEvent::checkReason_focusWidget()
 {
     // This test checks that a widget doesn't loose
-    // its focuswidget just because the focuswidget looses focus.
+    // its focuswidget just because the focuswidget loses focus.
     QWidget window1;
     QWidget frame1;
     QWidget frame2;
@@ -337,9 +310,10 @@ void tst_QFocusEvent::checkReason_focusWidget()
     frame1.setLayout(&leftLayout);
     frame2.setLayout(&rightLayout);
     window1.show();
+    QVERIFY(QTest::qWaitForWindowActive(&window1));
 
     edit1.setFocus();
-    QTest::qWait(100);
+    QTRY_VERIFY(edit1.hasFocus());
     edit2.setFocus();
 
     QVERIFY(frame1.focusWidget() != 0);
@@ -361,20 +335,29 @@ void tst_QFocusEvent::checkReason_ActiveWindow()
     QTRY_VERIFY(childFocusWidgetOne->focusOutEventRecieved);
     QVERIFY(childFocusWidgetOne->focusOutEventLostFocus);
 
+#if defined(Q_OS_WIN)
+    if (QSysInfo::kernelVersion() == "10.0.15063") {
+        // Activate window of testFocusWidget, focus in that window goes to childFocusWidgetOne
+        QWARN("Windows 10 Creators Update (10.0.15063) requires explicit activateWindow()");
+        testFocusWidget->activateWindow();
+    }
+#endif
+
     QVERIFY( !childFocusWidgetOne->focusInEventRecieved );
     QVERIFY( childFocusWidgetOne->focusOutEventRecieved );
     QCOMPARE( childFocusWidgetOne->focusOutEventReason, (int)Qt::ActiveWindowFocusReason);
     QVERIFY( !childFocusWidgetOne->hasFocus() );
 
     d->hide();
-    QTest::qWait(100);
 
-#if defined(Q_OS_IRIX)
-    QEXPECT_FAIL("", "IRIX requires explicit activateWindow(), so this test does not make any sense.", Abort);
-#endif
-#ifdef Q_OS_MAC
-    QEXPECT_FAIL("", "QTBUG-22815", Abort);
-#endif
+    if (!QGuiApplication::platformName().compare(QLatin1String("offscreen"), Qt::CaseInsensitive)
+        || !QGuiApplication::platformName().compare(QLatin1String("minimal"), Qt::CaseInsensitive)
+        || !QGuiApplication::platformName().compare(QLatin1String("winrt"), Qt::CaseInsensitive)) {
+        // Activate window of testFocusWidget, focus in that window goes to childFocusWidgetOne
+        QWARN("Platforms offscreen, minimal, and winrt require explicit activateWindow()");
+        testFocusWidget->activateWindow();
+    }
+
     QTRY_VERIFY(childFocusWidgetOne->focusInEventRecieved);
     QVERIFY(childFocusWidgetOne->focusInEventGotFocus);
 

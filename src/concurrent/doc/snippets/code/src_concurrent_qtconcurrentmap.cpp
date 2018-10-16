@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -94,7 +104,7 @@ QList<QImage> images = ...;
 
 QFuture<QImage> thumbnails = QtConcurrent::mapped(images.constBegin(), images.constEnd(), scaled);
 
-// map in-place only works on non-const iterators
+// Map in-place only works on non-const iterators.
 QFuture<void> future = QtConcurrent::map(images.begin(), images.end(), scale);
 
 QFuture<QImage> collage = QtConcurrent::mappedReduced(images.constBegin(), images.constEnd(), scaled, addToCollage);
@@ -104,7 +114,7 @@ QFuture<QImage> collage = QtConcurrent::mappedReduced(images.constBegin(), image
 //! [7]
 QList<QImage> images = ...;
 
-// each call blocks until the entire operation is finished
+// Each call blocks until the entire operation is finished.
 QList<QImage> future = QtConcurrent::blockingMapped(images, scaled);
 
 QtConcurrent::blockingMap(images, scale);
@@ -114,29 +124,29 @@ QImage collage = QtConcurrent::blockingMappedReduced(images, scaled, addToCollag
 
 
 //! [8]
-// squeeze all strings in a QStringList
+// Squeeze all strings in a QStringList.
 QStringList strings = ...;
 QFuture<void> squeezedStrings = QtConcurrent::map(strings, &QString::squeeze);
 
-// swap the rgb values of all pixels on a list of images
+// Swap the rgb values of all pixels on a list of images.
 QList<QImage> images = ...;
 QFuture<QImage> bgrImages = QtConcurrent::mapped(images, &QImage::rgbSwapped);
 
-// create a set of the lengths of all strings in a list
+// Create a set of the lengths of all strings in a list.
 QStringList strings = ...;
-QFuture<QSet<int> > wordLengths = QtConcurrent::mappedReduced(string, &QString::length, &QSet<int>::insert);
+QFuture<QSet<int> > wordLengths = QtConcurrent::mappedReduced(strings, &QString::length, &QSet<int>::insert);
 //! [8]
 
 
 //! [9]
-// can mix normal functions and member functions with QtConcurrent::mappedReduced()
+// Can mix normal functions and member functions with QtConcurrent::mappedReduced().
 
-// compute the average length of a list of strings
+// Compute the average length of a list of strings.
 extern void computeAverage(int &average, int length);
 QStringList strings = ...;
 QFuture<int> averageWordLength = QtConcurrent::mappedReduced(strings, &QString::length, computeAverage);
 
-// create a set of the color distribution of all images in a list
+// Create a set of the color distribution of all images in a list.
 extern int colorDistribution(const QImage &string);
 QList<QImage> images = ...;
 QFuture<QSet<int> > totalColorDistribution = QtConcurrent::mappedReduced(images, colorDistribution, QSet<int>::insert);
@@ -147,20 +157,25 @@ QFuture<QSet<int> > totalColorDistribution = QtConcurrent::mappedReduced(images,
 QImage QImage::scaledToWidth(int width, Qt::TransformationMode) const;
 //! [10]
 
-
 //! [11]
-boost::bind(&QImage::scaledToWidth, 100, Qt::SmoothTransformation)
+struct ImageTransform
+{
+    void operator()(QImage &result, const QImage &value);
+};
+
+QFuture<QImage> thumbNails =
+  QtConcurrent::mappedReduced<QImage>(images,
+                                      Scaled(100),
+                                      ImageTransform(),
+                                      QtConcurrent::SequentialReduce);
 //! [11]
-
-
-//! [12]
-QImage scaledToWith(const QImage &image)
-//! [12]
-
 
 //! [13]
 QList<QImage> images = ...;
-QFuture<QImage> thumbnails = QtConcurrent::mapped(images, boost::bind(&QImage::scaledToWidth, 100 Qt::SmoothTransformation));
+std::function<QImage(const QImage &)> scale = [](const QImage &img) {
+    return img.scaledToWidth(100, Qt::SmoothTransformation);
+};
+QFuture<QImage> thumbnails = QtConcurrent::mapped(images, scale);
 //! [13]
 
 //! [14]

@@ -1,40 +1,27 @@
 /*
 *********************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the autotests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +31,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'orderdialog.ui'
 **
-** Created: Fri Sep 4 10:17:14 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -54,14 +40,11 @@
 #define ORDERDIALOG_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
-#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QToolButton>
@@ -87,18 +70,18 @@ public:
     void setupUi(QDialog *qdesigner_internal__OrderDialog)
     {
         if (qdesigner_internal__OrderDialog->objectName().isEmpty())
-            qdesigner_internal__OrderDialog->setObjectName(QStringLiteral("qdesigner_internal__OrderDialog"));
+            qdesigner_internal__OrderDialog->setObjectName(QString::fromUtf8("qdesigner_internal__OrderDialog"));
         qdesigner_internal__OrderDialog->resize(467, 310);
         vboxLayout = new QVBoxLayout(qdesigner_internal__OrderDialog);
-        vboxLayout->setObjectName(QStringLiteral("vboxLayout"));
+        vboxLayout->setObjectName(QString::fromUtf8("vboxLayout"));
         groupBox = new QGroupBox(qdesigner_internal__OrderDialog);
-        groupBox->setObjectName(QStringLiteral("groupBox"));
+        groupBox->setObjectName(QString::fromUtf8("groupBox"));
         hboxLayout = new QHBoxLayout(groupBox);
         hboxLayout->setSpacing(6);
-        hboxLayout->setObjectName(QStringLiteral("hboxLayout"));
+        hboxLayout->setObjectName(QString::fromUtf8("hboxLayout"));
         hboxLayout->setContentsMargins(9, 9, 9, 9);
         pageList = new QListWidget(groupBox);
-        pageList->setObjectName(QStringLiteral("pageList"));
+        pageList->setObjectName(QString::fromUtf8("pageList"));
         pageList->setMinimumSize(QSize(344, 0));
         pageList->setDragDropMode(QAbstractItemView::InternalMove);
         pageList->setSelectionMode(QAbstractItemView::ContiguousSelection);
@@ -108,15 +91,15 @@ public:
 
         vboxLayout1 = new QVBoxLayout();
         vboxLayout1->setSpacing(6);
-        vboxLayout1->setObjectName(QStringLiteral("vboxLayout1"));
+        vboxLayout1->setObjectName(QString::fromUtf8("vboxLayout1"));
         vboxLayout1->setContentsMargins(0, 0, 0, 0);
         upButton = new QToolButton(groupBox);
-        upButton->setObjectName(QStringLiteral("upButton"));
+        upButton->setObjectName(QString::fromUtf8("upButton"));
 
         vboxLayout1->addWidget(upButton);
 
         downButton = new QToolButton(groupBox);
-        downButton->setObjectName(QStringLiteral("downButton"));
+        downButton->setObjectName(QString::fromUtf8("downButton"));
 
         vboxLayout1->addWidget(downButton);
 
@@ -131,7 +114,7 @@ public:
         vboxLayout->addWidget(groupBox);
 
         buttonBox = new QDialogButtonBox(qdesigner_internal__OrderDialog);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::Ok|QDialogButtonBox::Reset);
 
@@ -147,13 +130,13 @@ public:
 
     void retranslateUi(QDialog *qdesigner_internal__OrderDialog)
     {
-        qdesigner_internal__OrderDialog->setWindowTitle(QApplication::translate("qdesigner_internal::OrderDialog", "Change Page Order", 0));
-        groupBox->setTitle(QApplication::translate("qdesigner_internal::OrderDialog", "Page Order", 0));
+        qdesigner_internal__OrderDialog->setWindowTitle(QApplication::translate("qdesigner_internal::OrderDialog", "Change Page Order", nullptr));
+        groupBox->setTitle(QApplication::translate("qdesigner_internal::OrderDialog", "Page Order", nullptr));
 #ifndef QT_NO_TOOLTIP
-        upButton->setToolTip(QApplication::translate("qdesigner_internal::OrderDialog", "Move page up", 0));
+        upButton->setToolTip(QApplication::translate("qdesigner_internal::OrderDialog", "Move page up", nullptr));
 #endif // QT_NO_TOOLTIP
 #ifndef QT_NO_TOOLTIP
-        downButton->setToolTip(QApplication::translate("qdesigner_internal::OrderDialog", "Move page down", 0));
+        downButton->setToolTip(QApplication::translate("qdesigner_internal::OrderDialog", "Move page down", nullptr));
 #endif // QT_NO_TOOLTIP
     } // retranslateUi
 

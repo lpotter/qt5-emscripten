@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,15 +40,21 @@
 #ifndef QCOREAPPLICATION_H
 #define QCOREAPPLICATION_H
 
+#include <QtCore/qglobal.h>
+#include <QtCore/qstring.h>
+#ifndef QT_NO_QOBJECT
 #include <QtCore/qobject.h>
 #include <QtCore/qcoreevent.h>
 #include <QtCore/qeventloop.h>
+#else
+#include <QtCore/qscopedpointer.h>
+#endif
 
+#ifndef QT_NO_QOBJECT
 #if defined(Q_OS_WIN) && !defined(tagMSG)
 typedef struct tagMSG MSG;
 #endif
-
-QT_BEGIN_HEADER
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -65,14 +69,19 @@ class QAbstractNativeEventFilter;
 
 #define qApp QCoreApplication::instance()
 
-class Q_CORE_EXPORT QCoreApplication : public QObject
+class Q_CORE_EXPORT QCoreApplication
+#ifndef QT_NO_QOBJECT
+    : public QObject
+#endif
 {
+#ifndef QT_NO_QOBJECT
     Q_OBJECT
-    Q_PROPERTY(QString applicationName READ applicationName WRITE setApplicationName)
-    Q_PROPERTY(QString applicationVersion READ applicationVersion WRITE setApplicationVersion)
-    Q_PROPERTY(QString organizationName READ organizationName WRITE setOrganizationName)
-    Q_PROPERTY(QString organizationDomain READ organizationDomain WRITE setOrganizationDomain)
+    Q_PROPERTY(QString applicationName READ applicationName WRITE setApplicationName NOTIFY applicationNameChanged)
+    Q_PROPERTY(QString applicationVersion READ applicationVersion WRITE setApplicationVersion NOTIFY applicationVersionChanged)
+    Q_PROPERTY(QString organizationName READ organizationName WRITE setOrganizationName NOTIFY organizationNameChanged)
+    Q_PROPERTY(QString organizationDomain READ organizationDomain WRITE setOrganizationDomain NOTIFY organizationDomainChanged)
     Q_PROPERTY(bool quitLockEnabled READ isQuitLockEnabled WRITE setQuitLockEnabled)
+#endif
 
     Q_DECLARE_PRIVATE(QCoreApplication)
 public:
@@ -101,8 +110,12 @@ public:
     static void setApplicationVersion(const QString &version);
     static QString applicationVersion();
 
+    static void setSetuidAllowed(bool allow);
+    static bool isSetuidAllowed();
+
     static QCoreApplication *instance() { return self; }
 
+#ifndef QT_NO_QOBJECT
     static int exec();
     static void processEvents(QEventLoop::ProcessEventsFlags flags = QEventLoop::AllEvents);
     static void processEvents(QEventLoop::ProcessEventsFlags flags, int maxtime);
@@ -110,9 +123,11 @@ public:
 
     static bool sendEvent(QObject *receiver, QEvent *event);
     static void postEvent(QObject *receiver, QEvent *event, int priority = Qt::NormalEventPriority);
-    static void sendPostedEvents(QObject *receiver = 0, int event_type = 0);
+    static void sendPostedEvents(QObject *receiver = nullptr, int event_type = 0);
     static void removePostedEvents(QObject *receiver, int eventType = 0);
-    static bool hasPendingEvents();
+#if QT_DEPRECATED_SINCE(5, 3)
+    QT_DEPRECATED static bool hasPendingEvents();
+#endif
     static QAbstractEventDispatcher *eventDispatcher();
     static void setEventDispatcher(QAbstractEventDispatcher *eventDispatcher);
 
@@ -120,17 +135,18 @@ public:
 
     static bool startingUp();
     static bool closingDown();
+#endif
 
     static QString applicationDirPath();
     static QString applicationFilePath();
-    static qint64 applicationPid();
+    static qint64 applicationPid() Q_DECL_CONST_FUNCTION;
 
-#ifndef QT_NO_LIBRARY
+#if QT_CONFIG(library)
     static void setLibraryPaths(const QStringList &);
     static QStringList libraryPaths();
     static void addLibraryPath(const QString &);
     static void removeLibraryPath(const QString &);
-#endif // QT_NO_LIBRARY
+#endif // QT_CONFIG(library)
 
 #ifndef QT_NO_TRANSLATION
     static bool installTranslator(QTranslator * messageFile);
@@ -139,7 +155,7 @@ public:
 
     static QString translate(const char * context,
                              const char * key,
-                             const char * disambiguation = 0,
+                             const char * disambiguation = nullptr,
                              int n = -1);
 #if QT_DEPRECATED_SINCE(5, 0)
     enum Encoding { UnicodeUTF8, Latin1, DefaultCodec = UnicodeUTF8, CodecForTr = UnicodeUTF8 };
@@ -148,7 +164,10 @@ public:
         { return translate(context, key, disambiguation, n); }
 #endif
 
-    static void flush();
+#ifndef QT_NO_QOBJECT
+#  if QT_DEPRECATED_SINCE(5, 9)
+    QT_DEPRECATED static void flush();
+#  endif
 
     void installNativeEventFilter(QAbstractNativeEventFilter *filterObj);
     void removeNativeEventFilter(QAbstractNativeEventFilter *filterObj);
@@ -160,79 +179,92 @@ public Q_SLOTS:
     static void quit();
 
 Q_SIGNALS:
-    void aboutToQuit(
-#if !defined(qdoc)
-    QPrivateSignal
-#endif
-    );
+    void aboutToQuit(QPrivateSignal);
+
+    void organizationNameChanged();
+    void organizationDomainChanged();
+    void applicationNameChanged();
+    void applicationVersionChanged();
 
 protected:
-    bool event(QEvent *);
+    bool event(QEvent *) override;
 
     virtual bool compressEvent(QEvent *, QObject *receiver, QPostEventList *);
+#endif // QT_NO_QOBJECT
 
 protected:
     QCoreApplication(QCoreApplicationPrivate &p);
 
-private:
-    static bool sendSpontaneousEvent(QObject *receiver, QEvent *event);
-    bool notifyInternal(QObject *receiver, QEvent *event);
+#ifdef QT_NO_QOBJECT
+    QScopedPointer<QCoreApplicationPrivate> d_ptr;
+#endif
 
-    void init();
+private:
+#ifndef QT_NO_QOBJECT
+    static bool sendSpontaneousEvent(QObject *receiver, QEvent *event);
+#  if QT_DEPRECATED_SINCE(5,6)
+    QT_DEPRECATED bool notifyInternal(QObject *receiver, QEvent *event); // ### Qt6 BIC: remove me
+#  endif
+    static bool notifyInternal2(QObject *receiver, QEvent *);
+    static bool forwardEvent(QObject *receiver, QEvent *event, QEvent *originatingEvent = nullptr);
+#endif
 
     static QCoreApplication *self;
 
     Q_DISABLE_COPY(QCoreApplication)
 
-    friend class QEventDispatcherUNIXPrivate;
     friend class QApplication;
     friend class QApplicationPrivate;
     friend class QGuiApplication;
     friend class QGuiApplicationPrivate;
-    friend class QETWidget;
     friend class QWidget;
     friend class QWidgetWindow;
     friend class QWidgetPrivate;
+#ifndef QT_NO_QOBJECT
+    friend class QEventDispatcherUNIXPrivate;
     friend class QCocoaEventDispatcherPrivate;
     friend bool qt_sendSpontaneousEvent(QObject*, QEvent*);
+#endif
     friend Q_CORE_EXPORT QString qAppName();
     friend class QClassFactory;
 };
 
-inline bool QCoreApplication::sendEvent(QObject *receiver, QEvent *event)
-{  if (event) event->spont = false; return self ? self->notifyInternal(receiver, event) : false; }
-
-inline bool QCoreApplication::sendSpontaneousEvent(QObject *receiver, QEvent *event)
-{ if (event) event->spont = true; return self ? self->notifyInternal(receiver, event) : false; }
-
-#ifdef QT_NO_TRANSLATION
-inline QString QCoreApplication::translate(const char *, const char *sourceText, const char *, int)
-{
-    return QString::fromUtf8(sourceText);
-}
+#ifdef QT_NO_DEPRECATED
+#  define QT_DECLARE_DEPRECATED_TR_FUNCTIONS(context)
+#else
+#  define QT_DECLARE_DEPRECATED_TR_FUNCTIONS(context) \
+    QT_DEPRECATED static inline QString trUtf8(const char *sourceText, const char *disambiguation = nullptr, int n = -1) \
+        { return QCoreApplication::translate(#context, sourceText, disambiguation, n); }
 #endif
 
 #define Q_DECLARE_TR_FUNCTIONS(context) \
 public: \
-    static inline QString tr(const char *sourceText, const char *disambiguation = 0, int n = -1) \
+    static inline QString tr(const char *sourceText, const char *disambiguation = nullptr, int n = -1) \
         { return QCoreApplication::translate(#context, sourceText, disambiguation, n); } \
-    QT_DEPRECATED static inline QString trUtf8(const char *sourceText, const char *disambiguation = 0, int n = -1) \
-        { return QCoreApplication::translate(#context, sourceText, disambiguation, n); } \
+    QT_DECLARE_DEPRECATED_TR_FUNCTIONS(context) \
 private:
 
+typedef void (*QtStartUpFunction)();
 typedef void (*QtCleanUpFunction)();
 
+Q_CORE_EXPORT void qAddPreRoutine(QtStartUpFunction);
 Q_CORE_EXPORT void qAddPostRoutine(QtCleanUpFunction);
 Q_CORE_EXPORT void qRemovePostRoutine(QtCleanUpFunction);
 Q_CORE_EXPORT QString qAppName();                // get application name
 
+#define Q_COREAPP_STARTUP_FUNCTION(AFUNC) \
+    static void AFUNC ## _ctor_function() {  \
+        qAddPreRoutine(AFUNC);        \
+    }                                 \
+    Q_CONSTRUCTOR_FUNCTION(AFUNC ## _ctor_function)
+
+#ifndef QT_NO_QOBJECT
 #if defined(Q_OS_WIN) && !defined(QT_NO_DEBUG_STREAM)
 Q_CORE_EXPORT QString decodeMSG(const MSG &);
 Q_CORE_EXPORT QDebug operator<<(QDebug, const MSG &);
 #endif
+#endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QCOREAPPLICATION_H

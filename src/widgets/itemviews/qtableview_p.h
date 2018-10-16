@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtCore/QList>
 #include <QtCore/QLinkedList>
 #include <QtCore/QMap>
@@ -60,7 +59,7 @@
 #include <QtCore/QDebug>
 #include "private/qabstractitemview_p.h"
 
-#ifndef QT_NO_TABLEVIEW
+QT_REQUIRE_CONFIG(tableview);
 
 QT_BEGIN_NAMESPACE
 
@@ -143,14 +142,12 @@ public:
           visualCursor(QPoint())
  {
     wrapItemText = true;
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     overwrite = true;
 #endif
  }
     void init();
     void trimHiddenSelections(QItemSelectionRange *range) const;
-
-    QStyleOptionViewItem viewOptions() const;
 
     inline bool isHidden(int row, int col) const {
         return verticalHeader->isSectionHidden(row)
@@ -170,8 +167,9 @@ public:
     }
 
     inline int accessibleTable2Index(const QModelIndex &index) const {
-        return (index.row() + (horizontalHeader ? 1 : 0)) * (index.model()->columnCount() + (verticalHeader ? 1 : 0))
-            + index.column() + (verticalHeader ? 1 : 0) + 1;
+        const int vHeader = verticalHeader ? 1 : 0;
+        return (index.row() + (horizontalHeader ? 1 : 0)) * (index.model()->columnCount() + vHeader)
+            + index.column() + vHeader;
     }
 
     int sectionSpanEndLogical(const QHeaderView *header, int logical, int span) const;
@@ -181,6 +179,8 @@ public:
                           const QStyleOptionViewItem &option, QBitArray *drawn,
                           int firstVisualRow, int lastVisualRow, int firstVisualColumn, int lastVisualColumn);
     void drawCell(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index);
+    int widthHintForIndex(const QModelIndex &index, int hint, const QStyleOptionViewItem &option) const;
+    int heightHintForIndex(const QModelIndex &index, int hint, QStyleOptionViewItem &option) const;
 
     bool showGrid;
     Qt::PenStyle gridStyle;
@@ -188,11 +188,13 @@ public:
     int columnSectionAnchor;
     int columnResizeTimerID;
     int rowResizeTimerID;
-    QList<int> columnsToUpdate;
-    QList<int> rowsToUpdate;
+    QVector<int> columnsToUpdate;
+    QVector<int> rowsToUpdate;
     QHeaderView *horizontalHeader;
     QHeaderView *verticalHeader;
+#if QT_CONFIG(abstractbutton)
     QWidget *cornerWidget;
+#endif
     bool sortingEnabled;
     bool geometryRecursionBlock;
     QPoint visualCursor;  // (Row,column) cell coordinates to track through span navigation.
@@ -258,7 +260,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TABLEVIEW
 
 #endif // QTABLEVIEW_P_H

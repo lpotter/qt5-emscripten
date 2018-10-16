@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,11 +62,11 @@ private:
 public:
 
     BuildsMetaMakefileGenerator(QMakeProject *p, const QString &n, bool op) : MetaMakefileGenerator(p, n, op), init_flag(false) { }
-    virtual ~BuildsMetaMakefileGenerator() { clearBuilds(); }
+    ~BuildsMetaMakefileGenerator() { clearBuilds(); }
 
-    virtual bool init();
-    virtual int type() const { return BUILDSMETATYPE; }
-    virtual bool write(const QString &);
+    bool init() override;
+    int type() const override { return BUILDSMETATYPE; }
+    bool write() override;
 };
 
 void
@@ -149,9 +136,9 @@ BuildsMetaMakefileGenerator::init()
 }
 
 bool
-BuildsMetaMakefileGenerator::write(const QString &oldpwd)
+BuildsMetaMakefileGenerator::write()
 {
-    Build *glue = 0;
+    Build *glue = nullptr;
     if(!makefiles.isEmpty() && !makefiles.first()->build.isNull()) {
         glue = new Build;
         glue->name = name;
@@ -181,7 +168,6 @@ BuildsMetaMakefileGenerator::write(const QString &oldpwd)
                     if(Option::output.fileName().isEmpty() &&
                        Option::qmake_mode == Option::QMAKE_GENERATE_MAKEFILE)
                         Option::output.setFileName(project->first("QMAKE_MAKEFILE").toQString());
-                    Option::output_dir = oldpwd;
                     QString build_name = build->name;
                     if(!build->build.isEmpty()) {
                         if(!build_name.isEmpty())
@@ -239,12 +225,10 @@ MakefileGenerator
         build_proj->setExtraVars(basevars);
         build_proj->setExtraConfigs(basecfgs);
 
-        build_proj->read(project->projectFile());
-
-        //done
-        return createMakefileGenerator(build_proj);
+        if (build_proj->read(project->projectFile()))
+            return createMakefileGenerator(build_proj);
     }
-    return 0;
+    return nullptr;
 }
 
 class SubdirsMetaMakefileGenerator : public MetaMakefileGenerator
@@ -252,7 +236,7 @@ class SubdirsMetaMakefileGenerator : public MetaMakefileGenerator
 protected:
     bool init_flag;
     struct Subdir {
-        Subdir() : makefile(0), indent(0) { }
+        Subdir() : makefile(nullptr), indent(0) { }
         ~Subdir() { delete makefile; }
         QString input_dir;
         QString output_dir, output_file;
@@ -264,11 +248,11 @@ protected:
 
 public:
     SubdirsMetaMakefileGenerator(QMakeProject *p, const QString &n, bool op) : MetaMakefileGenerator(p, n, op), init_flag(false) { }
-    virtual ~SubdirsMetaMakefileGenerator();
+    ~SubdirsMetaMakefileGenerator();
 
-    virtual bool init();
-    virtual int type() const { return SUBDIRSMETATYPE; }
-    virtual bool write(const QString &);
+    bool init() override;
+    int type() const override { return SUBDIRSMETATYPE; }
+    bool write() override;
 };
 
 bool
@@ -349,10 +333,10 @@ SubdirsMetaMakefileGenerator::init()
             } else {
                 const QString output_name = Option::output.fileName();
                 Option::output.setFileName(sub->output_file);
-                hasError |= !sub->makefile->write(sub->output_dir);
+                hasError |= !sub->makefile->write();
                 delete sub;
                 qmakeClearCaches();
-                sub = 0;
+                sub = nullptr;
                 Option::output.setFileName(output_name);
             }
             Option::output_dir = old_output_dir;
@@ -378,7 +362,7 @@ SubdirsMetaMakefileGenerator::init()
 }
 
 bool
-SubdirsMetaMakefileGenerator::write(const QString &oldpwd)
+SubdirsMetaMakefileGenerator::write()
 {
     bool ret = true;
     const QString &pwd = qmake_getpwd();
@@ -386,21 +370,16 @@ SubdirsMetaMakefileGenerator::write(const QString &oldpwd)
     const QString &output_name = Option::output.fileName();
     for(int i = 0; ret && i < subs.count(); i++) {
         const Subdir *sub = subs.at(i);
-        qmake_setpwd(subs.at(i)->input_dir);
-        Option::output_dir = QFileInfo(subs.at(i)->output_dir).absoluteFilePath();
-        if(Option::output_dir.at(Option::output_dir.length()-1) != QLatin1Char('/'))
-            Option::output_dir += QLatin1Char('/');
-        Option::output.setFileName(subs.at(i)->output_file);
+        qmake_setpwd(sub->input_dir);
+        Option::output_dir = QFileInfo(sub->output_dir).absoluteFilePath();
+        Option::output.setFileName(sub->output_file);
         if(i != subs.count()-1) {
             for (int ind = 0; ind < sub->indent; ++ind)
                 printf(" ");
             printf("Writing %s\n", QDir::cleanPath(Option::output_dir+"/"+
                                                    Option::output.fileName()).toLatin1().constData());
         }
-        QString writepwd = Option::fixPathToLocalOS(qmake_getpwd());
-        if(!writepwd.startsWith(Option::fixPathToLocalOS(oldpwd)))
-            writepwd = oldpwd;
-        if(!(ret = subs.at(i)->makefile->write(writepwd)))
+        if (!(ret = sub->makefile->write()))
             break;
         //restore because I'm paranoid
         qmake_setpwd(pwd);
@@ -426,7 +405,6 @@ QT_BEGIN_INCLUDE_NAMESPACE
 #include "msvc_nmake.h"
 #include "msvc_vcproj.h"
 #include "msvc_vcxproj.h"
-#include "gbuild.h"
 QT_END_INCLUDE_NAMESPACE
 
 MakefileGenerator *
@@ -434,7 +412,7 @@ MetaMakefileGenerator::createMakefileGenerator(QMakeProject *proj, bool noIO)
 {
     Option::postProcessProject(proj);
 
-    MakefileGenerator *mkfile = NULL;
+    MakefileGenerator *mkfile = nullptr;
     if(Option::qmake_mode == Option::QMAKE_GENERATE_PROJECT) {
         mkfile = new ProjectGenerator;
         mkfile->setProjectFile(proj);
@@ -450,7 +428,11 @@ MetaMakefileGenerator::createMakefileGenerator(QMakeProject *proj, bool noIO)
     } else if(gen == "MINGW") {
         mkfile = new MingwMakefileGenerator;
     } else if(gen == "PROJECTBUILDER" || gen == "XCODE") {
+#ifdef Q_CC_MSVC
+        fprintf(stderr, "Generating Xcode projects is not supported with an MSVC build of Qt.\n");
+#else
         mkfile = new ProjectBuilderMakefileGenerator;
+#endif
     } else if(gen == "MSVC.NET") {
         if (proj->first("TEMPLATE").startsWith("vc"))
             mkfile = new VcprojGenerator;
@@ -462,8 +444,6 @@ MetaMakefileGenerator::createMakefileGenerator(QMakeProject *proj, bool noIO)
             mkfile = new VcxprojGenerator;
         else
             mkfile = new NmakeMakefileGenerator;
-    } else if(gen == "GBUILD") {
-        mkfile = new GBuildMakefileGenerator;
     } else {
         fprintf(stderr, "Unknown generator specified: %s\n", gen.toLatin1().constData());
     }
@@ -479,7 +459,7 @@ MetaMakefileGenerator::createMetaGenerator(QMakeProject *proj, const QString &na
 {
     Option::postProcessProject(proj);
 
-    MetaMakefileGenerator *ret = 0;
+    MetaMakefileGenerator *ret = nullptr;
     if ((Option::qmake_mode == Option::QMAKE_GENERATE_MAKEFILE ||
          Option::qmake_mode == Option::QMAKE_GENERATE_PRL)) {
         if (proj->first("TEMPLATE").endsWith("subdirs"))

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +50,8 @@
 //
 // We mean it.
 //
+
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include <QtNetwork/qnetworkrequest.h>
 #include <QtNetwork/qnetworkreply.h>
 #include <QtNetwork/qabstractsocket.h>
@@ -62,28 +62,28 @@
 #include <qnetworkproxy.h>
 #include <qbuffer.h>
 #include <qtimer.h>
+#include <qsharedpointer.h>
 
 #include <private/qhttpnetworkheader_p.h>
 #include <private/qhttpnetworkrequest_p.h>
 #include <private/qhttpnetworkreply_p.h>
+#include <private/http2protocol_p.h>
 
 #include <private/qhttpnetworkconnectionchannel_p.h>
 
-#ifndef QT_NO_HTTP
-
-#ifndef QT_NO_SSL
-#    include <QtNetwork/qsslsocket.h>
-#    include <QtNetwork/qsslerror.h>
-#else
-#   include <QtNetwork/qtcpsocket.h>
-#endif
+QT_REQUIRE_CONFIG(http);
 
 QT_BEGIN_NAMESPACE
 
 class QHttpNetworkRequest;
 class QHttpNetworkReply;
+class QHttpThreadDelegate;
 class QByteArray;
 class QHostInfo;
+#ifndef QT_NO_SSL
+class QSslConfiguration;
+class QSslContext;
+#endif // !QT_NO_SSL
 
 class QHttpNetworkConnectionPrivate;
 class Q_AUTOTEST_EXPORT QHttpNetworkConnection : public QObject
@@ -91,12 +91,29 @@ class Q_AUTOTEST_EXPORT QHttpNetworkConnection : public QObject
     Q_OBJECT
 public:
 
+    enum ConnectionType {
+        ConnectionTypeHTTP,
+        ConnectionTypeSPDY,
+        ConnectionTypeHTTP2,
+        ConnectionTypeHTTP2Direct
+    };
+
 #ifndef QT_NO_BEARERMANAGEMENT
-    explicit QHttpNetworkConnection(const QString &hostName, quint16 port = 80, bool encrypt = false, QObject *parent = 0, QSharedPointer<QNetworkSession> networkSession = QSharedPointer<QNetworkSession>());
-    QHttpNetworkConnection(quint16 channelCount, const QString &hostName, quint16 port = 80, bool encrypt = false, QObject *parent = 0, QSharedPointer<QNetworkSession> networkSession = QSharedPointer<QNetworkSession>());
+    explicit QHttpNetworkConnection(const QString &hostName, quint16 port = 80, bool encrypt = false,
+                                    ConnectionType connectionType = ConnectionTypeHTTP,
+                                    QObject *parent = 0, QSharedPointer<QNetworkSession> networkSession
+                                    = QSharedPointer<QNetworkSession>());
+    QHttpNetworkConnection(quint16 channelCount, const QString &hostName, quint16 port = 80,
+                           bool encrypt = false, QObject *parent = 0,
+                           QSharedPointer<QNetworkSession> networkSession = QSharedPointer<QNetworkSession>(),
+                           ConnectionType connectionType = ConnectionTypeHTTP);
 #else
-    explicit QHttpNetworkConnection(const QString &hostName, quint16 port = 80, bool encrypt = false, QObject *parent = 0);
-    QHttpNetworkConnection(quint16 channelCount, const QString &hostName, quint16 port = 80, bool encrypt = false, QObject *parent = 0);
+    explicit QHttpNetworkConnection(const QString &hostName, quint16 port = 80, bool encrypt = false,
+                                    ConnectionType connectionType = ConnectionTypeHTTP,
+                                    QObject *parent = 0);
+    QHttpNetworkConnection(quint16 channelCount, const QString &hostName, quint16 port = 80,
+                           bool encrypt = false, QObject *parent = 0,
+                           ConnectionType connectionType = ConnectionTypeHTTP);
 #endif
     ~QHttpNetworkConnection();
 
@@ -107,6 +124,7 @@ public:
 
     //add a new HTTP request through this connection
     QHttpNetworkReply* sendRequest(const QHttpNetworkRequest &request);
+    void fillHttp2Queue();
 
 #ifndef QT_NO_NETWORKPROXY
     //set the proxy for this connection
@@ -120,18 +138,32 @@ public:
 
     QHttpNetworkConnectionChannel *channels() const;
 
+    ConnectionType connectionType();
+    void setConnectionType(ConnectionType type);
+
+    Http2::ProtocolParameters http2Parameters() const;
+    void setHttp2Parameters(const Http2::ProtocolParameters &params);
+
 #ifndef QT_NO_SSL
     void setSslConfiguration(const QSslConfiguration &config);
     void ignoreSslErrors(int channel = -1);
     void ignoreSslErrors(const QList<QSslError> &errors, int channel = -1);
+    QSharedPointer<QSslContext> sslContext();
+    void setSslContext(QSharedPointer<QSslContext> context);
 #endif
+
+    void preConnectFinished();
 
 private:
     Q_DECLARE_PRIVATE(QHttpNetworkConnection)
     Q_DISABLE_COPY(QHttpNetworkConnection)
+    friend class QHttpThreadDelegate;
     friend class QHttpNetworkReply;
     friend class QHttpNetworkReplyPrivate;
     friend class QHttpNetworkConnectionChannel;
+    friend class QHttp2ProtocolHandler;
+    friend class QHttpProtocolHandler;
+    friend class QSpdyProtocolHandler;
 
     Q_PRIVATE_SLOT(d_func(), void _q_startNextRequest())
     Q_PRIVATE_SLOT(d_func(), void _q_hostLookupFinished(QHostInfo))
@@ -147,7 +179,7 @@ class QHttpNetworkConnectionPrivate : public QObjectPrivate
 {
     Q_DECLARE_PUBLIC(QHttpNetworkConnection)
 public:
-    static const int defaultChannelCount;
+    static const int defaultHttpChannelCount;
     static const int defaultPipelineLength;
     static const int defaultRePipelineLength;
 
@@ -158,13 +190,16 @@ public:
 
     enum NetworkLayerPreferenceState {
         Unknown,
-        InProgress,
+        HostLookupPending,
         IPv4,
-        IPv6
+        IPv6,
+        IPv4or6
     };
 
-    QHttpNetworkConnectionPrivate(const QString &hostName, quint16 port, bool encrypt);
-    QHttpNetworkConnectionPrivate(quint16 channelCount, const QString &hostName, quint16 port, bool encrypt);
+    QHttpNetworkConnectionPrivate(const QString &hostName, quint16 port, bool encrypt,
+                                  QHttpNetworkConnection::ConnectionType type);
+    QHttpNetworkConnectionPrivate(quint16 channelCount, const QString &hostName, quint16 port, bool encrypt,
+                                  QHttpNetworkConnection::ConnectionType type);
     ~QHttpNetworkConnectionPrivate();
     void init();
 
@@ -179,9 +214,11 @@ public:
 
     QHttpNetworkReply *queueRequest(const QHttpNetworkRequest &request);
     void requeueRequest(const HttpMessagePair &pair); // e.g. after pipeline broke
+    void fillHttp2Queue();
     bool dequeueRequest(QAbstractSocket *socket);
     void prepareRequest(HttpMessagePair &request);
-    QHttpNetworkRequest predictNextRequest();
+    void updateChannel(int i, const HttpMessagePair &messagePair);
+    QHttpNetworkRequest predictNextRequest() const;
 
     void fillPipeline(QAbstractSocket *socket);
     bool fillPipeline(QList<HttpMessagePair> &queue, QHttpNetworkConnectionChannel &channel);
@@ -198,7 +235,7 @@ public:
     // private slots
     void _q_startNextRequest(); // send the next request from the queue
 
-    void _q_hostLookupFinished(QHostInfo info);
+    void _q_hostLookupFinished(const QHostInfo &info);
     void _q_connectDelayedChannel();
 
     void createAuthorization(QAbstractSocket *socket, QHttpNetworkRequest &request);
@@ -213,6 +250,9 @@ public:
     bool encrypt;
     bool delayIpv4;
 
+    // Number of channels we are trying to use at the moment:
+    int activeChannelCount;
+    // The total number of channels we reserved:
     const int channelCount;
     QTimer delayedConnectionTimer;
     QHttpNetworkConnectionChannel *channels; // parallel connections to the server
@@ -224,6 +264,7 @@ public:
 
     void emitReplyError(QAbstractSocket *socket, QHttpNetworkReply *reply, QNetworkReply::NetworkError errorCode);
     bool handleAuthenticateChallenge(QAbstractSocket *socket, QHttpNetworkReply *reply, bool isProxy, bool &resend);
+    QUrl parseRedirectResponse(QAbstractSocket *socket, QHttpNetworkReply *reply);
 
 #ifndef QT_NO_NETWORKPROXY
     QNetworkProxy networkProxy;
@@ -234,9 +275,19 @@ public:
     QList<HttpMessagePair> highPriorityQueue;
     QList<HttpMessagePair> lowPriorityQueue;
 
+    int preConnectRequests;
+
+    QHttpNetworkConnection::ConnectionType connectionType;
+
+#ifndef QT_NO_SSL
+    QSharedPointer<QSslContext> sslContext;
+#endif
+
 #ifndef QT_NO_BEARERMANAGEMENT
     QSharedPointer<QNetworkSession> networkSession;
 #endif
+
+    Http2::ProtocolParameters http2Parameters;
 
     friend class QHttpNetworkConnectionChannel;
 };
@@ -244,7 +295,5 @@ public:
 
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_HTTP
 
 #endif

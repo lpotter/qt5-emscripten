@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,8 +30,6 @@
 #include <QtCore>
 #include <QtGui>
 #include <QtTest/QtTest>
-
-#include "../../../qtest-config.h"
 
 Q_DECLARE_METATYPE(QMetaType::Type)
 
@@ -66,7 +51,7 @@ private slots:
     void constructCopy();
 };
 
-#define FOR_EACH_GUI_METATYPE(F) \
+#define FOR_EACH_GUI_METATYPE_BASE(F) \
     F(QFont, QFont) \
     F(QPixmap, QPixmap) \
     F(QBrush, QBrush) \
@@ -76,7 +61,6 @@ private slots:
     F(QPolygon, QPolygon) \
     F(QRegion, QRegion) \
     F(QBitmap, QBitmap) \
-    F(QCursor, QCursor) \
     F(QKeySequence, QKeySequence) \
     F(QPen, QPen) \
     F(QTextLength, QTextLength) \
@@ -88,6 +72,16 @@ private slots:
     F(QVector3D, QVector3D) \
     F(QVector4D, QVector4D) \
     F(QQuaternion, QQuaternion)
+
+#ifndef QT_NO_CURSOR
+#   define FOR_EACH_GUI_METATYPE(F) \
+        FOR_EACH_GUI_METATYPE_BASE(F) \
+        F(QCursor, QCursor)
+#else // !QT_NO_CURSOR
+#   define FOR_EACH_GUI_METATYPE(F) \
+        FOR_EACH_GUI_METATYPE_BASE(F)
+#endif // !QT_NO_CURSOR
+
 
 namespace {
     template <typename T>
@@ -135,7 +129,7 @@ template<> struct TypeComparator<QMetaType::QBitmap>
     { return v1.size() == v2.size(); }
 };
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 template<> struct TypeComparator<QMetaType::QCursor>
 {
     static bool equal(const QCursor &v1, const QCursor &v2)
@@ -180,7 +174,7 @@ template<> struct TestValueFactory<QMetaType::QRegion> {
 template<> struct TestValueFactory<QMetaType::QBitmap> {
     static QBitmap *create() { return new QBitmap(16, 32); }
 };
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 template<> struct TestValueFactory<QMetaType::QCursor> {
     static QCursor *create() { return new QCursor(Qt::WaitCursor); }
 };
@@ -345,11 +339,11 @@ struct TypeAlignment
 void tst_QGuiMetaType::flags_data()
 {
     QTest::addColumn<int>("type");
-    QTest::addColumn<bool>("isMovable");
+    QTest::addColumn<bool>("isRelocatable");
     QTest::addColumn<bool>("isComplex");
 
 #define ADD_METATYPE_TEST_ROW(MetaTypeName, MetaTypeId, RealType) \
-    QTest::newRow(#RealType) << MetaTypeId << bool(!QTypeInfo<RealType>::isStatic) << bool(QTypeInfo<RealType>::isComplex);
+    QTest::newRow(#RealType) << MetaTypeId << bool(QTypeInfoQuery<RealType>::isRelocatable) << bool(QTypeInfoQuery<RealType>::isComplex);
 QT_FOR_EACH_STATIC_GUI_CLASS(ADD_METATYPE_TEST_ROW)
 #undef ADD_METATYPE_TEST_ROW
 }
@@ -357,12 +351,12 @@ QT_FOR_EACH_STATIC_GUI_CLASS(ADD_METATYPE_TEST_ROW)
 void tst_QGuiMetaType::flags()
 {
     QFETCH(int, type);
-    QFETCH(bool, isMovable);
+    QFETCH(bool, isRelocatable);
     QFETCH(bool, isComplex);
 
     QCOMPARE(bool(QMetaType::typeFlags(type) & QMetaType::NeedsConstruction), isComplex);
     QCOMPARE(bool(QMetaType::typeFlags(type) & QMetaType::NeedsDestruction), isComplex);
-    QCOMPARE(bool(QMetaType::typeFlags(type) & QMetaType::MovableType), isMovable);
+    QCOMPARE(bool(QMetaType::typeFlags(type) & QMetaType::MovableType), isRelocatable);
 }
 
 

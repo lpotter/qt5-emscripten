@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -58,6 +45,7 @@ private slots:
     void destructor();
     void assignment_operators();
     void equality_operators();
+    void swap();
     void isNull();
     void dereference_operators();
     void disconnect();
@@ -65,6 +53,8 @@ private slots:
     void threadSafety();
 
     void qvariantCast();
+    void constPointer();
+    void constQPointer();
 };
 
 void tst_QPointer::constructors()
@@ -174,6 +164,22 @@ void tst_QPointer::equality_operators()
     QVERIFY(p2 != widget);
     QVERIFY(widget != p2);
 #endif
+}
+
+void tst_QPointer::swap()
+{
+    QPointer<QObject> c1, c2;
+    {
+        QObject o;
+        c1 = &o;
+        QVERIFY(c2.isNull());
+        QCOMPARE(c1.data(), &o);
+        c1.swap(c2);
+        QVERIFY(c1.isNull());
+        QCOMPARE(c2.data(), &o);
+    }
+    QVERIFY(c1.isNull());
+    QVERIFY(c2.isNull());
 }
 
 void tst_QPointer::isNull()
@@ -352,7 +358,8 @@ void tst_QPointer::threadSafety()
 
 void tst_QPointer::qvariantCast()
 {
-    QPointer<QFile> tracking = new QFile;
+    QFile file;
+    QPointer<QFile> tracking = &file;
     tracking->setObjectName("A test name");
     QVariant v = QVariant::fromValue(tracking);
 
@@ -384,6 +391,27 @@ void tst_QPointer::qvariantCast()
 //     QPointer<int> sop = qPointerFromVariant<int>(v);
 }
 
+void tst_QPointer::constPointer()
+{
+    // Compile-time test that QPointer<const T> works.
+    QPointer<const QFile> fp = new QFile;
+    delete fp.data();
+}
+
+void tst_QPointer::constQPointer()
+{
+    // Check that const QPointers work. It's a bit weird to mark a pointer
+    // const if its value can change, but the shallow-const principle in C/C++
+    // allows this, and people use it, so document it with a test.
+    //
+    // It's unlikely that this test will fail in and out of itself, but it
+    // presents the use-case to static and dynamic checkers that can raise
+    // a warning (hopefully) should this become an issue.
+    QObject *o = new QObject(this);
+    const QPointer<QObject> p = o;
+    delete o;
+    QVERIFY(!p);
+}
 
 
 QTEST_MAIN(tst_QPointer)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,7 +28,7 @@
 /*!
     \namespace Qt
     \inmodule QtCore
-    \target Qt Namespace
+    \keyword Qt Namespace
 
     \brief The Qt namespace contains miscellaneous identifiers
     used throughout the Qt library.
@@ -67,6 +67,7 @@
     \value AlignTop Aligns with the top.
     \value AlignBottom Aligns with the bottom.
     \value AlignVCenter Centers vertically in the available space.
+    \value AlignBaseline Aligns with the baseline.
 
     You can use only one of the horizontal flags at a time. There is
     one two-dimensional flag:
@@ -105,24 +106,18 @@
     QCoreApplication::setAttribute(), and can be tested for with
     QCoreApplication::testAttribute().
 
-    \value AA_ImmediateWidgetCreation Ensures that widgets are created
-           as soon as they are constructed. By default, resources for
-           widgets are allocated on demand to improve efficiency and
-           minimize resource usage. Setting or clearing this attribute
-           affects widgets constructed after the change. Setting it
-           tells Qt to create toplevel windows immediately.
-           Therefore, if it is important to minimize resource
-           consumption, do not set this attribute.
-
-    \value AA_MSWindowsUseDirect3DByDefault This value is obsolete and
-           has no effect.
 
     \value AA_DontShowIconsInMenus Actions with the Icon property won't be
            shown in any menus unless specifically set by the
            QAction::iconVisibleInMenu property.
            Menus that are currently open or menus already created in the native
-           Mac OS X menubar \e{may not} pick up a change in this attribute. Changes
+           \macos menubar \e{may not} pick up a change in this attribute. Changes
            in the QAction::iconVisibleInMenu property will always be picked up.
+
+    \value AA_DontShowShortcutsInContextMenus Actions with the Shortcut property
+           won't be shown in any shortcut menus unless specifically set by the
+           QAction::shortcutVisibleInContextMenu property. This value was added
+           in Qt 5.10.
 
     \value AA_NativeWindows Ensures that widgets have native windows.
 
@@ -130,33 +125,32 @@
            widgets stay non-native unless specifically set by the
            Qt::WA_NativeWindow attribute.
 
-    \value AA_MacPluginApplication Stops the Qt mac application from doing
-           specific initializations that do not necessarily make sense when using Qt
-           to author a plugin. This includes avoiding loading our nib for the main
-           menu and not taking possession of the native menu bar. When setting this
+    \value AA_PluginApplication Indicates that Qt is used to author a plugin. Depending
+           on the operating system, it suppresses specific initializations that do not
+           necessarily make sense in the plugin case.
+           For example on \macos, this includes avoiding loading our nib for the main
+           menu and not taking possession of the native menu bar. Setting this
            attribute to true will also set the AA_DontUseNativeMenuBar attribute
-           to true.
+           to true. It also disables native event filters.
+           This attribute must be set before QGuiApplication constructed.
+           This value was added in Qt 5.7.
 
     \value AA_DontUseNativeMenuBar All menubars created while this attribute is
            set to true won't be used as a native menubar (e.g, the menubar at
-           the top of the main screen on Mac OS X or at the bottom in Windows CE).
+           the top of the main screen on \macos).
 
-    \value AA_MacDontSwapCtrlAndMeta On Mac OS X by default, Qt swaps the
+    \value AA_MacDontSwapCtrlAndMeta On \macos by default, Qt swaps the
            Control and Meta (Command) keys (i.e., whenever Control is pressed, Qt
            sends Meta, and whenever Meta is pressed Control is sent). When this
-           attribute is true, Qt will not do the flip. QKeySequence::StandardShortcuts
+           attribute is true, Qt will not do the flip. \l QKeySequence::StandardKey
            will also flip accordingly (i.e., QKeySequence::Copy will be
            Command+C on the keyboard regardless of the value set, though what is output for
-           QKeySequence::toString(QKeySequence::PortableText) will be different).
+           QKeySequence::toString() will be different).
 
     \value AA_Use96Dpi Assume the screen has a resolution of 96 DPI rather
            than using the OS-provided resolution. This will cause font rendering
            to be consistent in pixels-per-point across devices rather than
            defining 1 point as 1/72 inch.
-
-    \value AA_X11InitThreads Calls XInitThreads() as part of the QApplication
-           construction in order to make Xlib calls thread-safe. This
-           attribute must be set before QApplication is constructed.
 
     \value AA_SynthesizeTouchForUnhandledMouseEvents All mouse events
            that are not accepted by the application will be translated
@@ -166,6 +160,151 @@
            that are not accepted by the application will be translated
            to left button mouse events instead. This attribute is enabled
            by default.
+
+    \value AA_UseHighDpiPixmaps Make QIcon::pixmap() generate high-dpi pixmaps
+           that can be larger than the requested size. Such pixmaps will have
+           \l {QPixmap::devicePixelRatio}{devicePixelRatio()} set to a value higher than 1.
+           After setting this attribute, application code that uses pixmap
+           sizes in layout geometry calculations should typically divide by
+           \l {QPixmap::devicePixelRatio}{devicePixelRatio()} to get device-independent layout geometry.
+
+    \value AA_ForceRasterWidgets Make top-level widgets use pure raster surfaces,
+           and do not support non-native GL-based child widgets.
+
+    \value AA_UseDesktopOpenGL Forces the usage of desktop OpenGL (for example,
+           \e opengl32.dll or \e libGL.so) on platforms that use dynamic loading
+           of the OpenGL implementation. This attribute must be set before
+           QGuiApplication is constructed.
+           This value was added in Qt 5.3.
+
+    \value AA_UseOpenGLES Forces the usage of OpenGL ES 2.0 or higher on
+           platforms that use dynamic loading of the OpenGL implementation.
+           This attribute must be set before QGuiApplication is constructed.
+           This value was added in Qt 5.3.
+
+    \value AA_UseSoftwareOpenGL Forces the usage of a software based OpenGL
+           implementation on platforms that use dynamic loading of the OpenGL
+           implementation. This will typically be a patched build of
+           \l{http://www.mesa3d.org/llvmpipe.html}{Mesa llvmpipe}, providing
+           OpenGL 2.1. The value may have no effect if no such OpenGL
+           implementation is available. The default name of this library is
+           \c opengl32sw.dll and can be overridden by setting the environment
+           variable \e QT_OPENGL_DLL. See the platform-specific pages, for
+           instance \l{Qt for Windows}, for more information. This attribute
+           must be set before QGuiApplication is constructed.
+           This value was added in Qt 5.4.
+
+    \value AA_ShareOpenGLContexts Enables resource sharing between the OpenGL
+           contexts used by classes like QOpenGLWidget and QQuickWidget. This
+           allows sharing OpenGL resources, like textures, between QOpenGLWidget
+           instances that belong to different top-level windows. This attribute
+           must be set before QGuiApplication is constructed.
+           This value was added in Qt 5.4.
+
+    \value AA_SetPalette Indicates whether a palette was explicitly set on the
+           QGuiApplication. This value was added in Qt 5.5.
+
+    \value AA_EnableHighDpiScaling Enables high-DPI scaling in Qt on supported
+           platforms (see also \l{High DPI Displays}). Supported platforms are
+           X11, Windows and Android. Enabling makes Qt scale the main (device
+           independent) coordinate system according to display scale factors
+           provided by the operating system. This corresponds to setting the
+           QT_AUTO_SCREEN\unicode{0x200b}_SCALE_FACTOR environment variable to
+           1. This attribute must be set before QGuiApplication is constructed.
+           This value was added in Qt 5.6.
+
+    \value AA_DisableHighDpiScaling Disables high-DPI scaling in Qt, exposing window
+           system coordinates. Note that the window system may do its own scaling,
+           so this does not guarantee that QPaintDevice::devicePixelRatio() will
+           be equal to 1. In addition, scale factors set by QT_SCALE_FACTOR will not
+           be affected. This corresponds to setting the
+           QT_AUTO_SCREEN\unicode{0x200b}_SCALE_FACTOR environment variable to 0.
+           This attribute must be set before QGuiApplication is constructed.
+           This value was added in Qt 5.6.
+
+    \value AA_UseStyleSheetPropagationInWidgetStyles By default, Qt Style Sheets
+           disable regular QWidget palette and font propagation. When this flag
+           is enabled, font and palette changes propagate as though the user had
+           manually called the corresponding QWidget methods. See
+           \l{The Style Sheet Syntax#Inheritance}{The Style Sheet Syntax - Inheritance}
+           for more details.
+           This value was added in Qt 5.7.
+
+    \value AA_DontUseNativeDialogs All dialogs created while this attribute is
+           set to true won't use the native dialogs provided by the platform.
+           This value was added in Qt 5.7.
+
+    \value AA_SynthesizeMouseForUnhandledTabletEvents All tablet events
+           that are not accepted by the application will be translated
+           to mouse events instead. This attribute is enabled
+           by default.
+           This value was added in Qt 5.7.
+
+    \value AA_CompressHighFrequencyEvents Enables compression of certain frequent events.
+           On the X11 windowing system, the default value is true, which means that
+           QEvent::MouseMove, QEvent::TouchUpdate, and changes in window size and
+           position will be combined whenever they occur more frequently than the
+           application handles them, so that they don't accumulate and overwhelm the
+           application later.
+           On Windows 8 and above the default value is also true, but it only applies
+           to touch events. Mouse and window events remain unaffected by this flag.
+           On other platforms, the default is false.
+           (In the future, the compression feature may be implemented across platforms.)
+           You can test the attribute to see whether compression is enabled.
+           If your application needs to handle all events with no compression,
+           you can unset this attribute. Notice that input events from tablet devices
+           will not be compressed. See AA_CompressTabletEvents if you want these to be
+           compressed as well.
+           This value was added in Qt 5.7.
+
+    \value AA_CompressTabletEvents Enables compression of input events from tablet devices.
+           Notice that AA_CompressHighFrequencyEvents must be true for events compression
+           to be enabled, and that this flag extends the former to tablet events.
+           Currently supported on the X11 windowing system, Windows 8 and above.
+           The default value is false.
+           This value was added in Qt 5.10.
+
+    \value AA_DontCheckOpenGLContextThreadAffinity When making a context
+           current using QOpenGLContext, do not check that the
+           \l{QObject#Thread Affinity}{QObject thread affinity}
+           of the QOpenGLContext object is the same thread calling
+           \l{QOpenGLContext::makeCurrent}{makeCurrent()}.
+           This value was added in Qt 5.8.
+
+    \value AA_DisableShaderDiskCache Disables caching of shader program binaries
+           on disk. By default Qt Quick, QPainter's OpenGL backend, and any
+           application using QOpenGLShaderProgram with one of its
+           \e addCacheableShaderFromSource overloads will employ a disk-based
+           \l{Caching Program Binaries}{program binary cache} in either the shared
+           or per-process cache storage location, on systems that support
+           \e glProgramBinary(). In the unlikely event of this being problematic,
+           set this attribute to disable all disk-based caching of shaders.
+
+    \value AA_DisableWindowContextHelpButton Disables the WindowContextHelpButtonHint
+           by default on Qt::Sheet and Qt::Dialog widgets. This hides the \gui ? button
+           on Windows, which only makes sense if you use \l QWhatsThis functionality.
+           This value was added in Qt 5.10. In Qt 6, WindowContextHelpButtonHint
+           will not be set by default.
+
+    The following values are deprecated or obsolete:
+
+    \value AA_ImmediateWidgetCreation This attribute is no longer fully
+           supported in Qt 5. It ensures that widgets are created
+           as soon as they are constructed. By default, resources for
+           widgets are allocated on demand to improve efficiency and
+           minimize resource usage. Setting or clearing this attribute
+           affects widgets constructed after the change. Setting it
+           tells Qt to create toplevel windows immediately.
+           Therefore, if it is important to minimize resource
+           consumption, do not set this attribute.
+
+    \value AA_MacPluginApplication This attribute has been deprecated.
+           Use AA_PluginApplication instead.
+
+    \value AA_MSWindowsUseDirect3DByDefault This value is obsolete and
+           has no effect.
+
+    \value AA_X11InitThreads This value is obsolete and has no effect.
 
     \omitvalue AA_AttributeCount
 */
@@ -180,7 +319,7 @@
 
     \value AllButtons      This value corresponds to a mask of all
            possible mouse buttons. Use to set the 'acceptedButtons'
-           property of a mouseArea to accept ALL mouse buttons.
+           property of a MouseArea to accept ALL mouse buttons.
 
     \value LeftButton      The left button is pressed, or an event refers
            to the left button. (The left button may be the right button on
@@ -248,12 +387,13 @@
     \value AltModifier      An Alt key on the keyboard is pressed.
     \value MetaModifier     A Meta key on the keyboard is pressed.
     \value KeypadModifier   A keypad button is pressed.
-    \value GroupSwitchModifier X11 only. A Mode_switch key on the keyboard is pressed.
+    \value GroupSwitchModifier X11 only (unless activated on Windows by a command line argument).
+                            A Mode_switch key on the keyboard is pressed.
 
     \omitvalue KeyboardModifierMask
 
-    \note On Mac OS X, the \c ControlModifier value corresponds to
-    the Command keys on the Macintosh keyboard, and the \c MetaModifier value
+    \note On \macos, the \c ControlModifier value corresponds to
+    the Command keys on the keyboard, and the \c MetaModifier value
     corresponds to the Control keys. The \c KeypadModifier value will also be set
     when an arrow key is pressed as the arrow keys are considered part of the
     keypad.
@@ -270,8 +410,8 @@
     This enum provides shorter names for the keyboard modifier keys
     supported by Qt.
 
-    \b{Note:} On Mac OS X, the \c CTRL value corresponds to
-    the Command keys on the Macintosh keyboard, and the \c META value
+    \note On \macos, the \c CTRL value corresponds to
+    the Command keys on the keyboard, and the \c META value
     corresponds to the Control keys.
 
     \value SHIFT The Shift keys provided on all standard keyboards.
@@ -406,7 +546,7 @@
     \value BevelJoin  The triangular notch between the two lines is filled.
     \value RoundJoin  A circular arc between the two lines is filled.
     \value SvgMiterJoin A miter join corresponding to the definition of
-           a miter join in the \l{SVG 1.2 Tiny} specification.
+           a miter join in the \l{http://www.w3.org/TR/SVGMobile12/}{SVG 1.2 Tiny} specification.
     \omitvalue MPenJoinStyle
 
     \sa QPen
@@ -456,7 +596,7 @@
     \value TextExpandTabs Makes the U+0009 (ASCII tab) character move to
            the next tab stop.
     \value TextShowMnemonic Displays the string "\&P" as \underline{P}
-           (see QButton for an example). For an ampersand, use "\&\&".
+           For an ampersand, use "\&\&".
     \value TextWordWrap Breaks lines at appropriate points, e.g. at word
            boundaries.
     \value TextWrapAnywhere Breaks lines anywhere, even within words.
@@ -464,13 +604,12 @@
            the underlines.
     \value TextDontPrint Treat this text as "hidden" and don't print it.
     \value TextIncludeTrailingSpaces When this option is set,
-           QTextLine::naturalTextWidth() and naturalTextRect() will
+           QTextLine::naturalTextWidth() and QTextLine::naturalTextRect() will
            return a value that includes the width of trailing spaces in the
            text; otherwise this width is excluded.
     \value TextJustificationForced Ensures that text lines are justified.
 
-    \omitvalue TextLongestVariant Ensures that the longest variant is always used
-           when computing the size of a multi-variant string. (Internal)
+    \omitvalue TextLongestVariant
     \omitvalue TextBypassShaping
     \omitvalue TextForceLeftToRight
     \omitvalue TextForceRightToLeft
@@ -500,15 +639,14 @@
     delivery at a later time.
 
     \value AutoConnection
-           (default) If the signal is emitted from a different thread than the
-           receiving object, the signal is queued, behaving as
-           Qt::QueuedConnection. Otherwise, the slot is invoked directly,
-           behaving as Qt::DirectConnection. The type of connection is
+           \b (Default) If the receiver \l{QObject#Thread Affinity}{lives in} the
+           thread that emits the signal, Qt::DirectConnection is used. Otherwise,
+           Qt::QueuedConnection is used. The connection type is
            determined when the signal is emitted.
 
     \value DirectConnection
-           The slot is invoked immediately, when the signal is
-           emitted.
+           The slot is invoked immediately when the signal is
+           emitted. The slot is executed in the signalling thread.
 
     \value QueuedConnection
            The slot is invoked when control returns to the event loop
@@ -516,18 +654,17 @@
            receiver's thread.
 
     \value BlockingQueuedConnection
-           Same as QueuedConnection, except the current thread blocks
-           until the slot returns. This connection type should only be
-           used where the emitter and receiver are in different
-           threads.  \note Violating this rule can cause your
-           application to deadlock.
+           Same as Qt::QueuedConnection, except that the signalling thread blocks
+           until the slot returns. This connection must \e not be used if the
+           receiver lives in the signalling thread, or else the application
+           will deadlock.
 
     \value UniqueConnection
-           Same as AutoConnection, but the connection is made only if
-           it does not duplicate an existing connection. i.e., if the
-           same signal is already connected to the same slot for the
-           same pair of objects, then the connection will fail. This
-           connection type was introduced in Qt 4.6.
+           This is a flag that can be combined with any one of the above
+           connection types, using a bitwise OR. When Qt::UniqueConnection is
+           set, QObject::connect() will fail if the connection already exists
+           (i.e. if the same signal is already connected to the same slot
+           for the same pair of objects). This flag was introduced in Qt 4.6.
 
     With queued connections, the parameters must be of types that are
     known to Qt's meta-object system, because Qt needs to copy the
@@ -552,9 +689,12 @@
     be short, localized names. This is basically equivalent to using the date format
     string, "ddd MMM d yyyy". See QDate::toString() for more information.
 
-    \value ISODate \l{ISO 8601} extended format: either \c{YYYY-MM-DD} for dates or
-    \c{YYYY-MM-DDTHH:MM:SS}, \c{YYYY-MM-DDTHH:MM:SSTZD} (e.g., 1997-07-16T19:20:30+01:00)
+    \value ISODate \l{ISO 8601} extended format: either \c{yyyy-MM-dd} for dates or
+    \c{yyyy-MM-ddTHH:mm:ss} (e.g. 2017-07-24T15:46:29), or with a time-zone
+    suffix (Z for UTC otherwise an offset as [+|-]HH:mm) where appropriate
     for combined dates and times.
+
+    \value ISODateWithMs \l{ISO 8601} extended format, including milliseconds if applicable.
 
     \value SystemLocaleShortDate The \l{QLocale::ShortFormat}{short format} used
     by the \l{QLocale::system()}{operating system}.
@@ -577,6 +717,10 @@
     \value LocalDate \e{This enum value is deprecated.} Use Qt::SystemLocaleShortDate
     instead (or Qt::SystemLocaleLongDate if you want long dates).
 
+    \value RFC2822Date \l{RFC 2822}, \l{RFC 850} and \l{RFC 1036} format: either
+    \c{[ddd,] dd MMM yyyy hh:mm[:ss] +/-TZ} or \c{ddd MMM dd yyyy hh:mm[:ss] +/-TZ}
+    for combined dates and times.
+
     \note For \c ISODate formats, each \c Y, \c M and \c D represents a single digit
     of the year, month and day used to specify the date. Each \c H, \c M and \c S
     represents a single digit of the hour, minute and second used to specify the time.
@@ -591,6 +735,7 @@
     \value LocalTime Locale dependent time (Timezones and Daylight Savings Time).
     \value UTC Coordinated Universal Time, replaces Greenwich Mean Time.
     \value OffsetFromUTC An offset in seconds from Coordinated Universal Time.
+    \value TimeZone A named time zone using a specific set of Daylight Savings rules.
 */
 
 /*!
@@ -653,27 +798,25 @@
     \value MonoOnly The pixmap becomes monochrome. If necessary,
            it is dithered using the chosen dithering algorithm.
 
-    Dithering mode preference for RGB channels:
+    Dithering mode preference:
 
-    \value DiffuseDither (default) - A high-quality dither.
-    \value OrderedDither A faster, more ordered dither.
+    \value DiffuseDither (default) - A high-quality dither using error diffusion.
+    \value OrderedDither A faster, ordered dither.
     \value ThresholdDither No dithering; closest color is used.
 
-    Dithering mode preference for alpha channel:
+    Dithering mode preference for 1-bit alpha masks:
 
     \value ThresholdAlphaDither (default) - No dithering.
-    \value OrderedAlphaDither A faster, more ordered dither.
-    \value DiffuseAlphaDither A high-quality dither.
+    \value OrderedAlphaDither A faster, ordered dither.
+    \value DiffuseAlphaDither A high-quality dither using error diffusion.
     \omitvalue NoAlpha
 
     Color matching versus dithering preference:
 
-    \value PreferDither (default when converting to a pixmap) - Always dither
-           32-bit images when the image is converted to 8 bits.
-    \value AvoidDither (default when converting for the purpose of saving to
-           file) - Dither 32-bit images only if the image has more than 256
-           colors and it is being converted to 8 bits.
-    \omitvalue AutoDither
+    \value PreferDither Always dither images when converting to smaller color-spaces.
+    \value AvoidDither Only dither to indexed formats if the source image uses more
+           different colors than the size of the color table of the destination format.
+    \value AutoDither (default) - Only dither when down-converting to 1 or 8-bit indexed formats.
 
     \omitvalue ColorMode_Mask
     \omitvalue Dither_Mask
@@ -687,9 +830,10 @@
            retain an alpha channel for some other reason. If the image has no
            alpha channel this flag has no effect.
 
-    \omitvalue NoFormatConversion Don't do any format conversions on the image.
+    \value NoFormatConversion Don't do any format conversions on the image.
            Can be useful when converting a QImage to a QPixmap for a one-time
-           rendering operation for example.
+           rendering operation for example. Note that a QPixmap not in the
+           preferred format will be much slower as a paint device.
 */
 
 /*!
@@ -716,7 +860,7 @@
     \value UI_FadeTooltip Show tooltip fading effects.
     \value UI_AnimateToolBox Reserved
 
-    \sa QApplication::setEffectEnabled(), QApplication::setDesktopSettingsAware()
+    \sa QApplication::setEffectEnabled(), QGuiApplication::setDesktopSettingsAware()
 */
 
 /*! \enum Qt::AspectRatioMode
@@ -824,9 +968,6 @@
 
     \value WA_InputMethodEnabled Enables input methods for Asian languages.
     Must be set when creating custom text editing widgets.
-    On Windows CE this flag can be used in addition to
-    QApplication::autoSipEnabled to automatically display the SIP when
-    entering a widget.
 
     \value WA_KeyboardFocusChange Set on a toplevel window when
     the users changes focus with the keyboard (tab, backtab, or shortcut).
@@ -857,46 +998,38 @@
     on QWidget::contentsRect(). This is set by the widget's author.
 
     \value WA_LayoutUsesWidgetRect Ignore the layout item rect from the style
-    when laying out this widget with QLayout. This makes a difference in
-    QMacStyle and QPlastiqueStyle for some widgets.
+    when laying out this widget with QLayout.
 
-    \value WA_MacNoClickThrough When a widget that has this attribute set
-    is clicked, and its window is inactive, the click will make the window
-    active but won't be seen by the widget. Typical use of this attribute
-    is on widgets with "destructive" actions, such as a "Delete" button.
-    WA_MacNoClickThrough also applies to all child widgets of the widget
-    that has it set.
+    \value WA_MacNoClickThrough This value is obsolete and has no effect.
 
     \value WA_MacOpaqueSizeGrip Indicates that the native Carbon size grip
     should be opaque instead of transparent (the default). This attribute
-    is only applicable to Mac OS X and is set by the widget's author.
+    is only applicable to \macos and is set by the widget's author.
 
     \value WA_MacShowFocusRect Indicates that this widget should get a
     QFocusFrame around it. Some widgets draw their own focus halo
     regardless of this attribute. Not that the QWidget::focusPolicy
     also plays the main role in whether something is given focus or
     not, this only controls whether or not this gets the focus
-    frame. This attribute is only applicable to Mac OS X.
+    frame. This attribute is only applicable to \macos.
 
     \value WA_MacNormalSize Indicates the widget should have the
-    normal size for widgets in Mac OS X. This attribute is only
-    applicable to Mac OS X.
+    normal size for widgets in \macos. This attribute is only
+    applicable to \macos.
 
     \value WA_MacSmallSize Indicates the widget should have the small
-    size for widgets in Mac OS X. This attribute is only applicable to
-    Mac OS X.
+    size for widgets in \macos. This attribute is only applicable to
+    \macos.
 
     \value WA_MacMiniSize Indicates the widget should have the mini
-    size for widgets in Mac OS X. This attribute is only applicable to
-    Mac OS X.
+    size for widgets in \macos. This attribute is only applicable to
+    \macos.
 
     \value WA_MacVariableSize Indicates the widget can choose between
     alternative sizes for widgets to avoid clipping.
-    This attribute is only applicable to Mac OS X.
+    This attribute is only applicable to \macos.
 
-    \value WA_MacBrushedMetal Indicates the widget should be drawn in
-    the brushed metal style as supported by the windowing system. This
-    attribute is only applicable to Mac OS X.
+    \value WA_MacBrushedMetal This value is obsolete and has no effect.
 
     \omitvalue WA_MacMetalStyle
 
@@ -947,7 +1080,7 @@
 
     \value WA_NoSystemBackground Indicates that the widget has no background,
     i.e. when the widget receives paint events, the background is not
-    automatically repainted. \note Unlike WA_OpaquePaintEvent, newly exposed
+    automatically repainted. \b Note: Unlike WA_OpaquePaintEvent, newly exposed
     areas are \b never filled with the background (e.g., after showing a
     window for the first time the user can see "through" it until the
     application processes the paint events). This flag is set or cleared by the
@@ -959,7 +1092,7 @@
     before generating paint events. The use of WA_OpaquePaintEvent provides a
     small optimization by helping to reduce flicker on systems that do not
     support double buffering and avoiding computational cycles necessary to
-    erase the background prior to painting. \note Unlike
+    erase the background prior to painting. \b Note: Unlike
     WA_NoSystemBackground, WA_OpaquePaintEvent makes an effort to avoid
     transparent window backgrounds. This flag is set or cleared by the widget's
     author.
@@ -972,7 +1105,7 @@
     \value WA_PaintOnScreen Indicates that the widget wants to draw directly
     onto the screen. Widgets with this attribute set do not participate in
     composition management, i.e. they cannot be semi-transparent or shine
-    through semi-transparent overlapping widgets. \note This flag is only
+    through semi-transparent overlapping widgets. \b Note: This flag is only
     supported on X11 and it disables double buffering. On Qt for Embedded
     Linux, the flag only works when set on a top-level widget and it relies on
     support from the active screen driver. This flag is set or cleared by the
@@ -1027,7 +1160,15 @@
     the widget's author.
 
     \value WA_StyleSheet Indicates that the widget is styled using a
-    \l{Qt Style Sheets}{style sheet}.
+    \l{Qt Style Sheets}{style sheet}. WA_StyleSheet is set whenever a widget
+    is subject to a style sheet, even if the style sheet did not affect the
+    widget appearance.
+
+    \value WA_StyleSheetTarget Indicates that the widget appearance was modified
+    by a \l{Qt Style Sheets}{style sheet}. WA_StyleSheet will also be set.
+
+    \value WA_TabletTracking Indicates that the widget has tablet
+    tracking enabled. See QWidget::tabletTracking.
 
     \value WA_TranslucentBackground Indicates that the widget should have a
     translucent background, i.e., any non-opaque regions of the widgets will be
@@ -1043,17 +1184,17 @@
 
     \value WA_UpdatesDisabled Indicates that updates are blocked (including the
     system background). This flag is set or cleared by the Qt kernel.
-    \warning This flag must \e never be set or cleared by the widget's author.
+    \b Warning: This flag must \e never be set or cleared by the widget's author.
 
     \value WA_WindowModified Indicates that the window is marked as modified.
-    On some platforms this flag will do nothing, on others (including Mac OS X
+    On some platforms this flag will do nothing, on others (including \macos
     and Windows) the window will take a modified appearance. This flag is set
     or cleared by QWidget::setWindowModified().
 
-    \value WA_WindowPropagation Makes a toplevel window inherit font and
-    palette from its parent.
+    \value WA_WindowPropagation Makes a toplevel window inherit font, palette
+    and locale from its parent.
 
-    \value WA_MacAlwaysShowToolWindow On Mac OS X, show the tool window even
+    \value WA_MacAlwaysShowToolWindow On \macos, show the tool window even
     when the application is not active.  By default, all tool windows are
     hidden when the application is inactive.
 
@@ -1085,50 +1226,50 @@
     \value WA_X11NetWmWindowTypeToolBar Adds _NET_WM_WINDOW_TYPE_TOOLBAR to the
     window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for QToolBar.
 
     \value WA_X11NetWmWindowTypeMenu Adds _NET_WM_WINDOW_TYPE_MENU to the
     window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for QMenu when torn-off.
 
     \value WA_X11NetWmWindowTypeUtility Adds _NET_WM_WINDOW_TYPE_UTILITY to the
     window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for the Qt::Tool window type.
 
     \value WA_X11NetWmWindowTypeSplash Adds _NET_WM_WINDOW_TYPE_SPLASH to the
     window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for the Qt::SplashScreen window type.
 
     \value WA_X11NetWmWindowTypeDialog Adds _NET_WM_WINDOW_TYPE_DIALOG
     to the window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This
-    attribute has no effect on non-X11 platforms. \note Qt automatically sets
+    attribute has no effect on non-X11 platforms. \b Note: Qt automatically sets
     this attribute for the Qt::Dialog and Qt::Sheet window types.
 
     \value WA_X11NetWmWindowTypeDropDownMenu Adds
     _NET_WM_WINDOW_TYPE_DROPDOWN_MENU to the window's
     _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This
-    attribute has no effect on non-X11 platforms. \note Qt
-    automatically sets this attribute for QMenus added to a QMenuBar.
+    attribute has no effect on non-X11 platforms. \b Note: Qt
+    automatically sets this attribute for QMenu objects added to a QMenuBar.
 
     \value WA_X11NetWmWindowTypePopupMenu Adds _NET_WM_WINDOW_TYPE_POPUP_MENU
     to the window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for QMenu.
 
     \value WA_X11NetWmWindowTypeToolTip Adds _NET_WM_WINDOW_TYPE_TOOLTIP to the
     window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for the Qt::ToolTip window type.
 
     \value WA_X11NetWmWindowTypeNotification Adds
@@ -1139,18 +1280,16 @@
     \value WA_X11NetWmWindowTypeCombo Adds _NET_WM_WINDOW_TYPE_COMBO
     to the window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute for the QComboBox pop-up.
 
     \value WA_X11NetWmWindowTypeDND Adds _NET_WM_WINDOW_TYPE_DND to
     the window's _NET_WM_WINDOW_TYPE X11 window property. See
     http://standards.freedesktop.org/wm-spec/ for more details. This attribute
-    has no effect on non-X11 platforms. \note Qt automatically sets this
+    has no effect on non-X11 platforms. \b Note: Qt automatically sets this
     attribute on the feedback widget used during a drag.
 
-    \value WA_MacFrameworkScaled Enables resolution independence aware mode
-    on Mac when using Carbon. This attribute has no effect on Cocoa.
-    The attribute is off by default and can be enabled on a per-window basis.
+    \value WA_MacFrameworkScaled This value is obsolete and has no effect.
 
     \value WA_AcceptTouchEvents Allows touch events (see QTouchEvent)
     to be sent to the widget. Must be set on all widgets that can
@@ -1163,6 +1302,13 @@
     \value WA_X11DoNotAcceptFocus Asks the window manager to not give focus
     to this top level window. This attribute has no effect on non-X11
     platforms.
+
+    \value WA_AlwaysStackOnTop Since Qt 5.4, this value forces QOpenGLWidget and
+    QQuickWidget to be drawn last, on top of other widgets. Ignored for other
+    type of widgets. Setting this attribute breaks the stacking order, but
+    allows having a semi-transparent OpenGL widget with other widgets visible
+    underneath. It is strongly recommended to call update() on the widget's
+    top-level window after enabling or disabling this attribute.
 
     \omitvalue WA_SetLayoutDirection
     \omitvalue WA_InputMethodTransparent
@@ -1195,16 +1341,20 @@
     \omitvalue WA_WState_WindowOpacitySet
     \omitvalue WA_WState_AcceptedTouchBeginEvent
     \omitvalue WA_MacNoShadow
+    \value WA_ContentsMarginsRespectsSafeArea A QWidget respects the safe
+    area margins of a window by incorporating the margins into its contents'
+    margins by default. This means, that a QLayout will use the content area
+    of a widget for its layout, unless the Qt::WA_LayoutOnEntireRect attribute
+    is set. This along with a contents margin of 0 can be used on the actual
+    layout, to allow for example a background image to underlay the status bar and other
+    system areas on an iOS device, while still allowing child widgets of
+    that background to be inset based on the safe area.
 */
 
 /*! \typedef Qt::HANDLE
 
-    Platform-specific handle type for system objects. This is
-    equivalent to \c{void *} on Mac OS X and embedded Linux,
-    and to \c{unsigned long} on X11. On Windows it is the
-    DWORD returned by the Win32 function getCurrentThreadId().
-
-    \warning Using this type is not portable.
+    A handle type for system objects, defined as \c{void *}
+    on all platforms.
 */
 
 /*!
@@ -1220,10 +1370,13 @@
     \value Key_Enter     Typically located on the keypad.
     \value Key_Insert
     \value Key_Delete
-    \value Key_Pause    The Pause/Break key (\note Not anything to do with pausing media)
+    \value Key_Pause    The Pause/Break key (\b Note: Not related to pausing media)
     \value Key_Print
     \value Key_SysReq
-    \value Key_Clear
+    \value Key_Clear    Corresponds to the \b Clear key on selected Apple
+                        keyboard models. On other systems it is commonly mapped
+                        to the numeric keypad key \b 5, when \b {Num Lock} is
+                        \c off.
     \value Key_Home
     \value Key_End
     \value Key_Left
@@ -1233,8 +1386,8 @@
     \value Key_PageUp
     \value Key_PageDown
     \value Key_Shift
-    \value Key_Control    On Mac OS X, this corresponds to the Command keys.
-    \value Key_Meta       On Mac OS X, this corresponds to the Control keys.
+    \value Key_Control    On \macos, this corresponds to the Command keys.
+    \value Key_Meta       On \macos, this corresponds to the Control keys.
                           On Windows keyboards, this key is mapped to the
                           Windows key.
     \value Key_Alt
@@ -1474,6 +1627,36 @@
     \value Key_Dead_Belowdot
     \value Key_Dead_Hook
     \value Key_Dead_Horn
+    \value Key_Dead_Stroke
+    \value Key_Dead_Abovecomma
+    \value Key_Dead_Abovereversedcomma
+    \value Key_Dead_Doublegrave
+    \value Key_Dead_Belowring
+    \value Key_Dead_Belowmacron
+    \value Key_Dead_Belowcircumflex
+    \value Key_Dead_Belowtilde
+    \value Key_Dead_Belowbreve
+    \value Key_Dead_Belowdiaeresis
+    \value Key_Dead_Invertedbreve
+    \value Key_Dead_Belowcomma
+    \value Key_Dead_Currency
+    \value Key_Dead_a
+    \value Key_Dead_A
+    \value Key_Dead_e
+    \value Key_Dead_E
+    \value Key_Dead_i
+    \value Key_Dead_I
+    \value Key_Dead_o
+    \value Key_Dead_O
+    \value Key_Dead_u
+    \value Key_Dead_U
+    \value Key_Dead_Small_Schwa
+    \value Key_Dead_Capital_Schwa
+    \value Key_Dead_Greek
+    \value Key_Dead_Lowline
+    \value Key_Dead_Aboveverticalline
+    \value Key_Dead_Belowverticalline
+    \value Key_Dead_Longsolidusoverlay
     \value Key_Back
     \value Key_Forward
     \value Key_Stop
@@ -1491,7 +1674,7 @@
     \value Key_MediaPrevious
     \value Key_MediaNext
     \value Key_MediaRecord
-    \value Key_MediaPause   A key setting the state of the media player to pause (\note not the pause/break key)
+    \value Key_MediaPause   A key setting the state of the media player to pause (\b Note: not the pause/break key)
     \value Key_MediaTogglePlayPause   A key to toggle the play/pause state in the media player (rather than setting an absolute state)
     \value Key_HomePage
     \value Key_Favorites
@@ -1613,12 +1796,29 @@
     \value Key_TouchpadToggle
     \value Key_TouchpadOn
     \value Key_TouchpadOff
+    \value Key_MicMute
+    \value Key_Red
+    \value Key_Green
+    \value Key_Yellow
+    \value Key_Blue
+    \value Key_ChannelUp
+    \value Key_ChannelDown
+    \value Key_Guide
+    \value Key_Info
+    \value Key_Settings
+    \value Key_MicVolumeUp
+    \value Key_MicVolumeDown
+    \value Key_New
+    \value Key_Open
+    \value Key_Find
+    \value Key_Undo
+    \value Key_Redo
     \value Key_MediaLast
     \value Key_unknown
 
     \value Key_Call     A key to answer or initiate a call (see Qt::Key_ToggleCallHangup for a key to toggle current call state)
-    \value Key_Camera   A key to activate the camera shutter
-    \value Key_CameraFocus  A key to focus the camera
+    \value Key_Camera   A key to activate the camera shutter. On Windows Runtime, the environment variable QT_QPA_ENABLE_CAMERA_KEYS must be set to receive the event.
+    \value Key_CameraFocus  A key to focus the camera. On Windows Runtime, the environment variable QT_QPA_ENABLE_CAMERA_KEYS must be set to receive the event.
     \value Key_Context1
     \value Key_Context2
     \value Key_Context3
@@ -1637,6 +1837,7 @@
     \value Key_Play
     \value Key_Sleep
     \value Key_Zoom
+    \value Key_Exit
     \value Key_Cancel
 
     \sa QKeyEvent::key()
@@ -1710,6 +1911,19 @@
 */
 
 /*!
+    \enum Qt::Edge
+
+    This enum type specifies an edge in a rectangle:
+
+    \value TopEdge    The top edge of the rectangle.
+    \value LeftEdge   The left edge of the rectangle.
+    \value RightEdge  The right edge of the rectangle.
+    \value BottomEdge The bottom edge of the rectangle.
+
+    \since 5.1
+*/
+
+/*!
     \enum Qt::ScrollBarPolicy
 
     This enum type describes the various modes of QAbstractScrollArea's scroll
@@ -1721,7 +1935,9 @@
 
     \value ScrollBarAlwaysOff QAbstractScrollArea never shows a scroll bar.
 
-    \value ScrollBarAlwaysOn  QAbstractScrollArea always shows a scroll bar.
+    \value ScrollBarAlwaysOn  QAbstractScrollArea always shows a scroll bar. This
+    property is ignored on systems with transient scroll bars (e.g., on Mac from
+    version 10.7).
 
     (The modes for the horizontal and vertical scroll bars are
     independent.)
@@ -1781,6 +1997,36 @@
 */
 
 /*!
+    \enum Qt::ApplicationState
+
+    \keyword application state
+
+    This enum type is used to specify the current state of the application.
+
+    The states are
+
+    \value ApplicationSuspended    The application is about to suspend. When entering this state, the
+                                   application should save its state, cease all activities, and be
+                                   prepared for code execution to stop. While suspended, the
+                                   application can be killed at any time without further warnings
+                                   (e.g. when low memory forces the OS to purge suspended applications).
+    \value ApplicationHidden       The application is hidden and runs in the background. This
+                                   is the normal state for applications that need to do background
+                                   processing, like playing music, while the user interacts with
+                                   other applications. The application should free up all graphical
+                                   resources when entering this state.
+    \value ApplicationInactive     The application is visible, but not selected to be in front.
+                                   On desktop platforms, this typically means that the user
+                                   activated another application. On mobile platforms, it is
+                                   more common to enter this state when the OS is interrupting
+                                   the user with e.g. incoming calls or SMS-messages.
+                                   While in this state, consider reducing CPU-intensive tasks.
+    \value ApplicationActive       The application is visible and selected to be in front.
+
+    \since 5.1
+*/
+
+/*!
     \enum Qt::ScreenOrientation
 
     This enum type specifies the various orientations a screen might have.
@@ -1805,7 +2051,7 @@
     menu, and in contrast to \c NoContextMenu, the handling is \e not
     deferred to the widget's parent. This means that all right mouse
     button events are guaranteed to be delivered to the widget itself
-    through mousePressEvent(), and mouseReleaseEvent().
+    through QWidget::mousePressEvent(), and QWidget::mouseReleaseEvent().
     \value DefaultContextMenu  the widget's QWidget::contextMenuEvent() handler is called.
     \value ActionsContextMenu  the widget displays its QWidget::actions() as context menu.
     \value CustomContextMenu  the widget emits the QWidget::customContextMenuRequested() signal.
@@ -1820,12 +2066,25 @@
     \value TabFocus  the widget accepts focus by tabbing.
     \value ClickFocus  the widget accepts focus by clicking.
     \value StrongFocus  the widget accepts focus by both tabbing
-                    and clicking. On Mac OS X this will also
+                    and clicking. On \macos this will also
                     be indicate that the widget accepts tab focus
                     when in 'Text/List focus mode'.
     \value WheelFocus  like Qt::StrongFocus plus the widget accepts
                     focus by using the mouse wheel.
     \value NoFocus  the widget does not accept focus.
+
+*/
+
+/*!
+    \enum Qt::TabFocusBehavior
+    \since 5.5
+
+    This enum type provides different focus behaviors for tab navigation.
+
+    \value NoTabFocus  iterate nothing.
+    \value TabFocusTextControls  iterate text controls and widgets.
+    \value TabFocusListControls  iterate list controls and widgets.
+    \value TabFocusAllControls  iterate all controls and widgets.
 
 */
 
@@ -1892,12 +2151,12 @@
                    We refer to a top-level window that has a parent
                    as a \e secondary window.
 
-    \value Sheet   Indicates that the window is a Macintosh sheet. Since
+    \value Sheet   Indicates that the window is a sheet on \macos. Since
                    using a sheet implies window modality, the recommended
                    way is to use QWidget::setWindowModality(), or
                    QDialog::open(), instead.
 
-    \value Drawer  Indicates that the widget is a Macintosh drawer.
+    \value Drawer  Indicates that the widget is a drawer on \macos.
 
     \value Popup   Indicates that the widget is a pop-up top-level
                    window, i.e. that it is modal, but has a window
@@ -1913,10 +2172,10 @@
                    system supports it, a tool window can be decorated
                    with a somewhat lighter frame. It can also be
                    combined with Qt::FramelessWindowHint.
-                   On Mac OS X, tool windows correspond to the
-                   \l{http://developer.apple.com/documentation/Carbon/Conceptual/HandlingWindowsControls/hitb-wind_cont_concept/chapter_2_section_2.html}{Floating}
+                   On \macos, tool windows correspond to the
+                   \l{https://developer.apple.com/documentation/appkit/nspanel}{NSPanel}
                    class of windows. This means that the window lives on a
-                   level above normal windows; it impossible to put a normal
+                   level above normal windows making it impossible to put a normal
                    window on top of it. By default, tool windows will disappear
                    when the application is inactive.  This can be controlled by
                    the Qt::WA_MacAlwaysShowToolWindow attribute.
@@ -1934,6 +2193,14 @@
     \value SubWindow  Indicates that this widget is a sub-window, such
                       as a QMdiSubWindow widget.
 
+    \value ForeignWindow Indicates that this window object is a handle
+                         representing a native platform window created by
+                         another process or by manually using native code.
+
+    \value CoverWindow Indicates that the window represents a cover window,
+                       which is shown when the application is minimized on
+                       some platforms.
+
     There are also a number of flags which you can use to customize
     the appearance of top-level windows. These have no effect on other
     windows:
@@ -1943,6 +2210,12 @@
 
     \value MSWindowsOwnDC  Gives the window its own display
            context on Windows.
+
+    \value BypassWindowManagerHint This flag can be used to indicate to the platform plugin
+           that "all" window manager protocols should be disabled. This flag will behave
+           different depending on what operating system the application is running on and
+           what window manager is running. The flag can be used to get a native window
+           with no configuration set.
 
     \value X11BypassWindowManagerHint  Bypass the window
            manager completely. This results in a borderless window
@@ -1988,10 +2261,10 @@
     \value WindowContextHelpButtonHint  Adds a context help button to dialogs.
            On some platforms this implies Qt::WindowSystemMenuHint for it to work.
 
-    \value MacWindowToolBarButtonHint On Mac OS X adds a tool bar button (i.e.,
+    \value MacWindowToolBarButtonHint On \macos adds a tool bar button (i.e.,
            the oblong button that is on the top right of windows that have toolbars).
 
-    \value WindowFullscreenButtonHint On Mac OS X adds a fullscreen button.
+    \value WindowFullscreenButtonHint On \macos adds a fullscreen button.
 
     \value BypassGraphicsProxyWidget Prevents the window and its children from
            automatically embedding themselves into a QGraphicsProxyWidget if the
@@ -2000,7 +2273,8 @@
            regardless of whether the parent widget is embedded in a scene or
            not.
 
-    \value WindowShadeButtonHint
+    \value WindowShadeButtonHint Adds a shade button in place of the minimize
+           button if the underlying window manager supports it.
 
     \value WindowStaysOnTopHint  Informs the window system that the
            window should stay on top of all other windows. Note that
@@ -2009,18 +2283,16 @@
            correctly.
 
     \value WindowStaysOnBottomHint Informs the window system that the
-           window should stay on bottom of all other windows. Note
-           that on X11 this hint will work only in window managers
+           window should stay on bottom of all other windows.
+
+           \note On X11, this hint will work only in window managers
            that support _NET_WM_STATE_BELOW atom. If a window always
            on the bottom has a parent, the parent will also be left on
            the bottom.  This window hint is currently not implemented
-           for Mac OS X.
+           for \macos.
 
-    \value WindowOkButtonHint Adds an OK button to the window decoration of a dialog.
-           Only supported for Windows CE.
-
-    \value WindowCancelButtonHint Adds a Cancel button to the window decoration of a dialog.
-           Only supported for Windows CE.
+           \note On Windows, this will work only for frameless or
+           full-screen windows.
 
     \value WindowTransparentForInput Informs the window system that this window
            is used only for output (displaying something) and does not take input.
@@ -2032,6 +2304,15 @@
 
     \value WindowDoesNotAcceptFocus Informs the window system that this window should
            not receive the input focus.
+
+    \value MaximizeUsingFullscreenGeometryHint Informs the window system that when
+           maximizing the window it should use as much of the available screen geometry
+           as possible, including areas that may be covered by system UI such as status
+           bars or application launchers. This may result in the window being placed
+           under these system UIs, but does not guarantee it, depending on whether or
+           not the platform supports it. When the flag is enabled the user is responsible
+           for taking QScreen::availableGeometry() into account, so that any UI elements
+           in the application that require user interaction are not covered by system UI.
 
     \value WindowType_Mask  A mask for extracting the window type
                             part of the window flags.
@@ -2090,7 +2371,7 @@
     \enum Qt::ItemSelectionMode
 
     This enum is used in QGraphicsItem, QGraphicsScene and QGraphicsView to
-    specify how items are selected, or how to determine if a shapes and items
+    specify how items are selected, or how to determine if shapes and items
     collide.
 
     \value ContainsItemShape The output list contains only items whose
@@ -2117,6 +2398,21 @@
     \sa QGraphicsScene::items(), QGraphicsScene::collidingItems(),
         QGraphicsView::items(), QGraphicsItem::collidesWithItem(),
         QGraphicsItem::collidesWithPath()
+*/
+
+/*!
+    \enum Qt::ItemSelectionOperation
+
+    This enum is used in QGraphicsScene to specify what to do with currently selected
+    items when setting a selection area.
+
+    \value ReplaceSelection The currently selected items are replaced by items
+           in the selection area.
+
+    \value AddToSelection The items in the selection area are added to the currently
+           selected items.
+
+    \sa QGraphicsScene::setSelectionArea()
 */
 
 /*!
@@ -2147,9 +2443,9 @@
     \enum Qt::TextFormat
 
     This enum is used in widgets that can display both plain text and
-    rich text, e.g. QLabel. It is used for deciding whether a text
+    rich text, for example QLabel. It is used for deciding whether a text
     string should be interpreted as one or the other. This is normally
-    done by passing one of the enum values to a setTextFormat()
+    done by passing one of the enum values to a QTextEdit::setTextFormat()
     function.
 
     \value PlainText  The text string is interpreted as a plain text
@@ -2160,7 +2456,7 @@
         of rich text.
 
     \value AutoText The text string is interpreted as for
-        Qt::RichText if Qt::mightBeRichText() returns true, otherwise
+        Qt::RichText if Qt::mightBeRichText() returns \c true, otherwise
         as Qt::PlainText.
 */
 
@@ -2232,7 +2528,7 @@
     \value WhatsThisCursor  \inlineimage cursor-whatsthis.png
                           An arrow with a question mark, typically used to indicate
                           the presence of What's This? help for a widget.
-    \value BusyCursor     \inlineimage cursor-wait.png
+    \value BusyCursor     \inlineimage cursor-busy.png
                           An hourglass or watch cursor, usually shown during
                           operations that allow the user to interact with
                           the application while they are performed in the
@@ -2270,7 +2566,7 @@
     When LayoutDirectionAuto is used in conjunction with text layouting, it will imply that the text
     directionality is determined from the content of the string to be layouted.
 
-    \sa QApplication::setLayoutDirection(), QWidget::setLayoutDirection(), QTextOption::setTextDirection(), QString::isRightToLeft()
+    \sa QGuiApplication::setLayoutDirection(), QWidget::setLayoutDirection(), QTextOption::setTextDirection(), QString::isRightToLeft()
 */
 
 /*!
@@ -2298,8 +2594,9 @@
 
     Flags that alter the behavior:
 
-    \value ImhHiddenText             Characters should be hidden, as is typically used when entering passwords.
+    \value ImhHiddenText             The input method should not show the characters while typing.
                                      This is automatically set when setting QLineEdit::echoMode to \c Password.
+                                     Note that setting \c ImhHiddenText does not change the echo mode.
     \value ImhSensitiveData          Typed text should not be stored by the active input method
                                      in any persistent storage like predictive user dictionary.
     \value ImhNoAutoUppercase        The input method should not try to automatically switch to upper case
@@ -2312,6 +2609,11 @@
     \value ImhDate                   The text editor functions as a date field.
     \value ImhTime                   The text editor functions as a time field.
     \value ImhPreferLatin            Latin characters are preferred (but not required).
+
+    \value ImhMultiLine              Multiple lines can be entered into the text field.
+
+    \value ImhNoEditMenu             Do not use built-in edit menu. This flag was introduced in Qt 5.11.
+    \value ImhNoTextHandles          Do not use built-in text cursor and selection handles. This flag was introduced in Qt 5.11.
 
     Flags that restrict input (exclusive flags):
 
@@ -2328,7 +2630,7 @@
 
     \value ImhExclusiveInputMask     This mask yields nonzero if any of the exclusive flags are used.
 
-    \note If several exclusive flags are ORed together, the resulting character set will
+    \note If several exclusive flags are OR-ed together, the resulting character set will
           consist of the union of the specified sets. For instance specifying \c ImhNumbersOnly and
           \c ImhUppercaseOnly would yield a set consisting of numbers and uppercase letters.
 
@@ -2339,7 +2641,7 @@
     \enum Qt::InputMethodQuery
 
     \value ImEnabled            The widget accepts input method input.
-    \value ImMicroFocus         \obsolete replaced by \c ImCursorRectangle
+    \value ImMicroFocus         This query is obsolete. Use \c ImCursorRectangle instead.
     \value ImCursorRectangle    The rectangle covering the area of the input cursor in widget coordinates.
     \value ImFont               The currently used font for text input.
     \value ImCursorPosition     The logical position of the cursor within the text surrounding the input area
@@ -2347,13 +2649,24 @@
     \value ImSurroundingText    The plain text around the input area, for example the current paragraph.
     \value ImCurrentSelection   The currently selected text.
     \value ImMaximumTextLength  The maximum number of characters that the widget can hold. If there is no limit,
-                                QVariant() is returned.
+                                QVariant::QVariant() is returned.
     \value ImAnchorPosition     The position of the selection anchor. This may be less or greater than
                                 \c ImCursorPosition, depending on which side of selection the cursor is.
                                 If there is no selection, it returns the same as \c ImCursorPosition.
     \value ImHints              The hints for input method on expected input. (See Qt::InputMethodHints)
     \value ImPreferredLanguage  The preferred input language.
     \value ImPlatformData       Platform specific data for input method.
+    \value ImAbsolutePosition   The logical position of the cursor within the entire document.
+    \value ImTextBeforeCursor   The plain text before the cursor. The widget can decide how much text to return,
+                                but \b{must} not return an empty string unless the cursor is at the start of the document.
+    \value ImTextAfterCursor    The plain text after the cursor. The widget can decide how much text to return,
+                                but \b{must} not return an empty string unless the cursor is at the end of the document.
+    \value ImEnterKeyType       The Enter key type.
+    \value ImAnchorRectangle    The bounding rectangle of the selection anchor.
+                                This value was added in Qt 5.7.
+    \value ImInputItemClipRectangle The actual exposed input item rectangle. Parts of the input item might be
+                                clipped. This value will take clipping into consideration and return the actual painted
+                                item rectangle. The rectangle is in widget coordinates.
 
     Masks:
 
@@ -2361,6 +2674,37 @@
     \value ImQueryAll           Query for all input method properties.
 
     \sa QInputMethodQueryEvent
+*/
+
+/*!
+    \enum Qt::EnterKeyType
+
+    This can be used to alter the appearance of the Return key on an on-screen keyboard.
+
+    \note Not all of these values are supported on all platforms.
+    For unsupported values the default key will be used instead.
+
+    \value EnterKeyDefault     The default Enter key.
+                               This can either be a button closing the keyboard, or a Return button
+                               causing a new line in case of a multi-line input field.
+    \value EnterKeyReturn      Show a Return button that inserts a new line.
+                               The keyboard will not close when this button is pressed.
+    \value EnterKeyDone        Show a "Done" button.
+                               The keyboard will close when this button is pressed.
+    \value EnterKeyGo          Show a "Go" button.
+                               Typically used in an address bar when entering a URL; the keyboard
+                               will close when this button is pressed.
+    \value EnterKeySend        Show a "Send" button.
+                               The keyboard will close when this button is pressed.
+    \value EnterKeySearch      Show a "Search" button.
+                               The keyboard will close when this button is pressed.
+    \value EnterKeyNext        Show a "Next" button.
+                               Typically used in a form to allow navigating to the next input field;
+                               the keyboard will not close when this button is pressed.
+    \value EnterKeyPrevious    Show a "Previous" button.
+                               The keyboard will not close when this button is pressed.
+
+    \since 5.6
 */
 
 /*!
@@ -2390,7 +2734,7 @@
     \value FontRole             The font used for items rendered with the default
                                 delegate. (QFont)
     \value TextAlignmentRole    The alignment of the text for items rendered with the
-                                default delegate. (Qt::AlignmentFlag)
+                                default delegate. (Qt::Alignment)
     \value BackgroundRole       The background brush used for items rendered with
                                 the default delegate. (QBrush)
     \value BackgroundColorRole  This role is obsolete. Use BackgroundRole instead.
@@ -2438,13 +2782,25 @@
     \value ItemIsDropEnabled It can be used as a drop target.
     \value ItemIsUserCheckable It can be checked or unchecked by the user.
     \value ItemIsEnabled The user can interact with the item.
-    \value ItemIsTristate The item is checkable with three separate states.
+    \value ItemIsAutoTristate The item's state depends on the state of its children.
+           This enables automatic management of the state of parent items in QTreeWidget
+           (checked if all children are checked, unchecked if all children are unchecked,
+           or partially checked if only some children are checked).
+    \value ItemIsTristate \e{This enum value is deprecated.} Use Qt::ItemIsAutoTristate
+    instead.
+    \value ItemNeverHasChildren The item never has child items.
+           This is used for optimization purposes only.
+    \value ItemIsUserTristate The user can cycle through three separate states.
+           This value was added in Qt 5.5.
 
     Note that checkable items need to be given both a suitable set of flags
     and an initial state, indicating whether the item is checked or not.
     This is handled automatically for model/view components, but needs
     to be explicitly set for instances of QListWidgetItem, QTableWidgetItem,
     and QTreeWidgetItem.
+
+    Note that it is undefined behavior to reimplement QAbstractItemModel::hasChildren
+    to return true for an index if that index has the Qt::ItemNeverHasChildren flag set.
 
     \sa QAbstractItemModel
 */
@@ -2487,10 +2843,10 @@
     \value ElideNone    Ellipsis should NOT appear in the text.
 
     Qt::ElideMiddle is normally the most appropriate choice for URLs (e.g.,
-    "\l{http://bugreports.qt-project.org/browse/QTWEBSITE-13}{http://bugreports.qt.../QTWEBSITE-13/}"),
+    "\l{http://bugreports.qt.io/browse/QTWEBSITE-13}{http://bugreports.qt.../QTWEBSITE-13/}"),
     whereas Qt::ElideRight is appropriate
     for other strings (e.g.,
-    "\l{http://qt.nokia.com/doc/qq/qq09-mac-deployment.html}{Deploying Applications on Ma...}").
+    "\l{http://doc.qt.io/archives/qq/qq09-mac-deployment.html}{Deploying Applications on Ma...}").
 
     \sa QAbstractItemView::textElideMode, QFontMetrics::elidedText(), AlignmentFlag, QTabBar::elideMode
 */
@@ -2654,10 +3010,10 @@
 
     This enum specifies the coordinate system.
 
-    \value DeviceCoordinates Coordinates are relative to the upper-left corner
+    \value DeviceCoordinates Coordinates are relative to the top-left corner
     of the object's paint device.
 
-    \value LogicalCoordinates Coordinates are relative to the upper-left corner
+    \value LogicalCoordinates Coordinates are relative to the top-left corner
     of the object.
 */
 
@@ -2679,11 +3035,11 @@
 
     This enum type describes the state of a gesture.
 
+    \value NoGesture        No gesture has been detected.
     \value GestureStarted   A continuous gesture has started.
     \value GestureUpdated   A gesture continues.
     \value GestureFinished  A gesture has finished.
     \value GestureCanceled  A gesture was canceled.
-    \omitvalue NoGesture
 
     \sa QGesture
 */
@@ -2737,6 +3093,23 @@
 */
 
 /*!
+    \enum Qt::NativeGestureType
+    \since 5.2
+
+    This enum returns the gesture type.
+
+    \value BeginNativeGesture Sent before gesture event stream.
+    \value EndNativeGesture   Sent after gesture event stream.
+    \value PanNativeGesture   Sent after a panning gesture.
+                              Similar to a click-and-drag mouse movement.
+    \value ZoomNativeGesture  Specifies the magnification delta in percent.
+    \value SmartZoomNativeGesture Boolean magnification state.
+    \value RotateNativeGesture    Rotation delta in degrees.
+    \value SwipeNativeGesture     Sent after a swipe movements.
+
+*/
+
+/*!
     \enum Qt::NavigationMode
     \since 4.6
 
@@ -2755,9 +3128,8 @@
                                              it is displayed regardless of device type.
                                              The keypad is used to implement a virtual cursor, unless
                                              the device has an analog mouse type of input device (e.g. touchpad)
-
-    \note: in 4.6, cursor navigation is only implemented for Symbian OS.
-           On other platforms, it behaves as NavigationModeNone.
+    \note Cursor navigation is not currently implemented on any platform
+    and behaves as NavigationModeNone.
     \sa QApplication::setNavigationMode()
     \sa QApplication::navigationMode()
 */
@@ -2786,7 +3158,7 @@
     \value CoarseTimer Coarse timers try to keep accuracy within 5% of the desired interval
     \value VeryCoarseTimer Very coarse timers only keep full second accuracy
 
-    On UNIX (including Linux and Mac OS X), Qt will keep millisecond accuracy
+    On UNIX (including Linux, \macos, and iOS), Qt will keep millisecond accuracy
     for Qt::PreciseTimer. For Qt::CoarseTimer, the interval will be adjusted up
     to 5% to align the timer with other timers that are expected to fire at or
     around the same time. The objective is to make most timers wake up at the
@@ -2799,4 +3171,74 @@
     On all platforms, the interval for Qt::VeryCoarseTimer is rounded to the
     nearest full second (e.g. an interval of 23500ms will be rounded to
     24000ms, and 20300ms to 20000ms).
+*/
+
+/*!
+    \enum Qt::ScrollPhase
+    \since 5.2
+
+    This enum describes the phase of scrolling.
+
+    \value NoScrollPhase The input device doesn't support scroll phase.
+    This value was introduced in Qt 5.7.
+
+    \value ScrollBegin Scrolling is about to begin, but the scrolling
+    distance did not yet change.
+
+    \value ScrollUpdate The scrolling distance has changed (default).
+
+    \value ScrollEnd Scrolling has ended, but the scrolling distance
+    did not change anymore.
+*/
+
+/*!
+    \enum Qt::MouseEventSource
+    \since 5.3
+
+    This enum describes the source of a mouse event and can be useful
+    to determine if the event is an artificial mouse event originating
+    from another device such as a touchscreen.
+
+    \value MouseEventNotSynthesized The most common value. On
+    platforms where such information is available this value indicates
+    that the event was generated in response to a genuine mouse event
+    in the system.
+
+    \value MouseEventSynthesizedBySystem Indicates that the mouse
+    event was synthesized from a touch event by the platform.
+
+    \value MouseEventSynthesizedByQt Indicates that the mouse event was
+    synthesized from an unhandled touch event by Qt.
+
+    \value MouseEventSynthesizedByApplication Indicates that the mouse
+    event was synthesized by the application. This allows
+    distinguishing application-generated mouse events from the ones
+    that are coming from the system or are synthesized by Qt. This
+    value was introduced in Qt 5.6
+
+    \sa Qt::AA_SynthesizeMouseForUnhandledTouchEvents
+*/
+
+/*!
+    \enum Qt::MouseEventFlag
+    \since 5.3
+
+    This enum provides additional information concerning a QMouseEvent.
+
+    \value MouseEventCreatedDoubleClick Indicates that Qt has created a
+    \l {QEvent::MouseButtonDblClick}{MouseButtonDblClick} event from this event. The flag is set in the causing
+    \l {QEvent::MouseButtonPress}{MouseButtonPress}, and not in the resulting \l {QEvent::MouseButtonDblClick}{MouseButtonDblClick}.
+
+    \omitvalue MouseEventFlagMask
+*/
+
+/*!
+  \enum Qt::ChecksumType
+  \since 5.9
+
+  This enum describes the possible standards used by qChecksum().
+
+  \value ChecksumIso3309 Checksum calculation based on ISO 3309.
+
+  \value ChecksumItuV41 Checksum calculation based on ITU-V.41.
 */

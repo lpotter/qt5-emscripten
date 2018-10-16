@@ -1,51 +1,46 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-#include <QtGui/QtGui>
-#include <QtWidgets/QtWidgets>
-#include <QtTest/QtTest>
+#include <QDataWidgetMapper>
+#include <QStandardItemModel>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QTextEdit>
+#include <QVBoxLayout>
+#include <QTest>
+#include <QSignalSpy>
+#include <QMetaType>
 
 class tst_QDataWidgetMapper: public QObject
 {
     Q_OBJECT
 private slots:
+    void initTestCase();
+
     void setModel();
     void navigate();
     void addMapping();
@@ -55,25 +50,36 @@ private slots:
     void mappedWidgetAt();
 
     void comboBox();
+
+    void textEditDoesntChangeFocusOnTab_qtbug3305();
 };
+
+Q_DECLARE_METATYPE(QAbstractItemDelegate::EndEditHint)
 
 static QStandardItemModel *testModel(QObject *parent = 0)
 {
     QStandardItemModel *model = new QStandardItemModel(10, 10, parent);
 
     for (int row = 0; row < 10; ++row) {
+        const QString prefix = QLatin1String("item ") + QString::number(row)
+            + QLatin1Char(' ');
         for (int col = 0; col < 10; ++col)
-            model->setData(model->index(row, col), QString("item %1 %2").arg(row).arg(col));
+            model->setData(model->index(row, col), prefix + QString::number(col));
     }
 
     return model;
+}
+
+void tst_QDataWidgetMapper::initTestCase()
+{
+    qRegisterMetaType<QAbstractItemDelegate::EndEditHint>();
 }
 
 void tst_QDataWidgetMapper::setModel()
 {
     QDataWidgetMapper mapper;
 
-    QCOMPARE(mapper.model(), (QAbstractItemModel *)0);
+    QCOMPARE(mapper.model(), nullptr);
 
     { // let the model go out of scope firstma
         QStandardItemModel model;
@@ -81,7 +87,7 @@ void tst_QDataWidgetMapper::setModel()
         QCOMPARE(mapper.model(), static_cast<QAbstractItemModel *>(&model));
     }
 
-    QCOMPARE(mapper.model(), (QAbstractItemModel *)0);
+    QCOMPARE(mapper.model(), nullptr);
 
     { // let the mapper go out of scope first
         QStandardItemModel model2;
@@ -257,7 +263,7 @@ void tst_QDataWidgetMapper::addMapping()
         QCOMPARE(edit2.text(), QString("item 0 2"));
     } // let the edit go out of scope
 
-    QCOMPARE(mapper.mappedWidgetAt(2), (QWidget *)0);
+    QCOMPARE(mapper.mappedWidgetAt(2), nullptr);
     mapper.toLast();
 }
 
@@ -394,7 +400,7 @@ void tst_QDataWidgetMapper::mappedWidgetAt()
     QLineEdit lineEdit1;
     QLineEdit lineEdit2;
 
-    QCOMPARE(mapper.mappedWidgetAt(432312), (QWidget*)0);
+    QCOMPARE(mapper.mappedWidgetAt(432312), nullptr);
 
     mapper.addMapping(&lineEdit1, 1);
     mapper.addMapping(&lineEdit2, 2);
@@ -404,8 +410,66 @@ void tst_QDataWidgetMapper::mappedWidgetAt()
 
     mapper.addMapping(&lineEdit2, 4242);
 
-    QCOMPARE(mapper.mappedWidgetAt(2), (QWidget*)0);
+    QCOMPARE(mapper.mappedWidgetAt(2), nullptr);
     QCOMPARE(mapper.mappedWidgetAt(4242), static_cast<QWidget *>(&lineEdit2));
+}
+
+void tst_QDataWidgetMapper::textEditDoesntChangeFocusOnTab_qtbug3305()
+{
+    QDataWidgetMapper mapper;
+    QAbstractItemModel *model = testModel(&mapper);
+    mapper.setModel(model);
+
+    QSignalSpy closeEditorSpy(mapper.itemDelegate(), SIGNAL(closeEditor(QWidget*,QAbstractItemDelegate::EndEditHint)));
+    QVERIFY(closeEditorSpy.isValid());
+
+    QWidget container;
+    container.setLayout(new QVBoxLayout);
+
+    QLineEdit *lineEdit = new QLineEdit;
+    mapper.addMapping(lineEdit, 0);
+    container.layout()->addWidget(lineEdit);
+
+    QTextEdit *textEdit = new QTextEdit;
+    mapper.addMapping(textEdit, 1);
+    container.layout()->addWidget(textEdit);
+
+    lineEdit->setFocus();
+
+    container.show();
+
+    QApplication::setActiveWindow(&container);
+    QVERIFY(QTest::qWaitForWindowActive(&container));
+
+    int closeEditorSpyCount = 0;
+    const QString textEditContents = textEdit->toPlainText();
+
+    QCOMPARE(closeEditorSpy.count(), closeEditorSpyCount);
+    QVERIFY(lineEdit->hasFocus());
+    QVERIFY(!textEdit->hasFocus());
+
+    // this will generate a closeEditor for the tab key, and another for the focus out
+    QTest::keyClick(QApplication::focusWidget(), Qt::Key_Tab);
+    closeEditorSpyCount += 2;
+    QTRY_COMPARE(closeEditorSpy.count(), closeEditorSpyCount);
+
+    QTRY_VERIFY(textEdit->hasFocus());
+    QVERIFY(!lineEdit->hasFocus());
+
+    // now that the text edit is focused, a tab keypress will insert a tab, not change focus
+    QTest::keyClick(QApplication::focusWidget(), Qt::Key_Tab);
+    QTRY_COMPARE(closeEditorSpy.count(), closeEditorSpyCount);
+
+    QVERIFY(!lineEdit->hasFocus());
+    QVERIFY(textEdit->hasFocus());
+    QCOMPARE(textEdit->toPlainText(), QLatin1Char('\t') + textEditContents);
+
+    // now give focus back to the line edit and check closeEditor gets emitted
+    lineEdit->setFocus();
+    QTRY_VERIFY(lineEdit->hasFocus());
+    QVERIFY(!textEdit->hasFocus());
+    ++closeEditorSpyCount;
+    QCOMPARE(closeEditorSpy.count(), closeEditorSpyCount);
 }
 
 QTEST_MAIN(tst_QDataWidgetMapper)

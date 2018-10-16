@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -38,21 +48,40 @@
 **
 ****************************************************************************/
 
-#include <QGuiApplication>
+#include "hellowindow.h"
+
 #include <qpa/qplatformintegration.h>
-#include <private/qguiapplication_p.h>
+
+#include <QCommandLineParser>
+#include <QCommandLineOption>
+#include <QGuiApplication>
 #include <QScreen>
 #include <QThread>
 
-#include "hellowindow.h"
-
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
 
-    const bool multipleWindows =
-        QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::ThreadedOpenGL)
-        && !QGuiApplication::arguments().contains(QLatin1String("--single"));
+    QCoreApplication::setApplicationName("Qt HelloWindow GL Example");
+    QCoreApplication::setOrganizationName("QtProject");
+    QCoreApplication::setApplicationVersion(QT_VERSION_STR);
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QCoreApplication::applicationName());
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption multipleOption("multiple", "Create multiple windows");
+    parser.addOption(multipleOption);
+    QCommandLineOption multipleSampleOption("multisample", "Multisampling");
+    parser.addOption(multipleSampleOption);
+    QCommandLineOption multipleScreenOption("multiscreen", "Run on multiple screens");
+    parser.addOption(multipleScreenOption);
+    QCommandLineOption timeoutOption("timeout", "Close after 10s");
+    parser.addOption(timeoutOption);
+    parser.process(app);
+
+    // Some platforms can only have one window per screen. Therefore we need to differentiate.
+    const bool multipleWindows = parser.isSet(multipleOption);
+    const bool multipleScreens = parser.isSet(multipleScreenOption);
 
     QScreen *screen = QGuiApplication::primaryScreen();
 
@@ -60,7 +89,8 @@ int main(int argc, char **argv)
 
     QSurfaceFormat format;
     format.setDepthBufferSize(16);
-    format.setSamples(4);
+    if (parser.isSet(multipleSampleOption))
+        format.setSamples(4);
 
     QPoint center = QPoint(screenGeometry.center().x(), screenGeometry.top() + 80);
     QSize windowSize(400, 320);
@@ -71,7 +101,7 @@ int main(int argc, char **argv)
 
     HelloWindow *windowA = new HelloWindow(rendererA);
     windowA->setGeometry(QRect(center, windowSize).translated(-windowSize.width() - delta / 2, 0));
-    windowA->setTitle(QLatin1String("Thread A - Context A"));
+    windowA->setTitle(QStringLiteral("Thread A - Context A"));
     windowA->setVisible(true);
     windows.prepend(windowA);
 
@@ -85,21 +115,22 @@ int main(int argc, char **argv)
 
         HelloWindow *windowB = new HelloWindow(rendererA);
         windowB->setGeometry(QRect(center, windowSize).translated(delta / 2, 0));
-        windowB->setTitle(QLatin1String("Thread A - Context A"));
+        windowB->setTitle(QStringLiteral("Thread A - Context A"));
         windowB->setVisible(true);
         windows.prepend(windowB);
 
         HelloWindow *windowC = new HelloWindow(rendererB);
         windowC->setGeometry(QRect(center, windowSize).translated(-windowSize.width() / 2, windowSize.height() + delta));
-        windowC->setTitle(QLatin1String("Thread B - Context B"));
+        windowC->setTitle(QStringLiteral("Thread B - Context B"));
         windowC->setVisible(true);
         windows.prepend(windowC);
-
+    }
+    if (multipleScreens) {
         for (int i = 1; i < QGuiApplication::screens().size(); ++i) {
             QScreen *screen = QGuiApplication::screens().at(i);
             QSharedPointer<Renderer> renderer(new Renderer(format, rendererA.data(), screen));
 
-            renderThread = new QThread;
+            QThread *renderThread = new QThread;
             renderer->moveToThread(renderThread);
             renderThreads.prepend(renderThread);
 
@@ -108,26 +139,32 @@ int main(int argc, char **argv)
 
             QSize windowSize = screenGeometry.size() * 0.8;
 
-            HelloWindow *window = new HelloWindow(renderer);
-            window->setScreen(screen);
+            HelloWindow *window = new HelloWindow(renderer, screen);
             window->setGeometry(QRect(center, windowSize).translated(-windowSize.width() / 2, -windowSize.height() / 2));
 
             QChar id = QChar('B' + i);
-            window->setTitle(QLatin1String("Thread ") + id + QLatin1String(" - Context ") + id);
+            window->setTitle(QStringLiteral("Thread ") + id + QStringLiteral(" - Context ") + id);
             window->setVisible(true);
             windows.prepend(window);
         }
     }
 
     for (int i = 0; i < renderThreads.size(); ++i) {
-        QObject::connect(qGuiApp, SIGNAL(lastWindowClosed()), renderThreads.at(i), SLOT(quit()));
+        QObject::connect(qGuiApp, &QGuiApplication::lastWindowClosed, renderThreads.at(i), &QThread::quit);
         renderThreads.at(i)->start();
     }
 
+    // Quit after 10 seconds. For platforms that do not have windows that are closeable.
+    if (parser.isSet(timeoutOption))
+        QTimer::singleShot(10000, qGuiApp, &QCoreApplication::quit);
+
     const int exitValue = app.exec();
 
-    for (int i = 0; i < renderThreads.size(); ++i)
+    for (int i = 0; i < renderThreads.size(); ++i) {
+        renderThreads.at(i)->quit(); // some platforms may not have windows to close so ensure quit()
         renderThreads.at(i)->wait();
+    }
+
     qDeleteAll(windows);
     qDeleteAll(renderThreads);
 

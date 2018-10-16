@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,43 +10,40 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qwaitcondition.h"
+#include "qdeadlinetimer.h"
 #include "qnamespace.h"
 #include "qmutex.h"
 #include "qreadwritelock.h"
 #include "qlist.h"
 #include "qalgorithms.h"
-
-#ifndef QT_NO_THREAD
 
 #define Q_MUTEX_T void*
 #include <private/qmutex_p.h>
@@ -64,7 +61,11 @@ class QWaitConditionEvent
 public:
     inline QWaitConditionEvent() : priority(0), wokenUp(false)
     {
+#ifndef Q_OS_WINRT
         event = CreateEvent(NULL, TRUE, FALSE, NULL);
+#else
+        event = CreateEventEx(NULL, NULL, CREATE_EVENT_MANUAL_RESET, EVENT_ALL_ACCESS);
+#endif
     }
     inline ~QWaitConditionEvent() { CloseHandle(event); }
     int priority;
@@ -91,7 +92,9 @@ QWaitConditionEvent *QWaitConditionPrivate::pre()
     mtx.lock();
     QWaitConditionEvent *wce =
         freeQueue.isEmpty() ? new QWaitConditionEvent : freeQueue.takeFirst();
+#ifndef Q_OS_WINRT
     wce->priority = GetThreadPriority(GetCurrentThread());
+#endif
     wce->wokenUp = false;
 
     // insert 'wce' into the queue (sorted by priority)
@@ -111,7 +114,7 @@ bool QWaitConditionPrivate::wait(QWaitConditionEvent *wce, unsigned long time)
 {
     // wait for the event
     bool ret = false;
-    switch (WaitForSingleObject(wce->event, time)) {
+    switch (WaitForSingleObjectEx(wce->event, time, FALSE)) {
     default: break;
 
     case WAIT_OBJECT_0:
@@ -132,7 +135,7 @@ void QWaitConditionPrivate::post(QWaitConditionEvent *wce, bool ret)
 
     // wakeups delivered after the timeout should be forwarded to the next waiter
     if (!ret && wce->wokenUp && !queue.isEmpty()) {
-        QWaitConditionEvent *other = queue.first();
+        QWaitConditionEvent *other = queue.constFirst();
         SetEvent(other->event);
         other->wokenUp = true;
     }
@@ -180,22 +183,29 @@ bool QWaitCondition::wait(QMutex *mutex, unsigned long time)
     return returnValue;
 }
 
+bool QWaitCondition::wait(QMutex *mutex, QDeadlineTimer deadline)
+{
+    return wait(mutex, deadline.remainingTime());
+}
+
 bool QWaitCondition::wait(QReadWriteLock *readWriteLock, unsigned long time)
 {
-    if (!readWriteLock || readWriteLock->d->accessCount == 0)
+    if (!readWriteLock)
         return false;
-    if (readWriteLock->d->accessCount < -1) {
+    auto previousState = readWriteLock->stateForWaitCondition();
+    if (previousState == QReadWriteLock::Unlocked)
+        return false;
+    if (previousState == QReadWriteLock::RecursivelyLocked) {
         qWarning("QWaitCondition: cannot wait on QReadWriteLocks with recursive lockForWrite()");
         return false;
     }
 
     QWaitConditionEvent *wce = d->pre();
-    int previousAccessCount = readWriteLock->d->accessCount;
     readWriteLock->unlock();
 
     bool returnValue = d->wait(wce, time);
 
-    if (previousAccessCount < 0)
+    if (previousState == QReadWriteLock::LockedForWrite)
         readWriteLock->lockForWrite();
     else
         readWriteLock->lockForRead();
@@ -204,12 +214,16 @@ bool QWaitCondition::wait(QReadWriteLock *readWriteLock, unsigned long time)
     return returnValue;
 }
 
+bool QWaitCondition::wait(QReadWriteLock *readWriteLock, QDeadlineTimer deadline)
+{
+    return wait(readWriteLock, deadline.remainingTime());
+}
+
 void QWaitCondition::wakeOne()
 {
     // wake up the first waiting thread in the queue
     QMutexLocker locker(&d->mtx);
-    for (int i = 0; i < d->queue.size(); ++i) {
-        QWaitConditionEvent *current = d->queue.at(i);
+    for (QWaitConditionEvent *current : qAsConst(d->queue)) {
         if (current->wokenUp)
             continue;
         SetEvent(current->event);
@@ -222,12 +236,10 @@ void QWaitCondition::wakeAll()
 {
     // wake up the all threads in the queue
     QMutexLocker locker(&d->mtx);
-    for (int i = 0; i < d->queue.size(); ++i) {
-        QWaitConditionEvent *current = d->queue.at(i);
+    for (QWaitConditionEvent *current : qAsConst(d->queue)) {
         SetEvent(current->event);
         current->wokenUp = true;
     }
 }
 
 QT_END_NAMESPACE
-#endif // QT_NO_THREAD

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,14 +51,13 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QtGui/qpaintengine.h>
 
 #include <private/qpaintengine_p.h>
 #include <private/qstroker_p.h>
 #include <private/qpainter_p.h>
 
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -169,6 +166,32 @@ public:
         return 0;
     }
 
+    template <typename T> static inline bool isRect(const T *pts, int elementCount) {
+        return (elementCount == 5 // 5-point polygon, check for closed rect
+                && pts[0] == pts[8] && pts[1] == pts[9] // last point == first point
+                && pts[0] == pts[6] && pts[2] == pts[4] // x values equal
+                && pts[1] == pts[3] && pts[5] == pts[7] // y values equal...
+                && pts[0] < pts[4] && pts[1] < pts[5]
+                ) ||
+               (elementCount == 4 // 4-point polygon, check for unclosed rect
+                && pts[0] == pts[6] && pts[2] == pts[4] // x values equal
+                && pts[1] == pts[3] && pts[5] == pts[7] // y values equal...
+                && pts[0] < pts[4] && pts[1] < pts[5]
+                );
+    }
+
+    inline bool isRect() const
+    {
+        const QPainterPath::ElementType * const types = elements();
+
+        return (shape() == QVectorPath::RectangleHint)
+                || (isRect(points(), elementCount())
+                    && (!types || (types[0] == QPainterPath::MoveToElement
+                                   && types[1] == QPainterPath::LineToElement
+                                   && types[2] == QPainterPath::LineToElement
+                                   && types[3] == QPainterPath::LineToElement)));
+    }
+
 
 private:
     Q_DISABLE_COPY(QVectorPath)
@@ -186,7 +209,5 @@ private:
 Q_GUI_EXPORT const QVectorPath &qtVectorPathForPath(const QPainterPath &path);
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

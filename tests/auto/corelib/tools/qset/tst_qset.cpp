@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -73,13 +60,24 @@ private slots:
     void begin();
     void end();
     void insert();
+    void reverseIterators();
     void setOperations();
     void stlIterator();
     void stlMutableIterator();
     void javaIterator();
     void javaMutableIterator();
     void makeSureTheComfortFunctionsCompile();
+    void initializerList();
+    void qhash();
+    void intersects();
 };
+
+struct IdentityTracker {
+    int value, id;
+};
+
+inline uint qHash(IdentityTracker key) { return qHash(key.value); }
+inline bool operator==(IdentityTracker lhs, IdentityTracker rhs) { return lhs.value == rhs.value; }
 
 void tst_QSet::operator_eq()
 {
@@ -136,6 +134,16 @@ void tst_QSet::operator_eq()
 
         QVERIFY(a != b);
         QVERIFY(!(a == b));
+    }
+
+    {
+        QSet<int> s1, s2;
+        s1.reserve(100);
+        s2.reserve(4);
+        QVERIFY(s1 == s2);
+        s1 << 100 << 200 << 300 << 400;
+        s2 << 400 << 300 << 200 << 100;
+        QVERIFY(s1 == s2);
     }
 }
 
@@ -529,6 +537,33 @@ void tst_QSet::insert()
         QVERIFY(set1.size() == 2);
         QVERIFY(set1.contains(2));
     }
+
+    {
+        QSet<IdentityTracker> set;
+        QCOMPARE(set.size(), 0);
+        const int dummy = -1;
+        IdentityTracker id00 = {0, 0}, id01 = {0, 1}, searchKey = {0, dummy};
+        QCOMPARE(set.insert(id00)->id, id00.id);
+        QCOMPARE(set.size(), 1);
+        QCOMPARE(set.insert(id01)->id, id00.id); // first inserted is kept
+        QCOMPARE(set.size(), 1);
+        QCOMPARE(set.find(searchKey)->id, id00.id);
+    }
+}
+
+void tst_QSet::reverseIterators()
+{
+    QSet<int> s;
+    s << 1 << 17 << 61 << 127 << 911;
+    std::vector<int> v(s.begin(), s.end());
+    std::reverse(v.begin(), v.end());
+    const QSet<int> &cs = s;
+    QVERIFY(std::equal(v.begin(), v.end(), s.rbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), s.crbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), cs.rbegin()));
+    QVERIFY(std::equal(s.rbegin(), s.rend(), v.begin()));
+    QVERIFY(std::equal(s.crbegin(), s.crend(), v.begin()));
+    QVERIFY(std::equal(cs.rbegin(), cs.rend(), v.begin()));
 }
 
 void tst_QSet::setOperations()
@@ -713,7 +748,7 @@ void tst_QSet::stlMutableIterator()
         QSet<QString>::const_iterator k = set2.insert("foo");
         i = reinterpret_cast<QSet<QString>::iterator &>(k);
 // #endif
-        QVERIFY(*i == "foo");
+        QCOMPARE(*i, QLatin1String("foo"));
     }
 }
 
@@ -916,6 +951,103 @@ void tst_QSet::makeSureTheComfortFunctionsCompile()
     set1 = set2 & set3;
     set1 = set2 + set3;
     set1 = set2 - set3;
+}
+
+void tst_QSet::initializerList()
+{
+#ifdef Q_COMPILER_INITIALIZER_LISTS
+    QSet<int> set = {1, 1, 2, 3, 4, 5};
+    QCOMPARE(set.count(), 5);
+    QVERIFY(set.contains(1));
+    QVERIFY(set.contains(2));
+    QVERIFY(set.contains(3));
+    QVERIFY(set.contains(4));
+    QVERIFY(set.contains(5));
+
+    // check _which_ of the equal elements gets inserted (in the QHash/QMap case, it's the last):
+    const QSet<IdentityTracker> set2 = {{1, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}};
+    QCOMPARE(set2.count(), 5);
+    const int dummy = -1;
+    const IdentityTracker searchKey = {1, dummy};
+    QCOMPARE(set2.find(searchKey)->id, 0);
+
+    QSet<int> emptySet{};
+    QVERIFY(emptySet.isEmpty());
+
+    QSet<int> set3{{}, {}, {}};
+    QVERIFY(!set3.isEmpty());
+#else
+    QSKIP("Compiler doesn't support initializer lists");
+#endif
+}
+
+void tst_QSet::qhash()
+{
+    //
+    // check that sets containing the same elements hash to the same value
+    //
+    {
+        // create some deterministic initial state:
+        qSetGlobalQHashSeed(0);
+
+        QSet<int> s1;
+        s1.reserve(4);
+        s1 << 400 << 300 << 200 << 100;
+
+        // also change the seed:
+        qSetGlobalQHashSeed(0x10101010);
+
+        QSet<int> s2;
+        s2.reserve(100); // provoke different bucket counts
+        s2 << 100 << 200 << 300 << 400; // and insert elements in different order, too
+
+        QVERIFY(s1.capacity() != s2.capacity());
+        QCOMPARE(s1, s2);
+        QVERIFY(!std::equal(s1.cbegin(), s1.cend(), s2.cbegin())); // verify that the order _is_ different
+        QCOMPARE(qHash(s1), qHash(s2));
+    }
+
+    //
+    // check that sets of sets work:
+    //
+    {
+#ifdef Q_COMPILER_INITIALIZER_LISTS
+        QSet<QSet<int> > intSetSet = { { 0, 1, 2 }, { 0, 1 }, { 1, 2 } };
+#else
+        QSet<QSet<int> > intSetSet;
+        QSet<int> intSet01, intSet12;
+        intSet01 << 0 << 1;
+        intSet12 << 1 << 2;
+        intSetSet << intSet01 << intSet12 << (intSet01|intSet12);
+#endif
+        QCOMPARE(intSetSet.size(), 3);
+    }
+}
+
+void tst_QSet::intersects()
+{
+    QSet<int> s1;
+    QSet<int> s2;
+
+    QVERIFY(!s1.intersects(s1));
+    QVERIFY(!s1.intersects(s2));
+
+    s1 << 100;
+    QVERIFY(s1.intersects(s1));
+    QVERIFY(!s1.intersects(s2));
+
+    s2 << 200;
+    QVERIFY(!s1.intersects(s2));
+
+    s1 << 200;
+    QVERIFY(s1.intersects(s2));
+
+    qSetGlobalQHashSeed(0x10101010);
+    QSet<int> s3;
+    s3 << 500;
+    QVERIFY(!s1.intersects(s3));
+    s3 << 200;
+    QVERIFY(s1.intersects(s3));
 }
 
 QTEST_APPLESS_MAIN(tst_QSet)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -154,7 +152,7 @@ void QDirectFbInput::handleEvents()
 void QDirectFbInput::handleMouseEvents(const DFBEvent &event)
 {
     QPoint p(event.window.x, event.window.y);
-    QPoint globalPos = globalPoint(event);
+    QPoint globalPos(event.window.cx, event.window.cy);
     Qt::MouseButtons buttons = QDirectFbConvenience::mouseButtons(event.window.buttons);
 
     QDirectFBPointer<IDirectFBDisplayLayer> layer(QDirectFbConvenience::dfbDisplayLayer());
@@ -169,8 +167,8 @@ void QDirectFbInput::handleMouseEvents(const DFBEvent &event)
 
 void QDirectFbInput::handleWheelEvent(const DFBEvent &event)
 {
-    QPoint p(event.window.cx, event.window.cy);
-    QPoint globalPos = globalPoint(event);
+    QPoint p(event.window.x, event.window.y);
+    QPoint globalPos(event.window.cx, event.window.cy);
     long timestamp = (event.window.timestamp.tv_sec*1000) + (event.window.timestamp.tv_usec/1000);
     QWindow *tlw = m_tlwMap.value(event.window.window_id);
     QWindowSystemInterface::handleWheelEvent(tlw, timestamp, p, globalPos,
@@ -225,15 +223,6 @@ void QDirectFbInput::handleGeometryEvent(const DFBEvent &event)
     QWindow *tlw = m_tlwMap.value(event.window.window_id);
     QRect rect(event.window.x, event.window.y, event.window.w, event.window.h);
     QWindowSystemInterface::handleGeometryChange(tlw, rect);
-}
-
-inline QPoint QDirectFbInput::globalPoint(const DFBEvent &event) const
-{
-    QDirectFBPointer<IDirectFBWindow> window;
-    m_dfbDisplayLayer->GetWindow(m_dfbDisplayLayer, event.window.window_id, window.outPtr());
-    int x,y;
-    window->GetPosition(window.data(), &x, &y);
-    return QPoint(event.window.cx +x, event.window.cy + y);
 }
 
 QT_END_NAMESPACE

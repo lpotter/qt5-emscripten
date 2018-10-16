@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,6 +43,15 @@
 #include <QtTest/qtestcase.h>
 #include <QtTest/private/qtestresult_p.h>
 #include <QtTest/private/qbenchmark_p.h>
+
+#ifdef min // windows.h without NOMINMAX is included by the benchmark headers.
+#  undef min
+#endif
+#ifdef max
+#  undef max
+#endif
+
+#include <QtCore/qlibraryinfo.h>
 
 #include <string.h>
 
@@ -108,6 +115,11 @@ void QXunitTestLogger::stopLogging()
     property->addAttribute(QTest::AI_PropertyValue, qVersion());
     properties->addLogElement(property);
 
+    property = new QTestElement(QTest::LET_Property);
+    property->addAttribute(QTest::AI_Name, "QtBuild");
+    property->addAttribute(QTest::AI_PropertyValue, QLibraryInfo::build());
+    properties->addLogElement(property);
+
     currentLogElement->addLogElement(properties);
 
     currentLogElement->addLogElement(iterator);
@@ -161,6 +173,13 @@ void QXunitTestLogger::addIncident(IncidentTypes type, const char *description,
         ++failureCounter;
         typeBuf = "fail";
         break;
+    case QAbstractTestLogger::BlacklistedPass:
+        typeBuf = "bpass";
+        break;
+    case QAbstractTestLogger::BlacklistedFail:
+        ++failureCounter;
+        typeBuf = "bfail";
+        break;
     default:
         typeBuf = "??????";
         break;
@@ -193,6 +212,13 @@ void QXunitTestLogger::addIncident(IncidentTypes type, const char *description,
         if (!strcmp(oldResult, "pass")) {
             overwrite = true;
         }
+        else if (!strcmp(oldResult, "bpass")) {
+            overwrite = (type == QAbstractTestLogger::XPass || type == QAbstractTestLogger::Fail) || (type == QAbstractTestLogger::XFail)
+                    || (type == QAbstractTestLogger::BlacklistedFail);
+        }
+        else if (!strcmp(oldResult, "bfail")) {
+            overwrite = (type == QAbstractTestLogger::XPass || type == QAbstractTestLogger::Fail) || (type == QAbstractTestLogger::XFail);
+        }
         else if (!strcmp(oldResult, "xfail")) {
             overwrite = (type == QAbstractTestLogger::XPass || type == QAbstractTestLogger::Fail);
         }
@@ -220,7 +246,7 @@ void QXunitTestLogger::addIncident(IncidentTypes type, const char *description,
         have some information about the expected failure.
     */
     if (type == QAbstractTestLogger::XFail) {
-        QXunitTestLogger::addMessage(QAbstractTestLogger::Info, description, file, line);
+        QXunitTestLogger::addMessage(QAbstractTestLogger::Info, QString::fromUtf8(description), file, line);
     }
 }
 
@@ -230,9 +256,11 @@ void QXunitTestLogger::addBenchmarkResult(const QBenchmarkResult &result)
 
     benchmarkElement->addAttribute(
         QTest::AI_Metric,
-        QTest::benchmarkMetricName(QBenchmarkTestMethodData::current->result.metric));
+        QTest::benchmarkMetricName(result.metric));
     benchmarkElement->addAttribute(QTest::AI_Tag, result.context.tag.toUtf8().data());
-    benchmarkElement->addAttribute(QTest::AI_Value, QByteArray::number(result.value).constData());
+
+    const qreal valuePerIteration = qreal(result.value) / qreal(result.iterations);
+    benchmarkElement->addAttribute(QTest::AI_Value, QByteArray::number(valuePerIteration).constData());
 
     char buf[100];
     qsnprintf(buf, sizeof(buf), "%i", result.iterations);
@@ -261,7 +289,7 @@ void QXunitTestLogger::addTag(QTestElement* element)
     element->addAttribute(QTest::AI_Tag, buf.constData());
 }
 
-void QXunitTestLogger::addMessage(MessageTypes type, const char *message, const char *file, int line)
+void QXunitTestLogger::addMessage(MessageTypes type, const QString &message, const char *file, int line)
 {
     QTestElement *errorElement = new QTestElement(QTest::LET_Error);
     const char *typeBuf = 0;
@@ -275,6 +303,9 @@ void QXunitTestLogger::addMessage(MessageTypes type, const char *message, const 
         break;
     case QAbstractTestLogger::QDebug:
         typeBuf = "qdebug";
+        break;
+    case QAbstractTestLogger::QInfo:
+        typeBuf = "qinfo";
         break;
     case QAbstractTestLogger::QWarning:
         typeBuf = "qwarn";
@@ -294,7 +325,7 @@ void QXunitTestLogger::addMessage(MessageTypes type, const char *message, const 
     }
 
     errorElement->addAttribute(QTest::AI_Type, typeBuf);
-    errorElement->addAttribute(QTest::AI_Description, message);
+    errorElement->addAttribute(QTest::AI_Description, message.toUtf8().constData());
     addTag(errorElement);
 
     if (file)
@@ -312,7 +343,7 @@ void QXunitTestLogger::addMessage(MessageTypes type, const char *message, const 
     // Also add the message to the system error log (i.e. stderr), if one exists
     if (errorLogElement) {
         QTestElement *systemErrorElement = new QTestElement(QTest::LET_Error);
-        systemErrorElement->addAttribute(QTest::AI_Description, message);
+        systemErrorElement->addAttribute(QTest::AI_Description, message.toUtf8().constData());
         errorLogElement->addLogElement(systemErrorElement);
     }
 }

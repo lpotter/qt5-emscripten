@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,6 @@
 
 #include "qfilesystemwatcher.h"
 #include "qfilesystemwatcher_p.h"
-
-#ifndef QT_NO_FILESYSTEMWATCHER
 
 #include <qdatetime.h>
 #include <qdebug.h>
@@ -60,9 +56,14 @@
 #  include "qfilesystemwatcher_win_p.h"
 #elif defined(USE_INOTIFY)
 #  include "qfilesystemwatcher_inotify_p.h"
-#elif defined(Q_OS_FREEBSD) || defined(Q_OS_MAC)
+#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD) || defined(QT_PLATFORM_UIKIT)
 #  include "qfilesystemwatcher_kqueue_p.h"
+#elif defined(Q_OS_OSX)
+#  include "qfilesystemwatcher_fsevents_p.h"
 #endif
+
+#include <algorithm>
+#include <iterator>
 
 QT_BEGIN_NAMESPACE
 
@@ -74,9 +75,12 @@ QFileSystemWatcherEngine *QFileSystemWatcherPrivate::createNativeEngine(QObject 
     // there is a chance that inotify may fail on Linux pre-2.6.13 (August
     // 2005), so we can't just new inotify directly.
     return QInotifyFileSystemWatcherEngine::create(parent);
-#elif defined(Q_OS_FREEBSD) || defined(Q_OS_MAC)
+#elif defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD) || defined(QT_PLATFORM_UIKIT)
     return QKqueueFileSystemWatcherEngine::create(parent);
+#elif defined(Q_OS_OSX)
+    return QFseventsFileSystemWatcherEngine::create(parent);
 #else
+    Q_UNUSED(parent);
     return 0;
 #endif
 }
@@ -99,6 +103,17 @@ void QFileSystemWatcherPrivate::init()
                          SIGNAL(directoryChanged(QString,bool)),
                          q,
                          SLOT(_q_directoryChanged(QString,bool)));
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
+        QObject::connect(static_cast<QWindowsFileSystemWatcherEngine *>(native),
+                         &QWindowsFileSystemWatcherEngine::driveLockForRemoval,
+                         q, [this] (const QString &p) { _q_winDriveLockForRemoval(p); });
+        QObject::connect(static_cast<QWindowsFileSystemWatcherEngine *>(native),
+                         &QWindowsFileSystemWatcherEngine::driveLockForRemovalFailed,
+                         q, [this] (const QString &p) { _q_winDriveLockForRemovalFailed(p); });
+        QObject::connect(static_cast<QWindowsFileSystemWatcherEngine *>(native),
+                         &QWindowsFileSystemWatcherEngine::driveRemoved,
+                         q, [this] (const QString &p) { _q_winDriveRemoved(p); });
+#endif  // !Q_OS_WINRT
     }
 }
 
@@ -143,7 +158,46 @@ void QFileSystemWatcherPrivate::_q_directoryChanged(const QString &path, bool re
     emit q->directoryChanged(path, QFileSystemWatcher::QPrivateSignal());
 }
 
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
 
+void QFileSystemWatcherPrivate::_q_winDriveLockForRemoval(const QString &path)
+{
+    // Windows: Request to lock a (removable/USB) drive for removal, release
+    // its paths under watch, temporarily storing them should the lock fail.
+    Q_Q(QFileSystemWatcher);
+    QStringList pathsToBeRemoved;
+    auto pred = [&path] (const QString &f) { return !f.startsWith(path, Qt::CaseInsensitive); };
+    std::remove_copy_if(files.cbegin(), files.cend(),
+                        std::back_inserter(pathsToBeRemoved), pred);
+    std::remove_copy_if(directories.cbegin(), directories.cend(),
+                        std::back_inserter(pathsToBeRemoved), pred);
+    if (!pathsToBeRemoved.isEmpty()) {
+        q->removePaths(pathsToBeRemoved);
+        temporarilyRemovedPaths.insert(path.at(0), pathsToBeRemoved);
+    }
+}
+
+void QFileSystemWatcherPrivate::_q_winDriveLockForRemovalFailed(const QString &path)
+{
+    // Windows: Request to lock a (removable/USB) drive failed (blocked by other
+    // application), restore the watched paths.
+    Q_Q(QFileSystemWatcher);
+    if (!path.isEmpty()) {
+        const auto it = temporarilyRemovedPaths.find(path.at(0));
+        if (it != temporarilyRemovedPaths.end()) {
+            q->addPaths(it.value());
+            temporarilyRemovedPaths.erase(it);
+        }
+    }
+}
+
+void  QFileSystemWatcherPrivate::_q_winDriveRemoved(const QString &path)
+{
+    // Windows: Drive finally removed, clear out paths stored in lock request.
+    if (!path.isEmpty())
+        temporarilyRemovedPaths.remove(path.at(0));
+}
+#endif // Q_OS_WIN && !Q_OS_WINRT
 
 /*!
     \class QFileSystemWatcher
@@ -171,26 +225,27 @@ void QFileSystemWatcherPrivate::_q_directoryChanged(const QString &path, bool re
     they have been renamed or removed from disk, and directories once
     they have been removed from disk.
 
-    \note On systems running a Linux kernel without inotify support,
-    file systems that contain watched paths cannot be unmounted.
+    \list
+    \li \b Notes:
+    \list
+        \li On systems running a Linux kernel without inotify support,
+        file systems that contain watched paths cannot be unmounted.
 
-    \note Windows CE does not support directory monitoring by
-    default as this depends on the file system driver installed.
-
-    \note The act of monitoring files and directories for
-    modifications consumes system resources. This implies there is a
-    limit to the number of files and directories your process can
-    monitor simultaneously. On Mac OS X 10.4 and all BSD variants, for
-    example, an open file descriptor is required for each monitored
-    file. Some system limits the number of open file descriptors to 256
-    by default. This means that addPath() and addPaths() will fail if
-    your process tries to add more than 256 files or directories to
-    the file system monitor. Also note that your process may have
-    other file descriptors open in addition to the ones for files
-    being monitored, and these other open descriptors also count in
-    the total. Mac OS X 10.5 and up use a different backend and do not
-    suffer from this issue.
-
+         \li The act of monitoring files and directories for
+         modifications consumes system resources. This implies there is a
+         limit to the number of files and directories your process can
+         monitor simultaneously. On all BSD variants, for
+         example, an open file descriptor is required for each monitored
+         file. Some system limits the number of open file descriptors to 256
+         by default. This means that addPath() and addPaths() will fail if
+         your process tries to add more than 256 files or directories to
+         the file system monitor. Also note that your process may have
+         other file descriptors open in addition to the ones for files
+         being monitored, and these other open descriptors also count in
+         the total. \macos uses a different backend and does not
+         suffer from this issue.
+    \endlist
+    \endlist
 
     \sa QFile, QDir
 */
@@ -299,7 +354,9 @@ QStringList QFileSystemWatcher::addPaths(const QStringList &paths)
 
     QFileSystemWatcherEngine *engine = 0;
 
-    if(!objectName().startsWith(QLatin1String("_qt_autotest_force_engine_"))) {
+    const QString on = objectName();
+
+    if (!on.startsWith(QLatin1String("_qt_autotest_force_engine_"))) {
         // Normal runtime case - search intelligently for best engine
         if(d->native) {
             engine = d->native;
@@ -310,13 +367,13 @@ QStringList QFileSystemWatcher::addPaths(const QStringList &paths)
 
     } else {
         // Autotest override case - use the explicitly selected engine only
-        QString forceName = objectName().mid(26);
+        const QStringRef forceName = on.midRef(26);
         if(forceName == QLatin1String("poller")) {
-            qDebug() << "QFileSystemWatcher: skipping native engine, using only polling engine";
+            qDebug("QFileSystemWatcher: skipping native engine, using only polling engine");
             d_func()->initPollerEngine();
             engine = d->poller;
         } else if(forceName == QLatin1String("native")) {
-            qDebug() << "QFileSystemWatcher: skipping polling engine, using only native engine";
+            qDebug("QFileSystemWatcher: skipping polling engine, using only native engine");
             engine = d->native;
         }
     }
@@ -397,12 +454,12 @@ QStringList QFileSystemWatcher::removePaths(const QStringList &paths)
 /*!
     \fn void QFileSystemWatcher::directoryChanged(const QString &path)
 
-    This signal is emitted when the directory at a specified \a path,
-    is modified (e.g., when a file is added, modified or deleted) or
-    removed from disk. Note that if there are several changes during a
-    short period of time, some of the changes might not emit this
-    signal. However, the last change in the sequence of changes will
-    always generate this signal.
+    This signal is emitted when the directory at a specified \a path
+    is modified (e.g., when a file is added or deleted) or removed
+    from disk. Note that if there are several changes during a short
+    period of time, some of the changes might not emit this signal.
+    However, the last change in the sequence of changes will always
+    generate this signal.
 
     \sa fileChanged()
 */
@@ -438,6 +495,5 @@ QStringList QFileSystemWatcher::files() const
 QT_END_NAMESPACE
 
 #include "moc_qfilesystemwatcher.cpp"
-
-#endif // QT_NO_FILESYSTEMWATCHER
+#include "moc_qfilesystemwatcher_p.cpp"
 

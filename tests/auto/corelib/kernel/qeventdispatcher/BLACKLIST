@@ -1,0 +1,7 @@
+[sendPostedEvents]
+windows
+osx
+[registerTimer]
+windows
+osx
+winrt

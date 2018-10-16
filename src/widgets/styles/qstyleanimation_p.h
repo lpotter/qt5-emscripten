@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,11 +40,14 @@
 #ifndef QSTYLEANIMATION_P_H
 #define QSTYLEANIMATION_P_H
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qabstractanimation.h"
 #include "qdatetime.h"
 #include "qimage.h"
 
 QT_BEGIN_NAMESPACE
+
+#ifndef QT_NO_ANIMATION
 
 //
 //  W A R N I N G
@@ -59,7 +60,7 @@ QT_BEGIN_NAMESPACE
 // We mean it.
 //
 
-class QStyleAnimation : public QAbstractAnimation
+class Q_WIDGETS_EXPORT QStyleAnimation : public QAbstractAnimation
 {
     Q_OBJECT
 
@@ -69,7 +70,7 @@ public:
 
     QObject *target() const;
 
-    int duration() const;
+    int duration() const override;
     void setDuration(int duration);
 
     int delay() const;
@@ -78,19 +79,35 @@ public:
     QTime startTime() const;
     void setStartTime(const QTime &time);
 
+    enum FrameRate {
+        DefaultFps,
+        SixtyFps,
+        ThirtyFps,
+        TwentyFps,
+        FifteenFps
+    };
+
+    FrameRate frameRate() const;
+    void setFrameRate(FrameRate fps);
+
     void updateTarget();
+
+public Q_SLOTS:
+    void start();
 
 protected:
     virtual bool isUpdateNeeded() const;
-    virtual void updateCurrentTime(int time);
+    virtual void updateCurrentTime(int time) override;
 
 private:
     int _delay;
     int _duration;
     QTime _startTime;
+    FrameRate _fps;
+    int _skip;
 };
 
-class QProgressStyleAnimation : public QStyleAnimation
+class Q_WIDGETS_EXPORT QProgressStyleAnimation : public QStyleAnimation
 {
     Q_OBJECT
 
@@ -104,14 +121,14 @@ public:
     void setSpeed(int speed);
 
 protected:
-    bool isUpdateNeeded() const;
+    bool isUpdateNeeded() const override;
 
 private:
     int _speed;
     mutable int _step;
 };
 
-class QNumberStyleAnimation : public QStyleAnimation
+class Q_WIDGETS_EXPORT QNumberStyleAnimation : public QStyleAnimation
 {
     Q_OBJECT
 
@@ -127,7 +144,7 @@ public:
     qreal currentValue() const;
 
 protected:
-    bool isUpdateNeeded() const;
+    bool isUpdateNeeded() const override;
 
 private:
     qreal _start;
@@ -135,7 +152,7 @@ private:
     mutable qreal _prev;
 };
 
-class QBlendStyleAnimation : public QStyleAnimation
+class Q_WIDGETS_EXPORT QBlendStyleAnimation : public QStyleAnimation
 {
     Q_OBJECT
 
@@ -153,7 +170,7 @@ public:
     QImage currentImage() const;
 
 protected:
-    virtual void updateCurrentTime(int time);
+    virtual void updateCurrentTime(int time) override;
 
 private:
     Type _type;
@@ -161,6 +178,30 @@ private:
     QImage _end;
     QImage _current;
 };
+
+class Q_WIDGETS_EXPORT QScrollbarStyleAnimation : public QNumberStyleAnimation
+{
+    Q_OBJECT
+
+public:
+    enum Mode { Activating, Deactivating };
+
+    QScrollbarStyleAnimation(Mode mode, QObject *target);
+
+    Mode mode() const;
+
+    bool wasActive() const;
+    void setActive(bool active);
+
+private slots:
+    void updateCurrentTime(int time) override;
+
+private:
+    Mode _mode;
+    bool _active;
+};
+
+#endif // QT_NO_ANIMATION
 
 QT_END_NAMESPACE
 

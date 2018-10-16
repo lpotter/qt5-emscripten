@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,13 +28,10 @@
 
 #include <QtTest/QtTest>
 #include <qrect.h>
+#include <qmargins.h>
 #include <limits.h>
 #include <qdebug.h>
 
-Q_DECLARE_METATYPE(QRectF)
-Q_DECLARE_METATYPE(QPointF)
-Q_DECLARE_METATYPE(QRect)
-Q_DECLARE_METATYPE(QPoint)
 
 class tst_QRect : public QObject
 {
@@ -137,9 +121,14 @@ private slots:
     void newMoveTopLeft();
     void newMoveBottomRight_data();
     void newMoveBottomRight();
+    void margins();
+    void marginsf();
 
     void translate_data();
     void translate();
+
+    void transposed_data();
+    void transposed();
 
     void moveTop();
     void moveBottom();
@@ -182,6 +171,7 @@ private slots:
     void containsPointF_data();
     void containsPointF();
     void smallRects() const;
+    void toRect();
 };
 
 // Used to work around some floating point precision problems.
@@ -2358,7 +2348,7 @@ void tst_QRect::center_data()
     QTest::newRow( "SmallestQRect" ) << getQRectCase( SmallestQRect ) << QPoint(1,1);
     QTest::newRow( "MiddleQRect" ) << getQRectCase( MiddleQRect ) << QPoint(0,0);
     QTest::newRow( "LargestQRect" ) << getQRectCase( LargestQRect ) << QPoint(INT_MAX/2,INT_MAX/2);
-    QTest::newRow( "SmallestCoordQRect" ) << getQRectCase( SmallestCoordQRect ) << QPoint(0,0);
+    QTest::newRow( "SmallestCoordQRect" ) << getQRectCase( SmallestCoordQRect ) << QPoint(INT_MIN, INT_MIN);
     QTest::newRow( "LargestCoordQRect" ) << getQRectCase( LargestCoordQRect ) << QPoint(0,0);
     QTest::newRow( "RandomQRect" ) << getQRectCase( RandomQRect ) << QPoint(105,207);
     QTest::newRow( "NegativeSizeQRect" ) << getQRectCase( NegativeSizeQRect ) << QPoint(-4,-4);
@@ -3180,8 +3170,7 @@ void tst_QRect::newMoveTopLeft_data()
     }
 
     {
-        QTest::newRow("LargestCoordQRect_NullQPoint") << getQRectCase(LargestCoordQRect) << getQPointCase(NullQPoint)
-            << QRect(QPoint(0,0), QPoint(INT_MAX+(0-INT_MIN),INT_MAX+(0-INT_MIN)));
+        // QTest::newRow("LargestCoordQRect_NullQPoint") -- Not tested as it would cause an overflow
         QTest::newRow("LargestCoordQRect_SmallestCoordQPoint") << getQRectCase(LargestCoordQRect) << getQPointCase(SmallestCoordQPoint)
             << QRect(QPoint(INT_MIN,INT_MIN), QPoint(INT_MAX,INT_MAX));
         // QTest::newRow("LargestCoordQRect_MiddleNegCoordQPoint") -- Not tested as it would cause an overflow
@@ -3488,6 +3477,53 @@ void tst_QRect::newMoveBottomRight()
     QCOMPARE(r,nr);
 }
 
+void tst_QRect::margins()
+{
+    const QRect rectangle = QRect(QPoint(10, 10), QSize(50 ,50));
+    const QMargins margins = QMargins(2, 3, 4, 5);
+
+    const QRect added = rectangle + margins;
+    QCOMPARE(added, QRect(QPoint(8, 7), QSize(56, 58)));
+    QCOMPARE(added, margins + rectangle);
+    QCOMPARE(added, rectangle.marginsAdded(margins));
+
+    const QRect subtracted = rectangle - margins;
+    QCOMPARE(subtracted, QRect(QPoint(12, 13), QSize(44, 42)));
+    QCOMPARE(subtracted, rectangle.marginsRemoved(margins));
+
+    QRect a = rectangle;
+    a += margins;
+    QCOMPARE(added, a);
+
+    a = rectangle;
+    a -= margins;
+    QCOMPARE(a, QRect(QPoint(12, 13), QSize(44, 42)));
+    QCOMPARE(a, rectangle.marginsRemoved(margins));
+}
+
+void tst_QRect::marginsf()
+{
+    const QRectF rectangle = QRectF(QPointF(10.5, 10.5), QSizeF(50.5 ,150.5));
+    const QMarginsF margins = QMarginsF(2.5, 3.5, 4.5, 5.5);
+
+    const QRectF added = rectangle + margins;
+    QCOMPARE(added, QRectF(QPointF(8.0, 7.0), QSizeF(57.5, 159.5)));
+    QCOMPARE(added, margins + rectangle);
+    QCOMPARE(added, rectangle.marginsAdded(margins));
+
+    const QRectF subtracted = rectangle - margins;
+    QCOMPARE(subtracted, QRectF(QPointF(13.0, 14.0), QSizeF(43.5, 141.5)));
+    QCOMPARE(subtracted, rectangle.marginsRemoved(margins));
+
+    QRectF a = rectangle;
+    a += margins;
+    QCOMPARE(added, a);
+
+    a = rectangle;
+    a -= margins;
+    QCOMPARE(a, QRectF(QPoint(13.0, 14.0), QSizeF(43.5, 141.5)));
+    QCOMPARE(a, rectangle.marginsRemoved(margins));
+}
 
 void tst_QRect::translate_data()
 {
@@ -3529,6 +3565,41 @@ void tst_QRect::translate()
 
 }
 
+void tst_QRect::transposed_data()
+{
+    QTest::addColumn<QRect>("r");
+
+    QTest::newRow("InvalidQRect") << getQRectCase(InvalidQRect);
+    QTest::newRow("SmallestQRect") << getQRectCase(SmallestQRect);
+    QTest::newRow("MiddleQRect") << getQRectCase(MiddleQRect);
+    QTest::newRow("LargestQRect") << getQRectCase(LargestQRect);
+    QTest::newRow("SmallestCoordQRect") << getQRectCase(SmallestCoordQRect);
+    QTest::newRow("LargestCoordQRect") << getQRectCase(LargestCoordQRect);
+    QTest::newRow("RandomQRect") << getQRectCase(RandomQRect);
+    QTest::newRow("NegativeSizeQRect") << getQRectCase(NegativeSizeQRect);
+    QTest::newRow("NegativePointQRect") << getQRectCase(NegativePointQRect);
+    QTest::newRow("NullQRect") << getQRectCase(NullQRect);
+    QTest::newRow("EmptyQRect") << getQRectCase(EmptyQRect);
+}
+
+void tst_QRect::transposed()
+{
+    QFETCH(QRect, r);
+
+    const QRect rt = r.transposed();
+    QCOMPARE(rt.height(), r.width());
+    QCOMPARE(rt.width(), r.height());
+    QCOMPARE(rt.topLeft(), r.topLeft());
+
+    const QRectF rf = r;
+
+    const QRectF rtf = rf.transposed();
+    QCOMPARE(rtf.height(), rf.width());
+    QCOMPARE(rtf.width(), rf.height());
+    QCOMPARE(rtf.topLeft(), rf.topLeft());
+
+    QCOMPARE(rtf, QRectF(rt));
+}
 
 void tst_QRect::moveTop()
 {
@@ -4259,6 +4330,37 @@ void tst_QRect::smallRects() const
     // r2 is 10000 times bigger than r1
     QVERIFY(!(r1 == r2));
     QVERIFY(r1 != r2);
+}
+
+void tst_QRect::toRect()
+{
+    for (qreal x = 1.0; x < 2.0; x += 0.25) {
+        for (qreal y = 1.0; y < 2.0; y += 0.25) {
+            for (qreal w = 1.0; w < 2.0; w += 0.25) {
+                for (qreal h = 1.0; h < 2.0; h += 0.25) {
+                    const QRectF rectf(x, y, w, h);
+                    const QRectF rect = rectf.toRect();
+                    QVERIFY(qAbs(rect.x() - rectf.x()) < 1.0);
+                    QVERIFY(qAbs(rect.y() - rectf.y()) < 1.0);
+                    QVERIFY(qAbs(rect.width() - rectf.width()) < 1.0);
+                    QVERIFY(qAbs(rect.height() - rectf.height()) < 1.0);
+                    QVERIFY(qAbs(rect.right() - rectf.right()) < 1.0);
+                    QVERIFY(qAbs(rect.bottom() - rectf.bottom()) < 1.0);
+
+                    const QRectF arect = rectf.toAlignedRect();
+                    QVERIFY(qAbs(arect.x() - rectf.x()) < 1.0);
+                    QVERIFY(qAbs(arect.y() - rectf.y()) < 1.0);
+                    QVERIFY(qAbs(arect.width() - rectf.width()) < 2.0);
+                    QVERIFY(qAbs(arect.height() - rectf.height()) < 2.0);
+                    QVERIFY(qAbs(arect.right() - rectf.right()) < 1.0);
+                    QVERIFY(qAbs(arect.bottom() - rectf.bottom()) < 1.0);
+
+                    QVERIFY(arect.contains(rectf));
+                    QVERIFY(arect.contains(rect));
+                }
+            }
+        }
+    }
 }
 
 QTEST_MAIN(tst_QRect)

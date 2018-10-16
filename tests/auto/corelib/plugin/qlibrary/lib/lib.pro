@@ -6,7 +6,6 @@ TARGET = mylib
 DESTDIR = ../
 QT = core
 
-wince*: DEFINES += WIN32_MSVC
 win32-msvc: DEFINES += WIN32_MSVC
 
 # This project is testdata for tst_qlibrary
@@ -20,4 +19,3 @@ win32 {
         DESTDIR = ../release/
     }
 }
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

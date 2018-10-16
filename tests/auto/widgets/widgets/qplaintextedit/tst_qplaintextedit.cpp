@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +40,7 @@
 #include <private/qwidgettextcontrol_p.h>
 #include <qscrollbar.h>
 #include <qtextobject.h>
+#include <qmenu.h>
 
 #include <qabstracttextdocumentlayout.h>
 #include <qtextdocumentfragment.h>
@@ -60,14 +48,10 @@
 #include "qplaintextedit.h"
 #include "../../../shared/platformclipboard.h"
 
-#include "../../../qtest-config.h"
-
 //Used in copyAvailable
 typedef QPair<Qt::Key, Qt::KeyboardModifier> keyPairType;
 typedef QList<keyPairType> pairListType;
-Q_DECLARE_METATYPE(pairListType);
 Q_DECLARE_METATYPE(keyPairType);
-Q_DECLARE_METATYPE(QList<bool>);
 
 QT_FORWARD_DECLARE_CLASS(QPlainTextEdit)
 
@@ -78,7 +62,6 @@ public:
     tst_QPlainTextEdit();
 
 public slots:
-    void initTestCase();
     void init();
     void cleanup();
 private slots:
@@ -109,7 +92,8 @@ private slots:
 #ifndef QT_NO_CLIPBOARD
     void copyAndSelectAllInReadonly();
 #endif
-    void ctrlAltInput();
+    void charWithAltOrCtrlModifier_data();
+    void charWithAltOrCtrlModifier();
     void noPropertiesOnDefaultTextEditCharFormat();
     void setPlainTextShouldEmitTextChangedOnce();
     void overwriteMode();
@@ -117,7 +101,7 @@ private slots:
     void shiftDownInLineLastShouldSelectToEnd();
     void undoRedoShouldRepositionTextEditCursor();
     void lineWrapModes();
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
     void mouseCursorShape();
 #endif
     void implicitClear();
@@ -151,6 +135,18 @@ private slots:
     void insertAndScrollToBottom();
     void inputMethodQueryImHints_data();
     void inputMethodQueryImHints();
+#ifndef QT_NO_REGEXP
+    void findWithRegExp();
+    void findBackwardWithRegExp();
+    void findWithRegExpReturnsFalseIfNoMoreResults();
+#endif
+    void layoutAfterMultiLineRemove();
+    void undoCommandRemovesAndReinsertsBlock();
+    void taskQTBUG_43562_lineCountCrash();
+#ifndef QT_NO_CONTEXTMENU
+    void contextMenu();
+#endif
+    void inputMethodCursorRect();
 
 private:
     void createSelection();
@@ -209,16 +205,8 @@ void tst_QPlainTextEdit::getSetCheck()
     QCOMPARE(0, obj1.tabStopWidth());
     obj1.setTabStopWidth(INT_MIN);
     QCOMPARE(0, obj1.tabStopWidth()); // Makes no sense to set a negative tabstop value
-#if defined(Q_OS_WINCE)
-    // due to rounding error in qRound when qreal==float
-    // we cannot use INT_MAX for this check
-    obj1.setTabStopWidth(SHRT_MAX*2);
-    QCOMPARE(SHRT_MAX*2, obj1.tabStopWidth());
-#else
     obj1.setTabStopWidth(INT_MAX);
     QCOMPARE(INT_MAX, obj1.tabStopWidth());
-#endif
-
 }
 
 class QtTestDocumentLayout : public QAbstractTextDocumentLayout
@@ -251,13 +239,6 @@ public:
 
 tst_QPlainTextEdit::tst_QPlainTextEdit()
 {}
-
-void tst_QPlainTextEdit::initTestCase()
-{
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
 
 void tst_QPlainTextEdit::init()
 {
@@ -330,7 +311,7 @@ void tst_QPlainTextEdit::selectAllSetsNotSelection()
         QSKIP("Test only relevant for systems with selection");
 
     QApplication::clipboard()->setText(QString("foobar"), QClipboard::Selection);
-    QVERIFY(QApplication::clipboard()->text(QClipboard::Selection) == QString("foobar"));
+    QCOMPARE(QApplication::clipboard()->text(QClipboard::Selection), QString("foobar"));
 
     ed->insertPlainText("Hello World");
     ed->selectAll();
@@ -381,7 +362,7 @@ void tst_QPlainTextEdit::emptyAppend()
 {
     ed->appendPlainText("Blah");
     QCOMPARE(blockCount(), 1);
-    ed->appendPlainText(QString::null);
+    ed->appendPlainText(QString());
     QCOMPARE(blockCount(), 2);
     ed->appendPlainText(QString("   "));
     QCOMPARE(blockCount(), 3);
@@ -693,10 +674,34 @@ void tst_QPlainTextEdit::copyAndSelectAllInReadonly()
 }
 #endif
 
-void tst_QPlainTextEdit::ctrlAltInput()
+Q_DECLARE_METATYPE(Qt::KeyboardModifiers)
+
+// Test how QWidgetTextControlPrivate (used in QPlainTextEdit, QTextEdit)
+// handles input with modifiers.
+void tst_QPlainTextEdit::charWithAltOrCtrlModifier_data()
 {
-    QTest::keyClick(ed, Qt::Key_At, Qt::ControlModifier | Qt::AltModifier);
-    QCOMPARE(ed->toPlainText(), QString("@"));
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<bool>("textExpected");
+
+    QTest::newRow("no-modifiers") << Qt::KeyboardModifiers() << true;
+    // Ctrl, Ctrl+Shift: No text (QTBUG-35734)
+    QTest::newRow("ctrl") << Qt::KeyboardModifiers(Qt::ControlModifier)
+        << false;
+    QTest::newRow("ctrl-shift") << Qt::KeyboardModifiers(Qt::ShiftModifier | Qt::ControlModifier)
+        << false;
+    QTest::newRow("alt") << Qt::KeyboardModifiers(Qt::AltModifier) << true;
+    // Alt-Ctrl (Alt-Gr on German keyboards, Task 129098): Expect text
+    QTest::newRow("alt-ctrl") << (Qt::AltModifier | Qt::ControlModifier) << true;
+}
+
+void tst_QPlainTextEdit::charWithAltOrCtrlModifier()
+{
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(bool, textExpected);
+
+    QTest::keyClick(ed, Qt::Key_At, modifiers);
+    const QString expectedText = textExpected ?  QLatin1String("@") : QString();
+    QCOMPARE(ed->toPlainText(), expectedText);
 }
 
 void tst_QPlainTextEdit::noPropertiesOnDefaultTextEditCharFormat()
@@ -865,7 +870,7 @@ void tst_QPlainTextEdit::lineWrapModes()
     // QPlainTextEdit does lazy line layout on resize, only for the visible blocks.
     // We thus need to make it wide enough to show something visible.
     int minimumWidth = 2 * ed->document()->documentMargin();
-    minimumWidth += ed->fontMetrics().width(QLatin1Char('a'));
+    minimumWidth += ed->fontMetrics().horizontalAdvance(QLatin1Char('a'));
     minimumWidth += ed->frameWidth();
     ed->resize(minimumWidth, 1000);
     QCOMPARE(lineCount(), 26);
@@ -873,18 +878,18 @@ void tst_QPlainTextEdit::lineWrapModes()
     delete window;
 }
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 void tst_QPlainTextEdit::mouseCursorShape()
 {
     // always show an IBeamCursor, see change 170146
     QVERIFY(!ed->isReadOnly());
-    QVERIFY(ed->viewport()->cursor().shape() == Qt::IBeamCursor);
+    QCOMPARE(ed->viewport()->cursor().shape(), Qt::IBeamCursor);
 
     ed->setReadOnly(true);
-    QVERIFY(ed->viewport()->cursor().shape() == Qt::IBeamCursor);
+    QCOMPARE(ed->viewport()->cursor().shape(), Qt::IBeamCursor);
 
     ed->setPlainText("Foo");
-    QVERIFY(ed->viewport()->cursor().shape() == Qt::IBeamCursor);
+    QCOMPARE(ed->viewport()->cursor().shape(), Qt::IBeamCursor);
 }
 #endif
 
@@ -1121,7 +1126,7 @@ void tst_QPlainTextEdit::mimeDataReimplementations()
     QCOMPARE(ed.insertCallCount, 0);
 
 #ifdef QT_BUILD_INTERNAL
-    QWidgetTextControl *control = qFindChild<QWidgetTextControl *>(&ed);
+    QWidgetTextControl *control = ed.findChild<QWidgetTextControl *>();
     QVERIFY(control);
 
     control->canInsertFromMimeData(QApplication::clipboard()->mimeData());
@@ -1156,12 +1161,19 @@ void tst_QPlainTextEdit::selectWordsFromStringsContainingSeparators_data()
     QTest::addColumn<QString>("testString");
     QTest::addColumn<QString>("selectedWord");
 
-    QStringList wordSeparators;
-    wordSeparators << "." << "," << "?" << "!" << ":" << ";" << "-" << "<" << ">" << "["
-                   << "]" << "(" << ")" << "{" << "}" << "=" << "\t"<< QString(QChar::Nbsp);
+    const ushort wordSeparators[] =
+        {'.', ',', '?', '!', ':', ';', '-', '<', '>', '[', ']', '(', ')', '{', '}',
+         '=', '\t', ushort(QChar::Nbsp)};
 
-    foreach (QString s, wordSeparators)
-        QTest::newRow(QString("separator: " + s).toLocal8Bit()) << QString("foo") + s + QString("bar") << QString("foo");
+    for (size_t i = 0, count = sizeof(wordSeparators) / sizeof(wordSeparators[0]); i < count; ++i) {
+        const ushort u = wordSeparators[i];
+        QByteArray rowName = QByteArrayLiteral("separator: ");
+        if (u >= 32 && u < 128)
+            rowName += char(u);
+        else
+            rowName += QByteArrayLiteral("0x") + QByteArray::number(u, 16);
+        QTest::newRow(rowName.constData()) << QString("foo") + QChar(u) + QString("bar") << QString("foo");
+    }
 }
 
 void tst_QPlainTextEdit::selectWordsFromStringsContainingSeparators()
@@ -1297,7 +1309,7 @@ void tst_QPlainTextEdit::preserveCharFormatAfterSetPlainText()
     QTextBlock block = ed->document()->begin();
     block = block.next();
     QCOMPARE(block.text(), QString("This should still be blue"));
-    QVERIFY(block.begin().fragment().charFormat().foreground().color() == QColor(Qt::blue));
+    QCOMPARE(block.begin().fragment().charFormat().foreground().color(), QColor(Qt::blue));
 }
 
 void tst_QPlainTextEdit::extraSelections()
@@ -1340,6 +1352,9 @@ void tst_QPlainTextEdit::adjustScrollbars()
     QLatin1String txt("\nabc def ghi jkl mno pqr stu vwx");
     ed->setPlainText(txt + txt + txt + txt);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "WinRT does not support setMinimum/MaximumSize", Abort);
+#endif
     QVERIFY(ed->verticalScrollBar()->maximum() > 0);
 
     ed->moveCursor(QTextCursor::End);
@@ -1417,7 +1432,7 @@ void tst_QPlainTextEdit::wordWrapProperty()
         doc->setDocumentLayout(new QPlainTextDocumentLayout(doc));
         edit.setDocument(doc);
         edit.setWordWrapMode(QTextOption::NoWrap);
-        QVERIFY(doc->defaultTextOption().wrapMode() == QTextOption::NoWrap);
+        QCOMPARE(doc->defaultTextOption().wrapMode(), QTextOption::NoWrap);
     }
     {
         QPlainTextEdit edit;
@@ -1425,18 +1440,18 @@ void tst_QPlainTextEdit::wordWrapProperty()
         doc->setDocumentLayout(new QPlainTextDocumentLayout(doc));
         edit.setWordWrapMode(QTextOption::NoWrap);
         edit.setDocument(doc);
-        QVERIFY(doc->defaultTextOption().wrapMode() == QTextOption::NoWrap);
+        QCOMPARE(doc->defaultTextOption().wrapMode(), QTextOption::NoWrap);
     }
 }
 
 void tst_QPlainTextEdit::lineWrapProperty()
 {
-    QVERIFY(ed->wordWrapMode() == QTextOption::WrapAtWordBoundaryOrAnywhere);
-    QVERIFY(ed->lineWrapMode() == QPlainTextEdit::WidgetWidth);
+    QCOMPARE(ed->wordWrapMode(), QTextOption::WrapAtWordBoundaryOrAnywhere);
+    QCOMPARE(ed->lineWrapMode(), QPlainTextEdit::WidgetWidth);
     ed->setLineWrapMode(QPlainTextEdit::NoWrap);
-    QVERIFY(ed->lineWrapMode() == QPlainTextEdit::NoWrap);
-    QVERIFY(ed->wordWrapMode() == QTextOption::WrapAtWordBoundaryOrAnywhere);
-    QVERIFY(ed->document()->defaultTextOption().wrapMode() == QTextOption::NoWrap);
+    QCOMPARE(ed->lineWrapMode(), QPlainTextEdit::NoWrap);
+    QCOMPARE(ed->wordWrapMode(), QTextOption::WrapAtWordBoundaryOrAnywhere);
+    QCOMPARE(ed->document()->defaultTextOption().wrapMode(), QTextOption::NoWrap);
 }
 
 void tst_QPlainTextEdit::selectionChanged()
@@ -1523,6 +1538,193 @@ void tst_QPlainTextEdit::inputMethodQueryImHints()
 
     QVariant value = ed->inputMethodQuery(Qt::ImHints);
     QCOMPARE(static_cast<Qt::InputMethodHints>(value.toInt()), hints);
+}
+
+#ifndef QT_NO_REGEXP
+void tst_QPlainTextEdit::findWithRegExp()
+{
+    ed->setPlainText(QStringLiteral("arbitrary text"));
+    QRegExp rx("\\w{2}xt");
+
+    bool found = ed->find(rx);
+
+    QVERIFY(found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("text"));
+}
+
+void tst_QPlainTextEdit::findBackwardWithRegExp()
+{
+    ed->setPlainText(QStringLiteral("arbitrary text"));
+    QTextCursor cursor = ed->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    ed->setTextCursor(cursor);
+    QRegExp rx("a\\w*t");
+
+    bool found = ed->find(rx, QTextDocument::FindBackward);
+
+    QVERIFY(found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("arbit"));
+}
+
+void tst_QPlainTextEdit::findWithRegExpReturnsFalseIfNoMoreResults()
+{
+    ed->setPlainText(QStringLiteral("arbitrary text"));
+    QRegExp rx("t.xt");
+    ed->find(rx);
+
+    bool found = ed->find(rx);
+
+    QVERIFY(!found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("text"));
+}
+#endif
+
+void tst_QPlainTextEdit::layoutAfterMultiLineRemove()
+{
+    ed->setVisible(true); // The widget must be visible to reproduce this bug.
+
+    QString contents;
+    for (int i = 0; i < 5; ++i)
+        contents.append("\ttest\n");
+
+    ed->setPlainText(contents);
+
+    /*
+     * Remove the tab from the beginning of lines 2-4, in an edit block. The
+     * edit block is required for the bug to be reproduced.
+     */
+
+    QTextCursor curs = ed->textCursor();
+    curs.movePosition(QTextCursor::Start);
+    curs.movePosition(QTextCursor::NextBlock);
+
+    curs.beginEditBlock();
+    for (int i = 0; i < 3; ++i) {
+        curs.deleteChar();
+        curs.movePosition(QTextCursor::NextBlock);
+    }
+    curs.endEditBlock();
+
+    /*
+     * Now, we're going to perform the following actions:
+     *
+     *     - Move to the beginning of the document.
+     *     - Move down three times - this should put us at the front of block 3.
+     *     - Move to the end of the line.
+     *
+     * At this point, if the document layout is behaving correctly, we should
+     * still be positioned on block 3. Verify that this is the case.
+     */
+
+    curs.movePosition(QTextCursor::Start);
+    curs.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, 3);
+    curs.movePosition(QTextCursor::EndOfLine);
+
+    QCOMPARE(curs.blockNumber(), 3);
+}
+
+void tst_QPlainTextEdit::undoCommandRemovesAndReinsertsBlock()
+{
+    ed->setVisible(true);
+    ed->setPlainText(QStringLiteral("line1\nline2"));
+    QCOMPARE(ed->document()->blockCount(), 2);
+
+    QTextCursor cursor = ed->textCursor();
+    cursor.movePosition(QTextCursor::Start);
+    cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor);
+    cursor.insertText(QStringLiteral("\n"));
+    QCOMPARE(ed->document()->blockCount(), 2);
+
+    ed->undo();
+    QCOMPARE(ed->document()->blockCount(), 2);
+
+    QTextBlock block;
+    for (block = ed->document()->begin(); block != ed->document()->end(); block = block.next()) {
+        QVERIFY(block.isValid());
+        QCOMPARE(block.length(), 6);
+        QVERIFY(block.layout()->lineForTextPosition(0).isValid());
+    }
+
+}
+
+class ContentsChangedFunctor {
+public:
+    ContentsChangedFunctor(QPlainTextEdit *t) : textEdit(t) {}
+    void operator()(int, int, int)
+    {
+        QTextCursor c(textEdit->textCursor());
+        c.beginEditBlock();
+        c.movePosition(QTextCursor::Start);
+        c.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+        c.setCharFormat(QTextCharFormat());
+        c.endEditBlock();
+    }
+
+private:
+    QPlainTextEdit *textEdit;
+};
+
+void tst_QPlainTextEdit::taskQTBUG_43562_lineCountCrash()
+{
+    connect(ed->document(), &QTextDocument::contentsChange, ContentsChangedFunctor(ed));
+    // Don't crash
+    QTest::keyClicks(ed, "Some text");
+    QTest::keyClick(ed, Qt::Key_Left);
+    QTest::keyClick(ed, Qt::Key_Right);
+    QTest::keyClick(ed, Qt::Key_A);
+    QTest::keyClick(ed, Qt::Key_Left);
+    QTest::keyClick(ed, Qt::Key_Right);
+    QTest::keyClick(ed, Qt::Key_Space);
+    QTest::keyClicks(ed, "nd some more");
+    disconnect(ed->document(), SIGNAL(contentsChange(int, int, int)), 0, 0);
+}
+
+#ifndef QT_NO_CONTEXTMENU
+void tst_QPlainTextEdit::contextMenu()
+{
+    ed->appendHtml(QStringLiteral("Hello <a href='http://www.qt.io'>Qt</a>"));
+
+    QMenu *menu = ed->createStandardContextMenu();
+    QVERIFY(menu);
+    QAction *action = ed->findChild<QAction *>(QStringLiteral("link-copy"));
+    QVERIFY(!action);
+    delete menu;
+    QVERIFY(!ed->findChild<QAction *>(QStringLiteral("link-copy")));
+
+    ed->setTextInteractionFlags(Qt::TextBrowserInteraction);
+
+    menu = ed->createStandardContextMenu();
+    QVERIFY(menu);
+    action = ed->findChild<QAction *>(QStringLiteral("link-copy"));
+    QVERIFY(action);
+    QVERIFY(!action->isEnabled());
+    delete menu;
+    QVERIFY(!ed->findChild<QAction *>(QStringLiteral("link-copy")));
+
+    QTextCursor cursor = ed->textCursor();
+    cursor.setPosition(ed->toPlainText().length() - 2);
+    ed->setTextCursor(cursor);
+
+    menu = ed->createStandardContextMenu(ed->cursorRect().center());
+    QVERIFY(menu);
+    action = ed->findChild<QAction *>(QStringLiteral("link-copy"));
+    QVERIFY(action);
+    QVERIFY(action->isEnabled());
+    delete menu;
+    QVERIFY(!ed->findChild<QAction *>(QStringLiteral("link-copy")));
+}
+#endif // QT_NO_CONTEXTMENU
+
+// QTBUG-51923: Verify that the cursor rectangle returned by the input
+// method query correctly reflects the viewport offset.
+void tst_QPlainTextEdit::inputMethodCursorRect()
+{
+    ed->setPlainText("Line1\nLine2Line3\nLine3");
+    ed->moveCursor(QTextCursor::End);
+    const QRectF cursorRect = ed->cursorRect();
+    const QVariant cursorRectV = ed->inputMethodQuery(Qt::ImCursorRectangle);
+    QCOMPARE(cursorRectV.type(), QVariant::RectF);
+    QCOMPARE(cursorRectV.toRect(), cursorRect.toRect());
 }
 
 QTEST_MAIN(tst_QPlainTextEdit)

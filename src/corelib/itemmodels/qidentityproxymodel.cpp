@@ -1,7 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2011 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Stephen Kelly <stephen.kelly@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,39 +10,34 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qidentityproxymodel.h"
-
-#ifndef QT_NO_IDENTITYPROXYMODEL
-
 #include "qitemselectionmodel.h"
 #include <private/qabstractproxymodel_p.h>
 
@@ -74,7 +69,7 @@ class QIdentityProxyModelPrivate : public QAbstractProxyModelPrivate
     void _q_sourceColumnsAboutToBeMoved(const QModelIndex &sourceParent, int sourceStart, int sourceEnd, const QModelIndex &destParent, int dest);
     void _q_sourceColumnsMoved(const QModelIndex &sourceParent, int sourceStart, int sourceEnd, const QModelIndex &destParent, int dest);
 
-    void _q_sourceDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight);
+    void _q_sourceDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles);
     void _q_sourceHeaderDataChanged(Qt::Orientation orientation, int first, int last);
 
     void _q_sourceLayoutAboutToBeChanged(const QList<QPersistentModelIndex> &sourceParents, QAbstractItemModel::LayoutChangeHint hint);
@@ -88,7 +83,7 @@ class QIdentityProxyModelPrivate : public QAbstractProxyModelPrivate
     \since 4.8
     \class QIdentityProxyModel
     \inmodule QtCore
-    \brief The QIdentityProxyModel class proxies its source model unmodified
+    \brief The QIdentityProxyModel class proxies its source model unmodified.
 
     \ingroup model-view
 
@@ -160,11 +155,8 @@ QModelIndex QIdentityProxyModel::index(int row, int column, const QModelIndex& p
 {
     Q_ASSERT(parent.isValid() ? parent.model() == this : true);
     Q_D(const QIdentityProxyModel);
-    if (!hasIndex(row, column, parent))
-        return QModelIndex();
     const QModelIndex sourceParent = mapToSource(parent);
     const QModelIndex sourceIndex = d->model->index(row, column, sourceParent);
-    Q_ASSERT(sourceIndex.isValid());
     return mapFromSource(sourceIndex);
 }
 
@@ -223,6 +215,7 @@ QItemSelection QIdentityProxyModel::mapSelectionFromSource(const QItemSelection&
 
     QItemSelection::const_iterator it = selection.constBegin();
     const QItemSelection::const_iterator end = selection.constEnd();
+    proxySelection.reserve(selection.count());
     for ( ; it != end; ++it) {
         Q_ASSERT(it->model() == d->model);
         const QItemSelectionRange range(mapFromSource(it->topLeft()), mapFromSource(it->bottomRight()));
@@ -245,6 +238,7 @@ QItemSelection QIdentityProxyModel::mapSelectionToSource(const QItemSelection& s
 
     QItemSelection::const_iterator it = selection.constBegin();
     const QItemSelection::const_iterator end = selection.constEnd();
+    sourceSelection.reserve(selection.count());
     for ( ; it != end; ++it) {
         Q_ASSERT(it->model() == this);
         const QItemSelectionRange range(mapToSource(it->topLeft()), mapToSource(it->bottomRight()));
@@ -280,6 +274,7 @@ QModelIndexList QIdentityProxyModel::match(const QModelIndex& start, int role, c
     QModelIndexList::const_iterator it = sourceList.constBegin();
     const QModelIndexList::const_iterator end = sourceList.constEnd();
     QModelIndexList proxyList;
+    proxyList.reserve(sourceList.count());
     for ( ; it != end; ++it)
         proxyList.append(mapFromSource(*it));
     return proxyList;
@@ -371,8 +366,8 @@ void QIdentityProxyModel::setSourceModel(QAbstractItemModel* newSourceModel)
                    this, SLOT(_q_sourceModelAboutToBeReset()));
         disconnect(sourceModel(), SIGNAL(modelReset()),
                    this, SLOT(_q_sourceModelReset()));
-        disconnect(sourceModel(), SIGNAL(dataChanged(QModelIndex,QModelIndex)),
-                   this, SLOT(_q_sourceDataChanged(QModelIndex,QModelIndex)));
+        disconnect(sourceModel(), SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)),
+                   this, SLOT(_q_sourceDataChanged(QModelIndex,QModelIndex,QVector<int>)));
         disconnect(sourceModel(), SIGNAL(headerDataChanged(Qt::Orientation,int,int)),
                    this, SLOT(_q_sourceHeaderDataChanged(Qt::Orientation,int,int)));
         disconnect(sourceModel(), SIGNAL(layoutAboutToBeChanged(QList<QPersistentModelIndex>,QAbstractItemModel::LayoutChangeHint)),
@@ -412,8 +407,8 @@ void QIdentityProxyModel::setSourceModel(QAbstractItemModel* newSourceModel)
                 SLOT(_q_sourceModelAboutToBeReset()));
         connect(sourceModel(), SIGNAL(modelReset()),
                 SLOT(_q_sourceModelReset()));
-        connect(sourceModel(), SIGNAL(dataChanged(QModelIndex,QModelIndex)),
-                SLOT(_q_sourceDataChanged(QModelIndex,QModelIndex)));
+        connect(sourceModel(), SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)),
+                SLOT(_q_sourceDataChanged(QModelIndex,QModelIndex,QVector<int>)));
         connect(sourceModel(), SIGNAL(headerDataChanged(Qt::Orientation,int,int)),
                 SLOT(_q_sourceHeaderDataChanged(Qt::Orientation,int,int)));
         connect(sourceModel(), SIGNAL(layoutAboutToBeChanged(QList<QPersistentModelIndex>,QAbstractItemModel::LayoutChangeHint)),
@@ -480,12 +475,12 @@ void QIdentityProxyModelPrivate::_q_sourceColumnsRemoved(const QModelIndex &pare
     q->endRemoveColumns();
 }
 
-void QIdentityProxyModelPrivate::_q_sourceDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight)
+void QIdentityProxyModelPrivate::_q_sourceDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles)
 {
     Q_ASSERT(topLeft.isValid() ? topLeft.model() == model : true);
     Q_ASSERT(bottomRight.isValid() ? bottomRight.model() == model : true);
     Q_Q(QIdentityProxyModel);
-    q->dataChanged(q->mapFromSource(topLeft), q->mapFromSource(bottomRight));
+    q->dataChanged(q->mapFromSource(topLeft), q->mapFromSource(bottomRight), roles);
 }
 
 void QIdentityProxyModelPrivate::_q_sourceHeaderDataChanged(Qt::Orientation orientation, int first, int last)
@@ -498,17 +493,9 @@ void QIdentityProxyModelPrivate::_q_sourceLayoutAboutToBeChanged(const QList<QPe
 {
     Q_Q(QIdentityProxyModel);
 
-    foreach(const QPersistentModelIndex &proxyPersistentIndex, q->persistentIndexList()) {
-        proxyIndexes << proxyPersistentIndex;
-        Q_ASSERT(proxyPersistentIndex.isValid());
-        const QPersistentModelIndex srcPersistentIndex = q->mapToSource(proxyPersistentIndex);
-        Q_ASSERT(srcPersistentIndex.isValid());
-        layoutChangePersistentIndexes << srcPersistentIndex;
-    }
-
     QList<QPersistentModelIndex> parents;
     parents.reserve(sourceParents.size());
-    foreach (const QPersistentModelIndex &parent, sourceParents) {
+    for (const QPersistentModelIndex &parent : sourceParents) {
         if (!parent.isValid()) {
             parents << QPersistentModelIndex();
             continue;
@@ -519,6 +506,15 @@ void QIdentityProxyModelPrivate::_q_sourceLayoutAboutToBeChanged(const QList<QPe
     }
 
     q->layoutAboutToBeChanged(parents, hint);
+
+    const auto proxyPersistentIndexes = q->persistentIndexList();
+    for (const QPersistentModelIndex &proxyPersistentIndex : proxyPersistentIndexes) {
+        proxyIndexes << proxyPersistentIndex;
+        Q_ASSERT(proxyPersistentIndex.isValid());
+        const QPersistentModelIndex srcPersistentIndex = q->mapToSource(proxyPersistentIndex);
+        Q_ASSERT(srcPersistentIndex.isValid());
+        layoutChangePersistentIndexes << srcPersistentIndex;
+    }
 }
 
 void QIdentityProxyModelPrivate::_q_sourceLayoutChanged(const QList<QPersistentModelIndex> &sourceParents, QAbstractItemModel::LayoutChangeHint hint)
@@ -534,7 +530,7 @@ void QIdentityProxyModelPrivate::_q_sourceLayoutChanged(const QList<QPersistentM
 
     QList<QPersistentModelIndex> parents;
     parents.reserve(sourceParents.size());
-    foreach (const QPersistentModelIndex &parent, sourceParents) {
+    for (const QPersistentModelIndex &parent : sourceParents) {
         if (!parent.isValid()) {
             parents << QPersistentModelIndex();
             continue;
@@ -617,5 +613,3 @@ void QIdentityProxyModelPrivate::_q_sourceRowsRemoved(const QModelIndex &parent,
 QT_END_NAMESPACE
 
 #include "moc_qidentityproxymodel.cpp"
-
-#endif // QT_NO_IDENTITYPROXYMODEL

@@ -1,46 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qsplitter.h"
-#ifndef QT_NO_SPLITTER
 
 #include "qapplication.h"
 #include "qcursor.h"
@@ -49,7 +46,9 @@
 #include "qlayout.h"
 #include "qlist.h"
 #include "qpainter.h"
+#if QT_CONFIG(rubberband)
 #include "qrubberband.h"
+#endif
 #include "qstyle.h"
 #include "qstyleoption.h"
 #include "qtextstream.h"
@@ -66,9 +65,13 @@ QT_BEGIN_NAMESPACE
 
 //#define QSPLITTER_DEBUG
 
+QSplitterPrivate::~QSplitterPrivate()
+{
+}
+
 /*!
     \class QSplitterHandle
-    \brief The QSplitterHandle class provides handle functionality of the splitter.
+    \brief The QSplitterHandle class provides handle functionality for the splitter.
 
     \ingroup organizers
     \inmodule QtWidgets
@@ -80,7 +83,7 @@ QT_BEGIN_NAMESPACE
     QSplitterHandle. It is provided for developers who want splitter handles
     that provide extra features, such as popup menus.
 
-    The typical way one would create splitter handles is to subclass QSplitter then
+    The typical way one would create splitter handles is to subclass QSplitter and then
     reimplement QSplitter::createHandle() to instantiate the custom splitter
     handle. For example, a minimum QSplitter subclass might look like this:
 
@@ -113,7 +116,7 @@ QT_BEGIN_NAMESPACE
 
 /*!
     Creates a QSplitter handle with the given \a orientation and
-    QSplitter \a parent.
+    \a parent.
 */
 QSplitterHandle::QSplitterHandle(Qt::Orientation orientation, QSplitter *parent)
     : QWidget(*new QSplitterHandlePrivate, parent, 0)
@@ -158,8 +161,8 @@ Qt::Orientation QSplitterHandle::orientation() const
 
 
 /*!
-    Returns true if widgets are resized dynamically (opaquely), otherwise
-    returns false. This value is controlled by the QSplitter.
+    Returns \c true if widgets are resized dynamically (opaquely), otherwise
+    returns \c false. This value is controlled by the QSplitter.
 
     \sa QSplitter::opaqueResize()
 
@@ -239,21 +242,24 @@ void QSplitterHandle::resizeEvent(QResizeEvent *event)
 {
     Q_D(const QSplitterHandle);
 
-    // When splitters are only 1 or 0 pixel large we increase the
-    // actual grab area to five pixels
+    // Ensure the actual grab area is at least 4 or 5 pixels
+    const int handleMargin = (5 - d->s->handleWidth()) / 2;
 
     // Note that QSplitter uses contentsRect for layouting
     // and ensures that handles are drawn on top of widgets
     // We simply use the contents margins for draggin and only
     // paint the mask area
-    bool useTinyMode = (d->s->handleWidth() <= 1);
+    const bool useTinyMode = handleMargin > 0;
     setAttribute(Qt::WA_MouseNoMask, useTinyMode);
     if (useTinyMode) {
         if (orientation() == Qt::Horizontal)
-            setContentsMargins(2, 0, 2, 0);
+            setContentsMargins(handleMargin, 0, handleMargin, 0);
         else
-            setContentsMargins(0, 2, 0, 2);
+            setContentsMargins(0, handleMargin, 0, handleMargin);
         setMask(QRegion(contentsRect()));
+    } else {
+        setContentsMargins(0, 0, 0, 0);
+        clearMask();
     }
 
     QWidget::resizeEvent(event);
@@ -729,6 +735,12 @@ void QSplitterPrivate::setSizes_helper(const QList<int> &sizes, bool clampNegati
     doResize();
 }
 
+bool QSplitterPrivate::shouldShowWidget(const QWidget *w) const
+{
+    Q_Q(const QSplitter);
+    return q->isVisible() && !(w->isHidden() && w->testAttribute(Qt::WA_WState_ExplicitShowHide));
+}
+
 void QSplitterPrivate::setGeo(QSplitterLayoutStruct *sls, int p, int s, bool allowCollapse)
 {
     Q_Q(QSplitter);
@@ -814,7 +826,7 @@ QSplitterLayoutStruct *QSplitterPrivate::findWidget(QWidget *w) const
         if (list.at(i)->widget == w)
             return list.at(i);
     }
-    return 0;
+    return nullptr;
 }
 
 
@@ -825,8 +837,7 @@ void QSplitterPrivate::insertWidget_helper(int index, QWidget *widget, bool show
 {
     Q_Q(QSplitter);
     QBoolBlocker b(blockChildAdd);
-    bool needShow = show && q->isVisible() &&
-                    !(widget->isHidden() && widget->testAttribute(Qt::WA_WState_ExplicitShowHide));
+    const bool needShow = show && shouldShowWidget(widget);
     if (widget->parentWidget() != q)
         widget->setParent(q);
     if (needShow)
@@ -844,7 +855,7 @@ void QSplitterPrivate::insertWidget_helper(int index, QWidget *widget, bool show
 QSplitterLayoutStruct *QSplitterPrivate::insertWidget(int index, QWidget *w)
 {
     Q_Q(QSplitter);
-    QSplitterLayoutStruct *sls = 0;
+    QSplitterLayoutStruct *sls = nullptr;
     int i;
     int last = list.count();
     for (i = 0; i < list.size(); ++i) {
@@ -861,12 +872,9 @@ QSplitterLayoutStruct *QSplitterPrivate::insertWidget(int index, QWidget *w)
     if (sls) {
         list.move(i,index);
     } else {
-        QSplitterHandle *newHandle = 0;
         sls = new QSplitterLayoutStruct;
-        QString tmp = QLatin1String("qt_splithandle_");
-        tmp += w->objectName();
-        newHandle = q->createHandle();
-        newHandle->setObjectName(tmp);
+        QSplitterHandle *newHandle = q->createHandle();
+        newHandle->setObjectName(QLatin1String("qt_splithandle_") + w->objectName());
         sls->handle = newHandle;
         sls->widget = w;
         w->lower();
@@ -888,7 +896,7 @@ QSplitterLayoutStruct *QSplitterPrivate::insertWidget(int index, QWidget *w)
 
 
     A splitter lets the user control the size of child widgets by dragging the
-    boundary between the children. Any number of widgets may be controlled by a
+    boundary between them. Any number of widgets may be controlled by a
     single splitter. The typical use of a QSplitter is to create several
     widgets and add them using insertWidget() or addWidget().
 
@@ -921,7 +929,7 @@ QSplitterLayoutStruct *QSplitterPrivate::insertWidget(int index, QWidget *w)
     Alternatively, you can save and restore the sizes of the widgets from a
     QByteArray using saveState() and restoreState() respectively.
 
-    When you hide() a child its space will be distributed among the
+    When you hide() a child, its space will be distributed among the
     other children. It will be reinstated when you show() it again.
 
     \note Adding a QLayout to a QSplitter is not supported (either through
@@ -939,11 +947,8 @@ QSplitterLayoutStruct *QSplitterPrivate::insertWidget(int index, QWidget *w)
     \sa setOrientation()
 */
 QSplitter::QSplitter(QWidget *parent)
-    : QFrame(*new QSplitterPrivate, parent)
+    : QSplitter(Qt::Horizontal, parent)
 {
-    Q_D(QSplitter);
-    d->orient = Qt::Horizontal;
-    d->init();
 }
 
 
@@ -968,7 +973,9 @@ QSplitter::QSplitter(Qt::Orientation orientation, QWidget *parent)
 QSplitter::~QSplitter()
 {
     Q_D(QSplitter);
+#if QT_CONFIG(rubberband)
     delete d->rubberBand;
+#endif
     while (!d->list.isEmpty())
         delete d->list.takeFirst();
 }
@@ -987,7 +994,7 @@ void QSplitter::refresh()
     \property QSplitter::orientation
     \brief the orientation of the splitter
 
-    By default the orientation is horizontal (i.e., the widgets are
+    By default, the orientation is horizontal (i.e., the widgets are
     laid out side by side). The possible orientations are
     Qt::Horizontal and Qt::Vertical.
 
@@ -1001,9 +1008,7 @@ void QSplitter::setOrientation(Qt::Orientation orientation)
         return;
 
     if (!testAttribute(Qt::WA_WState_OwnSizePolicy)) {
-        QSizePolicy sp = sizePolicy();
-        sp.transpose();
-        setSizePolicy(sp);
+        setSizePolicy(sizePolicy().transposed());
         setAttribute(Qt::WA_WState_OwnSizePolicy, false);
     }
 
@@ -1046,7 +1051,7 @@ bool QSplitter::childrenCollapsible() const
 }
 
 /*!
-    Sets whether the child widget at index \a index is collapsible to \a collapse.
+    Sets whether the child widget at \a index is collapsible to \a collapse.
 
     By default, children are collapsible, meaning that the user can
     resize them down to size 0, even if they have a non-zero
@@ -1062,7 +1067,7 @@ void QSplitter::setCollapsible(int index, bool collapse)
 {
     Q_D(QSplitter);
 
-    if (index < 0 || index >= d->list.size()) {
+    if (Q_UNLIKELY(index < 0 || index >= d->list.size())) {
         qWarning("QSplitter::setCollapsible: Index %d out of range", index);
         return;
     }
@@ -1070,12 +1075,12 @@ void QSplitter::setCollapsible(int index, bool collapse)
 }
 
 /*!
-    Returns true if the widget at \a index is collapsible, otherwise returns false
+    Returns \c true if the widget at \a index is collapsible, otherwise returns \c false.
 */
 bool QSplitter::isCollapsible(int index) const
 {
     Q_D(const QSplitter);
-    if (index < 0 || index >= d->list.size()) {
+    if (Q_UNLIKELY(index < 0 || index >= d->list.size())) {
         qWarning("QSplitter::isCollapsible: Index %d out of range", index);
         return false;
     }
@@ -1097,6 +1102,8 @@ void QSplitter::resizeEvent(QResizeEvent *)
 
     If \a widget is already in the splitter, it will be moved to the new position.
 
+    \note The splitter takes ownership of the widget.
+
     \sa insertWidget(), widget(), indexOf()
 */
 void QSplitter::addWidget(QWidget *widget)
@@ -1111,7 +1118,9 @@ void QSplitter::addWidget(QWidget *widget)
 
     If \a widget is already in the splitter, it will be moved to the new position.
 
-    if \a index is an invalid index, then the widget will be inserted at the end.
+    If \a index is an invalid index, then the widget will be inserted at the end.
+
+    \note The splitter takes ownership of the widget.
 
     \sa addWidget(), indexOf(), widget()
 */
@@ -1122,10 +1131,74 @@ void QSplitter::insertWidget(int index, QWidget *widget)
 }
 
 /*!
+    \since 5.9
+
+    Replaces the widget in the splitter's layout at the given \a index by \a widget.
+
+    Returns the widget that has just been replaced if \a index is valid and \a widget
+    is not already a child of the splitter. Otherwise, it returns null and no replacement
+    or addition is made.
+
+    The geometry of the newly inserted widget will be the same as the widget it replaces.
+    Its visible and collapsed states are also inherited.
+
+    \note The splitter takes ownership of \a widget and sets the parent of the
+    replaced widget to null.
+
+    \note Because \a widget gets \l{QWidget::setParent()}{reparented} into the splitter,
+    its \l{QWidget::}{geometry} may not be set right away, but only after \a widget will
+    receive the appropriate events.
+
+    \sa insertWidget(), indexOf()
+*/
+QWidget *QSplitter::replaceWidget(int index, QWidget *widget)
+{
+    Q_D(QSplitter);
+    if (!widget) {
+        qWarning("QSplitter::replaceWidget: Widget can't be null");
+        return nullptr;
+    }
+
+    if (index < 0 || index >= d->list.count()) {
+        qWarning("QSplitter::replaceWidget: Index %d out of range", index);
+        return nullptr;
+    }
+
+    QSplitterLayoutStruct *s = d->list.at(index);
+    QWidget *current = s->widget;
+    if (current == widget) {
+        qWarning("QSplitter::replaceWidget: Trying to replace a widget with itself");
+        return nullptr;
+    }
+
+    if (widget->parentWidget() == this) {
+        qWarning("QSplitter::replaceWidget: Trying to replace a widget with one of its siblings");
+        return nullptr;
+    }
+
+    QBoolBlocker b(d->blockChildAdd);
+
+    const QRect geom = current->geometry();
+    const bool shouldShow = d->shouldShowWidget(current);
+
+    s->widget = widget;
+    current->setParent(nullptr);
+    widget->setParent(this);
+
+    // The splitter layout struct's geometry is already set and
+    // should not change. Only set the geometry on the new widget
+    widget->setGeometry(geom);
+    widget->lower();
+    widget->setVisible(shouldShow);
+
+    return current;
+}
+
+/*!
     \fn int QSplitter::indexOf(QWidget *widget) const
 
-    Returns the index in the splitter's layout of the specified \a widget. This
-    also works for handles.
+    Returns the index in the splitter's layout of the specified \a widget,
+    or -1 if \a widget is not found. This also works for handles.
 
     Handles are numbered from 0. There are as many handles as there
     are child widgets, but the handle at position 0 is always hidden.
@@ -1158,9 +1231,9 @@ QSplitterHandle *QSplitter::createHandle()
 }
 
 /*!
-    Returns the handle to the left (or above) for the item in the
-    splitter's layout at the given \a index. The handle at index 0 is
-    always hidden.
+    Returns the handle to the left of (or above) the item in the
+    splitter's layout at the given \a index, or \c nullptr if there is no such item.
+    The handle at index 0 is always hidden.
 
     For right-to-left languages such as Arabic and Hebrew, the layout
     of horizontal splitters is reversed. The handle will be to the
@@ -1172,12 +1245,13 @@ QSplitterHandle *QSplitter::handle(int index) const
 {
     Q_D(const QSplitter);
     if (index < 0 || index >= d->list.size())
-        return 0;
+        return nullptr;
     return d->list.at(index)->handle;
 }
 
 /*!
-    Returns the widget at the given \a index in the splitter's layout.
+    Returns the widget at the given \a index in the splitter's layout,
+    or \c nullptr if there is no such widget.
 
     \sa count(), handle(), indexOf(), insertWidget()
 */
@@ -1185,7 +1259,7 @@ QWidget *QSplitter::widget(int index) const
 {
     Q_D(const QSplitter);
     if (index < 0 || index >= d->list.size())
-        return 0;
+        return nullptr;
     return d->list.at(index)->widget;
 }
 
@@ -1219,20 +1293,23 @@ void QSplitter::childEvent(QChildEvent *c)
 {
     Q_D(QSplitter);
     if (!c->child()->isWidgetType()) {
-        if (c->type() == QEvent::ChildAdded && qobject_cast<QLayout *>(c->child()))
+        if (Q_UNLIKELY(c->type() == QEvent::ChildAdded && qobject_cast<QLayout *>(c->child())))
             qWarning("Adding a QLayout to a QSplitter is not supported.");
         return;
     }
-    QWidget *w = static_cast<QWidget*>(c->child());
-    if (c->added() && !d->blockChildAdd && !w->isWindow() && !d->findWidget(w)) {
-        d->insertWidget_helper(d->list.count(), w, false);
-    } else if (c->polished() && !d->blockChildAdd) {
-        if (isVisible() && !(w->isHidden() && w->testAttribute(Qt::WA_WState_ExplicitShowHide)))
+    if (c->added()) {
+        QWidget *w = static_cast<QWidget*>(c->child());
+        if (!d->blockChildAdd && !w->isWindow() && !d->findWidget(w))
+            d->insertWidget_helper(d->list.count(), w, false);
+    } else if (c->polished()) {
+        QWidget *w = static_cast<QWidget*>(c->child());
+        if (!d->blockChildAdd && !w->isWindow() && d->shouldShowWidget(w))
             w->show();
-    } else if (c->type() == QEvent::ChildRemoved) {
+    } else if (c->removed()) {
+        QObject *child = c->child();
         for (int i = 0; i < d->list.size(); ++i) {
             QSplitterLayoutStruct *s = d->list.at(i);
-            if (s->widget == w) {
+            if (s->widget == child) {
                 d->list.removeAt(i);
                 delete s;
                 d->recalc(isVisible());
@@ -1250,6 +1327,7 @@ void QSplitter::childEvent(QChildEvent *c)
 
 void QSplitter::setRubberBand(int pos)
 {
+#if QT_CONFIG(rubberband)
     Q_D(QSplitter);
     if (pos < 0) {
         if (d->rubberBand)
@@ -1270,6 +1348,9 @@ void QSplitter::setRubberBand(int pos)
                                                       : QRect(QPoint(r.x(), pos + hw / 2 - rBord), QSize(r.width(), 2 * rBord));
     d->rubberBand->setGeometry(newGeom);
     d->rubberBand->show();
+#else
+    Q_UNUSED(pos);
+#endif
 }
 
 /*!
@@ -1289,7 +1370,7 @@ bool QSplitter::event(QEvent *e)
         if (!d->firstShow)
             break;
         d->firstShow = false;
-        // fall through
+        Q_FALLTHROUGH();
     case QEvent::HideToParent:
     case QEvent::ShowToParent:
     case QEvent::LayoutRequest:
@@ -1372,20 +1453,19 @@ void QSplitter::moveSplitter(int pos, int index)
 
 
 /*!
-    Returns the valid range of the splitter with index \a index in
+    Returns the valid range of the splitter at \a index in
     *\a{min} and *\a{max} if \a min and \a max are not 0.
 */
 
 void QSplitter::getRange(int index, int *min, int *max) const
 {
     Q_D(const QSplitter);
-    d->getRange(index, min, 0, 0, max);
+    d->getRange(index, min, nullptr, nullptr, max);
 }
 
 
 /*!
-    Returns the closest legal position to \a pos of the widget with index
-    \a index.
+    Returns the closest legal position to \a pos of the widget at \a index.
 
     For right-to-left languages such as Arabic and Hebrew, the layout
     of horizontal splitters is reversed. Positions are then measured
@@ -1405,19 +1485,24 @@ int QSplitter::closestLegalPosition(int pos, int index)
     \property QSplitter::opaqueResize
     \brief whether resizing is opaque
 
-    Opaque resizing is on by default.
+    The default resize behavior is style dependent (determined by the
+    SH_Splitter_OpaqueResize style hint). However, you can override it
+    by calling setOpaqueResize()
+
+    \sa QStyle::StyleHint
 */
 
 bool QSplitter::opaqueResize() const
 {
     Q_D(const QSplitter);
-    return d->opaque;
+    return d->opaqueResizeSet ? d->opaque : style()->styleHint(QStyle::SH_Splitter_OpaqueResize, 0, this);
 }
 
 
 void QSplitter::setOpaqueResize(bool on)
 {
     Q_D(QSplitter);
+    d->opaqueResizeSet = true;
     d->opaque = on;
 }
 
@@ -1484,7 +1569,7 @@ QSize QSplitter::minimumSizeHint() const
 
     If the splitter's orientation is horizontal, the list contains the
     widgets width in pixels, from left to right; if the orientation is
-    vertical, the list contains the widgets height in pixels,
+    vertical, the list contains the widgets' heights in pixels,
     from top to bottom.
 
     Giving the values to another splitter's setSizes() function will
@@ -1500,8 +1585,11 @@ QList<int> QSplitter::sizes() const
     Q_D(const QSplitter);
     ensurePolished();
 
+    const int numSizes = d->list.size();
     QList<int> list;
-    for (int i = 0; i < d->list.size(); ++i) {
+    list.reserve(numSizes);
+
+    for (int i = 0; i < numSizes; ++i) {
         QSplitterLayoutStruct *s = d->list.at(i);
         list.append(d->pick(s->rect.size()));
     }
@@ -1509,21 +1597,21 @@ QList<int> QSplitter::sizes() const
 }
 
 /*!
-    Sets the child widgets respective sizes to the values given in the \a list.
+    Sets the child widgets' respective sizes to the values given in the \a list.
 
-    If the splitter is horizontal, the values set the widths of each
+    If the splitter is horizontal, the values set the width of each
     widget in pixels, from left to right. If the splitter is vertical, the
-    heights of each widget is set, from top to bottom.
+    height of each widget is set, from top to bottom.
 
     Extra values in the \a list are ignored. If \a list contains too few
-    values, the result is undefined but the program will still be well-behaved.
+    values, the result is undefined, but the program will still be well-behaved.
 
     The overall size of the splitter widget is not affected.
     Instead, any additional/missing space is distributed amongst the
     widgets according to the relative weight of the sizes.
 
     If you specify a size of 0, the widget will be invisible. The size policies
-    of the widgets are preserved. That is, a value smaller then the minimal size
+    of the widgets are preserved. That is, a value smaller than the minimal size
     hint of the respective widget will be replaced by the value of the hint.
 
     \sa sizes()
@@ -1590,33 +1678,36 @@ static const qint32 SplitterMagic = 0xff;
 QByteArray QSplitter::saveState() const
 {
     Q_D(const QSplitter);
-    int version = 0;
+    int version = 1;
     QByteArray data;
     QDataStream stream(&data, QIODevice::WriteOnly);
 
     stream << qint32(SplitterMagic);
     stream << qint32(version);
+    const int numSizes = d->list.size();
     QList<int> list;
-    for (int i = 0; i < d->list.size(); ++i) {
+    list.reserve(numSizes);
+    for (int i = 0; i < numSizes; ++i) {
         QSplitterLayoutStruct *s = d->list.at(i);
         list.append(s->sizer);
     }
     stream << list;
     stream << childrenCollapsible();
-    stream << qint32(handleWidth());
+    stream << qint32(d->handleWidth);
     stream << opaqueResize();
     stream << qint32(orientation());
+    stream << d->opaqueResizeSet;
     return data;
 }
 
 /*!
     Restores the splitter's layout to the \a state specified.
-    Returns true if the state is restored; otherwise returns false.
+    Returns \c true if the state is restored; otherwise returns \c false.
 
     Typically this is used in conjunction with QSettings to restore the size
     from a past session. Here is an example:
 
-    Restore the splitters's state:
+    Restore the splitter's state:
 
     \snippet splitter/splitter.cpp 2
 
@@ -1628,7 +1719,7 @@ QByteArray QSplitter::saveState() const
 bool QSplitter::restoreState(const QByteArray &state)
 {
     Q_D(QSplitter);
-    int version = 0;
+    int version = 1;
     QByteArray sd = state;
     QDataStream stream(&sd, QIODevice::ReadOnly);
     QList<int> list;
@@ -1639,7 +1730,7 @@ bool QSplitter::restoreState(const QByteArray &state)
 
     stream >> marker;
     stream >> v;
-    if (marker != SplitterMagic || v != version)
+    if (marker != SplitterMagic || v > version)
         return false;
 
     stream >> list;
@@ -1658,6 +1749,9 @@ bool QSplitter::restoreState(const QByteArray &state)
     setOrientation(Qt::Orientation(i));
     d->doResize();
 
+    if (v >= 1)
+        stream >> d->opaqueResizeSet;
+
     return true;
 }
 
@@ -1666,7 +1760,7 @@ bool QSplitter::restoreState(const QByteArray &state)
     have a stretch factor of \a stretch.
 
     \a stretch is not the effective stretch factor; the effective
-    stretch factor is calculated by taking the initial size of the 
+    stretch factor is calculated by taking the initial size of the
     widget and multiplying it with \a stretch.
 
     This function is provided for convenience. It is equivalent to
@@ -1714,12 +1808,12 @@ QTextStream& operator>>(QTextStream& ts, QSplitter& splitter)
     QString line = ts.readLine();
     line = line.simplified();
     line.replace(QLatin1Char(' '), QString());
-    line = line.toUpper();
+    line = std::move(line).toUpper();
 
-    splitter.restoreState(line.toLatin1());
+    splitter.restoreState(std::move(line).toLatin1());
     return ts;
 }
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_SPLITTER
+#include "moc_qsplitter.cpp"

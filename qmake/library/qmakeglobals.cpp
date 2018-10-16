@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -72,37 +59,21 @@
 
 #ifdef Q_OS_WIN32
 #define QT_POPEN _popen
+#define QT_POPEN_READ "rb"
 #define QT_PCLOSE _pclose
 #else
 #define QT_POPEN popen
+#define QT_POPEN_READ "r"
 #define QT_PCLOSE pclose
 #endif
 
 QT_BEGIN_NAMESPACE
+using namespace QMakeInternal; // for IoUtils
 
 #define fL1S(s) QString::fromLatin1(s)
 
-namespace { // MSVC doesn't seem to know the semantics of "static" ...
-
-static struct {
-    QRegExp reg_variableName;
-} statics;
-
-}
-
-static void initStatics()
-{
-    if (!statics.reg_variableName.isEmpty())
-        return;
-
-    statics.reg_variableName.setPattern(QLatin1String("\\$\\(.*\\)"));
-    statics.reg_variableName.setMinimal(true);
-}
-
 QMakeGlobals::QMakeGlobals()
 {
-    initStatics();
-
     do_cache = true;
 
 #ifdef PROEVALUATOR_DEBUG
@@ -115,7 +86,6 @@ QMakeGlobals::QMakeGlobals()
     dirlist_sep = QLatin1Char(':');
     dir_sep = QLatin1Char('/');
 #endif
-    qmakespec = getEnv(QLatin1String("QMAKESPEC"));
 }
 
 QMakeGlobals::~QMakeGlobals()
@@ -127,9 +97,9 @@ QString QMakeGlobals::cleanSpec(QMakeCmdLineParserState &state, const QString &s
 {
     QString ret = QDir::cleanPath(spec);
     if (ret.contains(QLatin1Char('/'))) {
-        QString absRet = QDir(state.pwd).absoluteFilePath(ret);
+        QString absRet = IoUtils::resolvePath(state.pwd, ret);
         if (QFile::exists(absRet))
-            ret = QDir::cleanPath(absRet);
+            ret = absRet;
     }
     return ret;
 }
@@ -137,15 +107,12 @@ QString QMakeGlobals::cleanSpec(QMakeCmdLineParserState &state, const QString &s
 QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
         QMakeCmdLineParserState &state, QStringList &args, int *pos)
 {
-    enum { ArgNone, ArgConfig, ArgSpec, ArgXSpec, ArgTmpl, ArgTmplPfx, ArgCache } argState = ArgNone;
+    enum { ArgNone, ArgConfig, ArgSpec, ArgXSpec, ArgTmpl, ArgTmplPfx, ArgCache, ArgQtConf } argState = ArgNone;
     for (; *pos < args.count(); (*pos)++) {
         QString arg = args.at(*pos);
         switch (argState) {
         case ArgConfig:
-            if (state.after)
-                state.postconfigs << arg;
-            else
-                state.preconfigs << arg;
+            state.configs[state.phase] << arg;
             break;
         case ArgSpec:
             qmakespec = args[*pos] = cleanSpec(state, arg);
@@ -160,38 +127,50 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
             user_template_prefix = arg;
             break;
         case ArgCache:
-            cachefile = args[*pos] = QDir::cleanPath(QDir(state.pwd).absoluteFilePath(arg));
+            cachefile = args[*pos] = IoUtils::resolvePath(state.pwd, arg);
+            break;
+        case ArgQtConf:
+            qtconf = args[*pos] = IoUtils::resolvePath(state.pwd, arg);
             break;
         default:
             if (arg.startsWith(QLatin1Char('-'))) {
-                if (arg == QLatin1String("-after")) {
-                    state.after = true;
-                } else if (arg == QLatin1String("-config")) {
-                    argState = ArgConfig;
-                } else if (arg == QLatin1String("-nocache")) {
-                    do_cache = false;
-                } else if (arg == QLatin1String("-cache")) {
-                    argState = ArgCache;
-                } else if (arg == QLatin1String("-platform") || arg == QLatin1String("-spec")) {
-                    argState = ArgSpec;
-                } else if (arg == QLatin1String("-xplatform") || arg == QLatin1String("-xspec")) {
-                    argState = ArgXSpec;
-                } else if (arg == QLatin1String("-template") || arg == QLatin1String("-t")) {
-                    argState = ArgTmpl;
-                } else if (arg == QLatin1String("-template_prefix") || arg == QLatin1String("-tp")) {
-                    argState = ArgTmplPfx;
-                } else if (arg == QLatin1String("-win32")) {
-                    dir_sep = QLatin1Char('\\');
-                } else if (arg == QLatin1String("-unix")) {
-                    dir_sep = QLatin1Char('/');
-                } else {
-                    return ArgumentUnknown;
+                if (arg == QLatin1String("--")) {
+                    state.extraargs = args.mid(*pos + 1);
+                    args.erase(args.begin() + *pos, args.end());
+                    return ArgumentsOk;
                 }
-            } else if (arg.contains(QLatin1Char('='))) {
-                if (state.after)
-                    state.postcmds << arg;
+                if (arg == QLatin1String("-early"))
+                    state.phase = QMakeEvalEarly;
+                else if (arg == QLatin1String("-before"))
+                    state.phase = QMakeEvalBefore;
+                else if (arg == QLatin1String("-after"))
+                    state.phase = QMakeEvalAfter;
+                else if (arg == QLatin1String("-late"))
+                    state.phase = QMakeEvalLate;
+                else if (arg == QLatin1String("-config"))
+                    argState = ArgConfig;
+                else if (arg == QLatin1String("-nocache"))
+                    do_cache = false;
+                else if (arg == QLatin1String("-cache"))
+                    argState = ArgCache;
+                else if (arg == QLatin1String("-qtconf"))
+                    argState = ArgQtConf;
+                else if (arg == QLatin1String("-platform") || arg == QLatin1String("-spec"))
+                    argState = ArgSpec;
+                else if (arg == QLatin1String("-xplatform") || arg == QLatin1String("-xspec"))
+                    argState = ArgXSpec;
+                else if (arg == QLatin1String("-template") || arg == QLatin1String("-t"))
+                    argState = ArgTmpl;
+                else if (arg == QLatin1String("-template_prefix") || arg == QLatin1String("-tp"))
+                    argState = ArgTmplPfx;
+                else if (arg == QLatin1String("-win32"))
+                    dir_sep = QLatin1Char('\\');
+                else if (arg == QLatin1String("-unix"))
+                    dir_sep = QLatin1Char('/');
                 else
-                    state.precmds << arg;
+                    return ArgumentUnknown;
+            } else if (arg.contains(QLatin1Char('='))) {
+                state.cmds[state.phase] << arg;
             } else {
                 return ArgumentUnknown;
             }
@@ -206,12 +185,17 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
 
 void QMakeGlobals::commitCommandLineArguments(QMakeCmdLineParserState &state)
 {
-    if (!state.preconfigs.isEmpty())
-        state.precmds << (fL1S("CONFIG += ") + state.preconfigs.join(fL1S(" ")));
-    precmds = state.precmds.join(fL1S("\n"));
-    if (!state.postconfigs.isEmpty())
-        state.postcmds << (fL1S("CONFIG += ") + state.postconfigs.join(fL1S(" ")));
-    postcmds = state.postcmds.join(fL1S("\n"));
+    if (!state.extraargs.isEmpty()) {
+        QString extra = fL1S("QMAKE_EXTRA_ARGS =");
+        for (const QString &ea : qAsConst(state.extraargs))
+            extra += QLatin1Char(' ') + QMakeEvaluator::quoteValue(ProString(ea));
+        state.cmds[QMakeEvalBefore] << extra;
+    }
+    for (int p = 0; p < 4; p++) {
+        if (!state.configs[p].isEmpty())
+            state.cmds[p] << (fL1S("CONFIG += ") + state.configs[p].join(QLatin1Char(' ')));
+        extra_cmds[p] = state.cmds[p].join(QLatin1Char('\n'));
+    }
 
     if (xqmakespec.isEmpty())
         xqmakespec = qmakespec;
@@ -251,7 +235,8 @@ void QMakeGlobals::setDirectories(const QString &input_dir, const QString &outpu
         int srcLen = srcpath.length();
         int dstLen = dstpath.length();
         int lastSl = -1;
-        while (++lastSl, srcpath.at(--srcLen) == dstpath.at(--dstLen))
+        while (++lastSl, --srcLen, --dstLen,
+               srcLen && dstLen && srcpath.at(srcLen) == dstpath.at(dstLen))
             if (srcpath.at(srcLen) == QLatin1Char('/'))
                 lastSl = 0;
         source_root = srcpath.left(srcLen + lastSl);
@@ -271,6 +256,19 @@ QString QMakeGlobals::shadowedPath(const QString &fileName) const
     return QString();
 }
 
+QStringList QMakeGlobals::splitPathList(const QString &val) const
+{
+    QStringList ret;
+    if (!val.isEmpty()) {
+        QString cwd(QDir::currentPath());
+        const QStringList vals = val.split(dirlist_sep, QString::SkipEmptyParts);
+        ret.reserve(vals.length());
+        for (const QString &it : vals)
+            ret << IoUtils::resolvePath(cwd, it);
+    }
+    return ret;
+}
+
 QString QMakeGlobals::getEnv(const QString &var) const
 {
 #ifdef PROEVALUATOR_SETENV
@@ -282,26 +280,30 @@ QString QMakeGlobals::getEnv(const QString &var) const
 
 QStringList QMakeGlobals::getPathListEnv(const QString &var) const
 {
-    QStringList ret;
-    QString val = getEnv(var);
-    if (!val.isEmpty()) {
-        QDir bdir;
-        QStringList vals = val.split(dirlist_sep);
-        ret.reserve(vals.length());
-        foreach (const QString &it, vals)
-            ret << QDir::cleanPath(bdir.absoluteFilePath(it));
-    }
-    return ret;
+    return splitPathList(getEnv(var));
 }
 
 QString QMakeGlobals::expandEnvVars(const QString &str) const
 {
     QString string = str;
-    int rep;
-    QRegExp reg_variableName = statics.reg_variableName; // Copy for thread safety
-    while ((rep = reg_variableName.indexIn(string)) != -1)
-        string.replace(rep, reg_variableName.matchedLength(),
-                       getEnv(string.mid(rep + 2, reg_variableName.matchedLength() - 3)));
+    int startIndex = 0;
+    forever {
+        startIndex = string.indexOf(QLatin1Char('$'), startIndex);
+        if (startIndex < 0)
+            break;
+        if (string.length() < startIndex + 3)
+            break;
+        if (string.at(startIndex + 1) != QLatin1Char('(')) {
+            startIndex++;
+            continue;
+        }
+        int endIndex = string.indexOf(QLatin1Char(')'), startIndex + 2);
+        if (endIndex < 0)
+            break;
+        QString value = getEnv(string.mid(startIndex + 2, endIndex - startIndex - 2));
+        string.replace(startIndex, endIndex - startIndex + 1, value);
+        startIndex += value.length();
+    }
     return string;
 }
 
@@ -317,52 +319,75 @@ bool QMakeGlobals::initProperties()
         return false;
     data = proc.readAll();
 #else
-    if (FILE *proc = QT_POPEN(QString(QMakeInternal::IoUtils::shellQuote(qmake_abslocation)
-                                      + QLatin1String(" -query")).toLocal8Bit(), "r")) {
+    if (FILE *proc = QT_POPEN(QString(IoUtils::shellQuote(qmake_abslocation)
+                                      + QLatin1String(" -query")).toLocal8Bit(), QT_POPEN_READ)) {
         char buff[1024];
         while (!feof(proc))
             data.append(buff, int(fread(buff, 1, 1023, proc)));
         QT_PCLOSE(proc);
     }
 #endif
-    foreach (QByteArray line, data.split('\n'))
-        if (!line.startsWith("QMAKE_")) {
-            int off = line.indexOf(':');
-            if (off < 0) // huh?
-                continue;
-            if (line.endsWith('\r'))
-                line.chop(1);
-            QString name = QString::fromLatin1(line.left(off));
-            ProString value = ProString(QDir::fromNativeSeparators(
-                        QString::fromLocal8Bit(line.mid(off + 1))));
-            properties.insert(ProKey(name), value);
-            if (name.startsWith(QLatin1String("QT_")) && !name.contains(QLatin1Char('/'))) {
-                if (name.startsWith(QLatin1String("QT_INSTALL_"))) {
-                    properties.insert(ProKey(name + QLatin1String("/raw")), value);
-                    properties.insert(ProKey(name + QLatin1String("/get")), value);
-                    if (name == QLatin1String("QT_INSTALL_PREFIX")
-                        || name == QLatin1String("QT_INSTALL_DATA")
-                        || name == QLatin1String("QT_INSTALL_BINS")) {
-                        name.replace(3, 7, QLatin1String("HOST"));
-                        properties.insert(ProKey(name), value);
-                        properties.insert(ProKey(name + QLatin1String("/get")), value);
-                    }
-                } else if (name.startsWith(QLatin1String("QT_HOST_"))) {
-                    properties.insert(ProKey(name + QLatin1String("/get")), value);
-                }
-            }
-        }
-    properties.insert(ProKey("QMAKE_VERSION"), ProString("2.01a"));
+    parseProperties(data, properties);
     return true;
 }
-#else
-void QMakeGlobals::setProperties(const QHash<QString, QString> &props)
-{
-    QHash<QString, QString>::ConstIterator it = props.constBegin(), eit = props.constEnd();
-    for (; it != eit; ++it)
-        properties.insert(ProKey(it.key()), ProString(it.value()));
-}
 #endif
+
+void QMakeGlobals::parseProperties(const QByteArray &data, QHash<ProKey, ProString> &properties)
+{
+    const auto lines = data.split('\n');
+    for (QByteArray line : lines) {
+        int off = line.indexOf(':');
+        if (off < 0) // huh?
+            continue;
+        if (line.endsWith('\r'))
+            line.chop(1);
+        QString name = QString::fromLatin1(line.left(off));
+        ProString value = ProString(QDir::fromNativeSeparators(
+                    QString::fromLocal8Bit(line.mid(off + 1))));
+        if (value.isNull())
+            value = ProString(""); // Make sure it is not null, to discern from missing keys
+        properties.insert(ProKey(name), value);
+        if (name.startsWith(QLatin1String("QT_"))) {
+            enum { PropPut, PropRaw, PropGet } variant;
+            if (name.contains(QLatin1Char('/'))) {
+                if (name.endsWith(QLatin1String("/raw")))
+                    variant = PropRaw;
+                else if (name.endsWith(QLatin1String("/get")))
+                    variant = PropGet;
+                else  // Nothing falls back on /src or /dev.
+                    continue;
+                name.chop(4);
+            } else {
+                variant = PropPut;
+            }
+            if (name.startsWith(QLatin1String("QT_INSTALL_"))) {
+                if (variant < PropRaw) {
+                    if (name == QLatin1String("QT_INSTALL_PREFIX")
+                        || name == QLatin1String("QT_INSTALL_DATA")
+                        || name == QLatin1String("QT_INSTALL_LIBS")
+                        || name == QLatin1String("QT_INSTALL_BINS")) {
+                        // Qt4 fallback
+                        QString hname = name;
+                        hname.replace(3, 7, QLatin1String("HOST"));
+                        properties.insert(ProKey(hname), value);
+                        properties.insert(ProKey(hname + QLatin1String("/get")), value);
+                        properties.insert(ProKey(hname + QLatin1String("/src")), value);
+                    }
+                    properties.insert(ProKey(name + QLatin1String("/raw")), value);
+                }
+                if (variant <= PropRaw)
+                    properties.insert(ProKey(name + QLatin1String("/dev")), value);
+            } else if (!name.startsWith(QLatin1String("QT_HOST_"))) {
+                continue;
+            }
+            if (variant != PropRaw) {
+                if (variant < PropGet)
+                    properties.insert(ProKey(name + QLatin1String("/get")), value);
+                properties.insert(ProKey(name + QLatin1String("/src")), value);
+            }
+        }
+    }
+}
 #endif // QT_BUILD_QMAKE
 
 QT_END_NAMESPACE

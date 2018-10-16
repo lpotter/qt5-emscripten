@@ -1,47 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include <QtWidgets/qmessagebox.h>
-
-#ifndef QT_NO_MESSAGEBOX
 
 #include <QtWidgets/qdialogbuttonbox.h>
 #include "private/qlabel_p.h"
@@ -53,17 +49,23 @@
 #include <QtWidgets/qgridlayout.h>
 #include <QtWidgets/qdesktopwidget.h>
 #include <QtWidgets/qpushbutton.h>
+#include <QtWidgets/qcheckbox.h>
 #include <QtGui/qaccessible.h>
 #include <QtGui/qicon.h>
 #include <QtGui/qtextdocument.h>
 #include <QtWidgets/qapplication.h>
+#if QT_CONFIG(textedit)
 #include <QtWidgets/qtextedit.h>
-#include <QtWidgets/qtextbrowser.h>
+#endif
+#if QT_CONFIG(menu)
 #include <QtWidgets/qmenu.h>
+#endif
 #include "qdialog_p.h"
 #include <QtGui/qfont.h>
 #include <QtGui/qfontmetrics.h>
 #include <QtGui/qclipboard.h>
+#include "private/qabstractbutton_p.h"
+#include <private/qdesktopwidget_p.h>
 
 #ifdef Q_OS_WIN
 #    include <QtCore/qt_windows.h>
@@ -72,7 +74,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
 HMENU qt_getWindowsSystemMenu(const QWidget *w)
 {
     if (QWindow *window = QApplicationPrivate::windowForWidget(w))
@@ -87,28 +89,28 @@ enum Button { Old_Ok = 1, Old_Cancel = 2, Old_Yes = 3, Old_No = 4, Old_Abort = 5
               NewButtonMask = 0xFFFFFC00 };
 
 enum DetailButtonLabel { ShowLabel = 0, HideLabel = 1 };
-#ifndef QT_NO_TEXTEDIT
+#if QT_CONFIG(textedit)
 class QMessageBoxDetailsText : public QWidget
 {
+    Q_OBJECT
 public:
     class TextEdit : public QTextEdit
     {
     public:
         TextEdit(QWidget *parent=0) : QTextEdit(parent) { }
-        void contextMenuEvent(QContextMenuEvent * e)
-        {
 #ifndef QT_NO_CONTEXTMENU
+        void contextMenuEvent(QContextMenuEvent * e) override
+        {
             QMenu *menu = createStandardContextMenu();
             menu->setAttribute(Qt::WA_DeleteOnClose);
             menu->popup(e->globalPos());
-#else
-            Q_UNUSED(e);
-#endif
         }
+#endif // QT_NO_CONTEXTMENU
     };
 
     QMessageBoxDetailsText(QWidget *parent=0)
         : QWidget(parent)
+        , copyAvailable(false)
     {
         QVBoxLayout *layout = new QVBoxLayout;
         layout->setMargin(0);
@@ -122,13 +124,41 @@ public:
         textEdit->setReadOnly(true);
         layout->addWidget(textEdit);
         setLayout(layout);
+
+        connect(textEdit, SIGNAL(copyAvailable(bool)),
+                this, SLOT(textCopyAvailable(bool)));
     }
     void setText(const QString &text) { textEdit->setPlainText(text); }
     QString text() const { return textEdit->toPlainText(); }
+
+    bool copy()
+    {
+#ifdef QT_NO_CLIPBOARD
+        return false;
+#else
+        if (!copyAvailable)
+            return false;
+        textEdit->copy();
+        return true;
+#endif
+    }
+
+    void selectAll()
+    {
+        textEdit->selectAll();
+    }
+
+private slots:
+    void textCopyAvailable(bool available)
+    {
+        copyAvailable = available;
+    }
+
 private:
+    bool copyAvailable;
     TextEdit *textEdit;
 };
-#endif // QT_NO_TEXTEDIT
+#endif // QT_CONFIG(textedit)
 
 class DetailButton : public QPushButton
 {
@@ -144,7 +174,7 @@ public:
     void setLabel(DetailButtonLabel lbl)
     { setText(label(lbl)); }
 
-    QSize sizeHint() const
+    QSize sizeHint() const override
     {
         ensurePolished();
         QStyleOptionButton opt;
@@ -162,21 +192,23 @@ public:
     }
 };
 
-
 class QMessageBoxPrivate : public QDialogPrivate
 {
     Q_DECLARE_PUBLIC(QMessageBox)
 
 public:
-    QMessageBoxPrivate() : escapeButton(0), defaultButton(0), clickedButton(0), detailsButton(0),
-#ifndef QT_NO_TEXTEDIT
+    QMessageBoxPrivate() : escapeButton(0), defaultButton(0), checkbox(0), clickedButton(0), detailsButton(0),
+#if QT_CONFIG(textedit)
                            detailsText(0),
 #endif
                            compatMode(false), autoAddOkButton(true),
-                           detectedEscapeButton(0), informativeLabel(0) { }
+                           detectedEscapeButton(0), informativeLabel(0),
+                           options(QMessageDialogOptions::create()) { }
 
     void init(const QString &title = QString(), const QString &text = QString());
+    void setupLayout();
     void _q_buttonClicked(QAbstractButton *);
+    void _q_clicked(QPlatformDialogHelper::StandardButton button, QPlatformDialogHelper::ButtonRole role);
 
     QAbstractButton *findButton(int button0, int button1, int button2, int flags);
     void addOldButtons(int button0, int button1, int button2);
@@ -188,10 +220,6 @@ public:
     void updateSize();
     int layoutMinimumWidth();
     void retranslateStrings();
-
-#ifdef Q_OS_WINCE
-    void hideSpecial();
-#endif
 
     static int showOldMessageBox(QWidget *parent, QMessageBox::Icon icon,
                                  const QString &title, const QString &text,
@@ -217,9 +245,10 @@ public:
     QList<QAbstractButton *> customButtonList;
     QAbstractButton *escapeButton;
     QPushButton *defaultButton;
+    QCheckBox *checkbox;
     QAbstractButton *clickedButton;
     DetailButton *detailsButton;
-#ifndef QT_NO_TEXTEDIT
+#if QT_CONFIG(textedit)
     QMessageBoxDetailsText *detailsText;
 #endif
     bool compatMode;
@@ -229,6 +258,11 @@ public:
     QPointer<QObject> receiverToDisconnectOnClose;
     QByteArray memberToDisconnectOnClose;
     QByteArray signalToDisconnectOnClose;
+    QSharedPointer<QMessageDialogOptions> options;
+private:
+    void initHelper(QPlatformDialogHelper *) override;
+    void helperPrepareShow(QPlatformDialogHelper *) override;
+    void helperDone(QDialog::DialogCode, QPlatformDialogHelper *) override;
 };
 
 void QMessageBoxPrivate::init(const QString &title, const QString &text)
@@ -240,14 +274,7 @@ void QMessageBoxPrivate::init(const QString &title, const QString &text)
     label->setTextInteractionFlags(Qt::TextInteractionFlags(q->style()->styleHint(QStyle::SH_MessageBox_TextInteractionFlags, 0, q)));
     label->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
     label->setOpenExternalLinks(true);
-#if defined(Q_WS_MAC)
-    label->setContentsMargins(16, 0, 0, 0);
-#else
-    label->setContentsMargins(2, 0, 0, 0);
-    label->setIndent(9);
-#endif
-    icon = QMessageBox::NoIcon;
-    iconLabel = new QLabel;
+    iconLabel = new QLabel(q);
     iconLabel->setObjectName(QLatin1String("qt_msgboxex_icon_label"));
     iconLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
@@ -256,41 +283,71 @@ void QMessageBoxPrivate::init(const QString &title, const QString &text)
     buttonBox->setCenterButtons(q->style()->styleHint(QStyle::SH_MessageBox_CenterButtons, 0, q));
     QObject::connect(buttonBox, SIGNAL(clicked(QAbstractButton*)),
                      q, SLOT(_q_buttonClicked(QAbstractButton*)));
-
-    QGridLayout *grid = new QGridLayout;
-#ifndef Q_WS_MAC
-    grid->addWidget(iconLabel, 0, 0, 2, 1, Qt::AlignTop);
-    grid->addWidget(label, 0, 1, 1, 1);
-    // -- leave space for information label --
-    grid->addWidget(buttonBox, 2, 0, 1, 2);
-#else
-    grid->setMargin(0);
-    grid->setVerticalSpacing(8);
-    grid->setHorizontalSpacing(0);
-    q->setContentsMargins(24, 15, 24, 20);
-    grid->addWidget(iconLabel, 0, 0, 2, 1, Qt::AlignTop | Qt::AlignLeft);
-    grid->addWidget(label, 0, 1, 1, 1);
-    // -- leave space for information label --
-    grid->setRowStretch(1, 100);
-    grid->setRowMinimumHeight(2, 6);
-    grid->addWidget(buttonBox, 3, 1, 1, 1);
-#endif
-
-    grid->setSizeConstraint(QLayout::SetNoConstraint);
-    q->setLayout(grid);
-
+    setupLayout();
     if (!title.isEmpty() || !text.isEmpty()) {
         q->setWindowTitle(title);
         q->setText(text);
     }
     q->setModal(true);
-
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     QFont f = q->font();
     f.setBold(true);
     label->setFont(f);
 #endif
+    icon = QMessageBox::NoIcon;
+}
+
+void QMessageBoxPrivate::setupLayout()
+{
+    Q_Q(QMessageBox);
+    delete q->layout();
+    QGridLayout *grid = new QGridLayout;
+    bool hasIcon = iconLabel->pixmap() && !iconLabel->pixmap()->isNull();
+
+    if (hasIcon)
+        grid->addWidget(iconLabel, 0, 0, 2, 1, Qt::AlignTop);
+    iconLabel->setVisible(hasIcon);
+#ifdef Q_OS_MAC
+    QSpacerItem *indentSpacer = new QSpacerItem(14, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
+#else
+    QSpacerItem *indentSpacer = new QSpacerItem(hasIcon ? 7 : 15, 1, QSizePolicy::Fixed, QSizePolicy::Fixed);
+#endif
+    grid->addItem(indentSpacer, 0, hasIcon ? 1 : 0, 2, 1);
+    grid->addWidget(label, 0, hasIcon ? 2 : 1, 1, 1);
+    if (informativeLabel) {
+#ifndef Q_OS_MAC
+        informativeLabel->setContentsMargins(0, 7, 0, 7);
+#endif
+        grid->addWidget(informativeLabel, 1, hasIcon ? 2 : 1, 1, 1);
+    }
+    if (checkbox) {
+        grid->addWidget(checkbox, informativeLabel ? 2 : 1, hasIcon ? 2 : 1, 1, 1, Qt::AlignLeft);
+#ifdef Q_OS_MAC
+        grid->addItem(new QSpacerItem(1, 15, QSizePolicy::Fixed, QSizePolicy::Fixed), grid->rowCount(), 0);
+#else
+        grid->addItem(new QSpacerItem(1, 7, QSizePolicy::Fixed, QSizePolicy::Fixed), grid->rowCount(), 0);
+#endif
+    }
+#ifdef Q_OS_MAC
+    grid->addWidget(buttonBox, grid->rowCount(), hasIcon ? 2 : 1, 1, 1);
+    grid->setMargin(0);
+    grid->setVerticalSpacing(8);
+    grid->setHorizontalSpacing(0);
+    q->setContentsMargins(24, 15, 24, 20);
+    grid->setRowStretch(1, 100);
+    grid->setRowMinimumHeight(2, 6);
+#else
+    grid->addWidget(buttonBox, grid->rowCount(), 0, 1, grid->columnCount());
+#endif
+#if QT_CONFIG(textedit)
+    if (detailsText)
+        grid->addWidget(detailsText, grid->rowCount(), 0, 1, grid->columnCount());
+#endif
+    grid->setSizeConstraint(QLayout::SetNoConstraint);
+    q->setLayout(grid);
+
     retranslateStrings();
+    updateSize();
 }
 
 int QMessageBoxPrivate::layoutMinimumWidth()
@@ -306,25 +363,16 @@ void QMessageBoxPrivate::updateSize()
     if (!q->isVisible())
         return;
 
-    QSize screenSize = QApplication::desktop()->availableGeometry(QCursor::pos()).size();
-#if defined(Q_OS_WINCE)
-    // the width of the screen, less the window border.
-    int hardLimit = screenSize.width() - (q->frameGeometry().width() - q->geometry().width());
-#else
+    QSize screenSize = QDesktopWidgetPrivate::availableGeometry(QCursor::pos()).size();
     int hardLimit = qMin(screenSize.width() - 480, 1000); // can never get bigger than this
     // on small screens allows the messagebox be the same size as the screen
     if (screenSize.width() <= 1024)
         hardLimit = screenSize.width();
-#endif
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     int softLimit = qMin(screenSize.width()/2, 420);
 #else
     // note: ideally on windows, hard and soft limits but it breaks compat
-#ifndef Q_OS_WINCE
     int softLimit = qMin(screenSize.width()/2, 500);
-#else
-    int softLimit = qMin(screenSize.width() * 3 / 4, 500);
-#endif //Q_OS_WINCE
 #endif
 
     if (informativeLabel)
@@ -368,7 +416,7 @@ void QMessageBoxPrivate::updateSize()
     }
 
     QFontMetrics fm(QApplication::font("QMdiSubWindowTitleBar"));
-    int windowTitleWidth = qMin(fm.width(q->windowTitle()) + 50, hardLimit);
+    int windowTitleWidth = qMin(fm.horizontalAdvance(q->windowTitle()) + 50, hardLimit);
     if (windowTitleWidth > width)
         width = windowTitleWidth;
 
@@ -380,28 +428,6 @@ void QMessageBoxPrivate::updateSize()
     q->setFixedSize(width, height);
     QCoreApplication::removePostedEvents(q, QEvent::LayoutRequest);
 }
-
-
-#ifdef Q_OS_WINCE
-/*!
-  \internal
-  Hides special buttons which are rather shown in the title bar
-  on WinCE, to conserve screen space.
-*/
-
-void QMessageBoxPrivate::hideSpecial()
-{
-    Q_Q(QMessageBox);
-    QList<QPushButton*> list = q->findChildren<QPushButton*>();
-        for (int i=0; i<list.size(); ++i) {
-            QPushButton *pb = list.at(i);
-            QString text = pb->text();
-            text.remove(QChar::fromLatin1('&'));
-            if (text == QApplication::translate("QMessageBox", "OK" ))
-                pb->setFixedSize(0,0);
-        }
-}
-#endif
 
 static int oldButton(int button)
 {
@@ -443,7 +469,7 @@ int QMessageBoxPrivate::execReturnCode(QAbstractButton *button)
 void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
 {
     Q_Q(QMessageBox);
-#ifndef QT_NO_TEXTEDIT
+#if QT_CONFIG(textedit)
     if (detailsButton && detailsText && button == detailsButton) {
         detailsButton->setLabel(detailsText->isHidden() ? HideLabel : ShowLabel);
         detailsText->setHidden(!detailsText->isHidden());
@@ -462,6 +488,21 @@ void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
         }
         signalToDisconnectOnClose.clear();
         memberToDisconnectOnClose.clear();
+    }
+}
+
+void QMessageBoxPrivate::_q_clicked(QPlatformDialogHelper::StandardButton button, QPlatformDialogHelper::ButtonRole role)
+{
+    Q_Q(QMessageBox);
+    if (button > QPlatformDialogHelper::LastButton) {
+        // It's a custom button, and the QPushButton in options is just a proxy
+        // for the button on the platform dialog.  Simulate the user clicking it.
+        clickedButton = static_cast<QAbstractButton *>(options->customButton(button)->button);
+        Q_ASSERT(clickedButton);
+        clickedButton->click();
+        q->done(role);
+    } else {
+        q->done(button);
     }
 }
 
@@ -522,7 +563,7 @@ void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
 
     This is the approach recommended in the
     \l{http://developer.apple.com/library/mac/documentation/UserExperience/Conceptual/AppleHIGuidelines/Windows/Windows.html#//apple_ref/doc/uid/20000961-BABCAJID}
-    {Mac OS X Guidelines}. Similar guidelines apply for the other
+    {\macos Guidelines}. Similar guidelines apply for the other
     platforms, but note the different ways the
     \l{QMessageBox::informativeText} {informative text} is handled for
     different platforms.
@@ -639,7 +680,7 @@ void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
 
     If the \l{QMessageBox::StandardButtons} {standard buttons} are not
     flexible enough for your message box, you can use the addButton()
-    overload that takes a text and a ButtonRoleto to add custom
+    overload that takes a text and a ButtonRole to add custom
     buttons. The ButtonRole is used by QMessageBox to determine the
     ordering of the buttons on screen (which varies according to the
     platform). You can test the value of clickedButton() after calling
@@ -737,7 +778,7 @@ void QMessageBoxPrivate::_q_buttonClicked(QAbstractButton *button)
     Constructs a message box with no text and no buttons. \a parent is
     passed to the QDialog constructor.
 
-    On Mac OS X, if you want your message box to appear
+    On \macos, if you want your message box to appear
     as a Qt::Sheet of its \a parent, set the message box's
     \l{setWindowModality()} {window modality} to Qt::WindowModal or use open().
     Otherwise, the message box will be a standard dialog.
@@ -759,7 +800,7 @@ QMessageBox::QMessageBox(QWidget *parent)
     The message box is an \l{Qt::ApplicationModal} {application modal}
     dialog box.
 
-    On Mac OS X, if \a parent is not 0 and you want your message box
+    On \macos, if \a parent is not 0 and you want your message box
     to appear as a Qt::Sheet of that parent, set the message box's
     \l{setWindowModality()} {window modality} to Qt::WindowModal
     (default). Otherwise, the message box will be a standard dialog.
@@ -799,6 +840,8 @@ void QMessageBox::addButton(QAbstractButton *button, ButtonRole role)
     if (!button)
         return;
     removeButton(button);
+    d->options->addButton(button->text(), static_cast<QPlatformDialogHelper::ButtonRole>(role),
+                          button);
     d->buttonBox->addButton(button, (QDialogButtonBox::ButtonRole)role);
     d->customButtonList.append(button);
     d->autoAddOkButton = false;
@@ -927,7 +970,7 @@ QAbstractButton *QMessageBox::button(StandardButton which) const
     \list 1
     \li If there is only one button, it is made the escape button.
     \li If there is a \l Cancel button, it is made the escape button.
-    \li On Mac OS X only, if there is exactly one button with the role
+    \li On \macos only, if there is exactly one button with the role
        QMessageBox::RejectRole, it is made the escape button.
     \endlist
 
@@ -990,27 +1033,37 @@ void QMessageBoxPrivate::detectEscapeButton()
         return;
     }
 
+    // If there are two buttons and one of them is the "Show Details..."
+    // button, then make the other one the escape button
+    if (buttons.count() == 2 && detailsButton) {
+        auto idx = buttons.indexOf(detailsButton);
+        if (idx != -1) {
+            detectedEscapeButton = buttons.at(1 - idx);
+            return;
+        }
+    }
+
     // if the message box has one RejectRole button, make it the escape button
-    for (int i = 0; i < buttons.count(); i++) {
-        if (buttonBox->buttonRole(buttons.at(i)) == QDialogButtonBox::RejectRole) {
+    for (auto *button : buttons) {
+        if (buttonBox->buttonRole(button) == QDialogButtonBox::RejectRole) {
             if (detectedEscapeButton) { // already detected!
                 detectedEscapeButton = 0;
                 break;
             }
-            detectedEscapeButton = buttons.at(i);
+            detectedEscapeButton = button;
         }
     }
     if (detectedEscapeButton)
         return;
 
     // if the message box has one NoRole button, make it the escape button
-    for (int i = 0; i < buttons.count(); i++) {
-        if (buttonBox->buttonRole(buttons.at(i)) == QDialogButtonBox::NoRole) {
+    for (auto *button : buttons) {
+        if (buttonBox->buttonRole(button) == QDialogButtonBox::NoRole) {
             if (detectedEscapeButton) { // already detected!
                 detectedEscapeButton = 0;
                 break;
             }
-            detectedEscapeButton = buttons.at(i);
+            detectedEscapeButton = button;
         }
     }
 }
@@ -1022,7 +1075,7 @@ void QMessageBoxPrivate::detectEscapeButton()
     or 0 if the user hit the \uicontrol Esc key and
     no \l{setEscapeButton()}{escape button} was set.
 
-    If exec() hasn't been called yet, returns 0.
+    If exec() hasn't been called yet, returns nullptr.
 
     Example:
 
@@ -1040,7 +1093,7 @@ QAbstractButton *QMessageBox::clickedButton() const
     \since 4.2
 
     Returns the button that should be the message box's
-    \l{QPushButton::setDefault()}{default button}. Returns 0
+    \l{QPushButton::setDefault()}{default button}. Returns nullptr
     if no default button was set.
 
     \sa addButton(), QPushButton::setDefault()
@@ -1081,6 +1134,51 @@ void QMessageBox::setDefaultButton(QMessageBox::StandardButton button)
 {
     Q_D(QMessageBox);
     setDefaultButton(d->buttonBox->button(QDialogButtonBox::StandardButton(button)));
+}
+
+/*! \since 5.2
+
+    Sets the checkbox \a cb on the message dialog. The message box takes ownership of the checkbox.
+    The argument \a cb can be 0 to remove an existing checkbox from the message box.
+
+    \sa checkBox()
+*/
+
+void QMessageBox::setCheckBox(QCheckBox *cb)
+{
+    Q_D(QMessageBox);
+
+    if (cb == d->checkbox)
+        return;
+
+    if (d->checkbox) {
+        d->checkbox->hide();
+        layout()->removeWidget(d->checkbox);
+        if (d->checkbox->parentWidget() == this) {
+            d->checkbox->setParent(0);
+            d->checkbox->deleteLater();
+        }
+    }
+    d->checkbox = cb;
+    if (d->checkbox) {
+        QSizePolicy sp = d->checkbox->sizePolicy();
+        sp.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
+        d->checkbox->setSizePolicy(sp);
+    }
+    d->setupLayout();
+}
+
+
+/*! \since 5.2
+
+    Returns the checkbox shown on the dialog. This is 0 if no checkbox is set.
+    \sa setCheckBox()
+*/
+
+QCheckBox* QMessageBox::checkBox() const
+{
+    Q_D(const QMessageBox);
+    return d->checkbox;
 }
 
 /*!
@@ -1194,8 +1292,8 @@ void QMessageBox::setIconPixmap(const QPixmap &pixmap)
 {
     Q_D(QMessageBox);
     d->iconLabel->setPixmap(pixmap);
-    d->updateSize();
     d->icon = NoIcon;
+    d->setupLayout();
 }
 
 /*!
@@ -1225,6 +1323,30 @@ void QMessageBox::setTextFormat(Qt::TextFormat format)
 }
 
 /*!
+    \property QMessageBox::textInteractionFlags
+    \since 5.1
+
+    Specifies how the label of the message box should interact with user
+    input.
+
+    The default value depends on the style.
+
+    \sa QStyle::SH_MessageBox_TextInteractionFlags
+*/
+
+Qt::TextInteractionFlags QMessageBox::textInteractionFlags() const
+{
+    Q_D(const QMessageBox);
+    return d->label->textInteractionFlags();
+}
+
+void QMessageBox::setTextInteractionFlags(Qt::TextInteractionFlags flags)
+{
+    Q_D(QMessageBox);
+    d->label->setTextInteractionFlags(flags);
+}
+
+/*!
     \reimp
 */
 bool QMessageBox::event(QEvent *e)
@@ -1237,24 +1359,6 @@ bool QMessageBox::event(QEvent *e)
         case QEvent::LanguageChange:
             d_func()->retranslateStrings();
             break;
-#ifdef Q_OS_WINCE
-        case QEvent::OkRequest:
-        case QEvent::HelpRequest: {
-          QString bName =
-              (e->type() == QEvent::OkRequest)
-              ? QApplication::translate("QMessageBox", "OK")
-              : QApplication::translate("QMessageBox", "Help");
-          QList<QPushButton*> list = findChildren<QPushButton*>();
-          for (int i=0; i<list.size(); ++i) {
-              QPushButton *pb = list.at(i);
-              if (pb->text() == bName) {
-                  if (pb->isEnabled())
-                      pb->click();
-                  return pb->isEnabled();
-              }
-          }
-        }
-#endif
         default:
             break;
     }
@@ -1300,17 +1404,18 @@ void QMessageBox::changeEvent(QEvent *ev)
         d->buttonBox->setCenterButtons(style()->styleHint(QStyle::SH_MessageBox_CenterButtons, 0, this));
         if (d->informativeLabel)
             d->informativeLabel->setTextInteractionFlags(flags);
-        // intentional fall through
+        Q_FALLTHROUGH();
     }
     case QEvent::FontChange:
     case QEvent::ApplicationFontChange:
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     {
         QFont f = font();
         f.setBold(true);
         d->label->setFont(f);
     }
 #endif
+        Q_FALLTHROUGH();
     default:
         break;
     }
@@ -1322,14 +1427,11 @@ void QMessageBox::changeEvent(QEvent *ev)
 */
 void QMessageBox::keyPressEvent(QKeyEvent *e)
 {
-    Q_D(QMessageBox);
-    if (e->key() == Qt::Key_Escape
-#ifdef Q_WS_MAC
-        || (e->modifiers() == Qt::ControlModifier && e->key() == Qt::Key_Period)
-#endif
-        ) {
+#if QT_CONFIG(shortcut)
+        Q_D(QMessageBox);
+        if (e->matches(QKeySequence::Cancel)) {
             if (d->detectedEscapeButton) {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
                 d->detectedEscapeButton->animateClick();
 #else
                 d->detectedEscapeButton->click();
@@ -1337,37 +1439,54 @@ void QMessageBox::keyPressEvent(QKeyEvent *e)
             }
             return;
         }
+#endif // QT_CONFIG(shortcut)
 
-#if defined (Q_OS_WIN) && !defined(QT_NO_CLIPBOARD) && !defined(QT_NO_SHORTCUT)
+#if !defined(QT_NO_CLIPBOARD) && !defined(QT_NO_SHORTCUT)
+
+#if QT_CONFIG(textedit)
         if (e == QKeySequence::Copy) {
-            QString separator = QString::fromLatin1("---------------------------\n");
-            QString textToCopy = separator;
-            separator.prepend(QLatin1Char('\n'));
-            textToCopy += windowTitle() + separator; // title
-            textToCopy += d->label->text() + separator; // text
+            if (d->detailsText && d->detailsText->isVisible() && d->detailsText->copy()) {
+                e->setAccepted(true);
+                return;
+            }
+        } else if (e == QKeySequence::SelectAll && d->detailsText && d->detailsText->isVisible()) {
+            d->detailsText->selectAll();
+            e->setAccepted(true);
+            return;
+        }
+#endif // QT_CONFIG(textedit)
+
+#if defined(Q_OS_WIN)
+        if (e == QKeySequence::Copy) {
+            const QLatin1String separator("---------------------------\n");
+            QString textToCopy;
+            textToCopy += separator + windowTitle() + QLatin1Char('\n') + separator // title
+                          + d->label->text() + QLatin1Char('\n') + separator;       // text
 
             if (d->informativeLabel)
-                textToCopy += d->informativeLabel->text() + separator;
+                textToCopy += d->informativeLabel->text() + QLatin1Char('\n') + separator;
 
-            QString buttonTexts;
-            QList<QAbstractButton *> buttons = d->buttonBox->buttons();
-            for (int i = 0; i < buttons.count(); i++) {
-                buttonTexts += buttons[i]->text() + QLatin1String("   ");
-            }
-            textToCopy += buttonTexts + separator;
-
+            const QList<QAbstractButton *> buttons = d->buttonBox->buttons();
+            for (const auto *button : buttons)
+                textToCopy += button->text() + QLatin1String("   ");
+            textToCopy += QLatin1Char('\n') + separator;
+#if QT_CONFIG(textedit)
+            if (d->detailsText)
+                textToCopy += d->detailsText->text() + QLatin1Char('\n') + separator;
+#endif
             QApplication::clipboard()->setText(textToCopy);
             return;
         }
-#endif //QT_NO_SHORTCUT QT_NO_CLIPBOARD Q_OS_WIN
+#endif // Q_OS_WIN
+
+#endif // !QT_NO_CLIPBOARD && !QT_NO_SHORTCUT
 
 #ifndef QT_NO_SHORTCUT
-    if (!(e->modifiers() & Qt::AltModifier)) {
+    if (!(e->modifiers() & (Qt::AltModifier | Qt::ControlModifier | Qt::MetaModifier))) {
         int key = e->key() & ~Qt::MODIFIER_MASK;
         if (key) {
             const QList<QAbstractButton *> buttons = d->buttonBox->buttons();
-            for (int i = 0; i < buttons.count(); ++i) {
-                QAbstractButton *pb = buttons.at(i);
+            for (auto *pb : buttons) {
                 QKeySequence shortcut = pb->shortcut();
                 if (!shortcut.isEmpty() && key == int(shortcut[0] & ~Qt::MODIFIER_MASK)) {
                     pb->animateClick();
@@ -1380,23 +1499,7 @@ void QMessageBox::keyPressEvent(QKeyEvent *e)
     QDialog::keyPressEvent(e);
 }
 
-#ifdef Q_OS_WINCE
 /*!
-    \reimp
-*/
-void QMessageBox::setVisible(bool visible)
-{
-    Q_D(QMessageBox);
-    if (visible)
-        d->hideSpecial();
-    QDialog::setVisible(visible);
-}
-#endif
-
-
-/*!
-    \overload
-
     Opens the dialog and connects its finished() or buttonClicked() signal to
     the slot specified by \a receiver and \a member. If the slot in \a member
     has a pointer for its first parameter the connection is to buttonClicked(),
@@ -1451,9 +1554,6 @@ void QMessageBox::showEvent(QShowEvent *e)
     Q_D(QMessageBox);
     if (d->autoAddOkButton) {
         addButton(Ok);
-#if defined(Q_OS_WINCE)
-        d->hideSpecial();
-#endif
     }
     if (d->detailsButton)
         addButton(d->detailsButton, QMessageBox::ActionRole);
@@ -1464,7 +1564,7 @@ void QMessageBox::showEvent(QShowEvent *e)
     QAccessibleEvent event(this, QAccessible::Alert);
     QAccessible::updateAccessibility(&event);
 #endif
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     if (const HMENU systemMenu = qt_getWindowsSystemMenu(this)) {
         EnableMenuItem(systemMenu, SC_CLOSE, d->detectedEscapeButton ?
                        MF_BYCOMMAND|MF_ENABLED : MF_BYCOMMAND|MF_GRAYED);
@@ -1655,7 +1755,7 @@ QMessageBox::StandardButton QMessageBox::critical(QWidget *parent, const QString
     \li As a last resort it uses the Information icon.
     \endlist
 
-    The about box has a single button labelled "OK". On Mac OS X, the
+    The about box has a single button labelled "OK". On \macos, the
     about box is popped up as a modeless window; on other platforms,
     it is currently application modal.
 
@@ -1663,7 +1763,7 @@ QMessageBox::StandardButton QMessageBox::critical(QWidget *parent, const QString
 */
 void QMessageBox::about(QWidget *parent, const QString &title, const QString &text)
 {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     static QPointer<QMessageBox> oldMsgBox;
 
     if (oldMsgBox && oldMsgBox->text() == text) {
@@ -1675,7 +1775,7 @@ void QMessageBox::about(QWidget *parent, const QString &title, const QString &te
 #endif
 
     QMessageBox *msgBox = new QMessageBox(title, text, Information, 0, 0, 0, parent
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
                                           , Qt::WindowTitleHint | Qt::WindowSystemMenuHint
 #endif
     );
@@ -1685,7 +1785,7 @@ void QMessageBox::about(QWidget *parent, const QString &title, const QString &te
     msgBox->setIconPixmap(icon.pixmap(size));
 
     // should perhaps be a style hint
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     oldMsgBox = msgBox;
 #if 0
     // ### doesn't work until close button is enabled in title bar
@@ -1709,14 +1809,14 @@ void QMessageBox::about(QWidget *parent, const QString &title, const QString &te
 
     QApplication provides this functionality as a slot.
 
-    On Mac OS X, the about box is popped up as a modeless window; on
+    On \macos, the about box is popped up as a modeless window; on
     other platforms, it is currently application modal.
 
     \sa QApplication::aboutQt()
 */
 void QMessageBox::aboutQt(QWidget *parent, const QString &title)
 {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     static QPointer<QMessageBox> oldMsgBox;
 
     if (oldMsgBox) {
@@ -1744,26 +1844,20 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
         "<p>Qt licensed under our commercial license agreement is appropriate "
         "for development of proprietary/commercial software where you do not "
         "want to share any source code with third parties or otherwise cannot "
-        "comply with the terms of the GNU LGPL version 2.1 or GNU GPL version "
-        "3.0.</p>"
-        "<p>Qt licensed under the GNU LGPL version 2.1 is appropriate for the "
-        "development of Qt applications provided you can comply with the terms "
-        "and conditions of the GNU LGPL version 2.1.</p>"
-        "<p>Qt licensed under the GNU General Public License version 3.0 is "
-        "appropriate for the development of Qt applications where you wish to "
-        "use such applications in combination with software subject to the "
-        "terms of the GNU GPL version 3.0 or where you are otherwise willing "
-        "to comply with the terms of the GNU GPL version 3.0.</p>"
-        "<p>Please see <a href=\"http://qt.digia.com/Product/Licensing/\">qt.digia.com/Product/Licensing</a> "
+        "comply with the terms of the GNU LGPL version 3.</p>"
+        "<p>Qt licensed under the GNU LGPL version 3 is appropriate for the "
+        "development of Qt&nbsp;applications provided you can comply with the terms "
+        "and conditions of the GNU LGPL version 3.</p>"
+        "<p>Please see <a href=\"http://%2/\">%2</a> "
         "for an overview of Qt licensing.</p>"
-        "<p>Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies) and other "
+        "<p>Copyright (C) %1 The Qt Company Ltd and other "
         "contributors.</p>"
-        "<p>Qt and the Qt logo are trademarks of Digia Plc and/or its subsidiary(-ies).</p>"
-        "<p>Qt is developed as an open source project on "
-        "<a href=\"http://qt-project.org/\">qt-project.org</a>.</p>"
-        "<p>Qt is a Digia product. See <a href=\"http://qt.digia.com/\">qt.digia.com</a> "
-        "for more information.</p>"
-        );
+        "<p>Qt and the Qt logo are trademarks of The Qt Company Ltd.</p>"
+        "<p>Qt is The Qt Company Ltd product developed as an open source "
+        "project. See <a href=\"http://%3/\">%3</a> for more information.</p>"
+        ).arg(QStringLiteral("2018"),
+              QStringLiteral("qt.io/licensing"),
+              QStringLiteral("qt.io"));
     QMessageBox *msgBox = new QMessageBox(parent);
     msgBox->setAttribute(Qt::WA_DeleteOnClose);
     msgBox->setWindowTitle(title.isEmpty() ? tr("About Qt") : title);
@@ -1773,12 +1867,9 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
     QPixmap pm(QLatin1String(":/qt-project.org/qmessagebox/images/qtlogo-64.png"));
     if (!pm.isNull())
         msgBox->setIconPixmap(pm);
-#if defined(Q_OS_WINCE)
-    msgBox->setDefaultButton(msgBox->addButton(QMessageBox::Ok));
-#endif
 
     // should perhaps be a style hint
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     oldMsgBox = msgBox;
 #if 0
     // ### doesn't work until close button is enabled in title bar
@@ -1915,7 +2006,7 @@ int QMessageBoxPrivate::showOldMessageBox(QWidget *parent, QMessageBox::Icon ico
 
 void QMessageBoxPrivate::retranslateStrings()
 {
-#ifndef QT_NO_TEXTEDIT
+#if QT_CONFIG(textedit)
     if (detailsButton)
         detailsButton->setLabel(detailsText->isHidden() ? ShowLabel : HideLabel);
 #endif
@@ -2370,7 +2461,7 @@ void QMessageBox::setButtonText(int button, const QString &text)
     }
 }
 
-#ifndef QT_NO_TEXTEDIT
+#if QT_CONFIG(textedit)
 /*!
   \property QMessageBox::detailedText
   \brief the text to be displayed in the details area.
@@ -2392,26 +2483,33 @@ void QMessageBox::setDetailedText(const QString &text)
 {
     Q_D(QMessageBox);
     if (text.isEmpty()) {
-        delete d->detailsText;
+        if (d->detailsText) {
+            d->detailsText->hide();
+            d->detailsText->deleteLater();
+        }
         d->detailsText = 0;
         removeButton(d->detailsButton);
-        delete d->detailsButton;
+        if (d->detailsButton) {
+            d->detailsButton->hide();
+            d->detailsButton->deleteLater();
+        }
         d->detailsButton = 0;
-        return;
+    } else {
+        if (!d->detailsText) {
+            d->detailsText = new QMessageBoxDetailsText(this);
+            d->detailsText->hide();
+        }
+        if (!d->detailsButton) {
+            const bool autoAddOkButton = d->autoAddOkButton; // QTBUG-39334, addButton() clears the flag.
+            d->detailsButton = new DetailButton(this);
+            addButton(d->detailsButton, QMessageBox::ActionRole);
+            d->autoAddOkButton = autoAddOkButton;
+        }
+        d->detailsText->setText(text);
     }
-
-    if (!d->detailsText) {
-        d->detailsText = new QMessageBoxDetailsText(this);
-        QGridLayout* grid = qobject_cast<QGridLayout*>(layout());
-        if (grid)
-            grid->addWidget(d->detailsText, grid->rowCount(), 0, 1, grid->columnCount());
-        d->detailsText->hide();
-    }
-    if (!d->detailsButton)
-        d->detailsButton = new DetailButton(this);
-    d->detailsText->setText(text);
+    d->setupLayout();
 }
-#endif // QT_NO_TEXTEDIT
+#endif // QT_CONFIG(textedit)
 
 /*!
   \property QMessageBox::informativeText
@@ -2440,39 +2538,29 @@ void QMessageBox::setInformativeText(const QString &text)
 {
     Q_D(QMessageBox);
     if (text.isEmpty()) {
-        layout()->removeWidget(d->informativeLabel);
-        delete d->informativeLabel;
+        if (d->informativeLabel) {
+            d->informativeLabel->hide();
+            d->informativeLabel->deleteLater();
+        }
         d->informativeLabel = 0;
-#ifndef Q_WS_MAC
-        d->label->setContentsMargins(2, 0, 0, 0);
+    } else {
+        if (!d->informativeLabel) {
+            QLabel *label = new QLabel;
+            label->setObjectName(QLatin1String("qt_msgbox_informativelabel"));
+            label->setTextInteractionFlags(Qt::TextInteractionFlags(style()->styleHint(QStyle::SH_MessageBox_TextInteractionFlags, 0, this)));
+            label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+            label->setOpenExternalLinks(true);
+            label->setWordWrap(true);
+#ifdef Q_OS_MAC
+            // apply a smaller font the information label on the mac
+            label->setFont(qt_app_fonts_hash()->value("QTipLabel"));
 #endif
-        d->updateSize();
-        return;
+            label->setWordWrap(true);
+            d->informativeLabel = label;
+        }
+        d->informativeLabel->setText(text);
     }
-
-    if (!d->informativeLabel) {
-        QLabel *label = new QLabel;
-        label->setObjectName(QLatin1String("qt_msgbox_informativelabel"));
-        label->setTextInteractionFlags(Qt::TextInteractionFlags(style()->styleHint(QStyle::SH_MessageBox_TextInteractionFlags, 0, this)));
-        label->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-        label->setOpenExternalLinks(true);
-        label->setWordWrap(true);
-#ifndef Q_WS_MAC
-        d->label->setContentsMargins(2, 0, 0, 0);
-        label->setContentsMargins(2, 0, 0, 6);
-        label->setIndent(9);
-#else
-        label->setContentsMargins(16, 0, 0, 0);
-        // apply a smaller font the information label on the mac
-        label->setFont(qt_app_fonts_hash()->value("QTipLabel"));
-#endif
-        label->setWordWrap(true);
-        QGridLayout *grid = static_cast<QGridLayout *>(layout());
-        grid->addWidget(label, 1, 1, 1, 1);
-        d->informativeLabel = label;
-    }
-    d->informativeLabel->setText(text);
-    d->updateSize();
+    d->setupLayout();
 }
 
 /*!
@@ -2480,14 +2568,14 @@ void QMessageBox::setInformativeText(const QString &text)
 
     This function shadows QWidget::setWindowTitle().
 
-    Sets the title of the message box to \a title. On Mac OS X,
-    the window title is ignored (as required by the Mac OS X
+    Sets the title of the message box to \a title. On \macos,
+    the window title is ignored (as required by the \macos
     Guidelines).
 */
 void QMessageBox::setWindowTitle(const QString &title)
 {
     // Message boxes on the mac do not have a title
-#ifndef Q_WS_MAC
+#ifndef Q_OS_MAC
     QDialog::setWindowTitle(title);
 #else
     Q_UNUSED(title);
@@ -2502,7 +2590,7 @@ void QMessageBox::setWindowTitle(const QString &title)
 
     Sets the modality of the message box to \a windowModality.
 
-    On Mac OS X, if the modality is set to Qt::WindowModal and the message box
+    On \macos, if the modality is set to Qt::WindowModal and the message box
     has a parent, then the message box will be a Qt::Sheet, otherwise the
     message box will be a standard dialog.
 */
@@ -2538,9 +2626,72 @@ QPixmap QMessageBoxPrivate::standardIcon(QMessageBox::Icon icon, QMessageBox *mb
     default:
         break;
     }
-    if (!tmpIcon.isNull())
-        return tmpIcon.pixmap(iconSize, iconSize);
+    if (!tmpIcon.isNull()) {
+        QWindow *window = nullptr;
+        if (mb) {
+            window = mb->windowHandle();
+            if (!window) {
+                if (const QWidget *nativeParent = mb->nativeParentWidget())
+                    window = nativeParent->windowHandle();
+            }
+        }
+        return tmpIcon.pixmap(window, QSize(iconSize, iconSize));
+    }
     return QPixmap();
+}
+
+void QMessageBoxPrivate::initHelper(QPlatformDialogHelper *h)
+{
+    Q_Q(QMessageBox);
+    QObject::connect(h, SIGNAL(clicked(QPlatformDialogHelper::StandardButton,QPlatformDialogHelper::ButtonRole)),
+                     q, SLOT(_q_clicked(QPlatformDialogHelper::StandardButton,QPlatformDialogHelper::ButtonRole)));
+    static_cast<QPlatformMessageDialogHelper *>(h)->setOptions(options);
+}
+
+static QMessageDialogOptions::Icon helperIcon(QMessageBox::Icon i)
+{
+    switch (i) {
+    case QMessageBox::NoIcon:
+        return QMessageDialogOptions::NoIcon;
+    case QMessageBox::Information:
+        return QMessageDialogOptions::Information;
+    case QMessageBox::Warning:
+        return QMessageDialogOptions::Warning;
+    case QMessageBox::Critical:
+        return QMessageDialogOptions::Critical;
+    case QMessageBox::Question:
+        return QMessageDialogOptions::Question;
+    }
+    return QMessageDialogOptions::NoIcon;
+}
+
+static QPlatformDialogHelper::StandardButtons helperStandardButtons(QMessageBox * q)
+{
+    QPlatformDialogHelper::StandardButtons buttons(int(q->standardButtons()));
+    return buttons;
+}
+
+void QMessageBoxPrivate::helperPrepareShow(QPlatformDialogHelper *)
+{
+    Q_Q(QMessageBox);
+    options->setWindowTitle(q->windowTitle());
+    options->setText(q->text());
+    options->setInformativeText(q->informativeText());
+#if QT_CONFIG(textedit)
+    options->setDetailedText(q->detailedText());
+#endif
+    options->setIcon(helperIcon(q->icon()));
+    options->setStandardButtons(helperStandardButtons(q));
+}
+
+void QMessageBoxPrivate::helperDone(QDialog::DialogCode code, QPlatformDialogHelper *)
+{
+    Q_Q(QMessageBox);
+    QAbstractButton *button = q->button(QMessageBox::StandardButton(code));
+    // If it was a custom button, a custom ID was used, so we won't get a valid pointer here.
+    // In that case, clickedButton has already been set in _q_buttonClicked.
+    if (button)
+        clickedButton = button;
 }
 
 /*!
@@ -2592,7 +2743,7 @@ QPixmap QMessageBox::standardIcon(Icon icon)
   Shows the message box as a \l{QDialog#Modal Dialogs}{modal dialog},
   blocking until the user closes it.
 
-  When using a QMessageBox with standard buttons, this functions returns a
+  When using a QMessageBox with standard buttons, this function returns a
   \l StandardButton value indicating the standard button that was clicked.
   When using QMessageBox with custom buttons, this function returns an
   opaque value; use clickedButton() to determine which button was clicked.
@@ -2610,5 +2761,4 @@ QPixmap QMessageBox::standardIcon(Icon icon)
 QT_END_NAMESPACE
 
 #include "moc_qmessagebox.cpp"
-
-#endif // QT_NO_MESSAGEBOX
+#include "qmessagebox.moc"

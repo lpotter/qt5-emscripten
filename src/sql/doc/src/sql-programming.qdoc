@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -35,7 +35,6 @@
 /*!
     \page sql-programming.html
     \title SQL Programming
-    \ingroup qt-sql
     \nextpage Connecting to Databases
 
     \brief Database integration for Qt applications.
@@ -64,7 +63,7 @@
     \li \l{Using the SQL Model Classes}
     \li \l{Presenting Data in a Table View}
     \li \l{Creating Data-Aware Forms}
-    \endlist    
+    \endlist
 
     \section1 Database Classes
 
@@ -76,7 +75,7 @@
 
     \section2 Driver Layer
 
-    This comprises the classes QSqlDriver, QSqlDriverCreator<T>,
+    This comprises the classes QSqlDriver, QSqlDriverCreator,
     QSqlDriverCreatorBase, QSqlDriverPlugin, and QSqlResult.
 
     This layer provides the low-level bridge between the specific databases
@@ -98,14 +97,13 @@
     These classes are designed to work with Qt's
     \l{Model/View Programming}{model/view framework}.
 
-    Note that to use any of these classes, a QCoreApplication object
-    must have been instantiated first.
+    Note that a QCoreApplication object must be instantiated before
+    using any of these classes.
 */
 
 /*!
     \page sql-connecting.html
     \title Connecting to Databases
-    \ingroup qt-sql
 
     \contentspage SQL Programming
     \previouspage SQL Programming
@@ -142,7 +140,7 @@
     \l{QSqlDatabase::addDatabase()} {addDatabase()} specifies the type
     of database driver to use for the connection. The set of database
     drivers included with Qt are shown in the table of \l{SQL Database
-    Drivers#Supported Databases} {supported database drivers}. 
+    Drivers#Supported Databases} {supported database drivers}.
 
     The connection in the snippet will be the \e{default} connection,
     because we don't pass the second argument to
@@ -154,7 +152,7 @@
 
     After these connections have been initialized, \l{QSqlDatabase::}
     {open()} for each one to establish the live connections. If the
-    \l{QSqlDatabase::} {open()} fails, it returns false. In that case,
+    \l{QSqlDatabase::} {open()} fails, it returns \c false. In that case,
     call QSqlDatabase::lastError() to get error information.
 
     Once a connection is established, we can call the static function
@@ -175,12 +173,11 @@
 /*!
     \page sql-sqlstatements.html
     \title Executing SQL Statements
-    \ingroup qt-sql
-    
+
     \previouspage Connecting to Databases
     \contentspage SQL Programming
     \nextpage Using the SQL Model Classes
-    
+
 
     The QSqlQuery class provides an interface for executing SQL
     statements and navigating through the result set of a query.
@@ -202,7 +199,7 @@
     above, we don't specify any connection, so the default connection
     is used.
 
-    If an error occurs, \l{QSqlQuery::exec()}{exec()} returns false.
+    If an error occurs, \l{QSqlQuery::exec()}{exec()} returns \c false.
     The error is then available as QSqlQuery::lastError().
 
     \section2 Navigating the Result Set
@@ -212,7 +209,7 @@
     internal pointer is located one position \e{before} the first
     record. We must call QSqlQuery::next() once to advance to the
     first record, then \l{QSqlQuery::next()}{next()} again repeatedly
-    to access the other records, until it returns false. Here's a
+    to access the other records, until it returns \c false. Here's a
     typical loop that iterates over all the records in order:
 
     \snippet sqldatabase/sqldatabase.cpp 32
@@ -230,7 +227,7 @@
     Databases, please refer to \l{Data Types for Qt-supported Database
     Systems} {this table}.
 
-    You can iterate back and forth using QSqlQuery::next(),
+    You can navigate within the dataset using QSqlQuery::next(),
     QSqlQuery::previous(), QSqlQuery::first(), QSqlQuery::last(), and
     QSqlQuery::seek(). The current row index is returned by
     QSqlQuery::at(), and the total number of rows in the result set
@@ -245,11 +242,10 @@
 
     \snippet sqldatabase/sqldatabase.cpp 33
 
-    If you iterate through a result set only using next() and seek()
-    with positive values, you can call
-    QSqlQuery::setForwardOnly(true) before calling exec(). This is an
-    easy optimization that will speed up the query significantly when
-    operating on large result sets.
+    If you navigate within a result set, and use next() and seek()
+    only for browsing forward, you can call QSqlQuery::setForwardOnly(true)
+    before calling exec(). This is an easy optimization that will speed up
+    the query significantly when operating on large result sets.
 
     \section2 Inserting, Updating, and Deleting Records
 
@@ -327,8 +323,7 @@
 /*!
     \page sql-model.html
     \title Using the SQL Model Classes
-    \ingroup qt-sql
-    
+
     \previouspage Executing SQL Statements
     \contentspage SQL Programming
     \nextpage Presenting Data in a Table View
@@ -474,8 +469,7 @@
 /*!
     \page sql-presenting.html
     \title Presenting Data in a Table View
-    \ingroup qt-sql
-    
+
     \previouspage Using the SQL Model Classes
     \contentspage SQL Programming
     \nextpage Creating Data-Aware Forms
@@ -579,8 +573,7 @@
 /*!
     \page sql-forms.html
     \title Creating Data-Aware Forms
-    \ingroup qt-sql
-    
+
     \previouspage Presenting Data in a Table View
     \contentspage SQL Programming
 
@@ -598,7 +591,7 @@
 
     QDataWidgetMapper operates on a specific database table, mapping items
     in the table on a row-by-row or column-by-column basis. As a result,
-    using QDataWidgetMapper with a SQL model is as simple as using it with
+    using QDataWidgetMapper with an SQL model is as simple as using it with
     any other table model.
 
     \image qdatawidgetmapper-simple.png

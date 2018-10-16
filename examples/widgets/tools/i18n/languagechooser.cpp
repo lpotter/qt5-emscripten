@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -43,13 +53,13 @@
 #include "languagechooser.h"
 #include "mainwindow.h"
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
 QT_BEGIN_NAMESPACE
 extern void qt_mac_set_menubar_merge(bool merge);
 QT_END_NAMESPACE
 #endif
 
-LanguageChooser::LanguageChooser(QWidget *parent)
+LanguageChooser::LanguageChooser(const QString& defaultLang, QWidget *parent)
     : QDialog(parent, Qt::WindowStaysOnTopHint)
 {
     groupBox = new QGroupBox("Languages");
@@ -60,7 +70,12 @@ LanguageChooser::LanguageChooser(QWidget *parent)
     for (int i = 0; i < qmFiles.size(); ++i) {
         QCheckBox *checkBox = new QCheckBox(languageName(qmFiles[i]));
         qmFileForCheckBoxMap.insert(checkBox, qmFiles[i]);
-        connect(checkBox, SIGNAL(toggled(bool)), this, SLOT(checkBoxToggled()));
+        connect(checkBox,
+                QOverload<bool>::of(&QCheckBox::toggled),
+                this,
+                &LanguageChooser::checkBoxToggled);
+        if (languageMatch(defaultLang, qmFiles[i]))
+                checkBox->setCheckState(Qt::Checked);
         groupBoxLayout->addWidget(checkBox, i / 2, i % 2);
     }
     groupBox->setLayout(groupBoxLayout);
@@ -72,19 +87,27 @@ LanguageChooser::LanguageChooser(QWidget *parent)
     hideAllButton = buttonBox->addButton("Hide All",
                                          QDialogButtonBox::ActionRole);
 
-    connect(showAllButton, SIGNAL(clicked()), this, SLOT(showAll()));
-    connect(hideAllButton, SIGNAL(clicked()), this, SLOT(hideAll()));
+    connect(showAllButton, &QAbstractButton::clicked, this, &LanguageChooser::showAll);
+    connect(hideAllButton, &QAbstractButton::clicked, this, &LanguageChooser::hideAll);
 
     QVBoxLayout *mainLayout = new QVBoxLayout;
     mainLayout->addWidget(groupBox);
     mainLayout->addWidget(buttonBox);
     setLayout(mainLayout);
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     qt_mac_set_menubar_merge(false);
 #endif
 
     setWindowTitle("I18N");
+}
+
+bool LanguageChooser::languageMatch(const QString& lang, const QString& qmFile)
+{
+    //qmFile: i18n_xx.qm
+    const QString prefix = "i18n_";
+    const int langTokenLength = 2; /*FIXME: is checking two chars enough?*/
+    return qmFile.midRef(qmFile.indexOf(prefix) + prefix.length(), langTokenLength) == lang.leftRef(langTokenLength);
 }
 
 bool LanguageChooser::eventFilter(QObject *object, QEvent *event)

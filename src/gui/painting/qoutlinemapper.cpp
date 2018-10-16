@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,47 +10,44 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qoutlinemapper_p.h"
-#include <private/qpainterpath_p.h>
+
+#include "qbezier_p.h"
 #include "qmath.h"
-#include <private/qbezier_p.h>
+#include "qpainterpath_p.h"
 
 #include <stdlib.h>
 
 QT_BEGIN_NAMESPACE
 
-static const qreal aliasedCoordinateDelta = 0.5 - 0.015625;
-
-#define qreal_to_fixed_26_6(f) (int(f * 64))
+#define qreal_to_fixed_26_6(f) (qRound(f * 64))
 
 
 
@@ -81,10 +78,23 @@ void QOutlineMapper::curveTo(const QPointF &cp1, const QPointF &cp2, const QPoin
 #endif
 
     QBezier bezier = QBezier::fromPoints(m_elements.last(), cp1, cp2, ep);
-    bezier.addToPolygon(m_elements, m_curve_threshold);
-    m_element_types.reserve(m_elements.size());
-    for (int i = m_elements.size() - m_element_types.size(); i; --i)
-        m_element_types << QPainterPath::LineToElement;
+
+    bool outsideClip = false;
+    // Test one point first before doing a full intersection test.
+    if (!QRectF(m_clip_rect).contains(m_transform.map(ep))) {
+        QRectF potentialCurveArea = m_transform.mapRect(bezier.bounds());
+        outsideClip = !potentialCurveArea.intersects(m_clip_rect);
+    }
+    if (outsideClip) {
+        // The curve is entirely outside the clip rect, so just
+        // approximate it with a line that closes the path.
+        lineTo(ep);
+    } else {
+        bezier.addToPolygon(m_elements, m_curve_threshold);
+        m_element_types.reserve(m_elements.size());
+        for (int i = m_elements.size() - m_element_types.size(); i; --i)
+            m_element_types << QPainterPath::LineToElement;
+    }
     Q_ASSERT(m_elements.size() == m_element_types.size());
 }
 
@@ -169,7 +179,7 @@ QT_FT_Outline *QOutlineMapper::convertPath(const QVectorPath &path)
 
         m_elements.resize(count);
         if (count)
-            memcpy(m_elements.data(), path.points(), count* sizeof(QPointF));
+            memcpy(static_cast<void *>(m_elements.data()), static_cast<const void *>(path.points()), count* sizeof(QPointF));
 
         m_element_types.resize(0);
     }
@@ -191,38 +201,26 @@ void QOutlineMapper::endOutline()
     QPointF *elements = m_elements.data();
 
     // Transform the outline
-    if (m_txop == QTransform::TxNone) {
-        // Nothing to do.
-    } else if (m_txop == QTransform::TxTranslate) {
-        for (int i = 0; i < m_elements.size(); ++i) {
-            QPointF &e = elements[i];
-            e = QPointF(e.x() + m_dx, e.y() + m_dy);
-        }
-    } else if (m_txop == QTransform::TxScale) {
-        for (int i = 0; i < m_elements.size(); ++i) {
-            QPointF &e = elements[i];
-            e = QPointF(m_m11 * e.x() + m_dx, m_m22 * e.y() + m_dy);
-        }
-    } else if (m_txop < QTransform::TxProject) {
-        for (int i = 0; i < m_elements.size(); ++i) {
-            QPointF &e = elements[i];
-            e = QPointF(m_m11 * e.x() + m_m21 * e.y() + m_dx,
-                        m_m22 * e.y() + m_m12 * e.x() + m_dy);
-        }
+    if (m_transform.isIdentity()) {
+        // Nothing to do
+    } else if (m_transform.type() < QTransform::TxProject) {
+        for (int i = 0; i < m_elements.size(); ++i)
+            elements[i] = m_transform.map(elements[i]);
     } else {
         const QVectorPath vp((qreal *)elements, m_elements.size(),
                              m_element_types.size() ? m_element_types.data() : 0);
         QPainterPath path = vp.convertToPainterPath();
-        path = QTransform(m_m11, m_m12, m_m13, m_m21, m_m22, m_m23, m_dx, m_dy, m_m33).map(path);
+        path = m_transform.map(path);
         if (!(m_outline.flags & QT_FT_OUTLINE_EVEN_ODD_FILL))
             path.setFillRule(Qt::WindingFill);
-        uint old_txop = m_txop;
-        m_txop = QTransform::TxNone;
-        if (path.isEmpty())
+        if (path.isEmpty()) {
             m_valid = false;
-        else
+        } else {
+            QTransform oldTransform = m_transform;
+            m_transform.reset();
             convertPath(path);
-        m_txop = old_txop;
+            m_transform = oldTransform;
+        }
         return;
     }
 
@@ -391,13 +389,14 @@ void QOutlineMapper::clipElements(const QPointF *elements,
     QPainterPath clipPath;
     clipPath.addRect(m_clip_rect);
     QPainterPath clippedPath = path.intersected(clipPath);
-    uint old_txop = m_txop;
-    m_txop = QTransform::TxNone;
-    if (clippedPath.isEmpty())
+    if (clippedPath.isEmpty()) {
         m_valid = false;
-    else
+    } else {
+        QTransform oldTransform = m_transform;
+        m_transform.reset();
         convertPath(clippedPath);
-    m_txop = old_txop;
+        m_transform = oldTransform;
+    }
 
     m_in_clip_elements = false;
 }

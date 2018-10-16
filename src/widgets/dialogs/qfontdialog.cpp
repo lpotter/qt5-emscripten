@@ -1,49 +1,45 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qwindowdefs.h"
-
-#ifndef QT_NO_FONTDIALOG
-
 #include "qfontdialog.h"
+
 #include "qfontdialog_p.h"
 
 #include <qapplication.h>
@@ -88,7 +84,7 @@ public:
         int row = QListView::currentIndex().row();
         return row < 0 ? QString() : model()->stringList().at(row);
     }
-    void currentChanged(const QModelIndex &current, const QModelIndex &previous) {
+    void currentChanged(const QModelIndex &current, const QModelIndex &previous) override {
         QListView::currentChanged(current, previous);
         if (current.isValid())
             emit highlighted(current.row());
@@ -108,7 +104,17 @@ QFontListView::QFontListView(QWidget *parent)
 }
 
 static const Qt::WindowFlags DefaultWindowFlags =
-        Qt::Dialog | Qt::WindowSystemMenuHint;
+        Qt::Dialog | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
+
+QFontDialogPrivate::QFontDialogPrivate()
+    : writingSystem(QFontDatabase::Any),
+      options(QFontDialogOptions::create())
+{
+}
+
+QFontDialogPrivate::~QFontDialogPrivate()
+{
+}
 
 /*!
   \class QFontDialog
@@ -160,10 +166,8 @@ QFontDialog::QFontDialog(QWidget *parent)
     \a initial color.
 */
 QFontDialog::QFontDialog(const QFont &initial, QWidget *parent)
-    : QDialog(*new QFontDialogPrivate, parent, DefaultWindowFlags)
+    : QFontDialog(parent)
 {
-    Q_D(QFontDialog);
-    d->init();
     setCurrentFont(initial);
 }
 
@@ -256,8 +260,10 @@ void QFontDialogPrivate::init()
     }
 
     updateFamilies();
-    if (familyList->count() != 0)
+    if (familyList->count() != 0) {
         familyList->setCurrentItem(0);
+        sizeList->setCurrentItem(0);
+    }
 
     // grid layout
     QGridLayout *mainGrid = new QGridLayout(q);
@@ -311,11 +317,7 @@ void QFontDialogPrivate::init()
     buttonBox->addButton(QDialogButtonBox::Cancel);
     QObject::connect(buttonBox, SIGNAL(rejected()), q, SLOT(reject()));
 
-#if defined(Q_OS_WINCE)
-    q->resize(180, 120);
-#else
     q->resize(500, 360);
-#endif // Q_OS_WINCE
 
     sizeEdit->installEventFilter(q);
     familyList->installEventFilter(q);
@@ -324,6 +326,7 @@ void QFontDialogPrivate::init()
 
     familyList->setFocus();
     retranslateStrings();
+    sampleEdit->setObjectName(QLatin1String("qt_fontDialog_sampleEdit"));
 }
 
 /*!
@@ -479,7 +482,28 @@ void QFontDialogPrivate::updateFamilies()
 
     enum match_t { MATCH_NONE = 0, MATCH_LAST_RESORT = 1, MATCH_APP = 2, MATCH_FAMILY = 3 };
 
-    QStringList familyNames = fdb.families(writingSystem);
+    const QFontDialog::FontDialogOptions scalableMask = (QFontDialog::ScalableFonts | QFontDialog::NonScalableFonts);
+    const QFontDialog::FontDialogOptions spacingMask = (QFontDialog::ProportionalFonts | QFontDialog::MonospacedFonts);
+    const QFontDialog::FontDialogOptions options = q->options();
+
+    QFontDatabase fdb;
+
+    QStringList familyNames;
+    const auto families = fdb.families(writingSystem);
+    for (const QString &family : families) {
+        if (fdb.isPrivateFamily(family))
+            continue;
+
+        if ((options & scalableMask) && (options & scalableMask) != scalableMask) {
+            if (bool(options & QFontDialog::ScalableFonts) != fdb.isSmoothlyScalable(family))
+                continue;
+        }
+        if ((options & spacingMask) && (options & spacingMask) != spacingMask) {
+            if (bool(options & QFontDialog::MonospacedFonts) != fdb.isFixedPitch(family))
+                continue;
+        }
+        familyNames << family;
+    }
 
     familyList->model()->setStringList(familyNames);
 
@@ -604,25 +628,22 @@ void QFontDialogPrivate::updateSizes()
         int i = 0;
         int current = -1;
         QStringList str_sizes;
+        str_sizes.reserve(sizes.size());
         for(QList<int>::const_iterator it = sizes.constBegin(); it != sizes.constEnd(); ++it) {
             str_sizes.append(QString::number(*it));
-            if (current == -1 && *it >= size)
+            if (current == -1 && *it == size)
                 current = i;
             ++i;
         }
         sizeList->model()->setStringList(str_sizes);
-        if (current == -1) {
-            // we request a size bigger than the ones in the list, select the biggest one
-            current = sizeList->count() - 1;
-        }
-        sizeList->setCurrentItem(current);
+        if (current != -1)
+            sizeList->setCurrentItem(current);
 
-        sizeEdit->blockSignals(true);
+        const QSignalBlocker blocker(sizeEdit);
         sizeEdit->setText((smoothScalable ? QString::number(size) : sizeList->currentText()));
         if (q->style()->styleHint(QStyle::SH_FontDialog_SelectAssociatedText, 0, q)
                 && sizeList->hasFocus())
             sizeEdit->selectAll();
-        sizeEdit->blockSignals(false);
     } else {
         sizeEdit->clear();
     }
@@ -735,9 +756,11 @@ void QFontDialogPrivate::_q_sizeChanged(const QString &s)
             if (sizeList->text(i).toInt() >= this->size)
                 break;
         }
-        sizeList->blockSignals(true);
-        sizeList->setCurrentItem(i);
-        sizeList->blockSignals(false);
+        const QSignalBlocker blocker(sizeList);
+        if (sizeList->text(i).toInt() == this->size)
+            sizeList->setCurrentItem(i);
+        else
+            sizeList->clearSelection();
     }
     _q_updateSample();
 }
@@ -793,10 +816,8 @@ void QFontDialog::setCurrentFont(const QFont &font)
     d->strikeout->setChecked(font.strikeOut());
     d->underline->setChecked(font.underline());
     d->updateFamilies();
-    if (d->canBeNativeDialog()) {
-        if (QPlatformFontDialogHelper *helper = d->platformFontDialogHelper())
-            helper->setCurrentFont(font);
-    }
+    if (QPlatformFontDialogHelper *helper = d->platformFontDialogHelper())
+        helper->setCurrentFont(font);
 }
 
 /*!
@@ -809,10 +830,8 @@ void QFontDialog::setCurrentFont(const QFont &font)
 QFont QFontDialog::currentFont() const
 {
     Q_D(const QFontDialog);
-    if (d->canBeNativeDialog()) {
-        if (const QPlatformFontDialogHelper *helper = d->platformFontDialogHelper())
-            return helper->currentFont();
-    }
+    if (const QPlatformFontDialogHelper *helper = d->platformFontDialogHelper())
+        return helper->currentFont();
     return d->sampleEdit->font();
 }
 
@@ -837,10 +856,20 @@ QFont QFontDialog::selectedFont() const
     This enum specifies various options that affect the look and feel
     of a font dialog.
 
+    For instance, it allows to specify which type of font should be
+    displayed. If none are specified all fonts available will be listed.
+
+    Note that the font filtering options might not be supported on some
+    platforms (e.g. Mac). They are always supported by the non native
+    dialog (used on Windows or Linux).
+
     \value NoButtons Don't display \uicontrol{OK} and \uicontrol{Cancel} buttons. (Useful for "live dialogs".)
     \value DontUseNativeDialog Use Qt's standard font dialog on the Mac instead of Apple's
-                               native font panel. (Currently, the native dialog is never used,
-                               but this is likely to change in future Qt releases.)
+                               native font panel.
+    \value ScalableFonts Show scalable fonts
+    \value NonScalableFonts Show non scalable fonts
+    \value MonospacedFonts Show monospaced fonts
+    \value ProportionalFonts Show proportional fonts
 
     \sa options, setOption(), testOption()
 */
@@ -853,12 +882,13 @@ QFont QFontDialog::selectedFont() const
 */
 void QFontDialog::setOption(FontDialogOption option, bool on)
 {
-    Q_D(QFontDialog);
-    d->options->setOption(static_cast<QFontDialogOptions::FontDialogOption>(option), on);
+    const QFontDialog::FontDialogOptions previousOptions = options();
+    if (!(previousOptions & option) != !on)
+        setOptions(previousOptions ^ option);
 }
 
 /*!
-    Returns true if the given \a option is enabled; otherwise, returns
+    Returns \c true if the given \a option is enabled; otherwise, returns
     false.
 
     \sa options, setOption()
@@ -901,7 +931,6 @@ QFontDialog::FontDialogOptions QFontDialog::options() const
 
 /*!
     \since 4.5
-    \overload
 
     Opens the dialog and connects its fontSelected() signal to the slot specified
     by \a receiver and \a member.
@@ -997,13 +1026,16 @@ void QFontDialog::done(int result)
 
 bool QFontDialogPrivate::canBeNativeDialog() const
 {
-    Q_Q(const QFontDialog);
+    // Don't use Q_Q here! This function is called from ~QDialog,
+    // so Q_Q calling q_func() invokes undefined behavior (invalid cast in q_func()).
+    const QDialog * const q = static_cast<const QDialog*>(q_ptr);
     if (nativeDialogInUse)
         return true;
-    if (q->testAttribute(Qt::WA_DontShowOnScreen))
+    if (QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs)
+        || q->testAttribute(Qt::WA_DontShowOnScreen)
+        || (options->options() & QFontDialog::DontUseNativeDialog)) {
         return false;
-    if (options->options() & QFontDialog::DontUseNativeDialog)
-        return false;
+    }
 
     QLatin1String staticName(QFontDialog::staticMetaObject.className());
     QLatin1String dynamicName(q->metaObject()->className());
@@ -1014,5 +1046,3 @@ QT_END_NAMESPACE
 
 #include "qfontdialog.moc"
 #include "moc_qfontdialog.cpp"
-
-#endif // QT_NO_FONTDIALOG

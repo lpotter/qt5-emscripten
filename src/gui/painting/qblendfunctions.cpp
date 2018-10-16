@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -129,7 +127,7 @@ struct Blend_ARGB32_on_RGB16_SourceAndConstAlpha {
 };
 
 void qt_scale_image_rgb16_on_rgb16(uchar *destPixels, int dbpl,
-                                   const uchar *srcPixels, int sbpl,
+                                   const uchar *srcPixels, int sbpl, int srch,
                                    const QRectF &targetRect,
                                    const QRectF &sourceRect,
                                    const QRect &clip,
@@ -144,17 +142,17 @@ void qt_scale_image_rgb16_on_rgb16(uchar *destPixels, int dbpl,
 #endif
     if (const_alpha == 256) {
         Blend_RGB16_on_RGB16_NoAlpha noAlpha;
-        qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl, srch,
                                       targetRect, sourceRect, clip, noAlpha);
     } else {
         Blend_RGB16_on_RGB16_ConstAlpha constAlpha(const_alpha);
-        qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_16bit<quint16>(destPixels, dbpl, srcPixels, sbpl, srch,
                                      targetRect, sourceRect, clip, constAlpha);
     }
 }
 
 void qt_scale_image_argb32_on_rgb16(uchar *destPixels, int dbpl,
-                                    const uchar *srcPixels, int sbpl,
+                                    const uchar *srcPixels, int sbpl, int srch,
                                     const QRectF &targetRect,
                                     const QRectF &sourceRect,
                                     const QRect &clip,
@@ -169,11 +167,11 @@ void qt_scale_image_argb32_on_rgb16(uchar *destPixels, int dbpl,
 #endif
     if (const_alpha == 256) {
         Blend_ARGB32_on_RGB16_SourceAlpha noAlpha;
-        qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl, srch,
                                       targetRect, sourceRect, clip, noAlpha);
     } else {
         Blend_ARGB32_on_RGB16_SourceAndConstAlpha constAlpha(const_alpha);
-        qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_16bit<quint32>(destPixels, dbpl, srcPixels, sbpl, srch,
                                      targetRect, sourceRect, clip, constAlpha);
     }
 }
@@ -253,7 +251,7 @@ static void qt_blend_argb32_on_rgb16(uchar *destPixels, int dbpl,
     }
 
     quint16 *dst = (quint16 *) destPixels;
-    quint32 *src = (quint32 *) srcPixels;
+    const quint32 *src = (const quint32 *) srcPixels;
 
     for (int y=0; y<h; ++y) {
         for (int x=0; x<w; ++x) {
@@ -290,7 +288,7 @@ static void qt_blend_argb32_on_rgb16(uchar *destPixels, int dbpl,
             }
         }
         dst = (quint16 *) (((uchar *) dst) + dbpl);
-        src = (quint32 *) (((uchar *) src) + sbpl);
+        src = (const quint32 *) (((const uchar *) src) + sbpl);
     }
 }
 
@@ -387,23 +385,27 @@ void qt_blend_rgb32_on_rgb32(uchar *destPixels, int dbpl,
             destPixels, dbpl, srcPixels, sbpl, w, h, const_alpha);
     fflush(stdout);
 #endif
-
-    if (const_alpha != 256) {
-        qt_blend_argb32_on_argb32(destPixels, dbpl, srcPixels, sbpl, w, h, const_alpha);
-        return;
-    }
-
     const uint *src = (const uint *) srcPixels;
     uint *dst = (uint *) destPixels;
-    int len = w * 4;
-    for (int y=0; y<h; ++y) {
-        memcpy(dst, src, len);
-        dst = (quint32 *)(((uchar *) dst) + dbpl);
-        src = (const quint32 *)(((const uchar *) src) + sbpl);
+    if (const_alpha == 256) {
+        const int len = w * 4;
+        for (int y = 0; y < h; ++y) {
+            memcpy(dst, src, len);
+            dst = (quint32 *)(((uchar *) dst) + dbpl);
+            src = (const quint32 *)(((const uchar *) src) + sbpl);
+        }
+        return;
+    } else if (const_alpha != 0) {
+        const_alpha = (const_alpha * 255) >> 8;
+        int ialpha = 255 - const_alpha;
+        for (int y=0; y<h; ++y) {
+            for (int x=0; x<w; ++x)
+                dst[x] = INTERPOLATE_PIXEL_255(dst[x], ialpha, src[x], const_alpha);
+            dst = (quint32 *)(((uchar *) dst) + dbpl);
+            src = (const quint32 *)(((const uchar *) src) + sbpl);
+        }
     }
 }
-
-
 
 struct Blend_RGB32_on_RGB32_NoAlpha {
     inline void write(quint32 *dst, quint32 src) { *dst = src; }
@@ -418,7 +420,7 @@ struct Blend_RGB32_on_RGB32_ConstAlpha {
     }
 
     inline void write(quint32 *dst, quint32 src) {
-        *dst = BYTE_MUL(src, m_alpha) + BYTE_MUL(*dst, m_ialpha);
+        *dst = INTERPOLATE_PIXEL_255(src, m_alpha, *dst, m_ialpha);
     }
 
     inline void flush(void *) {}
@@ -428,32 +430,32 @@ struct Blend_RGB32_on_RGB32_ConstAlpha {
 };
 
 struct Blend_ARGB32_on_ARGB32_SourceAlpha {
-    inline void write(quint32 *dst, quint32 src) {
-        *dst = src + BYTE_MUL(*dst, qAlpha(~src));
+    inline void write(quint32 *dst, quint32 src)
+    {
+        blend_pixel(*dst, src);
     }
 
     inline void flush(void *) {}
 };
 
 struct Blend_ARGB32_on_ARGB32_SourceAndConstAlpha {
-    inline Blend_ARGB32_on_ARGB32_SourceAndConstAlpha(quint32 alpha) {
+    inline Blend_ARGB32_on_ARGB32_SourceAndConstAlpha(quint32 alpha)
+    {
         m_alpha = (alpha * 255) >> 8;
-        m_ialpha = 255 - m_alpha;
     }
 
-    inline void write(quint32 *dst, quint32 src) {
-        src = BYTE_MUL(src, m_alpha);
-        *dst = src + BYTE_MUL(*dst, qAlpha(~src));
+    inline void write(quint32 *dst, quint32 src)
+    {
+        blend_pixel(*dst, src, m_alpha);
     }
 
     inline void flush(void *) {}
 
     quint32 m_alpha;
-    quint32 m_ialpha;
 };
 
 void qt_scale_image_rgb32_on_rgb32(uchar *destPixels, int dbpl,
-                                   const uchar *srcPixels, int sbpl,
+                                   const uchar *srcPixels, int sbpl, int srch,
                                    const QRectF &targetRect,
                                    const QRectF &sourceRect,
                                    const QRect &clip,
@@ -468,17 +470,17 @@ void qt_scale_image_rgb32_on_rgb32(uchar *destPixels, int dbpl,
 #endif
     if (const_alpha == 256) {
         Blend_RGB32_on_RGB32_NoAlpha noAlpha;
-        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl, srch,
                              targetRect, sourceRect, clip, noAlpha);
     } else {
         Blend_RGB32_on_RGB32_ConstAlpha constAlpha(const_alpha);
-        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl, srch,
                              targetRect, sourceRect, clip, constAlpha);
     }
 }
 
 void qt_scale_image_argb32_on_argb32(uchar *destPixels, int dbpl,
-                                     const uchar *srcPixels, int sbpl,
+                                     const uchar *srcPixels, int sbpl, int srch,
                                      const QRectF &targetRect,
                                      const QRectF &sourceRect,
                                      const QRect &clip,
@@ -493,11 +495,11 @@ void qt_scale_image_argb32_on_argb32(uchar *destPixels, int dbpl,
 #endif
     if (const_alpha == 256) {
         Blend_ARGB32_on_ARGB32_SourceAlpha sourceAlpha;
-        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl, srch,
                              targetRect, sourceRect, clip, sourceAlpha);
     } else {
         Blend_ARGB32_on_ARGB32_SourceAndConstAlpha constAlpha(const_alpha);
-        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl,
+        qt_scale_image_32bit(destPixels, dbpl, srcPixels, sbpl, srch,
                              targetRect, sourceRect, clip, constAlpha);
     }
 }
@@ -587,878 +589,51 @@ void qt_transform_image_argb32_on_argb32(uchar *destPixels, int dbpl,
     }
 }
 
-SrcOverScaleFunc qScaleFunctions[QImage::NImageFormats][QImage::NImageFormats] = {
-    {   // Format_Invalid
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Mono
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_MonoLSB
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Indexed8
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_scale_image_rgb32_on_rgb32,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_scale_image_argb32_on_argb32,    // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_scale_image_rgb32_on_rgb32,          // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_scale_image_argb32_on_argb32,        // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB16
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_scale_image_argb32_on_rgb16,       // Format_ARGB32_Premultiplied,
-        qt_scale_image_rgb16_on_rgb16,        // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8565_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB666
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB6666_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB555
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8555_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB888
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB444
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB4444_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    }
-};
+SrcOverScaleFunc qScaleFunctions[QImage::NImageFormats][QImage::NImageFormats];
+SrcOverBlendFunc qBlendFunctions[QImage::NImageFormats][QImage::NImageFormats];
+SrcOverTransformFunc qTransformFunctions[QImage::NImageFormats][QImage::NImageFormats];
 
+void qInitBlendFunctions()
+{
+    qScaleFunctions[QImage::Format_RGB32][QImage::Format_RGB32] = qt_scale_image_rgb32_on_rgb32;
+    qScaleFunctions[QImage::Format_RGB32][QImage::Format_ARGB32_Premultiplied] = qt_scale_image_argb32_on_argb32;
+    qScaleFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB32] = qt_scale_image_rgb32_on_rgb32;
+    qScaleFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_ARGB32_Premultiplied] = qt_scale_image_argb32_on_argb32;
+    qScaleFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_scale_image_argb32_on_rgb16;
+    qScaleFunctions[QImage::Format_RGB16][QImage::Format_RGB16] = qt_scale_image_rgb16_on_rgb16;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+    qScaleFunctions[QImage::Format_RGBX8888][QImage::Format_RGBX8888] = qt_scale_image_rgb32_on_rgb32;
+    qScaleFunctions[QImage::Format_RGBX8888][QImage::Format_RGBA8888_Premultiplied] = qt_scale_image_argb32_on_argb32;
+    qScaleFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBX8888] = qt_scale_image_rgb32_on_rgb32;
+    qScaleFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBA8888_Premultiplied] = qt_scale_image_argb32_on_argb32;
+#endif
 
-SrcOverBlendFunc qBlendFunctions[QImage::NImageFormats][QImage::NImageFormats] = {
-    {   // Format_Invalid
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Mono
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_MonoLSB
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Indexed8
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_blend_rgb32_on_rgb32,        // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_blend_argb32_on_argb32,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_blend_rgb32_on_rgb32,        // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_blend_argb32_on_argb32,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB16
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_blend_rgb32_on_rgb16,  // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_blend_argb32_on_rgb16, // Format_ARGB32_Premultiplied,
-        qt_blend_rgb16_on_rgb16,  // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8565_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB666
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB6666_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB555
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8555_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB888
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB444
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB4444_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    }
-};
+    qBlendFunctions[QImage::Format_RGB32][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb32;
+    qBlendFunctions[QImage::Format_RGB32][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_argb32;
+    qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb32;
+    qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_argb32;
+    qBlendFunctions[QImage::Format_RGB16][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb16;
+    qBlendFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_rgb16;
+    qBlendFunctions[QImage::Format_RGB16][QImage::Format_RGB16] = qt_blend_rgb16_on_rgb16;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+    qBlendFunctions[QImage::Format_RGBX8888][QImage::Format_RGBX8888] = qt_blend_rgb32_on_rgb32;
+    qBlendFunctions[QImage::Format_RGBX8888][QImage::Format_RGBA8888_Premultiplied] = qt_blend_argb32_on_argb32;
+    qBlendFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBX8888] = qt_blend_rgb32_on_rgb32;
+    qBlendFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBA8888_Premultiplied] = qt_blend_argb32_on_argb32;
+#endif
 
-SrcOverTransformFunc qTransformFunctions[QImage::NImageFormats][QImage::NImageFormats] = {
-    {   // Format_Invalid
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Mono
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_MonoLSB
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_Indexed8
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_transform_image_rgb32_on_rgb32,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_transform_image_argb32_on_argb32,    // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB32_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        qt_transform_image_rgb32_on_rgb32,          // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_transform_image_argb32_on_argb32,        // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB16
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        qt_transform_image_argb32_on_rgb16,       // Format_ARGB32_Premultiplied,
-        qt_transform_image_rgb16_on_rgb16,        // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8565_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB666
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB6666_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB555
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB8555_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB888
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_RGB444
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    },
-    {   // Format_ARGB4444_Premultiplied
-        0,      // Format_Invalid,
-        0,      // Format_Mono,
-        0,      // Format_MonoLSB,
-        0,      // Format_Indexed8,
-        0,      // Format_RGB32,
-        0,      // Format_ARGB32,
-        0,      // Format_ARGB32_Premultiplied,
-        0,      // Format_RGB16,
-        0,      // Format_ARGB8565_Premultiplied,
-        0,      // Format_RGB666,
-        0,      // Format_ARGB6666_Premultiplied,
-        0,      // Format_RGB555,
-        0,      // Format_ARGB8555_Premultiplied,
-        0,      // Format_RGB888,
-        0,      // Format_RGB444,
-        0       // Format_ARGB4444_Premultiplied,
-    }
-};
+    qTransformFunctions[QImage::Format_RGB32][QImage::Format_RGB32] = qt_transform_image_rgb32_on_rgb32;
+    qTransformFunctions[QImage::Format_RGB32][QImage::Format_ARGB32_Premultiplied] = qt_transform_image_argb32_on_argb32;
+    qTransformFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB32] = qt_transform_image_rgb32_on_rgb32;
+    qTransformFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_ARGB32_Premultiplied] = qt_transform_image_argb32_on_argb32;
+    qTransformFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_transform_image_argb32_on_rgb16;
+    qTransformFunctions[QImage::Format_RGB16][QImage::Format_RGB16] = qt_transform_image_rgb16_on_rgb16;
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+    qTransformFunctions[QImage::Format_RGBX8888][QImage::Format_RGBX8888] = qt_transform_image_rgb32_on_rgb32;
+    qTransformFunctions[QImage::Format_RGBX8888][QImage::Format_RGBA8888_Premultiplied] = qt_transform_image_argb32_on_argb32;
+    qTransformFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBX8888] = qt_transform_image_rgb32_on_rgb32;
+    qTransformFunctions[QImage::Format_RGBA8888_Premultiplied][QImage::Format_RGBA8888_Premultiplied] = qt_transform_image_argb32_on_argb32;
+#endif
+}
 
 QT_END_NAMESPACE

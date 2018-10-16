@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,60 +10,109 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qgenericunixservices_p.h"
+#include <QtGui/private/qtguiglobal_p.h>
 
-#include <QtCore/QStandardPaths>
-#include <QtCore/QProcess>
-#include <QtCore/QUrl>
 #include <QtCore/QDebug>
+#include <QtCore/QFile>
+#if QT_CONFIG(process)
+# include <QtCore/QProcess>
+#endif
+#include <QtCore/QSettings>
+#include <QtCore/QStandardPaths>
+#include <QtCore/QUrl>
+
+#if QT_CONFIG(dbus)
+// These QtCore includes are needed for xdg-desktop-portal support
+#include <QtCore/private/qcore_unix_p.h>
+
+#include <QtCore/QFileInfo>
+#include <QtCore/QUrlQuery>
+
+#include <QtDBus/QDBusConnection>
+#include <QtDBus/QDBusMessage>
+#include <QtDBus/QDBusPendingCall>
+#include <QtDBus/QDBusPendingCallWatcher>
+#include <QtDBus/QDBusPendingReply>
+#include <QtDBus/QDBusUnixFileDescriptor>
+
+#include <fcntl.h>
+
+#endif // QT_CONFIG(dbus)
 
 #include <stdlib.h>
 
 QT_BEGIN_NAMESPACE
 
+#if QT_CONFIG(multiprocess)
+
 enum { debug = 0 };
 
 static inline QByteArray detectDesktopEnvironment()
 {
-    if (!qEnvironmentVariableIsEmpty("KDE_FULL_SESSION"))
-        return QByteArray("KDE");
-    // Check Unity first, whose older versions also have "GNOME_DESKTOP_SESSION_ID" set.
     const QByteArray xdgCurrentDesktop = qgetenv("XDG_CURRENT_DESKTOP");
-    if (xdgCurrentDesktop == "Unity")
-        return QByteArrayLiteral("UNITY");
-    // GNOME_DESKTOP_SESSION_ID is deprecated for some reason, but still check it
-    if (qgetenv("DESKTOP_SESSION") == "gnome" || !qEnvironmentVariableIsEmpty("GNOME_DESKTOP_SESSION_ID"))
-        return QByteArray("GNOME");
-    return QByteArray("UNKNOWN");
+    if (!xdgCurrentDesktop.isEmpty())
+        return xdgCurrentDesktop.toUpper(); // KDE, GNOME, UNITY, LXDE, MATE, XFCE...
+
+    // Classic fallbacks
+    if (!qEnvironmentVariableIsEmpty("KDE_FULL_SESSION"))
+        return QByteArrayLiteral("KDE");
+    if (!qEnvironmentVariableIsEmpty("GNOME_DESKTOP_SESSION_ID"))
+        return QByteArrayLiteral("GNOME");
+
+    // Fallback to checking $DESKTOP_SESSION (unreliable)
+    QByteArray desktopSession = qgetenv("DESKTOP_SESSION");
+
+    // This can be a path in /usr/share/xsessions
+    int slash = desktopSession.lastIndexOf('/');
+    if (slash != -1) {
+#ifndef QT_NO_SETTINGS
+        QSettings desktopFile(QFile::decodeName(desktopSession + ".desktop"), QSettings::IniFormat);
+        desktopFile.beginGroup(QStringLiteral("Desktop Entry"));
+        QByteArray desktopName = desktopFile.value(QStringLiteral("DesktopNames")).toByteArray();
+        if (!desktopName.isEmpty())
+            return desktopName;
+#endif
+
+        // try decoding just the basename
+        desktopSession = desktopSession.mid(slash + 1);
+    }
+
+    if (desktopSession == "gnome")
+        return QByteArrayLiteral("GNOME");
+    else if (desktopSession == "xfce")
+        return QByteArrayLiteral("XFCE");
+    else if (desktopSession == "kde")
+        return QByteArrayLiteral("KDE");
+
+    return QByteArrayLiteral("UNKNOWN");
 }
 
 static inline bool checkExecutable(const QString &candidate, QString *result)
@@ -72,7 +121,7 @@ static inline bool checkExecutable(const QString &candidate, QString *result)
     return !result->isEmpty();
 }
 
-static inline bool detectWebBrowser(QByteArray desktop,
+static inline bool detectWebBrowser(const QByteArray &desktop,
                                     bool checkBrowserVariable,
                                     QString *browser)
 {
@@ -93,7 +142,7 @@ static inline bool detectWebBrowser(QByteArray desktop,
     if (desktop == QByteArray("KDE")) {
         // Konqueror launcher
         if (checkExecutable(QStringLiteral("kfmclient"), browser)) {
-            browser->append(QStringLiteral(" exec"));
+            browser->append(QLatin1String(" exec"));
             return true;
         }
     } else if (desktop == QByteArray("GNOME")) {
@@ -112,8 +161,8 @@ static inline bool launch(const QString &launcher, const QUrl &url)
     const QString command = launcher + QLatin1Char(' ') + QLatin1String(url.toEncoded());
     if (debug)
         qDebug("Launching %s", qPrintable(command));
-#if defined(QT_NO_PROCESS)
-    const bool ok = ::system(qPrintable(command + QStringLiteral(" &")));
+#if !QT_CONFIG(process)
+    const bool ok = ::system(qPrintable(command + QLatin1String(" &")));
 #else
     const bool ok = QProcess::startDetached(command);
 #endif
@@ -121,6 +170,119 @@ static inline bool launch(const QString &launcher, const QUrl &url)
         qWarning("Launch failed (%s)", qPrintable(command));
     return ok;
 }
+
+#if QT_CONFIG(dbus)
+static inline bool checkNeedPortalSupport()
+{
+    return !QStandardPaths::locate(QStandardPaths::RuntimeLocation, QLatin1String("flatpak-info")).isEmpty() || qEnvironmentVariableIsSet("SNAP");
+}
+
+static inline bool xdgDesktopPortalOpenFile(const QUrl &url)
+{
+    // DBus signature:
+    // OpenFile (IN   s      parent_window,
+    //           IN   h      fd,
+    //           IN   a{sv}  options,
+    //           OUT  o      handle)
+    // Options:
+    // handle_token (s) -  A string that will be used as the last element of the @handle.
+    // writable (b) - Whether to allow the chosen application to write to the file.
+
+#ifdef O_PATH
+    const int fd = qt_safe_open(QFile::encodeName(url.toLocalFile()), O_PATH);
+    if (fd != -1) {
+        QDBusMessage message = QDBusMessage::createMethodCall(QLatin1String("org.freedesktop.portal.Desktop"),
+                                                              QLatin1String("/org/freedesktop/portal/desktop"),
+                                                              QLatin1String("org.freedesktop.portal.OpenURI"),
+                                                              QLatin1String("OpenFile"));
+
+        QDBusUnixFileDescriptor descriptor(fd);
+        qt_safe_close(fd);
+
+        // FIXME parent_window_id and handle writable option
+        message << QString() << QVariant::fromValue(descriptor) << QVariantMap();
+
+        QDBusPendingReply<QDBusObjectPath> reply = QDBusConnection::sessionBus().call(message);
+        return !reply.isError();
+    }
+#else
+    Q_UNUSED(url)
+#endif
+
+    return false;
+}
+
+static inline bool xdgDesktopPortalOpenUrl(const QUrl &url)
+{
+    // DBus signature:
+    // OpenURI (IN   s      parent_window,
+    //          IN   s      uri,
+    //          IN   a{sv}  options,
+    //          OUT  o      handle)
+    // Options:
+    // handle_token (s) -  A string that will be used as the last element of the @handle.
+    // writable (b) - Whether to allow the chosen application to write to the file.
+    //                This key only takes effect the uri points to a local file that is exported in the document portal,
+    //                and the chosen application is sandboxed itself.
+
+    QDBusMessage message = QDBusMessage::createMethodCall(QLatin1String("org.freedesktop.portal.Desktop"),
+                                                          QLatin1String("/org/freedesktop/portal/desktop"),
+                                                          QLatin1String("org.freedesktop.portal.OpenURI"),
+                                                          QLatin1String("OpenURI"));
+    // FIXME parent_window_id and handle writable option
+    message << QString() << url.toString() << QVariantMap();
+
+    QDBusPendingReply<QDBusObjectPath> reply = QDBusConnection::sessionBus().call(message);
+    return !reply.isError();
+}
+
+static inline bool xdgDesktopPortalSendEmail(const QUrl &url)
+{
+    // DBus signature:
+    // ComposeEmail (IN   s      parent_window,
+    //               IN   a{sv}  options,
+    //               OUT  o      handle)
+    // Options:
+    // address (s) - The email address to send to.
+    // subject (s) - The subject for the email.
+    // body (s) - The body for the email.
+    // attachment_fds (ah) - File descriptors for files to attach.
+
+    QUrlQuery urlQuery(url);
+    QVariantMap options;
+    options.insert(QLatin1String("address"), url.path());
+    options.insert(QLatin1String("subject"), urlQuery.queryItemValue(QLatin1String("subject")));
+    options.insert(QLatin1String("body"), urlQuery.queryItemValue(QLatin1String("body")));
+
+    // O_PATH seems to be present since Linux 2.6.39, which is not case of RHEL 6
+#ifdef O_PATH
+    QList<QDBusUnixFileDescriptor> attachments;
+    const QStringList attachmentUris = urlQuery.allQueryItemValues(QLatin1String("attachment"));
+
+    for (const QString &attachmentUri : attachmentUris) {
+        const int fd = qt_safe_open(QFile::encodeName(attachmentUri), O_PATH);
+        if (fd != -1) {
+            QDBusUnixFileDescriptor descriptor(fd);
+            attachments << descriptor;
+            qt_safe_close(fd);
+        }
+    }
+
+    options.insert(QLatin1String("attachment_fds"), QVariant::fromValue(attachments));
+#endif
+
+    QDBusMessage message = QDBusMessage::createMethodCall(QLatin1String("org.freedesktop.portal.Desktop"),
+                                                          QLatin1String("/org/freedesktop/portal/desktop"),
+                                                          QLatin1String("org.freedesktop.portal.Email"),
+                                                          QLatin1String("ComposeEmail"));
+
+    // FIXME parent_window_id
+    message << QString() << options;
+
+    QDBusPendingReply<QDBusObjectPath> reply = QDBusConnection::sessionBus().call(message);
+    return !reply.isError();
+}
+#endif // QT_CONFIG(dbus)
 
 QByteArray QGenericUnixServices::desktopEnvironment() const
 {
@@ -130,11 +292,21 @@ QByteArray QGenericUnixServices::desktopEnvironment() const
 
 bool QGenericUnixServices::openUrl(const QUrl &url)
 {
-    if (url.scheme() == QStringLiteral("mailto"))
+    if (url.scheme() == QLatin1String("mailto")) {
+#if QT_CONFIG(dbus)
+        if (checkNeedPortalSupport())
+            return xdgDesktopPortalSendEmail(url);
+#endif
         return openDocument(url);
+    }
+
+#if QT_CONFIG(dbus)
+    if (checkNeedPortalSupport())
+        return xdgDesktopPortalOpenUrl(url);
+#endif
 
     if (m_webBrowser.isEmpty() && !detectWebBrowser(desktopEnvironment(), true, &m_webBrowser)) {
-        qWarning("%s: Unable to detect a web browser to launch '%s'", Q_FUNC_INFO, qPrintable(url.toString()));
+        qWarning("Unable to detect a web browser to launch '%s'", qPrintable(url.toString()));
         return false;
     }
     return launch(m_webBrowser, url);
@@ -142,11 +314,38 @@ bool QGenericUnixServices::openUrl(const QUrl &url)
 
 bool QGenericUnixServices::openDocument(const QUrl &url)
 {
+#if QT_CONFIG(dbus)
+    if (checkNeedPortalSupport())
+        return xdgDesktopPortalOpenFile(url);
+#endif
+
     if (m_documentLauncher.isEmpty() && !detectWebBrowser(desktopEnvironment(), false, &m_documentLauncher)) {
-        qWarning("%s: Unable to detect a launcher for '%s'", Q_FUNC_INFO, qPrintable(url.toString()));
+        qWarning("Unable to detect a launcher for '%s'", qPrintable(url.toString()));
         return false;
     }
     return launch(m_documentLauncher, url);
 }
+
+#else
+QByteArray QGenericUnixServices::desktopEnvironment() const
+{
+    return QByteArrayLiteral("UNKNOWN");
+}
+
+bool QGenericUnixServices::openUrl(const QUrl &url)
+{
+    Q_UNUSED(url)
+    qWarning("openUrl() not supported on this platform");
+    return false;
+}
+
+bool QGenericUnixServices::openDocument(const QUrl &url)
+{
+    Q_UNUSED(url)
+    qWarning("openDocument() not supported on this platform");
+    return false;
+}
+
+#endif // QT_NO_MULTIPROCESS
 
 QT_END_NAMESPACE

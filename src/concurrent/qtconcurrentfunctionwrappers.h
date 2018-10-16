@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,14 +41,11 @@
 #define QTCONCURRENT_FUNCTIONWRAPPERS_H
 
 #include <QtConcurrent/qtconcurrentcompilertest.h>
+#include <QtCore/QStringList>
 
-#ifndef QT_NO_CONCURRENT
+#if !defined(QT_NO_CONCURRENT) || defined(Q_CLANG_QDOC)
 
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
-
-
-#ifndef qdoc
 
 namespace QtConcurrent {
 
@@ -194,6 +189,32 @@ QtConcurrent::ConstMemberFunctionWrapper<T, C> createFunctionWrapper(T (C::*func
     return QtConcurrent::ConstMemberFunctionWrapper<T, C>(func);
 }
 
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+template <typename T, typename U>
+QtConcurrent::FunctionWrapper1<T, U> createFunctionWrapper(T (*func)(U) noexcept)
+{
+    return QtConcurrent::FunctionWrapper1<T, U>(func);
+}
+
+template <typename T, typename C>
+QtConcurrent::MemberFunctionWrapper<T, C> createFunctionWrapper(T (C::*func)() noexcept)
+{
+    return QtConcurrent::MemberFunctionWrapper<T, C>(func);
+}
+
+template <typename T, typename C, typename U>
+QtConcurrent::MemberFunctionWrapper1<T, C, U> createFunctionWrapper(T (C::*func)(U) noexcept)
+{
+    return QtConcurrent::MemberFunctionWrapper1<T, C, U>(func);
+}
+
+template <typename T, typename C>
+QtConcurrent::ConstMemberFunctionWrapper<T, C> createFunctionWrapper(T (C::*func)() const noexcept)
+{
+    return QtConcurrent::ConstMemberFunctionWrapper<T, C>(func);
+}
+#endif
+
 struct PushBackWrapper
 {
     typedef void result_type;
@@ -233,6 +254,20 @@ struct ReduceResultType<T(C::*)(U)>
     typedef C ResultType;
 };
 
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+template <class U, class V>
+struct ReduceResultType<void(*)(U&,V) noexcept>
+{
+    typedef U ResultType;
+};
+
+template <class T, class C, class U>
+struct ReduceResultType<T(C::*)(U) noexcept>
+{
+    typedef C ResultType;
+};
+#endif
+
 template <class InputSequence, class MapFunctor>
 struct MapResultType
 {
@@ -250,6 +285,20 @@ struct MapResultType<void, T(C::*)() const>
 {
     typedef T ResultType;
 };
+
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+template <class U, class V>
+struct MapResultType<void, U (*)(V) noexcept>
+{
+    typedef U ResultType;
+};
+
+template <class T, class C>
+struct MapResultType<void, T(C::*)() const noexcept>
+{
+    typedef T ResultType;
+};
+#endif
 
 #ifndef QT_NO_TEMPLATE_TEMPLATE_PARAMETERS
 
@@ -271,6 +320,21 @@ struct MapResultType<InputSequence<T>, U(C::*)() const>
     typedef InputSequence<U> ResultType;
 };
 
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+
+template <template <typename> class InputSequence, class T, class U, class V>
+struct MapResultType<InputSequence<T>, U (*)(V) noexcept>
+{
+    typedef InputSequence<U> ResultType;
+};
+
+template <template <typename> class InputSequence, class T, class U, class C>
+struct MapResultType<InputSequence<T>, U(C::*)() const noexcept>
+{
+    typedef InputSequence<U> ResultType;
+};
+#endif
+
 #endif // QT_NO_TEMPLATE_TEMPLATE_PARAMETER
 
 template <class MapFunctor>
@@ -291,12 +355,25 @@ struct MapResultType<QStringList, U(C::*)() const>
     typedef QList<U> ResultType;
 };
 
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+
+template <class U, class V>
+struct MapResultType<QStringList, U (*)(V) noexcept>
+{
+    typedef QList<U> ResultType;
+};
+
+template <class U, class C>
+struct MapResultType<QStringList, U(C::*)() const noexcept>
+{
+    typedef QList<U> ResultType;
+};
+#endif
+
 } // namespace QtPrivate.
 
-#endif //qdoc
 
 QT_END_NAMESPACE
-QT_END_HEADER
 
 #endif // QT_NO_CONCURRENT
 

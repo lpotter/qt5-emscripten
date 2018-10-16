@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,7 @@
 
 #include "qstringbuilder.h"
 #include <QtCore/qtextcodec.h>
+#include <private/qutfcodec_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -51,7 +50,7 @@ QT_BEGIN_NAMESPACE
     \reentrant
     \since 4.6
 
-    \brief The QStringBuilder class is a template class that provides a facility to build up QStrings from smaller chunks.
+    \brief The QStringBuilder class is a template class that provides a facility to build up QStrings and QByteArrays from smaller chunks.
 
     \ingroup tools
     \ingroup shared
@@ -59,33 +58,50 @@ QT_BEGIN_NAMESPACE
 
 
     To build a QString by multiple concatenations, QString::operator+()
-    is typically used. This causes \e{n - 1} reallocations when building
-    a string from \e{n} chunks.
+    is typically used. This causes \e{n - 1} allocations when building
+    a string from \e{n} chunks. The same is true for QByteArray.
 
     QStringBuilder uses expression templates to collect the individual
     chunks, compute the total size, allocate the required amount of
-    memory for the final QString object, and copy the chunks into the
+    memory for the final string object, and copy the chunks into the
     allocated memory.
 
     The QStringBuilder class is not to be used explicitly in user
     code.  Instances of the class are created as return values of the
-    operator%() function, acting on objects of type QString,
-    QLatin1String, QStringRef, QChar, QCharRef,
-    QLatin1Char, and \c char.
+    operator%() function, acting on objects of the following types:
+
+    For building QStrings:
+
+    \list
+    \li QString, QStringRef, (since 5.10:) QStringView
+    \li QChar, QCharRef, QLatin1Char, (since 5.10:) \c char16_t,
+    \li QLatin1String,
+    \li (since 5.10:) \c{const char16_t[]} (\c{u"foo"}),
+    \li QByteArray, \c char, \c{const char[]}.
+    \endlist
+
+    The types in the last list point are only available when
+    QT_NO_CAST_FROM_ASCII is not defined.
+
+    For building QByteArrays:
+
+    \list
+    \li QByteArray, \c char, \c{const char[]}.
+    \endlist
 
     Concatenating strings with operator%() generally yields better
-    performance then using \c QString::operator+() on the same chunks
+    performance than using \c QString::operator+() on the same chunks
     if there are three or more of them, and performs equally well in other
     cases.
 
     \sa QLatin1String, QString
 */
 
-/*! \fn QStringBuilder::QStringBuilder(const A &a, const B &b)
+/*! \fn template <typename A, typename B> QStringBuilder<A, B>::QStringBuilder(const A &a, const B &b)
   Constructs a QStringBuilder from \a a and \a b.
  */
 
-/* \fn QStringBuilder::operator%(const A &a, const B &b)
+/* \fn template <typename A, typename B> QStringBuilder<A, B>::operator%(const A &a, const B &b)
 
     Returns a \c QStringBuilder object that is converted to a QString object
     when assigned to a variable of QString type or passed to a function that
@@ -96,12 +112,12 @@ QT_BEGIN_NAMESPACE
     \c QChar, \c QCharRef, \c QLatin1Char, and \c char.
 */
 
-/* \fn QByteArray QStringBuilder::toLatin1() const
+/* \fn template <typename A, typename B> QByteArray QStringBuilder<A, B>::toLatin1() const
   Returns a Latin-1 representation of the string as a QByteArray.  The
   returned byte array is undefined if the string contains non-Latin1
   characters.
  */
-/* \fn QByteArray QStringBuilder::toUtf8() const
+/* \fn template <typename A, typename B> QByteArray QStringBuilder<A, B>::toUtf8() const
   Returns a UTF-8 representation of the string as a QByteArray.
  */
 
@@ -109,29 +125,14 @@ QT_BEGIN_NAMESPACE
 /*!
     \internal
  */
-void QAbstractConcatenable::convertFromAscii(const char *a, int len, QChar *&out)
+void QAbstractConcatenable::convertFromAscii(const char *a, int len, QChar *&out) Q_DECL_NOTHROW
 {
-    if (len == -1) {
+    if (Q_UNLIKELY(len == -1)) {
         if (!a)
             return;
-        while (*a && uchar(*a) < 0x80U)
-            *out++ = QLatin1Char(*a++);
-        if (!*a)
-            return;
-    } else {
-        int i;
-        for (i = 0; i < len && uchar(a[i]) < 0x80U; ++i)
-            *out++ = QLatin1Char(a[i]);
-        if (i == len)
-            return;
-        a += i;
-        len -= i;
+        len = int(strlen(a));
     }
-
-    // we need to complement with UTF-8 appending
-    QString tmp = QString::fromUtf8(a, len);
-    memcpy(out, reinterpret_cast<const char *>(tmp.constData()), sizeof(QChar) * tmp.size());
-    out += tmp.size();
+    out = QUtf8::convertToUnicode(out, a, len);
 }
 
 QT_END_NAMESPACE

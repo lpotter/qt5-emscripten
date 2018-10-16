@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -28,9 +28,8 @@
 /*!
     \example blockingfortuneclient
     \title Blocking Fortune Client Example
-
-    \brief The Blocking Fortune Client example shows how to create a client for a
-    network service using QTcpSocket's synchronous API in a non-GUI thread.
+    \ingroup examples-network
+    \brief Demonstrates how to create a client for a network service.
 
     \image blockingfortuneclient-example.png
 
@@ -44,7 +43,7 @@
     QTcpSocket::connectToHost() returns immediately, and when the connection
     has been established, QTcpSocket emits
     \l{QTcpSocket::connected()}{connected()}.
-    
+
     \li \e{The synchronous (blocking) approach.} In non-GUI and multithreaded
     applications, you can call the \c waitFor...() functions (e.g.,
     QTcpSocket::waitForConnected()) to suspend the calling thread until the
@@ -126,39 +125,22 @@
     other \c waitFor...() functions, is part of QTcpSocket's \e{blocking
     API}.
 
-    After this statement, we have a connected socket to work with. Now it's
-    time to see what the fortune server has sent us.
-
-    \snippet blockingfortuneclient/fortunethread.cpp 9
-    \snippet blockingfortuneclient/fortunethread.cpp 10
-
-    This step is to read the size of the packet. Although we are only reading
-    two bytes here, and the \c while loop may seem to overdo it, we present this
-    code to demonstrate a good pattern for waiting for data using
-    QTcpSocket::waitForReadyRead(). It goes like this: For as long as we still
-    need more data, we call waitForReadyRead(). If it returns false,
-    we abort the operation. After this statement, we know that we have received
-    enough data.
+    After this statement, we have a connected socket to work with.
 
     \snippet blockingfortuneclient/fortunethread.cpp 11
 
     Now we can create a QDataStream object, passing the socket to
     QDataStream's constructor, and as in the other client examples we set
-    the stream protocol version to QDataStream::Qt_4_0, and read the size
-    of the packet.
+    the stream protocol version to QDataStream::Qt_4_0.
 
     \snippet blockingfortuneclient/fortunethread.cpp 12
-    \snippet blockingfortuneclient/fortunethread.cpp 13
 
-    Again, we'll use a loop that waits for more data by calling
-    QTcpSocket::waitForReadyRead(). In this loop, we're waiting until
-    QTcpSocket::bytesAvailable() returns the full packet size.
-
-    \snippet blockingfortuneclient/fortunethread.cpp 14
-
-    Now that we have all the data that we need, we can use QDataStream to
-    read the fortune string from the packet. The resulting fortune is
-    delivered by emitting newFortune().
+    We proceed by initiating a loop that waits for the fortune string data by
+    calling QTcpSocket::waitForReadyRead(). If it returns false, we abort the
+    operation. After this statement, we start a stream read transaction. We
+    exit the loop when QDataStream::commitTransaction() returns true, which
+    means successful fortune string loading. The resulting fortune is
+    delivered by emitting newFortune():
 
     \snippet blockingfortuneclient/fortunethread.cpp 15
 
@@ -209,7 +191,7 @@
     \snippet blockingfortuneclient/blockingclient.cpp 3
     \codeline
     \snippet blockingfortuneclient/blockingclient.cpp 4
-    
+
     Here, we simply display the fortune we received as the argument.
 
     \sa {Fortune Client Example}, {Fortune Server Example}

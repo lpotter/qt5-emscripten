@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -100,7 +98,8 @@
 */
 
 #include "qtcpserver.h"
-#include "private/qobject_p.h"
+#include "qtcpserver_p.h"
+
 #include "qalgorithms.h"
 #include "qhostaddress.h"
 #include "qlist.h"
@@ -116,47 +115,11 @@ QT_BEGIN_NAMESPACE
         return returnValue; \
     } } while (0)
 
-class QTcpServerPrivate : public QObjectPrivate, public QAbstractSocketEngineReceiver
-{
-    Q_DECLARE_PUBLIC(QTcpServer)
-public:
-    QTcpServerPrivate();
-    ~QTcpServerPrivate();
-
-    QList<QTcpSocket *> pendingConnections;
-
-    quint16 port;
-    QHostAddress address;
-
-    QAbstractSocket::SocketState state;
-    QAbstractSocketEngine *socketEngine;
-
-    QAbstractSocket::SocketError serverSocketError;
-    QString serverSocketErrorString;
-
-    int maxConnections;
-
-#ifndef QT_NO_NETWORKPROXY
-    QNetworkProxy proxy;
-    QNetworkProxy resolveProxy(const QHostAddress &address, quint16 port);
-#endif
-
-    // from QAbstractSocketEngineReceiver
-    void readNotification();
-    void closeNotification() { readNotification(); }
-    inline void writeNotification() {}
-    inline void exceptionNotification() {}
-    inline void connectionNotification() {}
-#ifndef QT_NO_NETWORKPROXY
-    inline void proxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *) {}
-#endif
-
-};
-
 /*! \internal
 */
 QTcpServerPrivate::QTcpServerPrivate()
  : port(0)
+ , socketType(QAbstractSocket::UnknownSocketType)
  , state(QAbstractSocket::UnconnectedState)
  , socketEngine(0)
  , serverSocketError(QAbstractSocket::UnknownSocketError)
@@ -186,13 +149,21 @@ QNetworkProxy QTcpServerPrivate::resolveProxy(const QHostAddress &address, quint
         proxies << proxy;
     } else {
         // try the application settings instead
-        QNetworkProxyQuery query(port, QString(), QNetworkProxyQuery::TcpServer);
+        QNetworkProxyQuery query(port, QString(),
+                                 socketType == QAbstractSocket::SctpSocket ?
+                                 QNetworkProxyQuery::SctpServer :
+                                 QNetworkProxyQuery::TcpServer);
         proxies = QNetworkProxyFactory::proxyForQuery(query);
     }
 
     // return the first that we can use
-    foreach (const QNetworkProxy &p, proxies) {
-        if (p.capabilities() & QNetworkProxy::ListeningCapability)
+    for (const QNetworkProxy &p : qAsConst(proxies)) {
+        if (socketType == QAbstractSocket::TcpSocket &&
+            (p.capabilities() & QNetworkProxy::ListeningCapability) != 0)
+            return p;
+
+        if (socketType == QAbstractSocket::SctpSocket &&
+            (p.capabilities() & QNetworkProxy::SctpListeningCapability) != 0)
             return p;
     }
 
@@ -201,6 +172,23 @@ QNetworkProxy QTcpServerPrivate::resolveProxy(const QHostAddress &address, quint
     return QNetworkProxy(QNetworkProxy::DefaultProxy);
 }
 #endif
+
+/*! \internal
+*/
+void QTcpServerPrivate::configureCreatedSocket()
+{
+#if defined(Q_OS_UNIX)
+    // Under Unix, we want to be able to bind to the port, even if a socket on
+    // the same address-port is in TIME_WAIT. Under Windows this is possible
+    // anyway -- furthermore, the meaning of reusable on Windows is different:
+    // it means that you can use the same address-port for multiple listening
+    // sockets.
+    // Don't abort though if we can't set that option. For example the socks
+    // engine doesn't support that option, but that shouldn't prevent us from
+    // trying to bind/listen.
+    socketEngine->setOption(QAbstractSocketEngine::AddressReusable, 1);
+#endif
+}
 
 /*! \internal
 */
@@ -249,6 +237,11 @@ void QTcpServerPrivate::readNotification()
 QTcpServer::QTcpServer(QObject *parent)
     : QObject(*new QTcpServerPrivate, parent)
 {
+    Q_D(QTcpServer);
+#if defined(QTCPSERVER_DEBUG)
+    qDebug("QTcpServer::QTcpServer(%p)", parent);
+#endif
+    d->socketType = QAbstractSocket::TcpSocket;
 }
 
 /*!
@@ -262,7 +255,29 @@ QTcpServer::QTcpServer(QObject *parent)
 */
 QTcpServer::~QTcpServer()
 {
+#if defined(QTCPSERVER_DEBUG)
+    qDebug("QTcpServer::~QTcpServer()");
+#endif
     close();
+}
+
+/*! \internal
+
+    Constructs a new server object with socket of type \a socketType. The \a
+    parent argument is passed to QObject's constructor.
+*/
+QTcpServer::QTcpServer(QAbstractSocket::SocketType socketType, QTcpServerPrivate &dd,
+                       QObject *parent) : QObject(dd, parent)
+{
+    Q_D(QTcpServer);
+#if defined(QTCPSERVER_DEBUG)
+    qDebug("QTcpServer::QTcpServer(%sSocket, QTcpServerPrivate == %p, parent == %p)",
+           socketType == QAbstractSocket::TcpSocket ? "Tcp"
+           : socketType == QAbstractSocket::UdpSocket ? "Udp"
+           : socketType == QAbstractSocket::SctpSocket ? "Sctp"
+           : "Unknown", &dd, parent);
+#endif
+    d->socketType = socketType;
 }
 
 /*!
@@ -271,7 +286,7 @@ QTcpServer::~QTcpServer()
     automatically. If \a address is QHostAddress::Any, the server
     will listen on all network interfaces.
 
-    Returns true on success; otherwise returns false.
+    Returns \c true on success; otherwise returns \c false.
 
     \sa isListening()
 */
@@ -293,7 +308,7 @@ bool QTcpServer::listen(const QHostAddress &address, quint16 port)
 #endif
 
     delete d->socketEngine;
-    d->socketEngine = QAbstractSocketEngine::createSocketEngine(QAbstractSocket::TcpSocket, proxy, this);
+    d->socketEngine = QAbstractSocketEngine::createSocketEngine(d->socketType, proxy, this);
     if (!d->socketEngine) {
         d->serverSocketError = QAbstractSocket::UnsupportedSocketOperationError;
         d->serverSocketErrorString = tr("Operation on socket is not supported");
@@ -303,7 +318,7 @@ bool QTcpServer::listen(const QHostAddress &address, quint16 port)
     //copy network session down to the socket engine (if it has been set)
     d->socketEngine->setProperty("_q_networksession", property("_q_networksession"));
 #endif
-    if (!d->socketEngine->initialize(QAbstractSocket::TcpSocket, proto)) {
+    if (!d->socketEngine->initialize(d->socketType, proto)) {
         d->serverSocketError = d->socketEngine->error();
         d->serverSocketErrorString = d->socketEngine->errorString();
         return false;
@@ -312,17 +327,7 @@ bool QTcpServer::listen(const QHostAddress &address, quint16 port)
     if (addr.protocol() == QAbstractSocket::AnyIPProtocol && proto == QAbstractSocket::IPv4Protocol)
         addr = QHostAddress::AnyIPv4;
 
-#if defined(Q_OS_UNIX)
-    // Under Unix, we want to be able to bind to the port, even if a socket on
-    // the same address-port is in TIME_WAIT. Under Windows this is possible
-    // anyway -- furthermore, the meaning of reusable on Windows is different:
-    // it means that you can use the same address-port for multiple listening
-    // sockets.
-    // Don't abort though if we can't set that option. For example the socks
-    // engine doesn't support that option, but that shouldn't prevent us from
-    // trying to bind/listen.
-    d->socketEngine->setOption(QAbstractSocketEngine::AddressReusable, 1);
-#endif
+    d->configureCreatedSocket();
 
     if (!d->socketEngine->bind(addr, port)) {
         d->serverSocketError = d->socketEngine->error();
@@ -351,8 +356,8 @@ bool QTcpServer::listen(const QHostAddress &address, quint16 port)
 }
 
 /*!
-    Returns true if the server is currently listening for incoming
-    connections; otherwise returns false.
+    Returns \c true if the server is currently listening for incoming
+    connections; otherwise returns \c false.
 
     \sa listen()
 */
@@ -408,8 +413,8 @@ qintptr QTcpServer::socketDescriptor() const
 
 /*!
     Sets the socket descriptor this server should use when listening
-    for incoming connections to \a socketDescriptor. Returns true if
-    the socket is set successfully; otherwise returns false.
+    for incoming connections to \a socketDescriptor. Returns \c true if
+    the socket is set successfully; otherwise returns \c false.
 
     The socket is assumed to be in listening state.
 
@@ -486,8 +491,8 @@ QHostAddress QTcpServer::serverAddress() const
 
 /*!
     Waits for at most \a msec milliseconds or until an incoming
-    connection is available. Returns true if a connection is
-    available; otherwise returns false. If the operation timed out
+    connection is available. Returns \c true if a connection is
+    available; otherwise returns \c false. If the operation timed out
     and \a timedOut is not 0, *\a timedOut will be set to true.
 
     This is a blocking function call. Its use is disadvised in a
@@ -524,8 +529,8 @@ bool QTcpServer::waitForNewConnection(int msec, bool *timedOut)
 }
 
 /*!
-    Returns true if the server has a pending connection; otherwise
-    returns false.
+    Returns \c true if the server has a pending connection; otherwise
+    returns \c false.
 
     \sa nextPendingConnection(), setMaxPendingConnections()
 */
@@ -558,8 +563,11 @@ QTcpSocket *QTcpServer::nextPendingConnection()
     if (d->pendingConnections.isEmpty())
         return 0;
 
-    if (!d->socketEngine->isReadNotificationEnabled())
+    if (!d->socketEngine) {
+        qWarning("QTcpServer::nextPendingConnection() called while not listening");
+    } else if (!d->socketEngine->isReadNotificationEnabled()) {
         d->socketEngine->setReadNotificationEnabled(true);
+    }
 
     return d->pendingConnections.takeFirst();
 }
@@ -579,6 +587,10 @@ QTcpSocket *QTcpServer::nextPendingConnection()
     If this server is using QNetworkProxy then the \a socketDescriptor
     may not be usable with native socket functions, and should only be
     used with QTcpSocket::setSocketDescriptor().
+
+    \note If another socket is created in the reimplementation
+    of this method, it needs to be added to the Pending Connections mechanism
+    by calling addPendingConnection().
 
     \note If you want to handle an incoming connection as a new QTcpSocket
     object in another thread you have to pass the socketDescriptor

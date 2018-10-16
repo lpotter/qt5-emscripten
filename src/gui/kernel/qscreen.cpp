@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +42,11 @@
 #include "qpixmap.h"
 #include "qguiapplication_p.h"
 #include <qpa/qplatformscreen.h>
+#include <qpa/qplatformscreen_p.h>
 
+#include <QtCore/QDebug>
 #include <QtCore/private/qobject_p.h>
+#include "qhighdpiscaling_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -70,8 +71,71 @@ QT_BEGIN_NAMESPACE
 */
 
 QScreen::QScreen(QPlatformScreen *screen)
-    : QObject(*new QScreenPrivate(screen), 0)
+    : QObject(*new QScreenPrivate(), 0)
 {
+    Q_D(QScreen);
+    d->setPlatformScreen(screen);
+}
+
+void QScreenPrivate::setPlatformScreen(QPlatformScreen *screen)
+{
+    Q_Q(QScreen);
+    platformScreen = screen;
+    platformScreen->d_func()->screen = q;
+    orientation = platformScreen->orientation();
+    geometry = platformScreen->deviceIndependentGeometry();
+    availableGeometry = QHighDpi::fromNative(platformScreen->availableGeometry(), QHighDpiScaling::factor(platformScreen), geometry.topLeft());
+    logicalDpi = platformScreen->logicalDpi();
+    refreshRate = platformScreen->refreshRate();
+    // safeguard ourselves against buggy platform behavior...
+    if (refreshRate < 1.0)
+        refreshRate = 60.0;
+
+    updatePrimaryOrientation();
+
+    filteredOrientation = orientation;
+    if (filteredOrientation == Qt::PrimaryOrientation)
+        filteredOrientation = primaryOrientation;
+
+    updateHighDpi();
+}
+
+
+/*!
+    Destroys the screen.
+ */
+QScreen::~QScreen()
+{
+    if (!qApp)
+        return;
+
+    // Allow clients to manage windows that are affected by the screen going
+    // away, before we fall back to moving them to the primary screen.
+    emit qApp->screenRemoved(this);
+
+    if (QGuiApplication::closingDown())
+        return;
+
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    if (this == primaryScreen)
+        return;
+
+    bool movingFromVirtualSibling = primaryScreen && primaryScreen->handle()->virtualSiblings().contains(handle());
+
+    // Move any leftover windows to the primary screen
+    const auto allWindows = QGuiApplication::allWindows();
+    for (QWindow *window : allWindows) {
+        if (!window->isTopLevel() || window->screen() != this)
+            continue;
+
+        const bool wasVisible = window->isVisible();
+        window->setScreen(primaryScreen);
+
+        // Re-show window if moved from a virtual sibling screen. Otherwise
+        // leave it up to the application developer to show the window.
+        if (movingFromVirtualSibling)
+            window->setVisible(wasVisible);
+    }
 }
 
 /*!
@@ -94,6 +158,42 @@ QString QScreen::name() const
 {
     Q_D(const QScreen);
     return d->platformScreen->name();
+}
+
+/*!
+  \property QScreen::manufacturer
+  \brief the manufacturer of the screen
+
+  \since 5.9
+*/
+QString QScreen::manufacturer() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->manufacturer();
+}
+
+/*!
+  \property QScreen::model
+  \brief the model of the screen
+
+  \since 5.9
+*/
+QString QScreen::model() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->model();
+}
+
+/*!
+  \property QScreen::serialNumber
+  \brief the serial number of the screen
+
+  \since 5.9
+*/
+QString QScreen::serialNumber() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->serialNumber();
 }
 
 /*!
@@ -178,6 +278,8 @@ qreal QScreen::physicalDotsPerInch() const
 qreal QScreen::logicalDotsPerInchX() const
 {
     Q_D(const QScreen);
+    if (QHighDpiScaling::isActive())
+        return QHighDpiScaling::logicalDpi().first;
     return d->logicalDpi.first;
 }
 
@@ -192,6 +294,8 @@ qreal QScreen::logicalDotsPerInchX() const
 qreal QScreen::logicalDotsPerInchY() const
 {
     Q_D(const QScreen);
+    if (QHighDpiScaling::isActive())
+        return QHighDpiScaling::logicalDpi().second;
     return d->logicalDpi.second;
 }
 
@@ -210,22 +314,26 @@ qreal QScreen::logicalDotsPerInchY() const
 qreal QScreen::logicalDotsPerInch() const
 {
     Q_D(const QScreen);
-    QDpi dpi = d->logicalDpi;
+    QDpi dpi = QHighDpiScaling::isActive() ? QHighDpiScaling::logicalDpi() : d->logicalDpi;
     return (dpi.first + dpi.second) * qreal(0.5);
 }
 
-/*
+/*!
+    \property QScreen::devicePixelRatio
+    \brief the screen's ratio between physical pixels and device-independent pixels
+    \since 5.5
+
     Returns the ratio between physical pixels and device-independent pixels for the screen.
 
-    Common values are 1.0 on normal displays and 2.0 on Apple retina displays.
+    Common values are 1.0 on normal displays and 2.0 on "retina" displays.
+    Higher values are also possible.
 
-    \sa QWindow::devicePixelRatio();
-    \sa QGuiApplicaiton::devicePixelRatio();
+    \sa QWindow::devicePixelRatio(), QGuiApplication::devicePixelRatio()
 */
 qreal QScreen::devicePixelRatio() const
 {
     Q_D(const QScreen);
-    return d->platformScreen->devicePixelRatio();
+    return d->platformScreen->devicePixelRatio() * QHighDpiScaling::factor(this);
 }
 
 /*!
@@ -276,6 +384,10 @@ QRect QScreen::geometry() const
 
   The available geometry is the geometry excluding window manager reserved areas
   such as task bars and system menus.
+
+  Note, on X11 this will return the true available geometry only on systems with one monitor and
+  if window manager has set _NET_WORKAREA atom. In all other cases this is equal to geometry().
+  This is a limitation in X11 window manager specification.
 */
 QRect QScreen::availableGeometry() const
 {
@@ -293,9 +405,10 @@ QRect QScreen::availableGeometry() const
 QList<QScreen *> QScreen::virtualSiblings() const
 {
     Q_D(const QScreen);
-    QList<QPlatformScreen *> platformScreens = d->platformScreen->virtualSiblings();
+    const QList<QPlatformScreen *> platformScreens = d->platformScreen->virtualSiblings();
     QList<QScreen *> screens;
-    foreach (QPlatformScreen *platformScreen, platformScreens)
+    screens.reserve(platformScreens.count());
+    for (QPlatformScreen *platformScreen : platformScreens)
         screens << platformScreen->screen();
     return screens;
 }
@@ -328,7 +441,8 @@ QSize QScreen::virtualSize() const
 QRect QScreen::virtualGeometry() const
 {
     QRect result;
-    foreach (QScreen *screen, virtualSiblings())
+    const auto screens = virtualSiblings();
+    for (QScreen *screen : screens)
         result |= screen->geometry();
     return result;
 }
@@ -361,7 +475,8 @@ QSize QScreen::availableVirtualSize() const
 QRect QScreen::availableVirtualGeometry() const
 {
     QRect result;
-    foreach (QScreen *screen, virtualSiblings())
+    const auto screens = virtualSiblings();
+    for (QScreen *screen : screens)
         result |= screen->availableGeometry();
     return result;
 }
@@ -402,8 +517,8 @@ Qt::ScreenOrientations QScreen::orientationUpdateMask() const
 
     The screen orientation represents the physical orientation
     of the display. For example, the screen orientation of a mobile device
-    will change based on the device is being held, and a desktop display
-    might be rotated so that it's in portrait mode.
+    will change based on how it is being held. A change to the orientation
+    might or might not trigger a change to the primary orientation of the screen.
 
     Changes to this property will be filtered by orientationUpdateMask(),
     so in order to receive orientation updates the application must first
@@ -436,7 +551,12 @@ qreal QScreen::refreshRate() const
 
     The primary screen orientation is Qt::LandscapeOrientation
     if the screen geometry's width is greater than or equal to its
-    height, or Qt::PortraitOrientation otherwise.
+    height, or Qt::PortraitOrientation otherwise. This property might
+    change when the screen orientation was changed (i.e. when the
+    display is rotated).
+    The behavior is however platform dependent and can often be specified in
+    an application manifest file.
+
 */
 Qt::ScreenOrientation QScreen::primaryOrientation() const
 {
@@ -444,18 +564,21 @@ Qt::ScreenOrientation QScreen::primaryOrientation() const
     return d->primaryOrientation;
 }
 
-// i must be power of two
-static int log2(uint i)
-{
-    if (i == 0)
-        return -1;
+/*!
+    \property QScreen::nativeOrientation
+    \brief the native screen orientation
+    \since 5.2
 
-    int result = 0;
-    while (!(i & 1)) {
-        ++result;
-        i >>= 1;
-    }
-    return result;
+    The native orientation of the screen is the orientation where the logo
+    sticker of the device appears the right way up, or Qt::PrimaryOrientation
+    if the platform does not support this functionality.
+
+    The native orientation is a property of the hardware, and does not change.
+*/
+Qt::ScreenOrientation QScreen::nativeOrientation() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->nativeOrientation();
 }
 
 /*!
@@ -474,19 +597,7 @@ int QScreen::angleBetween(Qt::ScreenOrientation a, Qt::ScreenOrientation b) cons
     if (b == Qt::PrimaryOrientation)
         b = primaryOrientation();
 
-    if (a == b)
-        return 0;
-
-    int ia = log2(uint(a));
-    int ib = log2(uint(b));
-
-    int delta = ia - ib;
-
-    if (delta < 0)
-        delta = delta + 4;
-
-    int angles[] = { 0, 90, 180, 270 };
-    return angles[delta];
+    return QPlatformScreen::angleBetween(a, b);
 }
 
 /*!
@@ -509,28 +620,7 @@ QTransform QScreen::transformBetween(Qt::ScreenOrientation a, Qt::ScreenOrientat
     if (b == Qt::PrimaryOrientation)
         b = primaryOrientation();
 
-    if (a == b)
-        return QTransform();
-
-    int angle = angleBetween(a, b);
-
-    QTransform result;
-    switch (angle) {
-    case 90:
-        result.translate(target.width(), 0);
-        break;
-    case 180:
-        result.translate(target.width(), target.height());
-        break;
-    case 270:
-        result.translate(0, target.height());
-        break;
-    default:
-        Q_ASSERT(false);
-    }
-    result.rotate(angle);
-
-    return result;
+    return QPlatformScreen::transformBetween(a, b, target);
 }
 
 /*!
@@ -550,21 +640,12 @@ QRect QScreen::mapBetween(Qt::ScreenOrientation a, Qt::ScreenOrientation b, cons
     if (b == Qt::PrimaryOrientation)
         b = primaryOrientation();
 
-    if (a == b)
-        return rect;
-
-    if ((a == Qt::PortraitOrientation || a == Qt::InvertedPortraitOrientation)
-        != (b == Qt::PortraitOrientation || b == Qt::InvertedPortraitOrientation))
-    {
-        return QRect(rect.y(), rect.x(), rect.height(), rect.width());
-    }
-
-    return rect;
+    return QPlatformScreen::mapBetween(a, b, rect);
 }
 
 /*!
-    Convenience function that returns true if \a o is either portrait or inverted portrait;
-    otherwise returns false.
+    Convenience function that returns \c true if \a o is either portrait or inverted portrait;
+    otherwise returns \c false.
 
     Qt::PrimaryOrientation is interpreted as the screen's primaryOrientation().
 */
@@ -575,8 +656,8 @@ bool QScreen::isPortrait(Qt::ScreenOrientation o) const
 }
 
 /*!
-    Convenience function that returns true if \a o is either landscape or inverted landscape;
-    otherwise returns false.
+    Convenience function that returns \c true if \a o is either landscape or inverted landscape;
+    otherwise returns \c false.
 
     Qt::PrimaryOrientation is interpreted as the screen's primaryOrientation().
 */
@@ -590,7 +671,7 @@ bool QScreen::isLandscape(Qt::ScreenOrientation o) const
     \fn void QScreen::orientationChanged(Qt::ScreenOrientation orientation)
 
     This signal is emitted when the orientation of the screen
-    changes.
+    changes with \a orientation as an argument.
 
     \sa orientation()
 */
@@ -599,7 +680,7 @@ bool QScreen::isLandscape(Qt::ScreenOrientation o) const
     \fn void QScreen::primaryOrientationChanged(Qt::ScreenOrientation orientation)
 
     This signal is emitted when the primary orientation of the screen
-    changes.
+    changes with \a orientation as an argument.
 
     \sa primaryOrientation()
 */
@@ -626,6 +707,10 @@ void QScreenPrivate::updatePrimaryOrientation()
     that are not part of the application, window system frames, and so
     on.
 
+    \warning Grabbing windows that are not part of the application is
+    not supported on systems such as iOS, where sandboxing/security
+    prevents reading pixels of windows not owned by the application.
+
     The grabWindow() function grabs pixels from the screen, not from
     the window, i.e. if there is another window partially or entirely
     over the one you grab, you get pixels from the overlying window,
@@ -649,10 +734,59 @@ QPixmap QScreen::grabWindow(WId window, int x, int y, int width, int height)
 {
     const QPlatformScreen *platformScreen = handle();
     if (!platformScreen) {
-        qWarning("%s invoked with handle==0", Q_FUNC_INFO);
+        qWarning("invoked with handle==0");
         return QPixmap();
     }
-    return platformScreen->grabWindow(window, x, y, width, height);
+    const qreal factor = QHighDpiScaling::factor(this);
+    if (qFuzzyCompare(factor, 1))
+        return platformScreen->grabWindow(window, x, y, width, height);
+
+    const QPoint nativePos = QHighDpi::toNative(QPoint(x, y), factor);
+    QSize nativeSize(width, height);
+    if (nativeSize.isValid())
+        nativeSize = QHighDpi::toNative(nativeSize, factor);
+    QPixmap result =
+        platformScreen->grabWindow(window, nativePos.x(), nativePos.y(),
+                                   nativeSize.width(), nativeSize.height());
+    result.setDevicePixelRatio(factor);
+    return result;
 }
+
+#ifndef QT_NO_DEBUG_STREAM
+
+static inline void formatRect(QDebug &debug, const QRect r)
+{
+    debug << r.width() << 'x' << r.height()
+        << forcesign << r.x() << r.y() << noforcesign;
+}
+
+Q_GUI_EXPORT QDebug operator<<(QDebug debug, const QScreen *screen)
+{
+    const QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug << "QScreen(" << (const void *)screen;
+    if (screen) {
+        debug << ", name=" << screen->name();
+        if (debug.verbosity() > 2) {
+            if (screen == QGuiApplication::primaryScreen())
+                debug << ", primary";
+            debug << ", geometry=";
+            formatRect(debug, screen->geometry());
+            debug << ", available=";
+            formatRect(debug, screen->availableGeometry());
+            debug << ", logical DPI=" << screen->logicalDotsPerInchX()
+                << ',' << screen->logicalDotsPerInchY()
+                << ", physical DPI=" << screen->physicalDotsPerInchX()
+                << ',' << screen->physicalDotsPerInchY()
+                << ", devicePixelRatio=" << screen->devicePixelRatio()
+                << ", orientation=" << screen->orientation()
+                << ", physical size=" << screen->physicalSize().width()
+                << 'x' << screen->physicalSize().height() << "mm";
+        }
+    }
+    debug << ')';
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE

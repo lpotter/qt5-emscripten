@@ -1,6 +1,5 @@
 TEMPLATE      = subdirs
 SUBDIRS       = analogclock \
-                applicationicon \
                 calculator \
                 calendarwidget \
                 charactermap \
@@ -13,11 +12,11 @@ SUBDIRS       = analogclock \
                 lineedits \
                 movie \
                 mousebuttons \
-                orientation \
                 scribble \
                 shapedclock \
                 sliders \
                 spinboxes \
+                styles \
                 stylesheet \
                 tablet \
                 tetrix \
@@ -25,5 +24,3 @@ SUBDIRS       = analogclock \
                 validators \
                 wiggly \
                 windowflags
-
-contains(styles, windows): SUBDIRS += styles

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,6 +54,11 @@
 QT_BEGIN_NAMESPACE
 
 typedef QSqlTableModelSql Sql;
+
+QSqlTableModelPrivate::~QSqlTableModelPrivate()
+{
+
+}
 
 /*! \internal
     Populates our record with values.
@@ -195,29 +198,6 @@ bool QSqlTableModelPrivate::exec(const QString &stmt, bool prepStatement,
     return true;
 }
 
-QSqlRecord QSqlTableModelPrivate::primaryValues(const QSqlRecord &rec, const QSqlRecord &pIndex)
-{
-    QSqlRecord pValues(pIndex);
-
-    for (int i = pValues.count() - 1; i >= 0; --i)
-        pValues.setValue(i, rec.value(pValues.fieldName(i)));
-
-    return pValues;
-}
-
-QSqlRecord QSqlTableModelPrivate::primaryValues(int row) const
-{
-    Q_Q(const QSqlTableModel);
-
-    const QSqlRecord &pIndex = primaryIndex.isEmpty() ? rec : primaryIndex;
-
-    ModifiedRow mr = cache.value(row);
-    if (mr.op() != None)
-        return mr.primaryValues(pIndex);
-    else
-        return primaryValues(q->QSqlQueryModel::record(row), pIndex);
-}
-
 /*!
     \class QSqlTableModel
     \brief The QSqlTableModel class provides an editable data model
@@ -227,7 +207,7 @@ QSqlRecord QSqlTableModelPrivate::primaryValues(int row) const
     \inmodule QtSql
 
     QSqlTableModel is a high-level interface for reading and writing
-    database records from a single table. It is build on top of the
+    database records from a single table. It is built on top of the
     lower-level QSqlQuery and can be used to provide data to view
     classes such as QTableView. For example:
 
@@ -355,6 +335,16 @@ void QSqlTableModel::setTable(const QString &tableName)
     if (d->rec.count() == 0)
         d->error = QSqlError(QLatin1String("Unable to find table ") + d->tableName, QString(),
                              QSqlError::StatementError);
+
+    // Remember the auto index column if there is one now.
+    // The record that will be obtained from the query after select lacks this feature.
+    d->autoColumn.clear();
+    for (int c = 0; c < d->rec.count(); ++c) {
+        if (d->rec.field(c).isAutoValue()) {
+            d->autoColumn = d->rec.fieldName(c);
+            break;
+        }
+    }
 }
 
 /*!
@@ -368,8 +358,8 @@ QString QSqlTableModel::tableName() const
 
 /*!
     Populates the model with data from the table that was set via setTable(), using the
-    specified filter and sort condition, and returns true if successful; otherwise
-    returns false.
+    specified filter and sort condition, and returns \c true if successful; otherwise
+    returns \c false.
 
     \note Calling select() will revert any unsubmitted changes and remove any inserted columns.
 
@@ -406,7 +396,7 @@ bool QSqlTableModel::select()
     on primary key values. Without a primary key, all column values must match. If
     no matching row is found, the model will show an empty row.
 
-    Returns true if successful; otherwise returns false.
+    Returns \c true if successful; otherwise returns \c false.
 
     \sa select()
 */
@@ -422,7 +412,7 @@ bool QSqlTableModel::selectRow(int row)
     const QString table_filter = d->filter;
     d->filter = d->db.driver()->sqlStatement(QSqlDriver::WhereStatement,
                                               d->tableName,
-                                              d->primaryValues(row),
+                                              primaryValues(row),
                                               false);
     static const QString wh = Sql::where() + Sql::sp();
     if (d->filter.startsWith(wh, Qt::CaseInsensitive))
@@ -461,9 +451,10 @@ bool QSqlTableModel::selectRow(int row)
             // Look for changed values. Primary key fields are customarily first
             // and probably change less often than other fields, so start at the end.
             for (int f = curValues.count() - 1; f >= 0; --f) {
-                if (curValues.value(f) != newValues.value(f))
+                if (curValues.value(f) != newValues.value(f)) {
                     needsAddingToCache = true;
                     break;
+                }
             }
         }
     }
@@ -486,9 +477,9 @@ QVariant QSqlTableModel::data(const QModelIndex &index, int role) const
     if (!index.isValid() || (role != Qt::DisplayRole && role != Qt::EditRole))
         return QVariant();
 
-    const QSqlTableModelPrivate::ModifiedRow mrow = d->cache.value(index.row());
-    if (mrow.op() != QSqlTableModelPrivate::None)
-        return mrow.rec().value(index.column());
+    const auto it = d->cache.constFind(index.row());
+    if (it != d->cache.constEnd() && it->op() != QSqlTableModelPrivate::None)
+        return it->rec().value(index.column());
 
     return QSqlQueryModel::data(index, role);
 }
@@ -513,22 +504,23 @@ QVariant QSqlTableModel::headerData(int section, Qt::Orientation orientation, in
     \overload
     \since 5.0
 
-    Returns true if the model contains modified values that have not been
-    committed to the datase, otherwise false.
+    Returns \c true if the model contains modified values that have not been
+    committed to the database, otherwise false.
 */
 bool QSqlTableModel::isDirty() const
 {
     Q_D(const QSqlTableModel);
     QSqlTableModelPrivate::CacheMap::ConstIterator i = d->cache.constBegin();
     const QSqlTableModelPrivate::CacheMap::ConstIterator e = d->cache.constEnd();
-    for (; i != e; i++)
+    for (; i != e; ++i) {
         if (!i.value().submitted())
             return true;
+    }
     return false;
 }
 
 /*!
-    Returns true if the value at the index \a index is dirty, otherwise false.
+    Returns \c true if the value at the index \a index is dirty, otherwise false.
     Dirty values are values that were modified in the model
     but not yet written into the database.
 
@@ -540,7 +532,10 @@ bool QSqlTableModel::isDirty(const QModelIndex &index) const
     if (!index.isValid())
         return false;
 
-    const QSqlTableModelPrivate::ModifiedRow row = d->cache.value(index.row());
+    const auto it = d->cache.constFind(index.row());
+    if (it == d->cache.constEnd())
+        return false;
+    const QSqlTableModelPrivate::ModifiedRow &row = *it;
     if (row.submitted())
         return false;
 
@@ -564,11 +559,15 @@ bool QSqlTableModel::isDirty(const QModelIndex &index) const
     For OnRowChange, an index may receive a change only if no other
     row has a cached change. Changes are not submitted automatically.
 
-    Returns true if \a value is equal to the current value. However,
+    Returns \c true if \a value is equal to the current value. However,
     the value will not be submitted to the database.
 
-    Returns true if the value could be set or false on error, for
+    Returns \c true if the value could be set or false on error, for
     example if \a index is out of bounds.
+
+    Returns \c false if the role is not Qt::EditRole. To set data
+    for roles other than EditRole, either use a custom proxy model
+    or subclass QSqlTableModel.
 
     \sa editStrategy(), data(), submit(), submitAll(), revertRow()
 */
@@ -587,7 +586,10 @@ bool QSqlTableModel::setData(const QModelIndex &index, const QVariant &value, in
     if (!(flags(index) & Qt::ItemIsEditable))
         return false;
 
-    if (QSqlTableModel::data(index, role) == value)
+    const QVariant oldValue = QSqlTableModel::data(index, role);
+    if (value == oldValue
+        && value.isNull() == oldValue.isNull()
+        && d->cache.value(index.row()).op() != QSqlTableModelPrivate::Insert)
         return true;
 
     QSqlTableModelPrivate::ModifiedRow &row = d->cache[index.row()];
@@ -619,8 +621,8 @@ void QSqlTableModel::setQuery(const QSqlQuery &query)
 
 /*!
     Updates the given \a row in the currently active database table
-    with the specified \a values. Returns true if successful; otherwise
-    returns false.
+    with the specified \a values. Returns \c true if successful; otherwise
+    returns \c false.
 
     This is a low-level method that operates directly on the database
     and should not be called directly. Use setData() to update values.
@@ -639,7 +641,7 @@ bool QSqlTableModel::updateRowInTable(int row, const QSqlRecord &values)
     QSqlRecord rec(values);
     emit beforeUpdate(row, rec);
 
-    const QSqlRecord whereValues = d->primaryValues(row);
+    const QSqlRecord whereValues = primaryValues(row);
     const bool prepStatement = d->db.driver()->hasFeature(QSqlDriver::PreparedQueries);
     const QString stmt = d->db.driver()->sqlStatement(QSqlDriver::UpdateStatement, d->tableName,
                                                      rec, prepStatement);
@@ -664,7 +666,7 @@ bool QSqlTableModel::updateRowInTable(int row, const QSqlRecord &values)
     to insert values. The model will decide depending on its edit strategy
     when to modify the database.
 
-    Returns true if the values could be inserted, otherwise false.
+    Returns \c true if the values could be inserted, otherwise false.
     Error information can be retrieved with \l lastError().
 
     \sa lastError(), insertRow(), insertRows()
@@ -696,7 +698,7 @@ bool QSqlTableModel::insertRowIntoTable(const QSqlRecord &values)
     to delete values. The model will decide depending on its edit strategy
     when to modify the database.
 
-    Returns true if the row was deleted; otherwise returns false.
+    Returns \c true if the row was deleted; otherwise returns \c false.
 
     \sa removeRow(), removeRows()
 */
@@ -705,7 +707,7 @@ bool QSqlTableModel::deleteRowFromTable(int row)
     Q_D(QSqlTableModel);
     emit beforeDelete(row);
 
-    const QSqlRecord whereValues = d->primaryValues(row);
+    const QSqlRecord whereValues = primaryValues(row);
     const bool prepStatement = d->db.driver()->hasFeature(QSqlDriver::PreparedQueries);
     const QString stmt = d->db.driver()->sqlStatement(QSqlDriver::DeleteStatement,
                                                       d->tableName,
@@ -726,8 +728,8 @@ bool QSqlTableModel::deleteRowFromTable(int row)
 }
 
 /*!
-    Submits all pending changes and returns true on success.
-    Returns false on error, detailed error information can be
+    Submits all pending changes and returns \c true on success.
+    Returns \c false on error, detailed error information can be
     obtained with lastError().
 
     In OnManualSubmit, on success the model will be repopulated.
@@ -746,8 +748,9 @@ bool QSqlTableModel::submitAll()
 
     bool success = true;
 
-    foreach (int row, d->cache.keys()) {
-        // be sure cache *still* contains the row since overriden selectRow() could have called select()
+    const auto cachedKeys = d->cache.keys();
+    for (int row : cachedKeys) {
+        // be sure cache *still* contains the row since overridden selectRow() could have called select()
         QSqlTableModelPrivate::CacheMap::iterator it = d->cache.find(row);
         if (it == d->cache.end())
             continue;
@@ -772,6 +775,11 @@ bool QSqlTableModel::submitAll()
         }
 
         if (success) {
+            if (d->strategy != OnManualSubmit && mrow.op() == QSqlTableModelPrivate::Insert) {
+                int c = mrow.rec().indexOf(d->autoColumn);
+                if (c != -1 && !mrow.rec().isGenerated(c))
+                    mrow.setValue(c, d->editQuery.lastInsertId());
+            }
             mrow.setSubmitted();
             if (d->strategy != OnManualSubmit)
                 success = selectRow(row);
@@ -800,7 +808,7 @@ bool QSqlTableModel::submitAll()
     Use submitAll() to submit all pending changes for the
     OnManualSubmit strategy.
 
-    Returns true on success; otherwise returns false. Use lastError()
+    Returns \c true on success; otherwise returns \c false. Use lastError()
     to query detailed error information.
 
     Does not automatically repopulate the model. Submitted rows are
@@ -821,7 +829,8 @@ bool QSqlTableModel::submit()
     user canceled editing the current row.
 
     Reverts the changes if the model's strategy is set to
-    OnRowChange. Does nothing for the other edit strategies.
+    OnRowChange or OnFieldChange. Does nothing for the OnManualSubmit
+    strategy.
 
     Use revertAll() to revert all pending changes for the
     OnManualSubmit strategy or revertRow() to revert a specific row.
@@ -831,7 +840,7 @@ bool QSqlTableModel::submit()
 void QSqlTableModel::revert()
 {
     Q_D(QSqlTableModel);
-    if (d->strategy == OnRowChange)
+    if (d->strategy == OnRowChange || d->strategy == OnFieldChange)
         revertAll();
 }
 
@@ -934,7 +943,7 @@ void QSqlTableModel::setPrimaryKey(const QSqlIndex &key)
 }
 
 /*!
-    Returns a pointer to the used QSqlDatabase or 0 if no database was set.
+    Returns the model's database connection.
 */
 QSqlDatabase QSqlTableModel::database() const
 {
@@ -984,8 +993,8 @@ QString QSqlTableModel::orderByClause() const
 
     //we can safely escape the field because it would have been obtained from the database
     //and have the correct case
-    QString field = d->db.driver()->escapeIdentifier(f.name(), QSqlDriver::FieldName);
-    field.prepend(QLatin1Char('.')).prepend(d->tableName);
+    QString field = d->tableName + QLatin1Char('.')
+            + d->db.driver()->escapeIdentifier(f.name(), QSqlDriver::FieldName);
     field = d->sortOrder == Qt::AscendingOrder ? Sql::asc(field) : Sql::desc(field);
     return Sql::orderBy(field);
 }
@@ -1038,7 +1047,7 @@ QString QSqlTableModel::selectStatement() const
     index \a column.
 
     Returns if the columns were successfully removed; otherwise
-    returns false.
+    returns \c false.
 
     \sa removeRows()
 */
@@ -1077,8 +1086,8 @@ bool QSqlTableModel::removeColumns(int column, int count, const QModelIndex &par
     signal is emitted.
 
     If row < 0 or row + count > rowCount(), no action is taken and
-    false is returned. Returns true if all rows could be removed;
-    otherwise returns false. Detailed database error information
+    false is returned. Returns \c true if all rows could be removed;
+    otherwise returns \c false. Detailed database error information
     can be retrieved using lastError().
 
     \sa removeColumns(), insertRows()
@@ -1135,8 +1144,8 @@ bool QSqlTableModel::removeRows(int row, int count, const QModelIndex &parent)
 
     Does not submit rows, regardless of edit strategy.
 
-    Returns false if the parameters are out of bounds or the row cannot be
-    inserted; otherwise returns true.
+    Returns \c false if the parameters are out of bounds or the row cannot be
+    inserted; otherwise returns \c true.
 
     \sa primeInsert(), insertRecord()
 */
@@ -1182,7 +1191,7 @@ bool QSqlTableModel::insertRows(int row, int count, const QModelIndex &parent)
     the record will be appended to the end. Calls insertRows() and
     setRecord() internally.
 
-    Returns true if the record could be inserted, otherwise false.
+    Returns \c true if the record could be inserted, otherwise false.
 
     Changes are submitted immediately for OnFieldChange and
     OnRowChange. Failure does not leave a new row in the model.
@@ -1229,7 +1238,8 @@ int QSqlTableModel::rowCount(const QModelIndex &parent) const
 QModelIndex QSqlTableModel::indexInQuery(const QModelIndex &item) const
 {
     Q_D(const QSqlTableModel);
-    if (d->cache.value(item.row()).insert())
+    const auto it = d->cache.constFind(item.row());
+    if (it != d->cache.constEnd() && it->insert())
         return QModelIndex();
 
     const int rowOffset = d->insertCount(item.row());
@@ -1272,8 +1282,10 @@ void QSqlTableModel::setFilter(const QString &filter)
 void QSqlTableModel::clear()
 {
     Q_D(QSqlTableModel);
+    beginResetModel();
     d->clear();
     QSqlQueryModel::clear();
+    endResetModel();
 }
 
 /*! \reimp
@@ -1312,6 +1324,14 @@ Qt::ItemFlags QSqlTableModel::flags(const QModelIndex &index) const
         return QSqlQueryModel::flags(index) | Qt::ItemIsEditable;
 }
 
+/*!
+    This is an overloaded function.
+
+    It returns an empty record, having only the field names. This function can be used to
+    retrieve the field names of a record.
+
+    \sa QSqlRecord::isEmpty()
+*/
 QSqlRecord QSqlTableModel::record() const
 {
     return QSqlQueryModel::record();
@@ -1352,19 +1372,19 @@ QSqlRecord QSqlTableModel::record(int row) const
     target fields are mapped by field name, not by position in
     the record.
 
-    Note that the generated flags in \a values are preserved
-    and determine whether the corresponding fields are used when
-    changes are submitted to the database. The caller should
-    remember to set the generated flag to FALSE for fields
-    where the database is meant to supply the value, such as an
-    automatically incremented ID.
+    Note that the generated flags in \a values are preserved to
+    determine whether the corresponding fields are used when changes
+    are submitted to the database. By default, it is set to \c true
+    for all fields in a QSqlRecord. You must set the flag to \c false
+    using \l{QSqlRecord::}{setGenerated}(false) for any value in
+    \a values, to save changes back to the database.
 
     For edit strategies OnFieldChange and OnRowChange, a row may
     receive a change only if no other row has a cached change.
     Changes are submitted immediately. Submitted changes are not
     reverted upon failure.
 
-    Returns true if all the values could be set; otherwise returns
+    Returns \c true if all the values could be set; otherwise returns
     false.
 
     \sa record(), editStrategy()
@@ -1418,6 +1438,26 @@ bool QSqlTableModel::setRecord(int row, const QSqlRecord &values)
         return submit();
 
     return true;
+}
+
+/*!
+    \since 5.1
+    Returns a record containing the fields represented in the primary key set to the values
+    at \a row. If no primary key is defined, the returned record will contain all fields.
+
+    \sa primaryKey()
+*/
+QSqlRecord QSqlTableModel::primaryValues(int row) const
+{
+    Q_D(const QSqlTableModel);
+
+    const QSqlRecord &pIndex = d->primaryIndex.isEmpty() ? d->rec : d->primaryIndex;
+
+    QSqlTableModelPrivate::ModifiedRow mr = d->cache.value(row);
+    if (mr.op() != QSqlTableModelPrivate::None)
+        return mr.primaryValues(pIndex);
+    else
+        return QSqlQueryModel::record(row).keyValues(pIndex);
 }
 
 QT_END_NAMESPACE

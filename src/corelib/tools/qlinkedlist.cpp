@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -120,12 +118,21 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa QLinkedListIterator, QMutableLinkedListIterator, QList, QVector
 */
 
-/*! \fn QLinkedList::QLinkedList()
+/*! \fn template <class T> QLinkedList<T>::QLinkedList()
 
     Constructs an empty list.
 */
 
-/*! \fn QLinkedList::QLinkedList(const QLinkedList<T> &other)
+/*!
+    \fn template <class T> QLinkedList<T>::QLinkedList(QLinkedList<T> &&other)
+
+    Move-constructs a QLinkedList instance, making it point at the same
+    object that \a other was pointing to.
+
+    \since 5.2
+*/
+
+/*! \fn template <class T> QLinkedList<T>::QLinkedList(const QLinkedList<T> &other)
 
     Constructs a copy of \a other.
 
@@ -137,28 +144,37 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator=()
 */
 
-/*! \fn QLinkedList::~QLinkedList()
+/*! \fn template <class T> QLinkedList<T>::QLinkedList(std::initializer_list<T> list)
+    \since 5.2
+
+    Constructs a list from the std::initializer_list specified by \a list.
+
+    This constructor is only enabled if the compiler supports C++11
+    initializer lists.
+*/
+
+/*! \fn template <class T> QLinkedList<T>::~QLinkedList()
 
     Destroys the list. References to the values in the list, and all
     iterators over this list, become invalid.
 */
 
-/*! \fn QLinkedList<T> &QLinkedList::operator=(const QLinkedList<T> &other)
+/*! \fn template <class T> QLinkedList<T> &QLinkedList<T>::operator=(const QLinkedList<T> &other)
 
     Assigns \a other to this list and returns a reference to this
     list.
 */
 
-/*! \fn void QLinkedList::swap(QLinkedList<T> &other)
+/*! \fn template <class T> void QLinkedList<T>::swap(QLinkedList<T> &other)
     \since 4.8
 
     Swaps list \a other with this list. This operation is very
     fast and never fails.
 */
 
-/*! \fn bool QLinkedList::operator==(const QLinkedList<T> &other) const
+/*! \fn template <class T> bool QLinkedList<T>::operator==(const QLinkedList<T> &other) const
 
-    Returns true if \a other is equal to this list; otherwise returns
+    Returns \c true if \a other is equal to this list; otherwise returns
     false.
 
     Two lists are considered equal if they contain the same values in
@@ -170,10 +186,10 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator!=()
 */
 
-/*! \fn bool QLinkedList::operator!=(const QLinkedList<T> &other) const
+/*! \fn template <class T> bool QLinkedList<T>::operator!=(const QLinkedList<T> &other) const
 
-    Returns true if \a other is not equal to this list; otherwise
-    returns false.
+    Returns \c true if \a other is not equal to this list; otherwise
+    returns \c false.
 
     Two lists are considered equal if they contain the same values in
     the same order.
@@ -184,49 +200,49 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator==()
 */
 
-/*! \fn int QLinkedList::size() const
+/*! \fn template <class T> int QLinkedList<T>::size() const
 
     Returns the number of items in the list.
 
     \sa isEmpty(), count()
 */
 
-/*! \fn void QLinkedList::detach()
+/*! \fn template <class T> void QLinkedList<T>::detach()
 
     \internal
 */
 
-/*! \fn bool QLinkedList::isDetached() const
+/*! \fn template <class T> bool QLinkedList<T>::isDetached() const
 
     \internal
 */
 
-/*! \fn void QLinkedList::setSharable(bool sharable)
+/*! \fn template <class T> void QLinkedList<T>::setSharable(bool sharable)
 
     \internal
 */
 
-/*! \fn bool QLinkedList::isSharedWith(const QLinkedList<T> &other) const
+/*! \fn template <class T> bool QLinkedList<T>::isSharedWith(const QLinkedList<T> &other) const
 
     \internal
 */
 
-/*! \fn bool QLinkedList::isEmpty() const
+/*! \fn template <class T> bool QLinkedList<T>::isEmpty() const
 
-    Returns true if the list contains no items; otherwise returns
+    Returns \c true if the list contains no items; otherwise returns
     false.
 
     \sa size()
 */
 
-/*! \fn void QLinkedList::clear()
+/*! \fn template <class T> void QLinkedList<T>::clear()
 
     Removes all the items in the list.
 
     \sa removeAll()
 */
 
-/*! \fn void QLinkedList::append(const T &value)
+/*! \fn template <class T> void QLinkedList<T>::append(const T &value)
 
     Inserts \a value at the end of the list.
 
@@ -238,7 +254,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator<<(), prepend(), insert()
 */
 
-/*! \fn void QLinkedList::prepend(const T &value)
+/*! \fn template <class T> void QLinkedList<T>::prepend(const T &value)
 
     Inserts \a value at the beginning of the list.
 
@@ -250,7 +266,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa append(), insert()
 */
 
-/*! \fn int QLinkedList::removeAll(const T &value)
+/*! \fn template <class T> int QLinkedList<T>::removeAll(const T &value)
 
     Removes all occurrences of \a value in the list.
 
@@ -264,11 +280,11 @@ const QLinkedListData QLinkedListData::shared_null = {
 */
 
 /*!
-    \fn bool QLinkedList::removeOne(const T &value)
+    \fn template <class T> bool QLinkedList<T>::removeOne(const T &value)
     \since 4.4
 
-    Removes the first occurrences of \a value in the list. Returns true on
-    success; otherwise returns false.
+    Removes the first occurrences of \a value in the list. Returns \c true on
+    success; otherwise returns \c false.
 
     Example:
     \snippet code/src_corelib_tools_qlinkedlist.cpp 6
@@ -279,10 +295,10 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa insert()
 */
 
-/*! \fn bool QLinkedList::contains(const T &value) const
+/*! \fn template <class T> bool QLinkedList<T>::contains(const T &value) const
 
-    Returns true if the list contains an occurrence of \a value;
-    otherwise returns false.
+    Returns \c true if the list contains an occurrence of \a value;
+    otherwise returns \c false.
 
     This function requires the value type to have an implementation of
     \c operator==().
@@ -290,7 +306,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa QLinkedListIterator::findNext(), QLinkedListIterator::findPrevious()
 */
 
-/*! \fn int QLinkedList::count(const T &value) const
+/*! \fn template <class T> int QLinkedList<T>::count(const T &value) const
 
     Returns the number of occurrences of \a value in the list.
 
@@ -300,85 +316,131 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa contains()
 */
 
-/*! \fn bool QLinkedList::startsWith(const T &value) const
+/*! \fn template <class T> bool QLinkedList<T>::startsWith(const T &value) const
     \since 4.5
 
-    Returns true if the list is not empty and its first
-    item is equal to \a value; otherwise returns false.
+    Returns \c true if the list is not empty and its first
+    item is equal to \a value; otherwise returns \c false.
 
     \sa isEmpty(), first()
 */
 
-/*! \fn bool QLinkedList::endsWith(const T &value) const
+/*! \fn template <class T> bool QLinkedList<T>::endsWith(const T &value) const
     \since 4.5
 
-    Returns true if the list is not empty and its last
-    item is equal to \a value; otherwise returns false.
+    Returns \c true if the list is not empty and its last
+    item is equal to \a value; otherwise returns \c false.
 
     \sa isEmpty(), last()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::begin()
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::begin()
 
-    Returns an \l{STL-style iterator} pointing to the first item in
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the first item in
     the list.
 
     \sa constBegin(), end()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::begin() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::begin() const
 
     \overload
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::cbegin() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::cbegin() const
     \since 5.0
 
-    Returns a const \l{STL-style iterator} pointing to the first item
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first item
     in the list.
 
     \sa begin(), cend()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::constBegin() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::constBegin() const
 
-    Returns a const \l{STL-style iterator} pointing to the first item
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first item
     in the list.
 
     \sa begin(), constEnd()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::end()
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::end()
 
-    Returns an \l{STL-style iterator} pointing to the imaginary item
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the imaginary item
     after the last item in the list.
 
     \sa begin(), constEnd()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::end() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::end() const
 
     \overload
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::cend() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::cend() const
     \since 5.0
 
-    Returns a const \l{STL-style iterator} pointing to the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
     item after the last item in the list.
 
     \sa cbegin(), end()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::constEnd() const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::constEnd() const
 
-    Returns a const \l{STL-style iterator} pointing to the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
     item after the last item in the list.
 
     \sa constBegin(), end()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::insert(iterator before, const T &value)
+/*! \fn template <class T> QLinkedList<T>::reverse_iterator QLinkedList<T>::rbegin()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    item in the list, in reverse order.
+
+    \sa begin(), crbegin(), rend()
+*/
+
+/*! \fn template <class T> QLinkedList<T>::const_reverse_iterator QLinkedList<T>::rbegin() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn template <class T> QLinkedList<T>::const_reverse_iterator QLinkedList<T>::crbegin() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to the first
+    item in the list, in reverse order.
+
+    \sa begin(), rbegin(), rend()
+*/
+
+/*! \fn template <class T> QLinkedList<T>::reverse_iterator QLinkedList<T>::rend()
+    \since 5.6
+
+    Returns a \l{STL-style iterators}{STL-style} reverse iterator pointing to one past
+    the last item in the list, in reverse order.
+
+    \sa end(), crend(), rbegin()
+*/
+
+/*! \fn template <class T> QLinkedList<T>::const_reverse_iterator QLinkedList<T>::rend() const
+    \since 5.6
+    \overload
+*/
+
+/*! \fn template <class T> QLinkedList<T>::const_reverse_iterator QLinkedList<T>::crend() const
+    \since 5.6
+
+    Returns a const \l{STL-style iterators}{STL-style} reverse iterator pointing to one
+    past the last item in the list, in reverse order.
+
+    \sa end(), rend(), rbegin()
+*/
+
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::insert(iterator before, const T &value)
 
     Inserts \a value in front of the item pointed to by the iterator
     \a before. Returns an iterator pointing at the inserted item.
@@ -386,7 +448,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa erase()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::erase(iterator pos)
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::erase(iterator pos)
 
     Removes the item pointed to by the iterator \a pos from the list,
     and returns an iterator to the next item in the list (which may be
@@ -395,7 +457,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa insert()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::erase(iterator begin, iterator end)
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::erase(iterator begin, iterator end)
 
     \overload
 
@@ -411,6 +473,38 @@ const QLinkedListData QLinkedListData::shared_null = {
 /*! \typedef QLinkedList::ConstIterator
 
     Qt-style synonym for QLinkedList::const_iterator.
+*/
+
+/*! \typedef QLinkedList::reverse_iterator
+    \since 5.6
+
+    The QLinkedList::reverse_iterator typedef provides an STL-style non-const
+    reverse iterator for QLinkedList.
+
+    It is simply a typedef for \c{std::reverse_iterator<QLinkedList::iterator>}.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
+
+    \sa QLinkedList::rbegin(), QLinkedList::rend(), QLinkedList::const_reverse_iterator, QLinkedList::iterator
+*/
+
+/*! \typedef QLinkedList::const_reverse_iterator
+    \since 5.6
+
+    The QLinkedList::const_reverse_iterator typedef provides an STL-style const
+    reverse iterator for QLinkedList.
+
+    It is simply a typedef for \c{std::reverse_iterator<QLinkedList::const_iterator>}.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
+
+    \sa QLinkedList::rbegin(), QLinkedList::rend(), QLinkedList::reverse_iterator, QLinkedList::const_iterator
 */
 
 /*!
@@ -455,12 +549,12 @@ const QLinkedListData QLinkedListData::shared_null = {
     Typedef for ptrdiff_t. Provided for STL compatibility.
 */
 
-/*! \fn int QLinkedList::count() const
+/*! \fn template <class T> int QLinkedList<T>::count() const
 
     Same as size().
 */
 
-/*! \fn T& QLinkedList::first()
+/*! \fn template <class T> T& QLinkedList<T>::first()
 
     Returns a reference to the first item in the list. This function
     assumes that the list isn't empty.
@@ -468,12 +562,12 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa last(), isEmpty()
 */
 
-/*! \fn const T& QLinkedList::first() const
+/*! \fn template <class T> const T& QLinkedList<T>::first() const
 
     \overload
 */
 
-/*! \fn T& QLinkedList::last()
+/*! \fn template <class T> T& QLinkedList<T>::last()
 
     Returns a reference to the last item in the list. This function
     assumes that the list isn't empty.
@@ -481,12 +575,12 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa first(), isEmpty()
 */
 
-/*! \fn const T& QLinkedList::last() const
+/*! \fn template <class T> const T& QLinkedList<T>::last() const
 
     \overload
 */
 
-/*! \fn void QLinkedList::removeFirst()
+/*! \fn template <class T> void QLinkedList<T>::removeFirst()
 
     Removes the first item in the list.
 
@@ -495,14 +589,14 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa removeLast(), erase()
 */
 
-/*! \fn void QLinkedList::removeLast()
+/*! \fn template <class T> void QLinkedList<T>::removeLast()
 
     Removes the last item in the list.
 
     \sa removeFirst(), erase()
 */
 
-/*! \fn T QLinkedList::takeFirst()
+/*! \fn template <class T> T QLinkedList<T>::takeFirst()
 
     Removes the first item in the list and returns it.
 
@@ -512,7 +606,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa takeLast(), removeFirst()
 */
 
-/*! \fn T QLinkedList::takeLast()
+/*! \fn template <class T> T QLinkedList<T>::takeLast()
 
     Removes the last item in the list and returns it.
 
@@ -522,59 +616,59 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa takeFirst(), removeLast()
 */
 
-/*! \fn void QLinkedList::push_back(const T &value)
+/*! \fn template <class T> void QLinkedList<T>::push_back(const T &value)
 
     This function is provided for STL compatibility. It is equivalent
     to append(\a value).
 */
 
-/*! \fn void QLinkedList::push_front(const T &value)
+/*! \fn template <class T> void QLinkedList<T>::push_front(const T &value)
 
     This function is provided for STL compatibility. It is equivalent
     to prepend(\a value).
 */
 
-/*! \fn T& QLinkedList::front()
+/*! \fn template <class T> T& QLinkedList<T>::front()
 
     This function is provided for STL compatibility. It is equivalent
     to first().
 */
 
-/*! \fn const T& QLinkedList::front() const
+/*! \fn template <class T> const T& QLinkedList<T>::front() const
 
     \overload
 */
 
-/*! \fn T& QLinkedList::back()
+/*! \fn template <class T> T& QLinkedList<T>::back()
 
     This function is provided for STL compatibility. It is equivalent
     to last().
 */
 
-/*! \fn const T& QLinkedList::back() const
+/*! \fn template <class T> const T& QLinkedList<T>::back() const
 
     \overload
 */
 
-/*! \fn void QLinkedList::pop_front()
+/*! \fn template <class T> void QLinkedList<T>::pop_front()
 
     This function is provided for STL compatibility. It is equivalent
     to removeFirst().
 */
 
-/*! \fn void QLinkedList::pop_back()
+/*! \fn template <class T> void QLinkedList<T>::pop_back()
 
     This function is provided for STL compatibility. It is equivalent
     to removeLast().
 */
 
-/*! \fn bool QLinkedList::empty() const
+/*! \fn template <class T> bool QLinkedList<T>::empty() const
 
     This function is provided for STL compatibility. It is equivalent
-    to isEmpty() and returns true if the list is empty.
+    to isEmpty() and returns \c true if the list is empty.
 */
 
-/*! \fn QLinkedList<T> &QLinkedList::operator+=(const QLinkedList<T> &other)
+/*! \fn template <class T> QLinkedList<T> &QLinkedList<T>::operator+=(const QLinkedList<T> &other)
 
     Appends the items of the \a other list to this list and returns a
     reference to this list.
@@ -582,14 +676,14 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+(), append()
 */
 
-/*! \fn void QLinkedList::operator+=(const T &value)
+/*! \fn template <class T> void QLinkedList<T>::operator+=(const T &value)
 
     \overload
 
     Appends \a value to the list.
 */
 
-/*! \fn QLinkedList<T> QLinkedList::operator+(const QLinkedList<T> &other) const
+/*! \fn template <class T> QLinkedList<T> QLinkedList<T>::operator+(const QLinkedList<T> &other) const
 
     Returns a list that contains all the items in this list followed
     by all the items in the \a other list.
@@ -597,7 +691,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+=()
 */
 
-/*! \fn QLinkedList<T> &QLinkedList::operator<<(const QLinkedList<T> &other)
+/*! \fn template <class T> QLinkedList<T> &QLinkedList<T>::operator<<(const QLinkedList<T> &other)
 
     Appends the items of the \a other list to this list and returns a
     reference to this list.
@@ -605,7 +699,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+=(), append()
 */
 
-/*! \fn QLinkedList<T> &QLinkedList::operator<<(const T &value)
+/*! \fn template <class T> QLinkedList<T> &QLinkedList<T>::operator<<(const T &value)
 
     \overload
 
@@ -673,14 +767,17 @@ const QLinkedListData QLinkedListData::shared_null = {
     Multiple iterators can be used on the same list. If you add items
     to the list, existing iterators will remain valid. If you remove
     items from the list, iterators that point to the removed items
-    will become dangling iterators. However, because of how \l{implicit
-    sharing} works, you must not take a copy of a container while
-    iterators are active on that container.
+    will become dangling iterators.
+
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
 
     \sa QLinkedList::const_iterator, QMutableLinkedListIterator
 */
 
-/*! \fn QLinkedList::iterator::iterator()
+/*! \fn template <class T> QLinkedList<T>::iterator::iterator()
 
     Constructs an uninitialized iterator.
 
@@ -691,7 +788,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa QLinkedList::begin(), QLinkedList::end()
 */
 
-/*! \fn QLinkedList::iterator::iterator(Node *node)
+/*! \fn template <class T> QLinkedList<T>::iterator::iterator(Node *node)
 
     \internal
 */
@@ -721,17 +818,25 @@ const QLinkedListData QLinkedListData::shared_null = {
     \internal
 */
 
-/*! \fn QLinkedList::iterator::iterator(const iterator &other)
+/*! \fn template <class T> QLinkedList<T>::iterator::iterator(const iterator &other)
 
     Constructs a copy of \a other.
 */
 
-/*! \fn QLinkedList::iterator &QLinkedList::iterator::operator=(const iterator &other)
+/*! \fn template <class T> QLinkedList<T>::iterator &QLinkedList<T>::iterator::operator=(const iterator &other)
 
     Assigns \a other to this iterator.
 */
 
-/*! \fn T &QLinkedList::iterator::operator*() const
+/*!
+    \fn template <class T> QLinkedList<T> &QLinkedList<T>::operator=(QLinkedList<T> &&other)
+
+    Move-assigns \a other to this QLinkedList instance.
+
+    \since 5.2
+*/
+
+/*! \fn template <class T> T &QLinkedList<T>::iterator::operator*() const
 
     Returns a modifiable reference to the current item.
 
@@ -743,7 +848,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator->()
 */
 
-/*! \fn T *QLinkedList::iterator::operator->() const
+/*! \fn template <class T> T *QLinkedList<T>::iterator::operator->() const
 
     Returns a pointer to the current item.
 
@@ -751,26 +856,26 @@ const QLinkedListData QLinkedListData::shared_null = {
 */
 
 /*!
-    \fn bool QLinkedList::iterator::operator==(const iterator &other) const
-    \fn bool QLinkedList::iterator::operator==(const const_iterator &other) const
+    \fn template <class T> bool QLinkedList<T>::iterator::operator==(const iterator &other) const
+    \fn template <class T> bool QLinkedList<T>::iterator::operator==(const const_iterator &other) const
 
-    Returns true if \a other points to the same item as this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to the same item as this
+    iterator; otherwise returns \c false.
 
     \sa operator!=()
 */
 
 /*!
-    \fn bool QLinkedList::iterator::operator!=(const iterator &other) const
-    \fn bool QLinkedList::iterator::operator!=(const const_iterator &other) const
+    \fn template <class T> bool QLinkedList<T>::iterator::operator!=(const iterator &other) const
+    \fn template <class T> bool QLinkedList<T>::iterator::operator!=(const const_iterator &other) const
 
-    Returns true if \a other points to a different item than this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to a different item than this
+    iterator; otherwise returns \c false.
 
     \sa operator==()
 */
 
-/*! \fn QLinkedList::iterator &QLinkedList::iterator::operator++()
+/*! \fn template <class T> QLinkedList<T>::iterator &QLinkedList<T>::iterator::operator++()
 
     The prefix ++ operator (\c{++it}) advances the iterator to the
     next item in the list and returns an iterator to the new current
@@ -782,7 +887,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator--()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::iterator::operator++(int)
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::iterator::operator++(int)
 
     \overload
 
@@ -791,7 +896,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     current item.
 */
 
-/*! \fn QLinkedList::iterator &QLinkedList::iterator::operator--()
+/*! \fn template <class T> QLinkedList<T>::iterator &QLinkedList<T>::iterator::operator--()
 
     The prefix -- operator (\c{--it}) makes the preceding item
     current and returns an iterator to the new current item.
@@ -802,7 +907,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator++()
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::iterator::operator--(int)
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::iterator::operator--(int)
 
     \overload
 
@@ -810,7 +915,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     current and returns an iterator to the previously current item.
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::iterator::operator+(int j) const
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::iterator::operator+(int j) const
 
     Returns an iterator to the item at \a j positions forward from
     this iterator. (If \a j is negative, the iterator goes backward.)
@@ -821,7 +926,7 @@ const QLinkedListData QLinkedListData::shared_null = {
 
 */
 
-/*! \fn QLinkedList::iterator QLinkedList::iterator::operator-(int j) const
+/*! \fn template <class T> QLinkedList<T>::iterator QLinkedList<T>::iterator::operator-(int j) const
 
     Returns an iterator to the item at \a j positions backward from
     this iterator. (If \a j is negative, the iterator goes forward.)
@@ -831,7 +936,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+()
 */
 
-/*! \fn QLinkedList::iterator &QLinkedList::iterator::operator+=(int j)
+/*! \fn template <class T> QLinkedList<T>::iterator &QLinkedList<T>::iterator::operator+=(int j)
 
     Advances the iterator by \a j items. (If \a j is negative, the
     iterator goes backward.)
@@ -839,7 +944,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator-=(), operator+()
 */
 
-/*! \fn QLinkedList::iterator &QLinkedList::iterator::operator-=(int j)
+/*! \fn template <class T> QLinkedList<T>::iterator &QLinkedList<T>::iterator::operator-=(int j)
 
     Makes the iterator go back by \a j items. (If \a j is negative,
     the iterator goes forward.)
@@ -884,10 +989,15 @@ const QLinkedListData QLinkedListData::shared_null = {
     items from the list, iterators that point to the removed items
     will become dangling iterators.
 
+    \warning Iterators on implicitly shared containers do not work
+    exactly like STL-iterators. You should avoid copying a container
+    while iterators are active on that container. For more information,
+    read \l{Implicit sharing iterator problem}.
+
     \sa QLinkedList::iterator, QLinkedListIterator
 */
 
-/*! \fn QLinkedList::const_iterator::const_iterator()
+/*! \fn template <class T> QLinkedList<T>::const_iterator::const_iterator()
 
     Constructs an uninitialized iterator.
 
@@ -898,7 +1008,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa QLinkedList::constBegin(), QLinkedList::constEnd()
 */
 
-/*! \fn QLinkedList::const_iterator::const_iterator(Node *node)
+/*! \fn template <class T> QLinkedList<T>::const_iterator::const_iterator(Node *node)
 
     \internal
 */
@@ -928,65 +1038,64 @@ const QLinkedListData QLinkedListData::shared_null = {
     \internal
 */
 
-/*! \fn QLinkedList::const_iterator::const_iterator(const const_iterator &other)
+/*! \fn template <class T> QLinkedList<T>::const_iterator::const_iterator(const const_iterator &other)
 
     Constructs a copy of \a other.
 */
 
-/*! \fn QLinkedList::const_iterator::const_iterator(iterator other)
+/*! \fn template <class T> QLinkedList<T>::const_iterator::const_iterator(iterator other)
 
     Constructs a copy of \a other.
 */
 
-/*! \fn QLinkedList::const_iterator &QLinkedList::const_iterator::operator=( \
-            const const_iterator &other)
+/*! \fn template <class T> typename QLinkedList<T>::const_iterator &QLinkedList<T>::const_iterator::operator=(const const_iterator &other)
 
     Assigns \a other to this iterator.
 */
 
-/*! \fn const T &QLinkedList::const_iterator::operator*() const
+/*! \fn template <class T> const T &QLinkedList<T>::const_iterator::operator*() const
 
     Returns a reference to the current item.
 
     \sa operator->()
 */
 
-/*! \fn const T *QLinkedList::const_iterator::operator->() const
+/*! \fn template <class T> const T *QLinkedList<T>::const_iterator::operator->() const
 
     Returns a pointer to the current item.
 
     \sa operator*()
 */
 
-/*! \fn bool QLinkedList::const_iterator::operator==(const const_iterator &other) const
+/*! \fn template <class T> bool QLinkedList<T>::const_iterator::operator==(const const_iterator &other) const
 
-    Returns true if \a other points to the same item as this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to the same item as this
+    iterator; otherwise returns \c false.
 
     \sa operator!=()
 */
 
-/*! \fn bool QLinkedList::const_iterator::operator!=(const const_iterator &other) const
+/*! \fn template <class T> bool QLinkedList<T>::const_iterator::operator!=(const const_iterator &other) const
 
-    Returns true if \a other points to a different item than this
-    iterator; otherwise returns false.
+    Returns \c true if \a other points to a different item than this
+    iterator; otherwise returns \c false.
 
     \sa operator==()
 */
 
-/*! \fn QLinkedList::const_iterator &QLinkedList::const_iterator::operator++()
+/*! \fn template <class T> QLinkedList<T>::const_iterator &QLinkedList<T>::const_iterator::operator++()
 
     The prefix ++ operator (\c{++it}) advances the iterator to the
     next item in the list and returns an iterator to the new current
     item.
 
-    Calling this function on QLinkedList::constEnd() leads to
+    Calling this function on QLinkedList<T>::constEnd() leads to
     undefined results.
 
     \sa operator--()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::const_iterator::operator++(int)
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::const_iterator::operator++(int)
 
     \overload
 
@@ -995,7 +1104,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     current item.
 */
 
-/*! \fn QLinkedList::const_iterator &QLinkedList::const_iterator::operator--()
+/*! \fn template <class T> QLinkedList<T>::const_iterator &QLinkedList<T>::const_iterator::operator--()
 
     The prefix -- operator (\c{--it}) makes the preceding item
     current and returns an iterator to the new current item.
@@ -1006,7 +1115,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator++()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::const_iterator::operator--(int)
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::const_iterator::operator--(int)
 
     \overload
 
@@ -1014,7 +1123,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     current and returns an iterator to the previously current item.
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::const_iterator::operator+(int j) const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::const_iterator::operator+(int j) const
 
     Returns an iterator to the item at \a j positions forward from
     this iterator. (If \a j is negative, the iterator goes backward.)
@@ -1024,7 +1133,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator-()
 */
 
-/*! \fn QLinkedList::const_iterator QLinkedList::const_iterator::operator-(int j) const
+/*! \fn template <class T> QLinkedList<T>::const_iterator QLinkedList<T>::const_iterator::operator-(int j) const
 
     This function returns an iterator to the item at \a j positions backward from
     this iterator. (If \a j is negative, the iterator goes forward.)
@@ -1034,7 +1143,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+()
 */
 
-/*! \fn QLinkedList::const_iterator &QLinkedList::const_iterator::operator+=(int j)
+/*! \fn template <class T> QLinkedList<T>::const_iterator &QLinkedList<T>::const_iterator::operator+=(int j)
 
     Advances the iterator by \a j items. (If \a j is negative, the
     iterator goes backward.)
@@ -1044,7 +1153,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator-=(), operator+()
 */
 
-/*! \fn QLinkedList::const_iterator &QLinkedList::const_iterator::operator-=(int j)
+/*! \fn template <class T> QLinkedList<T>::const_iterator &QLinkedList<T>::const_iterator::operator-=(int j)
 
     Makes the iterator go back by \a j items. (If \a j is negative,
     the iterator goes forward.)
@@ -1054,7 +1163,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa operator+=(), operator-()
 */
 
-/*! \fn QDataStream &operator<<(QDataStream &out, const QLinkedList<T> &list)
+/*! \fn template <class T> QDataStream &operator<<(QDataStream &out, const QLinkedList<T> &list)
     \relates QLinkedList
 
     Writes the linked list \a list to stream \a out.
@@ -1065,7 +1174,7 @@ const QLinkedListData QLinkedListData::shared_null = {
     \sa{Serializing Qt Data Types}{Format of the QDataStream operators}
 */
 
-/*! \fn QDataStream &operator>>(QDataStream &in, QLinkedList<T> &list)
+/*! \fn template <class T> QDataStream &operator>>(QDataStream &in, QLinkedList<T> &list)
     \relates QLinkedList
 
     Reads a linked list from stream \a in into \a list.
@@ -1077,7 +1186,7 @@ const QLinkedListData QLinkedListData::shared_null = {
 
 /*!
     \since 4.1
-    \fn QLinkedList<T> QLinkedList<T>::fromStdList(const std::list<T> &list)
+    \fn template <class T> QLinkedList<T> QLinkedList<T>::fromStdList(const std::list<T> &list)
 
     Returns a QLinkedList object with the data contained in \a list.
     The order of the elements in the QLinkedList is the same as in \a
@@ -1092,7 +1201,7 @@ const QLinkedListData QLinkedListData::shared_null = {
 
 /*!
     \since 4.1
-    \fn std::list<T> QLinkedList<T>::toStdList() const
+    \fn template <class T> std::list<T> QLinkedList<T>::toStdList() const
 
     Returns a std::list object with the data contained in this
     QLinkedList. Example:

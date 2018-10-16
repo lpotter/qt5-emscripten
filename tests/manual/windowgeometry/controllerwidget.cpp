@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the examples of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -269,7 +256,7 @@ private:
 
 WidgetWindowControl::WidgetWindowControl(QWidget *w )
     : BaseWindowControl(w)
-    , m_statesControl(new WindowStatesControl(WindowStatesControl::WantVisibleCheckBox | WindowStatesControl::WantActiveCheckBox))
+    , m_statesControl(new WindowStatesControl)
 {
     setTitle(w->windowTitle());
     m_layout->addWidget(m_statesControl, 2, 0);
@@ -311,7 +298,7 @@ public:
         , m_backingStore(new QBackingStore(this))
     {
         setObjectName(QStringLiteral("window"));
-        setWindowTitle(tr("TestWindow"));
+        setTitle(tr("TestWindow"));
     }
 
 protected:
@@ -363,38 +350,38 @@ private:
     virtual QPoint objectMapToGlobal(const QObject *o, const QPoint &p) const
         { return static_cast<const QWindow *>(o)->mapToGlobal(p); }
     virtual Qt::WindowFlags objectWindowFlags(const QObject *o) const
-        { return static_cast<const QWindow *>(o)->windowFlags(); }
+        { return static_cast<const QWindow *>(o)->flags(); }
     virtual void setObjectWindowFlags(QObject *o, Qt::WindowFlags f)
-        { static_cast<QWindow *>(o)->setWindowFlags(f); }
+        { static_cast<QWindow *>(o)->setFlags(f); }
 
-    WindowStateControl *m_stateControl;
+    WindowStatesControl *m_statesControl;
 };
 
 WindowControl::WindowControl(QWindow *w )
     : BaseWindowControl(w)
-    , m_stateControl(new WindowStateControl(WindowStateControl::WantVisibleCheckBox | WindowStateControl::WantMinimizeRadioButton))
+    , m_statesControl(new WindowStatesControl)
 {
-    setTitle(w->windowTitle());
+    setTitle(w->title());
     QGroupBox *stateGroupBox = new QGroupBox(tr("State"));
     QVBoxLayout *l = new QVBoxLayout(stateGroupBox);
-    l->addWidget(m_stateControl);
+    l->addWidget(m_statesControl);
     m_layout->addWidget(stateGroupBox, 2, 0);
-    connect(m_stateControl, SIGNAL(changed()), this, SLOT(stateChanged()));
+    connect(m_statesControl, SIGNAL(changed()), this, SLOT(stateChanged()));
 }
 
 void WindowControl::refresh()
 {
     const QWindow *w = static_cast<const QWindow *>(m_object);
     BaseWindowControl::refresh();
-    m_stateControl->setVisibleValue(w->isVisible());
-    m_stateControl->setState(w->windowState());
+    m_statesControl->setVisibleValue(w->isVisible());
+    m_statesControl->setStates(w->windowStates());
 }
 
 void WindowControl::stateChanged()
 {
     QWindow *w = static_cast<QWindow *>(m_object);
-    w->setVisible(m_stateControl->visibleValue());
-    w->setWindowState(m_stateControl->state());
+    w->setVisible(m_statesControl->visibleValue());
+    w->setWindowStates(m_statesControl->states());
 }
 
 #endif
@@ -454,7 +441,7 @@ ControllerWidget::ControllerWidget(QWidget *parent)
 
 #if QT_VERSION >= 0x050000
     x += 300;
-    m_testWindow->setWindowFlags(Qt::Window | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint
+    m_testWindow->setFlags(Qt::Window | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint
                                  | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint
                                  | Qt::WindowTitleHint | Qt::WindowFullscreenButtonHint);
     m_testWindow->setFramePosition(QPoint(x, y));
@@ -467,7 +454,7 @@ ControllerWidget::ControllerWidget(QWidget *parent)
         m_testWindow->showFullScreen();
     else
         m_testWindow->show();
-    m_testWindow->setWindowTitle(tr("TestWindow"));
+    m_testWindow->setTitle(tr("TestWindow"));
 #endif
 
     QWidget *central = new QWidget ;

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,7 +50,7 @@
 
 #include <QtWidgets>
 
-#include <math.h>
+#include <cmath>
 
 #include "button.h"
 #include "calculator.h"
@@ -69,7 +79,7 @@ Calculator::Calculator(QWidget *parent)
 
 //! [4]
     for (int i = 0; i < NumDigitButtons; ++i) {
-	digitButtons[i] = createButton(QString::number(i), SLOT(digitClicked()));
+        digitButtons[i] = createButton(QString::number(i), SLOT(digitClicked()));
     }
 
     Button *pointButton = createButton(tr("."), SLOT(pointClicked()));
@@ -144,7 +154,7 @@ void Calculator::digitClicked()
 
     if (waitingForOperand) {
         display->clear();
-	waitingForOperand = false;
+        waitingForOperand = false;
     }
     display->setText(display->text() + QString::number(digitValue));
 }
@@ -164,13 +174,13 @@ void Calculator::unaryOperatorClicked()
             abortOperation();
             return;
         }
-        result = sqrt(operand);
+        result = std::sqrt(operand);
     } else if (clickedOperator == tr("x\302\262")) {
-        result = pow(operand, 2.0);
+        result = std::pow(operand, 2.0);
     } else if (clickedOperator == tr("1/x")) {
         if (operand == 0.0) {
-	    abortOperation();
-	    return;
+            abortOperation();
+            return;
         }
         result = 1.0 / operand;
     }
@@ -192,7 +202,7 @@ void Calculator::additiveOperatorClicked()
 //! [12] //! [13]
         if (!calculate(operand, pendingMultiplicativeOperator)) {
             abortOperation();
-	    return;
+            return;
         }
         display->setText(QString::number(factorSoFar));
         operand = factorSoFar;
@@ -205,7 +215,7 @@ void Calculator::additiveOperatorClicked()
 //! [14] //! [15]
         if (!calculate(operand, pendingAdditiveOperator)) {
             abortOperation();
-	    return;
+            return;
         }
         display->setText(QString::number(sumSoFar));
     } else {
@@ -229,7 +239,7 @@ void Calculator::multiplicativeOperatorClicked()
     if (!pendingMultiplicativeOperator.isEmpty()) {
         if (!calculate(operand, pendingMultiplicativeOperator)) {
             abortOperation();
-	    return;
+            return;
         }
         display->setText(QString::number(factorSoFar));
     } else {
@@ -249,7 +259,7 @@ void Calculator::equalClicked()
     if (!pendingMultiplicativeOperator.isEmpty()) {
         if (!calculate(operand, pendingMultiplicativeOperator)) {
             abortOperation();
-	    return;
+            return;
         }
         operand = factorSoFar;
         factorSoFar = 0.0;
@@ -258,7 +268,7 @@ void Calculator::equalClicked()
     if (!pendingAdditiveOperator.isEmpty()) {
         if (!calculate(operand, pendingAdditiveOperator)) {
             abortOperation();
-	    return;
+            return;
         }
         pendingAdditiveOperator.clear();
     } else {
@@ -276,7 +286,7 @@ void Calculator::pointClicked()
 {
     if (waitingForOperand)
         display->setText("0");
-    if (!display->text().contains("."))
+    if (!display->text().contains('.'))
         display->setText(display->text() + tr("."));
     waitingForOperand = false;
 }
@@ -387,9 +397,9 @@ bool Calculator::calculate(double rightOperand, const QString &pendingOperator)
     } else if (pendingOperator == tr("\303\227")) {
         factorSoFar *= rightOperand;
     } else if (pendingOperator == tr("\303\267")) {
-	if (rightOperand == 0.0)
-	    return false;
-	factorSoFar /= rightOperand;
+        if (rightOperand == 0.0)
+            return false;
+        factorSoFar /= rightOperand;
     }
     return true;
 }

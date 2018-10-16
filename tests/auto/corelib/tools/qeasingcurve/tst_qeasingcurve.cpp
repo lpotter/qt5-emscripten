@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -59,6 +46,7 @@ private slots:
     void operators();
     void properties();
     void metaTypes();
+    void propertyOrderIsNotImportant();
     void bezierSpline_data();
     void bezierSpline();
     void tcbSpline_data();
@@ -66,6 +54,7 @@ private slots:
     void testCbrtDouble();
     void testCbrtFloat();
     void cpp11();
+    void quadraticEquation();
 };
 
 void tst_QEasingCurve::type()
@@ -158,8 +147,6 @@ void tst_QEasingCurve::propertyDefaults()
 
 typedef QList<int> IntList;
 typedef QList<qreal> RealList;
-Q_DECLARE_METATYPE(IntList)
-Q_DECLARE_METATYPE(RealList)
 
 void tst_QEasingCurve::valueForProgress_data()
 {
@@ -436,7 +423,12 @@ void tst_QEasingCurve::setCustomType()
     QCOMPARE(curve.valueForProgress(0.15), 0.1);
     QCOMPARE(curve.valueForProgress(0.20), 0.2);
     QCOMPARE(curve.valueForProgress(0.25), 0.2);
+    // QTBUG-69947, MinGW 7.3 returns 0.2
+#if defined(Q_CC_MINGW)
+#if !defined(__GNUC__) || __GNUC__ != 7 || __GNUC_MINOR__ < 3
     QCOMPARE(curve.valueForProgress(0.30), 0.3);
+#endif
+#endif
     QCOMPARE(curve.valueForProgress(0.35), 0.3);
     QCOMPARE(curve.valueForProgress(0.999999), 0.9);
 
@@ -557,6 +549,25 @@ void tst_QEasingCurve::metaTypes()
     QVERIFY(QMetaType::isRegistered(QMetaType::QEasingCurve));
 
     QVERIFY(qMetaTypeId<QEasingCurve>() == QMetaType::QEasingCurve);
+}
+
+/*
+  Test to ensure that regardless of what order properties are set, they should produce the same
+  behavior.
+ */
+void tst_QEasingCurve::propertyOrderIsNotImportant()
+{
+
+    QEasingCurve c1;
+    c1.setPeriod(1);
+    c1.setType(QEasingCurve::OutSine);
+    QVERIFY(c1.valueForProgress(0.75) > 0.9);
+
+    QEasingCurve c2;
+    c2.setType(QEasingCurve::OutSine);
+    c2.setPeriod(1);
+
+    QCOMPARE(c1.valueForProgress(0.75), c2.valueForProgress(0.75));
 }
 
 void tst_QEasingCurve::bezierSpline_data()
@@ -729,16 +740,18 @@ double static inline _fast_cbrt(double d)
 
 void tst_QEasingCurve::testCbrtDouble()
 {
-    const qreal errorBound = 0.0001;
+    const double errorBound = 0.0001;
 
     for (int i = 0; i < 100000; i++) {
         double d = double(i) / 1000.0;
         double t = _fast_cbrt(d);
 
         const double t_cubic = t * t * t;
-        t = t * (t_cubic + d + d) / (t_cubic + t_cubic + d);
+        const double f = t_cubic + t_cubic + d;
+        if (f != 0.0)
+            t = t * (t_cubic + d + d) / f;
 
-        double expected = pow(d, 1.0/3.0);
+        double expected = std::pow(d, 1.0/3.0);
 
         const qreal error = qAbs(expected - t);
 
@@ -753,16 +766,18 @@ void tst_QEasingCurve::testCbrtDouble()
 
 void tst_QEasingCurve::testCbrtFloat()
 {
-    const qreal errorBound = 0.0005;
+    const float errorBound = 0.0005f;
 
-    for (int i = 1; i < 100000; i++) {
+    for (int i = 0; i < 100000; i++) {
         float f = float(i) / 1000.0f;
         float t = _fast_cbrt(f);
 
         const float t_cubic = t * t * t;
-        t = t * (t_cubic + f + f) / (t_cubic + t_cubic + f);
+        const float fac = t_cubic + t_cubic + f;
+        if (fac != 0.0f)
+            t = t * (t_cubic + f + f) / fac;
 
-        float expected = pow(f, float(1.0/3.0));
+        float expected = std::pow(f, float(1.0/3.0));
 
         const qreal error = qAbs(expected - t);
 
@@ -793,6 +808,75 @@ void tst_QEasingCurve::cpp11()
     QCOMPARE( ec.type(), type );
     }
 #endif
+}
+
+void tst_QEasingCurve::quadraticEquation() {
+    // We find the value for a given time by solving a cubic equation.
+    //     ax^3 + bx^2 + cx + d = 0
+    // However, the solver also needs to take care of cases where a = 0,
+    // b = 0 or c = 0, and the equation becomes quadratic, linear or invalid.
+    // A naive cubic solver might divide by zero and return nan, even
+    // when the solution is a real number.
+    // This test should triggers those cases.
+
+    {
+        // If the control points are spaced 1/3 apart of the distance of the
+        // start- and endpoint, the equation becomes linear.
+        QEasingCurve test(QEasingCurve::BezierSpline);
+        const qreal p1 = 1.0 / 3.0;
+        const qreal p2 = 1.0 - 1.0 / 3.0;
+        const qreal p3 = 1.0;
+
+        test.addCubicBezierSegment(QPointF(p1, 0.0), QPointF(p2, 1.0), QPointF(p3, 1.0));
+        QVERIFY(qAbs(test.valueForProgress(0.25) - 0.15625) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.5) - 0.5) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.75) - 0.84375) < 1e-6);
+    }
+
+    {
+        // If both the start point and the first control point
+        // are placed a 0.0, and the second control point is
+        // placed at 1/3, we get a case where a = 0 and b != 0
+        // i.e. a quadratic equation.
+        QEasingCurve test(QEasingCurve::BezierSpline);
+        const qreal p1 = 0.0;
+        const qreal p2 = 1.0 / 3.0;
+        const qreal p3 = 1.0;
+        test.addCubicBezierSegment(QPointF(p1, 0.0), QPointF(p2, 1.0), QPointF(p3, 1.0));
+        QVERIFY(qAbs(test.valueForProgress(0.25) - 0.5) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.5) - 0.792893) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.75) - 0.950962) < 1e-6);
+    }
+
+    {
+        // If both the start point and the first control point
+        // are placed a 0.0, and the second control point is
+        // placed close to 1/3, we get a case where a = ~0 and b != 0.
+        // It's not truly a quadratic equation, but should be treated
+        // as one, because it causes some cubic solvers to fail.
+        QEasingCurve test(QEasingCurve::BezierSpline);
+        const qreal p1 = 0.0;
+        const qreal p2 = 1.0 / 3.0 + 1e-6;
+        const qreal p3 = 1.0;
+        test.addCubicBezierSegment(QPointF(p1, 0.0), QPointF(p2, 1.0), QPointF(p3, 1.0));
+        QVERIFY(qAbs(test.valueForProgress(0.25) - 0.499999) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.5) - 0.792892) < 1e-6);
+        QVERIFY(qAbs(test.valueForProgress(0.75) - 0.950961) < 1e-6);
+    }
+
+    {
+        // A bad case, where the segment is of zero length.
+        // However, it might still happen in user code,
+        // and we should return a sensible answer.
+        QEasingCurve test(QEasingCurve::BezierSpline);
+        const qreal p0 = 0.0;
+        const qreal p1 = p0;
+        const qreal p2 = p0;
+        const qreal p3 = p0;
+        test.addCubicBezierSegment(QPointF(p1, 0.0), QPointF(p2, 1.0), QPointF(p3, 1.0));
+        test.addCubicBezierSegment(QPointF(p3, 1.0), QPointF(1.0, 1.0), QPointF(1.0, 1.0));
+        QCOMPARE(test.valueForProgress(0.0), 0.0);
+    }
 }
 
 QTEST_MAIN(tst_QEasingCurve)

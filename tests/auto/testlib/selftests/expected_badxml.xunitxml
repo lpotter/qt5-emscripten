@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite errors="12" failures="5" tests="5" name="tst_BadXml">
+<testsuite errors="13" failures="5" tests="6" name="tst_BadXml">
   <properties>
     <property value="@INSERT_QT_VERSION_HERE@" name="QTestVersion"/>
     <property value="@INSERT_QT_VERSION_HERE@" name="QtVersion"/>
+    <property value="" name="QtBuild"/>
   </properties>
   <testcase result="pass" name="initTestCase"/>
   <testcase result="fail" name="badDataTag">
@@ -28,6 +29,9 @@
   <testcase result="fail" name="failWithNoFile">
     <failure message="failure message" result="fail"/>
   </testcase>
+  <testcase result="pass" name="encoding">
+    <!-- message="&quot;Ülrich Ümläut&quot;" type="qdebug" -->
+  </testcase>
   <testcase result="pass" name="cleanupTestCase"/>
   <system-err>
 <![CDATA[a message]]>
@@ -42,5 +46,6 @@
 <![CDATA[quotes " text" more text]]>
 <![CDATA[xml close > open < tags < text]]>
 <![CDATA[all > " mixed ]]]><![CDATA[]> up > " in < the ]]]><![CDATA[]> hopes < of triggering "< ]]]><![CDATA[]> bugs]]>
+<![CDATA["Ülrich Ümläut"]]>
   </system-err>
 </testsuite>

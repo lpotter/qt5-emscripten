@@ -1,7 +1,6 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_lancelot
-QT += xml widgets testlib
+QT += testlib gui-private
 
 SOURCES += tst_lancelot.cpp \
            paintcommands.cpp
@@ -11,4 +10,3 @@ RESOURCES += images.qrc
 include($$PWD/../../../baselineserver/shared/qbaselinetest.pri)
 
 TESTDATA += scripts/*
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

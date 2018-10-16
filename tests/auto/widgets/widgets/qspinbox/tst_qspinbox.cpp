@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,6 +50,9 @@
 #include <QKeySequence>
 #include <QStackedWidget>
 #include <QDebug>
+#include <QStyleOptionSpinBox>
+#include <QStyle>
+#include <QProxyStyle>
 
 class SpinBox : public QSpinBox
 {
@@ -82,8 +72,58 @@ public:
     {
         return QSpinBox::valueFromText(text);
     }
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QWheelEvent *event)
+    {
+        QSpinBox::wheelEvent(event);
+    }
+#endif
+    void initStyleOption(QStyleOptionSpinBox *option) const
+    {
+        QSpinBox::initStyleOption(option);
+    }
 
     QLineEdit *lineEdit() const { return QSpinBox::lineEdit(); }
+};
+
+class PressAndHoldStyle : public QProxyStyle
+{
+    Q_OBJECT
+public:
+    using QProxyStyle::QProxyStyle;
+
+    int styleHint(QStyle::StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr, QStyleHintReturn *returnData = nullptr) const override
+    {
+        switch (hint) {
+        case QStyle::SH_SpinBox_ClickAutoRepeatRate:
+            return 5;
+        case QStyle::SH_SpinBox_ClickAutoRepeatThreshold:
+            return 10;
+        default:
+            return QProxyStyle::styleHint(hint, option, widget, returnData);
+        }
+    }
+};
+
+class StepModifierStyle : public QProxyStyle
+{
+    Q_OBJECT
+public:
+    using QProxyStyle::QProxyStyle;
+
+    int styleHint(QStyle::StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr, QStyleHintReturn *returnData = nullptr) const override
+    {
+        switch (hint) {
+        case QStyle::SH_SpinBox_StepModifier:
+            return stepModifier;
+        default:
+            return QProxyStyle::styleHint(hint, option, widget, returnData);
+        }
+    }
+
+    Qt::KeyboardModifier stepModifier = Qt::ControlModifier;
 };
 
 class tst_QSpinBox : public QObject
@@ -97,6 +137,9 @@ private slots:
     void getSetCheck();
     void setValue_data();
     void setValue();
+
+    void setDisplayIntegerBase_data();
+    void setDisplayIntegerBase();
 
     void setPrefixSuffix_data();
     void setPrefixSuffix();
@@ -138,7 +181,28 @@ private slots:
     void integerOverflow();
 
     void taskQTBUG_5008_textFromValueAndValidate();
+    void lineEditReturnPressed();
 
+    void positiveSign();
+
+    void interpretOnLosingFocus();
+
+    void setGroupSeparatorShown_data();
+    void setGroupSeparatorShown();
+
+    void wheelEvents_data();
+    void wheelEvents();
+
+    void adaptiveDecimalStep();
+
+    void stepModifierKeys_data();
+    void stepModifierKeys();
+
+    void stepModifierButtons_data();
+    void stepModifierButtons();
+
+    void stepModifierPressAndHold_data();
+    void stepModifierPressAndHold();
 public slots:
     void valueChangedHelper(const QString &);
     void valueChangedHelper(int);
@@ -148,13 +212,39 @@ private:
 };
 
 typedef QList<int> IntList;
-Q_DECLARE_METATYPE(IntList)
-Q_DECLARE_METATYPE(QLocale)
+
+Q_DECLARE_METATYPE(QLocale::Language)
+Q_DECLARE_METATYPE(QLocale::Country)
+
+static QLatin1String modifierToName(Qt::KeyboardModifier modifier)
+{
+    switch (modifier) {
+    case Qt::NoModifier:
+        return QLatin1Literal("No");
+        break;
+    case Qt::ControlModifier:
+        return QLatin1Literal("Ctrl");
+        break;
+    case Qt::ShiftModifier:
+        return QLatin1Literal("Shift");
+        break;
+    case Qt::AltModifier:
+        return QLatin1Literal("Alt");
+        break;
+    case Qt::MetaModifier:
+        return QLatin1Literal("Meta");
+        break;
+    default:
+        qFatal("Unexpected keyboard modifier");
+        return QLatin1String();
+    }
+}
 
 // Testing get/set functions
 void tst_QSpinBox::getSetCheck()
 {
     QSpinBox obj1;
+    QCOMPARE(obj1.inputMethodQuery(Qt::ImHints), QVariant(int(Qt::ImhDigitsOnly)));
     // int QSpinBox::singleStep()
     // void QSpinBox::setSingleStep(int)
     obj1.setSingleStep(0);
@@ -192,6 +282,7 @@ void tst_QSpinBox::getSetCheck()
     QCOMPARE(INT_MAX, obj1.value());
 
     QDoubleSpinBox obj2;
+    QCOMPARE(obj2.inputMethodQuery(Qt::ImHints), QVariant(int(Qt::ImhFormattedNumbersOnly)));
     // double QDoubleSpinBox::singleStep()
     // void QDoubleSpinBox::setSingleStep(double)
     obj2.setSingleStep(0.0);
@@ -276,6 +367,61 @@ void tst_QSpinBox::setValue()
     QCOMPARE(spin.value(), expected);
 }
 
+void tst_QSpinBox::setDisplayIntegerBase_data()
+{
+    QTest::addColumn<int>("value");
+    QTest::addColumn<int>("base");
+    QTest::addColumn<QString>("string");
+
+    QTest::newRow("base 10") << 42 << 10 << "42";
+    QTest::newRow("base 2") << 42 << 2 << "101010";
+    QTest::newRow("base 8") << 42 << 8 << "52";
+    QTest::newRow("base 16") << 42 << 16 << "2a";
+    QTest::newRow("base 0") << 42 << 0 << "42";
+    QTest::newRow("base -4") << 42 << -4 << "42";
+    QTest::newRow("base 40") << 42 << 40 << "42";
+
+    QTest::newRow("negative base 10") << -42 << 10 << "-42";
+    QTest::newRow("negative base 2") << -42 << 2 << "-101010";
+    QTest::newRow("negative base 8") << -42 << 8 << "-52";
+    QTest::newRow("negative base 16") << -42 << 16 << "-2a";
+    QTest::newRow("negative base 0") << -42 << 0 << "-42";
+    QTest::newRow("negative base -4") << -42 << -4 << "-42";
+    QTest::newRow("negative base 40") << -42 << 40 << "-42";
+
+    QTest::newRow("0 base 10") << 0 << 10 << "0";
+    QTest::newRow("0 base 2") << 0 << 2 << "0";
+    QTest::newRow("0 base 8") << 0 << 8 << "0";
+    QTest::newRow("0 base 16") << 0 << 16 << "0";
+    QTest::newRow("0 base 0") << 0 << 0 << "0";
+    QTest::newRow("0 base -4") << 0 << -4 << "0";
+    QTest::newRow("0 base 40") << 0 << 40 << "0";
+}
+
+void tst_QSpinBox::setDisplayIntegerBase()
+{
+    QFETCH(int, value);
+    QFETCH(int, base);
+    QFETCH(QString, string);
+
+    SpinBox spin;
+    spin.setRange(INT_MIN, INT_MAX);
+
+    spin.setValue(value);
+    QCOMPARE(spin.lineEdit()->text(), QString::number(value));
+
+    spin.setDisplayIntegerBase(base);
+    QCOMPARE(spin.lineEdit()->text(), string);
+
+    spin.setValue(0);
+    QCOMPARE(spin.value(), 0);
+    QCOMPARE(spin.lineEdit()->text(), QString::number(0, base));
+
+    spin.lineEdit()->clear();
+    QTest::keyClicks(spin.lineEdit(), string);
+    QCOMPARE(spin.value(), value);
+}
+
 void tst_QSpinBox::setPrefixSuffix_data()
 {
     QTest::addColumn<QString>("prefix");
@@ -328,18 +474,35 @@ void tst_QSpinBox::valueChangedHelper(int value)
     actualValues << value;
 }
 
+class MySpinBox: public QSpinBox
+{
+public:
+    MySpinBox(QWidget *parent = 0) : QSpinBox(parent) {}
+
+    void changeEvent(QEvent *ev) {
+        eventsReceived.append(ev->type());
+    }
+    QList<QEvent::Type> eventsReceived;
+};
+
 void tst_QSpinBox::setReadOnly()
 {
-    QSpinBox spin(0);
+    MySpinBox spin(0);
     spin.show();
     QTest::keyClick(&spin, Qt::Key_Up);
     QCOMPARE(spin.value(), 1);
     spin.setReadOnly(true);
+#ifndef Q_OS_WINRT // QTBUG-68297
+    QCOMPARE(spin.eventsReceived, QList<QEvent::Type>() << QEvent::ReadOnlyChange);
+#endif
     QTest::keyClick(&spin, Qt::Key_Up);
     QCOMPARE(spin.value(), 1);
     spin.stepBy(1);
     QCOMPARE(spin.value(), 2);
     spin.setReadOnly(false);
+#ifndef Q_OS_WINRT // QTBUG-68297
+    QCOMPARE(spin.eventsReceived, QList<QEvent::Type>() << QEvent::ReadOnlyChange << QEvent::ReadOnlyChange);
+#endif
     QTest::keyClick(&spin, Qt::Key_Up);
     QCOMPARE(spin.value(), 3);
 }
@@ -775,12 +938,11 @@ void tst_QSpinBox::editingFinished()
     testFocusWidget.hide();
     QCOMPARE(editingFinishedSpy1.count(), 4);
     QCOMPARE(editingFinishedSpy2.count(), 4);
-    QTest::qWait(100);
 
     //task203285
     editingFinishedSpy1.clear();
     testFocusWidget.show();
-    QTest::qWait(100);
+    QVERIFY(QTest::qWaitForWindowActive(&testFocusWidget));
     box->setKeyboardTracking(false);
     qApp->setActiveWindow(&testFocusWidget);
     testFocusWidget.activateWindow();
@@ -1044,6 +1206,600 @@ void tst_QSpinBox::integerOverflow()
     QCOMPARE(sb.value(), INT_MIN + 1);
     sb.stepDown();
     QCOMPARE(sb.value(), INT_MIN);
+}
+
+void tst_QSpinBox::lineEditReturnPressed()
+{
+    SpinBox spinBox;
+    QSignalSpy spyCurrentChanged(spinBox.lineEdit(), SIGNAL(returnPressed()));
+    spinBox.show();
+    QTest::keyClick(&spinBox, Qt::Key_Return);
+    QCOMPARE(spyCurrentChanged.count(), 1);
+}
+
+void tst_QSpinBox::positiveSign()
+{
+    QSpinBox spinBox;
+    spinBox.setRange(-20, 20);
+    spinBox.setValue(-20);
+    spinBox.show();
+    QVERIFY(QTest::qWaitForWindowActive(&spinBox));
+
+    QTest::keyClick(&spinBox, Qt::Key_End, Qt::ShiftModifier);
+    QTest::keyClick(&spinBox, Qt::Key_Plus, Qt::ShiftModifier);
+    QTest::keyClick(&spinBox, Qt::Key_2);
+    QTest::keyClick(&spinBox, Qt::Key_0);
+    QCOMPARE(spinBox.text(), QLatin1String("+20"));
+}
+
+void tst_QSpinBox::interpretOnLosingFocus()
+{
+    // QTBUG-55249: When typing an invalid value after QSpinBox::clear(),
+    // it should be fixed up on losing focus.
+
+    static const int minimumValue = 10;
+    static const int maximumValue = 20;
+
+    QWidget widget;
+    widget.setWindowTitle(QTest::currentTestFunction());
+    QVBoxLayout *layout = new QVBoxLayout(&widget);
+    QLineEdit *focusDummy = new QLineEdit("focusDummy", &widget);
+    layout->addWidget(focusDummy);
+    SpinBox *spinBox = new SpinBox(&widget);
+    spinBox->setRange(minimumValue, maximumValue);
+    spinBox->setValue(minimumValue);
+    layout->addWidget(spinBox);
+    spinBox->clear();
+    spinBox->setFocus();
+    widget.show();
+    QVERIFY(QTest::qWaitForWindowActive(&widget));
+    QTest::keyClick(spinBox, Qt::Key_1); // Too small
+    focusDummy->setFocus();
+    QCOMPARE(spinBox->value(), minimumValue);
+    QCOMPARE(spinBox->lineEdit()->text().toInt(), minimumValue);
+}
+
+void tst_QSpinBox::setGroupSeparatorShown_data()
+{
+    QTest::addColumn<QLocale::Language>("lang");
+    QTest::addColumn<QLocale::Country>("country");
+
+    QTest::newRow("data0") << QLocale::English << QLocale::UnitedStates;
+    QTest::newRow("data1") << QLocale::Swedish << QLocale::Sweden;
+    QTest::newRow("data2") << QLocale::German << QLocale::Germany;
+    QTest::newRow("data3") << QLocale::Georgian << QLocale::Georgia;
+    QTest::newRow("data3") << QLocale::Macedonian << QLocale::Macedonia;
+}
+
+void tst_QSpinBox::setGroupSeparatorShown()
+{
+    QFETCH(QLocale::Language, lang);
+    QFETCH(QLocale::Country, country);
+
+    QLocale loc(lang, country);
+    QLocale::setDefault(loc);
+    SpinBox spinBox;
+    spinBox.setMaximum(99999);
+    spinBox.setValue(13000);
+    spinBox.setGroupSeparatorShown(true);
+    QCOMPARE(spinBox.lineEdit()->text(), spinBox.locale().toString(13000));
+    QCOMPARE(spinBox.isGroupSeparatorShown(), true);
+    QCOMPARE(spinBox.textFromValue(23421),spinBox.locale().toString(23421));
+
+    spinBox.setGroupSeparatorShown(false);
+    QCOMPARE(spinBox.lineEdit()->text(), QStringLiteral("13000"));
+    QCOMPARE(spinBox.isGroupSeparatorShown(), false);
+
+    spinBox.setMaximum(72000);
+    spinBox.lineEdit()->setText(spinBox.locale().toString(32000));
+    QCOMPARE(spinBox.value()+1000, 33000);
+
+    spinBox.lineEdit()->setText(QStringLiteral("32000"));
+    QCOMPARE(spinBox.value()+1000, 33000);
+
+    spinBox.lineEdit()->setText(QStringLiteral("32,000"));
+    QCOMPARE(spinBox.value()+1000, 33000);
+}
+
+void tst_QSpinBox::wheelEvents_data()
+{
+#if QT_CONFIG(wheelevent)
+    QTest::addColumn<QPoint>("angleDelta");
+    QTest::addColumn<int>("qt4Delta");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifier");
+    QTest::addColumn<Qt::MouseEventSource>("source");
+    QTest::addColumn<int>("start");
+    QTest::addColumn<IntList>("expectedValues");
+
+    const auto fractions = {false, true};
+
+    const auto directions = {true, false};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    const auto sources = {Qt::MouseEventNotSynthesized,
+                          Qt::MouseEventSynthesizedBySystem,
+                          Qt::MouseEventSynthesizedByQt,
+                          Qt::MouseEventSynthesizedByApplication};
+
+    const int startValue = 0;
+
+    for (auto fraction : fractions) {
+        for (auto up : directions) {
+
+            const int units = (fraction ? 60 : 120) * (up ? 1 : -1);
+
+            for (auto modifier : modifierList) {
+
+                const Qt::KeyboardModifiers modifiers(modifier);
+
+                const auto modifierName = modifierToName(modifier);
+                if (modifierName.isEmpty())
+                    continue;
+
+                for (auto stepModifier : validStepModifierList) {
+
+                    const auto stepModifierName = modifierToName(stepModifier);
+                    if (stepModifierName.isEmpty())
+                        continue;
+
+                    const int steps = (modifier & stepModifier ? 10 : 1)
+                            * (up ? 1 : -1);
+
+                    for (auto source : sources) {
+
+#ifdef Q_OS_MACOS
+                        QPoint angleDelta;
+                        if ((modifier & Qt::ShiftModifier) &&
+                                source == Qt::MouseEventNotSynthesized) {
+                            // On macOS the Shift modifier converts vertical
+                            // mouse wheel events to horizontal.
+                            angleDelta = { units, 0 };
+                        } else {
+                            // However, this is not the case for trackpad scroll
+                            // events.
+                            angleDelta = { 0, units };
+                        }
+#else
+                        const QPoint angleDelta(0, units);
+#endif
+
+                        QLatin1String sourceName;
+                        switch (source) {
+                        case Qt::MouseEventNotSynthesized:
+                            sourceName = QLatin1Literal("NotSynthesized");
+                            break;
+                        case Qt::MouseEventSynthesizedBySystem:
+                            sourceName = QLatin1Literal("SynthesizedBySystem");
+                            break;
+                        case Qt::MouseEventSynthesizedByQt:
+                            sourceName = QLatin1Literal("SynthesizedByQt");
+                            break;
+                        case Qt::MouseEventSynthesizedByApplication:
+                            sourceName = QLatin1Literal("SynthesizedByApplication");
+                            break;
+                        default:
+                            qFatal("Unexpected wheel event source");
+                            continue;
+                        }
+
+                        IntList expectedValues;
+                        if (fraction)
+                            expectedValues << startValue;
+                        expectedValues << startValue + steps;
+
+                        QTest::addRow("%s%s%sWith%sKeyboardModifier%s",
+                                      fraction ? "half" : "full",
+                                      up ? "Up" : "Down",
+                                      stepModifierName.latin1(),
+                                      modifierName.latin1(),
+                                      sourceName.latin1())
+                                << angleDelta
+                                << units
+                                << static_cast<int>(stepModifier)
+                                << modifiers
+                                << source
+                                << startValue
+                                << expectedValues;
+                    }
+                }
+            }
+        }
+    }
+#else
+    QSKIP("Built with --no-feature-wheelevent");
+#endif
+}
+
+void tst_QSpinBox::wheelEvents()
+{
+#if QT_CONFIG(wheelevent)
+    QFETCH(QPoint, angleDelta);
+    QFETCH(int, qt4Delta);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifier);
+    QFETCH(Qt::MouseEventSource, source);
+    QFETCH(int, start);
+    QFETCH(IntList, expectedValues);
+
+    SpinBox spinBox;
+    spinBox.setRange(-20, 20);
+    spinBox.setValue(start);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    spinBox.setStyle(style.data());
+
+    QWheelEvent event(QPointF(), QPointF(), QPoint(), angleDelta, qt4Delta,
+                      Qt::Vertical, Qt::NoButton, modifier, Qt::NoScrollPhase,
+                      source);
+    for (int expected : expectedValues) {
+        qApp->sendEvent(&spinBox, &event);
+        QCOMPARE(spinBox.value(), expected);
+    }
+#else
+    QSKIP("Built with --no-feature-wheelevent");
+#endif
+}
+
+void tst_QSpinBox::adaptiveDecimalStep()
+{
+    SpinBox spinBox;
+    spinBox.setRange(-100000, 100000);
+    spinBox.setStepType(SpinBox::StepType::AdaptiveDecimalStepType);
+
+    // Positive values
+
+    spinBox.setValue(0);
+
+    // Go from 0 to 100
+    for (int i = 0; i < 100; i++) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(1);
+    }
+
+    // Go from 100 to 1000
+    for (int i = 100; i < 1000; i += 10) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(1);
+    }
+
+    // Go from 1000 to 10000
+    for (int i = 1000; i < 10000; i += 100) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(1);
+    }
+
+    // Test decreasing the values now
+
+    // Go from 10000 down to 1000
+    for (int i = 10000; i > 1000; i -= 100) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(-1);
+    }
+
+    // Go from 1000 down to 100
+    for (int i = 1000; i > 100; i -= 10) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(-1);
+    }
+
+    // Negative values
+
+    spinBox.setValue(0);
+
+    // Go from 0 to -100
+    for (int i = 0; i > -100; i--) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(-1);
+    }
+
+    // Go from -100 to -1000
+    for (int i = -100; i > -1000; i -= 10) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(-1);
+    }
+
+    // Go from 1000 to 10000
+    for (int i = -1000; i > -10000; i -= 100) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(-1);
+    }
+
+    // Test increasing the values now
+
+    // Go from -10000 up to -1000
+    for (int i = -10000; i < -1000; i += 100) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(1);
+    }
+
+    // Go from -1000 up to -100
+    for (int i = -1000; i < -100; i += 10) {
+        QCOMPARE(spinBox.value(), i);
+        spinBox.stepBy(1);
+    }
+}
+
+void tst_QSpinBox::stepModifierKeys_data()
+{
+    QTest::addColumn<int>("startValue");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<QTestEventList>("keys");
+    QTest::addColumn<int>("expectedValue");
+
+    const auto keyList = {Qt::Key_Up, Qt::Key_Down};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    for (auto key : keyList) {
+
+        const bool up = key == Qt::Key_Up;
+        Q_ASSERT(up || key == Qt::Key_Down);
+
+        const int startValue = up ? 0.0 : 10.0;
+
+        for (auto modifier : modifierList) {
+
+            QTestEventList keys;
+            keys.addKeyClick(key, modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                const int expectedValue = startValue + steps;
+
+                QTest::addRow("%s%sWith%sKeyboardModifier",
+                              up ? "up" : "down",
+                              stepModifierName.latin1(),
+                              modifierName.latin1())
+                        << startValue
+                        << static_cast<int>(stepModifier)
+                        << keys
+                        << expectedValue;
+            }
+        }
+    }
+}
+
+void tst_QSpinBox::stepModifierKeys()
+{
+    QFETCH(int, startValue);
+    QFETCH(int, stepModifier);
+    QFETCH(QTestEventList, keys);
+    QFETCH(int, expectedValue);
+
+    QSpinBox spin(0);
+    spin.setValue(startValue);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    spin.setStyle(style.data());
+
+    spin.show();
+    QVERIFY(QTest::qWaitForWindowActive(&spin));
+
+    QCOMPARE(spin.value(), startValue);
+    keys.simulate(&spin);
+    QCOMPARE(spin.value(), expectedValue);
+}
+
+void tst_QSpinBox::stepModifierButtons_data()
+{
+    QTest::addColumn<QStyle::SubControl>("subControl");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<int>("startValue");
+    QTest::addColumn<int>("expectedValue");
+
+    const auto subControls = {QStyle::SC_SpinBoxUp, QStyle::SC_SpinBoxDown};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    for (auto subControl : subControls) {
+
+        const bool up = subControl == QStyle::SC_SpinBoxUp;
+        Q_ASSERT(up || subControl == QStyle::SC_SpinBoxDown);
+
+        const int startValue = up ? 0 : 10;
+
+        for (auto modifier : modifierList) {
+
+            const Qt::KeyboardModifiers modifiers(modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                const int expectedValue = startValue + steps;
+
+                QTest::addRow("%s%sWith%sKeyboardModifier",
+                              up ? "up" : "down",
+                              stepModifierName.latin1(),
+                              modifierName.latin1())
+                        << subControl
+                        << static_cast<int>(stepModifier)
+                        << modifiers
+                        << startValue
+                        << expectedValue;
+            }
+        }
+    }
+}
+
+void tst_QSpinBox::stepModifierButtons()
+{
+    QFETCH(QStyle::SubControl, subControl);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(int, startValue);
+    QFETCH(int, expectedValue);
+
+    SpinBox spin(0);
+    spin.setRange(-20, 20);
+    spin.setValue(startValue);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> style(
+                new StepModifierStyle);
+    style->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    spin.setStyle(style.data());
+
+    spin.show();
+    QVERIFY(QTest::qWaitForWindowActive(&spin));
+
+    QStyleOptionSpinBox spinBoxStyleOption;
+    spin.initStyleOption(&spinBoxStyleOption);
+
+    const QRect buttonRect = spin.style()->subControlRect(
+                QStyle::CC_SpinBox, &spinBoxStyleOption, subControl, &spin);
+
+    QCOMPARE(spin.value(), startValue);
+    QTest::mouseClick(&spin, Qt::LeftButton, modifiers, buttonRect.center());
+    QCOMPARE(spin.value(), expectedValue);
+}
+
+void tst_QSpinBox::stepModifierPressAndHold_data()
+{
+    QTest::addColumn<QStyle::SubControl>("subControl");
+    QTest::addColumn<int>("stepModifier");
+    QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+    QTest::addColumn<int>("expectedStepModifier");
+
+    const auto subControls = {QStyle::SC_SpinBoxUp, QStyle::SC_SpinBoxDown};
+
+    const auto modifierList = {Qt::NoModifier,
+                               Qt::ShiftModifier,
+                               Qt::ControlModifier,
+                               Qt::AltModifier,
+                               Qt::MetaModifier};
+
+    const auto validStepModifierList = {Qt::NoModifier,
+                                        Qt::ControlModifier,
+                                        Qt::ShiftModifier};
+
+    for (auto subControl : subControls) {
+
+        const bool up = subControl == QStyle::SC_SpinBoxUp;
+        Q_ASSERT(up || subControl == QStyle::SC_SpinBoxDown);
+
+        for (auto modifier : modifierList) {
+
+            const Qt::KeyboardModifiers modifiers(modifier);
+
+            const auto modifierName = modifierToName(modifier);
+            if (modifierName.isEmpty())
+                continue;
+
+            for (auto stepModifier : validStepModifierList) {
+
+                const auto stepModifierName = modifierToName(stepModifier);
+                if (stepModifierName.isEmpty())
+                    continue;
+
+                const int steps = (modifier & stepModifier ? 10 : 1)
+                        * (up ? 1 : -1);
+
+                QTest::addRow("%s%sWith%sKeyboardModifier",
+                              up ? "up" : "down",
+                              stepModifierName.latin1(),
+                              modifierName.latin1())
+                        << subControl
+                        << static_cast<int>(stepModifier)
+                        << modifiers
+                        << steps;
+            }
+        }
+    }
+}
+
+void tst_QSpinBox::stepModifierPressAndHold()
+{
+    QFETCH(QStyle::SubControl, subControl);
+    QFETCH(int, stepModifier);
+    QFETCH(Qt::KeyboardModifiers, modifiers);
+    QFETCH(int, expectedStepModifier);
+
+    SpinBox spin(0);
+    spin.setRange(-100, 100);
+    spin.setValue(0);
+
+    QScopedPointer<StepModifierStyle, QScopedPointerDeleteLater> stepModifierStyle(
+                new StepModifierStyle(new PressAndHoldStyle));
+    stepModifierStyle->stepModifier = static_cast<Qt::KeyboardModifier>(stepModifier);
+    spin.setStyle(stepModifierStyle.data());
+
+    QSignalSpy spy(&spin, QOverload<int>::of(&SpinBox::valueChanged));
+    // TODO: remove debug output when QTBUG-69492 is fixed
+    connect(&spin, QOverload<int>::of(&SpinBox::valueChanged), [=]() {
+        qDebug() << QTime::currentTime() << "valueChanged emitted";
+    });
+
+    spin.show();
+    QVERIFY(QTest::qWaitForWindowActive(&spin));
+
+    QStyleOptionSpinBox spinBoxStyleOption;
+    spin.initStyleOption(&spinBoxStyleOption);
+
+    const QRect buttonRect = spin.style()->subControlRect(
+                QStyle::CC_SpinBox, &spinBoxStyleOption, subControl, &spin);
+
+    // TODO: remove debug output when QTBUG-69492 is fixed
+    qDebug() << "QGuiApplication::focusWindow():" << QGuiApplication::focusWindow();
+    qDebug() << "QGuiApplication::topLevelWindows():" << QGuiApplication::topLevelWindows();
+    QTest::mousePress(&spin, Qt::LeftButton, modifiers, buttonRect.center());
+    QTRY_VERIFY2(spy.length() >= 3, qPrintable(QString::fromLatin1(
+        "Expected valueChanged() to be emitted 3 or more times, but it was only emitted %1 times").arg(spy.length())));
+    QTest::mouseRelease(&spin, Qt::LeftButton, modifiers, buttonRect.center());
+
+    const auto value = spy.last().at(0);
+    QVERIFY(value.type() == QVariant::Int);
+    QCOMPARE(value.toInt(), spy.length() * expectedStepModifier);
 }
 
 QTEST_MAIN(tst_QSpinBox)

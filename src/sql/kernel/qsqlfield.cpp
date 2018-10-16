@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtSql module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,22 +47,23 @@ class QSqlFieldPrivate
 {
 public:
     QSqlFieldPrivate(const QString &name,
-              QVariant::Type type) :
-        ref(1), nm(name), ro(false), type(type), req(QSqlField::Unknown),
-        len(-1), prec(-1), tp(-1), gen(true), autoval(false)
-    {
-    }
+                     QVariant::Type type, const QString &tableName) :
+        ref(1), nm(name), table(tableName), def(QVariant()), type(type),
+        req(QSqlField::Unknown), len(-1), prec(-1), tp(-1),
+        ro(false), gen(true), autoval(false)
+    {}
 
     QSqlFieldPrivate(const QSqlFieldPrivate &other)
         : ref(1),
           nm(other.nm),
-          ro(other.ro),
+          table(other.table),
+          def(other.def),
           type(other.type),
           req(other.req),
           len(other.len),
           prec(other.prec),
-          def(other.def),
           tp(other.tp),
+          ro(other.ro),
           gen(other.gen),
           autoval(other.autoval)
     {}
@@ -72,27 +71,29 @@ public:
     bool operator==(const QSqlFieldPrivate& other) const
     {
         return (nm == other.nm
-                && ro == other.ro
+                && table == other.table
+                && def == other.def
                 && type == other.type
                 && req == other.req
                 && len == other.len
                 && prec == other.prec
-                && def == other.def
+                && ro == other.ro
                 && gen == other.gen
                 && autoval == other.autoval);
     }
 
     QAtomicInt ref;
     QString nm;
-    uint ro: 1;
+    QString table;
+    QVariant def;
     QVariant::Type type;
     QSqlField::RequiredStatus req;
     int len;
     int prec;
-    QVariant def;
     int tp;
-    uint gen: 1;
-    uint autoval: 1;
+    bool ro: 1;
+    bool gen: 1;
+    bool autoval: 1;
 };
 
 
@@ -154,15 +155,29 @@ public:
 */
 
 /*!
-    Constructs an empty field called \a fieldName of variant type \a
-    type.
+    Constructs an empty field called \a fieldName of variant type \a type.
 
     \sa setRequiredStatus(), setLength(), setPrecision(), setDefaultValue(),
         setGenerated(), setReadOnly()
 */
-QSqlField::QSqlField(const QString& fieldName, QVariant::Type type)
+QSqlField::QSqlField(const QString &fieldName, QVariant::Type type)
 {
-    d = new QSqlFieldPrivate(fieldName, type);
+    d = new QSqlFieldPrivate(fieldName, type, QString());
+    val = QVariant(type);
+}
+
+/*!
+    \overload
+    Constructs an empty field called \a fieldName of variant type \a
+    type in \a table.
+
+    \sa setRequiredStatus(), setLength(), setPrecision(), setDefaultValue(),
+        setGenerated(), setReadOnly()
+*/
+QSqlField::QSqlField(const QString &fieldName, QVariant::Type type,
+                     const QString &table)
+{
+    d = new QSqlFieldPrivate(fieldName, type, table);
     val = QVariant(type);
 }
 
@@ -190,12 +205,12 @@ QSqlField& QSqlField::operator=(const QSqlField& other)
 
 
 /*! \fn bool QSqlField::operator!=(const QSqlField &other) const
-    Returns true if the field is unequal to \a other; otherwise returns
+    Returns \c true if the field is unequal to \a other; otherwise returns
     false.
 */
 
 /*!
-    Returns true if the field is equal to \a other; otherwise returns
+    Returns \c true if the field is equal to \a other; otherwise returns
     false.
 */
 bool QSqlField::operator==(const QSqlField& other) const
@@ -299,7 +314,7 @@ void QSqlField::setGenerated(bool gen)
 
 /*!
     Sets the value of the field to \a value. If the field is read-only
-    (isReadOnly() returns true), nothing happens.
+    (isReadOnly() returns \c true), nothing happens.
 
     If the data type of \a value differs from the field's current
     data type, an attempt is made to cast it to the proper type. This
@@ -403,7 +418,7 @@ void QSqlField::setType(QVariant::Type type)
 
 
 /*!
-    Returns true if the field's value is read-only; otherwise returns
+    Returns \c true if the field's value is read-only; otherwise returns
     false.
 
     \sa setReadOnly(), type(), requiredStatus(), length(), precision(),
@@ -413,7 +428,7 @@ bool QSqlField::isReadOnly() const
 { return d->ro; }
 
 /*!
-    Returns true if the field's value is NULL; otherwise returns
+    Returns \c true if the field's value is NULL; otherwise returns
     false.
 
     \sa value()
@@ -429,7 +444,7 @@ void QSqlField::detach()
 }
 
 /*!
-    Returns true if this is a required field; otherwise returns false.
+    Returns \c true if this is a required field; otherwise returns \c false.
     An \c INSERT will fail if a required field does not have a value.
 
     \sa setRequiredStatus(), type(), length(), precision(), defaultValue(),
@@ -494,7 +509,7 @@ int QSqlField::typeID() const
 }
 
 /*!
-    Returns true if the field is generated; otherwise returns
+    Returns \c true if the field is generated; otherwise returns
     false.
 
     \sa setGenerated(), type(), requiredStatus(), length(), precision(),
@@ -506,8 +521,8 @@ bool QSqlField::isGenerated() const
 }
 
 /*!
-    Returns true if the field's variant type is valid; otherwise
-    returns false.
+    Returns \c true if the field's variant type is valid; otherwise
+    returns \c false.
 */
 bool QSqlField::isValid() const
 {
@@ -517,27 +532,37 @@ bool QSqlField::isValid() const
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QSqlField &f)
 {
-    dbg.nospace() << "QSqlField(" << f.name() << ", " << QMetaType::typeName(f.type());
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
+    dbg << "QSqlField(" << f.name() << ", " << QMetaType::typeName(f.type());
+    dbg << ", tableName: " << (f.tableName().isEmpty() ? QStringLiteral("(not specified)") : f.tableName());
     if (f.length() >= 0)
-        dbg.nospace() << ", length: " << f.length();
+        dbg << ", length: " << f.length();
     if (f.precision() >= 0)
-        dbg.nospace() << ", precision: " << f.precision();
+        dbg << ", precision: " << f.precision();
     if (f.requiredStatus() != QSqlField::Unknown)
-        dbg.nospace() << ", required: "
-                      << (f.requiredStatus() == QSqlField::Required ? "yes" : "no");
-    dbg.nospace() << ", generated: " << (f.isGenerated() ? "yes" : "no");
+        dbg << ", required: "
+            << (f.requiredStatus() == QSqlField::Required ? "yes" : "no");
+    dbg  << ", generated: " << (f.isGenerated() ? "yes" : "no");
     if (f.typeID() >= 0)
-        dbg.nospace() << ", typeID: " << f.typeID();
+        dbg << ", typeID: " << f.typeID();
     if (!f.defaultValue().isNull())
-        dbg.nospace() << ", auto-value: \"" << f.defaultValue() << '\"';
-    dbg.nospace() << ')';
-    return dbg.space();
+        dbg << ", defaultValue: \"" << f.defaultValue() << '\"';
+    dbg << ", autoValue: " << f.isAutoValue()
+        << ", readOnly: " << f.isReadOnly() << ')';
+    return dbg;
 }
 #endif
 
 /*!
-    Returns true if the value is auto-generated by the database,
+    Returns \c true if the value is auto-generated by the database,
     for example auto-increment primary key values.
+
+    \note When using the ODBC driver, due to limitations in the ODBC API,
+    the \c isAutoValue() field is only populated in a QSqlField resulting from a
+    QSqlRecord obtained by executing a \c SELECT query. It is \c false in a QSqlField
+    resulting from a QSqlRecord returned from QSqlDatabase::record() or
+    QSqlDatabase::primaryIndex().
 
     \sa setAutoValue()
 */
@@ -556,6 +581,31 @@ void QSqlField::setAutoValue(bool autoVal)
 {
     detach();
     d->autoval = autoVal;
+}
+
+/*!
+    Sets the tableName of the field to \a table.
+
+    \sa tableName()
+*/
+void QSqlField::setTableName(const QString &table)
+{
+    detach();
+    d->table = table;
+}
+
+/*!
+    Returns the tableName of the field.
+
+    \note When using the QPSQL driver, due to limitations in the libpq library,
+    the \c tableName() field is not populated in a QSqlField resulting
+    from a QSqlRecord obtained by QSqlQuery::record() of a forward-only query.
+
+    \sa setTableName()
+*/
+QString QSqlField::tableName() const
+{
+    return d->table;
 }
 
 QT_END_NAMESPACE

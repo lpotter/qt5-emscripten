@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -53,17 +63,17 @@ AddressBook::AddressBook(QWidget *parent)
     addressText->setReadOnly(true);
 
     addButton = new QPushButton(tr("&Add"));
-//! [edit and remove buttons] 
+//! [edit and remove buttons]
     editButton = new QPushButton(tr("&Edit"));
     editButton->setEnabled(false);
     removeButton = new QPushButton(tr("&Remove"));
     removeButton->setEnabled(false);
-//! [edit and remove buttons] 
+//! [edit and remove buttons]
     submitButton = new QPushButton(tr("&Submit"));
     submitButton->hide();
     cancelButton = new QPushButton(tr("&Cancel"));
     cancelButton->hide();
-    
+
     nextButton = new QPushButton(tr("&Next"));
     nextButton->setEnabled(false);
     previousButton = new QPushButton(tr("&Previous"));
@@ -71,20 +81,20 @@ AddressBook::AddressBook(QWidget *parent)
 
     connect(addButton, SIGNAL(clicked()), this, SLOT(addContact()));
     connect(submitButton, SIGNAL(clicked()), this, SLOT(submitContact()));
-//! [connecting edit and remove] 
+//! [connecting edit and remove]
     connect(editButton, SIGNAL(clicked()), this, SLOT(editContact()));
     connect(removeButton, SIGNAL(clicked()), this, SLOT(removeContact()));
-//! [connecting edit and remove] 
+//! [connecting edit and remove]
     connect(cancelButton, SIGNAL(clicked()), this, SLOT(cancel()));
     connect(nextButton, SIGNAL(clicked()), this, SLOT(next()));
     connect(previousButton, SIGNAL(clicked()), this, SLOT(previous()));
 
     QVBoxLayout *buttonLayout1 = new QVBoxLayout;
     buttonLayout1->addWidget(addButton);
-//! [adding edit and remove to the layout]     
+//! [adding edit and remove to the layout]
     buttonLayout1->addWidget(editButton);
     buttonLayout1->addWidget(removeButton);
-//! [adding edit and remove to the layout]         
+//! [adding edit and remove to the layout]
     buttonLayout1->addWidget(submitButton);
     buttonLayout1->addWidget(cancelButton);
     buttonLayout1->addStretch();
@@ -138,7 +148,7 @@ void AddressBook::submitContact()
     }
 //! [submitContact() function part1]
     if (currentMode == AddingMode) {
-        
+
         if (!contacts.contains(name)) {
             contacts.insert(name, address);
             QMessageBox::information(this, tr("Add Successful"),
@@ -150,7 +160,7 @@ void AddressBook::submitContact()
 //! [submitContact() function part1]
 //! [submitContact() function part2]
     } else if (currentMode == EditingMode) {
-        
+
         if (oldName != name) {
             if (!contacts.contains(name)) {
                 QMessageBox::information(this, tr("Edit Successful"),
@@ -164,7 +174,7 @@ void AddressBook::submitContact()
         } else if (oldAddress != address) {
             QMessageBox::information(this, tr("Edit Successful"),
                 tr("\"%1\" has been edited in your address book.").arg(name));
-            contacts[name] = address;        
+            contacts[name] = address;
         }
     }
 
@@ -192,7 +202,7 @@ void AddressBook::removeContact()
             QMessageBox::Yes | QMessageBox::No);
 
         if (button == QMessageBox::Yes) {
-            
+
             previous();
             contacts.remove(name);
 
@@ -243,7 +253,7 @@ void AddressBook::updateInterface(Mode mode)
     currentMode = mode;
 
     switch (currentMode) {
-        
+
     case AddingMode:
     case EditingMode:
 

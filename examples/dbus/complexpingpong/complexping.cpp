@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,11 +59,9 @@
 #include "ping-common.h"
 #include "complexping.h"
 
-void Ping::start(const QString &name, const QString &oldValue, const QString &newValue)
+void Ping::start(const QString &name)
 {
-    Q_UNUSED(oldValue);
-
-    if (name != SERVICE_NAME || newValue.isEmpty())
+    if (name != SERVICE_NAME)
         return;
 
     // open stdin for reading
@@ -82,7 +90,7 @@ void Ping::start(const QString &name, const QString &oldValue, const QString &ne
             if (!reply.isNull())
                 printf("value = %s\n", qPrintable(reply.toString()));
         } else if (line.startsWith("value=")) {
-            iface->setProperty("value", line.mid(6));            
+            iface->setProperty("value", line.mid(6));
         } else {
             QDBusReply<QDBusVariant> reply = iface->call("query", line);
             if (reply.isValid())
@@ -92,7 +100,7 @@ void Ping::start(const QString &name, const QString &oldValue, const QString &ne
         if (iface->lastError().isValid())
             fprintf(stderr, "Call failed: %s\n", qPrintable(iface->lastError().message()));
     }
-}    
+}
 
 int main(int argc, char **argv)
 {
@@ -105,10 +113,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    QDBusServiceWatcher serviceWatcher(SERVICE_NAME, QDBusConnection::sessionBus(),
+                                       QDBusServiceWatcher::WatchForRegistration);
+
     Ping ping;
-    ping.connect(QDBusConnection::sessionBus().interface(),
-                 SIGNAL(serviceOwnerChanged(QString,QString,QString)),
-                 SLOT(start(QString,QString,QString)));
+    QObject::connect(&serviceWatcher, &QDBusServiceWatcher::serviceRegistered,
+                     &ping, &Ping::start);
 
     QProcess pong;
     pong.start("./complexpong");

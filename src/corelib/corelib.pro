@@ -4,84 +4,150 @@ CONFIG    += exceptions
 
 MODULE = core     # not corelib, as per project file
 MODULE_CONFIG = moc resources
+qtConfig(gc_binaries): MODULE_CONFIG += gc_binaries
 !isEmpty(QT_NAMESPACE): MODULE_DEFINES = QT_NAMESPACE=$$QT_NAMESPACE
 
-DEFINES   += QT_NO_USING_NAMESPACE
-win32-msvc*|win32-icc:QMAKE_LFLAGS += /BASE:0x67000000
-irix-cc*:QMAKE_CXXFLAGS += -no_prelink -ptused
+TRACEPOINT_PROVIDER = $$PWD/qtcore.tracepoints
+CONFIG += qt_tracepoints
 
-# otherwise mingw headers do not declare common functions like putenv
-win32-g++*:QMAKE_CXXFLAGS_CXX11 = -std=gnu++0x
+CONFIG += $$MODULE_CONFIG
+DEFINES += $$MODULE_DEFINES
+DEFINES += QT_NO_USING_NAMESPACE QT_NO_FOREACH
+msvc:equals(QT_ARCH, i386): QMAKE_LFLAGS += /BASE:0x67000000
+
+CONFIG += simd optimize_full
 
 QMAKE_DOCS = $$PWD/doc/qtcore.qdocconf
 
-load(qt_module)
+ANDROID_LIB_DEPENDENCIES = \
+    plugins/platforms/android/libqtforandroid.so
+ANDROID_BUNDLED_JAR_DEPENDENCIES = \
+    jar/QtAndroid.jar
+ANDROID_PERMISSIONS = \
+    android.permission.INTERNET \
+    android.permission.WRITE_EXTERNAL_STORAGE
+
+# QtCore can't be compiled with -Wl,-no-undefined because it uses the "environ"
+# variable and on FreeBSD and OpenBSD, this variable is in the final executable itself.
+# OpenBSD 6.0 will include environ in libc.
+freebsd|openbsd: QMAKE_LFLAGS_NOUNDEF =
 
 include(animation/animation.pri)
-include(arch/arch.pri)
 include(global/global.pri)
 include(thread/thread.pri)
 include(tools/tools.pri)
 include(io/io.pri)
 include(itemmodels/itemmodels.pri)
-include(json/json.pri)
 include(plugin/plugin.pri)
 include(kernel/kernel.pri)
 include(codecs/codecs.pri)
+include(serialization/serialization.pri)
 include(statemachine/statemachine.pri)
 include(mimetypes/mimetypes.pri)
-include(xml/xml.pri)
 
-mac|darwin {
-    !ios {
+win32 {
+    LIBS_PRIVATE += -lws2_32
+    !winrt {
+        LIBS_PRIVATE += -lkernel32 -luser32 -lshell32 -luuid -lole32 -ladvapi32 -lwinmm
+    }
+}
+
+darwin {
+    osx {
         LIBS_PRIVATE += -framework ApplicationServices
         LIBS_PRIVATE += -framework CoreServices
-        LIBS_PRIVATE += -framework Foundation
     }
     LIBS_PRIVATE += -framework CoreFoundation
+    LIBS_PRIVATE += -framework Foundation
 }
-mac:lib_bundle:DEFINES += QT_NO_DEBUG_PLUGIN_CHECK
-win32:DEFINES-=QT_NO_CAST_TO_ASCII
-DEFINES += $$MODULE_DEFINES
 
-QMAKE_LIBS += $$QMAKE_LIBS_CORE
+integrity {
+    LIBS_PRIVATE += -lposix -livfs -lsocket -lnet -lshm_client
+}
 
 QMAKE_DYNAMIC_LIST_FILE = $$PWD/QtCore.dynlist
 
 contains(DEFINES,QT_EVAL):include(eval.pri)
 
-load(moc)
-load(resources)
+HOST_BINS = $$[QT_HOST_BINS]
+host_bins.name = host_bins
+host_bins.variable = HOST_BINS
 
-moc_dir.name = moc_location
-moc_dir.variable = QMAKE_MOC
+qt_conf.name = qt_config
+qt_conf.variable = QT_CONFIG
 
-rcc_dir.name = rcc_location
-rcc_dir.variable = QMAKE_RCC
+QMAKE_PKGCONFIG_VARIABLES += host_bins qt_conf
 
-QMAKE_PKGCONFIG_VARIABLES += moc_dir rcc_dir
+load(qt_module)
 
-# These are aliens, but Linguist installs no own module, and it fits here best.
-
-qtPrepareTool(QMAKE_LUPDATE, lupdate)
-qtPrepareTool(QMAKE_LRELEASE, lrelease)
-
-lupdate_dir.name = lupdate_location
-lupdate_dir.variable = QMAKE_LUPDATE
-
-lrelease_dir.name = lrelease_location
-lrelease_dir.variable = QMAKE_LRELEASE
-
-QMAKE_PKGCONFIG_VARIABLES += lupdate_dir lrelease_dir
+# Override qt_module, so the symbols are actually included into the library.
+win32: DEFINES -= QT_NO_CAST_TO_ASCII
 
 ctest_macros_file.input = $$PWD/Qt5CTestMacros.cmake
 ctest_macros_file.output = $$DESTDIR/cmake/Qt5Core/Qt5CTestMacros.cmake
 ctest_macros_file.CONFIG = verbatim
 
-QMAKE_SUBSTITUTES += ctest_macros_file
+cmake_umbrella_config_file.input = $$PWD/Qt5Config.cmake.in
+cmake_umbrella_config_file.output = $$DESTDIR/cmake/Qt5/Qt5Config.cmake
 
-ctest_qt5_module_files.files += $$ctest_macros_file.output
+cmake_umbrella_config_module_location.input = $$PWD/Qt5ModuleLocation.cmake.in
+cmake_umbrella_config_module_location.output = $$DESTDIR/cmake/Qt5/Qt5ModuleLocation.cmake
+
+cmake_umbrella_config_module_location_for_install.input = $$PWD/Qt5ModuleLocationForInstall.cmake.in
+cmake_umbrella_config_module_location_for_install.output = $$DESTDIR/cmake/install/Qt5/Qt5ModuleLocation.cmake
+
+cmake_umbrella_config_version_file.input = $$PWD/../../mkspecs/features/data/cmake/Qt5ConfigVersion.cmake.in
+cmake_umbrella_config_version_file.output = $$DESTDIR/cmake/Qt5/Qt5ConfigVersion.cmake
+
+load(cmake_functions)
+
+defineTest(pathIsAbsolute) {
+    p = $$clean_path($$1)
+    !isEmpty(p):isEqual(p, $$absolute_path($$p)): return(true)
+    return(false)
+}
+
+##### This requires fixing, so that the feature system works with cmake as well
+CMAKE_DISABLED_FEATURES = $$join(QT_DISABLED_FEATURES, "$$escape_expand(\\n)    ")
+
+CMAKE_HOST_DATA_DIR = $$cmakeRelativePath($$[QT_HOST_DATA/src], $$[QT_INSTALL_PREFIX])
+pathIsAbsolute($$CMAKE_HOST_DATA_DIR) {
+    CMAKE_HOST_DATA_DIR = $$[QT_HOST_DATA/src]/
+    CMAKE_HOST_DATA_DIR_IS_ABSOLUTE = True
+}
+
+cmake_extras_mkspec_dir.input = $$PWD/Qt5CoreConfigExtrasMkspecDir.cmake.in
+cmake_extras_mkspec_dir.output = $$DESTDIR/cmake/Qt5Core/Qt5CoreConfigExtrasMkspecDir.cmake
+
+CMAKE_INSTALL_DATA_DIR = $$cmakeRelativePath($$[QT_HOST_DATA], $$[QT_INSTALL_PREFIX])
+pathIsAbsolute($$CMAKE_INSTALL_DATA_DIR) {
+    CMAKE_INSTALL_DATA_DIR = $$[QT_HOST_DATA]/
+    CMAKE_INSTALL_DATA_DIR_IS_ABSOLUTE = True
+}
+
+cmake_extras_mkspec_dir_for_install.input = $$PWD/Qt5CoreConfigExtrasMkspecDirForInstall.cmake.in
+cmake_extras_mkspec_dir_for_install.output = $$DESTDIR/cmake/install/Qt5Core/Qt5CoreConfigExtrasMkspecDir.cmake
+
+cmake_qt5_umbrella_module_files.files = \
+    $$cmake_umbrella_config_file.output \
+    $$cmake_umbrella_config_version_file.output \
+    $$cmake_umbrella_config_module_location_for_install.output
+
+cmake_qt5_umbrella_module_files.path = $$[QT_INSTALL_LIBS]/cmake/Qt5
+
+QMAKE_SUBSTITUTES += \
+    ctest_macros_file \
+    cmake_umbrella_config_file \
+    cmake_umbrella_config_module_location \
+    cmake_umbrella_config_module_location_for_install \
+    cmake_umbrella_config_version_file \
+    cmake_extras_mkspec_dir \
+    cmake_extras_mkspec_dir_for_install
+
+ctest_qt5_module_files.files += $$ctest_macros_file.output $$cmake_extras_mkspec_dir_for_install.output
 
 ctest_qt5_module_files.path = $$[QT_INSTALL_LIBS]/cmake/Qt5Core
 
-INSTALLS += ctest_qt5_module_files
+INSTALLS += ctest_qt5_module_files cmake_qt5_umbrella_module_files
+
+QMAKE_DSYM_DEBUG_SCRIPT = $$PWD/debug_script.py

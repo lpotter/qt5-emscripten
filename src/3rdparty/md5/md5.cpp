@@ -36,7 +36,7 @@ static void
 byteSwap(UWORD32 *buf, unsigned words)
 {
         const quint32 byteOrderTest = 0x1;
-        if (((char *)&byteOrderTest)[0] == 0) {
+        if (((const char *)&byteOrderTest)[0] == 0) {
             md5byte *p = (md5byte *)buf;
 
             do {
@@ -161,7 +161,7 @@ MD5Final(struct MD5Context *ctx, md5byte digest[16])
 static void
 MD5Transform(UWORD32 buf[4], UWORD32 const in[16])
 {
-	register UWORD32 a, b, c, d;
+	UWORD32 a, b, c, d;
 
 	a = buf[0];
 	b = buf[1];

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,12 +39,14 @@
 
 #include "qwidgetresizehandler_p.h"
 
-#ifndef QT_NO_RESIZEHANDLER
 #include "qframe.h"
 #include "qapplication.h"
 #include "qdesktopwidget.h"
+#include <private/qdesktopwidget_p.h>
 #include "qcursor.h"
+#if QT_CONFIG(sizegrip)
 #include "qsizegrip.h"
+#endif
 #include "qevent.h"
 #include "qdebug.h"
 #include "private/qlayoutengine_p.h"
@@ -57,6 +57,10 @@ QT_BEGIN_NAMESPACE
 
 static bool resizeHorizontalDirectionFixed = false;
 static bool resizeVerticalDirectionFixed = false;
+
+// ### fixme: Qt 6: No longer export QWidgetResizeHandler and remove "Move"
+// functionality. Currently, only the resize functionality is used by QDockWidget.
+// Historically, the class was used in Qt 3's QWorkspace (predecessor to QMdiArea).
 
 QWidgetResizeHandler::QWidgetResizeHandler(QWidget *parent, QWidget *cw)
     : QObject(parent), widget(parent), childWidget(cw ? cw : parent),
@@ -110,15 +114,17 @@ bool QWidgetResizeHandler::eventFilter(QObject *o, QEvent *ee)
         return false;
     }
 
-    QMouseEvent *e = (QMouseEvent*)ee;
-    switch (e->type()) {
+    switch (ee->type()) {
     case QEvent::MouseButtonPress: {
+        QMouseEvent *e = static_cast<QMouseEvent *>(ee);
         if (w->isMaximized())
             break;
-        if (!widget->rect().contains(widget->mapFromGlobal(e->globalPos())))
+        const QRect widgetRect = widget->rect().marginsAdded(QMargins(range, range, range, range));
+        const QPoint cursorPoint = widget->mapFromGlobal(e->globalPos());
+        if (!widgetRect.contains(cursorPoint) || mode == Nowhere)
             return false;
         if (e->button() == Qt::LeftButton) {
-#if defined(Q_WS_X11)
+#if 0 // Used to be included in Qt4 for Q_WS_X11
             /*
                Implicit grabs do not stop the X server from changing
                the cursor in children, which looks *really* bad when
@@ -132,7 +138,7 @@ bool QWidgetResizeHandler::eventFilter(QObject *o, QEvent *ee)
 #  else
                 widget->grabMouse();
 #  endif // QT_NO_CURSOR
-#endif // Q_WS_X11
+#endif
             buttonDown = false;
             emit activate();
             bool me = movingEnabled;
@@ -153,7 +159,7 @@ bool QWidgetResizeHandler::eventFilter(QObject *o, QEvent *ee)
     case QEvent::MouseButtonRelease:
         if (w->isMaximized())
             break;
-        if (e->button() == Qt::LeftButton) {
+        if (static_cast<QMouseEvent *>(ee)->button() == Qt::LeftButton) {
             moveResizeMode = false;
             buttonDown = false;
             widget->releaseMouse();
@@ -169,6 +175,7 @@ bool QWidgetResizeHandler::eventFilter(QObject *o, QEvent *ee)
     case QEvent::MouseMove: {
         if (w->isMaximized())
             break;
+        QMouseEvent *e = static_cast<QMouseEvent *>(ee);
         buttonDown = buttonDown && (e->buttons() & Qt::LeftButton); // safety, state machine broken!
         bool me = movingEnabled;
         movingEnabled = (me && o == widget && (buttonDown || moveResizeMode));
@@ -182,11 +189,12 @@ bool QWidgetResizeHandler::eventFilter(QObject *o, QEvent *ee)
         }
     } break;
     case QEvent::KeyPress:
-        keyPressEvent((QKeyEvent*)e);
+        keyPressEvent(static_cast<QKeyEvent *>(ee));
         break;
     case QEvent::ShortcutOverride:
+        buttonDown &= ((QGuiApplication::mouseButtons() & Qt::LeftButton) != Qt::NoButton);
         if (buttonDown) {
-            ((QKeyEvent*)ee)->accept();
+            ee->accept();
             return true;
         }
         break;
@@ -255,7 +263,7 @@ void QWidgetResizeHandler::mouseMoveEvent(QMouseEvent *e)
 
     // Workaround for window managers which refuse to move a tool window partially offscreen.
     if (QGuiApplication::platformName() == QLatin1String("xcb")) {
-        const QRect desktop = QApplication::desktop()->availableGeometry(widget);
+        const QRect desktop = QDesktopWidgetPrivate::availableGeometry(widget);
         pp.rx() = qMax(pp.x(), desktop.left());
         pp.ry() = qMax(pp.y(), desktop.top());
         p.rx() = qMin(p.x(), desktop.right());
@@ -376,7 +384,7 @@ void QWidgetResizeHandler::keyPressEvent(QKeyEvent * e)
     switch (e->key()) {
     case Qt::Key_Left:
         pos.rx() -= delta;
-        if (pos.x() <= QApplication::desktop()->geometry().left()) {
+        if (pos.x() <= QDesktopWidgetPrivate::geometry().left()) {
             if (mode == TopLeft || mode == BottomLeft) {
                 moveOffset.rx() += delta;
                 invertedMoveOffset.rx() += delta;
@@ -401,7 +409,7 @@ void QWidgetResizeHandler::keyPressEvent(QKeyEvent * e)
         break;
     case Qt::Key_Right:
         pos.rx() += delta;
-        if (pos.x() >= QApplication::desktop()->geometry().right()) {
+        if (pos.x() >= QDesktopWidgetPrivate::geometry().right()) {
             if (mode == TopRight || mode == BottomRight) {
                 moveOffset.rx() += delta;
                 invertedMoveOffset.rx() += delta;
@@ -426,7 +434,7 @@ void QWidgetResizeHandler::keyPressEvent(QKeyEvent * e)
         break;
     case Qt::Key_Up:
         pos.ry() -= delta;
-        if (pos.y() <= QApplication::desktop()->geometry().top()) {
+        if (pos.y() <= QDesktopWidgetPrivate::geometry().top()) {
             if (mode == TopLeft || mode == TopRight) {
                 moveOffset.ry() += delta;
                 invertedMoveOffset.ry() += delta;
@@ -451,7 +459,7 @@ void QWidgetResizeHandler::keyPressEvent(QKeyEvent * e)
         break;
     case Qt::Key_Down:
         pos.ry() += delta;
-        if (pos.y() >= QApplication::desktop()->geometry().bottom()) {
+        if (pos.y() >= QDesktopWidgetPrivate::geometry().bottom()) {
             if (mode == BottomLeft || mode == BottomRight) {
                 moveOffset.ry() += delta;
                 invertedMoveOffset.ry() += delta;
@@ -539,4 +547,4 @@ void QWidgetResizeHandler::doMove()
 
 QT_END_NAMESPACE
 
-#endif //QT_NO_RESIZEHANDLER
+#include "moc_qwidgetresizehandler_p.cpp"

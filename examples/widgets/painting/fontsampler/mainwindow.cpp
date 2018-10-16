@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -39,10 +49,15 @@
 ****************************************************************************/
 
 #include <QtWidgets>
-#ifndef QT_NO_PRINTER
+#if defined(QT_PRINTSUPPORT_LIB)
+#include <QtPrintSupport/qtprintsupportglobal.h>
+#if QT_CONFIG(printdialog)
 #include <QPrinter>
 #include <QPrintDialog>
+#if QT_CONFIG(printpreviewdialog)
 #include <QPrintPreviewDialog>
+#endif
+#endif
 #endif
 
 #include "mainwindow.h"
@@ -80,6 +95,7 @@ void MainWindow::setupFontTree()
         QTreeWidgetItem *familyItem = new QTreeWidgetItem(fontTree);
         familyItem->setText(0, family);
         familyItem->setCheckState(0, Qt::Unchecked);
+        familyItem->setFlags(familyItem->flags() | Qt::ItemIsAutoTristate);
 
         foreach (QString style, styles) {
             QTreeWidgetItem *styleItem = new QTreeWidgetItem(familyItem);
@@ -143,7 +159,9 @@ void MainWindow::showFont(QTreeWidgetItem *item)
     QString oldText = textEdit->toPlainText().trimmed();
     bool modified = textEdit->document()->isModified();
     textEdit->clear();
-    textEdit->document()->setDefaultFont(QFont(family, 32, weight, italic));
+    QFont font(family, 32, weight, italic);
+    font.setStyleName(style);
+    textEdit->document()->setDefaultFont(font);
 
     QTextCursor cursor = textEdit->textCursor();
     QTextBlockFormat blockFormat;
@@ -167,51 +185,11 @@ void MainWindow::updateStyles(QTreeWidgetItem *item, int column)
     QTreeWidgetItem *parent = item->parent();
 
     if (parent) {
-
         // Only count style items.
         if (state == Qt::Checked)
             ++markedCount;
         else
             --markedCount;
-
-        if (state == Qt::Checked && parent->checkState(0) == Qt::Unchecked) {
-            // Mark parent items when child items are checked.
-            parent->setCheckState(0, Qt::Checked);
-
-        } else if (state == Qt::Unchecked && parent->checkState(0) == Qt::Checked) {
-
-            bool marked = false;
-            for (int row = 0; row < parent->childCount(); ++row) {
-                if (parent->child(row)->checkState(0) == Qt::Checked) {
-                    marked = true;
-                    break;
-                }
-            }
-            // Unmark parent items when all child items are unchecked.
-            if (!marked)
-                parent->setCheckState(0, Qt::Unchecked);
-        }
-    } else {
-        int row;
-        int number = 0;
-        for (row = 0; row < item->childCount(); ++row) {
-            if (item->child(row)->checkState(0) == Qt::Checked)
-                ++number;
-        }
-
-        // Mark/unmark all child items when marking/unmarking top-level
-        // items.
-        if (state == Qt::Checked && number == 0) {
-            for (row = 0; row < item->childCount(); ++row) {
-                if (item->child(row)->checkState(0) == Qt::Unchecked)
-                    item->child(row)->setCheckState(0, Qt::Checked);
-            }
-        } else if (state == Qt::Unchecked && number > 0) {
-            for (row = 0; row < item->childCount(); ++row) {
-                if (item->child(row)->checkState(0) == Qt::Checked)
-                    item->child(row)->setCheckState(0, Qt::Unchecked);
-            }
-        }
     }
 
     printAction->setEnabled(markedCount > 0);
@@ -241,9 +219,9 @@ QMap<QString, StyleItems> MainWindow::currentPageMap()
     return pageMap;
 }
 
-#ifndef QT_NO_PRINTER
 void MainWindow::on_printAction_triggered()
 {
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     pageMap = currentPageMap();
 
     if (pageMap.count() == 0)
@@ -260,10 +238,12 @@ void MainWindow::on_printAction_triggered()
         printer.setFromTo(1, pageMap.keys().count());
 
     printDocument(&printer);
+#endif
 }
 
 void MainWindow::printDocument(QPrinter *printer)
 {
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     printer->setFromTo(1, pageMap.count());
 
     QProgressDialog progress(tr("Preparing font samples..."), tr("&Cancel"),
@@ -292,10 +272,12 @@ void MainWindow::printDocument(QPrinter *printer)
     }
 
     painter.end();
+#endif
 }
 
 void MainWindow::on_printPreviewAction_triggered()
 {
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printpreviewdialog)
     pageMap = currentPageMap();
 
     if (pageMap.count() == 0)
@@ -306,10 +288,12 @@ void MainWindow::on_printPreviewAction_triggered()
     connect(&preview, SIGNAL(paintRequested(QPrinter*)),
             this, SLOT(printDocument(QPrinter*)));
     preview.exec();
+#endif
 }
 
 void MainWindow::printPage(int index, QPainter *painter, QPrinter *printer)
 {
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     QString family = pageMap.keys()[index];
     StyleItems items = pageMap[family];
 
@@ -324,6 +308,7 @@ void MainWindow::printPage(int index, QPainter *painter, QPrinter *printer)
         // Calculate the maximum width and total height of the text.
         foreach (int size, sampleSizes) {
             QFont font(family, size, weight, italic);
+            font.setStyleName(style);
             font = QFont(font, painter->device());
             QFontMetricsF fontMetrics(font);
             QRectF rect = fontMetrics.boundingRect(
@@ -357,6 +342,7 @@ void MainWindow::printPage(int index, QPainter *painter, QPrinter *printer)
         // Draw each line of text.
         foreach (int size, sampleSizes) {
             QFont font(family, size, weight, italic);
+            font.setStyleName(style);
             font = QFont(font, painter->device());
             QFontMetricsF fontMetrics(font);
             QRectF rect = fontMetrics.boundingRect(QString("%1 %2").arg(
@@ -370,5 +356,5 @@ void MainWindow::printPage(int index, QPainter *painter, QPrinter *printer)
     }
 
     painter->restore();
+#endif
 }
-#endif // QT_NO_PRINTER

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtDBus module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +41,7 @@
 #include "qdbusserver.h"
 #include "qdbusconnection_p.h"
 #include "qdbusconnectionmanager_p.h"
+#include "qdbusutil_p.h"
 
 #ifndef QT_NO_DBUS
 
@@ -60,44 +60,48 @@ QT_BEGIN_NAMESPACE
     \a parent.
 */
 QDBusServer::QDBusServer(const QString &address, QObject *parent)
-    : QObject(parent)
+    : QObject(parent), d(nullptr)
 {
     if (address.isEmpty())
         return;
 
-    if (!qdbus_loadLibDBus()) {
-        d = 0;
+    if (!qdbus_loadLibDBus())
         return;
-    }
-    d = new QDBusConnectionPrivate(this);
 
-    QObject::connect(d, SIGNAL(newServerConnection(QDBusConnection)),
-                     this, SIGNAL(newConnection(QDBusConnection)));
+    QDBusConnectionManager *instance = QDBusConnectionManager::instance();
+    if (!instance)
+        return;
 
-    QDBusErrorInternal error;
-    d->setServer(q_dbus_server_listen(address.toUtf8().constData(), error), error);
+    emit instance->serverRequested(address, this);
+    QObject::connect(d, SIGNAL(newServerConnection(QDBusConnectionPrivate*)),
+                     this, SLOT(_q_newConnection(QDBusConnectionPrivate*)), Qt::QueuedConnection);
 }
 
 /*!
     Constructs a QDBusServer with the given \a parent. The server will listen
-    for connections in \c {/tmp}.
+    for connections in \c {/tmp} (on Unix systems) or on a TCP port bound to
+    localhost (elsewhere).
 */
 QDBusServer::QDBusServer(QObject *parent)
-    : QObject(parent)
+    : QObject(parent), d(nullptr)
 {
-    const QString address = QLatin1String("unix:tmpdir=/tmp");
+#ifdef Q_OS_UNIX
+    // Use Unix sockets on Unix systems only
+    const QString address = QStringLiteral("unix:tmpdir=/tmp");
+#else
+    const QString address = QStringLiteral("tcp:");
+#endif
 
-    if (!qdbus_loadLibDBus()) {
-        d = 0;
+    if (!qdbus_loadLibDBus())
         return;
-    }
-    d = new QDBusConnectionPrivate(this);
 
-    QObject::connect(d, SIGNAL(newServerConnection(QDBusConnection)),
-                     this, SIGNAL(newConnection(QDBusConnection)));
+    QDBusConnectionManager *instance = QDBusConnectionManager::instance();
+    if (!instance)
+        return;
 
-    QDBusErrorInternal error;
-    d->setServer(q_dbus_server_listen(address.toUtf8().constData(), error), error);
+    emit instance->serverRequested(address, this);
+    QObject::connect(d, SIGNAL(newServerConnection(QDBusConnectionPrivate*)),
+                     this, SLOT(_q_newConnection(QDBusConnectionPrivate*)), Qt::QueuedConnection);
 }
 
 /*!
@@ -105,17 +109,20 @@ QDBusServer::QDBusServer(QObject *parent)
 */
 QDBusServer::~QDBusServer()
 {
+    QWriteLocker locker(&d->lock);
     if (QDBusConnectionManager::instance()) {
         QMutexLocker locker(&QDBusConnectionManager::instance()->mutex);
-        Q_FOREACH (const QString &name, d->serverConnectionNames) {
+        for (const QString &name : qAsConst(d->serverConnectionNames))
             QDBusConnectionManager::instance()->removeConnection(name);
-        }
         d->serverConnectionNames.clear();
     }
+    d->serverObject = nullptr;
+    d->ref.store(0);
+    d->deleteLater();
 }
 
 /*!
-    Returns true if this QDBusServer object is connected.
+    Returns \c true if this QDBusServer object is connected.
 
     If it isn't connected, you need to call the constructor again.
 */
@@ -131,7 +138,7 @@ bool QDBusServer::isConnected() const
 */
 QDBusError QDBusServer::lastError() const
 {
-    return d->lastError;
+    return d ? d->lastError : QDBusError(QDBusError::Disconnected, QDBusUtil::disconnectedErrorMessage());
 }
 
 /*!
@@ -150,6 +157,33 @@ QString QDBusServer::address() const
 }
 
 /*!
+    \since 5.3
+
+    If \a value is set to true, an incoming connection can proceed even if the
+    connecting client is not authenticated as a user.
+
+    By default, this value is false.
+
+    \sa isAnonymousAuthenticationAllowed()
+*/
+void QDBusServer::setAnonymousAuthenticationAllowed(bool value)
+{
+    d->anonymousAuthenticationAllowed = value;
+}
+
+/*!
+    \since 5.3
+
+    Returns true if anonymous authentication is allowed.
+
+    \sa setAnonymousAuthenticationAllowed()
+*/
+bool QDBusServer::isAnonymousAuthenticationAllowed() const
+{
+    return d->anonymousAuthenticationAllowed;
+}
+
+/*!
   \fn void QDBusServer::newConnection(const QDBusConnection &connection)
 
   This signal is emitted when a new client connection \a connection is
@@ -157,5 +191,7 @@ QString QDBusServer::address() const
  */
 
 QT_END_NAMESPACE
+
+#include "moc_qdbusserver.cpp"
 
 #endif // QT_NO_DBUS

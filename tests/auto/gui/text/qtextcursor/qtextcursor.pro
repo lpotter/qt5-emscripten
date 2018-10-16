@@ -1,6 +1,4 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qtextcursor
 SOURCES  += tst_qtextcursor.cpp
-QT += testlib
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+QT += core-private gui-private testlib

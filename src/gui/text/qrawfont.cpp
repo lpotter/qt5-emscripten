@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,8 +43,14 @@
 
 #include "qrawfont.h"
 #include "qrawfont_p.h"
+#include "qplatformfontdatabase.h"
+
+#include <private/qguiapplication_p.h>
+#include <qpa/qplatformintegration.h>
+#include <qpa/qplatformfontdatabase.h>
 
 #include <QtCore/qendian.h>
+#include <QtCore/qfile.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -58,7 +62,6 @@ QT_BEGIN_NAMESPACE
 
    \ingroup text
    \ingroup shared
-   \mainclass
 
    \note QRawFont is a low level class. For most purposes QFont is a more appropriate class.
 
@@ -83,7 +86,7 @@ QT_BEGIN_NAMESPACE
    also have accessors to some relevant data in the physical font.
 
    QRawFont only provides support for the main font technologies: GDI and DirectWrite on Windows
-   platforms, FreeType on Linux platforms and CoreText on Mac OS X. For other
+   platforms, FreeType on Linux platforms and CoreText on \macos. For other
    font back-ends, the APIs will be disabled.
 
    QRawFont can be constructed in a number of ways:
@@ -122,6 +125,20 @@ QT_BEGIN_NAMESPACE
     \value SubPixelAntialiasing Will rasterize by measuring the coverage of each subpixel,
            returning a separate alpha value for each of the red, green and blue components of
            each pixel.
+*/
+
+/*!
+    \enum QRawFont::LayoutFlag
+    \since 5.1
+
+    This enum tells the function advancesForGlyphIndexes() how to calculate the advances.
+
+    \value SeparateAdvances Will calculate the advance for each glyph separately.
+    \value KernedAdvances Will apply kerning between adjacent glyphs. Note that OpenType GPOS based
+           kerning is currently not supported.
+    \value UseDesignMetrics Use design metrics instead of hinted metrics adjusted to the resolution
+           of the paint device.
+           Can be OR-ed with any of the options above.
 */
 
 /*!
@@ -195,7 +212,7 @@ QRawFont &QRawFont::operator=(const QRawFont &other)
 */
 
 /*!
-   Returns true if the QRawFont is valid and false otherwise.
+   Returns \c true if the QRawFont is valid and false otherwise.
 */
 bool QRawFont::isValid() const
 {
@@ -236,8 +253,7 @@ void QRawFont::loadFromData(const QByteArray &fontData,
     d.detach();
     d->cleanUp();
     d->hintingPreference = hintingPreference;
-    d->thread = QThread::currentThread();
-    d->platformLoadFromData(fontData, pixelSize, hintingPreference);
+    d->loadFromData(fontData, pixelSize, hintingPreference);
 }
 
 /*!
@@ -245,9 +261,13 @@ void QRawFont::loadFromData(const QByteArray &fontData,
    \a glyphIndex in the underlying font, using the \a transform specified.
    If the QRawFont is not valid, this function will return an invalid QImage.
 
-   If \a antialiasingType is set to QRawFont::SubPixelAntialiasing, then the resulting image will be
-   in QImage::Format_RGB32 and the RGB values of each pixel will represent the subpixel opacities of
-   the pixel in the rasterization of the glyph. Otherwise, the image will be in the format of
+   If the font is a color font, then the resulting image will contain the rendered
+   glyph at the current pixel size. In this case, the \a antialiasingType will be
+   ignored.
+
+   Otherwise, if \a antialiasingType is set to QRawFont::SubPixelAntialiasing, then the resulting image
+   will be in QImage::Format_RGB32 and the RGB values of each pixel will represent the subpixel opacities
+   of the pixel in the rasterization of the glyph. Otherwise, the image will be in the format of
    QImage::Format_Indexed8 and each pixel will contain the opacity of the pixel in the
    rasterization.
 
@@ -258,6 +278,9 @@ QImage QRawFont::alphaMapForGlyph(quint32 glyphIndex, AntialiasingType antialias
 {
     if (!d->isValid())
         return QImage();
+
+    if (d->fontEngine->glyphFormat == QFontEngine::Format_ARGB)
+        return d->fontEngine->bitmapForGlyph(glyphIndex, QFixed(), transform);
 
     if (antialiasingType == SubPixelAntialiasing)
         return d->fontEngine->alphaRGBMapForGlyph(glyphIndex, QFixed(), transform);
@@ -285,7 +308,7 @@ QPainterPath QRawFont::pathForGlyph(quint32 glyphIndex) const
 }
 
 /*!
-   Returns true if this QRawFont is equal to \a other. Otherwise, returns false.
+   Returns \c true if this QRawFont is equal to \a other. Otherwise, returns \c false.
 */
 bool QRawFont::operator==(const QRawFont &other) const
 {
@@ -293,13 +316,33 @@ bool QRawFont::operator==(const QRawFont &other) const
 }
 
 /*!
+    Returns the hash value for \a font. If specified, \a seed is used
+    to initialize the hash.
+
+    \relates QRawFont
+    \since 5.8
+*/
+uint qHash(const QRawFont &font, uint seed) Q_DECL_NOTHROW
+{
+    return qHash(QRawFontPrivate::get(font)->fontEngine, seed);
+}
+
+
+/*!
     \fn bool QRawFont::operator!=(const QRawFont &other) const
 
-    Returns true if this QRawFont is not equal to \a other. Otherwise, returns false.
+    Returns \c true if this QRawFont is not equal to \a other. Otherwise, returns \c false.
 */
 
 /*!
    Returns the ascent of this QRawFont in pixel units.
+
+   The ascent of a font is the distance from the baseline to the
+   highest position characters extend to. In practice, some font
+   designers break this rule, e.g. when they put more than one accent
+   on top of a character, or to accommodate an unusual character in
+   an exotic language, so it is possible (though rare) that this
+   value will be too small.
 
    \sa QFontMetricsF::ascent()
 */
@@ -309,7 +352,29 @@ qreal QRawFont::ascent() const
 }
 
 /*!
+   Returns the cap height of this QRawFont in pixel units.
+
+   \since 5.8
+
+   The cap height of a font is the height of a capital letter above
+   the baseline. It specifically is the height of capital letters
+   that are flat - such as H or I - as opposed to round letters such
+   as O, or pointed letters like A, both of which may display overshoot.
+
+   \sa QFontMetricsF::capHeight()
+*/
+qreal QRawFont::capHeight() const
+{
+    return d->isValid() ? d->fontEngine->capHeight().toReal() : 0.0;
+}
+
+/*!
    Returns the descent of this QRawFont in pixel units.
+
+   The descent is the distance from the base line to the lowest point
+   characters extend to. In practice, some font designers break this rule,
+   e.g. to accommodate an unusual character in an exotic language, so
+   it is possible (though rare) that this value will be too small.
 
    \sa QFontMetricsF::descent()
 */
@@ -321,6 +386,8 @@ qreal QRawFont::descent() const
 /*!
    Returns the xHeight of this QRawFont in pixel units.
 
+   This is often but not always the same as the height of the character 'x'.
+
    \sa QFontMetricsF::xHeight()
 */
 qreal QRawFont::xHeight() const
@@ -330,6 +397,8 @@ qreal QRawFont::xHeight() const
 
 /*!
    Returns the leading of this QRawFont in pixel units.
+
+   This is the natural inter-line spacing.
 
    \sa QFontMetricsF::leading()
 */
@@ -464,16 +533,8 @@ QVector<quint32> QRawFont::glyphIndexesForString(const QString &text) const
     QGlyphLayout glyphs;
     glyphs.numGlyphs = numGlyphs;
     glyphs.glyphs = glyphIndexes.data();
-    if (!d->fontEngine->stringToCMap(text.data(), text.size(), &glyphs, &numGlyphs, QFontEngine::GlyphIndicesOnly)) {
-        glyphIndexes.resize(numGlyphs);
-
-        glyphs.numGlyphs = numGlyphs;
-        glyphs.glyphs = glyphIndexes.data();
-        if (!d->fontEngine->stringToCMap(text.data(), text.size(), &glyphs, &numGlyphs, QFontEngine::GlyphIndicesOnly)) {
-            Q_ASSERT_X(false, Q_FUNC_INFO, "stringToCMap shouldn't fail twice");
-            return QVector<quint32>();
-        }
-    }
+    if (!d->fontEngine->stringToCMap(text.data(), text.size(), &glyphs, &numGlyphs, QFontEngine::GlyphIndicesOnly))
+        Q_UNREACHABLE();
 
     glyphIndexes.resize(numGlyphs);
     return glyphIndexes;
@@ -509,44 +570,80 @@ bool QRawFont::glyphIndexesForChars(const QChar *chars, int numChars, quint32 *g
 }
 
 /*!
-    \fn QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes) const
+   \fn QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes, LayoutFlags layoutFlags) const
+   \since 5.1
 
    Returns the QRawFont's advances for each of the \a glyphIndexes in pixel units. The advances
    give the distance from the position of a given glyph to where the next glyph should be drawn
-   to make it appear as if the two glyphs are unspaced.
+   to make it appear as if the two glyphs are unspaced. How the advances are calculated is
+   controlled by \a layoutFlags.
 
    \sa QTextLine::horizontalAdvance(), QFontMetricsF::width()
 */
 
 /*!
+   \fn QVector<QPointF> QRawFont::advancesForGlyphIndexes(const QVector<quint32> &glyphIndexes) const
+
+   \overload
+
+   Returns the QRawFont's advances for each of the \a glyphIndexes in pixel units. The advances
+   give the distance from the position of a given glyph to where the next glyph should be drawn
+   to make it appear as if the two glyphs are unspaced. The advance of each glyph is calculated
+   separately.
+
+   \sa QTextLine::horizontalAdvance(), QFontMetricsF::width()
+*/
+
+/*!
+   \since 5.1
+
    Returns the QRawFont's advances for each of the \a glyphIndexes in pixel units. The advances
    give the distance from the position of a given glyph to where the next glyph should be drawn
    to make it appear as if the two glyphs are unspaced. The glyph indexes are given with the
    array \a glyphIndexes while the results are returned through \a advances, both of them must
-   have \a numGlyphs elements.
+   have \a numGlyphs elements. How the advances are calculated is controlled by \a layoutFlags.
 
    \sa QTextLine::horizontalAdvance(), QFontMetricsF::width()
 */
-bool QRawFont::advancesForGlyphIndexes(const quint32 *glyphIndexes, QPointF *advances, int numGlyphs) const
+bool QRawFont::advancesForGlyphIndexes(const quint32 *glyphIndexes, QPointF *advances, int numGlyphs, LayoutFlags layoutFlags) const
 {
     Q_ASSERT(glyphIndexes && advances);
     if (!d->isValid() || numGlyphs <= 0)
         return false;
 
-    QGlyphLayout glyphs;
-    glyphs.glyphs = const_cast<HB_Glyph *>(glyphIndexes);
-    glyphs.numGlyphs = numGlyphs;
-    QVarLengthArray<QFixed> advances_x(numGlyphs);
-    QVarLengthArray<QFixed> advances_y(numGlyphs);
-    glyphs.advances_x = advances_x.data();
-    glyphs.advances_y = advances_y.data();
+    QVarLengthArray<QFixed> tmpAdvances(numGlyphs);
 
-    d->fontEngine->recalcAdvances(&glyphs, 0);
+    QGlyphLayout glyphs;
+    glyphs.glyphs = const_cast<glyph_t *>(glyphIndexes);
+    glyphs.numGlyphs = numGlyphs;
+    glyphs.advances = tmpAdvances.data();
+
+    bool design = layoutFlags & UseDesignMetrics;
+
+    d->fontEngine->recalcAdvances(&glyphs, design ? QFontEngine::DesignMetrics : QFontEngine::ShaperFlag(0));
+    if (layoutFlags & KernedAdvances)
+        d->fontEngine->doKerning(&glyphs, design ? QFontEngine::DesignMetrics : QFontEngine::ShaperFlag(0));
 
     for (int i=0; i<numGlyphs; ++i)
-        advances[i] = QPointF(glyphs.advances_x[i].toReal(), glyphs.advances_y[i].toReal());
+        advances[i] = QPointF(tmpAdvances[i].toReal(), 0.0);
 
     return true;
+}
+
+/*!
+   \overload
+
+   Returns the QRawFont's advances for each of the \a glyphIndexes in pixel units. The advances
+   give the distance from the position of a given glyph to where the next glyph should be drawn
+   to make it appear as if the two glyphs are unspaced. The glyph indexes are given with the
+   array \a glyphIndexes while the results are returned through \a advances, both of them must
+   have \a numGlyphs elements. The advance of each glyph is calculated separately
+
+   \sa QTextLine::horizontalAdvance(), QFontMetricsF::width()
+*/
+bool QRawFont::advancesForGlyphIndexes(const quint32 *glyphIndexes, QPointF *advances, int numGlyphs) const
+{
+    return QRawFont::advancesForGlyphIndexes(glyphIndexes, advances, numGlyphs, SeparateAdvances);
 }
 
 /*!
@@ -570,12 +667,8 @@ QByteArray QRawFont::fontTable(const char *tagName) const
     if (!d->isValid())
         return QByteArray();
 
-    const quint32 *tagId = reinterpret_cast<const quint32 *>(tagName);
-    return d->fontEngine->getSfntTable(qToBigEndian(*tagId));
+    return d->fontEngine->getSfntTable(MAKE_TAG(tagName[0], tagName[1], tagName[2], tagName[3]));
 }
-
-// From qfontdatabase.cpp
-extern QList<QFontDatabase::WritingSystem> qt_determine_writing_systems_from_truetype_bits(quint32 unicodeRange[4], quint32 codePageRange[2]);
 
 /*!
    Returns a list of writing systems supported by the font according to designer supplied
@@ -590,43 +683,48 @@ extern QList<QFontDatabase::WritingSystem> qt_determine_writing_systems_from_tru
 */
 QList<QFontDatabase::WritingSystem> QRawFont::supportedWritingSystems() const
 {
+    QList<QFontDatabase::WritingSystem> writingSystems;
     if (d->isValid()) {
         QByteArray os2Table = fontTable("OS/2");
         if (os2Table.size() > 86) {
-            char *data = os2Table.data();
-            quint32 *bigEndianUnicodeRanges = reinterpret_cast<quint32 *>(data + 42);
-            quint32 *bigEndianCodepageRanges = reinterpret_cast<quint32 *>(data + 78);
+            const uchar * const data = reinterpret_cast<const uchar *>(os2Table.constData());
+            const uchar * const bigEndianUnicodeRanges  = data + 42;
+            const uchar * const bigEndianCodepageRanges = data + 78;
 
             quint32 unicodeRanges[4];
             quint32 codepageRanges[2];
 
-            for (int i=0; i<4; ++i) {
-                if (i < 2)
-                    codepageRanges[i] = qFromBigEndian(bigEndianCodepageRanges[i]);
-                unicodeRanges[i] = qFromBigEndian(bigEndianUnicodeRanges[i]);
-            }
+            for (size_t i = 0; i < sizeof unicodeRanges / sizeof *unicodeRanges; ++i)
+                unicodeRanges[i] = qFromBigEndian<quint32>(bigEndianUnicodeRanges + i * sizeof(quint32));
 
-            return qt_determine_writing_systems_from_truetype_bits(unicodeRanges, codepageRanges);
+            for (size_t i = 0; i < sizeof codepageRanges / sizeof *codepageRanges; ++i)
+                codepageRanges[i] = qFromBigEndian<quint32>(bigEndianCodepageRanges + i * sizeof(quint32));
+
+            QSupportedWritingSystems ws = QPlatformFontDatabase::writingSystemsFromTrueTypeBits(unicodeRanges, codepageRanges);
+            for (int i = 0; i < QFontDatabase::WritingSystemsCount; ++i) {
+                if (ws.supported(QFontDatabase::WritingSystem(i)))
+                    writingSystems.append(QFontDatabase::WritingSystem(i));
+            }
         }
     }
 
-    return QList<QFontDatabase::WritingSystem>();
+    return writingSystems;
 }
 
 /*!
-    Returns true if the font has a glyph that corresponds to the given \a character.
+    Returns \c true if the font has a glyph that corresponds to the given \a character.
 
     \sa supportedWritingSystems()
 */
 bool QRawFont::supportsCharacter(QChar character) const
 {
-    return d->isValid() && d->fontEngine->canRender(&character, 1);
+    return supportsCharacter(character.unicode());
 }
 
 /*!
     \overload
 
-   Returns true if the font has a glyph that corresponds to the UCS-4 encoded character \a ucs4.
+   Returns \c true if the font has a glyph that corresponds to the UCS-4 encoded character \a ucs4.
 
    \sa supportedWritingSystems()
 */
@@ -648,22 +746,32 @@ extern int qt_script_for_writing_system(QFontDatabase::WritingSystem writingSyst
 QRawFont QRawFont::fromFont(const QFont &font, QFontDatabase::WritingSystem writingSystem)
 {
     QRawFont rawFont;
-    QFontPrivate *font_d = QFontPrivate::get(font);
+    const QFontPrivate *font_d = QFontPrivate::get(font);
     int script = qt_script_for_writing_system(writingSystem);
     QFontEngine *fe = font_d->engineForScript(script);
 
     if (fe != 0 && fe->type() == QFontEngine::Multi) {
         QFontEngineMulti *multiEngine = static_cast<QFontEngineMulti *>(fe);
         fe = multiEngine->engine(0);
-        if (fe == 0) {
-            multiEngine->loadEngine(0);
-            fe = multiEngine->engine(0);
+
+        if (script > QChar::Script_Latin) {
+            // keep in sync with QFontEngineMulti::loadEngine()
+            QFontDef request(multiEngine->fontDef);
+            request.styleStrategy |= QFont::NoFontMerging;
+
+            if (QFontEngine *engine = QFontDatabase::findFont(request, script)) {
+                if (request.weight > QFont::Normal)
+                    engine->fontDef.weight = request.weight;
+                if (request.style > QFont::StyleNormal)
+                    engine->fontDef.style = request.style;
+                fe = engine;
+            }
         }
+        Q_ASSERT(fe);
     }
 
     if (fe != 0) {
-        rawFont.d.data()->fontEngine = fe;
-        rawFont.d.data()->fontEngine->ref.ref();
+        rawFont.d.data()->setFontEngine(fe);
         rawFont.d.data()->hintingPreference = font.hintingPreference();
     }
     return rawFont;
@@ -674,34 +782,23 @@ QRawFont QRawFont::fromFont(const QFont &font, QFontDatabase::WritingSystem writ
 */
 void QRawFont::setPixelSize(qreal pixelSize)
 {
-    if (d->fontEngine == 0 || qFuzzyCompare(d->fontEngine->fontDef.pixelSize, pixelSize))
+    if (!d->isValid() || qFuzzyCompare(d->fontEngine->fontDef.pixelSize, pixelSize))
         return;
 
     d.detach();
-    QFontEngine *oldFontEngine = d->fontEngine;
-
-    d->fontEngine = d->fontEngine->cloneWithSize(pixelSize);
-    if (d->fontEngine != 0)
-        d->fontEngine->ref.ref();
-
-    oldFontEngine->ref.deref();
-    if (oldFontEngine->cache_count == 0 && oldFontEngine->ref.load() == 0)
-        delete oldFontEngine;
+    d->setFontEngine(d->fontEngine->cloneWithSize(pixelSize));
 }
 
 /*!
     \internal
 */
-void QRawFontPrivate::cleanUp()
+void QRawFontPrivate::loadFromData(const QByteArray &fontData, qreal pixelSize,
+                                           QFont::HintingPreference hintingPreference)
 {
-    platformCleanUp();
-    if (fontEngine != 0) {
-        fontEngine->ref.deref();
-        if (fontEngine->cache_count == 0 && fontEngine->ref.load() == 0)
-            delete fontEngine;
-        fontEngine = 0;
-    }
-    hintingPreference = QFont::PreferDefaultHinting;
+    Q_ASSERT(fontEngine == 0);
+
+    QPlatformFontDatabase *pfdb = QGuiApplicationPrivate::platformIntegration()->fontDatabase();
+    setFontEngine(pfdb->fontEngine(fontData, pixelSize, hintingPreference));
 }
 
 /*!
@@ -711,7 +808,7 @@ void QRawFontPrivate::cleanUp()
 */
 QRectF QRawFont::boundingRect(quint32 glyphIndex) const
 {
-    if (!isValid())
+    if (!d->isValid())
         return QRectF();
 
     glyph_metrics_t gm = d->fontEngine->boundingBox(glyphIndex);

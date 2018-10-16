@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the utils of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,7 +35,7 @@ void Function::printDeclaration(CodeBlock &block, const QString &funcNamePrefix)
     block << (iline ? "inline " : "") << signature(funcNamePrefix) << (iline ? QLatin1String(" {") : QLatin1String(";"));
     if (!iline)
         return;
-    
+
     block.indent();
     QString tmp = body;
     if (tmp.endsWith(QLatin1Char('\n')))
@@ -81,7 +68,7 @@ QString Function::definition() const
     QString result;
     result += signature();
     result += QLatin1String("\n{\n");
-    
+
     QString tmp = body;
 
     if (tmp.endsWith(QLatin1Char('\n')))
@@ -92,7 +79,7 @@ QString Function::definition() const
     tmp.replace(QLatin1Char('\n'), QLatin1String("\n    "));
 
     result += tmp;
-    
+
     result += QLatin1String("\n}\n");
 
     return result;
@@ -102,16 +89,16 @@ void Class::Section::printDeclaration(const Class *klass, CodeBlock &block) cons
 {
     foreach (Function ctor, constructors)
         ctor.printDeclaration(block, klass->name());
-    
+
     if (!constructors.isEmpty())
         block.addNewLine();
-    
+
     foreach (Function func, functions)
         func.printDeclaration(block);
-    
+
     if (!functions.isEmpty())
         block.addNewLine();
-    
+
     foreach (QString var, variables)
         block << var << ';';
 }
@@ -133,13 +120,13 @@ void Class::addConstructor(Access access, const QString &body, const QString &_a
 QString Class::Section::definition(const Class *klass) const
 {
     QString result;
-    
+
     foreach (Function ctor, constructors) {
         ctor.setName(klass->name() + "::" + klass->name() + ctor.name());
         result += ctor.definition();
         result += QLatin1Char('\n');
     }
-    
+
     foreach (Function func, functions) {
         if (!func.hasBody()) continue;
         func.setName(klass->name() + "::" + func.name());
@@ -153,10 +140,10 @@ QString Class::Section::definition(const Class *klass) const
 QString Class::declaration() const
 {
     CodeBlock block;
-    
+
     block << QLatin1String("class ") << cname;
     block << "{";
-    
+
     if (!sections[PublicMember].isEmpty()) {
         block << "public:";
         block.indent();
@@ -170,7 +157,7 @@ QString Class::declaration() const
         sections[ProtectedMember].printDeclaration(this, block);
         block.outdent();
     }
-    
+
     if (!sections[PrivateMember].isEmpty()) {
         block << "private:";
         block.indent();
@@ -180,7 +167,7 @@ QString Class::declaration() const
 
     block << "};";
     block.addNewLine();
-    
+
     return block.toString();
 }
 
@@ -406,12 +393,12 @@ void Generator::generateTransitions(CodeBlock &body, const TransitionMap &transi
 QString Generator::generate()
 {
     Class klass(cfg.className);
-    
+
     klass.addMember(Class::PublicMember, "QString input");
     klass.addMember(Class::PublicMember, "int pos");
     klass.addMember(Class::PublicMember, "int lexemStart");
     klass.addMember(Class::PublicMember, "int lexemLength");
-    
+
     {
         CodeBlock body;
         body << "input = inp;";
@@ -420,7 +407,7 @@ QString Generator::generate()
         body << "lexemLength = 0;";
         klass.addConstructor(Class::PublicMember, body, "const QString &inp");
     }
-    
+
     {
         Function next("QChar", "next()");
         next.setInline(true);
@@ -430,7 +417,7 @@ QString Generator::generate()
             next.addBody("return (pos < input.length()) ? input.at(pos++).toLower() : QChar();");
         klass.addMember(Class::PublicMember, next);
     }
-    
+
     /*
     {
         Function lexem("QString", "lexem()");
@@ -450,7 +437,7 @@ QString Generator::generate()
     Function lexFunc;
     lexFunc.setReturnType("int");
     lexFunc.setName("lex()");
-    
+
     CodeBlock body;
     body << "lexemStart = pos;";
     body << "lexemLength = 0;";
@@ -487,14 +474,14 @@ QString Generator::generate()
         body.outdent();
 
         body.indent();
-        
+
         if (!dfa.at(i).transitions.isEmpty()) {
             body << "ch = next();";
             generateTransitions(body, dfa.at(i).transitions);
         }
-        
+
         body << "goto out;";
-        
+
         body.outdent();
     }
 
@@ -512,9 +499,9 @@ QString Generator::generate()
     body.outdent();
     body << "}";
     body << "return token;";
-    
+
     lexFunc.addBody(body);
-    
+
     klass.addMember(Class::PublicMember, lexFunc);
 
     QString header;
@@ -526,7 +513,7 @@ QString Generator::generate()
     }
 
     header += QLatin1String("// auto generated. DO NOT EDIT.\n");
-    
+
     return header + klass.declaration() + klass.definition();
 }
 

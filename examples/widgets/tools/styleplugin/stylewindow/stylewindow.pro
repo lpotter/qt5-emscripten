@@ -1,3 +1,5 @@
+QT += widgets
+
 HEADERS    = stylewindow.h
 SOURCES    = stylewindow.cpp \
              main.cpp
@@ -11,7 +13,7 @@ win32 {
 }
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/tools/styleplugin
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tools/styleplugin
 INSTALLS += target
 
-QT += widgets
+CONFIG += install_ok  # Do not cargo-cult this!

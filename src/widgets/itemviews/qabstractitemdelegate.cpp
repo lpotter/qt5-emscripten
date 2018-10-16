@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,16 +39,35 @@
 
 #include "qabstractitemdelegate.h"
 
-#ifndef QT_NO_ITEMVIEWS
 #include <qabstractitemmodel.h>
 #include <qabstractitemview.h>
 #include <qfontmetrics.h>
+#if QT_CONFIG(whatsthis)
 #include <qwhatsthis.h>
+#endif
 #include <qtooltip.h>
 #include <qevent.h>
 #include <qstring.h>
 #include <qdebug.h>
+#if QT_CONFIG(lineedit)
+#include <qlineedit.h>
+#endif
+#if QT_CONFIG(textedit)
+#include <qtextedit.h>
+#include <qplaintextedit.h>
+#endif
+#include <qapplication.h>
+#include <qvalidator.h>
+#include <qjsonvalue.h>
 #include <private/qtextengine_p.h>
+#include <private/qabstractitemdelegate_p.h>
+
+#include <qpa/qplatformintegration.h>
+#if QT_CONFIG(draganddrop)
+#include <qpa/qplatformdrag.h>
+#include <private/qdnd_p.h>
+#endif
+#include <private/qguiapplication_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -173,7 +190,7 @@ QT_BEGIN_NAMESPACE
     Creates a new abstract item delegate with the given \a parent.
 */
 QAbstractItemDelegate::QAbstractItemDelegate(QObject *parent)
-    : QObject(parent)
+    : QObject(*new QAbstractItemDelegatePrivate, parent)
 {
 
 }
@@ -316,7 +333,7 @@ void QAbstractItemDelegate::updateEditorGeometry(QWidget *,
     to open a context menu when the right mouse button is pressed on
     an item.
 
-    The base implementation returns false (indicating that it has not
+    The base implementation returns \c false (indicating that it has not
     handled the event).
 */
 bool QAbstractItemDelegate::editorEvent(QEvent *,
@@ -354,7 +371,7 @@ QString QAbstractItemDelegate::elidedText(const QFontMetrics &fontMetrics, int w
     \a view \a option and the \a index that corresponds to the item where the
     event occurs.
 
-    Returns true if the delegate can handle the event; otherwise returns false.
+    Returns \c true if the delegate can handle the event; otherwise returns \c false.
     A return value of true indicates that the data obtained using the index had
     the required role.
 
@@ -368,6 +385,7 @@ bool QAbstractItemDelegate::helpEvent(QHelpEvent *event,
                                       const QStyleOptionViewItem &option,
                                       const QModelIndex &index)
 {
+    Q_D(QAbstractItemDelegate);
     Q_UNUSED(option);
 
     if (!event || !view)
@@ -376,23 +394,25 @@ bool QAbstractItemDelegate::helpEvent(QHelpEvent *event,
 #ifndef QT_NO_TOOLTIP
     case QEvent::ToolTip: {
         QHelpEvent *he = static_cast<QHelpEvent*>(event);
-        QVariant tooltip = index.data(Qt::ToolTipRole);
-        if (tooltip.canConvert<QString>()) {
-            QToolTip::showText(he->globalPos(), tooltip.toString(), view);
+        const int precision = inherits("QItemDelegate") ? 10 : 6; // keep in sync with DBL_DIG in qitemdelegate.cpp
+        const QString tooltip = d->textForRole(Qt::ToolTipRole, index.data(Qt::ToolTipRole), option.locale, precision);
+        if (!tooltip.isEmpty()) {
+            QToolTip::showText(he->globalPos(), tooltip, view);
             return true;
         }
         break;}
 #endif
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     case QEvent::QueryWhatsThis: {
         if (index.data(Qt::WhatsThisRole).isValid())
             return true;
         break; }
     case QEvent::WhatsThis: {
         QHelpEvent *he = static_cast<QHelpEvent*>(event);
-        QVariant whatsthis = index.data(Qt::WhatsThisRole);
-        if (whatsthis.canConvert<QString>()) {
-            QWhatsThis::showText(he->globalPos(), whatsthis.toString(), view);
+        const int precision = inherits("QItemDelegate") ? 10 : 6; // keep in sync with DBL_DIG in qitemdelegate.cpp
+        const QString whatsthis = d->textForRole(Qt::WhatsThisRole, index.data(Qt::WhatsThisRole), option.locale, precision);
+        if (!whatsthis.isEmpty()) {
+            QWhatsThis::showText(he->globalPos(), whatsthis, view);
             return true;
         }
         break ; }
@@ -413,6 +433,202 @@ QVector<int> QAbstractItemDelegate::paintingRoles() const
     return QVector<int>();
 }
 
+QAbstractItemDelegatePrivate::QAbstractItemDelegatePrivate()
+    : QObjectPrivate()
+{
+}
+
+static bool editorHandlesKeyEvent(QWidget *editor, const QKeyEvent *event)
+{
+#if QT_CONFIG(textedit)
+    // do not filter enter / return / tab / backtab for QTextEdit or QPlainTextEdit
+    if (qobject_cast<QTextEdit *>(editor) || qobject_cast<QPlainTextEdit *>(editor)) {
+        switch (event->key()) {
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab:
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+            return true;
+
+        default:
+            break;
+        }
+    }
+#endif // QT_CONFIG(textedit)
+
+    Q_UNUSED(editor);
+    Q_UNUSED(event);
+    return false;
+}
+
+bool QAbstractItemDelegatePrivate::editorEventFilter(QObject *object, QEvent *event)
+{
+    Q_Q(QAbstractItemDelegate);
+
+    QWidget *editor = qobject_cast<QWidget*>(object);
+    if (!editor)
+        return false;
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+        if (editorHandlesKeyEvent(editor, keyEvent))
+            return false;
+
+#ifndef QT_NO_SHORTCUT
+        if (keyEvent->matches(QKeySequence::Cancel)) {
+            // don't commit data
+            emit q->closeEditor(editor, QAbstractItemDelegate::RevertModelCache);
+            return true;
+        }
+#endif
+
+        switch (keyEvent->key()) {
+        case Qt::Key_Tab:
+            if (tryFixup(editor)) {
+                emit q->commitData(editor);
+                emit q->closeEditor(editor, QAbstractItemDelegate::EditNextItem);
+            }
+            return true;
+        case Qt::Key_Backtab:
+            if (tryFixup(editor)) {
+                emit q->commitData(editor);
+                emit q->closeEditor(editor, QAbstractItemDelegate::EditPreviousItem);
+            }
+            return true;
+        case Qt::Key_Enter:
+        case Qt::Key_Return:
+            // We want the editor to be able to process the key press
+            // before committing the data (e.g. so it can do
+            // validation/fixup of the input).
+            if (!tryFixup(editor))
+                return true;
+
+            QMetaObject::invokeMethod(q, "_q_commitDataAndCloseEditor",
+                                      Qt::QueuedConnection, Q_ARG(QWidget*, editor));
+            return false;
+        default:
+            return false;
+        }
+    } else if (event->type() == QEvent::FocusOut || (event->type() == QEvent::Hide && editor->isWindow())) {
+        //the Hide event will take care of he editors that are in fact complete dialogs
+        if (!editor->isActiveWindow() || (QApplication::focusWidget() != editor)) {
+            QWidget *w = QApplication::focusWidget();
+            while (w) { // don't worry about focus changes internally in the editor
+                if (w == editor)
+                    return false;
+                w = w->parentWidget();
+            }
+#if QT_CONFIG(draganddrop)
+            // The window may lose focus during an drag operation.
+            // i.e when dragging involves the taskbar on Windows.
+            QPlatformDrag *platformDrag = QGuiApplicationPrivate::instance()->platformIntegration()->drag();
+            if (platformDrag && platformDrag->currentDrag()) {
+                return false;
+            }
+#endif
+            if (tryFixup(editor))
+                emit q->commitData(editor);
+
+            // If the application loses focus while editing, then the focus needs to go back
+            // to the itemview when the editor closes. This ensures that when the application
+            // is active again it will have the focus on the itemview as expected.
+            const bool manuallyFixFocus = (event->type() == QEvent::FocusOut) && !editor->hasFocus() &&
+                    editor->parentWidget() &&
+                    (static_cast<QFocusEvent *>(event)->reason() == Qt::ActiveWindowFocusReason);
+            emit q->closeEditor(editor, QAbstractItemDelegate::NoHint);
+            if (manuallyFixFocus)
+                editor->parentWidget()->setFocus();
+        }
+#ifndef QT_NO_SHORTCUT
+    } else if (event->type() == QEvent::ShortcutOverride) {
+        if (static_cast<QKeyEvent*>(event)->matches(QKeySequence::Cancel)) {
+            event->accept();
+            return true;
+        }
+#endif
+    }
+    return false;
+}
+
+bool QAbstractItemDelegatePrivate::tryFixup(QWidget *editor)
+{
+#if QT_CONFIG(lineedit)
+    if (QLineEdit *e = qobject_cast<QLineEdit*>(editor)) {
+        if (!e->hasAcceptableInput()) {
+#if QT_CONFIG(validator)
+            if (const QValidator *validator = e->validator()) {
+                QString text = e->text();
+                validator->fixup(text);
+                e->setText(text);
+            }
+#endif
+            return e->hasAcceptableInput();
+        }
+    }
+#else
+    Q_UNUSED(editor)
+#endif // QT_CONFIG(lineedit)
+
+    return true;
+}
+
+QString QAbstractItemDelegatePrivate::textForRole(Qt::ItemDataRole role, const QVariant &value, const QLocale &locale, int precision) const
+{
+    const QLocale::FormatType formatType = (role == Qt::DisplayRole) ? QLocale::ShortFormat : QLocale::LongFormat;
+    QString text;
+    switch (value.userType()) {
+    case QMetaType::Float:
+        text = locale.toString(value.toFloat());
+        break;
+    case QVariant::Double:
+        text = locale.toString(value.toDouble(), 'g', precision);
+        break;
+    case QVariant::Int:
+    case QVariant::LongLong:
+        text = locale.toString(value.toLongLong());
+        break;
+    case QVariant::UInt:
+    case QVariant::ULongLong:
+        text = locale.toString(value.toULongLong());
+        break;
+    case QVariant::Date:
+        text = locale.toString(value.toDate(), formatType);
+        break;
+    case QVariant::Time:
+        text = locale.toString(value.toTime(), formatType);
+        break;
+    case QVariant::DateTime:
+        text = locale.toString(value.toDateTime(), formatType);
+        break;
+    case QVariant::Type(QMetaType::QJsonValue): {
+        const QJsonValue val = value.toJsonValue();
+        if (val.isBool()) {
+            text = QVariant(val.toBool()).toString();
+            break;
+        }
+        if (val.isDouble()) {
+            text = locale.toString(val.toDouble(), 'g', precision);
+            break;
+        }
+        // val is a string (or null) here
+        Q_FALLTHROUGH();
+    }
+    default: {
+        text = value.toString();
+        if (role == Qt::DisplayRole)
+            text.replace(QLatin1Char('\n'), QChar::LineSeparator);
+        break;
+    }
+    }
+    return text;
+}
+
+void QAbstractItemDelegatePrivate::_q_commitDataAndCloseEditor(QWidget *editor)
+{
+    Q_Q(QAbstractItemDelegate);
+    emit q->commitData(editor);
+    emit q->closeEditor(editor, QAbstractItemDelegate::SubmitModelCache);
+}
+
 QT_END_NAMESPACE
 
-#endif // QT_NO_ITEMVIEWS
+#include "moc_qabstractitemdelegate.cpp"

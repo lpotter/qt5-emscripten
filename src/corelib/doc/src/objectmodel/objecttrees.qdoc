@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -42,13 +42,13 @@
     (keyboard shortcut) is a child of the relevant window, so when the
     user closes that window, the shortcut is deleted too.
 
-    \l QQuickItem, the basic visual element of the QtQuick module, inherits
+    \l QQuickItem, the basic visual element of the Qt Quick module, inherits
     from QObject, but has a concept of the \e {visual parent} which
     differs from that of the \e {QObject parent}. An item's visual parent
     may not necessarily be the same as its object parent. See
     \l {Concepts - Visual Parent in Qt Quick} for more details.
 
-    \l QWidget, the fundamental class of the QtWidgets module,
+    \l QWidget, the fundamental class of the Qt Widgets module,
     extends the parent-child relationship. A child normally also becomes a
     child widget, i.e. it is displayed in its parent's coordinate system
     and is graphically clipped by its parent's boundaries. For example,

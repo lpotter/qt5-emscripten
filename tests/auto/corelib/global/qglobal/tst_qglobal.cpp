@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,13 +28,18 @@
 
 
 #include <QtTest/QtTest>
-#include <QtCore/qtypetraits.h>
+
+#include <QPair>
+#include <QTextCodec>
+#include <QSysInfo>
+#include <QLatin1String>
 
 class tst_QGlobal: public QObject
 {
     Q_OBJECT
 
 private slots:
+    void cMode();
     void qIsNull();
     void for_each();
     void qassert();
@@ -55,9 +47,31 @@ private slots:
     void checkptr();
     void qstaticassert();
     void qConstructorFunction();
-    void isEnum();
+    void qCoreAppStartupFunction();
+    void qCoreAppStartupFunctionRestart();
     void qAlignOf();
+    void integerForSize();
+    void qprintable();
+    void qprintable_data();
+    void buildAbiEndianness();
+    void testqOverload();
 };
+
+extern "C" {        // functions in qglobal.c
+void tst_GlobalTypes();
+int tst_QtVersion();
+const char *tst_qVersion();
+}
+
+void tst_QGlobal::cMode()
+{
+    tst_GlobalTypes();
+    QCOMPARE(tst_QtVersion(), QT_VERSION);
+
+#ifndef QT_NAMESPACE
+    QCOMPARE(tst_qVersion(), qVersion());
+#endif
+}
 
 void tst_QGlobal::qIsNull()
 {
@@ -82,7 +96,7 @@ void tst_QGlobal::qIsNull()
 
 void tst_QGlobal::for_each()
 {
-    QList<int> list;
+    QVector<int> list;
     list << 0 << 1 << 2 << 3 << 4 << 5;
 
     int counter = 0;
@@ -95,6 +109,20 @@ void tst_QGlobal::for_each()
     // problems with older compilers
     counter = 0;
     foreach(int i, list) {
+        QCOMPARE(i, counter++);
+    }
+    QCOMPARE(counter, list.count());
+
+    // check whether we can pass a constructor as container argument
+    counter = 0;
+    foreach (int i, QVector<int>(list)) {
+        QCOMPARE(i, counter++);
+    }
+    QCOMPARE(counter, list.count());
+
+    // check whether we can use a lambda
+    counter = 0;
+    foreach (int i, [&](){ return list; }()) {
         QCOMPARE(i, counter++);
     }
     QCOMPARE(counter, list.count());
@@ -288,6 +316,11 @@ void tst_QGlobal::qstaticassert()
     Q_UNUSED(tmp1);
     Q_UNUSED(tmp2);
     Q_UNUSED(tmp3);
+#ifdef __COUNTER__
+    // if the compiler supports __COUNTER__, multiple
+    // Q_STATIC_ASSERT's on a single line should compile:
+    Q_STATIC_ASSERT(true); Q_STATIC_ASSERT_X(!false, "");
+#endif // __COUNTER__
     QVERIFY(true); // if the test compiles it has passed.
 }
 
@@ -301,6 +334,33 @@ Q_CONSTRUCTOR_FUNCTION(qConstructorFunctionCtor);
 void tst_QGlobal::qConstructorFunction()
 {
     QCOMPARE(qConstructorFunctionValue, 123);
+}
+
+static int qStartupFunctionValue;
+static void myStartupFunc()
+{
+   Q_ASSERT(QCoreApplication::instance());
+   if (QCoreApplication::instance())
+       qStartupFunctionValue += 124;
+}
+
+Q_COREAPP_STARTUP_FUNCTION(myStartupFunc)
+
+void tst_QGlobal::qCoreAppStartupFunction()
+{
+    QCOMPARE(qStartupFunctionValue, 0);
+    int argc = 1;
+    char *argv[] = { const_cast<char*>(QTest::currentAppName()) };
+    QCoreApplication app(argc, argv);
+    QCOMPARE(qStartupFunctionValue, 124);
+}
+
+void tst_QGlobal::qCoreAppStartupFunctionRestart()
+{
+    qStartupFunctionValue = 0;
+    qCoreAppStartupFunction();
+    qStartupFunctionValue = 0;
+    qCoreAppStartupFunction();
 }
 
 struct isEnum_A {
@@ -327,100 +387,6 @@ class isEnum_F {
 public:
     enum AnEnum {};
 };
-
-#if defined (Q_COMPILER_CLASS_ENUM)
-enum class isEnum_G : qint64 {};
-#endif
-
-void tst_QGlobal::isEnum()
-{
-#if defined (Q_CC_MSVC)
-#define IS_ENUM_TRUE(x)     (Q_IS_ENUM(x) == true)
-#define IS_ENUM_FALSE(x)    (Q_IS_ENUM(x) == false)
-#else
-#define IS_ENUM_TRUE(x)     (Q_IS_ENUM(x) == true && QtPrivate::is_enum<x>::value == true)
-#define IS_ENUM_FALSE(x)    (Q_IS_ENUM(x) == false && QtPrivate::is_enum<x>::value == false)
-#endif
-
-    QVERIFY(IS_ENUM_TRUE(isEnum_B_Byte));
-    QVERIFY(IS_ENUM_TRUE(const isEnum_B_Byte));
-    QVERIFY(IS_ENUM_TRUE(volatile isEnum_B_Byte));
-    QVERIFY(IS_ENUM_TRUE(const volatile isEnum_B_Byte));
-
-    QVERIFY(IS_ENUM_TRUE(isEnum_B_Short));
-    QVERIFY(IS_ENUM_TRUE(const isEnum_B_Short));
-    QVERIFY(IS_ENUM_TRUE(volatile isEnum_B_Short));
-    QVERIFY(IS_ENUM_TRUE(const volatile isEnum_B_Short));
-
-    QVERIFY(IS_ENUM_TRUE(isEnum_B_Int));
-    QVERIFY(IS_ENUM_TRUE(const isEnum_B_Int));
-    QVERIFY(IS_ENUM_TRUE(volatile isEnum_B_Int));
-    QVERIFY(IS_ENUM_TRUE(const volatile isEnum_B_Int));
-
-    QVERIFY(IS_ENUM_TRUE(isEnum_F::AnEnum));
-    QVERIFY(IS_ENUM_TRUE(const isEnum_F::AnEnum));
-    QVERIFY(IS_ENUM_TRUE(volatile isEnum_F::AnEnum));
-    QVERIFY(IS_ENUM_TRUE(const volatile isEnum_F::AnEnum));
-
-    QVERIFY(IS_ENUM_FALSE(void));
-    QVERIFY(IS_ENUM_FALSE(isEnum_B_Byte &));
-    QVERIFY(IS_ENUM_FALSE(isEnum_B_Byte[1]));
-    QVERIFY(IS_ENUM_FALSE(const isEnum_B_Byte[1]));
-    QVERIFY(IS_ENUM_FALSE(isEnum_B_Byte[]));
-    QVERIFY(IS_ENUM_FALSE(int));
-    QVERIFY(IS_ENUM_FALSE(float));
-    QVERIFY(IS_ENUM_FALSE(isEnum_A));
-    QVERIFY(IS_ENUM_FALSE(isEnum_A *));
-    QVERIFY(IS_ENUM_FALSE(const isEnum_A));
-    QVERIFY(IS_ENUM_FALSE(isEnum_C));
-    QVERIFY(IS_ENUM_FALSE(isEnum_D));
-    QVERIFY(IS_ENUM_FALSE(isEnum_E));
-    QVERIFY(IS_ENUM_FALSE(void()));
-    QVERIFY(IS_ENUM_FALSE(void(*)()));
-    QVERIFY(IS_ENUM_FALSE(int isEnum_A::*));
-    QVERIFY(IS_ENUM_FALSE(void (isEnum_A::*)()));
-
-    QVERIFY(IS_ENUM_FALSE(size_t));
-    QVERIFY(IS_ENUM_FALSE(bool));
-    QVERIFY(IS_ENUM_FALSE(wchar_t));
-
-    QVERIFY(IS_ENUM_FALSE(char));
-    QVERIFY(IS_ENUM_FALSE(unsigned char));
-    QVERIFY(IS_ENUM_FALSE(short));
-    QVERIFY(IS_ENUM_FALSE(unsigned short));
-    QVERIFY(IS_ENUM_FALSE(int));
-    QVERIFY(IS_ENUM_FALSE(unsigned int));
-    QVERIFY(IS_ENUM_FALSE(long));
-    QVERIFY(IS_ENUM_FALSE(unsigned long));
-
-    QVERIFY(IS_ENUM_FALSE(qint8));
-    QVERIFY(IS_ENUM_FALSE(quint8));
-    QVERIFY(IS_ENUM_FALSE(qint16));
-    QVERIFY(IS_ENUM_FALSE(quint16));
-    QVERIFY(IS_ENUM_FALSE(qint32));
-    QVERIFY(IS_ENUM_FALSE(quint32));
-    QVERIFY(IS_ENUM_FALSE(qint64));
-    QVERIFY(IS_ENUM_FALSE(quint64));
-
-    QVERIFY(IS_ENUM_FALSE(void *));
-    QVERIFY(IS_ENUM_FALSE(int *));
-
-#if defined (Q_COMPILER_UNICODE_STRINGS)
-    QVERIFY(IS_ENUM_FALSE(char16_t));
-    QVERIFY(IS_ENUM_FALSE(char32_t));
-#endif
-
-#if defined (Q_COMPILER_CLASS_ENUM)
-    // Strongly type class enums are not handled by the
-    // fallback type traits implementation. Any compiler
-    // supported by Qt that supports C++0x class enums
-    // should also support the __is_enum intrinsic.
-    QVERIFY(Q_IS_ENUM(isEnum_G) == true);
-#endif
-
-#undef IS_ENUM_TRUE
-#undef IS_ENUM_FALSE
-}
 
 struct Empty {};
 template <class T> struct AlignmentInStruct { T dummy; };
@@ -532,5 +498,209 @@ void tst_QGlobal::qAlignOf()
 #undef TEST_AlignOf_RValueRef
 #undef TEST_AlignOf_impl
 
-QTEST_MAIN(tst_QGlobal)
+void tst_QGlobal::integerForSize()
+{
+    // compile-only test:
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<1>::Signed) == 1);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<2>::Signed) == 2);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<4>::Signed) == 4);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<8>::Signed) == 8);
+
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<1>::Unsigned) == 1);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<2>::Unsigned) == 2);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<4>::Unsigned) == 4);
+    Q_STATIC_ASSERT(sizeof(QIntegerForSize<8>::Unsigned) == 8);
+}
+
+typedef QPair<const char *, const char *> stringpair;
+Q_DECLARE_METATYPE(stringpair)
+
+void tst_QGlobal::qprintable()
+{
+    QFETCH(QVector<stringpair>, localestrings);
+    QFETCH(int, utf8index);
+
+    QVERIFY(utf8index >= 0 && utf8index < localestrings.count());
+    if (utf8index < 0 || utf8index >= localestrings.count())
+        return;
+
+    const char *const utf8string = localestrings.at(utf8index).second;
+
+    QString string = QString::fromUtf8(utf8string);
+
+    for (const stringpair &pair : qAsConst(localestrings)) {
+        QTextCodec *codec = QTextCodec::codecForName(pair.first);
+        if (!codec)
+            continue;
+        QTextCodec::setCodecForLocale(codec);
+        // test qPrintable()
+        QVERIFY(qstrcmp(qPrintable(string), pair.second) == 0);
+        for (const stringpair &pair2 : qAsConst(localestrings)) {
+            if (pair2.second == pair.second)
+                continue;
+            QVERIFY(qstrcmp(qPrintable(string), pair2.second) != 0);
+        }
+        // test qUtf8Printable()
+        QVERIFY(qstrcmp(qUtf8Printable(string), utf8string) == 0);
+        for (const stringpair &pair2 : qAsConst(localestrings)) {
+            if (qstrcmp(pair2.second, utf8string) == 0)
+                continue;
+            QVERIFY(qstrcmp(qUtf8Printable(string), pair2.second) != 0);
+        }
+    }
+
+    QTextCodec::setCodecForLocale(0);
+}
+
+void tst_QGlobal::qprintable_data()
+{
+    QTest::addColumn<QVector<stringpair> >("localestrings");
+    QTest::addColumn<int>("utf8index"); // index of utf8 string
+
+    // Unicode: HIRAGANA LETTER A, I, U, E, O (U+3442, U+3444, U+3446, U+3448, U+344a)
+    static const char *const utf8string = "\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\xe3\x81\x88\xe3\x81\x8a";
+    static const char *const eucjpstring = "\xa4\xa2\xa4\xa4\xa4\xa6\xa4\xa8\xa4\xaa";
+    static const char *const sjisstring = "\x82\xa0\x82\xa2\x82\xa4\x82\xa6\x82\xa8";
+
+    QVector<stringpair> japanesestrings;
+    japanesestrings << stringpair("UTF-8", utf8string)
+                    << stringpair("EUC-JP", eucjpstring)
+                    << stringpair("Shift_JIS", sjisstring);
+
+    QTest::newRow("Japanese") << japanesestrings << 0;
+
+}
+
+void tst_QGlobal::buildAbiEndianness()
+{
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+    QLatin1String endian("little_endian");
+#elif Q_BYTE_ORDER == Q_BIG_ENDIAN
+    QLatin1String endian("big_endian");
+#endif
+    QVERIFY(QSysInfo::buildAbi().contains(endian));
+}
+
+struct Overloaded
+{
+    void foo() {}
+    void foo(QByteArray) {}
+    void foo(QByteArray, const QString &) {}
+
+    void constFoo() const {}
+    void constFoo(QByteArray) const {}
+    void constFoo(QByteArray, const QString &) const {}
+
+    void mixedFoo() {}
+    void mixedFoo(QByteArray) const {}
+};
+
+void freeOverloaded() {}
+void freeOverloaded(QByteArray) {}
+void freeOverloaded(QByteArray, const QString &) {}
+
+void freeOverloadedGet(QByteArray) {}
+QByteArray freeOverloadedGet() { return QByteArray(); }
+
+
+void tst_QGlobal::testqOverload()
+{
+#ifdef Q_COMPILER_VARIADIC_TEMPLATES
+
+    // void returning free overloaded functions
+    QVERIFY(QOverload<>::of(&freeOverloaded) ==
+             static_cast<void (*)()>(&freeOverloaded));
+
+    QVERIFY(QOverload<QByteArray>::of(&freeOverloaded) ==
+             static_cast<void (*)(QByteArray)>(&freeOverloaded));
+
+    QVERIFY((QOverload<QByteArray, const QString &>::of(&freeOverloaded)) ==
+             static_cast<void (*)(QByteArray, const QString &)>(&freeOverloaded));
+
+    // value returning free overloaded functions
+    QVERIFY(QOverload<>::of(&freeOverloadedGet) ==
+             static_cast<QByteArray (*)()>(&freeOverloadedGet));
+
+    QVERIFY(QOverload<QByteArray>::of(&freeOverloadedGet) ==
+             static_cast<void (*)(QByteArray)>(&freeOverloadedGet));
+
+    // void returning overloaded member functions
+    QVERIFY(QOverload<>::of(&Overloaded::foo) ==
+             static_cast<void (Overloaded::*)()>(&Overloaded::foo));
+
+    QVERIFY(QOverload<QByteArray>::of(&Overloaded::foo) ==
+             static_cast<void (Overloaded::*)(QByteArray)>(&Overloaded::foo));
+
+    QVERIFY((QOverload<QByteArray, const QString &>::of(&Overloaded::foo)) ==
+             static_cast<void (Overloaded::*)(QByteArray, const QString &)>(&Overloaded::foo));
+
+    // void returning overloaded const member functions
+    QVERIFY(QOverload<>::of(&Overloaded::constFoo) ==
+             static_cast<void (Overloaded::*)() const>(&Overloaded::constFoo));
+
+    QVERIFY(QOverload<QByteArray>::of(&Overloaded::constFoo) ==
+             static_cast<void (Overloaded::*)(QByteArray) const>(&Overloaded::constFoo));
+
+    QVERIFY((QOverload<QByteArray, const QString &>::of(&Overloaded::constFoo)) ==
+             static_cast<void (Overloaded::*)(QByteArray, const QString &) const>(&Overloaded::constFoo));
+
+    // void returning overloaded const AND non-const member functions
+    QVERIFY(QNonConstOverload<>::of(&Overloaded::mixedFoo) ==
+             static_cast<void (Overloaded::*)()>(&Overloaded::mixedFoo));
+
+    QVERIFY(QConstOverload<QByteArray>::of(&Overloaded::mixedFoo) ==
+             static_cast<void (Overloaded::*)(QByteArray) const>(&Overloaded::mixedFoo));
+
+#if defined(__cpp_variable_templates) && __cpp_variable_templates >= 201304 // C++14
+
+    // void returning free overloaded functions
+    QVERIFY(qOverload<>(&freeOverloaded) ==
+             static_cast<void (*)()>(&freeOverloaded));
+
+    QVERIFY(qOverload<QByteArray>(&freeOverloaded) ==
+             static_cast<void (*)(QByteArray)>(&freeOverloaded));
+
+    QVERIFY((qOverload<QByteArray, const QString &>(&freeOverloaded) ==
+             static_cast<void (*)(QByteArray, const QString &)>(&freeOverloaded)));
+
+    // value returning free overloaded functions
+    QVERIFY(qOverload<>(&freeOverloadedGet) ==
+             static_cast<QByteArray (*)()>(&freeOverloadedGet));
+
+    QVERIFY(qOverload<QByteArray>(&freeOverloadedGet) ==
+             static_cast<void (*)(QByteArray)>(&freeOverloadedGet));
+
+    // void returning overloaded member functions
+    QVERIFY(qOverload<>(&Overloaded::foo) ==
+             static_cast<void (Overloaded::*)()>(&Overloaded::foo));
+
+    QVERIFY(qOverload<QByteArray>(&Overloaded::foo) ==
+             static_cast<void (Overloaded::*)(QByteArray)>(&Overloaded::foo));
+
+    QVERIFY((qOverload<QByteArray, const QString &>(&Overloaded::foo)) ==
+             static_cast<void (Overloaded::*)(QByteArray, const QString &)>(&Overloaded::foo));
+
+    // void returning overloaded const member functions
+    QVERIFY(qOverload<>(&Overloaded::constFoo) ==
+             static_cast<void (Overloaded::*)() const>(&Overloaded::constFoo));
+
+    QVERIFY(qOverload<QByteArray>(&Overloaded::constFoo) ==
+             static_cast<void (Overloaded::*)(QByteArray) const>(&Overloaded::constFoo));
+
+    QVERIFY((qOverload<QByteArray, const QString &>(&Overloaded::constFoo)) ==
+             static_cast<void (Overloaded::*)(QByteArray, const QString &) const>(&Overloaded::constFoo));
+
+    // void returning overloaded const AND non-const member functions
+    QVERIFY(qNonConstOverload<>(&Overloaded::mixedFoo) ==
+             static_cast<void (Overloaded::*)()>(&Overloaded::mixedFoo));
+
+    QVERIFY(qConstOverload<QByteArray>(&Overloaded::mixedFoo) ==
+             static_cast<void (Overloaded::*)(QByteArray) const>(&Overloaded::mixedFoo));
+#endif
+
+#endif
+}
+
+
+QTEST_APPLESS_MAIN(tst_QGlobal)
 #include "tst_qglobal.moc"

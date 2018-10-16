@@ -4,6 +4,3 @@ SUBDIRS     = draggableicons \
               dropsite \
               fridgemagnets \
               puzzle
-
-wince*: SUBDIRS -= dropsite
-QT += widgets

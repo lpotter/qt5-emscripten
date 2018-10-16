@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -43,22 +43,16 @@
 
     \table
     \row
-    \li \image gtk-label.png
+    \li \image fusion-label.png
     \li \image windowsvista-pushbutton.png
-    \li \image macintosh-progressbar.png
+    \li \image macos-progressbar.png
     \row
-    \li \image gtk-combobox.png
+    \li \image fusion-combobox.png
     \li \image windowsvista-radiobutton.png
-    \li \image macintosh-lineedit.png
+    \li \image macos-lineedit.png
     \endtable
 
     \annotatedlist basicwidgets
-
-    \table
-    \row
-    \li \image windowsvista-tabwidget.png
-    \li \image macintosh-groupbox.png
-    \endtable
 
 
   \section2 Advanced Widget Classes
@@ -68,8 +62,8 @@
 
       \table
       \row
-      \li \image windowsxp-treeview.png
-      \li \image gtk-calendarwidget.png
+      \li \image windows-treeview.png
+      \li \image fusion-calendarwidget.png
       \li \image qundoview.png
       \endtable
 

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +42,7 @@
 #include "qglobal.h"
 #include "qdir.h"
 #include "qfileinfo_p.h"
+#include "qdebug.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -189,13 +188,23 @@ QDateTime &QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) 
     Q_ASSERT(fileEngine); // should never be called when using the native FS
     if (!cache_enabled)
         clearFlags();
-    uint cf;
-    if (request == QAbstractFileEngine::CreationTime)
-        cf = CachedCTime;
-    else if (request == QAbstractFileEngine::ModificationTime)
-        cf = CachedMTime;
-    else
+
+    uint cf = 0;
+    switch (request) {
+    case QAbstractFileEngine::AccessTime:
         cf = CachedATime;
+        break;
+    case QAbstractFileEngine::BirthTime:
+        cf = CachedBTime;
+        break;
+    case QAbstractFileEngine::MetadataChangeTime:
+        cf = CachedMCTime;
+        break;
+    case QAbstractFileEngine::ModificationTime:
+        cf = CachedMTime;
+        break;
+    }
+
     if (!getCachedFlag(cf)) {
         fileTimes[request] = fileEngine->fileTime(request);
         setCachedFlag(cf);
@@ -240,7 +249,7 @@ QDateTime &QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) 
     isSymLink(). The symLinkTarget() function provides the name of the file
     the symlink points to.
 
-    On Unix (including Mac OS X), the symlink has the same size() has
+    On Unix (including \macos and iOS), the symlink has the same size() has
     the file it points to, because Unix handles symlinks
     transparently; similarly, opening a symlink using QFile
     effectively opens the link's target. For example:
@@ -262,12 +271,24 @@ QDateTime &QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) 
     info objects, just append one to the file name given to the constructors
     or setFile().
 
-    The file's dates are returned by created(), lastModified() and
-    lastRead(). Information about the file's access permissions is
+    The file's dates are returned by created(), lastModified(), lastRead() and
+    fileTime(). Information about the file's access permissions is
     obtained with isReadable(), isWritable() and isExecutable(). The
     file's ownership is available from owner(), ownerId(), group() and
     groupId(). You can examine a file's permissions and ownership in a
     single statement using the permission() function.
+
+    \target NTFS permissions
+    \note On NTFS file systems, ownership and permissions checking is
+    disabled by default for performance reasons. To enable it,
+    include the following line:
+
+    \snippet ntfsp.cpp 0
+
+    Permission checking is then turned on and off by incrementing and
+    decrementing \c qt_ntfs_permission_lookup by 1.
+
+    \snippet ntfsp.cpp 1
 
     \section1 Performance Issues
 
@@ -281,14 +302,21 @@ QDateTime &QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) 
     \note To speed up performance, QFileInfo caches information about
     the file.
 
-    To speed up performance, QFileInfo caches information about the
-    file. Because files can be changed by other users or programs, or
+    Because files can be changed by other users or programs, or
     even by other parts of the same program, there is a function that
     refreshes the file information: refresh(). If you want to switch
     off a QFileInfo's caching and force it to access the file system
     every time you request information from it call setCaching(false).
 
     \sa QDir, QFile
+*/
+
+/*!
+    \fn QFileInfo &QFileInfo::operator=(QFileInfo &&other)
+
+    Move-assigns \a other to this QFileInfo instance.
+
+    \since 5.2
 */
 
 /*!
@@ -369,15 +397,15 @@ QFileInfo::~QFileInfo()
 /*!
     \fn bool QFileInfo::operator!=(const QFileInfo &fileinfo) const
 
-    Returns true if this QFileInfo object refers to a different file
-    than the one specified by \a fileinfo; otherwise returns false.
+    Returns \c true if this QFileInfo object refers to a different file
+    than the one specified by \a fileinfo; otherwise returns \c false.
 
     \sa operator==()
 */
 
 /*!
-    Returns true if this QFileInfo object refers to a file in the same
-    location as \a fileinfo; otherwise returns false.
+    Returns \c true if this QFileInfo object refers to a file in the same
+    location as \a fileinfo; otherwise returns \c false.
 
     Note that the result of comparing two empty QFileInfo objects,
     containing no file references (file paths that do not exist or
@@ -509,7 +537,8 @@ void QFileInfo::setFile(const QDir &dir, const QString &file)
     is true. In contrast to canonicalFilePath(), symbolic links or
     redundant "." or ".." elements are not necessarily removed.
 
-    If the QFileInfo is empty it returns QDir::currentPath().
+    \warning If filePath() is empty the behavior of this function
+            is undefined.
 
     \sa filePath(), canonicalFilePath(), isRelative()
 */
@@ -551,8 +580,8 @@ QString QFileInfo::canonicalFilePath() const
     In contrast to canonicalPath() symbolic links or redundant "." or
     ".." elements are not necessarily removed.
 
-    \warning If the QFileInfo object was created with an empty QString,
-              the behavior of this function is undefined.
+    \warning If filePath() is empty the behavior of this function
+             is undefined.
 
     \sa absoluteFilePath(), path(), canonicalPath(), fileName(), isRelative()
 */
@@ -561,9 +590,6 @@ QString QFileInfo::absolutePath() const
     Q_D(const QFileInfo);
 
     if (d->isDefaultConstructed) {
-        return QLatin1String("");
-    } else if (d->fileEntry.isEmpty()) {
-        qWarning("QFileInfo::absolutePath: Constructed with empty filename");
         return QLatin1String("");
     }
     return d->getFileName(QAbstractFileEngine::AbsolutePathName);
@@ -605,14 +631,14 @@ QString QFileInfo::path() const
 /*!
     \fn bool QFileInfo::isAbsolute() const
 
-    Returns true if the file path name is absolute, otherwise returns
+    Returns \c true if the file path name is absolute, otherwise returns
     false if the path is relative.
 
     \sa isRelative()
 */
 
 /*!
-    Returns true if the file path name is relative, otherwise returns
+    Returns \c true if the file path name is relative, otherwise returns
     false if the path is absolute (e.g. under Unix a path is absolute
     if it begins with a "/").
 
@@ -630,7 +656,7 @@ bool QFileInfo::isRelative() const
 
 /*!
     Converts the file's path to an absolute path if it is not already in that form.
-    Returns true to indicate that the path was converted; otherwise returns false
+    Returns \c true to indicate that the path was converted; otherwise returns \c false
     to indicate that the path was already absolute.
 
     \sa filePath(), isRelative()
@@ -646,10 +672,10 @@ bool QFileInfo::makeAbsolute()
 }
 
 /*!
-    Returns true if the file exists; otherwise returns false.
+    Returns \c true if the file exists; otherwise returns \c false.
 
-    \note If the file is a symlink that points to a non existing
-     file, false is returned.
+    \note If the file is a symlink that points to a non-existing
+    file, false is returned.
 */
 bool QFileInfo::exists() const
 {
@@ -665,11 +691,33 @@ bool QFileInfo::exists() const
 }
 
 /*!
+    \since 5.2
+
+    Returns \c true if the \a file exists; otherwise returns \c false.
+
+    \note If \a file is a symlink that points to a non-existing
+    file, false is returned.
+
+    \note Using this function is faster than using
+    \c QFileInfo(file).exists() for file system access.
+*/
+bool QFileInfo::exists(const QString &file)
+{
+    QFileSystemEntry entry(file);
+    QFileSystemMetaData data;
+    QAbstractFileEngine *engine =
+        QFileSystemEngine::resolveEntryAndCreateLegacyEngine(entry, data);
+    // Expensive fallback to non-QFileSystemEngine implementation
+    if (engine)
+        return QFileInfo(new QFileInfoPrivate(entry, data, engine)).exists();
+
+    QFileSystemEngine::fillMetaData(entry, data, QFileSystemMetaData::ExistsAttribute);
+    return data.exists();
+}
+
+/*!
     Refreshes the information about the file, i.e. reads in information
     from the file system the next time a cached property is fetched.
-
-   \note On Windows CE, there might be a delay for the file system driver
-    to detect changes on the file.
 */
 void QFileInfo::refresh()
 {
@@ -714,7 +762,7 @@ QString QFileInfo::fileName() const
     \since 4.3
     Returns the name of the bundle.
 
-    On Mac OS X this returns the proper localized name for a bundle if the
+    On \macos and iOS this returns the proper localized name for a bundle if the
     path isBundle(). On all other platforms an empty QString is returned.
 
     Example:
@@ -774,7 +822,7 @@ QString QFileInfo::completeBaseName() const
 }
 
 /*!
-    Returns the complete suffix of the file.
+    Returns the complete suffix (extension) of the file.
 
     The complete suffix consists of all characters in the file after
     (but not including) the first '.'.
@@ -793,7 +841,7 @@ QString QFileInfo::completeSuffix() const
 }
 
 /*!
-    Returns the suffix of the file.
+    Returns the suffix (extension) of the file.
 
     The suffix consists of all characters in the file after (but not
     including) the last '.'.
@@ -822,12 +870,12 @@ QString QFileInfo::suffix() const
     \b{Note:} The QDir returned always corresponds to the object's
     parent directory, even if the QFileInfo represents a directory.
 
-    For each of the following, dir() returns a QDir for
+    For each of the following, dir() returns the QDir
     \c{"~/examples/191697"}.
 
     \snippet fileinfo/main.cpp 0
 
-    For each of the following, dir() returns a QDir for
+    For each of the following, dir() returns the QDir
     \c{"."}.
 
     \snippet fileinfo/main.cpp 1
@@ -852,82 +900,72 @@ QDir QFileInfo::absoluteDir() const
 }
 
 /*!
-    Returns true if the user can read the file; otherwise returns false.
+    Returns \c true if the user can read the file; otherwise returns \c false.
+
+    \note If the \l{NTFS permissions} check has not been enabled, the result
+    on Windows will merely reflect whether the file exists.
 
     \sa isWritable(), isExecutable(), permission()
 */
 bool QFileInfo::isReadable() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::UserReadPermission))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserReadPermission);
-        return (d->metaData.permissions() & QFile::ReadUser) != 0;
-    }
-    return d->getFileFlags(QAbstractFileEngine::ReadUserPerm);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::UserReadPermission,
+                [d]() { return (d->metaData.permissions() & QFile::ReadUser) != 0; },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::ReadUserPerm); });
 }
 
 /*!
-    Returns true if the user can write to the file; otherwise returns false.
+    Returns \c true if the user can write to the file; otherwise returns \c false.
+
+    \note If the \l{NTFS permissions} check has not been enabled, the result on
+    Windows will merely reflect whether the file is marked as Read Only.
 
     \sa isReadable(), isExecutable(), permission()
 */
 bool QFileInfo::isWritable() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::UserWritePermission))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserWritePermission);
-        return (d->metaData.permissions() & QFile::WriteUser) != 0;
-    }
-    return d->getFileFlags(QAbstractFileEngine::WriteUserPerm);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::UserWritePermission,
+                [d]() { return (d->metaData.permissions() & QFile::WriteUser) != 0; },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::WriteUserPerm); });
 }
 
 /*!
-    Returns true if the file is executable; otherwise returns false.
+    Returns \c true if the file is executable; otherwise returns \c false.
 
     \sa isReadable(), isWritable(), permission()
 */
 bool QFileInfo::isExecutable() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::UserExecutePermission))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserExecutePermission);
-        return (d->metaData.permissions() & QFile::ExeUser) != 0;
-    }
-    return d->getFileFlags(QAbstractFileEngine::ExeUserPerm);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::UserExecutePermission,
+                [d]() { return (d->metaData.permissions() & QFile::ExeUser) != 0; },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::ExeUserPerm); });
 }
 
 /*!
-    Returns true if this is a `hidden' file; otherwise returns false.
+    Returns \c true if this is a `hidden' file; otherwise returns \c false.
 
-    \b{Note:} This function returns true for the special entries
+    \b{Note:} This function returns \c true for the special entries
     "." and ".." on Unix, even though QDir::entryList threats them as shown.
 */
 bool QFileInfo::isHidden() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::HiddenAttribute))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::HiddenAttribute);
-        return d->metaData.isHidden();
-    }
-    return d->getFileFlags(QAbstractFileEngine::HiddenFlag);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::HiddenAttribute,
+                [d]() { return d->metaData.isHidden(); },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::HiddenFlag); });
 }
 
 /*!
     \since 5.0
-    Returns true if the file path can be used directly with native APIs.
-    Returns false if the file is otherwise supported by a virtual file system
+    Returns \c true if the file path can be used directly with native APIs.
+    Returns \c false if the file is otherwise supported by a virtual file system
     inside Qt, such as \l{the Qt Resource System}.
 
     \b{Note:} Native paths may still require conversion of path separators
@@ -948,8 +986,8 @@ bool QFileInfo::isNativePath() const
 }
 
 /*!
-    Returns true if this object points to a file or to a symbolic
-    link to a file. Returns false if the
+    Returns \c true if this object points to a file or to a symbolic
+    link to a file. Returns \c false if the
     object points to something which isn't a file, such as a directory.
 
     \sa isDir(), isSymLink(), isBundle()
@@ -957,63 +995,55 @@ bool QFileInfo::isNativePath() const
 bool QFileInfo::isFile() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::FileType))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::FileType);
-        return d->metaData.isFile();
-    }
-    return d->getFileFlags(QAbstractFileEngine::FileType);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::FileType,
+                [d]() { return d->metaData.isFile(); },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::FileType); });
 }
 
 /*!
-    Returns true if this object points to a directory or to a symbolic
-    link to a directory; otherwise returns false.
+    Returns \c true if this object points to a directory or to a symbolic
+    link to a directory; otherwise returns \c false.
 
     \sa isFile(), isSymLink(), isBundle()
 */
 bool QFileInfo::isDir() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::DirectoryType))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::DirectoryType);
-        return d->metaData.isDirectory();
-    }
-    return d->getFileFlags(QAbstractFileEngine::DirectoryType);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::DirectoryType,
+                [d]() { return d->metaData.isDirectory(); },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::DirectoryType); });
 }
 
 
 /*!
     \since 4.3
-    Returns true if this object points to a bundle or to a symbolic
-    link to a bundle on Mac OS X; otherwise returns false.
+    Returns \c true if this object points to a bundle or to a symbolic
+    link to a bundle on \macos and iOS; otherwise returns \c false.
 
     \sa isDir(), isSymLink(), isFile()
 */
 bool QFileInfo::isBundle() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::BundleType))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::BundleType);
-        return d->metaData.isBundle();
-    }
-    return d->getFileFlags(QAbstractFileEngine::BundleType);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::BundleType,
+                [d]() { return d->metaData.isBundle(); },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::BundleType); });
 }
 
 /*!
-    Returns true if this object points to a symbolic link (or to a
-    shortcut on Windows); otherwise returns false.
+    Returns \c true if this object points to a symbolic link;
+    otherwise returns \c false.
 
-    On Unix (including Mac OS X), opening a symlink effectively opens
-    the \l{symLinkTarget()}{link's target}. On Windows, it opens the \c
-    .lnk file itself.
+    Symbolic links exist on Unix (including \macos and iOS) and Windows
+    and are typically created by the \c{ln -s} or \c{mklink} commands,
+    respectively. Opening a symbolic link effectively opens
+    the \l{symLinkTarget()}{link's target}.
+
+    In addition, true will be returned for shortcuts (\c *.lnk files) on
+    Windows. Opening those will open the \c .lnk file itself.
 
     Example:
 
@@ -1027,29 +1057,25 @@ bool QFileInfo::isBundle() const
 bool QFileInfo::isSymLink() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::LegacyLinkType))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::LegacyLinkType);
-        return d->metaData.isLegacyLink();
-    }
-    return d->getFileFlags(QAbstractFileEngine::LinkType);
+    return d->checkAttribute<bool>(
+                QFileSystemMetaData::LegacyLinkType,
+                [d]() { return d->metaData.isLegacyLink(); },
+                [d]() { return d->getFileFlags(QAbstractFileEngine::LinkType); });
 }
 
 /*!
-    Returns true if the object points to a directory or to a symbolic
+    Returns \c true if the object points to a directory or to a symbolic
     link to a directory, and that directory is the root directory; otherwise
-    returns false.
+    returns \c false.
 */
 bool QFileInfo::isRoot() const
 {
     Q_D(const QFileInfo);
     if (d->isDefaultConstructed)
-        return true;
+        return false;
     if (d->fileEngine == 0) {
         if (d->fileEntry.isRoot()) {
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
             //the path is a drive root, but the drive may not exist
             //for backward compatibility, return true only if the drive exists
             if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::ExistsAttribute))
@@ -1068,12 +1094,12 @@ bool QFileInfo::isRoot() const
     \fn QString QFileInfo::symLinkTarget() const
     \since 4.2
 
-    Returns the absolute path to the file or directory a symlink (or shortcut
-    on Windows) points to, or a an empty string if the object isn't a symbolic
+    Returns the absolute path to the file or directory a symbolic link
+    points to, or an empty string if the object isn't a symbolic
     link.
 
     This name may not represent an existing file; it is only a string.
-    QFileInfo::exists() returns true if the symlink points to an
+    QFileInfo::exists() returns \c true if the symlink points to an
     existing file.
 
     \sa exists(), isSymLink(), isDir(), isFile()
@@ -1098,7 +1124,8 @@ QString QFileInfo::readLink() const
     returned.
 
     This function can be time consuming under Unix (in the order of
-    milliseconds).
+    milliseconds). On Windows, it will return an empty string unless
+    the \l{NTFS permissions} check has been enabled.
 
     \sa ownerId(), group(), groupId()
 */
@@ -1121,14 +1148,10 @@ QString QFileInfo::owner() const
 uint QFileInfo::ownerId() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return 0;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::UserId))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::UserId);
-        return d->metaData.userId();
-    }
-    return d->fileEngine->ownerId(QAbstractFileEngine::OwnerUser);
+    return d->checkAttribute(uint(-2),
+                QFileSystemMetaData::UserId,
+                [d]() { return d->metaData.userId(); },
+                [d]() { return d->fileEngine->ownerId(QAbstractFileEngine::OwnerUser); });
 }
 
 /*!
@@ -1160,14 +1183,10 @@ QString QFileInfo::group() const
 uint QFileInfo::groupId() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return 0;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::GroupId))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::GroupId);
-        return d->metaData.groupId();
-    }
-    return d->fileEngine->ownerId(QAbstractFileEngine::OwnerGroup);
+    return d->checkAttribute(uint(-2),
+                QFileSystemMetaData::GroupId,
+                [d]() { return d->metaData.groupId(); },
+                [d]() { return d->fileEngine->ownerId(QAbstractFileEngine::OwnerGroup); });
 }
 
 /*!
@@ -1176,7 +1195,10 @@ uint QFileInfo::groupId() const
     for permission combinations.
 
     On systems where files do not have permissions this function
-    always returns true.
+    always returns \c true.
+
+    \note The result might be inaccurate on Windows if the
+    \l{NTFS permissions} check has not been enabled.
 
     Example:
     \snippet code/src_corelib_io_qfileinfo.cpp 10
@@ -1186,33 +1208,33 @@ uint QFileInfo::groupId() const
 bool QFileInfo::permission(QFile::Permissions permissions) const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return false;
-    if (d->fileEngine == 0) {
-        // the QFileSystemMetaData::MetaDataFlag and QFile::Permissions overlap, so just static cast.
-        QFileSystemMetaData::MetaDataFlag permissionFlags = static_cast<QFileSystemMetaData::MetaDataFlag>((int)permissions);
-        if (!d->cache_enabled || !d->metaData.hasFlags(permissionFlags))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, permissionFlags);
-        return (d->metaData.permissions() & permissions) == permissions;
-    }
-    return d->getFileFlags(QAbstractFileEngine::FileFlags((int)permissions)) == (uint)permissions;
+    // the QFileSystemMetaData::MetaDataFlag and QFile::Permissions overlap, so just cast.
+    auto fseFlags = QFileSystemMetaData::MetaDataFlag(int(permissions));
+    auto feFlags = QAbstractFileEngine::FileFlags(int(permissions));
+    return d->checkAttribute<bool>(
+                fseFlags,
+                [=]() { return (d->metaData.permissions() & permissions) == permissions; },
+        [=]() {
+            return d->getFileFlags(feFlags) == uint(permissions);
+        });
 }
 
 /*!
     Returns the complete OR-ed together combination of
     QFile::Permissions for the file.
+
+    \note The result might be inaccurate on Windows if the
+    \l{NTFS permissions} check has not been enabled.
 */
 QFile::Permissions QFileInfo::permissions() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return 0;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::Permissions))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::Permissions);
-        return d->metaData.permissions();
-    }
-    return QFile::Permissions(d->getFileFlags(QAbstractFileEngine::PermsMask) & QAbstractFileEngine::PermsMask);
+    return d->checkAttribute<QFile::Permissions>(
+                QFileSystemMetaData::Permissions,
+                [d]() { return d->metaData.permissions(); },
+        [d]() {
+            return QFile::Permissions(d->getFileFlags(QAbstractFileEngine::PermsMask) & QAbstractFileEngine::PermsMask);
+        });
 }
 
 
@@ -1225,86 +1247,129 @@ QFile::Permissions QFileInfo::permissions() const
 qint64 QFileInfo::size() const
 {
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return 0;
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::SizeAttribute))
-            QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::SizeAttribute);
-        return d->metaData.size();
-    }
-    if (!d->getCachedFlag(QFileInfoPrivate::CachedSize)) {
-        d->setCachedFlag(QFileInfoPrivate::CachedSize);
-        d->fileSize = d->fileEngine->size();
-    }
-    return d->fileSize;
+    return d->checkAttribute<qint64>(
+                QFileSystemMetaData::SizeAttribute,
+                [d]() { return d->metaData.size(); },
+        [d]() {
+            if (!d->getCachedFlag(QFileInfoPrivate::CachedSize)) {
+                d->setCachedFlag(QFileInfoPrivate::CachedSize);
+                d->fileSize = d->fileEngine->size();
+            }
+            return d->fileSize;
+        });
 }
 
+#if QT_DEPRECATED_SINCE(5, 10)
 /*!
-    Returns the date and time when the file was created.
+    \deprecated
 
-    On most Unix systems, this function returns the time of the last
-    status change. A status change occurs when the file is created,
-    but it also occurs whenever the user writes or sets inode
-    information (for example, changing the file permissions).
+    Returns the date and time when the file was created, the time its metadata
+    was last changed or the time of last modification, whichever one of the
+    three is available (in that order).
 
-    If neither creation time nor "last status change" time are not
-    available, returns the same as lastModified().
+    This function is deprecated. Instead, use the birthTime() function to get
+    the time the file was created, metadataChangeTime() to get the time its
+    metadata was last changed, or lastModified() to get the time it was last modified.
 
-    \sa lastModified(), lastRead()
+    \sa birthTime(), metadataChangeTime(), lastModified(), lastRead()
 */
 QDateTime QFileInfo::created() const
 {
-    Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return QDateTime();
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::CreationTime))
-            if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::CreationTime))
-                return QDateTime();
-        return d->metaData.creationTime();
-    }
-    return d->getFileTime(QAbstractFileEngine::CreationTime);
+    QDateTime d = fileTime(QFile::FileBirthTime);
+    if (d.isValid())
+        return d;
+    return fileTime(QFile::FileMetadataChangeTime);
+}
+#endif
+
+/*!
+    \since 5.10
+    Returns the date and time when the file was created / born.
+
+    If the file birth time is not available, this function returns an invalid
+    QDateTime.
+
+    \sa lastModified(), lastRead(), metadataChangeTime()
+*/
+QDateTime QFileInfo::birthTime() const
+{
+    return fileTime(QFile::FileBirthTime);
 }
 
 /*!
-    Returns the date and time when the file was last modified.
+    \since 5.10
+    Returns the date and time when the file metadata was changed. A metadata
+    change occurs when the file is created, but it also occurs whenever the
+    user writes or sets inode information (for example, changing the file
+    permissions).
 
-    \sa created(), lastRead()
+    \sa lastModified(), lastRead()
+*/
+QDateTime QFileInfo::metadataChangeTime() const
+{
+    return fileTime(QFile::FileMetadataChangeTime);
+}
+
+/*!
+    Returns the date and local time when the file was last modified.
+
+    \sa birthTime(), lastRead(), metadataChangeTime(), fileTime()
 */
 QDateTime QFileInfo::lastModified() const
 {
-    Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return QDateTime();
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::ModificationTime))
-            if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ModificationTime))
-                return QDateTime();
-        return d->metaData.modificationTime();
-    }
-    return d->getFileTime(QAbstractFileEngine::ModificationTime);
+    return fileTime(QFile::FileModificationTime);
 }
 
 /*!
-    Returns the date and time when the file was last read (accessed).
+    Returns the date and local time when the file was last read (accessed).
 
     On platforms where this information is not available, returns the
     same as lastModified().
 
-    \sa created(), lastModified()
+    \sa birthTime(), lastModified(), metadataChangeTime(), fileTime()
 */
 QDateTime QFileInfo::lastRead() const
 {
+    return fileTime(QFile::FileAccessTime);
+}
+
+/*!
+    \since 5.10
+
+    Returns the file time specified by \a time. If the time cannot be
+    determined, an invalid date time is returned.
+
+    \sa QFile::FileTime, QDateTime::isValid()
+*/
+QDateTime QFileInfo::fileTime(QFile::FileTime time) const
+{
+    Q_STATIC_ASSERT(int(QFile::FileAccessTime) == int(QAbstractFileEngine::AccessTime));
+    Q_STATIC_ASSERT(int(QFile::FileBirthTime) == int(QAbstractFileEngine::BirthTime));
+    Q_STATIC_ASSERT(int(QFile::FileMetadataChangeTime) == int(QAbstractFileEngine::MetadataChangeTime));
+    Q_STATIC_ASSERT(int(QFile::FileModificationTime) == int(QAbstractFileEngine::ModificationTime));
+
     Q_D(const QFileInfo);
-    if (d->isDefaultConstructed)
-        return QDateTime();
-    if (d->fileEngine == 0) {
-        if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::AccessTime))
-            if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::AccessTime))
-                return QDateTime();
-        return d->metaData.accessTime();
+    auto fetime = QAbstractFileEngine::FileTime(time);
+    QFileSystemMetaData::MetaDataFlags flag;
+    switch (time) {
+    case QFile::FileAccessTime:
+        flag = QFileSystemMetaData::AccessTime;
+        break;
+    case QFile::FileBirthTime:
+        flag = QFileSystemMetaData::BirthTime;
+        break;
+    case QFile::FileMetadataChangeTime:
+        flag = QFileSystemMetaData::MetadataChangeTime;
+        break;
+    case QFile::FileModificationTime:
+        flag = QFileSystemMetaData::ModificationTime;
+        break;
     }
-    return d->getFileTime(QAbstractFileEngine::AccessTime);
+
+    return d->checkAttribute<QDateTime>(
+                flag,
+                [=]() { return d->metaData.fileTime(fetime).toLocalTime(); },
+                [=]() { return d->getFileTime(fetime).toLocalTime(); });
 }
 
 /*!
@@ -1316,7 +1381,7 @@ QFileInfoPrivate* QFileInfo::d_func()
 }
 
 /*!
-    Returns true if caching is enabled; otherwise returns false.
+    Returns \c true if caching is enabled; otherwise returns \c false.
 
     \sa setCaching(), refresh()
 */
@@ -1350,5 +1415,16 @@ void QFileInfo::setCaching(bool enable)
 
     Synonym for QList<QFileInfo>.
 */
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug dbg, const QFileInfo &fi)
+{
+    QDebugStateSaver saver(dbg);
+    dbg.nospace();
+    dbg.noquote();
+    dbg << "QFileInfo(" << QDir::toNativeSeparators(fi.filePath()) << ')';
+    return dbg;
+}
+#endif
 
 QT_END_NAMESPACE

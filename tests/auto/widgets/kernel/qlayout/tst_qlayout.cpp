@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,6 +44,10 @@
 #include <QRadioButton>
 #include <private/qlayoutengine_p.h>
 
+#include <QtTest/private/qtesthelpers_p.h>
+
+using namespace QTestPrivate;
+
 class tst_QLayout : public QObject
 {
 Q_OBJECT
@@ -66,6 +57,7 @@ public:
     virtual ~tst_QLayout();
 
 private slots:
+    void cleanup() { QVERIFY(QApplication::topLevelWidgets().isEmpty()); }
     void getSetCheck();
     void geometry();
     void smartMaxSize();
@@ -76,6 +68,7 @@ private slots:
     void controlTypes();
     void controlTypes2();
     void adjustSizeShouldMakeSureLayoutIsActivated();
+    void testRetainSizeWhenHidden();
 };
 
 tst_QLayout::tst_QLayout()
@@ -126,6 +119,7 @@ void tst_QLayout::geometry()
     // should be the same.
     QApplication::setStyle(QStyleFactory::create(QLatin1String("Windows")));
     QWidget topLevel;
+    setFrameless(&topLevel);
     QWidget w(&topLevel);
     QVBoxLayout layout(&w);
     SizeHinterFrame widget(QSize(100,100));
@@ -146,7 +140,7 @@ void tst_QLayout::geometry()
 
 void tst_QLayout::smartMaxSize()
 {
-    QVector<int> expectedWidths; 
+    QVector<int> expectedWidths;
 
     QFile f(QFINDTESTDATA("baseline/smartmaxsize"));
 
@@ -161,9 +155,9 @@ void tst_QLayout::smartMaxSize()
     f.close();
 
     int sizeCombinations[] = { 0, 10, 20, QWIDGETSIZE_MAX};
-    QSizePolicy::Policy policies[] = {  QSizePolicy::Fixed, 
-                                        QSizePolicy::Minimum, 
-                                        QSizePolicy::Maximum, 
+    QSizePolicy::Policy policies[] = {  QSizePolicy::Fixed,
+                                        QSizePolicy::Minimum,
+                                        QSizePolicy::Maximum,
                                         QSizePolicy::Preferred,
                                         QSizePolicy::Expanding,
                                         QSizePolicy::MinimumExpanding,
@@ -192,7 +186,7 @@ void tst_QLayout::smartMaxSize()
                         int width = sz.width();
                         int expectedWidth = expectedWidths[expectedIndex];
                         if (width != expectedWidth) {
-                            qDebug() << "error at index" << expectedIndex << ":" << sizePolicy.horizontalPolicy() << align << minSize << sizeHint << maxSize << width;
+                            qDebug() << "error at index" << expectedIndex << ':' << sizePolicy.horizontalPolicy() << align << minSize << sizeHint << maxSize << width;
                             ++regressionCount;
                         }
                         ++expectedIndex;
@@ -215,12 +209,12 @@ void tst_QLayout::setLayoutBugs()
     }
 
     widget.setLayout(hBoxLayout);
-    QVERIFY(widget.layout() == hBoxLayout);
+    QCOMPARE(widget.layout(), hBoxLayout);
 
     QWidget containerWidget(0);
     containerWidget.setLayout(widget.layout());
-    QVERIFY(widget.layout() == 0);
-    QVERIFY(containerWidget.layout() == hBoxLayout);
+    QVERIFY(!widget.layout());
+    QCOMPARE(containerWidget.layout(), hBoxLayout);
 }
 
 class MyLayout : public QLayout
@@ -241,7 +235,7 @@ void tst_QLayout::setContentsMargins()
     MyLayout layout;
     layout.invalidated = false;
     int left, top, right, bottom;
-    
+
     layout.setContentsMargins(52, 53, 54, 55);
     QVERIFY(layout.invalidated);
     layout.invalidated = false;
@@ -251,7 +245,7 @@ void tst_QLayout::setContentsMargins()
     QCOMPARE(top, 53);
     QCOMPARE(right, 54);
     QCOMPARE(bottom, 55);
- 
+
     layout.setContentsMargins(52, 53, 54, 55);
     QVERIFY(!layout.invalidated);
 }
@@ -299,7 +293,7 @@ void tst_QLayout::warnIfWrongParent()
     QHBoxLayout lay;
     lay.setParent(&root);
     QTest::ignoreMessage(QtWarningMsg, "QLayout::parentWidget: A layout can only have another layout as a parent.");
-    QCOMPARE(lay.parentWidget(), static_cast<QWidget*>(0));
+    QCOMPARE(lay.parentWidget(), nullptr);
 }
 
 void tst_QLayout::controlTypes()
@@ -339,6 +333,52 @@ void tst_QLayout::adjustSizeShouldMakeSureLayoutIsActivated()
     frame2->hide();
     main.adjustSize();
     QCOMPARE(main.size(), QSize(200, 10));
+}
+
+void tst_QLayout::testRetainSizeWhenHidden()
+{
+#if (defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)) || defined(Q_OS_WINRT)
+    QSKIP("Test does not work on platforms which default to showMaximized()");
+#endif
+
+    QWidget widget;
+    QBoxLayout layout(QBoxLayout::TopToBottom, &widget);
+
+    QLabel *label1 = new QLabel("label1 text", &widget);
+    layout.addWidget(label1);
+    QLabel *label2 = new QLabel("label2 text", &widget);
+    layout.addWidget(label2);
+
+    widget.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&widget));
+    int normalHeight = widget.height();
+
+    // a. Verify that a removed visible will mean lesser size after adjust
+    label1->hide();
+    widget.adjustSize();
+    int heightWithoutLabel1 = widget.height();
+    QVERIFY(heightWithoutLabel1 < normalHeight);
+
+    // b restore with verify that the size is the same
+    label1->show();
+    QCOMPARE(widget.sizeHint().height(), normalHeight);
+
+    // c verify that a policy with retainSizeWhenHidden is respected
+    QSizePolicy sp_remove = label1->sizePolicy();
+    QSizePolicy sp_retain = label1->sizePolicy();
+    sp_retain.setRetainSizeWhenHidden(true);
+
+    label1->setSizePolicy(sp_retain);
+    label1->hide();
+    QCOMPARE(widget.sizeHint().height(), normalHeight);
+
+    // d check that changing the policy to not wanting size will result in lesser size
+    label1->setSizePolicy(sp_remove);
+    QCOMPARE(widget.sizeHint().height(), heightWithoutLabel1);
+
+    // e verify that changing back the hidden widget to want the hidden size will ensure that it gets more size
+    label1->setSizePolicy(sp_retain);
+    QCOMPARE(widget.sizeHint().height(), normalHeight);
 }
 
 QTEST_MAIN(tst_QLayout)

@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -54,17 +64,18 @@ LocationDialog::LocationDialog(QWidget *parent)
     scopeComboBox->addItem(tr("System"));
 
     organizationComboBox = new QComboBox;
-    organizationComboBox->addItem(tr("Qt"));
+    organizationComboBox->addItem(tr("QtProject"));
     organizationComboBox->setEditable(true);
 
     applicationComboBox = new QComboBox;
     applicationComboBox->addItem(tr("Any"));
+    applicationComboBox->addItem(tr("Qt Creator"));
     applicationComboBox->addItem(tr("Application Example"));
     applicationComboBox->addItem(tr("Assistant"));
     applicationComboBox->addItem(tr("Designer"));
     applicationComboBox->addItem(tr("Linguist"));
     applicationComboBox->setEditable(true);
-    applicationComboBox->setCurrentIndex(3);
+    applicationComboBox->setCurrentIndex(1);
 
     formatLabel = new QLabel(tr("&Format:"));
     formatLabel->setBuddy(formatComboBox);
@@ -91,28 +102,29 @@ LocationDialog::LocationDialog(QWidget *parent)
     locationsTable->setHorizontalHeaderLabels(labels);
     locationsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     locationsTable->horizontalHeader()->resizeSection(1, 180);
+    connect(locationsTable, &QTableWidget::itemActivated, this, &LocationDialog::itemActivated);
 
-    buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok
-                                     | QDialogButtonBox::Cancel);
+    buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
 
-    connect(formatComboBox, SIGNAL(activated(int)),
-            this, SLOT(updateLocationsTable()));
-    connect(scopeComboBox, SIGNAL(activated(int)),
-            this, SLOT(updateLocationsTable()));
+    connect(formatComboBox, QOverload<int>::of(&QComboBox::activated),
+            this, &LocationDialog::updateLocationsTable);
+    connect(scopeComboBox, QOverload<int>::of(&QComboBox::activated),
+            this, &LocationDialog::updateLocationsTable);
     connect(organizationComboBox->lineEdit(),
-            SIGNAL(editingFinished()),
-            this, SLOT(updateLocationsTable()));
+            &QLineEdit::editingFinished,
+            this, &LocationDialog::updateLocationsTable);
     connect(applicationComboBox->lineEdit(),
-            SIGNAL(editingFinished()),
-            this, SLOT(updateLocationsTable()));
-    connect(buttonBox, SIGNAL(accepted()), this, SLOT(accept()));
-    connect(buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
+            &QLineEdit::editingFinished,
+            this, &LocationDialog::updateLocationsTable);
+    connect(applicationComboBox, QOverload<int>::of(&QComboBox::activated),
+            this, &LocationDialog::updateLocationsTable);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    QVBoxLayout *locationsLayout = new QVBoxLayout;
+    QVBoxLayout *locationsLayout = new QVBoxLayout(locationsGroupBox);
     locationsLayout->addWidget(locationsTable);
-    locationsGroupBox->setLayout(locationsLayout);
 
-    QGridLayout *mainLayout = new QGridLayout;
+    QGridLayout *mainLayout = new QGridLayout(this);
     mainLayout->addWidget(formatLabel, 0, 0);
     mainLayout->addWidget(formatComboBox, 0, 1);
     mainLayout->addWidget(scopeLabel, 1, 0);
@@ -123,7 +135,6 @@ LocationDialog::LocationDialog(QWidget *parent)
     mainLayout->addWidget(applicationComboBox, 3, 1);
     mainLayout->addWidget(locationsGroupBox, 4, 0, 1, 2);
     mainLayout->addWidget(buttonBox, 5, 0, 1, 2);
-    setLayout(mainLayout);
 
     updateLocationsTable();
 
@@ -155,9 +166,14 @@ QString LocationDialog::organization() const
 QString LocationDialog::application() const
 {
     if (applicationComboBox->currentText() == tr("Any"))
-        return "";
+        return QString();
     else
         return applicationComboBox->currentText();
+}
+
+void LocationDialog::itemActivated(QTableWidgetItem *)
+{
+    buttonBox->button(QDialogButtonBox::Ok)->animateClick();
 }
 
 void LocationDialog::updateLocationsTable()
@@ -184,8 +200,7 @@ void LocationDialog::updateLocationsTable()
             int row = locationsTable->rowCount();
             locationsTable->setRowCount(row + 1);
 
-            QTableWidgetItem *item0 = new QTableWidgetItem;
-            item0->setText(settings.fileName());
+            QTableWidgetItem *item0 = new QTableWidgetItem(QDir::toNativeSeparators(settings.fileName()));
 
             QTableWidgetItem *item1 = new QTableWidgetItem;
             bool disable = (settings.childKeys().isEmpty()

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtOpenVG module of the Qt Toolkit.
+** This file is part of the QtGui module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,15 +48,6 @@
 #include <QDebug>
 
 QT_BEGIN_NAMESPACE
-
-QList<QPlatformCursor *> QPlatformCursorPrivate::getInstances()
-{
-    QList<QPlatformCursor *> result;
-    foreach (const QScreen *screen, QGuiApplicationPrivate::screen_list)
-        if (QPlatformCursor *cursor = screen->handle()->cursor())
-            result.push_back(cursor);
-    return result;
-}
 
 /*!
     \class QPlatformCursor
@@ -95,11 +84,26 @@ QList<QPlatformCursor *> QPlatformCursorPrivate::getInstances()
 
     \a windowCursor is a pointer to the QCursor that should be displayed.
 
+    To unset the cursor of \a window, 0 is passed. This means \a window does not have
+    a cursor set and the cursor of a the first parent window which has a cursor explicitly
+    set or the system default cursor should take effect.
+
     \a window is a pointer to the window currently displayed at QCursor::pos(). Note
     that this may be 0 if the current position is not occupied by a displayed widget.
 
     \sa QCursor::pos()
 */
+
+/*!
+    \enum QPlatformCursor::Capability
+    \since 5.10
+
+    \value OverrideCursor Indicates that the platform implements
+                          QPlatformCursor::setOverrideCursor() and
+                          QPlatformCursor::clearOverrideCursor().
+*/
+
+QPlatformCursor::Capabilities QPlatformCursor::m_capabilities = 0;
 
 /*!
     \fn QPlatformCursor::QPlatformCursor()
@@ -118,8 +122,13 @@ QPoint QPlatformCursor::pos() const
 
 void QPlatformCursor::setPos(const QPoint &pos)
 {
-    Q_UNUSED(pos);
-    qWarning("This plugin does not support QCursor::setPos()");
+    static bool firstCall = true;
+    if (firstCall) {
+        firstCall = false;
+        qWarning("This plugin does not support QCursor::setPos()"
+                 "; emulating movement within the application.");
+    }
+    QWindowSystemInterface::handleMouseEvent(0, pos, pos, Qt::NoButton, Qt::NoButton, QEvent::MouseMove);
 }
 
 // End of display and pointer event handling code
@@ -540,7 +549,7 @@ void QPlatformCursorImage::createSystemCursor(int id)
 void QPlatformCursorImage::set(Qt::CursorShape id)
 {
     QPlatformCursorImage *cursor = 0;
-    if (id >= 0 && id <= Qt::LastCursor) {
+    if (unsigned(id) <= unsigned(Qt::LastCursor)) {
         if (!systemCursorTable[id])
             createSystemCursor(id);
         cursor = systemCursorTable[id];
@@ -660,5 +669,35 @@ void QPlatformCursorImage::set(const uchar *data, const uchar *mask,
 
     \brief Return the cursor's hotspot
 */
+
+#ifndef QT_NO_CURSOR
+/*!
+    Reimplement this function in subclass to set an override cursor
+    on the associated screen and return true to indicate success.
+
+    This function can be implemented on platforms where the cursor is a
+    property of the application or the screen rather than a property
+    of the window. On these platforms, the OverrideCursor capability
+    should be set.
+
+    \sa QGuiApplication::setOverrideCursor(), Capabilities
+
+    \since 5.10
+*/
+void QPlatformCursor::setOverrideCursor(const QCursor &)
+{
+}
+
+/*!
+    Reimplement this function in subclass to clear the override cursor.
+
+    \sa QGuiApplication::clearOverrideCursor(), Capabilities
+
+    \since 5.10
+*/
+void QPlatformCursor::clearOverrideCursor()
+{
+}
+#endif // QT_NO_CURSOR
 
 QT_END_NAMESPACE

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,12 +32,9 @@
 #include "project.h"
 #include "xmloutput.h"
 #include "msvc_objectmodel.h"
-#include <qatomic.h>
 #include <qlist.h>
 #include <qstring.h>
-#include <qstringlist.h>
 #include <qmap.h>
-#include <qdebug.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -64,7 +48,8 @@ public:
     }
     virtual void addElement(const QString &filepath, const VCFilterFile &allInfo) = 0;
     virtual void removeElements()= 0;
-    virtual void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName, VCProject &tool, const QString &filter) = 0;
+    virtual void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName,
+                             VCProject &tool, const QString &filter) = 0;
     virtual bool hasElements() = 0;
 };
 
@@ -87,7 +72,7 @@ public:
         return Uindex;
     }
 
-    void addElement(const QString &filepath, const VCFilterFile &allInfo){
+    void addElement(const QString &filepath, const VCFilterFile &allInfo) override {
         QString newNodeName(filepath);
 
         int index = pathIndex(filepath);
@@ -104,7 +89,7 @@ public:
             n->addElement(filepath.mid(index+1), allInfo);
     }
 
-    void removeElements() {
+    void removeElements() override {
         ChildrenMap::ConstIterator it = children.constBegin();
         ChildrenMap::ConstIterator end = children.constEnd();
         for( ; it != end; it++) {
@@ -114,8 +99,9 @@ public:
         children.clear();
     }
 
-    void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName, VCProject &tool, const QString &filter);
-    bool hasElements() {
+    void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName, VCProject &tool,
+                     const QString &filter) override;
+    bool hasElements() override {
         return children.size() != 0;
     }
 };
@@ -138,7 +124,7 @@ public:
         return Uindex;
     }
 
-    void addElement(const QString &filepath, const VCFilterFile &allInfo){
+    void addElement(const QString &filepath, const VCFilterFile &allInfo) override {
         QString newKey(filepath);
 
         int index = pathIndex(filepath);
@@ -150,12 +136,13 @@ public:
         children.insert(newKey + "\0" + allInfo.file, allInfo);
     }
 
-    void removeElements() {
+    void removeElements() override {
         children.clear();
     }
 
-    void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName, VCProject &proj, const QString &filter);
-    bool hasElements() {
+    void generateXML(XmlOutput &xml, XmlOutput &xmlFilter, const QString &tagName, VCProject &proj,
+                     const QString &filter) override;
+    bool hasElements() override {
         return children.size() != 0;
     }
 };
@@ -163,27 +150,39 @@ public:
 class VCXProjectWriter : public VCProjectWriter
 {
 public:
-    void write(XmlOutput &, VCProjectSingleConfig &);
-    void write(XmlOutput &, VCProject &);
+    void write(XmlOutput &, VCProjectSingleConfig &) override;
+    void write(XmlOutput &, VCProject &) override;
 
-    void write(XmlOutput &, const VCCLCompilerTool &);
-    void write(XmlOutput &, const VCLinkerTool &);
-    void write(XmlOutput &, const VCMIDLTool &);
-    void write(XmlOutput &, const VCCustomBuildTool &);
-    void write(XmlOutput &, const VCLibrarianTool &);
-    void write(XmlOutput &, const VCResourceCompilerTool &);
-    void write(XmlOutput &, const VCEventTool &);
-    void write(XmlOutput &, const VCDeploymentTool &);
-    void write(XmlOutput &, const VCConfiguration &);
-    void write(XmlOutput &, VCFilter &);
+    void write(XmlOutput &, const VCCLCompilerTool &) override;
+    void write(XmlOutput &, const VCLinkerTool &) override;
+    void write(XmlOutput &, const VCMIDLTool &) override;
+    void write(XmlOutput &, const VCCustomBuildTool &) override;
+    void write(XmlOutput &, const VCLibrarianTool &) override;
+    void write(XmlOutput &, const VCResourceCompilerTool &) override;
+    void write(XmlOutput &, const VCEventTool &) override;
+    void write(XmlOutput &, const VCDeploymentTool &) override;
+    void write(XmlOutput &, const VCWinDeployQtTool &) override;
+    void write(XmlOutput &, const VCConfiguration &) override;
+    void write(XmlOutput &, VCFilter &) override;
 
 private:
+    struct OutputFilterData
+    {
+        VCFilter filter;
+        VCFilterFile info;
+        bool inBuild;
+    };
+
     static void addFilters(VCProject &project, XmlOutput &xmlFilter, const QString &filterName);
     static void outputFilter(VCProject &project, XmlOutput &xml, XmlOutput &xmlFilter, const QString &filtername);
-    static void outputFileConfigs(VCProject &project, XmlOutput &xml, XmlOutput &xmlFilter, const VCFilterFile &info, const QString &filtername);
-    static bool outputFileConfig(VCFilter &filter, XmlOutput &xml, XmlOutput &xmlFilter, const QString &filename, const QString &filtername, bool fileAllreadyAdded);
+    static void outputFileConfigs(VCProject &project, XmlOutput &xml, XmlOutput &xmlFilter,
+                                  const VCFilterFile &info, const QString &filtername);
+    static bool outputFileConfig(OutputFilterData *d, XmlOutput &xml, XmlOutput &xmlFilter,
+                                 const QString &filename, const QString &fullFilterName,
+                                 bool fileAdded, bool hasCustomBuildStep);
+    static void outputFileConfig(XmlOutput &xml, XmlOutput &xmlFilter, const QString &fileName, const QString &filterName);
     static QString generateCondition(const VCConfiguration &config);
-    static QString platformToolSetVersion(const DotNET version);
+    static XmlOutput::xml_output attrTagToolsVersion(const VCConfiguration &config);
 
     friend class XTreeNode;
     friend class XFlatNode;

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,37 +10,38 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qlinuxfbscreen.h"
-#include <QtPlatformSupport/private/qfbcursor_p.h>
+#include <QtFbSupport/private/qfbcursor_p.h>
+#include <QtFbSupport/private/qfbwindow_p.h>
+#include <QtCore/QFile>
+#include <QtCore/QRegularExpression>
 #include <QtGui/QPainter>
 
 #include <private/qcore_unix_p.h> // overrides QT_OPEN
@@ -143,7 +144,7 @@ static QSizeF determinePhysicalSize(const fb_var_screeninfo &vinfo, const QSize 
             mmWidth = vinfo.width;
             mmHeight = vinfo.height;
         } else {
-            const int dpi = 72;
+            const int dpi = 100;
             mmWidth = qRound(res.width() * 25.4 / dpi);
             mmHeight = qRound(res.height() * 25.4 / dpi);
         }
@@ -262,27 +263,20 @@ static int openTtyDevice(const QString &device)
     return fd;
 }
 
-static bool switchToGraphicsMode(int ttyfd, int *oldMode)
+static void switchToGraphicsMode(int ttyfd, bool doSwitch, int *oldMode)
 {
-    ioctl(ttyfd, KDGETMODE, &oldMode);
-    if (*oldMode != KD_GRAPHICS) {
-       if (ioctl(ttyfd, KDSETMODE, KD_GRAPHICS) != 0)
-            return false;
+    // Do not warn if the switch fails: the ioctl fails when launching from a
+    // remote console and there is nothing we can do about it.  The matching
+    // call in resetTty should at least fail then, too, so we do no harm.
+    if (ioctl(ttyfd, KDGETMODE, oldMode) == 0) {
+        if (doSwitch && *oldMode != KD_GRAPHICS)
+            ioctl(ttyfd, KDSETMODE, KD_GRAPHICS);
     }
-
-    // No blankin' screen, no blinkin' cursor!, no cursor!
-    const char termctl[] = "\033[9;0]\033[?33l\033[?25l\033[?1c";
-    QT_WRITE(ttyfd, termctl, sizeof(termctl));
-    return true;
 }
 
 static void resetTty(int ttyfd, int oldMode)
 {
     ioctl(ttyfd, KDSETMODE, oldMode);
-
-    // Blankin' screen, blinkin' cursor!
-    const char termctl[] = "\033[9;15]\033[?33h\033[?25h\033[?0c";
-    QT_WRITE(ttyfd, termctl, sizeof(termctl));
 
     QT_CLOSE(ttyfd);
 }
@@ -292,33 +286,33 @@ static void blankScreen(int fd, bool on)
     ioctl(fd, FBIOBLANK, on ? VESA_POWERDOWN : VESA_NO_BLANKING);
 }
 
-QLinuxFbScreen::QLinuxFbScreen()
-    : mFbFd(-1), mBlitter(0)
+QLinuxFbScreen::QLinuxFbScreen(const QStringList &args)
+    : mArgs(args), mFbFd(-1), mTtyFd(-1), mBlitter(0)
 {
+    mMmap.data = 0;
 }
 
 QLinuxFbScreen::~QLinuxFbScreen()
 {
     if (mFbFd != -1) {
-        munmap(mMmap.data - mMmap.offset, mMmap.size);
+        if (mMmap.data)
+            munmap(mMmap.data - mMmap.offset, mMmap.size);
         close(mFbFd);
     }
 
-    if (mTtyFd != -1) {
+    if (mTtyFd != -1)
         resetTty(mTtyFd, mOldTtyMode);
-        close(mTtyFd);
-    }
 
     delete mBlitter;
 }
 
-bool QLinuxFbScreen::initialize(const QStringList &args)
+bool QLinuxFbScreen::initialize()
 {
-    QRegExp ttyRx(QLatin1String("tty=(.*)"));
-    QRegExp fbRx(QLatin1String("fb=(.*)"));
-    QRegExp mmSizeRx(QLatin1String("mmsize=(\\d+)x(\\d+)"));
-    QRegExp sizeRx(QLatin1String("size=(\\d+)x(\\d+)"));
-    QRegExp offsetRx(QLatin1String("offset=(\\d+)x(\\d+)"));
+    QRegularExpression ttyRx(QLatin1String("tty=(.*)"));
+    QRegularExpression fbRx(QLatin1String("fb=(.*)"));
+    QRegularExpression mmSizeRx(QLatin1String("mmsize=(\\d+)x(\\d+)"));
+    QRegularExpression sizeRx(QLatin1String("size=(\\d+)x(\\d+)"));
+    QRegularExpression offsetRx(QLatin1String("offset=(\\d+)x(\\d+)"));
 
     QString fbDevice, ttyDevice;
     QSize userMmSize;
@@ -326,28 +320,36 @@ bool QLinuxFbScreen::initialize(const QStringList &args)
     bool doSwitchToGraphicsMode = true;
 
     // Parse arguments
-    foreach (const QString &arg, args) {
+    for (const QString &arg : qAsConst(mArgs)) {
+        QRegularExpressionMatch match;
         if (arg == QLatin1String("nographicsmodeswitch"))
             doSwitchToGraphicsMode = false;
-        else if (sizeRx.indexIn(arg) != -1)
-            userGeometry.setSize(QSize(sizeRx.cap(1).toInt(), sizeRx.cap(2).toInt()));
-        else if (offsetRx.indexIn(arg) != -1)
-            userGeometry.setTopLeft(QPoint(offsetRx.cap(1).toInt(), offsetRx.cap(2).toInt()));
-        else if (ttyRx.indexIn(arg) != -1)
-            ttyDevice = ttyRx.cap(1);
-        else if (fbRx.indexIn(arg) != -1)
-            fbDevice = fbRx.cap(1);
-        else if (mmSizeRx.indexIn(arg) != -1)
-            userMmSize = QSize(mmSizeRx.cap(1).toInt(), mmSizeRx.cap(2).toInt());
+        else if (arg.contains(mmSizeRx, &match))
+            userMmSize = QSize(match.captured(1).toInt(), match.captured(2).toInt());
+        else if (arg.contains(sizeRx, &match))
+            userGeometry.setSize(QSize(match.captured(1).toInt(), match.captured(2).toInt()));
+        else if (arg.contains(offsetRx, &match))
+            userGeometry.setTopLeft(QPoint(match.captured(1).toInt(), match.captured(2).toInt()));
+        else if (arg.contains(ttyRx, &match))
+            ttyDevice = match.captured(1);
+        else if (arg.contains(fbRx, &match))
+            fbDevice = match.captured(1);
     }
 
-    if (fbDevice.isEmpty())
-        fbDevice = QLatin1String("/dev/fb0"); // ## auto-detect
+    if (fbDevice.isEmpty()) {
+        fbDevice = QLatin1String("/dev/fb0");
+        if (!QFile::exists(fbDevice))
+            fbDevice = QLatin1String("/dev/graphics/fb0");
+        if (!QFile::exists(fbDevice)) {
+            qWarning("Unable to figure out framebuffer device. Specify it manually.");
+            return false;
+        }
+    }
 
     // Open the device
     mFbFd = openFramebufferDevice(fbDevice);
     if (mFbFd == -1) {
-        qWarning("Failed to open framebuffer %s : %s", qPrintable(fbDevice), strerror(errno));
+        qErrnoWarning(errno, "Failed to open framebuffer %s", qPrintable(fbDevice));
         return false;
     }
 
@@ -358,43 +360,43 @@ bool QLinuxFbScreen::initialize(const QStringList &args)
     memset(&finfo, 0, sizeof(finfo));
 
     if (ioctl(mFbFd, FBIOGET_FSCREENINFO, &finfo) != 0) {
-        qWarning("Error reading fixed information: %s", strerror(errno));
+        qErrnoWarning(errno, "Error reading fixed information");
         return false;
     }
 
     if (ioctl(mFbFd, FBIOGET_VSCREENINFO, &vinfo)) {
-        qWarning("Error reading variable information: %s", strerror(errno));
+        qErrnoWarning(errno, "Error reading variable information");
         return false;
     }
 
     mDepth = determineDepth(vinfo);
     mBytesPerLine = finfo.line_length;
-    mGeometry = determineGeometry(vinfo, userGeometry);
+    QRect geometry = determineGeometry(vinfo, userGeometry);
+    mGeometry = QRect(QPoint(0, 0), geometry.size());
     mFormat = determineFormat(vinfo, mDepth);
-    mPhysicalSize = determinePhysicalSize(vinfo, userMmSize, mGeometry.size());
+    mPhysicalSize = determinePhysicalSize(vinfo, userMmSize, geometry.size());
 
     // mmap the framebuffer
     mMmap.size = finfo.smem_len;
     uchar *data = (unsigned char *)mmap(0, mMmap.size, PROT_READ | PROT_WRITE, MAP_SHARED, mFbFd, 0);
     if ((long)data == -1) {
-        qWarning("Failed to mmap framebuffer: %s", strerror(errno));
+        qErrnoWarning(errno, "Failed to mmap framebuffer");
         return false;
     }
 
-    mMmap.offset = mGeometry.y() * mBytesPerLine + mGeometry.x() * mDepth / 8;
+    mMmap.offset = geometry.y() * mBytesPerLine + geometry.x() * mDepth / 8;
     mMmap.data = data + mMmap.offset;
 
     QFbScreen::initializeCompositor();
-    mFbScreenImage = QImage(data, mGeometry.width(), mGeometry.height(), mBytesPerLine, mFormat);
+    mFbScreenImage = QImage(mMmap.data, geometry.width(), geometry.height(), mBytesPerLine, mFormat);
+
     mCursor = new QFbCursor(this);
 
     mTtyFd = openTtyDevice(ttyDevice);
     if (mTtyFd == -1)
-        qWarning() << "Failed to open tty" << strerror(errno);
+        qErrnoWarning(errno, "Failed to open tty");
 
-    if (doSwitchToGraphicsMode && !switchToGraphicsMode(mTtyFd, &mOldTtyMode))
-        qWarning() << "Failed to set graphics mode" << strerror(errno);
-
+    switchToGraphicsMode(mTtyFd, doSwitchToGraphicsMode, &mOldTtyMode);
     blankScreen(mFbFd, false);
 
     return true;
@@ -410,10 +412,38 @@ QRegion QLinuxFbScreen::doRedraw()
     if (!mBlitter)
         mBlitter = new QPainter(&mFbScreenImage);
 
-    QVector<QRect> rects = touched.rects();
-    for (int i = 0; i < rects.size(); i++)
-        mBlitter->drawImage(rects[i], *mScreenImage, rects[i]);
+    mBlitter->setCompositionMode(QPainter::CompositionMode_Source);
+    for (const QRect &rect : touched)
+        mBlitter->drawImage(rect, mScreenImage, rect);
+
     return touched;
+}
+
+// grabWindow() grabs "from the screen" not from the backingstores.
+// In linuxfb's case it will also include the mouse cursor.
+QPixmap QLinuxFbScreen::grabWindow(WId wid, int x, int y, int width, int height) const
+{
+    if (!wid) {
+        if (width < 0)
+            width = mFbScreenImage.width() - x;
+        if (height < 0)
+            height = mFbScreenImage.height() - y;
+        return QPixmap::fromImage(mFbScreenImage).copy(x, y, width, height);
+    }
+
+    QFbWindow *window = windowForId(wid);
+    if (window) {
+        const QRect geom = window->geometry();
+        if (width < 0)
+            width = geom.width() - x;
+        if (height < 0)
+            height = geom.height() - y;
+        QRect rect(geom.topLeft() + QPoint(x, y), QSize(width, height));
+        rect &= window->geometry();
+        return QPixmap::fromImage(mFbScreenImage).copy(rect);
+    }
+
+    return QPixmap();
 }
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QDebug>
 
 #include <qopenglpaintdevice.h>
@@ -66,16 +65,22 @@
 
 #include <private/qopenglextensions_p.h>
 
+#include <QOpenGLVertexArrayObject>
+#include <QOpenGLBuffer>
+
 enum EngineMode {
     ImageDrawingMode,
     TextDrawingMode,
     BrushDrawingMode,
-    ImageArrayDrawingMode
+    ImageArrayDrawingMode,
+    ImageOpacityArrayDrawingMode
 };
 
 QT_BEGIN_NAMESPACE
 
 #define GL_STENCIL_HIGH_BIT         GLuint(0x80)
+#define QT_UNKNOWN_TEXTURE_UNIT     GLuint(-1)
+#define QT_DEFAULT_TEXTURE_UNIT     GLuint(0)
 #define QT_BRUSH_TEXTURE_UNIT       GLuint(0)
 #define QT_IMAGE_TEXTURE_UNIT       GLuint(0) //Can be the same as brush texture unit
 #define QT_MASK_TEXTURE_UNIT        GLuint(1)
@@ -111,37 +116,37 @@ public:
     QOpenGL2PaintEngineEx();
     ~QOpenGL2PaintEngineEx();
 
-    bool begin(QPaintDevice *device);
+    bool begin(QPaintDevice *device) override;
     void ensureActive();
-    bool end();
+    bool end() override;
 
-    virtual void clipEnabledChanged();
-    virtual void penChanged();
-    virtual void brushChanged();
-    virtual void brushOriginChanged();
-    virtual void opacityChanged();
-    virtual void compositionModeChanged();
-    virtual void renderHintsChanged();
-    virtual void transformChanged();
+    virtual void clipEnabledChanged() override;
+    virtual void penChanged() override;
+    virtual void brushChanged() override;
+    virtual void brushOriginChanged() override;
+    virtual void opacityChanged() override;
+    virtual void compositionModeChanged() override;
+    virtual void renderHintsChanged() override;
+    virtual void transformChanged() override;
 
-    virtual void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr);
+    virtual void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr) override;
     virtual void drawPixmapFragments(const QPainter::PixmapFragment *fragments, int fragmentCount, const QPixmap &pixmap,
-                                     QPainter::PixmapFragmentHints hints);
+                                     QPainter::PixmapFragmentHints hints) override;
     virtual void drawImage(const QRectF &r, const QImage &pm, const QRectF &sr,
-                           Qt::ImageConversionFlags flags = Qt::AutoColor);
-    virtual void drawTextItem(const QPointF &p, const QTextItem &textItem);
-    virtual void fill(const QVectorPath &path, const QBrush &brush);
-    virtual void stroke(const QVectorPath &path, const QPen &pen);
-    virtual void clip(const QVectorPath &path, Qt::ClipOperation op);
+                           Qt::ImageConversionFlags flags = Qt::AutoColor) override;
+    virtual void drawTextItem(const QPointF &p, const QTextItem &textItem) override;
+    virtual void fill(const QVectorPath &path, const QBrush &brush) override;
+    virtual void stroke(const QVectorPath &path, const QPen &pen) override;
+    virtual void clip(const QVectorPath &path, Qt::ClipOperation op) override;
 
-    virtual void drawStaticTextItem(QStaticTextItem *textItem);
+    virtual void drawStaticTextItem(QStaticTextItem *textItem) override;
 
     bool drawTexture(const QRectF &r, GLuint textureId, const QSize &size, const QRectF &sr);
 
-    Type type() const { return OpenGL2; }
+    Type type() const override { return OpenGL2; }
 
-    virtual void setState(QPainterState *s);
-    virtual QPainterState *createState(QPainterState *orig) const;
+    virtual void setState(QPainterState *s) override;
+    virtual QPainterState *createState(QPainterState *orig) const override;
     inline QOpenGL2PaintEngineState *state() {
         return static_cast<QOpenGL2PaintEngineState *>(QPaintEngineEx::state());
     }
@@ -149,15 +154,16 @@ public:
         return static_cast<const QOpenGL2PaintEngineState *>(QPaintEngineEx::state());
     }
 
-    void beginNativePainting();
-    void endNativePainting();
+    void beginNativePainting() override;
+    void endNativePainting() override;
 
     void invalidateState();
 
     void setRenderTextActive(bool);
 
     bool isNativePaintingActive() const;
-    bool supportsTransformations(QFontEngine *, const QTransform &) const { return true; }
+    bool requiresPretransformedGlyphPositions(QFontEngine *, const QTransform &) const override { return false; }
+    bool shouldDrawCachedGlyphs(QFontEngine *, const QTransform &) const override;
 
 private:
     Q_DISABLE_COPY(QOpenGL2PaintEngineEx)
@@ -190,7 +196,11 @@ public:
             snapToPixelGrid(false),
             nativePaintingActive(false),
             inverseScale(1),
-            lastMaskTextureUsed(0)
+            lastTextureUnitUsed(QT_UNKNOWN_TEXTURE_UNIT),
+            vertexBuffer(QOpenGLBuffer::VertexBuffer),
+            texCoordBuffer(QOpenGLBuffer::VertexBuffer),
+            opacityBuffer(QOpenGLBuffer::VertexBuffer),
+            indexBuffer(QOpenGLBuffer::IndexBuffer)
     { }
 
     ~QOpenGL2PaintEngineExPrivate();
@@ -199,7 +209,13 @@ public:
     void updateBrushUniforms();
     void updateMatrix();
     void updateCompositionMode();
-    void updateTextureFilter(GLenum target, GLenum wrapMode, bool smoothPixmapTransform, GLuint id = GLuint(-1));
+
+    enum TextureUpdateMode { UpdateIfNeeded, ForceUpdate };
+    template<typename T>
+    void updateTexture(GLenum textureUnit, const T &texture, GLenum wrapMode, GLenum filterMode, TextureUpdateMode updateMode = UpdateIfNeeded);
+    template<typename T>
+    GLuint bindTexture(const T &texture);
+    void activateTextureUnit(GLenum textureUnit);
 
     void resetGLState();
 
@@ -210,10 +226,11 @@ public:
     void drawTexture(const QOpenGLRect& dest, const QOpenGLRect& src, const QSize &textureSize, bool opaque, bool pattern = false);
     void drawPixmapFragments(const QPainter::PixmapFragment *fragments, int fragmentCount, const QPixmap &pixmap,
                              QPainter::PixmapFragmentHints hints);
-    void drawCachedGlyphs(QFontEngineGlyphCache::Type glyphType, QStaticTextItem *staticTextItem);
+    void drawCachedGlyphs(QFontEngine::GlyphFormat glyphFormat, QStaticTextItem *staticTextItem);
 
     // Calls glVertexAttributePointer if the pointer has changed
-    inline void setVertexAttributePointer(unsigned int arrayIndex, const GLfloat *pointer);
+    inline void uploadData(unsigned int arrayIndex, const GLfloat *data, GLuint count);
+    inline bool uploadIndexData(const void *data, GLenum indexValueType, GLuint count);
 
     // draws whatever is in the vertex array:
     void drawVertexArrays(const float *data, int *stops, int stopCount, GLenum primitive);
@@ -235,6 +252,7 @@ public:
     void setBrush(const QBrush& brush);
     void transferMode(EngineMode newMode);
     bool prepareForDraw(bool srcPixelsAreOpaque); // returns true if the program has changed
+    bool prepareForCachedGlyphDraw(const QFontEngineGlyphCache &cache);
     inline void useSimpleShader();
     inline GLuint location(const QOpenGLEngineShaderManager::Uniform uniform) {
         return shaderManager->getUniformLocation(uniform);
@@ -247,7 +265,7 @@ public:
     void updateClipScissorTest();
     void setScissor(const QRect &rect);
     void regenerateClip();
-    void systemStateChanged();
+    void systemStateChanged() override;
 
     void setVertexAttribArrayEnabled(int arrayIndex, bool enabled = true);
     void syncGlState();
@@ -264,7 +282,7 @@ public:
     int width, height;
     QOpenGLContext *ctx;
     EngineMode mode;
-    QFontEngineGlyphCache::Type glyphCacheType;
+    QFontEngine::GlyphFormat glyphCacheFormat;
 
     bool vertexAttributeArraysEnabledState[QT_GL_VERTEX_ARRAY_TRACKED_COUNT];
 
@@ -285,7 +303,7 @@ public:
     QBrush currentBrush; // May not be the state's brush!
     const QBrush noBrush;
 
-    QPixmap currentBrushPixmap;
+    QImage currentBrushImage;
 
     QOpenGL2PEXVertexArray vertexCoordinateArray;
     QOpenGL2PEXVertexArray textureCoordinateArray;
@@ -300,20 +318,21 @@ public:
     GLfloat pmvMatrix[3][3];
     GLfloat inverseScale;
 
+    GLenum lastTextureUnitUsed;
     GLuint lastTextureUsed;
-    GLuint lastMaskTextureUsed;
+
+    QOpenGLVertexArrayObject vao;
+    QOpenGLBuffer vertexBuffer;
+    QOpenGLBuffer texCoordBuffer;
+    QOpenGLBuffer opacityBuffer;
+    QOpenGLBuffer indexBuffer;
 
     bool needsSync;
     bool multisamplingAlwaysEnabled;
 
-    GLfloat depthRange[2];
-
-    float textureInvertedY;
-
     QTriangulatingStroker stroker;
     QDashedStrokeProcessor dasher;
 
-    QSet<QVectorPath::CacheEntry *> pathCaches;
     QVector<GLuint> unusedVBOSToClean;
     QVector<GLuint> unusedIBOSToClean;
 
@@ -321,17 +340,55 @@ public:
 };
 
 
-void QOpenGL2PaintEngineExPrivate::setVertexAttributePointer(unsigned int arrayIndex, const GLfloat *pointer)
+void QOpenGL2PaintEngineExPrivate::uploadData(unsigned int arrayIndex, const GLfloat *data, GLuint count)
 {
     Q_ASSERT(arrayIndex < 3);
-    if (pointer == vertexAttribPointers[arrayIndex])
-        return;
 
-    vertexAttribPointers[arrayIndex] = pointer;
-    if (arrayIndex == QT_OPACITY_ATTR)
-        funcs.glVertexAttribPointer(arrayIndex, 1, GL_FLOAT, GL_FALSE, 0, pointer);
-    else
-        funcs.glVertexAttribPointer(arrayIndex, 2, GL_FLOAT, GL_FALSE, 0, pointer);
+    // If a vertex array object is created we have a profile that supports them
+    // and we will upload the data via a QOpenGLBuffer. Otherwise we will use
+    // the legacy way of uploading the data via glVertexAttribPointer.
+    if (vao.isCreated()) {
+        if (arrayIndex == QT_VERTEX_COORDS_ATTR) {
+            vertexBuffer.bind();
+            vertexBuffer.allocate(data, count * sizeof(float));
+        }
+        if (arrayIndex == QT_TEXTURE_COORDS_ATTR) {
+            texCoordBuffer.bind();
+            texCoordBuffer.allocate(data, count * sizeof(float));
+        }
+        if (arrayIndex == QT_OPACITY_ATTR) {
+            opacityBuffer.bind();
+            opacityBuffer.allocate(data, count * sizeof(float));
+        }
+        if (arrayIndex == QT_OPACITY_ATTR)
+            funcs.glVertexAttribPointer(arrayIndex, 1, GL_FLOAT, GL_FALSE, 0, 0);
+        else
+            funcs.glVertexAttribPointer(arrayIndex, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    } else {
+        // If we already uploaded the data we don't have to do it again
+        if (data == vertexAttribPointers[arrayIndex])
+            return;
+
+        // Store the data in cache and upload it to the graphics card.
+        vertexAttribPointers[arrayIndex] = data;
+        if (arrayIndex == QT_OPACITY_ATTR)
+            funcs.glVertexAttribPointer(arrayIndex, 1, GL_FLOAT, GL_FALSE, 0, data);
+        else
+            funcs.glVertexAttribPointer(arrayIndex, 2, GL_FLOAT, GL_FALSE, 0, data);
+    }
+}
+
+bool QOpenGL2PaintEngineExPrivate::uploadIndexData(const void *data, GLenum indexValueType, GLuint count)
+{
+    // Follow the uploadData() logic: VBOs are used only when VAO support is available.
+    // Otherwise the legacy client-side pointer path is used.
+    if (vao.isCreated()) {
+        Q_ASSERT(indexValueType == GL_UNSIGNED_SHORT || indexValueType == GL_UNSIGNED_INT);
+        indexBuffer.bind();
+        indexBuffer.allocate(data, count * (indexValueType == GL_UNSIGNED_SHORT ? sizeof(quint16) : sizeof(quint32)));
+        return true;
+    }
+    return false;
 }
 
 QT_END_NAMESPACE

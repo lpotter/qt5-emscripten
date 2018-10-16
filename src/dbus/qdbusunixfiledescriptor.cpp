@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the FOO module of the Qt Toolkit.
+** This file is part of the QtDBus module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -59,7 +57,7 @@ QT_BEGIN_NAMESPACE
     \brief The QDBusUnixFileDescriptor class holds one Unix file descriptor.
 
     The QDBusUnixFileDescriptor class is used to hold one Unix file
-    descriptor for use with the QtDBus module. This allows applications to
+    descriptor for use with the Qt D-Bus module. This allows applications to
     send and receive Unix file descriptors over the D-Bus connection, mapping
     automatically to the D-Bus type 'h'.
 
@@ -77,7 +75,7 @@ QT_BEGIN_NAMESPACE
 
     Unix file descriptor passing is not available in all D-Bus connections.
     This feature is present with D-Bus library and bus daemon version 1.4 and
-    upwards on Unix systems. QtDBus automatically enables the feature if such
+    upwards on Unix systems. Qt D-Bus automatically enables the feature if such
     a version was found at compile-time and run-time.
 
     To verify that your connection does support passing file descriptors,
@@ -182,6 +180,12 @@ QDBusUnixFileDescriptor &QDBusUnixFileDescriptor::operator=(const QDBusUnixFileD
 }
 
 /*!
+   \fn QDBusUnixFileDescriptor &QDBusUnixFileDescriptor::operator=(QDBusUnixFileDescriptor &&other)
+
+   Move-assigns  \a other to this QDBusUnixFileDescriptor.
+*/
+
+/*!
     Destroys this QDBusUnixFileDescriptor object and disposes of the Unix file descriptor that it contained.
 */
 QDBusUnixFileDescriptor::~QDBusUnixFileDescriptor()
@@ -197,7 +201,7 @@ QDBusUnixFileDescriptor::~QDBusUnixFileDescriptor()
 */
 
 /*!
-    Returns true if this Unix file descriptor is valid. A valid Unix file
+    Returns \c true if this Unix file descriptor is valid. A valid Unix file
     descriptor is not -1.
 
     \sa fileDescriptor()
@@ -231,11 +235,11 @@ int QDBusUnixFileDescriptor::fileDescriptor() const
 // qdoc documentation is generated on Unix
 
 /*!
-    Returns true if Unix file descriptors are supported on this platform. In
-    other words, this function returns true if this is a Unix platform.
+    Returns \c true if Unix file descriptors are supported on this platform. In
+    other words, this function returns \c true if this is a Unix platform.
 
     Note that QDBusUnixFileDescriptor continues to operate even if this
-    function returns false. The only difference is that the
+    function returns \c false. The only difference is that the
     QDBusUnixFileDescriptor objects will always be in the isValid() == false
     state and fileDescriptor() will always return -1. The class will not
     consume any operating system resources.

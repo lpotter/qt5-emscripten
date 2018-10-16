@@ -1,8 +1,8 @@
 SOURCES += tst_cmptest.cpp
-QT = core gui testlib
+QT = core testlib
+qtHaveModule(gui): QT += gui
 
 mac:CONFIG -= app_bundle
 CONFIG -= debug_and_release_target
 
 TARGET = cmptest
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

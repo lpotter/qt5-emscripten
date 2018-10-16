@@ -1,11 +1,8 @@
 QT += concurrent widgets
+requires(qtConfig(filedialog))
 
 SOURCES += main.cpp imagescaling.cpp
 HEADERS += imagescaling.h
 
 target.path = $$[QT_INSTALL_EXAMPLES]/qtconcurrent/imagescaling
 INSTALLS += target
-
-wince*: DEPLOYMENT_PLUGIN += qgif qjpeg
-
-simulator: warning(This example does not work on Simulator platform)

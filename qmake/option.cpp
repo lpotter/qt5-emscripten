@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,23 +28,26 @@
 
 #include "option.h"
 #include "cachekeys.h"
+#include <ioutils.h>
 #include <qdir.h>
 #include <qregexp.h>
 #include <qhash.h>
 #include <qdebug.h>
-#include <qsettings.h>
+#include <qlibraryinfo.h>
 #include <stdlib.h>
 #include <stdarg.h>
 
 QT_BEGIN_NAMESPACE
 
+using namespace QMakeInternal;
+
 EvalHandler Option::evalHandler;
 QMakeGlobals *Option::globals;
 ProFileCache *Option::proFileCache;
+QMakeVfs *Option::vfs;
 QMakeParser *Option::parser;
 
 //convenience
-const char *Option::application_argv0 = 0;
 QString Option::prf_ext;
 QString Option::prl_ext;
 QString Option::libtool_ext;
@@ -67,6 +57,8 @@ QStringList Option::h_ext;
 QString Option::cpp_moc_ext;
 QStringList Option::cpp_ext;
 QStringList Option::c_ext;
+QString Option::objc_ext;
+QString Option::objcpp_ext;
 QString Option::obj_ext;
 QString Option::lex_ext;
 QString Option::yacc_ext;
@@ -82,7 +74,6 @@ char Option::field_sep;
 Option::QMAKE_MODE Option::qmake_mode = Option::QMAKE_GENERATE_NOTHING;
 
 //all modes
-QStringList Option::qmake_args;
 int Option::warn_level = WarnLogic | WarnDeprecated;
 int Option::debug_level = 0;
 QFile Option::output;
@@ -163,22 +154,29 @@ bool usage(const char *a0)
             "  -Wdeprecated   Turn on deprecation warnings (on by default)\n"
             "\n"
             "Options:\n"
-            "   * You can place any variable assignment in options and it will be     *\n"
-            "   * processed as if it was in [files]. These assignments will be parsed *\n"
-            "   * before [files].                                                     *\n"
+            "   * You can place any variable assignment in options and it will be *\n"
+            "   * processed as if it was in [files]. These assignments will be    *\n"
+            "   * processed before [files] by default.                            *\n"
             "  -o file        Write output to file\n"
             "  -d             Increase debug level\n"
             "  -t templ       Overrides TEMPLATE as templ\n"
             "  -tp prefix     Overrides TEMPLATE so that prefix is prefixed into the value\n"
             "  -help          This help\n"
             "  -v             Version information\n"
-            "  -after         All variable assignments after this will be\n"
+            "  -early         All subsequent variable assignments will be\n"
+            "                 parsed right before default_pre.prf\n"
+            "  -before        All subsequent variable assignments will be\n"
+            "                 parsed right before [files] (the default)\n"
+            "  -after         All subsequent variable assignments will be\n"
             "                 parsed after [files]\n"
+            "  -late          All subsequent variable assignments will be\n"
+            "                 parsed right after default_post.prf\n"
             "  -norecursive   Don't do a recursive search\n"
             "  -recursive     Do a recursive search\n"
             "  -set <prop> <value> Set persistent property\n"
             "  -unset <prop>  Unset persistent property\n"
             "  -query <prop>  Query persistent property. Show all if <prop> is empty.\n"
+            "  -qtconf file   Use file instead of looking for qt.conf\n"
             "  -cache file    Use file as cache           [makefile mode only]\n"
             "  -spec spec     Use spec as QMAKESPEC       [makefile mode only]\n"
             "  -nocache       Don't use a cache file      [makefile mode only]\n"
@@ -193,9 +191,8 @@ bool usage(const char *a0)
 }
 
 int
-Option::parseCommandLine(QStringList &args)
+Option::parseCommandLine(QStringList &args, QMakeCmdLineParserState &state)
 {
-    QMakeCmdLineParserState state(QDir::currentPath());
     enum { ArgNone, ArgOutput } argState = ArgNone;
     int x = 0;
     while (x < args.count()) {
@@ -225,7 +222,7 @@ Option::parseCommandLine(QStringList &args)
                             QMAKE_VERSION_STR, QT_VERSION_STR,
                             QLibraryInfo::location(QLibraryInfo::LibrariesPath).toLatin1().constData());
 #ifdef QMAKE_OPENSOURCE_VERSION
-                    fprintf(stdout, "QMake is Open Source software from Digia Plc and/or its subsidiary(-ies).\n");
+                    fprintf(stdout, "QMake is Open Source software from The Qt Company Ltd and/or its subsidiary(-ies).\n");
 #endif
                     return Option::QMAKE_CMDLINE_BAIL;
                 } else if (arg == "-h" || arg == "-help" || arg == "--help") {
@@ -313,37 +310,38 @@ Option::parseCommandLine(QStringList &args)
         fprintf(stderr, "***Option %s requires a parameter\n", qPrintable(args.at(x - 1)));
         return Option::QMAKE_CMDLINE_SHOW_USAGE | Option::QMAKE_CMDLINE_ERROR;
     }
-    globals->commitCommandLineArguments(state);
-    globals->debugLevel = Option::debug_level;
     return Option::QMAKE_CMDLINE_SUCCESS;
 }
 
 int
 Option::init(int argc, char **argv)
 {
-    Option::application_argv0 = 0;
     Option::prf_ext = ".prf";
     Option::pro_ext = ".pro";
     Option::field_sep = ' ';
 
     if(argc && argv) {
-        Option::application_argv0 = argv[0];
         QString argv0 = argv[0];
+#ifdef Q_OS_WIN
+        if (!argv0.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive))
+            argv0 += QLatin1String(".exe");
+#endif
         if(Option::qmake_mode == Option::QMAKE_GENERATE_NOTHING)
             Option::qmake_mode = default_mode(argv0);
-        if(!argv0.isEmpty() && !QFileInfo(argv0).isRelative()) {
+        if (!argv0.isEmpty() && IoUtils::isAbsolutePath(argv0)) {
             globals->qmake_abslocation = argv0;
         } else if (argv0.contains(QLatin1Char('/'))
 #ifdef Q_OS_WIN
-		   || argv0.contains(QLatin1Char('\\'))
+                   || argv0.contains(QLatin1Char('\\'))
 #endif
-	    ) { //relative PWD
+            ) { //relative PWD
             globals->qmake_abslocation = QDir::current().absoluteFilePath(argv0);
         } else { //in the PATH
             QByteArray pEnv = qgetenv("PATH");
             QDir currentDir = QDir::current();
 #ifdef Q_OS_WIN
             QStringList paths = QString::fromLocal8Bit(pEnv).split(QLatin1String(";"));
+            paths.prepend(QLatin1String("."));
 #else
             QStringList paths = QString::fromLocal8Bit(pEnv).split(QLatin1String(":"));
 #endif
@@ -351,29 +349,30 @@ Option::init(int argc, char **argv)
                 if ((*p).isEmpty())
                     continue;
                 QString candidate = currentDir.absoluteFilePath(*p + QLatin1Char('/') + argv0);
-#ifdef Q_OS_WIN
-                candidate += ".exe";
-#endif
                 if (QFile::exists(candidate)) {
                     globals->qmake_abslocation = candidate;
                     break;
                 }
             }
         }
-        if (!globals->qmake_abslocation.isNull())
-            globals->qmake_abslocation = QDir::cleanPath(globals->qmake_abslocation);
-        else // This is rather unlikely to ever happen on a modern system ...
-            globals->qmake_abslocation = QLibraryInfo::rawLocation(QLibraryInfo::HostBinariesPath,
-                                                                   QLibraryInfo::EffectivePaths) +
+        if (Q_UNLIKELY(globals->qmake_abslocation.isNull())) {
+            // This is rather unlikely to ever happen on a modern system ...
+            globals->qmake_abslocation = QLibraryInfo::rawLocation(
+                                                QLibraryInfo::HostBinariesPath,
+                                                QLibraryInfo::EffectivePaths)
 #ifdef Q_OS_WIN
-                    "/qmake.exe";
+                                         + "/qmake.exe";
 #else
-                    "/qmake";
+                                         + "/qmake";
 #endif
+        } else {
+            globals->qmake_abslocation = QDir::cleanPath(globals->qmake_abslocation);
+        }
     } else {
         Option::qmake_mode = Option::QMAKE_GENERATE_MAKEFILE;
     }
 
+    QMakeCmdLineParserState cmdstate(QDir::currentPath());
     const QByteArray envflags = qgetenv("QMAKEFLAGS");
     if (!envflags.isNull()) {
         QStringList args;
@@ -399,10 +398,12 @@ Option::init(int argc, char **argv)
         }
         if (hasWord)
             args << QString::fromLocal8Bit(buf);
-        parseCommandLine(args);
+        parseCommandLine(args, cmdstate);
+        cmdstate.flush();
     }
     if(argc && argv) {
         QStringList args;
+        args.reserve(argc - 1);
         for (int i = 1; i < argc; i++)
             args << QString::fromLocal8Bit(argv[i]);
 
@@ -430,15 +431,18 @@ Option::init(int argc, char **argv)
             break;
         }
 
-        int ret = parseCommandLine(args);
+        int ret = parseCommandLine(args, cmdstate);
         if(ret != Option::QMAKE_CMDLINE_SUCCESS) {
             if ((ret & Option::QMAKE_CMDLINE_SHOW_USAGE) != 0)
                 usage(argv[0]);
             return ret;
             //return ret == QMAKE_CMDLINE_SHOW_USAGE ? usage(argv[0]) : false;
         }
-        Option::qmake_args = args;
+        globals->qmake_args = args;
+        globals->qmake_extra_args = cmdstate.extraargs;
     }
+    globals->commitCommandLineArguments(cmdstate);
+    globals->debugLevel = Option::debug_level;
 
     //last chance for defaults
     if(Option::qmake_mode == Option::QMAKE_GENERATE_MAKEFILE ||
@@ -464,7 +468,9 @@ Option::init(int argc, char **argv)
 
 void Option::prepareProject(const QString &pfile)
 {
-    QString srcpath = QDir::cleanPath(QFileInfo(pfile).absolutePath());
+    // Canonicalize only the directory, otherwise things will go haywire
+    // if the file itself is a symbolic link.
+    const QString srcpath = QFileInfo(QFileInfo(pfile).absolutePath()).canonicalFilePath();
     globals->setDirectories(srcpath, output_dir);
 }
 
@@ -473,6 +479,8 @@ bool Option::postProcessProject(QMakeProject *project)
     Option::cpp_ext = project->values("QMAKE_EXT_CPP").toQStringList();
     Option::h_ext = project->values("QMAKE_EXT_H").toQStringList();
     Option::c_ext = project->values("QMAKE_EXT_C").toQStringList();
+    Option::objc_ext = project->first("QMAKE_EXT_OBJC").toQString();
+    Option::objcpp_ext = project->first("QMAKE_EXT_OBJCXX").toQString();
     Option::res_ext = project->first("QMAKE_EXT_RES").toQString();
     Option::pkgcfg_ext = project->first("QMAKE_EXT_PKGCONFIG").toQString();
     Option::libtool_ext = project->first("QMAKE_EXT_LIBTOOL").toQString();
@@ -488,7 +496,7 @@ bool Option::postProcessProject(QMakeProject *project)
 
     Option::dir_sep = project->dirSep().toQString();
 
-    if (Option::output_dir.startsWith(project->buildRoot()))
+    if (!project->buildRoot().isEmpty() && Option::output_dir.startsWith(project->buildRoot()))
         Option::mkfile::cachefile_depth =
                 Option::output_dir.mid(project->buildRoot().length()).count('/');
 
@@ -499,7 +507,7 @@ QString
 Option::fixString(QString string, uchar flags)
 {
     //const QString orig_string = string;
-    static QHash<FixStringCacheKey, QString> *cache = 0;
+    static QHash<FixStringCacheKey, QString> *cache = nullptr;
     if(!cache) {
         cache = new QHash<FixStringCacheKey, QString>;
         qmakeAddCacheClear(qmakeDeleteCacheClear<QHash<FixStringCacheKey, QString> >, (void**)&cache);
@@ -531,23 +539,22 @@ Option::fixString(QString string, uchar flags)
         string = QDir::cleanPath(string);
     }
 
-    bool localSep = (flags & Option::FixPathToLocalSeparators) != 0;
-    bool targetSep = (flags & Option::FixPathToTargetSeparators) != 0;
-    bool normalSep = (flags & Option::FixPathToNormalSeparators) != 0;
-
     // either none or only one active flag
-    Q_ASSERT(localSep + targetSep + normalSep <= 1);
+    Q_ASSERT(((flags & Option::FixPathToLocalSeparators) != 0) +
+             ((flags & Option::FixPathToTargetSeparators) != 0) +
+             ((flags & Option::FixPathToNormalSeparators) != 0) <= 1);
+
     //fix separators
     if (flags & Option::FixPathToNormalSeparators) {
-        string = string.replace('\\', '/');
+        string.replace('\\', '/');
     } else if (flags & Option::FixPathToLocalSeparators) {
 #if defined(Q_OS_WIN32)
-        string = string.replace('/', '\\');
+        string.replace('/', '\\');
 #else
-        string = string.replace('\\', '/');
+        string.replace('\\', '/');
 #endif
     } else if(flags & Option::FixPathToTargetSeparators) {
-        string = string.replace('/', Option::dir_sep).replace('\\', Option::dir_sep);
+        string.replace('/', Option::dir_sep).replace('\\', Option::dir_sep);
     }
 
     if ((string.startsWith("\"") && string.endsWith("\"")) ||
@@ -606,8 +613,9 @@ void EvalHandler::message(int type, const QString &msg, const QString &fileName,
         fprintf(stderr, "%s%s\n", qPrintable(pfx), qPrintable(msg));
 }
 
-void EvalHandler::fileMessage(const QString &msg)
+void EvalHandler::fileMessage(int type, const QString &msg)
 {
+    Q_UNUSED(type)
     fprintf(stderr, "%s\n", qPrintable(msg));
 }
 
@@ -627,7 +635,7 @@ public:
     QMakeCacheClearItem(qmakeCacheClearFunc f, void **d) : func(f), data(d) { }
     ~QMakeCacheClearItem() {
         (*func)(*data);
-        *data = 0;
+        *data = nullptr;
     }
 };
 static QList<QMakeCacheClearItem*> cache_items;
@@ -645,8 +653,10 @@ qmakeAddCacheClear(qmakeCacheClearFunc func, void **data)
     cache_items.append(new QMakeCacheClearItem(func, data));
 }
 
-QString qt_libraryInfoFile()
+QString qmake_libraryInfoFile()
 {
+    if (!Option::globals->qtconf.isEmpty())
+        return Option::globals->qtconf;
     if (!Option::globals->qmake_abslocation.isEmpty())
         return QDir(QFileInfo(Option::globals->qmake_abslocation).absolutePath()).filePath("qt.conf");
     return QString();

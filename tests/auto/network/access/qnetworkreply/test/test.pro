@@ -1,20 +1,19 @@
 CONFIG += testcase
 testcase.timeout = 600 # this test is slow
-CONFIG += parallel_test
-CONFIG -= app_bundle debug_and_release_target
-QT -= gui
+CONFIG -= debug_and_release_target
+INCLUDEPATH += ../../../../../shared/
+HEADERS += ../../../../../shared/emulationdetector.h
 SOURCES  += ../tst_qnetworkreply.cpp
 TARGET = ../tst_qnetworkreply
 
-contains(QT_CONFIG,xcb): CONFIG+=insignificant_test  # unstable, QTBUG-21102
-
 QT = core-private network-private testlib
+QT_FOR_CONFIG += gui-private
 RESOURCES += ../qnetworkreply.qrc
 
 TESTDATA += ../empty ../rfc3252.txt ../resource ../bigfile ../*.jpg ../certs \
             ../index.html ../smb-file.txt
 
-win32:CONFIG += insignificant_test # QTBUG-24226
+!android:!winrt: TEST_HELPER_INSTALLS = ../echo/echo
 
-TEST_HELPER_INSTALLS = ../echo/echo
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+QT_TEST_SERVER_LIST = vsftpd apache2 ftp-proxy danted squid
+include($$dirname(_QMAKE_CONF_)/tests/auto/testserver.pri)

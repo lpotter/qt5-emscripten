@@ -1,4 +1,6 @@
 TEMPLATE = subdirs
+QT_FOR_CONFIG += network-private
+
 SUBDIRS = \
         access \
         kernel \
@@ -8,7 +10,7 @@ TRUSTED_BENCHMARKS += \
     kernel/qhostinfo \
     socket/qtcpserver
 
-contains(QT_CONFIG, openssl) {
+qtConfig(openssl) {
    SUBDIRS += ssl
    TRUSTED_BENCHMARKS += ssl/qsslsocket
 }

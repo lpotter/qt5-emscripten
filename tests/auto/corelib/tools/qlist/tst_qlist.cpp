@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +29,17 @@
 
 #include <QtTest/QtTest>
 #include <QList>
+
+template <typename T, class MemoryLayout>
+class is_qlist_array_memory_layout {
+    struct No { char c; };
+    struct Yes { No n[2]; };
+    Q_STATIC_ASSERT(sizeof(No) != sizeof(Yes));
+    static No check(...);
+    static Yes check(MemoryLayout);
+public:
+    enum { value = sizeof(check(typename QList<T>::MemoryLayout())) == sizeof(Yes) };
+};
 
 struct Movable {
     Movable(char input = 'j')
@@ -73,6 +71,13 @@ struct Movable {
         return i == other.i;
     }
 
+    bool operator<(const Movable &other) const
+    {
+        check(state, Constructed);
+        check(other.state, Constructed);
+        return i < other.i;
+    }
+
     Movable &operator=(const Movable &other)
     {
         check(state, Constructed);
@@ -87,13 +92,15 @@ private:
     static int liveCount;
 
     enum State { Constructed = 106, Destructed = 110 };
-    State state;
+    uchar state;
 
-    static void check(const State state1, const State state2)
+    static void check(const uchar state1, const uchar state2)
     {
         QCOMPARE(state1, state2);
     }
 };
+
+Q_STATIC_ASSERT(sizeof(Movable) < sizeof(void*));
 
 int Movable::liveCount = 0;
 
@@ -106,6 +113,82 @@ Q_DECLARE_METATYPE(Movable);
 int qHash(const Movable& movable)
 {
     return qHash(movable.i);
+}
+
+struct Optimal
+{
+    Optimal(char input = 'j')
+        : i(input),
+          state(Constructed)
+    {
+        ++liveCount;
+    }
+    Optimal(const Optimal &other)
+        : i(other.i),
+          state(Constructed)
+    {
+        check(other.state, Constructed);
+        ++liveCount;
+    }
+
+    ~Optimal()
+    {
+        check(state, Constructed);
+        i = 0;
+        --liveCount;
+        state = Destructed;
+    }
+
+    bool operator ==(const Optimal &other) const
+    {
+        check(state, Constructed);
+        check(other.state, Constructed);
+        return i == other.i;
+    }
+
+    bool operator<(const Optimal &other) const
+    {
+        check(state, Constructed);
+        check(other.state, Constructed);
+        return i < other.i;
+    }
+
+    Optimal &operator=(const Optimal &other)
+    {
+        check(state, Constructed);
+        check(other.state, Constructed);
+        i = other.i;
+        return *this;
+    }
+    char i;
+
+    static int getLiveCount() { return liveCount; }
+private:
+    static int liveCount;
+
+    enum State { Constructed = 106, Destructed = 110 };
+    uchar state;
+    char padding[sizeof(void*) - 2];
+
+    static void check(const uchar state1, const uchar state2)
+    {
+        QCOMPARE(state1, state2);
+    }
+};
+
+Q_STATIC_ASSERT(sizeof(Optimal) == sizeof(void*));
+
+int Optimal::liveCount = 0;
+
+QT_BEGIN_NAMESPACE
+Q_DECLARE_TYPEINFO(Optimal, Q_MOVABLE_TYPE);
+QT_END_NAMESPACE
+
+Q_DECLARE_METATYPE(Optimal);
+
+int qHash(const Optimal& key)
+{
+    return qHash(key.i);
 }
 
 struct Complex
@@ -146,6 +229,12 @@ struct Complex
         return value == other.value;
     }
 
+    bool operator<(Complex const &other) const
+    {
+        check(); other.check();
+        return value < other.value;
+    }
+
     void check() const
     {
         QVERIFY(this == checkSum);
@@ -168,114 +257,149 @@ Q_STATIC_ASSERT(!QTypeInfo<int>::isStatic);
 Q_STATIC_ASSERT(!QTypeInfo<int>::isComplex);
 Q_STATIC_ASSERT(!QTypeInfo<Movable>::isStatic);
 Q_STATIC_ASSERT(QTypeInfo<Movable>::isComplex);
+Q_STATIC_ASSERT(!QTypeInfo<Optimal>::isStatic);
+Q_STATIC_ASSERT(QTypeInfo<Optimal>::isComplex);
 Q_STATIC_ASSERT(QTypeInfo<Complex>::isStatic);
 Q_STATIC_ASSERT(QTypeInfo<Complex>::isComplex);
+// iow:
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<int, QListData::NotIndirectLayout>       ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<int, QListData::IndirectLayout>          ::value));
+
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Optimal, QListData::InlineWithPaddingLayout> ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Optimal, QListData::NotArrayCompatibleLayout>::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Optimal, QListData::NotIndirectLayout>       ::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Optimal, QListData::ArrayCompatibleLayout>   ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Optimal, QListData::IndirectLayout>          ::value));
+
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Movable, QListData::InlineWithPaddingLayout> ::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Movable, QListData::NotArrayCompatibleLayout>::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Movable, QListData::NotIndirectLayout>       ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Movable, QListData::ArrayCompatibleLayout>   ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Movable, QListData::IndirectLayout>          ::value));
+
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Complex, QListData::InlineWithPaddingLayout> ::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Complex, QListData::NotArrayCompatibleLayout>::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Complex, QListData::NotIndirectLayout>       ::value));
+Q_STATIC_ASSERT((!is_qlist_array_memory_layout<Complex, QListData::ArrayCompatibleLayout>   ::value));
+Q_STATIC_ASSERT(( is_qlist_array_memory_layout<Complex, QListData::IndirectLayout>          ::value));
 
 class tst_QList : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void lengthInt() const;
+    void lengthOptimal() const;
     void lengthMovable() const;
     void lengthComplex() const;
     void lengthSignature() const;
-    void appendInt() const;
+    void appendOptimal() const;
     void appendMovable() const;
     void appendComplex() const;
     void prepend() const;
-    void midInt() const;
+    void midOptimal() const;
     void midMovable() const;
     void midComplex() const;
-    void atInt() const;
+    void atOptimal() const;
     void atMovable() const;
     void atComplex() const;
-    void firstInt() const;
+    void firstOptimal() const;
     void firstMovable() const;
     void firstComplex() const;
-    void lastInt() const;
+    void lastOptimal() const;
     void lastMovable() const;
     void lastComplex() const;
-    void beginInt() const;
+    void constFirst() const;
+    void constLast() const;
+    void beginOptimal() const;
     void beginMovable() const;
     void beginComplex() const;
-    void endInt() const;
+    void endOptimal() const;
     void endMovable() const;
     void endComplex() const;
-    void containsInt() const;
+    void containsOptimal() const;
     void containsMovable() const;
     void containsComplex() const;
-    void countInt() const;
+    void countOptimal() const;
     void countMovable() const;
     void countComplex() const;
-    void emptyInt() const;
+    void emptyOptimal() const;
     void emptyMovable() const;
     void emptyComplex() const;
-    void endsWithInt() const;
+    void endsWithOptimal() const;
     void endsWithMovable() const;
     void endsWithComplex() const;
-    void lastIndexOfInt() const;
+    void lastIndexOfOptimal() const;
     void lastIndexOfMovable() const;
     void lastIndexOfComplex() const;
-    void moveInt() const;
+    void moveOptimal() const;
     void moveMovable() const;
     void moveComplex() const;
-    void removeAllInt() const;
+    void removeAllOptimal() const;
     void removeAllMovable() const;
     void removeAllComplex() const;
-    void removeAtInt() const;
+    void removeAtOptimal() const;
     void removeAtMovable() const;
     void removeAtComplex() const;
-    void removeOneInt() const;
+    void removeOneOptimal() const;
     void removeOneMovable() const;
     void removeOneComplex() const;
-    void replaceInt() const;
+    void replaceOptimal() const;
     void replaceMovable() const;
     void replaceComplex() const;
-    void startsWithInt() const;
+    void reverseIteratorsOptimal() const;
+    void reverseIteratorsMovable() const;
+    void reverseIteratorsComplex() const;
+    void startsWithOptimal() const;
     void startsWithMovable() const;
     void startsWithComplex() const;
-    void swapInt() const;
+    void swapOptimal() const;
     void swapMovable() const;
     void swapComplex() const;
-    void takeAtInt() const;
+    void takeAtOptimal() const;
     void takeAtMovable() const;
     void takeAtComplex() const;
-    void takeFirstInt() const;
+    void takeFirstOptimal() const;
     void takeFirstMovable() const;
     void takeFirstComplex() const;
-    void takeLastInt() const;
+    void takeLastOptimal() const;
     void takeLastMovable() const;
     void takeLastComplex() const;
-    void toSetInt() const;
+    void toSetOptimal() const;
     void toSetMovable() const;
     void toSetComplex() const;
-    void toStdListInt() const;
+    void toStdListOptimal() const;
     void toStdListMovable() const;
     void toStdListComplex() const;
-    void toVectorInt() const;
+    void toVectorOptimal() const;
     void toVectorMovable() const;
     void toVectorComplex() const;
-    void valueInt() const;
+    void valueOptimal() const;
     void valueMovable() const;
     void valueComplex() const;
 
-    void testOperatorsInt() const;
+    void testOperatorsOptimal() const;
     void testOperatorsMovable() const;
     void testOperatorsComplex() const;
-    void testSTLIteratorsInt() const;
+    void testSTLIteratorsOptimal() const;
     void testSTLIteratorsMovable() const;
     void testSTLIteratorsComplex() const;
 
     void initializeList() const;
 
-    void constSharedNullInt() const;
+    void constSharedNullOptimal() const;
     void constSharedNullMovable() const;
     void constSharedNullComplex() const;
     void setSharableInt_data() const;
     void setSharableInt() const;
     void setSharableComplex_data() const;
     void setSharableComplex() const;
+    void eraseValidIteratorsOnSharedList() const;
+    void insertWithValidIteratorsOnSharedList() const;
+
+    void qhashOptimal() const { qhash<Optimal>(); }
+    void qhashMovable() const { qhash<Movable>(); }
+    void qhashComplex() const { qhash<Complex>(); }
+    void reserve() const;
 private:
     template<typename T> void length() const;
     template<typename T> void append() const;
@@ -291,10 +415,12 @@ private:
     template<typename T> void endsWith() const;
     template<typename T> void lastIndexOf() const;
     template<typename T> void move() const;
+    template<typename T> void qhash() const;
     template<typename T> void removeAll() const;
     template<typename T> void removeAt() const;
     template<typename T> void removeOne() const;
     template<typename T> void replace() const;
+    template<typename T> void reverseIterators() const;
     template<typename T> void startsWith() const;
     template<typename T> void swap() const;
     template<typename T> void takeAt() const;
@@ -324,7 +450,7 @@ template<typename T> struct SimpleValue
 };
 
 template<>
-const int SimpleValue<int>::values[] = { 10, 20, 30, 40, 100, 101, 102 };
+const Optimal SimpleValue<Optimal>::values[] = { 10, 20, 30, 40, 100, 101, 102 };
 template<>
 const Movable SimpleValue<Movable>::values[] = { 10, 20, 30, 40, 100, 101, 102 };
 template<>
@@ -373,9 +499,11 @@ void tst_QList::length() const
     }
 }
 
-void tst_QList::lengthInt() const
+void tst_QList::lengthOptimal() const
 {
-    length<int>();
+    const int liveCount = Optimal::getLiveCount();
+    length<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::lengthMovable() const
@@ -425,9 +553,11 @@ void tst_QList::append() const
     QCOMPARE(list1, listTotal);
 }
 
-void tst_QList::appendInt() const
+void tst_QList::appendOptimal() const
 {
-    append<int>();
+    const int liveCount = Optimal::getLiveCount();
+    append<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::appendMovable() const
@@ -490,9 +620,11 @@ void tst_QList::mid() const
     QCOMPARE(list1.mid(1, 1).length(), 0);
 }
 
-void tst_QList::midInt() const
+void tst_QList::midOptimal() const
 {
-    mid<int>();
+    const int liveCount = Optimal::getLiveCount();
+    mid<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::midMovable() const
@@ -538,9 +670,11 @@ void tst_QList::at() const
     QCOMPARE(list.at(2), T_CAT);
 }
 
-void tst_QList::atInt() const
+void tst_QList::atOptimal() const
 {
-    at<int>();
+    const int liveCount = Optimal::getLiveCount();
+    at<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::atMovable() const
@@ -571,9 +705,11 @@ void tst_QList::first() const
     QCOMPARE(list.first(), T_BAR);
 }
 
-void tst_QList::firstInt() const
+void tst_QList::firstOptimal() const
 {
-    first<int>();
+    const int liveCount = Optimal::getLiveCount();
+    first<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::firstMovable() const
@@ -590,6 +726,140 @@ void tst_QList::firstComplex() const
     QCOMPARE(liveCount, Complex::getLiveCount());
 }
 
+void tst_QList::constFirst() const
+{
+    // Based on tst_QVector::constFirst()
+    QList<int> list;
+    list << 69 << 42 << 3;
+
+    // test it starts ok
+    QCOMPARE(list.constFirst(), 69);
+    QVERIFY(list.isDetached());
+
+    QList<int> listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constFirst(), 69);
+    QCOMPARE(listCopy.constFirst(), 69);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    // test removal changes
+    list.removeAt(0);
+    QVERIFY(list.isDetached());
+    QVERIFY(!list.isSharedWith(listCopy));
+    QCOMPARE(list.constFirst(), 42);
+    QCOMPARE(listCopy.constFirst(), 69);
+
+    listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constFirst(), 42);
+    QCOMPARE(listCopy.constFirst(), 42);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    // test prepend changes
+    list.prepend(23);
+    QVERIFY(list.isDetached());
+    QVERIFY(!list.isSharedWith(listCopy));
+    QCOMPARE(list.constFirst(), 23);
+    QCOMPARE(listCopy.constFirst(), 42);
+
+    listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constFirst(), 23);
+    QCOMPARE(listCopy.constFirst(), 23);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+}
+
+void tst_QList::constLast() const
+{
+    // Based on tst_QVector::constLast()
+    QList<int> list;
+    list << 69 << 42 << 3;
+
+    // test it starts ok
+    QCOMPARE(list.constLast(), 3);
+    QVERIFY(list.isDetached());
+
+    QList<int> listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constLast(), 3);
+    QCOMPARE(listCopy.constLast(), 3);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    // test removal changes
+    list.removeLast();
+    QVERIFY(list.isDetached());
+    QVERIFY(!list.isSharedWith(listCopy));
+    QCOMPARE(list.constLast(), 42);
+    QCOMPARE(listCopy.constLast(), 3);
+
+    listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constLast(), 42);
+    QCOMPARE(listCopy.constLast(), 42);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    // test prepend changes
+    list.append(23);
+    QVERIFY(list.isDetached());
+    QVERIFY(!list.isSharedWith(listCopy));
+    QCOMPARE(list.constLast(), 23);
+    QCOMPARE(listCopy.constLast(), 42);
+
+    listCopy = list;
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+
+    QCOMPARE(list.constLast(), 23);
+    QCOMPARE(listCopy.constLast(), 23);
+
+    QVERIFY(!list.isDetached());
+    QVERIFY(!listCopy.isDetached());
+    QVERIFY(list.isSharedWith(listCopy));
+    QVERIFY(listCopy.isSharedWith(list));
+}
+
 template<typename T>
 void tst_QList::last() const
 {
@@ -604,9 +874,11 @@ void tst_QList::last() const
     QCOMPARE(list.last(), T_FOO);
 }
 
-void tst_QList::lastInt() const
+void tst_QList::lastOptimal() const
 {
-    last<int>();
+    const int liveCount = Optimal::getLiveCount();
+    last<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::lastMovable() const
@@ -637,9 +909,11 @@ void tst_QList::begin() const
     QCOMPARE(*list.begin(), T_BAR);
 }
 
-void tst_QList::beginInt() const
+void tst_QList::beginOptimal() const
 {
-    begin<int>();
+    const int liveCount = Optimal::getLiveCount();
+    begin<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::beginMovable() const
@@ -670,9 +944,11 @@ void tst_QList::end() const
     QCOMPARE(*--list.end(), T_FOO);
 }
 
-void tst_QList::endInt() const
+void tst_QList::endOptimal() const
 {
-    end<int>();
+    const int liveCount = Optimal::getLiveCount();
+    end<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::endMovable() const
@@ -695,17 +971,19 @@ void tst_QList::contains() const
     QList<T> list;
     list << T_FOO << T_BAR << T_BAZ;
 
-    QVERIFY(list.contains(T_FOO) == true);
+    QVERIFY(list.contains(T_FOO));
     QVERIFY(list.contains(T_BLAH) != true);
 
     // add it and make sure it matches
     list.append(T_BLAH);
-    QVERIFY(list.contains(T_BLAH) == true);
+    QVERIFY(list.contains(T_BLAH));
 }
 
-void tst_QList::containsInt() const
+void tst_QList::containsOptimal() const
 {
-    contains<int>();
+    const int liveCount = Optimal::getLiveCount();
+    contains<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::containsMovable() const
@@ -747,9 +1025,11 @@ void tst_QList::count() const
     QVERIFY(list.count() == 0);
 }
 
-void tst_QList::countInt() const
+void tst_QList::countOptimal() const
 {
-    count<int>();
+    const int liveCount = Optimal::getLiveCount();
+    count<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::countMovable() const
@@ -783,9 +1063,11 @@ void tst_QList::empty() const
     QVERIFY(list.empty());
 }
 
-void tst_QList::emptyInt() const
+void tst_QList::emptyOptimal() const
 {
-    empty<int>();
+    const int liveCount = Optimal::getLiveCount();
+    empty<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::emptyMovable() const
@@ -817,9 +1099,11 @@ void tst_QList::endsWith() const
     QVERIFY(list.endsWith(T_BAR));
 }
 
-void tst_QList::endsWithInt() const
+void tst_QList::endsWithOptimal() const
 {
-    endsWith<int>();
+    const int liveCount = Optimal::getLiveCount();
+    endsWith<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::endsWithMovable() const
@@ -860,9 +1144,11 @@ void tst_QList::lastIndexOf() const
     QVERIFY(list.lastIndexOf(T_BAZ, 1) == -1);
 }
 
-void tst_QList::lastIndexOfInt() const
+void tst_QList::lastIndexOfOptimal() const
 {
-    lastIndexOf<int>();
+    const int liveCount = Optimal::getLiveCount();
+    lastIndexOf<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::lastIndexOfMovable() const
@@ -898,9 +1184,11 @@ void tst_QList::move() const
     QCOMPARE(list, QList<T>() << T_BAR << T_FOO << T_BAZ);
 }
 
-void tst_QList::moveInt() const
+void tst_QList::moveOptimal() const
 {
-    move<int>();
+    const int liveCount = Optimal::getLiveCount();
+    move<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::moveMovable() const
@@ -937,9 +1225,11 @@ void tst_QList::removeAll() const
     QCOMPARE(list, QList<T>() << T_FOO << T_BAZ << T_FOO << T_BAZ << T_FOO << T_BAZ << T_FOO << T_BAZ);
 }
 
-void tst_QList::removeAllInt() const
+void tst_QList::removeAllOptimal() const
 {
-    removeAll<int>();
+    const int liveCount = Optimal::getLiveCount();
+    removeAll<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::removeAllMovable() const
@@ -975,9 +1265,11 @@ void tst_QList::removeAt() const
     QCOMPARE(list, QList<T>());
 }
 
-void tst_QList::removeAtInt() const
+void tst_QList::removeAtOptimal() const
 {
-    removeAt<int>();
+    const int liveCount = Optimal::getLiveCount();
+    removeAt<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::removeAtMovable() const
@@ -1022,9 +1314,11 @@ void tst_QList::removeOne() const
     QCOMPARE(list, QList<T>() << T_FOO);
 }
 
-void tst_QList::removeOneInt() const
+void tst_QList::removeOneOptimal() const
 {
-    removeOne<int>();
+    const int liveCount = Optimal::getLiveCount();
+    removeOne<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::removeOneMovable() const
@@ -1063,9 +1357,11 @@ void tst_QList::replace() const
         << T_DOG << T_BLAH);
 }
 
-void tst_QList::replaceInt() const
+void tst_QList::replaceOptimal() const
 {
-    replace<int>();
+    const int liveCount = Optimal::getLiveCount();
+    replace<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::replaceMovable() const
@@ -1083,6 +1379,43 @@ void tst_QList::replaceComplex() const
 }
 
 template<typename T>
+void tst_QList::reverseIterators() const
+{
+    QList<T> v;
+    v << T_CAT << T_DOG << T_BLAH << T_BAZ;
+    QList<T> vr = v;
+    std::reverse(vr.begin(), vr.end());
+    const QList<T> &cvr = vr;
+    QVERIFY(std::equal(v.begin(), v.end(), vr.rbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), vr.crbegin()));
+    QVERIFY(std::equal(v.begin(), v.end(), cvr.rbegin()));
+    QVERIFY(std::equal(vr.rbegin(), vr.rend(), v.begin()));
+    QVERIFY(std::equal(vr.crbegin(), vr.crend(), v.begin()));
+    QVERIFY(std::equal(cvr.rbegin(), cvr.rend(), v.begin()));
+}
+
+void tst_QList::reverseIteratorsOptimal() const
+{
+    const int liveCount = Optimal::getLiveCount();
+    reverseIterators<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
+}
+
+void tst_QList::reverseIteratorsMovable() const
+{
+    const int liveCount = Movable::getLiveCount();
+    reverseIterators<Movable>();
+    QCOMPARE(liveCount, Movable::getLiveCount());
+}
+
+void tst_QList::reverseIteratorsComplex() const
+{
+    const int liveCount = Complex::getLiveCount();
+    reverseIterators<Complex>();
+    QCOMPARE(liveCount, Complex::getLiveCount());
+}
+
+template<typename T>
 void tst_QList::startsWith() const
 {
     QList<T> list;
@@ -1096,9 +1429,11 @@ void tst_QList::startsWith() const
     QVERIFY(list.startsWith(T_BAR));
 }
 
-void tst_QList::startsWithInt() const
+void tst_QList::startsWithOptimal() const
 {
-    startsWith<int>();
+    const int liveCount = Optimal::getLiveCount();
+    startsWith<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::startsWithMovable() const
@@ -1137,9 +1472,11 @@ void tst_QList::swap() const
     QCOMPARE(list2, QList<T>() << T_BAZ << T_FOO << T_BAR);
 }
 
-void tst_QList::swapInt() const
+void tst_QList::swapOptimal() const
 {
-    swap<int>();
+    const int liveCount = Optimal::getLiveCount();
+    swap<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::swapMovable() const
@@ -1170,9 +1507,11 @@ void tst_QList::takeAt() const
     QVERIFY(list.size() == 0);
 }
 
-void tst_QList::takeAtInt() const
+void tst_QList::takeAtOptimal() const
 {
-    takeAt<int>();
+    const int liveCount = Optimal::getLiveCount();
+    takeAt<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::takeAtMovable() const
@@ -1203,9 +1542,11 @@ void tst_QList::takeFirst() const
     QVERIFY(list.size() == 0);
 }
 
-void tst_QList::takeFirstInt() const
+void tst_QList::takeFirstOptimal() const
 {
-    takeFirst<int>();
+    const int liveCount = Optimal::getLiveCount();
+    takeFirst<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::takeFirstMovable() const
@@ -1233,9 +1574,11 @@ void tst_QList::takeLast() const
     QCOMPARE(list.takeLast(), T_FOO);
 }
 
-void tst_QList::takeLastInt() const
+void tst_QList::takeLastOptimal() const
 {
-    takeLast<int>();
+    const int liveCount = Optimal::getLiveCount();
+    takeLast<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::takeLastMovable() const
@@ -1269,9 +1612,11 @@ void tst_QList::toSet() const
         << T_FOO << T_BAR << T_BAZ);
 }
 
-void tst_QList::toSetInt() const
+void tst_QList::toSetOptimal() const
 {
-    toSet<int>();
+    const int liveCount = Optimal::getLiveCount();
+    toSet<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::toSetMovable() const
@@ -1304,9 +1649,11 @@ void tst_QList::toStdList() const
     QCOMPARE(list, QList<T>() << T_FOO << T_BAR << T_BAZ);
 }
 
-void tst_QList::toStdListInt() const
+void tst_QList::toStdListOptimal() const
 {
-    toStdList<int>();
+    const int liveCount = Optimal::getLiveCount();
+    toStdList<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::toStdListMovable() const
@@ -1332,9 +1679,11 @@ void tst_QList::toVector() const
     QCOMPARE(list.toVector(), QVector<T>() << T_FOO << T_BAR << T_BAZ);
 }
 
-void tst_QList::toVectorInt() const
+void tst_QList::toVectorOptimal() const
 {
-    toVector<int>();
+    const int liveCount = Optimal::getLiveCount();
+    toVector<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::toVectorMovable() const
@@ -1371,9 +1720,11 @@ void tst_QList::value() const
     QCOMPARE(list.value(3, defaultT), defaultT);
 }
 
-void tst_QList::valueInt() const
+void tst_QList::valueOptimal() const
 {
-    value<int>();
+    const int liveCount = Optimal::getLiveCount();
+    value<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::valueMovable() const
@@ -1421,11 +1772,26 @@ void tst_QList::testOperators() const
     // []
     QCOMPARE(list[0], T_FOO);
     QCOMPARE(list[list.size() - 1], T_CAT);
+
+    // <, >, <=, >=
+    QVERIFY(!(list <  listtwo));
+    QVERIFY(!(list >  listtwo));
+    QVERIFY(  list <= listtwo);
+    QVERIFY(  list >= listtwo);
+    listtwo.push_back(T_CAT);
+    QVERIFY(  list <  listtwo);
+    QVERIFY(!(list >  listtwo));
+    QVERIFY(  list <= listtwo);
+    QVERIFY(!(list >= listtwo));
+    QVERIFY(listtwo >  list);
+    QVERIFY(listtwo >= list);
 }
 
-void tst_QList::testOperatorsInt() const
+void tst_QList::testOperatorsOptimal() const
 {
-    testOperators<int>();
+    const int liveCount = Optimal::getLiveCount();
+    testOperators<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::testOperatorsMovable() const
@@ -1482,9 +1848,11 @@ void tst_QList::testSTLIterators() const
     QCOMPARE(*it, T_FOO);
 }
 
-void tst_QList::testSTLIteratorsInt() const
+void tst_QList::testSTLIteratorsOptimal() const
 {
-    testSTLIterators<int>();
+    const int liveCount = Optimal::getLiveCount();
+    testSTLIterators<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::testSTLIteratorsMovable() const
@@ -1518,18 +1886,22 @@ void tst_QList::initializeList() const
 template<typename T>
 void tst_QList::constSharedNull() const
 {
+    QList<T> list2;
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
     QList<T> list1;
     list1.setSharable(false);
     QVERIFY(list1.isDetached());
 
-    QList<T> list2;
     list2.setSharable(true);
+#endif
     QVERIFY(!list2.isDetached());
 }
 
-void tst_QList::constSharedNullInt() const
+void tst_QList::constSharedNullOptimal() const
 {
-    constSharedNull<int>();
+    const int liveCount = Optimal::getLiveCount();
+    constSharedNull<Optimal>();
+    QCOMPARE(liveCount, Optimal::getLiveCount());
 }
 
 void tst_QList::constSharedNullMovable() const
@@ -1546,22 +1918,22 @@ void tst_QList::constSharedNullComplex() const
     QCOMPARE(liveCount, Complex::getLiveCount());
 }
 
-Q_DECLARE_METATYPE(QList<int>);
-Q_DECLARE_METATYPE(QList<Complex>);
-
 template <class T>
 void generateSetSharableData()
 {
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
     QTest::addColumn<QList<T> >("list");
     QTest::addColumn<int>("size");
 
     QTest::newRow("null") << QList<T>() << 0;
     QTest::newRow("non-empty") << (QList<T>() << T(0) << T(1) << T(2) << T(3) << T(4)) << 5;
+#endif
 }
 
 template <class T>
 void runSetSharableTest()
 {
+#if !defined(QT_NO_UNSHARABLE_CONTAINERS)
     QFETCH(QList<T>, list);
     QFETCH(int, size);
 
@@ -1601,6 +1973,7 @@ void runSetSharableTest()
         QCOMPARE(int(list[i]), i);
 
     QCOMPARE(list.size(), size);
+#endif
 }
 
 void tst_QList::setSharableInt_data() const
@@ -1621,6 +1994,89 @@ void tst_QList::setSharableInt() const
 void tst_QList::setSharableComplex() const
 {
     runSetSharableTest<Complex>();
+}
+
+void tst_QList::eraseValidIteratorsOnSharedList() const
+{
+    QList<int> a, b;
+    a.push_back(10);
+    a.push_back(20);
+    a.push_back(30);
+    QList<int>::iterator i = a.begin();
+    ++i;
+    b = a;
+    a.erase(i);
+    QCOMPARE(b.size(), 3);
+    QCOMPARE(a.size(), 2);
+    QCOMPARE(a.at(0), 10);
+    QCOMPARE(a.at(1), 30);
+
+    a.push_back(40);
+    a.push_back(50);
+    a.push_back(60);
+    QCOMPARE(a.size(), 5);
+    i = a.begin();
+    b = a;
+    ++i;
+    QList<int>::iterator j = i;
+    ++j;
+    ++j;
+    a.erase(i, j); // remove 3 elements
+    QCOMPARE(b.size(), 5);
+    QCOMPARE(a.size(), 3);
+    QCOMPARE(a.at(0), 10);
+    QCOMPARE(a.at(1), 50);
+}
+
+void tst_QList::insertWithValidIteratorsOnSharedList() const
+{
+    QList<int> a, b;
+    a.push_back(10);
+    a.push_back(20);
+    a.push_back(30);
+    QList<int>::iterator i = a.begin();
+    ++i;
+    b = a;
+    a.insert(i, 15);
+    QCOMPARE(a.size(), b.size() + 1);
+    QCOMPARE(b.at(1), 20);
+    QCOMPARE(a.at(1), 15);
+}
+
+template <typename T>
+void tst_QList::qhash() const
+{
+    QList<T> l1, l2;
+    QCOMPARE(qHash(l1), qHash(l2));
+    l1 << T_BAR;
+    l2 << T_BAR;
+    QCOMPARE(qHash(l1), qHash(l2));
+}
+
+void tst_QList::reserve() const
+{
+    // Note:
+    // This test depends on QList's current behavior that ints are stored in the array itself.
+    // This test would not work for QList<Complex>.
+    int capacity = 100;
+    QList<int> list;
+    list.reserve(capacity);
+    list << 0;
+    int *data = &list[0];
+
+    for (int i = 1; i < capacity; i++) {
+        list << i;
+        QCOMPARE(&list.at(0), data);
+    }
+
+    QList<int> copy = list;
+    list.reserve(capacity / 2);
+    QCOMPARE(list.size(), capacity); // we didn't shrink the size!
+
+    copy = list;
+    list.reserve(capacity * 2);
+    QCOMPARE(list.size(), capacity);
+    QVERIFY(&list.at(0) != data);
 }
 
 QTEST_APPLESS_MAIN(tst_QList)

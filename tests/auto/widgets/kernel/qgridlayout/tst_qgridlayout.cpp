@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,23 +39,18 @@
 #include <QtWidgets/QLineEdit>
 #include <QtWidgets/QRadioButton>
 #include <QStyleFactory>
+#include <QSharedPointer>
+
+#include <QtTest/private/qtesthelpers_p.h>
+
+using namespace QTestPrivate;
 
 class tst_QGridLayout : public QObject
 {
 Q_OBJECT
 
-public:
-    tst_QGridLayout();
-    virtual ~tst_QGridLayout();
-
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
-
 private slots:
+    void cleanup();
     void getItemPosition();
     void itemAtPosition();
     void badDistributionBug();
@@ -89,75 +71,71 @@ private slots:
     void contentsRect();
     void distributeMultiCell();
 
-private:
-    QWidget *testWidget;
+    void taskQTBUG_27420_takeAtShouldUnparentLayout();
+    void taskQTBUG_40609_addingWidgetToItsOwnLayout();
+    void taskQTBUG_40609_addingLayoutToItself();
+    void taskQTBUG_52357_spacingWhenItemIsHidden();
+    void replaceWidget();
+    void dontCrashWhenExtendsToEnd();
+};
+
+static inline int visibleTopLevelWidgetCount()
+{
+    int result= 0;
+    foreach (const QWidget *topLevel, QApplication::topLevelWidgets()) {
+        if (topLevel->isVisible())
+            ++result;
+    }
+    return result;
+}
+
+void tst_QGridLayout::cleanup()
+{
+    // Verify that no visible top levels are leaked. Cannot check for
+    // topLevelWidgets().isEmpty() here since the data driven test layoutSpacing()
+    // will appear to "leak" top levels due to it creating widgets in the test data.
+    QCOMPARE(visibleTopLevelWidgetCount(), 0);
+}
+
+class ItemTestWidget : public QWidget {
+public:
+    ItemTestWidget();
+
     QGridLayout *testLayout;
     QWidget *w1;
     QWidget *w2;
     QWidget *w3;
     QSpacerItem *sp;
-
-    QGridLayout *m_grid;
-    QWidget *m_toplevel;
 };
 
-
-tst_QGridLayout::tst_QGridLayout()
+ItemTestWidget::ItemTestWidget()
+    : testLayout(new QGridLayout(this))
+    , w1(new QWidget(this))
+    , w2(new QWidget(this))
+    , w3(new QWidget(this))
+    , sp(new QSpacerItem(4, 4))
 {
-    m_grid = 0;
-    m_toplevel = 0;
-}
+    setObjectName("testWidget");
+    setWindowTitle(QTest::currentTestFunction());
 
-tst_QGridLayout::~tst_QGridLayout()
-{
-    delete m_toplevel;
-}
-
-void tst_QGridLayout::initTestCase()
-{
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-    // Create the test class
-    testWidget = new QWidget(0);
-
-    testLayout = new QGridLayout(testWidget);
-
-    w1 = new QWidget(testWidget);
     w1->setPalette(QPalette(Qt::red));
     testLayout->addWidget(w1, 0, 0);
 
-    w2 = new QWidget(testWidget);
     testLayout->addWidget(w2, 1, 1, 2, 2);
     w2->setPalette(QPalette(Qt::green));
 
-    w3 = new QWidget(testWidget);
     testLayout->addWidget(w3, 0, 1, 1, 2);
     w3->setPalette(QPalette(Qt::blue));
 
-    sp = new QSpacerItem(4, 4);
     testLayout->addItem(sp, 1, 3, 2, 1);
-
-    testWidget->resize( 200, 200 );
-    testWidget->show();
-}
-
-void tst_QGridLayout::cleanupTestCase()
-{
-    delete testWidget;
-    testWidget = 0;
-}
-
-void tst_QGridLayout::init()
-{
-}
-
-void tst_QGridLayout::cleanup()
-{
 }
 
 void tst_QGridLayout::getItemPosition()
 {
+    ItemTestWidget testWidget;
+    testWidget.resize(200, 200);
+    testWidget.show();
+
     QLayoutItem *item;
     int counter = 0;
 
@@ -166,28 +144,28 @@ void tst_QGridLayout::getItemPosition()
     bool seenW3 = false;
     bool seenSpacer = false;
 
-    while ((item = testLayout->itemAt(counter))) {
+    while ((item = testWidget.testLayout->itemAt(counter))) {
         QWidget *w = item->widget();
         int r,c,rs,cs;
-        testLayout->getItemPosition(counter, &r, &c, &rs, &cs);
+        testWidget.testLayout->getItemPosition(counter, &r, &c, &rs, &cs);
 
 //        qDebug() << "item" << counter << "has" <<r << c << rs << cs;
 
-        if (w == w1) {
+        if (w == testWidget.w1) {
             QVERIFY(!seenW1);
             seenW1 = true;
             QCOMPARE(r, 0);
             QCOMPARE(c, 0);
             QCOMPARE(rs, 1);
             QCOMPARE(cs, 1);
-        } else if (w == w2) {
+        } else if (w == testWidget.w2) {
             QVERIFY(!seenW2);
             seenW2 = true;
             QCOMPARE(r, 1);
             QCOMPARE(c, 1);
             QCOMPARE(rs, 2);
             QCOMPARE(cs, 2);
-        } else if (w == w3) {
+        } else if (w == testWidget.w3) {
             QVERIFY(!seenW3);
             seenW3 = true;
             QCOMPARE(r, 0);
@@ -214,16 +192,20 @@ void tst_QGridLayout::getItemPosition()
 
 void tst_QGridLayout::itemAtPosition()
 {
+    ItemTestWidget testWidget;
+    testWidget.resize(200, 200);
+    testWidget.show();
+
     void *table[4][5] = {
-        { w1, w3, w3, 0,  0 },
-        { 0,  w2, w2, sp, 0 },
-        { 0,  w2, w2, sp, 0 },
+        { testWidget.w1, testWidget.w3,testWidget.w3, 0,  0 },
+        { 0,  testWidget.w2, testWidget.w2, testWidget.sp, 0 },
+        { 0,  testWidget.w2, testWidget.w2, testWidget.sp, 0 },
         { 0,  0,  0,  0,  0 }
     };
 
     for (int row = 0; row < 4; ++row) {
         for (int col = 0; col < 5; ++col) {
-            QLayoutItem *item = testLayout->itemAtPosition(row, col);
+            QLayoutItem *item = testWidget.testLayout->itemAtPosition(row, col);
             QVERIFY(item == table[row][col]
                     || (item && item->widget() == table[row][col]));
         }
@@ -253,6 +235,7 @@ void tst_QGridLayout::badDistributionBug()
 void tst_QGridLayout::setMinAndMaxSize()
 {
     QWidget widget;
+    setFrameless(&widget);
     QGridLayout layout(&widget);
     layout.setMargin(0);
     layout.setSpacing(0);
@@ -352,6 +335,8 @@ void tst_QGridLayout::setMinAndMaxSize()
 
 
     layout.removeItem(spacer);
+    delete spacer;
+    spacer = nullptr;
 
     rightChild.hide();
     QApplication::sendPostedEvents(0, 0);
@@ -409,6 +394,7 @@ private:
 void tst_QGridLayout::spacingAndSpacers()
 {
     QWidget widget;
+    setFrameless(&widget);
     QGridLayout layout(&widget);
     layout.setMargin(0);
     layout.setSpacing(0);
@@ -498,7 +484,6 @@ int Qt42Style::pixelMetric(PixelMetric metric, const QStyleOption * option /*= 0
 
 
 typedef QList<QPoint> PointList;
-Q_DECLARE_METATYPE(PointList)
 
 
 class SizeHinterFrame : public QLabel
@@ -537,7 +522,8 @@ public:
     }
 private:
     void init(int numPixels = -1){
-        setText(QString::fromLatin1("(%1,%2)").arg(sh.width()).arg(sh.height()));
+        setText(QLatin1Char('(') + QString::number(sh.width())
+                + QLatin1Char(',') + QString::number(sh.height()) + QLatin1Char(')'));
         setFrameStyle(QFrame::Box | QFrame::Plain);
         setNumberOfPixels(numPixels);
     }
@@ -606,19 +592,6 @@ void tst_QGridLayout::spacingsAndMargins_data()
                                         << QPoint( 20, child_offset_y)
                                         << QPoint( 20, child_offset_y + 100 + 6)
                                         );
-#if defined (Q_OS_WINCE) //There is not enough screenspace to run the test in original size on Windows CE. We use smaller widgets.
-    child_offset_y = 11 + 9 + 50 + 6 + 50 + 6 + 50 + 6;
-    QTest::newRow("1x3 grid") << 1 << 3 << QSize(50, 50)
-                       << (PointList()  // toplevel
-                                        << QPoint( 11, 11)
-                                        << QPoint( 11, 11 + 50 + 6)
-                                        << QPoint( 11, 11 + 50 + 6 + 50 + 6)
-                                        // children
-                                        << QPoint( 20, child_offset_y)
-                                        << QPoint( 20, child_offset_y + 50 + 6)
-                                        << QPoint( 20, child_offset_y + 50 + 6 + 50 + 6)
-                                        );
-#else
     child_offset_y = 11 + 9 + 100 + 6 + 100 + 6 + 100 + 6;
     QTest::newRow("1x3 grid") << 1 << 3 << QSize(100, 100)
                        << (PointList()  // toplevel
@@ -630,7 +603,6 @@ void tst_QGridLayout::spacingsAndMargins_data()
                                         << QPoint( 20, child_offset_y + 100 + 6)
                                         << QPoint( 20, child_offset_y + 100 + 6 + 100 + 6)
                                         );
-#endif
 
     child_offset_y = 11 + 9 + 100 + 6 + 100 + 6;
     QTest::newRow("2x2 grid") << 2 << 2 << QSize(100, 100)
@@ -664,6 +636,8 @@ void tst_QGridLayout::spacingsAndMargins()
 
     QApplication::setStyle(new Qt42Style);
     QWidget toplevel;
+    setFrameless(&toplevel);
+
     QVBoxLayout vbox(&toplevel);
     QGridLayout grid1;
     vbox.addLayout(&grid1);
@@ -696,7 +670,7 @@ void tst_QGridLayout::spacingsAndMargins()
 
     grid1.setColumnStretch(columns-1, 1);
     grid1.setRowStretch(rows-1, 1);
-    toplevel.show();
+    toplevel.showNormal();
     toplevel.adjustSize();
     QApplication::processEvents();
     QVERIFY(QTest::qWaitForWindowExposed(&toplevel));
@@ -848,30 +822,31 @@ void tst_QGridLayout::minMaxSize()
         }
     }
     QApplication::setStyle(style);
-    if (!m_grid)
-        m_grid = new QGridLayout();
-    if (!m_toplevel)
-        m_toplevel = new QWidget();
+    QWidget toplevel;
+    toplevel.setWindowTitle(QLatin1String(QTest::currentTestFunction())
+                            + QLatin1Char(' ') + QLatin1String(QTest::currentDataTag()));
+    setFrameless(&toplevel);
+    QGridLayout *grid = new QGridLayout;
     if (fixedSize.isValid()) {
-        m_toplevel->setFixedSize(fixedSize);
+        toplevel.setFixedSize(fixedSize);
     } else {
-        m_toplevel->setMinimumSize(QSize(0,0));
-        m_toplevel->setMaximumSize(QSize(QWIDGETSIZE_MAX,QWIDGETSIZE_MAX));
+        toplevel.setMinimumSize(QSize(0,0));
+        toplevel.setMaximumSize(QSize(QWIDGETSIZE_MAX,QWIDGETSIZE_MAX));
     }
     // Do a two-pass one using the real testdata, the other pass enables heightForWidth
     // on the widget, but the heightForWidth() function just return sizeHint().width()
     for (int pass = 0; pass < 2; ++pass) {
-        m_toplevel->hide();
+        toplevel.hide();
         QApplication::processEvents();
         QTest::qWait(20);
         // Test if removeItem uninitializes data properly
-        while (m_grid->count()) {
-            QLayoutItem *item = m_grid->itemAt(0);
-            m_grid->removeItem(item);
+        while (grid->count()) {
+            QLayoutItem *item = grid->itemAt(0);
+            grid->removeItem(item);
             delete item->widget();
             delete item;
         }
-        m_toplevel->setLayout(m_grid);
+        toplevel.setLayout(grid);
 
         // a layout with a top-level parent widget
         QList<QPointer<SizeHinterFrame> > sizehinters;
@@ -885,29 +860,29 @@ void tst_QGridLayout::minMaxSize()
                 QSizePolicy sp = sh->sizePolicy();
                 sp.setHorizontalPolicy((QSizePolicy::Policy)sizePolicy);
                 sh->setSizePolicy(sp);
-                sh->setParent(m_toplevel);
+                sh->setParent(&toplevel);
                 if (si.minSize.isValid())
                     sh->setMinimumSize(si.minSize);
                 if (si.maxSize.isValid())
                     sh->setMaximumSize(si.maxSize);
                 sizehinters.append(sh);
-                m_grid->addWidget(sh, i, j);
+                grid->addWidget(sh, i, j);
             }
         }
 
-        m_toplevel->show();
-        QVERIFY(QTest::qWaitForWindowExposed(m_toplevel));
-        m_toplevel->adjustSize();
+        toplevel.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&toplevel));
+        toplevel.adjustSize();
         QTest::qWait(240);                              // wait for the implicit adjustSize
         // If the following fails we might have to wait longer.
         // If that does not help there is likely a problem with the implicit adjustSize in show()
         if (!fixedSize.isValid()) {
             // Note that this can fail if the desktop has large fonts on windows.
-            QTRY_COMPARE(m_toplevel->size(), m_toplevel->sizeHint());
+            QTRY_COMPARE(toplevel.size(), toplevel.sizeHint());
         }
         // We are relying on the order here...
         for (int pi = 0; pi < sizehinters.count(); ++pi) {
-            QPoint pt = sizehinters.at(pi)->mapTo(m_toplevel, QPoint(0, 0));
+            QPoint pt = sizehinters.at(pi)->mapTo(&toplevel, QPoint(0, 0));
             QCOMPARE(pt, sizeinfos.at(pi).expectedPos);
         }
     }
@@ -955,8 +930,8 @@ QRect CustomLayoutStyle::subElementRect(SubElement sr, const QStyleOption *opt,
         case SE_GroupBoxLayoutItem:
             rect = opt->rect.adjusted(0, +10, 0, 0);
             break;
-	default:
-	    break;
+        default:
+            break;
         }
     }
     if (rect.isNull())
@@ -1058,6 +1033,7 @@ void tst_QGridLayout::styleDependentSpacingsAndMargins()
 
     QApplication::setStyle(new CustomLayoutStyle());
     QWidget widget;
+    setFrameless(&widget);
     QGridLayout layout(&widget);
     QList<QPointer<SizeHinterFrame> > sizehinters;
     for (int i = 0; i < rows; ++i) {
@@ -1098,6 +1074,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = false;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QVBoxLayout *layout = new QVBoxLayout();
         QRadioButton *rb1 = new QRadioButton(QLatin1String("Radio 1"), w);
         QRadioButton *rb2 = new QRadioButton(QLatin1String("Radio 2"), w);
@@ -1134,6 +1111,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = false;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QHBoxLayout *layout = new QHBoxLayout();
         QLineEdit *le1 = new QLineEdit(w);
         QLineEdit *le2 = new QLineEdit(w);
@@ -1171,6 +1149,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = true;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QVBoxLayout *layout = new QVBoxLayout();
         QPushButton *pb1 = new QPushButton(QLatin1String("Push 1"), w);
 
@@ -1207,6 +1186,10 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = true;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        QFont font;
+        font.setPixelSize(10);
+        w->setFont(font);
+        setFrameless(w);
         QGridLayout *layout = new QGridLayout();
         QPushButton *pb1 = new QPushButton(QLatin1String("Push 1"), w);
         QPushButton *pb2 = new QPushButton(QLatin1String("Push 2"), w);
@@ -1274,6 +1257,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = true;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QVBoxLayout *layout = new QVBoxLayout();
         QPushButton *pb1 = new QPushButton(QLatin1String("Push 1"), w);
 
@@ -1313,6 +1297,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = true;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QVBoxLayout *layout = new QVBoxLayout();
         QPushButton *pb1 = new QPushButton(QLatin1String("Push 1"), w);
 
@@ -1361,6 +1346,7 @@ void tst_QGridLayout::layoutSpacing_data()
         style->reimplementSubelementRect = false;
         QApplication::setStyle(style);
         QWidget *w = new QWidget();
+        setFrameless(w);
         QGridLayout *layout = new QGridLayout();
         QPushButton *left = new QPushButton(w);
         QPushButton *up = new QPushButton(w);
@@ -1402,6 +1388,7 @@ void tst_QGridLayout::layoutSpacing_data()
             style->reimplementSubelementRect = false;
             QApplication::setStyle(style);
             QWidget *w = new QWidget();
+            setFrameless(w);
             QGridLayout *layout = new QGridLayout();
             QPushButton *left = new QPushButton(w);
             QPushButton *up = new QPushButton(w);
@@ -1416,8 +1403,9 @@ void tst_QGridLayout::layoutSpacing_data()
             w->setLayout(layout);
             int pw = up->sizeHint().width();
             int ph = up->sizeHint().height();
-            QByteArray testName = QString::fromLatin1("arrowpad with %1 empty rows, %2 empty columns").arg(yoff).arg(xoff).toLatin1();
-            QTest::newRow(testName.data())
+            QByteArray testName = "arrowpad with " + QByteArray::number(yoff)
+                + " empty rows, " + QByteArray::number(xoff) + " empty columns";
+            QTest::newRow(testName.constData())
                     << w << (PointList()
                     << QPoint(0 + pw + 5, 3)
                     << QPoint(0, 3 + ph + 10)
@@ -1439,6 +1427,7 @@ void tst_QGridLayout::layoutSpacing()
     QFETCH(bool, customSubElementRect);
 
     QWidget toplevel;
+    setFrameless(&toplevel);
 
     CustomLayoutStyle *style = new CustomLayoutStyle();
     style->hspacing = hSpacing;
@@ -1452,7 +1441,6 @@ void tst_QGridLayout::layoutSpacing()
 
     QLayout *layout = widget->layout();
     QVERIFY(layout);
-    //QTest::qWait(2000);
     for (int pi = 0; pi < expectedpositions.count(); ++pi) {
         QLayoutItem *item = layout->itemAt(pi);
         //qDebug()  << item->widget()->pos();
@@ -1463,6 +1451,7 @@ void tst_QGridLayout::layoutSpacing()
 void tst_QGridLayout::spacing()
 {
     QWidget w;
+    setFrameless(&w);
     CustomLayoutStyle *style = new CustomLayoutStyle();
     style->hspacing = 5;
     style->vspacing = 10;
@@ -1566,6 +1555,7 @@ void tst_QGridLayout::spacerWithSpacing()
 void tst_QGridLayout::contentsRect()
 {
     QWidget w;
+    setFrameless(&w);
     QGridLayout grid;
     w.setLayout(&grid);
     grid.addWidget(new QPushButton(&w));
@@ -1582,10 +1572,10 @@ void tst_QGridLayout::contentsRect()
 void tst_QGridLayout::distributeMultiCell()
 {
     QWidget w;
-    Qt42Style *style = new Qt42Style();
-    style->spacing = 9;
+    Qt42Style style;
+    style.spacing = 9;
 
-    w.setStyle(style);
+    w.setStyle(&style);
     QGridLayout grid;
     w.setLayout(&grid);
 
@@ -1603,6 +1593,138 @@ void tst_QGridLayout::distributeMultiCell()
 
     QCOMPARE(box.sizeHint().height(), 57);
     QCOMPARE(w.sizeHint().height(), 11 + 57 + 11);
+}
+
+void tst_QGridLayout::taskQTBUG_27420_takeAtShouldUnparentLayout()
+{
+    QSharedPointer<QGridLayout> outer(new QGridLayout);
+    QPointer<QGridLayout> inner = new QGridLayout;
+
+    outer->addLayout(inner, 0, 0);
+    QCOMPARE(outer->count(), 1);
+    QCOMPARE(inner->parent(), outer.data());
+
+    QLayoutItem *item = outer->takeAt(0);
+    QCOMPARE(item->layout(), inner.data());
+    QVERIFY(!item->layout()->parent());
+
+    outer.reset();
+
+    if (inner)
+        delete item; // success: a taken item/layout should not be deleted when the old parent is deleted
+    else
+        QVERIFY(!inner.isNull());
+}
+
+void tst_QGridLayout::taskQTBUG_40609_addingWidgetToItsOwnLayout(){
+    QWidget widget;
+    widget.setObjectName("9bb37ca762aeb7269b8");
+    QGridLayout layout(&widget);
+    layout.setObjectName("d631e91a35f2b66a6dff35");
+
+    QTest::ignoreMessage(QtWarningMsg, "QLayout: Cannot add a null widget to QGridLayout/d631e91a35f2b66a6dff35");
+    layout.addWidget(nullptr, 0, 0);
+    QCOMPARE(layout.count(), 0);
+
+    QTest::ignoreMessage(QtWarningMsg, "QLayout: Cannot add parent widget QWidget/9bb37ca762aeb7269b8 to its child layout QGridLayout/d631e91a35f2b66a6dff35");
+    layout.addWidget(&widget, 0, 0);
+    QCOMPARE(layout.count(), 0);
+}
+
+void tst_QGridLayout::taskQTBUG_40609_addingLayoutToItself(){
+    QWidget widget;
+    widget.setObjectName("0373d417fffe2c59c6fe543");
+    QGridLayout layout(&widget);
+    layout.setObjectName("5d79e1b0aed83f100e3c2");
+
+    QTest::ignoreMessage(QtWarningMsg, "QLayout: Cannot add a null layout to QGridLayout/5d79e1b0aed83f100e3c2");
+    layout.addLayout(nullptr, 0, 0);
+    QCOMPARE(layout.count(), 0);
+
+    QTest::ignoreMessage(QtWarningMsg, "QLayout: Cannot add layout QGridLayout/5d79e1b0aed83f100e3c2 to itself");
+    layout.addLayout(&layout, 0, 0);
+    QCOMPARE(layout.count(), 0);
+}
+
+void tst_QGridLayout::taskQTBUG_52357_spacingWhenItemIsHidden()
+{
+    QWidget widget;
+    setFrameless(&widget);
+    QGridLayout layout(&widget);
+    layout.setMargin(0);
+    layout.setSpacing(5);
+    QPushButton button1;
+    layout.addWidget(&button1, 0, 0);
+    QPushButton button2;
+    layout.addWidget(&button2, 0, 1);
+    QPushButton button3;
+    layout.addWidget(&button3, 0, 2);
+    widget.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&widget));
+    int tempWidth = button1.width() + button2.width() + button3.width() + 2 * layout.spacing();
+    button2.hide();
+    QTRY_COMPARE_WITH_TIMEOUT(tempWidth, button1.width() + button3.width() + layout.spacing(), 1000);
+}
+
+void tst_QGridLayout::replaceWidget()
+{
+    QWidget wdg;
+    QGridLayout *l = new QGridLayout();
+    const int itemCount = 9;
+    QLabel *labels[itemCount];
+
+    // setup layout
+    for (int n = 0; n < itemCount; ++n) {
+        int x = n % 3;
+        int y = n / 3;
+        labels[n] = new QLabel(QLatin1String("label ") + QString::number(n));
+        Qt::Alignment align = (n % 3 ? Qt::AlignLeft : Qt::AlignRight);
+        l->addWidget(labels[n], x * 3, y * 3, (n % 2) + 1, (n + 1) % 2 + 1, align);
+    }
+    wdg.setLayout(l);
+
+    // iterate and replace
+    for (int n = 0; n < itemCount; n += 2) {
+        int i = l->indexOf(labels[n]);
+        int fromRow, fromCol, fromRowSpan, fromColSpan;
+        l->getItemPosition(i, &fromRow, &fromCol, &fromRowSpan, &fromColSpan);
+        Qt::Alignment fromAlign = l->itemAt(i)->alignment();
+        // do replace
+        QPushButton *pb = new QPushButton("replaced");
+        QLayoutItem *olditem = l->replaceWidget(labels[n], pb);
+        // verify
+        QCOMPARE(i, l->indexOf(pb));
+        QVERIFY(olditem != 0);
+        QCOMPARE(l->indexOf(labels[n]), -1);
+        int toRow, toCol, toRowSpan, toColSpan;
+        l->getItemPosition(i, &toRow, &toCol, &toRowSpan, &toColSpan);
+        QCOMPARE(fromRow, toRow);
+        QCOMPARE(fromCol, toCol);
+        QCOMPARE(fromRowSpan, toRowSpan);
+        QCOMPARE(fromColSpan, toColSpan);
+        Qt::Alignment toAlign = l->itemAt(i)->alignment();
+        QCOMPARE(fromAlign, toAlign);
+        // clean up
+        olditem->widget()->deleteLater();
+        delete olditem;
+    }
+}
+
+void tst_QGridLayout::dontCrashWhenExtendsToEnd()
+{
+    QWidget window;
+    window.resize(320,200);
+    QWidget parent(&window);
+    QLabel *lbl0 = new QLabel(QLatin1String("lbl0:"));
+    QLabel *lbl1 = new QLabel(QLatin1String("lbl1:"));
+    QPushButton *pb = new QPushButton(QLatin1String("pb1"));
+    QGridLayout *l = new QGridLayout(&parent);
+    l->addWidget(lbl0, 0, 0);
+    l->addWidget(lbl1, 1, 0);
+    // adding an item in the bottom right corner than spans to the end (!)...
+    l->addWidget(pb, 1, 1, -1, -1);
+    // ...should not cause a crash when the items are distributed....
+    l->setGeometry(QRect(0, 0, 200, 50));    // DONT CRASH HERE
 }
 
 QTEST_MAIN(tst_QGridLayout)

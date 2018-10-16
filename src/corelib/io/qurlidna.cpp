@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +41,7 @@
 #include "qurl_p.h"
 
 #include <QtCore/qstringlist.h>
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -67,7 +67,7 @@ inline bool operator<(const NameprepCaseFoldingEntry &one, uint other)
 { return one.uc < other; }
 
 static const NameprepCaseFoldingEntry NameprepCaseFolding[] = {
-/*	{ 0x0041, { 0x0061, 0x0000, 0x0000, 0x0000 } },
+/*      { 0x0041, { 0x0061, 0x0000, 0x0000, 0x0000 } },
         { 0x0042, { 0x0062, 0x0000, 0x0000, 0x0000 } },
         { 0x0043, { 0x0063, 0x0000, 0x0000, 0x0000 } },
         { 0x0044, { 0x0064, 0x0000, 0x0000, 0x0000 } },
@@ -1461,18 +1461,19 @@ static void mapToLowerCase(QString *str, int from)
                     ++i;
                 }
             }
-            const NameprepCaseFoldingEntry *entry = qBinaryFind(NameprepCaseFolding,
-                                                                NameprepCaseFolding + N,
-                                                                uc);
-            if ((entry - NameprepCaseFolding) != N) {
+            const NameprepCaseFoldingEntry *entry = std::lower_bound(NameprepCaseFolding,
+                                                                     NameprepCaseFolding + N,
+                                                                     uc);
+            if ((entry != NameprepCaseFolding + N) && !(uc < *entry)) {
                 int l = 1;
                 while (l < 4 && entry->mapping[l])
                     ++l;
-                if (l > 1) {
+                if (l > 1 || uc > 0xffff) {
                     if (uc <= 0xffff)
                         str->replace(i, 1, reinterpret_cast<const QChar *>(&entry->mapping[0]), l);
                     else
-                        str->replace(i-1, 2, reinterpret_cast<const QChar *>(&entry->mapping[0]), l);
+                        str->replace(--i, 2, reinterpret_cast<const QChar *>(&entry->mapping[0]), l);
+                    i += l - 1;
                     d = 0;
                 } else {
                     if (!d)
@@ -1501,18 +1502,20 @@ static bool isMappedToNothing(uint uc)
 }
 
 
-static void stripProhibitedOutput(QString *str, int from)
+static bool containsProhibitedOuptut(const QString *str, int from)
 {
-    ushort *out = (ushort *)str->data() + from;
-    const ushort *in = out;
-    const ushort *end = (ushort *)str->data() + str->size();
-    while (in < end) {
+    const ushort *in = reinterpret_cast<const ushort *>(str->begin() + from);
+    const ushort *end = (const ushort *)str->data() + str->size();
+    for ( ; in < end; ++in) {
         uint uc = *in;
         if (QChar(uc).isHighSurrogate() && in < end - 1) {
             ushort low = *(in + 1);
             if (QChar(low).isLowSurrogate()) {
                 ++in;
                 uc = QChar::surrogateToUcs4(uc, low);
+            } else {
+                // unpaired surrogates are prohibited
+                return true;
             }
         }
         if (uc <= 0xFFFF) {
@@ -1537,7 +1540,7 @@ static void stripProhibitedOutput(QString *str, int from)
                 || (uc >= 0xFDD0 && uc <= 0xFDEF)
                 || uc == 0xFEFF
                 || (uc >= 0xFFF9 && uc <= 0xFFFF))) {
-                *out++ = *in;
+                continue;
             }
         } else {
             if (!((uc >= 0x1D173 && uc <= 0x1D17A)
@@ -1561,14 +1564,12 @@ static void stripProhibitedOutput(QString *str, int from)
                 || (uc >= 0xFFFFE && uc <= 0xFFFFF)
                 || (uc >= 0x100000 && uc <= 0x10FFFD)
                 || (uc >= 0x10FFFE && uc <= 0x10FFFF))) {
-                *out++ = QChar::highSurrogate(uc);
-                *out++ = QChar::lowSurrogate(uc);
+                continue;
             }
         }
-        ++in;
+        return true;
     }
-    if (in != out)
-        str->truncate(out - str->utf16());
+    return false;
 }
 
 static bool isBidirectionalRorAL(uint uc)
@@ -2020,22 +2021,22 @@ static bool isBidirectionalL(uint uc)
     return false;
 }
 
-Q_AUTOTEST_EXPORT void qt_nameprep(QString *source, int from)
+Q_AUTOTEST_EXPORT bool qt_nameprep(QString *source, int from)
 {
     QChar *src = source->data(); // causes a detach, so we're sure the only one using it
     QChar *out = src + from;
     const QChar *e = src + source->size();
 
     for ( ; out < e; ++out) {
-        register ushort uc = out->unicode();
-        if (uc > 0x80) {
+        ushort uc = out->unicode();
+        if (uc >= 0x80) {
             break;
         } else if (uc >= 'A' && uc <= 'Z') {
             *out = QChar(uc | 0x20);
         }
     }
     if (out == e)
-        return; // everything was mapped easily (lowercased, actually)
+        return true;    // everything was mapped easily (lowercased, actually)
     int firstNonAscii = out - src;
 
     // Characters unassigned in Unicode 3.2 are not allowed in "stored string" scheme
@@ -2058,15 +2059,15 @@ Q_AUTOTEST_EXPORT void qt_nameprep(QString *source, int from)
             QChar::UnicodeVersion version = QChar::unicodeVersion(uc);
             if (version == QChar::Unicode_Unassigned || version > QChar::Unicode_3_2) {
                 source->resize(from); // not allowed, clear the label
-                return;
+                return false;
             }
         }
         if (!isMappedToNothing(uc)) {
             if (uc <= 0xFFFF) {
                 *out++ = *in;
             } else {
-                *out++ = QChar::highSurrogate(uc);
-                *out++ = QChar::lowSurrogate(uc);
+                *out++ = in[-1];
+                *out++ = in[0];
             }
         }
     }
@@ -2083,7 +2084,10 @@ Q_AUTOTEST_EXPORT void qt_nameprep(QString *source, int from)
                         firstNonAscii > from ? firstNonAscii - 1 : from);
 
     // Strip prohibited output
-    stripProhibitedOutput(source, firstNonAscii);
+    if (containsProhibitedOuptut(source, firstNonAscii)) {
+        source->resize(from);
+        return false;
+    }
 
     // Check for valid bidirectional characters
     bool containsLCat = false;
@@ -2106,36 +2110,61 @@ Q_AUTOTEST_EXPORT void qt_nameprep(QString *source, int from)
     }
     if (containsRandALCat) {
         if (containsLCat || (!isBidirectionalRorAL(src[from].unicode())
-                             || !isBidirectionalRorAL(e[-1].unicode())))
+                             || !isBidirectionalRorAL(e[-1].unicode()))) {
             source->resize(from); // not allowed, clear the label
-    }
-}
-
-Q_AUTOTEST_EXPORT bool qt_check_std3rules(const QChar *uc, int len)
-{
-    if (len > 63)
-        return false;
-
-    for (int i = 0; i < len; ++i) {
-        register ushort c = uc[i].unicode();
-        if (c == '-' && (i == 0 || i == len - 1))
             return false;
-
-        // verifying the absence of non-LDH is the same as verifying that
-        // only LDH is present
-        if (c == '-' || (c >= '0' && c <= '9')
-            || (c >= 'A' && c <= 'Z')
-            || (c >= 'a' && c <= 'z')
-            //underscore is not supposed to be allowed, but other browser accept it (QTBUG-7434)
-            || c == '_')
-            continue;
-
-        return false;
+        }
     }
 
     return true;
 }
 
+static const QChar *qt_find_nonstd3(const QChar *uc, int len, Qt::CaseSensitivity cs)
+{
+    if (len > 63)
+        return uc;
+
+    for (int i = 0; i < len; ++i) {
+        ushort c = uc[i].unicode();
+        if (c == '-' && (i == 0 || i == len - 1))
+            return uc + i;
+
+        // verifying the absence of non-LDH is the same as verifying that
+        // only LDH is present
+        if (cs == Qt::CaseInsensitive && (c >= 'A' && c <= 'Z'))
+            continue;
+        if (c == '-' || (c >= '0' && c <= '9')
+            || (c >= 'a' && c <= 'z')
+            //underscore is not supposed to be allowed, but other browser accept it (QTBUG-7434)
+            || c == '_')
+            continue;
+
+        return uc + i;
+    }
+
+    return nullptr;
+}
+
+Q_AUTOTEST_EXPORT bool qt_check_std3rules(const QChar *uc, int len)
+{
+    return qt_find_nonstd3(uc, len, Qt::CaseInsensitive) == nullptr;
+}
+
+static bool qt_check_nameprepped_std3(const QChar *in, int len)
+{
+    // fast path: check for lowercase ASCII
+    const QChar *firstNonAscii = qt_find_nonstd3(in, len, Qt::CaseSensitive);
+    if (firstNonAscii == nullptr) {
+        // everything was lowercase ASCII, digits or hyphen
+        return true;
+    }
+
+    const QChar *e = in + len;
+    QString origin = QString::fromRawData(firstNonAscii, e - firstNonAscii);
+    QString copy = origin;
+    qt_nameprep(&copy, 0);
+    return origin == copy;
+}
 
 static inline uint encodeDigit(uint digit)
 {
@@ -2260,7 +2289,7 @@ Q_AUTOTEST_EXPORT void qt_punycodeEncoder(const QChar *s, int ucLength, QString 
     }
 
     // prepend ACE prefix
-    output->insert(outLen, QStringLiteral("xn--"));
+    output->insert(outLen, QLatin1String("xn--"));
     return;
 }
 
@@ -2336,27 +2365,42 @@ Q_AUTOTEST_EXPORT QString qt_punycodeDecoder(const QString &pc)
 }
 
 static const char * const idn_whitelist[] = {
-    "ac", "ar", "at",
+    "ac", "ar", "asia", "at",
     "biz", "br",
-    "cat", "ch", "cl", "cn",
+    "cat", "ch", "cl", "cn", "com",
     "de", "dk",
     "es",
     "fi",
     "gr",
     "hu",
-    "info", "io", "is",
+    "il", "info", "io", "is", "ir",
     "jp",
     "kr",
-    "li", "lt",
+    "li", "lt", "lu", "lv",
     "museum",
-    "no",
+    "name", "net", "no", "nu", "nz",
     "org",
+    "pl", "pr",
     "se", "sh",
-    "th", "tm", "tw",
+    "tel", "th", "tm", "tw",
+    "ua",
     "vn",
+    "xn--fiqs8s",               // China
+    "xn--fiqz9s",               // China
+    "xn--fzc2c9e2c",            // Sri Lanka
+    "xn--j6w193g",              // Hong Kong
+    "xn--kprw13d",              // Taiwan
+    "xn--kpry57d",              // Taiwan
+    "xn--mgba3a4f16a",          // Iran
+    "xn--mgba3a4fra",           // Iran
     "xn--mgbaam7a8h",           // UAE
+    "xn--mgbayh7gpa",           // Jordan
     "xn--mgberp4a5d4ar",        // Saudi Arabia
-    "xn--wgbh1c"                // Egypt
+    "xn--ogbpf8fl",             // Syria
+    "xn--p1ai",                 // Russian Federation
+    "xn--wgbh1c",               // Egypt
+    "xn--wgbl6a",               // Qatar
+    "xn--xkc2al3hye2a"          // Sri Lanka
 };
 static const size_t idn_whitelist_size = sizeof idn_whitelist / sizeof *idn_whitelist;
 
@@ -2398,8 +2442,8 @@ static bool qt_is_idn_enabled(const QString &domain)
         return false;
 
     int len = domain.size() - idx - 1;
-    QString tldString(domain.constData() + idx + 1, len);
-    qt_nameprep(&tldString, 0);
+    QString tldString = qt_ACE_do(QString::fromRawData(domain.constData() + idx + 1, len), ToAceOnly, ForbidLeadingDot);
+    len = tldString.size();
 
     const QChar *tld = tldString.constData();
 
@@ -2442,7 +2486,7 @@ static int nextDotDelimiter(const QString &domain, int from = 0)
     return ch - b;
 }
 
-QString qt_ACE_do(const QString &domain, AceOperation op)
+QString qt_ACE_do(const QString &domain, AceOperation op, AceLeadingDot dot)
 {
     if (domain.isEmpty())
         return domain;
@@ -2460,7 +2504,8 @@ QString qt_ACE_do(const QString &domain, AceOperation op)
         if (labelLength == 0) {
             if (idx == domain.length())
                 break;
-            return QString(); // two delimiters in a row -- empty label not allowed
+            if (dot == ForbidLeadingDot || idx > 0)
+                return QString(); // two delimiters in a row -- empty label not allowed
         }
 
         // RFC 3490 says, about the ToASCII operation:
@@ -2485,7 +2530,7 @@ QString qt_ACE_do(const QString &domain, AceOperation op)
             const QChar *in = domain.constData() + lastIdx;
             const QChar *e = in + labelLength;
             for (; in < e; ++in, ++out) {
-                register ushort uc = in->unicode();
+                ushort uc = in->unicode();
                 if (uc > 0x7f)
                     simple = false;
                 if (uc >= 'A' && uc <= 'Z')
@@ -2512,22 +2557,29 @@ QString qt_ACE_do(const QString &domain, AceOperation op)
         } else {
             // Punycode encoding and decoding cannot be done in-place
             // That means we need one or two temporaries
-            qt_nameprep(&result, prevLen);
+            if (!qt_nameprep(&result, prevLen))
+                return QString();   // failed
             labelLength = result.length() - prevLen;
-            register int toReserve = labelLength + 4 + 6; // "xn--" plus some extra bytes
+            int toReserve = labelLength + 4 + 6; // "xn--" plus some extra bytes
             aceForm.resize(0);
             if (toReserve > aceForm.capacity())
                 aceForm.reserve(toReserve);
             qt_punycodeEncoder(result.constData() + prevLen, result.size() - prevLen, &aceForm);
 
             // We use resize()+memcpy() here because we're overwriting the data we've copied
+            bool appended = false;
             if (isIdnEnabled) {
                 QString tmp = qt_punycodeDecoder(aceForm);
                 if (tmp.isEmpty())
                     return QString(); // shouldn't happen, since we've just punycode-encoded it
-                result.resize(prevLen + tmp.size());
-                memcpy(result.data() + prevLen, tmp.constData(), tmp.size() * sizeof(QChar));
-            } else {
+                if (qt_check_nameprepped_std3(tmp.constData(), tmp.size())) {
+                    result.resize(prevLen + tmp.size());
+                    memcpy(result.data() + prevLen, tmp.constData(), tmp.size() * sizeof(QChar));
+                    appended = true;
+                }
+            }
+
+            if (!appended) {
                 result.resize(prevLen + aceForm.size());
                 memcpy(result.data() + prevLen, aceForm.constData(), aceForm.size() * sizeof(QChar));
             }
@@ -2577,7 +2629,7 @@ QStringList QUrl::idnWhitelist()
     Note that if you call this function, you need to do so \e before
     you start any threads that might access idnWhitelist().
 
-    Qt has comes a default list that contains the Internet top-level domains
+    Qt comes with a default list that contains the Internet top-level domains
     that have published support for Internationalized Domain Names (IDNs)
     and rules to guarantee that no deception can happen between similarly-looking
     characters (such as the Latin lowercase letter \c 'a' and the Cyrillic

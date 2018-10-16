@@ -8,6 +8,7 @@ SUBDIRS       = addressbook \
                 dirview \
                 editabletreemodel \
                 fetchmore \
+                flattreeview \
                 frozencolumn \
                 interview \
                 pixelator \
@@ -17,6 +18,7 @@ SUBDIRS       = addressbook \
                 simplewidgetmapper \
                 spinboxdelegate \
                 spreadsheet \
-                stardelegate
-
-QT += widgets
+                stardelegate \
+                storageview
+!qtConfig(draganddrop): SUBDIRS -= puzzle
+!qtHaveModule(xml): SUBDIRS -= simpledommodel

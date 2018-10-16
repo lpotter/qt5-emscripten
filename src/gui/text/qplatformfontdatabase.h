@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -51,15 +49,16 @@
 // source and binary incompatible with future versions of Qt.
 //
 
-#include <QtCore/qconfig.h>
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 #include <QtCore/QList>
+#if QT_DEPRECATED_SINCE(5, 5)
 #include <QtCore/QHash>
+#endif
 #include <QtGui/QFontDatabase>
+#include <QtGui/private/qfontengine_p.h>
 #include <QtGui/private/qfont_p.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -85,10 +84,17 @@ private:
 
     friend Q_GUI_EXPORT bool operator==(const QSupportedWritingSystems &, const QSupportedWritingSystems &);
     friend Q_GUI_EXPORT bool operator!=(const QSupportedWritingSystems &, const QSupportedWritingSystems &);
+#ifndef QT_NO_DEBUG_STREAM
+    friend Q_GUI_EXPORT QDebug operator<<(QDebug, const QSupportedWritingSystems &);
+#endif
 };
 
 Q_GUI_EXPORT bool operator==(const QSupportedWritingSystems &, const QSupportedWritingSystems &);
 Q_GUI_EXPORT bool operator!=(const QSupportedWritingSystems &, const QSupportedWritingSystems &);
+
+#ifndef QT_NO_DEBUG_STREAM
+Q_GUI_EXPORT QDebug operator<<(QDebug, const QSupportedWritingSystems &);
+#endif
 
 class QFontRequestPrivate;
 class QFontEngineMulti;
@@ -98,9 +104,13 @@ class Q_GUI_EXPORT QPlatformFontDatabase
 public:
     virtual ~QPlatformFontDatabase();
     virtual void populateFontDatabase();
-    virtual QFontEngineMulti *fontEngineMulti(QFontEngine *fontEngine, QUnicodeTables::Script script);
-    virtual QFontEngine *fontEngine(const QFontDef &fontDef, QUnicodeTables::Script script, void *handle);
-    virtual QStringList fallbacksForFamily(const QString family, const QFont::Style &style, const QFont::StyleHint &styleHint, const QUnicodeTables::Script &script) const;
+    virtual bool populateFamilyAliases() { return false; }
+    virtual void populateFamily(const QString &familyName);
+    virtual void invalidate();
+
+    virtual QFontEngineMulti *fontEngineMulti(QFontEngine *fontEngine, QChar::Script script);
+    virtual QFontEngine *fontEngine(const QFontDef &fontDef, void *handle);
+    virtual QStringList fallbacksForFamily(const QString &family, QFont::Style style, QFont::StyleHint styleHint, QChar::Script script) const;
     virtual QStringList addApplicationFont(const QByteArray &fontData, const QString &fileName);
     virtual void releaseHandle(void *handle);
 
@@ -109,21 +119,28 @@ public:
     virtual QString fontDir() const;
 
     virtual QFont defaultFont() const;
+    virtual bool isPrivateFontFamily(const QString &family) const;
 
     virtual QString resolveFontFamilyAlias(const QString &family) const;
     virtual bool fontsAlwaysScalable() const;
     virtual QList<int> standardSizes() const;
 
+    // helper
+    static QSupportedWritingSystems writingSystemsFromTrueTypeBits(quint32 unicodeRange[4], quint32 codePageRange[2]);
+    static QFont::Weight weightFromInteger(int weight);
+
     //callback
     static void registerQPF2Font(const QByteArray &dataArray, void *handle);
-    static void registerFont(const QString &familyname, const QString &foundryname, QFont::Weight weight,
+    static void registerFont(const QString &familyname, const QString &stylename,
+                             const QString &foundryname, QFont::Weight weight,
                              QFont::Style style, QFont::Stretch stretch, bool antialiased,
                              bool scalable, int pixelSize, bool fixedPitch,
                              const QSupportedWritingSystems &writingSystems, void *handle);
+
+    static void registerFontFamily(const QString &familyName);
+    static void registerAliasToFontFamily(const QString &familyName, const QString &alias);
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPLATFORMFONTDATABASE_H

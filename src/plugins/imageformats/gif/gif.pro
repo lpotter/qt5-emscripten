@@ -1,9 +1,10 @@
 TARGET  = qgif
 
-PLUGIN_TYPE = imageformats
-load(qt_plugin)
+SOURCES += main.cpp qgifhandler.cpp
+HEADERS += main.h qgifhandler_p.h
 
-include(../../../gui/image/qgifhandler.pri)
-SOURCES += $$PWD/main.cpp
-HEADERS += $$PWD/main.h
 OTHER_FILES += gif.json
+
+PLUGIN_TYPE = imageformats
+PLUGIN_CLASS_NAME = QGifPlugin
+load(qt_plugin)

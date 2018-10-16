@@ -3,12 +3,13 @@
   <properties>
     <property value="@INSERT_QT_VERSION_HERE@" name="QTestVersion"/>
     <property value="@INSERT_QT_VERSION_HERE@" name="QtVersion"/>
+    <property value="" name="QtBuild"/>
   </properties>
   <testcase result="pass" name="initTestCase"/>
   <testcase result="fail" name="dateTime">
     <failure message="Compared values are not the same
-   Actual   (local): 2000/05/03 04:03:04.000[local time]
-   Expected (utc): 2000/05/03 04:03:04.000[UTC]" result="fail"/>
+   Actual   (local): 2000/05/03 04:03:04.000[UTC+00:02]
+   Expected (utc)  : 2000/05/03 04:03:04.000[UTC]" result="fail"/>
   </testcase>
   <testcase result="fail" name="qurl">
     <failure tag="empty rhs" message="Compared values are not the same

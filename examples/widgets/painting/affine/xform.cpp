@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -68,8 +77,8 @@ XFormView::XFormView(QWidget *parent)
     pts->setBoundingRect(QRectF(0, 0, 500, 500));
     ctrlPoints << QPointF(250, 250) << QPointF(350, 250);
     pts->setPoints(ctrlPoints);
-    connect(pts, SIGNAL(pointsChanged(QPolygonF)),
-            this, SLOT(updateCtrlPoints(QPolygonF)));
+    connect(pts, &HoverPoints::pointsChanged,
+            this,&XFormView::updateCtrlPoints);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
@@ -251,12 +260,14 @@ void XFormView::timerEvent(QTimerEvent *e)
     }
 }
 
+#if QT_CONFIG(wheelevent)
 void XFormView::wheelEvent(QWheelEvent *e)
 {
     m_scale += e->delta() / qreal(600);
     m_scale = qMax(qreal(0.1), qMin(qreal(4), m_scale));
     emit scaleChanged(int(m_scale*1000));
 }
+#endif
 
 void XFormView::reset()
 {
@@ -865,29 +876,29 @@ XFormWidget::XFormWidget(QWidget *parent)
 #endif
     mainGroupLayout->addWidget(whatsThisButton);
 
-    connect(rotateSlider, SIGNAL(valueChanged(int)), view, SLOT(changeRotation(int)));
-    connect(shearSlider, SIGNAL(valueChanged(int)), view, SLOT(changeShear(int)));
-    connect(scaleSlider, SIGNAL(valueChanged(int)), view, SLOT(changeScale(int)));
+    connect(rotateSlider, &QSlider::valueChanged, view, &XFormView::changeRotation);
+    connect(shearSlider, &QSlider::valueChanged, view, &XFormView::changeShear);
+    connect(scaleSlider, &QSlider::valueChanged, view, &XFormView::changeScale);
 
-    connect(vectorType, SIGNAL(clicked()), view, SLOT(setVectorType()));
-    connect(pixmapType, SIGNAL(clicked()), view, SLOT(setPixmapType()));
-    connect(textType, SIGNAL(clicked()), view, SLOT(setTextType()));
-    connect(textType, SIGNAL(toggled(bool)), textEditor, SLOT(setEnabled(bool)));
-    connect(textEditor, SIGNAL(textChanged(QString)), view, SLOT(setText(QString)));
+    connect(vectorType, &QRadioButton::clicked, view, &XFormView::setVectorType);
+    connect(pixmapType, &QRadioButton::clicked, view, &XFormView::setPixmapType);
+    connect(textType, &QRadioButton::clicked, view, &XFormView::setTextType);
+    connect(textType, &QRadioButton::toggled, textEditor, &XFormView::setEnabled);
+    connect(textEditor, &QLineEdit::textChanged, view, &XFormView::setText);
 
-    connect(view, SIGNAL(rotationChanged(int)), rotateSlider, SLOT(setValue(int)));
-    connect(view, SIGNAL(scaleChanged(int)), scaleSlider, SLOT(setValue(int)));
-    connect(view, SIGNAL(shearChanged(int)), shearSlider, SLOT(setValue(int)));
+    connect(view, &XFormView::rotationChanged, rotateSlider, &QSlider::setValue);
+    connect(view, &XFormView::scaleChanged, scaleSlider, &QAbstractSlider::setValue);
+    connect(view, &XFormView::shearChanged, shearSlider, &QAbstractSlider::setValue);
 
-    connect(resetButton, SIGNAL(clicked()), view, SLOT(reset()));
-    connect(animateButton, SIGNAL(clicked(bool)), view, SLOT(setAnimation(bool)));
-    connect(whatsThisButton, SIGNAL(clicked(bool)), view, SLOT(setDescriptionEnabled(bool)));
-    connect(whatsThisButton, SIGNAL(clicked(bool)), view->hoverPoints(), SLOT(setDisabled(bool)));
-    connect(view, SIGNAL(descriptionEnabledChanged(bool)), view->hoverPoints(), SLOT(setDisabled(bool)));
-    connect(view, SIGNAL(descriptionEnabledChanged(bool)), whatsThisButton, SLOT(setChecked(bool)));
-    connect(showSourceButton, SIGNAL(clicked()), view, SLOT(showSource()));
+    connect(resetButton, &QPushButton::clicked, view, &XFormView::reset);
+    connect(animateButton, &QPushButton::clicked, view, &XFormView::setAnimation);
+    connect(whatsThisButton, &QPushButton::clicked, view, &ArthurFrame::setDescriptionEnabled);
+    connect(whatsThisButton, &QPushButton::clicked, view->hoverPoints(), &HoverPoints::setDisabled);
+    connect(view, &XFormView::descriptionEnabledChanged, view->hoverPoints(), &HoverPoints::setDisabled);
+    connect(view, &XFormView::descriptionEnabledChanged, whatsThisButton, &QPushButton::setChecked);
+    connect(showSourceButton, &QPushButton::clicked, view, &XFormView::showSource);
 #ifdef QT_OPENGL_SUPPORT
-    connect(enableOpenGLButton, SIGNAL(clicked(bool)), view, SLOT(enableOpenGL(bool)));
+    connect(enableOpenGLButton, &QPushButton::clicked, view, &XFormView::enableOpenGL);
 #endif
     view->loadSourceFile(":res/affine/xform.cpp");
     view->loadDescription(":res/affine/xform.html");

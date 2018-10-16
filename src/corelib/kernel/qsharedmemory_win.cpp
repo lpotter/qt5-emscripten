@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -55,9 +53,9 @@ QSharedMemoryPrivate::QSharedMemoryPrivate() : QObjectPrivate(),
 {
 }
 
-void QSharedMemoryPrivate::setErrorString(const QString &function)
+void QSharedMemoryPrivate::setErrorString(QLatin1String function)
 {
-    BOOL windowsError = GetLastError();
+    DWORD windowsError = GetLastError();
     if (windowsError == 0)
         return;
     switch (windowsError) {
@@ -66,11 +64,6 @@ void QSharedMemoryPrivate::setErrorString(const QString &function)
         errorString = QSharedMemory::tr("%1: already exists").arg(function);
     break;
     case ERROR_FILE_NOT_FOUND:
-#ifdef Q_OS_WINCE
-        // This happens on CE only if no file is present as CreateFileMappingW
-        // bails out with this error code
-    case ERROR_INVALID_PARAMETER:
-#endif
         error = QSharedMemory::NotFound;
         errorString = QSharedMemory::tr("%1: doesn't exist").arg(function);
         break;
@@ -99,18 +92,17 @@ void QSharedMemoryPrivate::setErrorString(const QString &function)
 HANDLE QSharedMemoryPrivate::handle()
 {
     if (!hand) {
-        QString function = QLatin1String("QSharedMemory::handle");
+        const QLatin1String function("QSharedMemory::handle");
         if (nativeKey.isEmpty()) {
             error = QSharedMemory::KeyError;
             errorString = QSharedMemory::tr("%1: unable to make key").arg(function);
             return 0;
         }
-#ifndef Q_OS_WINCE
-        hand = OpenFileMapping(FILE_MAP_ALL_ACCESS, false, (wchar_t*)nativeKey.utf16());
+#if defined(Q_OS_WINRT)
+        hand = OpenFileMappingFromApp(FILE_MAP_ALL_ACCESS, FALSE, reinterpret_cast<PCWSTR>(nativeKey.utf16()));
 #else
-        // This works for opening a mapping too, but always opens it with read/write access in
-        // attach as it seems.
-        hand = CreateFileMapping(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, 0, (wchar_t*)nativeKey.utf16());
+        hand = OpenFileMapping(FILE_MAP_ALL_ACCESS, false,
+                               reinterpret_cast<const wchar_t*>(nativeKey.utf16()));
 #endif
         if (!hand) {
             setErrorString(function);
@@ -133,7 +125,7 @@ bool QSharedMemoryPrivate::cleanHandle()
 
 bool QSharedMemoryPrivate::create(int size)
 {
-    QString function = QLatin1String("QSharedMemory::create");
+    const QLatin1String function("QSharedMemory::create");
     if (nativeKey.isEmpty()) {
         error = QSharedMemory::KeyError;
         errorString = QSharedMemory::tr("%1: key error").arg(function);
@@ -141,21 +133,28 @@ bool QSharedMemoryPrivate::create(int size)
     }
 
     // Create the file mapping.
-    hand = CreateFileMapping(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, size, (wchar_t*)nativeKey.utf16());
+#if defined(Q_OS_WINRT)
+    hand = CreateFileMappingFromApp(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, size,
+                                    reinterpret_cast<PCWSTR>(nativeKey.utf16()));
+#else
+    hand = CreateFileMapping(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, size,
+                             reinterpret_cast<const wchar_t*>(nativeKey.utf16()));
+#endif
     setErrorString(function);
 
     // hand is valid when it already exists unlike unix so explicitly check
-    if (error == QSharedMemory::AlreadyExists || !hand)
-        return false;
-
-    return true;
+    return error != QSharedMemory::AlreadyExists && hand;
 }
 
 bool QSharedMemoryPrivate::attach(QSharedMemory::AccessMode mode)
 {
     // Grab a pointer to the memory block
     int permissions = (mode == QSharedMemory::ReadOnly ? FILE_MAP_READ : FILE_MAP_ALL_ACCESS);
+#if defined(Q_OS_WINRT)
+    memory = (void *)MapViewOfFileFromApp(handle(), permissions, 0, 0);
+#else
     memory = (void *)MapViewOfFile(handle(), permissions, 0, 0, 0);
+#endif
     if (0 == memory) {
         setErrorString(QLatin1String("QSharedMemory::attach"));
         cleanHandle();

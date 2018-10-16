@@ -1,47 +1,43 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qglobal.h"
-
-#ifndef QT_NO_GRAPHICSVIEW
 
 #include "qgraphicswidget.h"
 #include "qgraphicswidget_p.h"
@@ -259,7 +255,8 @@ QGraphicsWidget::~QGraphicsWidget()
     //we check if we have a layout previously
     if (d->layout) {
         QGraphicsLayout *temp = d->layout;
-        foreach (QGraphicsItem * item, childItems()) {
+        const auto items = childItems();
+        for (QGraphicsItem *item : items) {
             // In case of a custom layout which doesn't remove and delete items, we ensure that
             // the parent layout item does not point to the deleted layout. This code is here to
             // avoid regression from 4.4 to 4.5, because according to 4.5 docs it is not really needed.
@@ -275,6 +272,11 @@ QGraphicsWidget::~QGraphicsWidget()
 
     // Remove this graphics widget from widgetStyles
     widgetStyles()->setStyleForWidget(this, 0);
+
+    // Unset the parent here, when we're still a QGraphicsWidget.
+    // It is otherwise done in ~QGraphicsItem() where we'd be
+    // calling QGraphicsWidget members on an ex-QGraphicsWidget object
+    setParentItem(nullptr);
 }
 
 /*!
@@ -312,7 +314,9 @@ void QGraphicsWidget::resize(const QSizeF &size)
 
 /*!
     \fn void QGraphicsWidget::resize(qreal w, qreal h)
+    \overload
 
+    Constructs a resize with the given \c width (\a w) and \c height (\a h).
     This convenience function is equivalent to calling resize(QSizeF(w, h)).
 
     \sa setGeometry(), setTransform()
@@ -702,7 +706,7 @@ void QGraphicsWidget::initStyleOption(QStyleOption *option) const
         option->state |= QStyle::State_Window;
     /*
       ###
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     extern bool qt_mac_can_clickThrough(const QGraphicsWidget *w); //qwidget_mac.cpp
     if (!(option->state & QStyle::State_Active) && !qt_mac_can_clickThrough(widget))
         option->state &= ~QStyle::State_Enabled;
@@ -1043,7 +1047,7 @@ void QGraphicsWidget::setPalette(const QPalette &palette)
     In addition, Windows are always filled with QPalette::Window, unless the
     WA_OpaquePaintEvent or WA_NoSystemBackground attributes are set.
 
-    By default, this property is false.
+    By default, this property is \c false.
 
     \sa Qt::WA_OpaquePaintEvent, Qt::WA_NoSystemBackground,
 */
@@ -1145,6 +1149,10 @@ QVariant QGraphicsWidget::itemChange(GraphicsItemChange change, const QVariant &
                 setAttribute(Qt::WA_Resized, false);
             }
         }
+
+        // layout size hint only changes if an item changes from/to explicitly hidden state
+        if (value.toBool() || d->explicitlyHidden)
+            updateGeometry();
         break;
     case ItemVisibleHasChanged:
         if (!value.toBool()) {
@@ -1239,8 +1247,8 @@ bool QGraphicsWidget::sceneEvent(QEvent *event)
     You can reimplement this handler in a subclass of QGraphicsWidget to
     provide your own custom window frame interaction support.
 
-    Returns true if \a event has been recognized and processed; otherwise,
-    returns false.
+    Returns \c true if \a event has been recognized and processed; otherwise,
+    returns \c false.
 
     \sa event()
 */
@@ -1315,7 +1323,7 @@ Qt::WindowFrameSection QGraphicsWidget::windowFrameSectionAt(const QPointF &pos)
     if (x <= left + cornerMargin) {
         if (y <= top + windowFrameWidth || (x <= left + windowFrameWidth && y <= top + cornerMargin)) {
             s = Qt::TopLeftSection;
-        } else if (y >= bottom - windowFrameWidth || (x <= left + windowFrameWidth && y >= bottom - windowFrameWidth)) {
+        } else if (y >= bottom - windowFrameWidth || (x <= left + windowFrameWidth && y >= bottom - cornerMargin)) {
             s = Qt::BottomLeftSection;
         } else if (x <= left + windowFrameWidth) {
             s = Qt::LeftSection;
@@ -1323,7 +1331,7 @@ Qt::WindowFrameSection QGraphicsWidget::windowFrameSectionAt(const QPointF &pos)
     } else if (x >= right - cornerMargin) {
         if (y <= top + windowFrameWidth || (x >= right - windowFrameWidth && y <= top + cornerMargin)) {
             s = Qt::TopRightSection;
-        } else if (y >= bottom - windowFrameWidth || (x >= right - windowFrameWidth && y >= bottom - windowFrameWidth)) {
+        } else if (y >= bottom - windowFrameWidth || (x >= right - windowFrameWidth && y >= bottom - cornerMargin)) {
             s = Qt::BottomRightSection;
         } else if (x >= right - windowFrameWidth) {
             s = Qt::RightSection;
@@ -1409,8 +1417,13 @@ bool QGraphicsWidget::event(QEvent *event)
         break;
     case QEvent::WindowActivate:
     case QEvent::WindowDeactivate:
-    case QEvent::StyleAnimationUpdate:
         update();
+        break;
+    case QEvent::StyleAnimationUpdate:
+        if (isVisible()) {
+            event->accept();
+            update();
+        }
         break;
         // Taken from QWidget::event
     case QEvent::ActivationChange:
@@ -1441,6 +1454,7 @@ bool QGraphicsWidget::event(QEvent *event)
     case QEvent::GraphicsSceneMousePress:
         if (d->hasDecoration() && windowFrameEvent(event))
             return true;
+        break;
     case QEvent::GraphicsSceneMouseMove:
     case QEvent::GraphicsSceneMouseRelease:
     case QEvent::GraphicsSceneMouseDoubleClick:
@@ -1484,6 +1498,7 @@ void QGraphicsWidget::changeEvent(QEvent *event)
         unsetWindowFrameMargins();
         if (d->layout)
             d->layout->invalidate();
+        Q_FALLTHROUGH();
     case QEvent::FontChange:
         update();
         updateGeometry();
@@ -1524,7 +1539,7 @@ void QGraphicsWidget::focusInEvent(QFocusEvent *event)
 
 /*!
     Finds a new widget to give the keyboard focus to, as appropriate for Tab
-    and Shift+Tab, and returns true if it can find a new widget; returns false
+    and Shift+Tab, and returns \c true if it can find a new widget; returns \c false
     otherwise. If \a next is true, this function searches forward; if \a next
     is false, it searches backward.
 
@@ -1673,7 +1688,7 @@ void QGraphicsWidget::hoverMoveEvent(QGraphicsSceneHoverEvent *event)
 */
 void QGraphicsWidget::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
 {
-    Q_UNUSED(event);
+    QGraphicsObject::hoverLeaveEvent(event);
 }
 
 /*!
@@ -1782,7 +1797,7 @@ void QGraphicsWidget::setWindowFlags(Qt::WindowFlags wFlags)
 }
 
 /*!
-    Returns true if this widget's window is in the active window, or if the
+    Returns \c true if this widget's window is in the active window, or if the
     widget does not have a window but is in an active scene (i.e., a scene
     that currently has focus).
 
@@ -1993,7 +2008,11 @@ void QGraphicsWidget::addAction(QAction *action)
 
     \sa removeAction(), QMenu, addAction(), QWidget::addActions()
 */
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+void QGraphicsWidget::addActions(const QList<QAction *> &actions)
+#else
 void QGraphicsWidget::addActions(QList<QAction *> actions)
+#endif
 {
     for (int i = 0; i < actions.count(); ++i)
         insertAction(0, actions.at(i));
@@ -2050,7 +2069,11 @@ void QGraphicsWidget::insertAction(QAction *before, QAction *action)
 
     \sa removeAction(), QMenu, insertAction(), QWidget::insertActions()
 */
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+void QGraphicsWidget::insertActions(QAction *before, const QList<QAction *> &actions)
+#else
 void QGraphicsWidget::insertActions(QAction *before, QList<QAction *> actions)
+#endif
 {
     for (int i = 0; i < actions.count(); ++i)
         insertAction(before, actions.at(i));
@@ -2193,8 +2216,8 @@ void QGraphicsWidget::setAttribute(Qt::WidgetAttribute attribute, bool on)
 }
 
 /*!
-    Returns true if \a attribute is enabled for this widget; otherwise,
-    returns false.
+    Returns \c true if \a attribute is enabled for this widget; otherwise,
+    returns \c false.
 
     \sa setAttribute()
 */
@@ -2203,6 +2226,14 @@ bool QGraphicsWidget::testAttribute(Qt::WidgetAttribute attribute) const
     Q_D(const QGraphicsWidget);
     return d->testAttribute(attribute);
 }
+
+/*!
+  \enum QGraphicsWidget::anonymous
+
+  The value returned by the virtual type() function.
+
+  \value Type A graphics widget item
+*/
 
 /*!
     \reimp
@@ -2254,22 +2285,15 @@ void QGraphicsWidget::paintWindowFrame(QPainter *painter, const QStyleOptionGrap
     bar.QStyleOption::operator=(*option);
     d->initStyleOptionTitleBar(&bar);   // this clear flags in bar.state
     d->ensureWindowData();
-    if (d->windowData->buttonMouseOver)
-        bar.state |= QStyle::State_MouseOver;
-    else
-        bar.state &= ~QStyle::State_MouseOver;
-    if (d->windowData->buttonSunken)
-        bar.state |= QStyle::State_Sunken;
-    else
-        bar.state &= ~QStyle::State_Sunken;
-
+    bar.state.setFlag(QStyle::State_MouseOver, d->windowData->buttonMouseOver);
+    bar.state.setFlag(QStyle::State_Sunken, d->windowData->buttonSunken);
     bar.rect = windowFrameRect;
 
     // translate painter to make the style happy
     const QPointF styleOrigin = this->windowFrameRect().topLeft();
     painter->translate(styleOrigin);
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     const QSize pixmapSize = windowFrameRect.size();
     if (pixmapSize.width() <= 0 || pixmapSize.height() <= 0)
         return;
@@ -2319,17 +2343,9 @@ void QGraphicsWidget::paintWindowFrame(QPainter *painter, const QStyleOptionGrap
     initStyleOption(&frameOptions);
     if (!hasBorder)
         painter->setClipRect(windowFrameRect.adjusted(0, +height, 0, 0), Qt::IntersectClip);
-    if (hasFocus()) {
-        frameOptions.state |= QStyle::State_HasFocus;
-    } else {
-        frameOptions.state &= ~QStyle::State_HasFocus;
-    }
+    frameOptions.state.setFlag(QStyle::State_HasFocus, hasFocus());
     bool isActive = isActiveWindow();
-    if (isActive) {
-        frameOptions.state |= QStyle::State_Active;
-    } else {
-        frameOptions.state &= ~QStyle::State_Active;
-    }
+    frameOptions.state.setFlag(QStyle::State_Active, isActive);
 
     frameOptions.palette.setCurrentColorGroup(isActive ? QPalette::Active : QPalette::Normal);
     frameOptions.rect = windowFrameRect;
@@ -2337,7 +2353,7 @@ void QGraphicsWidget::paintWindowFrame(QPainter *painter, const QStyleOptionGrap
     frameOptions.midLineWidth = 1;
     style()->drawPrimitive(QStyle::PE_FrameWindow, &frameOptions, painter, widget);
 
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MAC
     realPainter->drawPixmap(QPoint(), pm);
     delete painter;
 #endif
@@ -2364,7 +2380,7 @@ QPainterPath QGraphicsWidget::shape() const
 /*!
     Call this function to close the widget.
 
-    Returns true if the widget was closed; otherwise returns false.
+    Returns \c true if the widget was closed; otherwise returns \c false.
     This slot will first send a QCloseEvent to the widget, which may or may
     not accept the event. If the event was ignored, nothing happens. If the
     event was accepted, it will hide() the widget.
@@ -2389,22 +2405,10 @@ bool QGraphicsWidget::close()
     return true;
 }
 
-#ifdef Q_NO_USING_KEYWORD
-/*!
-    \fn const QObjectList &QGraphicsWidget::children() const
-    \internal
-
-    This function returns the same value as QObject::children(). It's
-    provided to differentiate between the obsolete member
-    QGraphicsItem::children() and QObject::children(). QGraphicsItem now
-    provides childItems() instead.
-*/
-#endif
-
 #if 0
 void QGraphicsWidget::dumpFocusChain()
 {
-    qDebug() << "=========== Dumping focus chain ==============";
+    qDebug("=========== Dumping focus chain ==============");
     int i = 0;
     QGraphicsWidget *next = this;
     QSet<QGraphicsWidget*> visited;
@@ -2426,4 +2430,4 @@ void QGraphicsWidget::dumpFocusChain()
 
 QT_END_NAMESPACE
 
-#endif //QT_NO_GRAPHICSVIEW
+#include "moc_qgraphicswidget.cpp"

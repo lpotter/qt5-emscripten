@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -67,7 +54,7 @@ void tst_QIntValidator::validate_data()
     QTest::addColumn<QValidator::State>("state");
 
     QTest::newRow("data0") << 0 << 100 << QString("50") << ACC;
-    QTest::newRow("data1") << 0 << 100 << QString("500") << INV;
+    QTest::newRow("data1") << 0 << 100 << QString("500") << INT;
     QTest::newRow("data1a") << 0 << 100 << QString("5000") << INV;
     QTest::newRow("data1b") << -100 << 0 << QString("50") << INT;
     QTest::newRow("data1c") << -100 << 0 << QString("500") << INV;
@@ -134,7 +121,7 @@ void tst_QIntValidator::validate_data()
 
     QTest::newRow("5.1") << 6 << 8 << QString("5") << INT;
     QTest::newRow("5.2") << 6 << 8 << QString("7") << ACC;
-    QTest::newRow("5.3") << 6 << 8 << QString("9") << INV;
+    QTest::newRow("5.3") << 6 << 8 << QString("9") << INT;
     QTest::newRow("5.3a") << 6 << 8 << QString("19") << INV;
     QTest::newRow("5.4") << -8 << -6 << QString("-5") << INT;
     QTest::newRow("5.5") << -8 << -6 << QString("-7") << ACC;
@@ -142,13 +129,13 @@ void tst_QIntValidator::validate_data()
     QTest::newRow("5.6a") << -8 << -6 << QString("-19") << INV;
     QTest::newRow("5.7") << -8 << -6 << QString("5") << INT;
     QTest::newRow("5.8") << -8 << -6 << QString("7") << INT;
-    QTest::newRow("5.9") << -8 << -6 << QString("9") << INV;
+    QTest::newRow("5.9") << -8 << -6 << QString("9") << INT;
     QTest::newRow("5.10") << -6 << 8 << QString("-5") << ACC;
     QTest::newRow("5.11") << -6 << 8 << QString("5") << ACC;
     QTest::newRow("5.12") << -6 << 8 << QString("-7") << INV;
     QTest::newRow("5.13") << -6 << 8 << QString("7") << ACC;
     QTest::newRow("5.14") << -6 << 8 << QString("-9") << INV;
-    QTest::newRow("5.15") << -6 << 8 << QString("9") << INV;
+    QTest::newRow("5.15") << -6 << 8 << QString("9") << INT;
 
     QTest::newRow("6.1") << 100 << 102 << QString("11") << INT;
     QTest::newRow("6.2") << 100 << 102 << QString("-11") << INV;
@@ -247,32 +234,32 @@ void tst_QIntValidator::notifySignals()
     iv.setTop(9);
     QCOMPARE(topSpy.count(), 1);
     QCOMPARE(changedSpy.count(), 1);
-    QVERIFY(iv.top() == 9);
+    QCOMPARE(iv.top(), 9);
     iv.setBottom(1);
     QCOMPARE(bottomSpy.count(), 1);
     QCOMPARE(changedSpy.count(), 2);
-    QVERIFY(iv.bottom() == 1);
+    QCOMPARE(iv.bottom(), 1);
 
     iv.setRange(1, 8);
     QCOMPARE(topSpy.count(), 2);
     QCOMPARE(bottomSpy.count(), 1);
     QCOMPARE(changedSpy.count(), 3);
-    QVERIFY(iv.top() == 8);
-    QVERIFY(iv.bottom() == 1);
+    QCOMPARE(iv.top(), 8);
+    QCOMPARE(iv.bottom(), 1);
 
     iv.setRange(2, 8);
     QCOMPARE(topSpy.count(), 2);
     QCOMPARE(bottomSpy.count(), 2);
     QCOMPARE(changedSpy.count(), 4);
-    QVERIFY(iv.top() == 8);
-    QVERIFY(iv.bottom() == 2);
+    QCOMPARE(iv.top(), 8);
+    QCOMPARE(iv.bottom(), 2);
 
     iv.setRange(3, 7);
     QCOMPARE(topSpy.count(), 3);
     QCOMPARE(bottomSpy.count(), 3);
     QCOMPARE(changedSpy.count(), 5);
-    QVERIFY(iv.top() == 7);
-    QVERIFY(iv.bottom() == 3);
+    QCOMPARE(iv.top(), 7);
+    QCOMPARE(iv.bottom(), 3);
 
     iv.setRange(3, 7);
     QCOMPARE(topSpy.count(), 3);

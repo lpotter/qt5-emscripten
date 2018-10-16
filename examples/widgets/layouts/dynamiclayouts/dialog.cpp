@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -45,12 +55,12 @@
 Dialog::Dialog(QWidget *parent)
     : QDialog(parent)
 {
-    createRotableGroupBox();
+    createRotatableGroupBox();
     createOptionsGroupBox();
     createButtonBox();
 
     mainLayout = new QGridLayout;
-    mainLayout->addWidget(rotableGroupBox, 0, 0);
+    mainLayout->addWidget(rotatableGroupBox, 0, 0);
     mainLayout->addWidget(optionsGroupBox, 1, 0);
     mainLayout->addWidget(buttonBox, 2, 0);
     setLayout(mainLayout);
@@ -92,17 +102,17 @@ void Dialog::buttonsOrientationChanged(int index)
 
 void Dialog::rotateWidgets()
 {
-    Q_ASSERT(rotableWidgets.count() % 2 == 0);
+    Q_ASSERT(rotatableWidgets.count() % 2 == 0);
 
-    foreach (QWidget *widget, rotableWidgets)
-        rotableLayout->removeWidget(widget);
+    foreach (QWidget *widget, rotatableWidgets)
+        rotatableLayout->removeWidget(widget);
 
-    rotableWidgets.enqueue(rotableWidgets.dequeue());
+    rotatableWidgets.enqueue(rotatableWidgets.dequeue());
 
-    const int n = rotableWidgets.count();
+    const int n = rotatableWidgets.count();
     for (int i = 0; i < n / 2; ++i) {
-        rotableLayout->addWidget(rotableWidgets[n - i - 1], 0, i);
-        rotableLayout->addWidget(rotableWidgets[i], 1, i);
+        rotatableLayout->addWidget(rotatableWidgets[n - i - 1], 0, i);
+        rotatableLayout->addWidget(rotatableWidgets[i], 1, i);
     }
 }
 
@@ -113,23 +123,23 @@ void Dialog::help()
                                   "dynamically."));
 }
 
-void Dialog::createRotableGroupBox()
+void Dialog::createRotatableGroupBox()
 {
-    rotableGroupBox = new QGroupBox(tr("Rotable Widgets"));
+    rotatableGroupBox = new QGroupBox(tr("Rotatable Widgets"));
 
-    rotableWidgets.enqueue(new QSpinBox);
-    rotableWidgets.enqueue(new QSlider);
-    rotableWidgets.enqueue(new QDial);
-    rotableWidgets.enqueue(new QProgressBar);
+    rotatableWidgets.enqueue(new QSpinBox);
+    rotatableWidgets.enqueue(new QSlider);
+    rotatableWidgets.enqueue(new QDial);
+    rotatableWidgets.enqueue(new QProgressBar);
 
-    int n = rotableWidgets.count();
+    int n = rotatableWidgets.count();
     for (int i = 0; i < n; ++i) {
-        connect(rotableWidgets[i], SIGNAL(valueChanged(int)),
-                rotableWidgets[(i + 1) % n], SLOT(setValue(int)));
+        connect(rotatableWidgets[i], SIGNAL(valueChanged(int)),
+                rotatableWidgets[(i + 1) % n], SLOT(setValue(int)));
     }
 
-    rotableLayout = new QGridLayout;
-    rotableGroupBox->setLayout(rotableLayout);
+    rotatableLayout = new QGridLayout;
+    rotatableGroupBox->setLayout(rotatableLayout);
 
     rotateWidgets();
 }
@@ -144,8 +154,10 @@ void Dialog::createOptionsGroupBox()
     buttonsOrientationComboBox->addItem(tr("Horizontal"), Qt::Horizontal);
     buttonsOrientationComboBox->addItem(tr("Vertical"), Qt::Vertical);
 
-    connect(buttonsOrientationComboBox, SIGNAL(currentIndexChanged(int)),
-            this, SLOT(buttonsOrientationChanged(int)));
+    connect(buttonsOrientationComboBox,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this,
+            &Dialog::buttonsOrientationChanged);
 
     optionsLayout = new QGridLayout;
     optionsLayout->addWidget(buttonsOrientationLabel, 0, 0);
@@ -163,7 +175,9 @@ void Dialog::createButtonBox()
     rotateWidgetsButton = buttonBox->addButton(tr("Rotate &Widgets"),
                                                QDialogButtonBox::ActionRole);
 
-    connect(rotateWidgetsButton, SIGNAL(clicked()), this, SLOT(rotateWidgets()));
-    connect(closeButton, SIGNAL(clicked()), this, SLOT(close()));
-    connect(helpButton, SIGNAL(clicked()), this, SLOT(help()));
+    connect(rotateWidgetsButton, &QPushButton::clicked, this, &Dialog::rotateWidgets);
+    connect(closeButton, &QPushButton::clicked, this, &Dialog::close);
+    connect(helpButton, &QPushButton::clicked, this, &Dialog::help);
 }
+
+

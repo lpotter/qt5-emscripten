@@ -1,19 +1,25 @@
 # Qt accessibility module
 
-contains(QT_CONFIG, accessibility) {
+qtConfig(accessibility) {
     HEADERS += \
         accessible/qaccessible.h \
-        accessible/qaccessible2.h \
+        accessible/qaccessiblecache_p.h \
         accessible/qaccessibleobject.h \
         accessible/qaccessibleplugin.h \
         accessible/qplatformaccessibility.h
 
     SOURCES += accessible/qaccessible.cpp \
-        accessible/qaccessible2.cpp \
+        accessible/qaccessiblecache.cpp \
         accessible/qaccessibleobject.cpp \
         accessible/qaccessibleplugin.cpp \
         accessible/qplatformaccessibility.cpp
 
     HEADERS += accessible/qaccessiblebridge.h
     SOURCES += accessible/qaccessiblebridge.cpp
+
+    mac {
+        OBJECTIVE_SOURCES += accessible/qaccessiblecache_mac.mm
+
+        LIBS_PRIVATE += -framework Foundation
+    }
 }

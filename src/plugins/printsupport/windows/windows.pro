@@ -1,7 +1,5 @@
 TARGET = windowsprintersupport
 MODULE = windowsprintersupport
-PLUGIN_TYPE = printsupport
-load(qt_plugin)
 
 QT *= core-private
 QT *= gui-private
@@ -11,11 +9,17 @@ INCLUDEPATH *= $$QT_SOURCE_TREE/src/printsupport/kernel
 
 SOURCES += \
     main.cpp \
-    qwindowsprintersupport.cpp
+    qwindowsprintersupport.cpp \
+    qwindowsprintdevice.cpp \
 
 HEADERS += \
-    qwindowsprintersupport.h
+    qwindowsprintersupport.h \
+    qwindowsprintdevice.h \
 
 OTHER_FILES += windows.json
 
-LIBS += -lwinspool -lcomdlg32
+LIBS += -lwinspool -lcomdlg32 -lgdi32 -luser32
+
+PLUGIN_TYPE = printsupport
+PLUGIN_CLASS_NAME = QWindowsPrinterSupportPlugin
+load(qt_plugin)

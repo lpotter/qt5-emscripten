@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -48,8 +46,6 @@
 #include <QtCore/qvector.h>
 
 #include <algorithm>
-
-#ifndef QT_NO_STRINGLISTMODEL
 
 QT_BEGIN_NAMESPACE
 
@@ -133,7 +129,7 @@ int QStringListModel::rowCount(const QModelIndex &parent) const
 */
 QModelIndex QStringListModel::sibling(int row, int column, const QModelIndex &idx) const
 {
-    if (!idx.isValid() || column != 0 || row >= lst.count())
+    if (!idx.isValid() || column != 0 || row >= lst.count() || row < 0)
         return QModelIndex();
 
     return createIndex(row, 0);
@@ -170,9 +166,9 @@ QVariant QStringListModel::data(const QModelIndex &index, int role) const
 Qt::ItemFlags QStringListModel::flags(const QModelIndex &index) const
 {
     if (!index.isValid())
-        return QAbstractItemModel::flags(index) | Qt::ItemIsDropEnabled;
+        return QAbstractListModel::flags(index) | Qt::ItemIsDropEnabled;
 
-    return QAbstractItemModel::flags(index) | Qt::ItemIsEditable | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
+    return QAbstractListModel::flags(index) | Qt::ItemIsEditable | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
 }
 
 /*!
@@ -189,7 +185,13 @@ bool QStringListModel::setData(const QModelIndex &index, const QVariant &value, 
     if (index.row() >= 0 && index.row() < lst.size()
         && (role == Qt::EditRole || role == Qt::DisplayRole)) {
         lst.replace(index.row(), value.toString());
-        emit dataChanged(index, index);
+        QVector<int> roles;
+        roles.reserve(2);
+        roles.append(Qt::DisplayRole);
+        roles.append(Qt::EditRole);
+        emit dataChanged(index, index, roles);
+        // once Q_COMPILER_UNIFORM_INIT can be used, change to:
+        // emit dataChanged(index, index, {Qt::DisplayRole, Qt::EditRole});
         return true;
     }
     return false;
@@ -239,8 +241,8 @@ bool QStringListModel::removeRows(int row, int count, const QModelIndex &parent)
 
     beginRemoveRows(QModelIndex(), row, row + count - 1);
 
-    for (int r = 0; r < count; ++r)
-        lst.removeAt(row);
+    const auto it = lst.begin() + row;
+    lst.erase(it, it + count);
 
     endRemoveRows();
 
@@ -264,8 +266,10 @@ void QStringListModel::sort(int, Qt::SortOrder order)
 {
     emit layoutAboutToBeChanged(QList<QPersistentModelIndex>(), VerticalSortHint);
 
-    QList<QPair<QString, int> > list;
-    for (int i = 0; i < lst.count(); ++i)
+    QVector<QPair<QString, int> > list;
+    const int lstCount = lst.count();
+    list.reserve(lstCount);
+    for (int i = 0; i < lstCount; ++i)
         list.append(QPair<QString, int>(lst.at(i), i));
 
     if (order == Qt::AscendingOrder)
@@ -274,15 +278,17 @@ void QStringListModel::sort(int, Qt::SortOrder order)
         std::sort(list.begin(), list.end(), decendingLessThan);
 
     lst.clear();
-    QVector<int> forwarding(list.count());
-    for (int i = 0; i < list.count(); ++i) {
+    QVector<int> forwarding(lstCount);
+    for (int i = 0; i < lstCount; ++i) {
         lst.append(list.at(i).first);
         forwarding[list.at(i).second] = i;
     }
 
     QModelIndexList oldList = persistentIndexList();
     QModelIndexList newList;
-    for (int i = 0; i < oldList.count(); ++i)
+    const int numOldIndexes = oldList.count();
+    newList.reserve(numOldIndexes);
+    for (int i = 0; i < numOldIndexes; ++i)
         newList.append(index(forwarding.at(oldList.at(i).row()), 0));
     changePersistentIndexList(oldList, newList);
 
@@ -305,9 +311,9 @@ QStringList QStringListModel::stringList() const
 */
 void QStringListModel::setStringList(const QStringList &strings)
 {
-    emit beginResetModel();
+    beginResetModel();
     lst = strings;
-    emit endResetModel();
+    endResetModel();
 }
 
 /*!
@@ -320,4 +326,4 @@ Qt::DropActions QStringListModel::supportedDropActions() const
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_STRINGLISTMODEL
+#include "moc_qstringlistmodel.cpp"

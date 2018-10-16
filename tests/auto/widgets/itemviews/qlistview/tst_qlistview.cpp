@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,6 +33,7 @@
 #include <qapplication.h>
 #include <qlistview.h>
 #include <private/qlistview_p.h>
+#include <private/qcoreapplication_p.h>
 #include <qlistwidget.h>
 #include <qitemdelegate.h>
 #include <qstandarditemmodel.h>
@@ -55,14 +43,20 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QStyledItemDelegate>
+#include <QtWidgets/QStyleFactory>
+#include <QtWidgets/QVBoxLayout>
 
-#if defined(Q_OS_WIN) || defined(Q_OS_WINCE)
+#include <QtTest/private/qtesthelpers_p.h>
+
+using namespace QTestPrivate;
+
+#if defined(Q_OS_WIN)
 #  include <windows.h>
 #  include <QtGui/QGuiApplication>
 #include <qpa/qplatformnativeinterface.h>
 #endif // Q_OS_WIN
 
-#if defined(Q_OS_WIN) || defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
 static inline HWND getHWNDForWidget(const QWidget *widget)
 {
     QWindow *window = widget->windowHandle();
@@ -70,21 +64,25 @@ static inline HWND getHWNDForWidget(const QWidget *widget)
 }
 #endif // Q_OS_WIN
 
+Q_DECLARE_METATYPE(QAbstractItemView::ScrollMode)
+Q_DECLARE_METATYPE(QMargins)
+Q_DECLARE_METATYPE(QSize)
+
+static QStringList generateList(const QString &prefix, int size)
+{
+    QStringList result;
+    result.reserve(size);
+    for (int i = 0; i < size; ++i)
+        result.append(prefix + QString::number(i));
+    return result;
+}
+
 class tst_QListView : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QListView();
-    virtual ~tst_QListView();
-
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
 private slots:
+    void cleanup();
     void getSetCheck();
     void noDelegate();
     void noModel();
@@ -111,7 +109,7 @@ private slots:
     void scrollBarAsNeeded();
     void moveItems();
     void wordWrap();
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE) && WINVER >= 0x0500
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     void setCurrentIndexAfterAppendRowCrash();
 #endif
     void emptyItemSize();
@@ -145,6 +143,14 @@ private slots:
     void spacing();
     void testScrollToWithHidden();
     void testViewOptions();
+    void taskQTBUG_39902_mutualScrollBars_data();
+    void taskQTBUG_39902_mutualScrollBars();
+    void horizontalScrollingByVerticalWheelEvents();
+    void taskQTBUG_7232_AllowUserToControlSingleStep();
+    void taskQTBUG_51086_skippingIndexesInSelectedIndexes();
+    void taskQTBUG_47694_indexOutOfBoundBatchLayout();
+    void itemAlignment();
+    void internalDragDropMove();
 };
 
 // Testing get/set functions
@@ -248,7 +254,7 @@ public:
             wrongIndex = true;
             qWarning("got invalid modelIndex %d/%d", idx.row(), idx.column());
         }
-        return QString("%1/%2").arg(idx.row()).arg(idx.column());
+        return QString::number(idx.row()) + QLatin1Char('/') + QString::number(idx.column());
     }
 
     void removeLastRow()
@@ -275,33 +281,22 @@ public:
     mutable bool wrongIndex;
 };
 
-tst_QListView::tst_QListView()
+class ScrollPerItemListView : public QListView
 {
-}
-
-tst_QListView::~tst_QListView()
-{
-}
-
-void tst_QListView::initTestCase()
-{
-}
-
-void tst_QListView::cleanupTestCase()
-{
-}
-
-void tst_QListView::init()
-{
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
+public:
+    explicit ScrollPerItemListView(QWidget *parent = nullptr)
+        : QListView(parent)
+    {
+        // Force per item scroll mode since it comes from the style by default
+        setVerticalScrollMode(QAbstractItemView::ScrollPerItem);
+        setHorizontalScrollMode(QAbstractItemView::ScrollPerItem);
+    }
+};
 
 void tst_QListView::cleanup()
 {
+    QTRY_VERIFY(QApplication::topLevelWidgets().isEmpty());
 }
-
 
 void tst_QListView::noDelegate()
 {
@@ -356,10 +351,11 @@ void tst_QListView::cursorMove()
     view.setModel(&model);
 
     for (int j = 0; j < columns; ++j) {
+        const QString postfix = QLatin1Char(',') + QString::number(j) + QLatin1Char(']');
         view.setModelColumn(j);
         for (int i = 0; i < rows; ++i) {
             QModelIndex index = model.index(i, j);
-            model.setData(index, QString("[%1,%2]").arg(i).arg(j));
+            model.setData(index, QLatin1Char('[') + QString::number(i) + postfix);
             view.setCurrentIndex(index);
             QApplication::processEvents();
             QCOMPARE(view.currentIndex(), index);
@@ -460,7 +456,7 @@ void tst_QListView::hideRows()
     QStandardItemModel sim(0);
     QStandardItem *root = new QStandardItem("Root row");
     for (int i=0;i<5;i++)
-        root->appendRow(new QStandardItem(QString("Row %1").arg(i)));
+        root->appendRow(new QStandardItem(QLatin1String("Row ") + QString::number(i)));
     sim.appendRow(root);
     view.setModel(&sim);
     view.setRootIndex(root->index());
@@ -495,11 +491,12 @@ class QMoveCursorListView : public QListView
 public:
     QMoveCursorListView() : QListView() {}
 
+    // enum CursorAction and moveCursor() are protected in QListView.
     enum CursorAction { MoveUp, MoveDown, MoveLeft, MoveRight,
         MoveHome, MoveEnd, MovePageUp, MovePageDown,
         MoveNext, MovePrevious };
 
-    QModelIndex moveCursor(QMoveCursorListView::CursorAction action, Qt::KeyboardModifiers modifiers)
+    QModelIndex doMoveCursor(QMoveCursorListView::CursorAction action, Qt::KeyboardModifiers modifiers)
     {
         return QListView::moveCursor((QListView::CursorAction)action, modifiers);
     }
@@ -530,9 +527,9 @@ void tst_QListView::moveCursor2()
     vu.selectionModel()->setCurrentIndex(model.index(0,0), QItemSelectionModel::SelectCurrent);
     QCoreApplication::processEvents();
 
-    QModelIndex idx = vu.moveCursor(QMoveCursorListView::MoveHome, Qt::NoModifier);
+    QModelIndex idx = vu.doMoveCursor(QMoveCursorListView::MoveHome, Qt::NoModifier);
     QCOMPARE(idx, model.index(0,0));
-    idx = vu.moveCursor(QMoveCursorListView::MoveDown, Qt::NoModifier);
+    idx = vu.doMoveCursor(QMoveCursorListView::MoveDown, Qt::NoModifier);
     QCOMPARE(idx, model.index(8,0));
 }
 
@@ -642,8 +639,6 @@ void tst_QListView::clicked()
     model.rCount = 10;
     model.colCount = 2;
 
-    qRegisterMetaType<QModelIndex>("QModelIndex");
-
     QListView view;
     view.setModel(&model);
 
@@ -695,9 +690,11 @@ void tst_QListView::singleSelectionRemoveColumn()
     int numCols = 3;
     int numRows = 3;
     QStandardItemModel model(numCols, numRows);
-    for (int r = 0; r < numRows; ++r)
+    for (int r = 0; r < numRows; ++r) {
+        const QString prefix = QString::number(r) + QLatin1Char(',');
         for (int c = 0; c < numCols; ++c)
-            model.setData(model.index(r, c), QString("%1,%2").arg(r).arg(c));
+            model.setData(model.index(r, c), prefix + QString::number(c));
+    }
 
     QListView view;
     view.setModel(&model);
@@ -722,10 +719,11 @@ void tst_QListView::modelColumn()
     int numCols = 3;
     int numRows = 3;
     QStandardItemModel model(numCols, numRows);
-    for (int r = 0; r < numRows; ++r)
+    for (int r = 0; r < numRows; ++r) {
+        const QString prefix = QString::number(r) + QLatin1Char(',');
         for (int c = 0; c < numCols; ++c)
-            model.setData(model.index(r, c), QString("%1,%2").arg(r).arg(c));
-
+            model.setData(model.index(r, c), prefix + QString::number(c));
+    }
 
     QListView view;
     view.setModel(&model);
@@ -783,17 +781,30 @@ void tst_QListView::hideFirstRow()
     view.setRowHidden(0,true);
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
-    QTest::qWait(10);
+}
+
+static int modelIndexCount(const QAbstractItemView *view)
+{
+    QBitArray ba;
+    for (int y = 0, height = view->height(); y < height; ++y) {
+        const QModelIndex idx = view->indexAt( QPoint(1, y) );
+        if (!idx.isValid())
+            break;
+        if (idx.row() >= ba.size())
+            ba.resize(idx.row() + 1);
+        ba.setBit(idx.row(), true);
+    }
+    return ba.size();
 }
 
 void tst_QListView::batchedMode()
 {
-    QStringList items;
-    for (int i=0; i <3; ++i)
-        items << "item";
-    QStringListModel model(items);
+    const int rowCount = 3;
+
+    QStringListModel model(generateList(QLatin1String("item "), rowCount));
 
     QListView view;
+    view.setWindowTitle(QTest::currentTestFunction());
     view.setModel(&model);
     view.setUniformItemSizes(true);
     view.setViewMode(QListView::ListMode);
@@ -802,22 +813,8 @@ void tst_QListView::batchedMode()
     view.resize(200,400);
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
-    QTest::qWait(100);
 
-#if defined(Q_OS_WINCE)
-    QTest::qWait(2000);
-#endif
-    QBitArray ba;
-    for (int y = 0; y < view.height(); ++y) {
-        QModelIndex idx = view.indexAt( QPoint(1, y) );
-        if (!idx.isValid())
-            break;
-        if (idx.row() >= ba.size())
-            ba.resize(idx.row() + 1);
-        ba.setBit(idx.row(), true);
-    }
-    QCOMPARE(ba.size(), 3);
-
+    QTRY_COMPARE(modelIndexCount(&view), rowCount);
 
     // Test the dynamic listview too.
     view.setViewMode(QListView::IconMode);
@@ -825,33 +822,14 @@ void tst_QListView::batchedMode()
     view.setFlow(QListView::TopToBottom);
     view.setBatchSize(2);
 
-#if !defined(Q_OS_WINCE)
-    QTest::qWait(100);
-#else
-    QTest::qWait(2000);
-#endif
-
-    ba.clear();
-    for (int y = 0; y < view.height(); ++y) {
-        QModelIndex idx = view.indexAt( QPoint(1, y) );
-        if (!idx.isValid())
-            break;
-        if (idx.row() >= ba.size())
-            ba.resize(idx.row() + 1);
-        ba.setBit(idx.row(), true);
-    }
-    QCOMPARE(ba.size(), 3);
+    QTRY_COMPARE(modelIndexCount(&view), rowCount);
 }
 
 void tst_QListView::setCurrentIndex()
 {
-    QStringList items;
-    int i;
-    for (i=0; i <20; ++i)
-        items << QString("item %1").arg(i);
-    QStringListModel model(items);
+    QStringListModel model(generateList(QLatin1String("item "), 20));
 
-    QListView view;
+    ScrollPerItemListView view;
     view.setModel(&model);
 
     view.resize(220,182);
@@ -871,7 +849,7 @@ void tst_QListView::setCurrentIndex()
             int offset = sb->value();
 
             // first "scroll" down, verify that we scroll one step at a time
-            i = 0;
+            int i = 0;
             for (i = 0; i < 20; ++i) {
                 QModelIndex idx = model.index(i,0);
                 view.setCurrentIndex(idx);
@@ -880,7 +858,6 @@ void tst_QListView::setCurrentIndex()
                     QCOMPARE(sb->value(), offset + 1);
                     ++offset;
                 }
-                //QTest::qWait(50);
             }
 
             --i;    // item 20 does not exist
@@ -893,7 +870,6 @@ void tst_QListView::setCurrentIndex()
                     QCOMPARE(sb->value(), offset - 1);
                     --offset;
                 }
-                //QTest::qWait(50);
             }
         }
     }
@@ -923,14 +899,14 @@ class PublicListView : public QListView
 class TestDelegate : public QItemDelegate
 {
 public:
-    TestDelegate(QObject *parent) : QItemDelegate(parent), m_sizeHint(50,50) {}
+    explicit TestDelegate(QObject *parent, const QSize &sizeHint = QSize(50,50))
+        : QItemDelegate(parent), m_sizeHint(sizeHint) {}
     QSize sizeHint(const QStyleOptionViewItem &, const QModelIndex &) const { return m_sizeHint; }
 
-    QSize m_sizeHint;
+    const QSize m_sizeHint;
 };
 
 typedef QList<int> IntList;
-Q_DECLARE_METATYPE(IntList)
 
 void tst_QListView::selection_data()
 {
@@ -999,25 +975,6 @@ void tst_QListView::selection_data()
         << QRect(300, 0, 1, 300)                // selection rectangle
         << IntList();                           // expected items
 
-#if defined(Q_OS_WINCE)
-    // depending on whether the display is double-pixeld, we need
-    // to click at a different position
-    bool doubledSize = false;
-    int dpi = GetDeviceCaps(GetDC(0), LOGPIXELSX);
-    if ((dpi < 1000) && (dpi > 0)) {
-        doubledSize = true;
-    }
-    QTest::newRow("select inside contents, (on viewport)")
-        << 35                                   // itemCount
-        << int(QListView::ListMode)
-        << int(QListView::TopToBottom)
-        << true                                 // wrapping
-        << 0                                    // spacing
-        << QSize()                              // gridSize
-        << IntList()                            // hiddenRows
-        << QRect(doubledSize?350:175,doubledSize?550:275, 1, 1)// selection rectangle
-        << IntList();                           // expected items
-#else
     QTest::newRow("select inside contents, (on viewport)")
         << 35                                   // itemCount
         << int(QListView::ListMode)
@@ -1028,7 +985,6 @@ void tst_QListView::selection_data()
         << IntList()                            // hiddenRows
         << QRect(175, 275, 1, 1)                // selection rectangle
         << IntList();                           // expected items
-#endif
 
     QTest::newRow("select a tall rect in LeftToRight flow, wrap items")
         << 70                                   // itemCount
@@ -1153,17 +1109,7 @@ void tst_QListView::selection()
         v.setRowHidden(hiddenRows.at(j), true);
     }
 
-#if defined(Q_OS_WINCE)
-    // If the device is double-pixeled then the scrollbars become
-    // 10 pixels wider than normal (Windows Style: 16, Windows Mobile Style: 26).
-    // So we have to make the window slightly bigger to have the same count of
-    // items in each row of the list view like in the other styles.
-    static const int dpi = ::GetDeviceCaps(GetDC(0), LOGPIXELSX);
-    if ((dpi < 1000) && (dpi > 0))
-        v.resize(535,535);
-#else
     v.resize(525,525);
-#endif
 
     topLevel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
@@ -1181,7 +1127,8 @@ void tst_QListView::selection()
 void tst_QListView::scrollTo()
 {
     QWidget topLevel;
-    QListView lv(&topLevel);
+    setFrameless(&topLevel);
+    ScrollPerItemListView lv(&topLevel);
     QStringListModel model(&lv);
     QStringList list;
     list << "Short item 1";
@@ -1216,7 +1163,8 @@ void tst_QListView::scrollTo()
     list << "Short item";
     model.setStringList(list);
     lv.setModel(&model);
-    lv.setFixedSize(100, 200);
+    lv.setFixedSize(110, 200);
+
     topLevel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
 
@@ -1290,18 +1238,17 @@ void tst_QListView::scrollBarRanges()
     const int rowHeight = 20;
 
     QWidget topLevel;
-    QListView lv(&topLevel);
+    ScrollPerItemListView lv(&topLevel);
     QStringListModel model(&lv);
     QStringList list;
     for (int i = 0; i < rowCount; ++i)
-        list << QString::fromLatin1("Item %1").arg(i);
+        list << QLatin1String("Item ") + QString::number(i);
 
     model.setStringList(list);
     lv.setModel(&model);
     lv.resize(250, 130);
-    TestDelegate *delegate = new TestDelegate(&lv);
-    delegate->m_sizeHint = QSize(100, rowHeight);
-    lv.setItemDelegate(delegate);
+
+    lv.setItemDelegate(new TestDelegate(&lv, QSize(100, rowHeight)));
     topLevel.show();
 
     for (int h = 30; h <= 210; ++h) {
@@ -1317,14 +1264,18 @@ void tst_QListView::scrollBarAsNeeded_data()
 {
     QTest::addColumn<QSize>("size");
     QTest::addColumn<int>("itemCount");
+    QTest::addColumn<QAbstractItemView::ScrollMode>("verticalScrollMode");
+    QTest::addColumn<QMargins>("viewportMargins");
+    QTest::addColumn<QSize>("delegateSize");
     QTest::addColumn<int>("flow");
     QTest::addColumn<bool>("horizontalScrollBarVisible");
     QTest::addColumn<bool>("verticalScrollBarVisible");
 
-
     QTest::newRow("TopToBottom, count:0")
             << QSize(200, 100)
             << 0
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::TopToBottom)
             << false
             << false;
@@ -1332,6 +1283,8 @@ void tst_QListView::scrollBarAsNeeded_data()
     QTest::newRow("TopToBottom, count:1")
             << QSize(200, 100)
             << 1
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::TopToBottom)
             << false
             << false;
@@ -1339,13 +1292,46 @@ void tst_QListView::scrollBarAsNeeded_data()
     QTest::newRow("TopToBottom, count:20")
             << QSize(200, 100)
             << 20
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::TopToBottom)
             << false
             << true;
 
+    QTest::newRow("TopToBottom, fixed size, count:4")
+            << QSize(200, 200)
+            << 4
+            << QListView::ScrollPerPixel
+            << QMargins() << QSize(40, 40)
+            << int(QListView::TopToBottom)
+            << false
+            << false;
+
+    // QTBUG-61383, vertical case: take viewport margins into account
+    QTest::newRow("TopToBottom, fixed size, vertical margins, count:4")
+            << QSize(200, 200)
+            << 4
+            << QListView::ScrollPerPixel
+            << QMargins(0, 50, 0, 50) << QSize(40, 40)
+            << int(QListView::TopToBottom)
+            << false
+            << true;
+
+    // QTBUG-61383, horizontal case: take viewport margins into account
+    QTest::newRow("TopToBottom, fixed size, horizontal margins, count:4")
+            << QSize(200, 200)
+            << 4
+            << QListView::ScrollPerPixel
+            << QMargins(50, 0, 50, 0) << QSize(120, 40)
+            << int(QListView::TopToBottom)
+            << true
+            << false;
+
     QTest::newRow("LeftToRight, count:0")
             << QSize(200, 100)
             << 0
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::LeftToRight)
             << false
             << false;
@@ -1353,6 +1339,8 @@ void tst_QListView::scrollBarAsNeeded_data()
     QTest::newRow("LeftToRight, count:1")
             << QSize(200, 100)
             << 1
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::LeftToRight)
             << false
             << false;
@@ -1360,17 +1348,31 @@ void tst_QListView::scrollBarAsNeeded_data()
     QTest::newRow("LeftToRight, count:20")
             << QSize(200, 100)
             << 20
+            << QListView::ScrollPerItem
+            << QMargins() << QSize()
             << int(QListView::LeftToRight)
             << true
             << false;
 
 
 }
+
+class ScrollBarTestListView : public QListView
+{
+  public:
+    explicit ScrollBarTestListView(QWidget *p) : QListView(p) {}
+
+    using QAbstractScrollArea::setViewportMargins;
+};
+
 void tst_QListView::scrollBarAsNeeded()
 {
 
     QFETCH(QSize, size);
     QFETCH(int, itemCount);
+    QFETCH(QAbstractItemView::ScrollMode, verticalScrollMode);
+    QFETCH(QMargins, viewportMargins);
+    QFETCH(QSize, delegateSize);
     QFETCH(int, flow);
     QFETCH(bool, horizontalScrollBarVisible);
     QFETCH(bool, verticalScrollBarVisible);
@@ -1379,32 +1381,31 @@ void tst_QListView::scrollBarAsNeeded()
     const int rowCounts[3] = {0, 1, 20};
 
     QWidget topLevel;
-    QListView lv(&topLevel);
+    topLevel.setWindowTitle(QLatin1String(QTest::currentTestFunction()) + QStringLiteral("::")
+                            + QLatin1String(QTest::currentDataTag()));
+    ScrollBarTestListView lv(&topLevel);
     lv.setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     lv.setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    lv.setVerticalScrollMode(verticalScrollMode);
+    lv.setViewportMargins(viewportMargins);
     lv.setFlow((QListView::Flow)flow);
+    if (!delegateSize.isEmpty())
+        lv.setItemDelegate(new TestDelegate(&lv, delegateSize));
+
     QStringListModel model(&lv);
     lv.setModel(&model);
     lv.resize(size);
     topLevel.show();
+    QVERIFY(QTest::qWaitForWindowActive(&topLevel));
 
     for (uint r = 0; r < sizeof(rowCounts)/sizeof(int); ++r) {
         QStringList list;
-        int i;
-        for (i = 0; i < rowCounts[r]; ++i)
-            list << QString::fromLatin1("Item %1").arg(i);
+        for (int i = 0; i < rowCounts[r]; ++i)
+            list << QLatin1String("Item ") + QString::number(i);
 
         model.setStringList(list);
-        QApplication::processEvents();
-        QTest::qWait(50);
 
-        QStringList replacement;
-        for (i = 0; i < itemCount; ++i) {
-            replacement << QString::fromLatin1("Item %1").arg(i);
-        }
-        model.setStringList(replacement);
-
-        QApplication::processEvents();
+        model.setStringList(generateList(QLatin1String("Item "), itemCount));
 
         QTRY_COMPARE(lv.horizontalScrollBar()->isVisible(), horizontalScrollBarVisible);
         QTRY_COMPARE(lv.verticalScrollBar()->isVisible(), verticalScrollBarVisible);
@@ -1415,10 +1416,9 @@ void tst_QListView::moveItems()
 {
     QStandardItemModel model;
     for (int r = 0; r < 4; ++r) {
-        for (int c = 0; c < 4; ++c) {
-            QStandardItem* item = new QStandardItem(QString("standard item (%1,%2)").arg(r).arg(c));
-            model.setItem(r, c, item);
-        }
+        const QString prefix = QLatin1String("standard item (") + QString::number(r) + QLatin1Char(',');
+        for (int c = 0; c < 4; ++c)
+            model.setItem(r, c, new QStandardItem(prefix + QString::number(c) + QLatin1Char(')')));
     }
 
     PublicListView view;
@@ -1459,23 +1459,28 @@ void tst_QListView::wordWrap()
     model.setStringList(list);
     lv.setModel(&model);
     lv.setWordWrap(true);
-    lv.setFixedSize(150, 150);
-    lv.show();
+    lv.setFixedSize(400, 150);
+    lv.showNormal();
     QApplication::processEvents();
 
     QTRY_COMPARE(lv.horizontalScrollBar()->isVisible(), false);
+#ifdef Q_OS_WINRT
+QSKIP("setFixedSize does not work on WinRT. Vertical scroll bar will not be visible.");
+#endif
     QTRY_COMPARE(lv.verticalScrollBar()->isVisible(), true);
 }
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
 class SetCurrentIndexAfterAppendRowCrashDialog : public QDialog
 {
     Q_OBJECT
 public:
     SetCurrentIndexAfterAppendRowCrashDialog()
     {
-#if WINVER >= 0x0500
-        listView = new QListView();
+        setWindowTitle(QTest::currentTestFunction());
+        listView = new QListView(this);
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        layout->addWidget(listView);
         listView->setViewMode(QListView::IconMode);
 
         model = new QStandardItemModel(this);
@@ -1484,12 +1489,16 @@ public:
         timer = new QTimer(this);
         connect(timer, SIGNAL(timeout()), this, SLOT(buttonClicked()));
         timer->start(1000);
+    }
 
+protected:
+    void showEvent(QShowEvent *event) override
+    {
+        QDialog::showEvent(event);
         DWORD lParam = 0xFFFFFFFC/*OBJID_CLIENT*/;
         DWORD wParam = 0;
         if (const HWND hwnd =getHWNDForWidget(this))
             SendMessage(hwnd, WM_GETOBJECT, wParam, lParam);
-#endif
     }
 
 private slots:
@@ -1506,24 +1515,22 @@ private:
     QStandardItemModel *model;
     QTimer *timer;
 };
-#endif
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE) && WINVER >= 0x0500
-// This test only makes sense on windows 2000 and higher.
 void tst_QListView::setCurrentIndexAfterAppendRowCrash()
 {
     SetCurrentIndexAfterAppendRowCrashDialog w;
     w.exec();
 }
-#endif
+#endif // Q_OS_WIN && !Q_OS_WINRT
 
 void tst_QListView::emptyItemSize()
 {
     QStandardItemModel model;
     for (int r = 0; r < 4; ++r) {
-        QStandardItem* item = new QStandardItem(QString("standard item (%1)").arg(r));
-        model.setItem(r, 0, item);
+        const QString text = QLatin1String("standard item (") + QString::number(r) + QLatin1Char(')');
+        model.setItem(r, new QStandardItem(text));
     }
+
     model.setItem(4, 0, new QStandardItem());
 
     PublicListView view;
@@ -1538,7 +1545,7 @@ void tst_QListView::task203585_selectAll()
     //we make sure that "select all" doesn't select the hidden items
     QListView view;
     view.setSelectionMode(QAbstractItemView::ExtendedSelection);
-    view.setModel(new QStringListModel( QStringList() << "foo"));
+    view.setModel(new QStringListModel(QStringList() << "foo", &view));
     view.setRowHidden(0, true);
     view.selectAll();
     QVERIFY(view.selectionModel()->selectedIndexes().isEmpty());
@@ -1568,14 +1575,14 @@ void tst_QListView::task228566_infiniteRelayout()
 
     view.setFixedHeight(itemHeight * 12);
     view.show();
+    QVERIFY(QTest::qWaitForWindowActive(&view));
     QTest::qWait(100); //make sure the layout is done once
 
     QSignalSpy spy(view.horizontalScrollBar(), SIGNAL(rangeChanged(int,int)));
 
-    QTest::qWait(200);
     //the layout should already have been done
     //so there should be no change made to the scrollbar
-    QCOMPARE(spy.count(), 0);
+    QVERIFY(!spy.wait(200));
 }
 
 void tst_QListView::task248430_crashWith0SizedItem()
@@ -1610,7 +1617,7 @@ void tst_QListView::task250446_scrollChanged()
     QTRY_COMPARE(view.currentIndex(), index);
 
     view.showNormal();
-    QTest::qWait(50);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QTRY_COMPARE(view.verticalScrollBar()->value(), scrollValue);
     QTRY_COMPARE(view.currentIndex(), index);
 }
@@ -1620,7 +1627,7 @@ void tst_QListView::task196118_visualRegionForSelection()
     class MyListView : public QListView
     {
     public:
-        QRegion visualRegionForSelection() const
+        QRegion getVisualRegionForSelection() const
         { return QListView::visualRegionForSelection( selectionModel()->selection()); }
     } view;
 
@@ -1635,7 +1642,7 @@ void tst_QListView::task196118_visualRegionForSelection()
     view.selectionModel()->select(top1.index(), QItemSelectionModel::Select);
 
     QCOMPARE(view.selectionModel()->selectedIndexes().count(), 1);
-    QVERIFY(view.visualRegionForSelection().isEmpty());
+    QVERIFY(view.getVisualRegionForSelection().isEmpty());
 }
 
 void tst_QListView::task254449_draggingItemToNegativeCoordinates()
@@ -1700,19 +1707,14 @@ void tst_QListView::keyboardSearch()
     qApp->setActiveWindow(&view);
     QVERIFY(QTest::qWaitForWindowActive(&view));
 
-//    QCOMPARE(view.currentIndex() , model.index(0,0));
-
     QTest::keyClick(&view, Qt::Key_K);
-    QTest::qWait(10);
-    QCOMPARE(view.currentIndex() , model.index(5,0)); //KAFEINE
+    QTRY_COMPARE(view.currentIndex() , model.index(5,0)); //KAFEINE
 
     QTest::keyClick(&view, Qt::Key_O);
-    QTest::qWait(10);
-    QCOMPARE(view.currentIndex() , model.index(6,0)); //KONQUEROR
+    QTRY_COMPARE(view.currentIndex() , model.index(6,0)); //KONQUEROR
 
     QTest::keyClick(&view, Qt::Key_N);
-    QTest::qWait(10);
-    QCOMPARE(view.currentIndex() , model.index(6,0)); //KONQUEROR
+    QTRY_COMPARE(view.currentIndex() , model.index(6,0)); //KONQUEROR
 }
 
 void tst_QListView::shiftSelectionWithNonUniformItemSizes()
@@ -1742,8 +1744,7 @@ void tst_QListView::shiftSelectionWithNonUniformItemSizes()
         QCOMPARE(view.currentIndex(), index);
 
         QTest::keyClick(&view, Qt::Key_Up, Qt::ShiftModifier);
-        QTest::qWait(10);
-        QCOMPARE(view.currentIndex(), model.index(1, 0));
+        QTRY_COMPARE(view.currentIndex(), model.index(1, 0));
 
         QModelIndexList selected = view.selectionModel()->selectedIndexes();
         QCOMPARE(selected.count(), 3);
@@ -1772,8 +1773,7 @@ void tst_QListView::shiftSelectionWithNonUniformItemSizes()
         QCOMPARE(view.currentIndex(), index);
 
         QTest::keyClick(&view, Qt::Key_Left, Qt::ShiftModifier);
-        QTest::qWait(10);
-        QCOMPARE(view.currentIndex(), model.index(1, 0));
+        QTRY_COMPARE(view.currentIndex(), model.index(1, 0));
 
         QModelIndexList selected = view.selectionModel()->selectedIndexes();
         QCOMPARE(selected.count(), 3);
@@ -1824,10 +1824,8 @@ void tst_QListView::task262152_setModelColumnNavigate()
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(static_cast<QWidget *>(&view), QApplication::activeWindow());
     QTest::keyClick(&view, Qt::Key_Down);
-    QTest::qWait(30);
     QTRY_COMPARE(view.currentIndex(), model.index(1,1));
     QTest::keyClick(&view, Qt::Key_Down);
-    QTest::qWait(30);
     QTRY_COMPARE(view.currentIndex(), model.index(2,1));
 }
 
@@ -1845,7 +1843,8 @@ void tst_QListView::taskQTBUG_2233_scrollHiddenItems()
     const int rowCount = 200;
 
     QWidget topLevel;
-    QListView view(&topLevel);
+    setFrameless(&topLevel);
+    ScrollPerItemListView view(&topLevel);
     QStringListModel model(&view);
     QStringList list;
     for (int i = 0; i < rowCount; ++i)
@@ -1878,14 +1877,11 @@ void tst_QListView::taskQTBUG_2233_scrollHiddenItems()
     int nbVisibleItem = rowCount / 2 - bar->maximum();
 
     bar->setValue(bar->maximum());
-    QApplication::processEvents();
     for (int i = rowCount; i > rowCount / 2; i--) {
         view.setRowHidden(i, true);
     }
-    QApplication::processEvents();
-    QTest::qWait(50);
+    QTRY_COMPARE(bar->maximum(), rowCount/4 - nbVisibleItem);
     QCOMPARE(bar->value(), bar->maximum());
-    QCOMPARE(bar->maximum(), rowCount/4 - nbVisibleItem);
 }
 
 void tst_QListView::taskQTBUG_633_changeModelData()
@@ -1901,10 +1897,12 @@ void tst_QListView::taskQTBUG_633_changeModelData()
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
     model.setData( model.index(1, 0), QLatin1String("long long text"));
-    QTest::qWait(100); //leave time for relayouting the items
-    QRect rectLongText = view.visualRect(model.index(1,0));
-    QRect rect2 = view.visualRect(model.index(2,0));
-    QVERIFY( ! rectLongText.intersects(rect2) );
+    const auto longTextDoesNotIntersectNextItem = [&]() {
+        QRect rectLongText = view.visualRect(model.index(1,0));
+        QRect rect2 = view.visualRect(model.index(2,0));
+        return !rectLongText.intersects(rect2);
+    };
+    QTRY_VERIFY(longTextDoesNotIntersectNextItem());
 }
 
 void tst_QListView::taskQTBUG_435_deselectOnViewportClick()
@@ -1968,11 +1966,11 @@ void tst_QListView::taskQTBUG_5877_skippingItemInPageDownUp()
         vu.selectionModel()->setCurrentIndex(model.index(currentItemIndexes[i], 0),
                                              QItemSelectionModel::SelectCurrent);
 
-        QModelIndex idx = vu.moveCursor(QMoveCursorListView::MovePageDown, Qt::NoModifier);
+        QModelIndex idx = vu.doMoveCursor(QMoveCursorListView::MovePageDown, Qt::NoModifier);
         int newCurrent = qMin(currentItemIndexes[i] + scrolledRowCount, 99);
         QCOMPARE(idx, model.index(newCurrent, 0));
 
-        idx = vu.moveCursor(QMoveCursorListView::MovePageUp, Qt::NoModifier);
+        idx = vu.doMoveCursor(QMoveCursorListView::MovePageUp, Qt::NoModifier);
         newCurrent = qMax(currentItemIndexes[i] - scrolledRowCount, 0);
         QCOMPARE(idx, model.index(newCurrent, 0));
     }
@@ -1989,20 +1987,16 @@ public:
 
 void tst_QListView::taskQTBUG_9455_wrongScrollbarRanges()
 {
-    QStringList list;
-    const int nrItems = 8;
-    for (int i = 0; i < nrItems; i++)
-        list << QString().sprintf("item %d", i);
-
-    QStringListModel model(list);
+    QStringListModel model(generateList("item ", 8));
     ListView_9455 w;
+    setFrameless(&w);
     w.setModel(&model);
     w.setViewMode(QListView::IconMode);
     w.resize(116, 132);
     w.setMovement(QListView::Static);
-    const int spacing = 40;
+    const int spacing = 200;
     w.setSpacing(spacing);
-    w.show();
+    w.showNormal();
     QVERIFY(QTest::qWaitForWindowExposed(&w));
     QCOMPARE(w.verticalScrollBar()->maximum(), w.contentsSize().height() - w.viewport()->geometry().height());
 }
@@ -2014,8 +2008,7 @@ void tst_QListView::styleOptionViewItem()
         public:
             void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
             {
-                QVERIFY(qstyleoption_cast<const QStyleOptionViewItemV4 *>(&option));
-                QStyleOptionViewItemV4 opt(option);
+                QStyleOptionViewItem opt(option);
                 initStyleOption(&opt, index);
 
                 QCOMPARE(opt.index, index);
@@ -2078,7 +2071,7 @@ void tst_QListView::taskQTBUG_12308_wrongFlowLayout()
         QListWidgetItem *item = new QListWidgetItem();
         item->setText(QString("Item %L1").arg(i));
         lw.addItem(item);
-        if (!item->text().contains(QString::fromLatin1("1")))
+        if (!item->text().contains(QLatin1Char('1')))
             item->setHidden(true);
     }
     lw.show();
@@ -2095,8 +2088,11 @@ void tst_QListView::taskQTBUG_21115_scrollToAndHiddenItems_data()
 void tst_QListView::taskQTBUG_21115_scrollToAndHiddenItems()
 {
     QFETCH(int, flow);
+#ifdef Q_OS_WINRT
+    QSKIP("Fails on WinRT - QTBUG-68297");
+#endif
 
-    QListView lv;
+    ScrollPerItemListView lv;
     lv.setUniformItemSizes(true);
     lv.setFlow(static_cast<QListView::Flow>(flow));
 
@@ -2106,7 +2102,7 @@ void tst_QListView::taskQTBUG_21115_scrollToAndHiddenItems()
         list << QString::number(i);
     model.setStringList(list);
     lv.setModel(&model);
-    lv.show();
+    lv.showNormal();
     QVERIFY(QTest::qWaitForWindowExposed(&lv));
 
     // Save first item rect for reference
@@ -2152,7 +2148,7 @@ void tst_QListView::draggablePaintPairs()
     view.setModel(&model);
 
     view.show();
-    QTest::qWaitForWindowExposed(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     QModelIndex expectedIndex = model.index(row, 0);
     QListViewPrivate *privateClass = static_cast<QListViewPrivate *>(QListViewPrivate::get(&view));
@@ -2162,9 +2158,9 @@ void tst_QListView::draggablePaintPairs()
     view.scrollTo(expectedIndex);
     QItemViewPaintPairs pairs = privateClass->draggablePaintPairs(indexList, &rect);
     QCOMPARE(indexList.size(), pairs.size());
-    foreach (const QItemViewPaintPair pair, pairs) {
-        QCOMPARE(rect, pair.first);
-        QCOMPARE(expectedIndex, pair.second);
+    foreach (const QItemViewPaintPair &pair, pairs) {
+        QCOMPARE(rect, pair.rect);
+        QCOMPARE(expectedIndex, pair.index);
     }
 }
 
@@ -2191,12 +2187,12 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
     model.setStringList(list);
 
     // create listview
-    QListView lv;
+    ScrollPerItemListView lv;
     lv.setFlow(static_cast<QListView::Flow>(flow));
     lv.setSpacing(spacing);
     lv.setModel(&model);
     lv.show();
-    QTest::qWaitForWindowShown(&lv);
+    QVERIFY(QTest::qWaitForWindowExposed(&lv));
 
     // hide every odd number row
     for (int i = 1; i < model.rowCount(); i+=2)
@@ -2209,8 +2205,7 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
             QTest::keyClick(&lv, Qt::Key_Down);
         else
             QTest::keyClick(&lv, Qt::Key_Right);
-        QTest::qWait(100);
-        QVERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
+        QTRY_VERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
     }
 
     // scroll backward
@@ -2219,8 +2214,7 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
             QTest::keyClick(&lv, Qt::Key_Up);
         else
             QTest::keyClick(&lv, Qt::Key_Left);
-        QTest::qWait(100);
-        QVERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
+        QTRY_VERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
     }
 
     // scroll forward only half way
@@ -2229,8 +2223,7 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
             QTest::keyClick(&lv, Qt::Key_Down);
         else
             QTest::keyClick(&lv, Qt::Key_Right);
-        QTest::qWait(100);
-        QVERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
+        QTRY_VERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
     }
 
     // scroll backward again
@@ -2239,8 +2232,7 @@ void tst_QListView::taskQTBUG_21804_hiddenItemsAndScrollingWithKeys()
             QTest::keyClick(&lv, Qt::Key_Up);
         else
             QTest::keyClick(&lv, Qt::Key_Left);
-        QTest::qWait(100);
-        QVERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
+        QTRY_VERIFY(lv.rect().contains(lv.visualRect(lv.currentIndex())));
     }
 }
 
@@ -2267,12 +2259,12 @@ void tst_QListView::spacing()
     model.setStringList(list);
 
     // create listview
-    QListView lv;
+    ScrollPerItemListView lv;
     lv.setFlow(static_cast<QListView::Flow>(flow));
     lv.setModel(&model);
     lv.setSpacing(spacing);
     lv.show();
-    QTest::qWaitForWindowShown(&lv);
+    QVERIFY(QTest::qWaitForWindowExposed(&lv));
 
     // check size and position of first two items
     QRect item1 = lv.visualRect(lv.model()->index(0, 0));
@@ -2302,13 +2294,16 @@ void tst_QListView::testScrollToWithHidden()
     lv.setRowHidden(1, true);
     lv.setSpacing(5);
 
-    lv.show();
-    QTest::qWaitForWindowExposed(&lv);
+    lv.showNormal();
+    QVERIFY(QTest::qWaitForWindowExposed(&lv));
 
     QCOMPARE(lv.verticalScrollBar()->value(), 0);
 
     lv.scrollTo(model.index(26, 0));
     int expectedScrollBarValue = lv.verticalScrollBar()->value();
+#ifdef Q_OS_WINRT
+    QSKIP("Might fail on WinRT - QTBUG-68297");
+#endif
     QVERIFY(expectedScrollBarValue != 0);
 
     lv.scrollTo(model.index(25, 0));
@@ -2326,6 +2321,310 @@ void tst_QListView::testViewOptions()
     options = view.viewOptions();
     QCOMPARE(options.decorationPosition, QStyleOptionViewItem::Top);
 }
+
+// make sure we have no transient scroll bars
+class TempStyleSetter
+{
+public:
+    TempStyleSetter()
+        : m_oldStyle(qApp->style())
+    {
+        m_oldStyle->setParent(0);
+        QListView tempView;
+        if (QApplication::style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, tempView.horizontalScrollBar()))
+            QApplication::setStyle(QStyleFactory::create("Fusion"));
+    }
+
+    ~TempStyleSetter()
+    {
+        QApplication::setStyle(m_oldStyle);
+    }
+private:
+    QStyle* m_oldStyle;
+};
+
+void tst_QListView::taskQTBUG_39902_mutualScrollBars_data()
+{
+    QTest::addColumn<QAbstractItemView::ScrollMode>("horizontalScrollMode");
+    QTest::addColumn<QAbstractItemView::ScrollMode>("verticalScrollMode");
+    QTest::newRow("per item / per item") << QAbstractItemView::ScrollPerItem << QAbstractItemView::ScrollPerItem;
+    QTest::newRow("per pixel / per item") << QAbstractItemView::ScrollPerPixel << QAbstractItemView::ScrollPerItem;
+    QTest::newRow("per item / per pixel") << QAbstractItemView::ScrollPerItem << QAbstractItemView::ScrollPerPixel;
+    QTest::newRow("per pixel / per pixel") << QAbstractItemView::ScrollPerPixel << QAbstractItemView::ScrollPerPixel;
+}
+
+void tst_QListView::taskQTBUG_39902_mutualScrollBars()
+{
+    QFETCH(QAbstractItemView::ScrollMode, horizontalScrollMode);
+    QFETCH(QAbstractItemView::ScrollMode, verticalScrollMode);
+
+    QWidget window;
+    window.resize(400, 300);
+    QListView *view = new QListView(&window);
+    // make sure we have no transient scroll bars
+    TempStyleSetter styleSetter;
+    QStandardItemModel model(200, 1);
+    const QSize itemSize(100, 20);
+    for (int i = 0; i < model.rowCount(); ++i)
+        model.setData(model.index(i, 0), itemSize, Qt::SizeHintRole);
+    view->setModel(&model);
+
+    view->setVerticalScrollMode(verticalScrollMode);
+    view->setHorizontalScrollMode(horizontalScrollMode);
+
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    // make sure QListView is done with layouting the items (1/10 sec, like QListView)
+    QTest::qWait(100);
+
+    model.setRowCount(2);
+    for (int i = 0; i < model.rowCount(); ++i)
+        model.setData(model.index(i, 0), itemSize, Qt::SizeHintRole);
+    view->resize(itemSize.width() + view->frameWidth() * 2, model.rowCount() * itemSize.height() + view->frameWidth() * 2);
+    // this will end up in a stack overflow, if QTBUG-39902 is not fixed
+    QTest::qWait(100);
+
+    // these tests do not apply with transient scroll bars enabled
+    QVERIFY (!view->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, view->horizontalScrollBar()));
+
+    // make it double as large, no scroll bars should be visible
+    view->resize((itemSize.width() + view->frameWidth() * 2) * 2, (model.rowCount() * itemSize.height() + view->frameWidth() * 2) * 2);
+    QTRY_VERIFY(!view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(!view->verticalScrollBar()->isVisible());
+
+    // make it half the size, both scroll bars should be visible
+    view->resize((itemSize.width() + view->frameWidth() * 2) / 2, (model.rowCount() * itemSize.height() + view->frameWidth() * 2) / 2);
+    QTRY_VERIFY(view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(view->verticalScrollBar()->isVisible());
+
+    // make it double as large, no scroll bars should be visible
+    view->resize((itemSize.width() + view->frameWidth() * 2) * 2, (model.rowCount() * itemSize.height() + view->frameWidth() * 2) * 2);
+    QTRY_VERIFY(!view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(!view->verticalScrollBar()->isVisible());
+
+    // now, coming from the double size, resize it to the exactly matching size, still no scroll bars should be visible again
+    view->resize(itemSize.width() + view->frameWidth() * 2, model.rowCount() * itemSize.height() + view->frameWidth() * 2);
+    QTRY_VERIFY(!view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(!view->verticalScrollBar()->isVisible());
+
+    // now remove just one single pixel in height -> both scroll bars will show up since they depend on each other
+    view->resize(itemSize.width() + view->frameWidth() * 2, model.rowCount() * itemSize.height() + view->frameWidth() * 2 - 1);
+    QTRY_VERIFY(view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(view->verticalScrollBar()->isVisible());
+
+    // now remove just one single pixel in width -> both scroll bars will show up since they depend on each other
+    view->resize(itemSize.width() + view->frameWidth() * 2 - 1, model.rowCount() * itemSize.height() + view->frameWidth() * 2);
+    QTRY_VERIFY(view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(view->verticalScrollBar()->isVisible());
+
+    // finally, coming from a size being to small, resize back to the exactly matching size -> both scroll bars should disappear again
+    view->resize(itemSize.width() + view->frameWidth() * 2, model.rowCount() * itemSize.height() + view->frameWidth() * 2);
+    QTRY_VERIFY(!view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(!view->verticalScrollBar()->isVisible());
+
+   // now remove just one single pixel in height -> both scroll bars will show up since they depend on each other
+    view->resize(itemSize.width() + view->frameWidth() * 2, model.rowCount() * itemSize.height() + view->frameWidth() * 2 - 1);
+    QTRY_VERIFY(view->horizontalScrollBar()->isVisible());
+    QTRY_VERIFY(view->verticalScrollBar()->isVisible());
+}
+
+void tst_QListView::horizontalScrollingByVerticalWheelEvents()
+{
+#if QT_CONFIG(wheelevent)
+    QListView lv;
+    lv.setWrapping(true);
+
+    lv.setItemDelegate(new TestDelegate(&lv, QSize(100, 100)));
+
+    QtTestModel model;
+    model.colCount = 1;
+    model.rCount = 100;
+
+    lv.setModel(&model);
+
+    lv.resize(300, 300);
+    lv.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&lv));
+
+    QPoint globalPos = lv.geometry().center();
+    QPoint pos = lv.viewport()->geometry().center();
+
+    QWheelEvent wheelDownEvent(pos, globalPos, QPoint(0, 0), QPoint(0, -120), -120, Qt::Vertical, 0, 0);
+    QWheelEvent wheelUpEvent(pos, globalPos, QPoint(0, 0), QPoint(0, 120), 120, Qt::Vertical, 0, 0);
+    QWheelEvent wheelLeftDownEvent(pos, globalPos, QPoint(0, 0), QPoint(120, -120), -120, Qt::Vertical, 0, 0);
+
+    int hValue = lv.horizontalScrollBar()->value();
+    QApplication::sendEvent(lv.viewport(), &wheelDownEvent);
+    QVERIFY(lv.horizontalScrollBar()->value() > hValue);
+
+    QApplication::sendEvent(lv.viewport(), &wheelUpEvent);
+    QCOMPARE(lv.horizontalScrollBar()->value(), hValue);
+
+    QApplication::sendEvent(lv.viewport(), &wheelLeftDownEvent);
+    QCOMPARE(lv.horizontalScrollBar()->value(), hValue);
+
+    // ensure that vertical wheel events are not converted when vertical
+    // scroll bar is not visible but vertical scrolling is possible
+    lv.setWrapping(false);
+    lv.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    QApplication::processEvents();
+
+    int vValue = lv.verticalScrollBar()->value();
+    QApplication::sendEvent(lv.viewport(), &wheelDownEvent);
+    QVERIFY(lv.verticalScrollBar()->value() > vValue);
+#else
+    QSKIP("Built with --no-feature-wheelevent");
+#endif
+}
+
+void tst_QListView::taskQTBUG_7232_AllowUserToControlSingleStep()
+{
+    // When we set the scrollMode to ScrollPerPixel it will adjust the scrollbars singleStep automatically
+    // Setting a singlestep on a scrollbar should however imply that the user takes control.
+    // Setting a singlestep to -1 return to an automatic control of the singleStep.
+    QListView lv;
+    lv.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    lv.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+
+    QStandardItemModel model(1000, 100);
+    QString str = QString::fromLatin1("This is a long string made to ensure that we get some horizontal scroll (and we want scroll)");
+    model.setData(model.index(0, 0), str);
+    lv.setModel(&model);
+    lv.setGeometry(150, 150, 150, 150);
+    lv.show();
+    lv.setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    lv.setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    QVERIFY(QTest::qWaitForWindowExposed(&lv));
+
+    int vStep1 = lv.verticalScrollBar()->singleStep();
+    int hStep1 = lv.horizontalScrollBar()->singleStep();
+    QVERIFY(lv.verticalScrollBar()->singleStep() > 1);
+    QVERIFY(lv.horizontalScrollBar()->singleStep() > 1);
+
+    lv.verticalScrollBar()->setSingleStep(1);
+    lv.setGeometry(200, 200, 200, 200);
+    QCOMPARE(lv.verticalScrollBar()->singleStep(), 1);
+
+    lv.horizontalScrollBar()->setSingleStep(1);
+    lv.setGeometry(150, 150, 150, 150);
+    QCOMPARE(lv.horizontalScrollBar()->singleStep(), 1);
+
+    lv.verticalScrollBar()->setSingleStep(-1);
+    lv.horizontalScrollBar()->setSingleStep(-1);
+    QCOMPARE(vStep1, lv.verticalScrollBar()->singleStep());
+    QCOMPARE(hStep1, lv.horizontalScrollBar()->singleStep());
+}
+
+void tst_QListView::taskQTBUG_51086_skippingIndexesInSelectedIndexes()
+{
+    // simple way to get access to selectedIndexes()
+    class QListViewWithPublicSelectedIndexes : public QListView
+    {
+    public:
+        using QListView::selectedIndexes;
+    };
+
+    QStandardItemModel data(10, 1);
+    QItemSelectionModel selections(&data);
+    QListViewWithPublicSelectedIndexes list;
+    list.setModel(&data);
+    list.setSelectionModel(&selections);
+
+    list.setRowHidden(7, true);
+    list.setRowHidden(8, true);
+
+    for (int i = 0, count = data.rowCount(); i < count; ++i)
+        selections.select(data.index(i, 0), QItemSelectionModel::Select);
+
+    const QModelIndexList indexes = list.selectedIndexes();
+
+    QVERIFY(!indexes.contains(data.index(7, 0)));
+    QVERIFY(!indexes.contains(data.index(8, 0)));
+}
+
+void tst_QListView::taskQTBUG_47694_indexOutOfBoundBatchLayout()
+{
+    QListView view;
+    view.setLayoutMode(QListView::Batched);
+    int batchSize = view.batchSize();
+
+    QStandardItemModel model(batchSize + 1, 1);
+
+    view.setModel(&model);
+
+    view.scrollTo(model.index(batchSize - 1, 0));
+}
+
+void tst_QListView::itemAlignment()
+{
+    auto item1 = new QStandardItem("111");
+    auto item2 = new QStandardItem("111111");
+    QStandardItemModel model;
+    model.appendRow(item1);
+    model.appendRow(item2);
+
+    QListView w;
+    w.setModel(&model);
+    w.setWrapping(true);
+    w.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
+
+    QVERIFY(w.visualRect(item1->index()).width() > 0);
+    QVERIFY(w.visualRect(item1->index()).width() == w.visualRect(item2->index()).width());
+
+    w.setItemAlignment(Qt::AlignLeft);
+    QApplication::processEvents();
+
+    QVERIFY(w.visualRect(item1->index()).width() < w.visualRect(item2->index()).width());
+}
+
+void tst_QListView::internalDragDropMove()
+{
+    const QString platform(QGuiApplication::platformName().toLower());
+    if (platform != QLatin1String("xcb"))
+        QSKIP("Need a window system with proper DnD support via injected mouse events");
+
+    // on an internal move, the item was deleted which should not happen
+    // see QTBUG-67440
+    class QListViewWithPublicStartDrag : public QListView
+    {
+    public:
+        using QListView::startDrag;
+    };
+
+    QStandardItemModel data(0, 1);
+    QPixmap pixmap(32, 32);
+    for (int i = 0; i < 10; ++i) {
+        pixmap.fill(Qt::GlobalColor(i + 1));
+        data.appendRow(new QStandardItem(QIcon(pixmap), QString::number(i)));
+    }
+    QItemSelectionModel selections(&data);
+    QListViewWithPublicStartDrag list;
+    list.setWindowTitle(QTest::currentTestFunction());
+    list.setViewMode(QListView::IconMode);
+    list.setDefaultDropAction(Qt::MoveAction);
+    list.setModel(&data);
+    list.setSelectionModel(&selections);
+    list.resize(300, 300);
+    list.show();
+    selections.select(data.index(1, 0), QItemSelectionModel::Select);
+    QVERIFY(QTest::qWaitForWindowExposed(&list));
+
+    // execute as soon as the eventloop is running again
+    // which is the case inside list.startDrag()
+    QTimer::singleShot(0, [&list]()
+    {
+        const QPoint pos = list.rect().center();
+        QMouseEvent mouseMove(QEvent::MouseMove, pos, list.mapToGlobal(pos), Qt::NoButton, 0, 0);
+        QApplication::sendEvent(&list, &mouseMove);
+        QMouseEvent mouseRelease(QEvent::MouseButtonRelease, pos, list.mapToGlobal(pos), Qt::LeftButton, 0, 0);
+        QApplication::sendEvent(&list, &mouseRelease);
+    });
+    const int expectedCount = data.rowCount();
+    list.startDrag(Qt::MoveAction|Qt::CopyAction);
+    QCOMPARE(expectedCount, data.rowCount());
+}
+
 
 QTEST_MAIN(tst_QListView)
 #include "tst_qlistview.moc"

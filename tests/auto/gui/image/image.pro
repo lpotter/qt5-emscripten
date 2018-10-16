@@ -10,7 +10,11 @@ SUBDIRS=\
    qmovie \
    qpicture \
    qicon \
+   qiconhighdpi
 
-!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+!qtHaveModule(network): SUBDIRS -= \
+    qimagereader
+
+!qtConfig(private_tests): SUBDIRS -= \
            qpixmapcache \
 

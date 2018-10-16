@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,43 +10,42 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+// We have to include this before the X11 headers dragged in by
+// qglxconvenience_p.h.
+#include <QtCore/QByteArray>
+#include <QtCore/QScopedPointer>
+
 #include "qglxconvenience_p.h"
 
 #include <QtCore/QVector>
 #include <QtCore/QVarLengthArray>
-
-#ifndef QT_NO_XRENDER
-#include <X11/extensions/Xrender.h>
-#endif
 
 #include <GL/glxext.h>
 
@@ -73,157 +72,207 @@ enum {
 #undef FontChange
 #endif
 
-QVector<int> qglx_buildSpec(const QSurfaceFormat &format, int drawableBit)
+#ifndef GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB
+#define GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB 0x20B2
+#endif
+
+QVector<int> qglx_buildSpec(const QSurfaceFormat &format, int drawableBit, int flags)
 {
-    QVector<int> spec(48);
-    int i = 0;
+    QVector<int> spec;
 
-    spec[i++] = GLX_LEVEL;
-    spec[i++] = 0;
-    spec[i++] = GLX_DRAWABLE_TYPE; spec[i++] = drawableBit;
+    spec << GLX_LEVEL
+         << 0
 
-    spec[i++] = GLX_RENDER_TYPE; spec[i++] = GLX_RGBA_BIT;
+         << GLX_RENDER_TYPE
+         << GLX_RGBA_BIT
 
-    spec[i++] = GLX_RED_SIZE; spec[i++] = (format.redBufferSize() == -1) ? 1 : format.redBufferSize();
-    spec[i++] = GLX_GREEN_SIZE; spec[i++] =  (format.greenBufferSize() == -1) ? 1 : format.greenBufferSize();
-    spec[i++] = GLX_BLUE_SIZE; spec[i++] = (format.blueBufferSize() == -1) ? 1 : format.blueBufferSize();
-    if (format.hasAlpha()) {
-        spec[i++] = GLX_ALPHA_SIZE; spec[i++] = format.alphaBufferSize();
-    }
+         << GLX_RED_SIZE
+         << qMax(1, format.redBufferSize())
 
-    spec[i++] = GLX_DOUBLEBUFFER; spec[i++] = format.swapBehavior() != QSurfaceFormat::SingleBuffer ? True : False;
+         << GLX_GREEN_SIZE
+         << qMax(1, format.greenBufferSize())
 
-    spec[i++] = GLX_STEREO; spec[i++] =  format.stereo() ? True : False;
+         << GLX_BLUE_SIZE
+         << qMax(1, format.blueBufferSize())
 
-    if (format.depthBufferSize() > 0) {
-        spec[i++] = GLX_DEPTH_SIZE; spec[i++] = format.depthBufferSize();
-    }
+         << GLX_ALPHA_SIZE
+         << qMax(0, format.alphaBufferSize());
 
-    if (format.stencilBufferSize() > 0) {
-        spec[i++] = GLX_STENCIL_SIZE; spec[i++] =  (format.stencilBufferSize() == -1) ? 1 : format.stencilBufferSize();
-    }
+    if (format.swapBehavior() != QSurfaceFormat::SingleBuffer)
+        spec << GLX_DOUBLEBUFFER
+             << True;
 
-    if (format.samples() > 1) {
-        spec[i++] = GLX_SAMPLE_BUFFERS_ARB;
-        spec[i++] = 1;
-        spec[i++] = GLX_SAMPLES_ARB;
-        spec[i++] = format.samples();
-    }
+    if (format.stereo())
+        spec << GLX_STEREO
+             << True;
 
-    spec[i++] = XNone;
+    if (format.depthBufferSize() != -1)
+        spec << GLX_DEPTH_SIZE
+             << format.depthBufferSize();
+
+    if (format.stencilBufferSize() != -1)
+        spec << GLX_STENCIL_SIZE
+             << format.stencilBufferSize();
+
+    if (format.samples() > 1)
+        spec << GLX_SAMPLE_BUFFERS_ARB
+             << 1
+             << GLX_SAMPLES_ARB
+             << format.samples();
+
+    if ((flags & QGLX_SUPPORTS_SRGB) && format.colorSpace() == QSurfaceFormat::sRGBColorSpace)
+        spec << GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB
+             << True;
+
+    spec << GLX_DRAWABLE_TYPE
+         << drawableBit
+
+         << XNone;
+
     return spec;
 }
 
-GLXFBConfig qglx_findConfig(Display *display, int screen , const QSurfaceFormat &format, int drawableBit)
-{
-    bool reduced = true;
-    GLXFBConfig chosenConfig = 0;
-    QSurfaceFormat reducedFormat = format;
-    while (!chosenConfig && reduced) {
-        QVector<int> spec = qglx_buildSpec(reducedFormat, drawableBit);
-        int confcount = 0;
-        GLXFBConfig *configs;
-        configs = glXChooseFBConfig(display, screen,spec.constData(),&confcount);
-        if (confcount)
-        {
-            for (int i = 0; i < confcount; i++) {
-                chosenConfig = configs[i];
-                // Make sure we try to get an ARGB visual if the format asked for an alpha:
-                if (reducedFormat.hasAlpha()) {
-                    int alphaSize;
-                    glXGetFBConfigAttrib(display,configs[i],GLX_ALPHA_SIZE,&alphaSize);
-                    if (alphaSize > 0) {
-                        XVisualInfo *visual = glXGetVisualFromFBConfig(display, chosenConfig);
-                        bool hasAlpha = false;
+namespace  {
+struct QXcbSoftwareOpenGLEnforcer {
+    QXcbSoftwareOpenGLEnforcer() {
+        // Allow forcing LIBGL_ALWAYS_SOFTWARE for Qt 5 applications only.
+        // This is most useful with drivers that only support OpenGL 1.
+        // We need OpenGL 2, but the user probably doesn't want
+        // LIBGL_ALWAYS_SOFTWARE in OpenGL 1 apps.
 
-#if !defined(QT_NO_XRENDER)
-                        XRenderPictFormat *pictFormat = XRenderFindVisualFormat(display, visual->visual);
-                        hasAlpha = pictFormat->direct.alphaMask > 0;
-#else
-                        hasAlpha = visual->depth == 32;
-#endif
+        if (!checkedForceSoftwareOpenGL) {
+            // If LIBGL_ALWAYS_SOFTWARE is already set, don't mess with it.
+            // We want to unset LIBGL_ALWAYS_SOFTWARE at the end so it does not
+            // get inherited by other processes, of course only if it wasn't
+            // already set before.
+            if (!qEnvironmentVariableIsEmpty("QT_XCB_FORCE_SOFTWARE_OPENGL")
+                && !qEnvironmentVariableIsSet("LIBGL_ALWAYS_SOFTWARE"))
+                forceSoftwareOpenGL = true;
 
-                        XFree(visual);
-
-                        if (hasAlpha)
-                            break;
-                    }
-                } else {
-                    break; // Just choose the first in the list if there's no alpha requested
-                }
-            }
-
-            XFree(configs);
+            checkedForceSoftwareOpenGL = true;
         }
-        if (!chosenConfig)
-            reducedFormat = qglx_reduceSurfaceFormat(reducedFormat,&reduced);
+
+        if (forceSoftwareOpenGL)
+            qputenv("LIBGL_ALWAYS_SOFTWARE", QByteArrayLiteral("1"));
     }
 
-    return chosenConfig;
+    ~QXcbSoftwareOpenGLEnforcer() {
+        // unset LIBGL_ALWAYS_SOFTWARE now so other processes don't inherit it
+        if (forceSoftwareOpenGL)
+            qunsetenv("LIBGL_ALWAYS_SOFTWARE");
+    }
+
+    static bool checkedForceSoftwareOpenGL;
+    static bool forceSoftwareOpenGL;
+};
+
+bool QXcbSoftwareOpenGLEnforcer::checkedForceSoftwareOpenGL = false;
+bool QXcbSoftwareOpenGLEnforcer::forceSoftwareOpenGL = false;
+
+template <class T>
+struct QXlibScopedPointerDeleter {
+    static inline void cleanup(T *pointer) {
+        if (pointer)
+            XFree(pointer);
+    }
+};
+
+template <class T>
+using QXlibPointer = QScopedPointer<T, QXlibScopedPointerDeleter<T>>;
+
+template <class T>
+using QXlibArrayPointer = QScopedArrayPointer<T, QXlibScopedPointerDeleter<T>>;
 }
 
-XVisualInfo *qglx_findVisualInfo(Display *display, int screen, QSurfaceFormat *format)
+GLXFBConfig qglx_findConfig(Display *display, int screen , QSurfaceFormat format, bool highestPixelFormat, int drawableBit, int flags)
+{
+    QXcbSoftwareOpenGLEnforcer softwareOpenGLEnforcer;
+
+    GLXFBConfig config = 0;
+
+    do {
+        const QVector<int> spec = qglx_buildSpec(format, drawableBit, flags);
+
+        int confcount = 0;
+        QXlibArrayPointer<GLXFBConfig> configs(glXChooseFBConfig(display, screen, spec.constData(), &confcount));
+
+        if (!config && confcount > 0) {
+            config = configs[0];
+            if (highestPixelFormat && !format.hasAlpha())
+                break;
+        }
+
+        const int requestedRed = qMax(0, format.redBufferSize());
+        const int requestedGreen = qMax(0, format.greenBufferSize());
+        const int requestedBlue = qMax(0, format.blueBufferSize());
+        const int requestedAlpha = qMax(0, format.alphaBufferSize());
+
+        for (int i = 0; i < confcount; i++) {
+            GLXFBConfig candidate = configs[i];
+
+            if ((flags & QGLX_SUPPORTS_SRGB) && format.colorSpace() == QSurfaceFormat::sRGBColorSpace) {
+                int srgbCapable = 0;
+                glXGetFBConfigAttrib(display, candidate, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, &srgbCapable);
+                if (!srgbCapable)
+                    continue;
+            }
+
+            QXlibPointer<XVisualInfo> visual(glXGetVisualFromFBConfig(display, candidate));
+            if (visual.isNull())
+                continue;
+
+            const int actualRed = qPopulationCount(visual->red_mask);
+            const int actualGreen = qPopulationCount(visual->green_mask);
+            const int actualBlue = qPopulationCount(visual->blue_mask);
+            const int actualAlpha = visual->depth - actualRed - actualGreen - actualBlue;
+
+            if (requestedRed && actualRed != requestedRed)
+                continue;
+            if (requestedGreen && actualGreen != requestedGreen)
+                continue;
+            if (requestedBlue && actualBlue != requestedBlue)
+                continue;
+            if (requestedAlpha && actualAlpha != requestedAlpha)
+                continue;
+
+            return candidate;
+        }
+    } while (qglx_reduceFormat(&format));
+
+    return config;
+}
+
+XVisualInfo *qglx_findVisualInfo(Display *display, int screen, QSurfaceFormat *format, int drawableBit, int flags)
 {
     Q_ASSERT(format);
 
     XVisualInfo *visualInfo = 0;
 
-    GLXFBConfig config = qglx_findConfig(display,screen,*format);
-    if (config) {
+    GLXFBConfig config = qglx_findConfig(display, screen, *format, false, drawableBit, flags);
+    if (config)
         visualInfo = glXGetVisualFromFBConfig(display, config);
-        *format = qglx_surfaceFormatFromGLXFBConfig(display, config);
+
+    if (visualInfo) {
+        qglx_surfaceFormatFromGLXFBConfig(format, display, config, flags);
+        return visualInfo;
     }
 
     // attempt to fall back to glXChooseVisual
-    bool reduced = true;
-    QSurfaceFormat reducedFormat = *format;
-    while (!visualInfo && reduced) {
-        QVarLengthArray<int, 13> attribs;
-        attribs.append(GLX_RGBA);
-
-        if (reducedFormat.redBufferSize() > 0) {
-            attribs.append(GLX_RED_SIZE);
-            attribs.append(reducedFormat.redBufferSize());
-        }
-
-        if (reducedFormat.greenBufferSize() > 0) {
-            attribs.append(GLX_GREEN_SIZE);
-            attribs.append(reducedFormat.greenBufferSize());
-        }
-
-        if (reducedFormat.blueBufferSize() > 0) {
-            attribs.append(GLX_BLUE_SIZE);
-            attribs.append(reducedFormat.blueBufferSize());
-        }
-
-        if (reducedFormat.stencilBufferSize() > 0) {
-            attribs.append(GLX_STENCIL_SIZE);
-            attribs.append(reducedFormat.stencilBufferSize());
-        }
-
-        if (reducedFormat.depthBufferSize() > 0) {
-            attribs.append(GLX_DEPTH_SIZE);
-            attribs.append(reducedFormat.depthBufferSize());
-        }
-
-        if (reducedFormat.swapBehavior() != QSurfaceFormat::SingleBuffer)
-            attribs.append(GLX_DOUBLEBUFFER);
-
-        attribs.append(XNone);
-
+    do {
+        QVector<int> attribs = qglx_buildSpec(*format, drawableBit, flags);
         visualInfo = glXChooseVisual(display, screen, attribs.data());
-        if (visualInfo)
-            *format = reducedFormat;
 
-        reducedFormat = qglx_reduceSurfaceFormat(reducedFormat, &reduced);
-    }
+        if (visualInfo) {
+            qglx_surfaceFormatFromVisualInfo(format, display, visualInfo, flags);
+            return visualInfo;
+        }
+    } while (qglx_reduceFormat(format));
 
     return visualInfo;
 }
 
-QSurfaceFormat qglx_surfaceFormatFromGLXFBConfig(Display *display, GLXFBConfig config, GLXContext)
+void qglx_surfaceFormatFromGLXFBConfig(QSurfaceFormat *format, Display *display, GLXFBConfig config, int flags)
 {
-    QSurfaceFormat format;
     int redSize     = 0;
     int greenSize   = 0;
     int blueSize    = 0;
@@ -233,9 +282,8 @@ QSurfaceFormat qglx_surfaceFormatFromGLXFBConfig(Display *display, GLXFBConfig c
     int sampleBuffers = 0;
     int sampleCount = 0;
     int stereo      = 0;
+    int srgbCapable = 0;
 
-    XVisualInfo *vi = glXGetVisualFromFBConfig(display,config);
-    XFree(vi);
     glXGetFBConfigAttrib(display, config, GLX_RED_SIZE,     &redSize);
     glXGetFBConfigAttrib(display, config, GLX_GREEN_SIZE,   &greenSize);
     glXGetFBConfigAttrib(display, config, GLX_BLUE_SIZE,    &blueSize);
@@ -244,48 +292,131 @@ QSurfaceFormat qglx_surfaceFormatFromGLXFBConfig(Display *display, GLXFBConfig c
     glXGetFBConfigAttrib(display, config, GLX_STENCIL_SIZE, &stencilSize);
     glXGetFBConfigAttrib(display, config, GLX_SAMPLES_ARB,  &sampleBuffers);
     glXGetFBConfigAttrib(display, config, GLX_STEREO,       &stereo);
+    if (flags & QGLX_SUPPORTS_SRGB)
+        glXGetFBConfigAttrib(display, config, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, &srgbCapable);
 
-    format.setRedBufferSize(redSize);
-    format.setGreenBufferSize(greenSize);
-    format.setBlueBufferSize(blueSize);
-    format.setAlphaBufferSize(alphaSize);
-    format.setDepthBufferSize(depthSize);
-    format.setStencilBufferSize(stencilSize);
+    format->setRedBufferSize(redSize);
+    format->setGreenBufferSize(greenSize);
+    format->setBlueBufferSize(blueSize);
+    format->setAlphaBufferSize(alphaSize);
+    format->setDepthBufferSize(depthSize);
+    format->setStencilBufferSize(stencilSize);
     if (sampleBuffers) {
         glXGetFBConfigAttrib(display, config, GLX_SAMPLES_ARB, &sampleCount);
-        format.setSamples(sampleCount);
+        format->setSamples(sampleCount);
     }
+    format->setColorSpace(srgbCapable ? QSurfaceFormat::sRGBColorSpace : QSurfaceFormat::DefaultColorSpace);
 
-    format.setStereo(stereo);
-
-    return format;
+    format->setStereo(stereo);
 }
 
-QSurfaceFormat qglx_reduceSurfaceFormat(const QSurfaceFormat &format, bool *reduced)
+void qglx_surfaceFormatFromVisualInfo(QSurfaceFormat *format, Display *display, XVisualInfo *visualInfo, int flags)
 {
-    QSurfaceFormat retFormat = format;
-    *reduced = true;
+    int redSize     = 0;
+    int greenSize   = 0;
+    int blueSize    = 0;
+    int alphaSize   = 0;
+    int depthSize   = 0;
+    int stencilSize = 0;
+    int sampleBuffers = 0;
+    int sampleCount = 0;
+    int stereo      = 0;
+    int srgbCapable = 0;
 
-    if (retFormat.redBufferSize() > 1) {
-        retFormat.setRedBufferSize(1);
-    } else if (retFormat.greenBufferSize() > 1) {
-        retFormat.setGreenBufferSize(1);
-    } else if (retFormat.blueBufferSize() > 1) {
-        retFormat.setBlueBufferSize(1);
-    } else if (retFormat.samples() > 1) {
-        retFormat.setSamples(qMin(retFormat.samples() / 2, 16));
-    } else if (retFormat.stereo()) {
-        retFormat.setStereo(false);
-    }else if (retFormat.stencilBufferSize() > 0) {
-        retFormat.setStencilBufferSize(0);
-    }else if (retFormat.hasAlpha()) {
-        retFormat.setAlphaBufferSize(0);
-    }else if (retFormat.depthBufferSize() > 0) {
-        retFormat.setDepthBufferSize(0);
-    }else if (retFormat.swapBehavior() != QSurfaceFormat::SingleBuffer) {
-        retFormat.setSwapBehavior(QSurfaceFormat::SingleBuffer);
-    }else{
-        *reduced = false;
+    glXGetConfig(display, visualInfo, GLX_RED_SIZE,     &redSize);
+    glXGetConfig(display, visualInfo, GLX_GREEN_SIZE,   &greenSize);
+    glXGetConfig(display, visualInfo, GLX_BLUE_SIZE,    &blueSize);
+    glXGetConfig(display, visualInfo, GLX_ALPHA_SIZE,   &alphaSize);
+    glXGetConfig(display, visualInfo, GLX_DEPTH_SIZE,   &depthSize);
+    glXGetConfig(display, visualInfo, GLX_STENCIL_SIZE, &stencilSize);
+    glXGetConfig(display, visualInfo, GLX_SAMPLES_ARB,  &sampleBuffers);
+    glXGetConfig(display, visualInfo, GLX_STEREO,       &stereo);
+    if (flags & QGLX_SUPPORTS_SRGB)
+        glXGetConfig(display, visualInfo, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, &srgbCapable);
+
+    format->setRedBufferSize(redSize);
+    format->setGreenBufferSize(greenSize);
+    format->setBlueBufferSize(blueSize);
+    format->setAlphaBufferSize(alphaSize);
+    format->setDepthBufferSize(depthSize);
+    format->setStencilBufferSize(stencilSize);
+    if (sampleBuffers) {
+        glXGetConfig(display, visualInfo, GLX_SAMPLES_ARB, &sampleCount);
+        format->setSamples(sampleCount);
     }
-    return retFormat;
+    format->setColorSpace(srgbCapable ? QSurfaceFormat::sRGBColorSpace : QSurfaceFormat::DefaultColorSpace);
+
+    format->setStereo(stereo);
+}
+
+bool qglx_reduceFormat(QSurfaceFormat *format)
+{
+    Q_ASSERT(format);
+
+    if (format->redBufferSize() > 1) {
+        format->setRedBufferSize(1);
+        return true;
+    }
+
+    if (format->greenBufferSize() > 1) {
+        format->setGreenBufferSize(1);
+        return true;
+    }
+
+    if (format->blueBufferSize() > 1) {
+        format->setBlueBufferSize(1);
+        return true;
+    }
+
+    if (format->swapBehavior() != QSurfaceFormat::SingleBuffer){
+        format->setSwapBehavior(QSurfaceFormat::SingleBuffer);
+        return true;
+    }
+
+    if (format->samples() > 1) {
+        format->setSamples(qMin(16, format->samples() / 2));
+        return true;
+    }
+
+    if (format->depthBufferSize() >= 32) {
+        format->setDepthBufferSize(24);
+        return true;
+    }
+
+    if (format->depthBufferSize() > 1) {
+        format->setDepthBufferSize(1);
+        return true;
+    }
+
+    if (format->depthBufferSize() > 0) {
+        format->setDepthBufferSize(0);
+        return true;
+    }
+
+    if (format->hasAlpha()) {
+        format->setAlphaBufferSize(0);
+        return true;
+    }
+
+    if (format->stencilBufferSize() > 1) {
+        format->setStencilBufferSize(1);
+        return true;
+    }
+
+    if (format->stencilBufferSize() > 0) {
+        format->setStencilBufferSize(0);
+        return true;
+    }
+
+    if (format->stereo()) {
+        format->setStereo(false);
+        return true;
+    }
+
+    if (format->colorSpace() == QSurfaceFormat::sRGBColorSpace) {
+        format->setColorSpace(QSurfaceFormat::DefaultColorSpace);
+        return true;
+    }
+
+    return false;
 }

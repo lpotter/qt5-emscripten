@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,27 +51,14 @@
 // We mean it.
 //
 
-#include "qopenglfunctions.h"
-
-QT_BEGIN_HEADER
+#include <QtGui/private/qtguiglobal_p.h>
+#include "qopenglextrafunctions.h"
 
 QT_BEGIN_NAMESPACE
 
-
-#if 0
-#ifndef GL_ARB_vertex_buffer_object
-typedef ptrdiff_t GLintptrARB;
-typedef ptrdiff_t GLsizeiptrARB;
-#endif
-#endif
-
-#ifndef GL_VERSION_2_0
-typedef char GLchar;
-#endif
-
 class QOpenGLExtensionsPrivate;
 
-class Q_GUI_EXPORT QOpenGLExtensions : public QOpenGLFunctions
+class Q_GUI_EXPORT QOpenGLExtensions : public QOpenGLExtraFunctions
 {
     Q_DECLARE_PRIVATE(QOpenGLExtensions)
 public:
@@ -101,27 +86,25 @@ public:
         Depth24                 = 0x00010000,
         SRGBFrameBuffer         = 0x00020000,
         MapBuffer               = 0x00040000,
-        GeometryShaders         = 0x00080000
+        GeometryShaders         = 0x00080000,
+        MapBufferRange          = 0x00100000,
+        Sized8Formats           = 0x00200000,
+        DiscardFramebuffer      = 0x00400000,
+        Sized16Formats          = 0x00800000,
+        TextureSwizzle          = 0x01000000,
     };
     Q_DECLARE_FLAGS(OpenGLExtensions, OpenGLExtension)
 
     OpenGLExtensions openGLExtensions();
     bool hasOpenGLExtension(QOpenGLExtensions::OpenGLExtension extension) const;
 
-    void initializeGLExtensions();
-
     GLvoid *glMapBuffer(GLenum target, GLenum access);
-    GLboolean glUnmapBuffer(GLenum target);
-
-    void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
-                           GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
-                           GLbitfield mask, GLenum filter);
-
-    void glRenderbufferStorageMultisample(GLenum target, GLsizei samples,
-                                          GLenum internalFormat,
-                                          GLsizei width, GLsizei height);
-
     void glGetBufferSubData(GLenum target, qopengl_GLintptr offset, qopengl_GLsizeiptr size, GLvoid *data);
+    void glDiscardFramebufferEXT (GLenum target, GLsizei numAttachments, const GLenum *attachments);
+
+    void flushShared();
+
+    QOpenGLExtensionsPrivate *d() const;
 
 private:
     static bool isInitialized(const QOpenGLFunctionsPrivate *d) { return d != 0; }
@@ -129,21 +112,23 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QOpenGLExtensions::OpenGLExtensions)
 
-class QOpenGLExtensionsPrivate : public QOpenGLFunctionsPrivate
+class QOpenGLExtensionsPrivate : public QOpenGLExtraFunctionsPrivate
 {
 public:
     explicit QOpenGLExtensionsPrivate(QOpenGLContext *ctx);
 
     GLvoid* (QOPENGLF_APIENTRYP MapBuffer)(GLenum target, GLenum access);
-    GLboolean (QOPENGLF_APIENTRYP UnmapBuffer)(GLenum target);
-    void (QOPENGLF_APIENTRYP BlitFramebuffer)(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
-                           GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
-                           GLbitfield mask, GLenum filter);
-    void (QOPENGLF_APIENTRYP RenderbufferStorageMultisample)(GLenum target, GLsizei samples,
-                                          GLenum internalFormat,
-                                          GLsizei width, GLsizei height);
     void (QOPENGLF_APIENTRYP GetBufferSubData)(GLenum target, qopengl_GLintptr offset, qopengl_GLsizeiptr size, GLvoid *data);
+    void (QOPENGLF_APIENTRYP DiscardFramebuffer)(GLenum target, GLsizei numAttachments, const GLenum *attachments);
+
+    bool flushVendorChecked;
+    bool flushIsSufficientToSyncContexts;
 };
+
+inline QOpenGLExtensionsPrivate *QOpenGLExtensions::d() const
+{
+    return static_cast<QOpenGLExtensionsPrivate *>(d_ptr);
+}
 
 inline GLvoid *QOpenGLExtensions::glMapBuffer(GLenum target, GLenum access)
 {
@@ -154,35 +139,6 @@ inline GLvoid *QOpenGLExtensions::glMapBuffer(GLenum target, GLenum access)
     return result;
 }
 
-inline GLboolean QOpenGLExtensions::glUnmapBuffer(GLenum target)
-{
-    Q_D(QOpenGLExtensions);
-    Q_ASSERT(QOpenGLExtensions::isInitialized(d));
-    GLboolean result = d->UnmapBuffer(target);
-    Q_OPENGL_FUNCTIONS_DEBUG
-    return result;
-}
-
-inline void QOpenGLExtensions::glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
-                       GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
-                       GLbitfield mask, GLenum filter)
-{
-    Q_D(QOpenGLExtensions);
-    Q_ASSERT(QOpenGLExtensions::isInitialized(d));
-    d->BlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
-    Q_OPENGL_FUNCTIONS_DEBUG
-}
-
-inline void QOpenGLExtensions::glRenderbufferStorageMultisample(GLenum target, GLsizei samples,
-                                      GLenum internalFormat,
-                                      GLsizei width, GLsizei height)
-{
-    Q_D(QOpenGLExtensions);
-    Q_ASSERT(QOpenGLExtensions::isInitialized(d));
-    d->RenderbufferStorageMultisample(target, samples, internalFormat, width, height);
-    Q_OPENGL_FUNCTIONS_DEBUG
-}
-
 inline void QOpenGLExtensions::glGetBufferSubData(GLenum target, qopengl_GLintptr offset, qopengl_GLsizeiptr size, GLvoid *data)
 {
     Q_D(QOpenGLExtensions);
@@ -191,8 +147,14 @@ inline void QOpenGLExtensions::glGetBufferSubData(GLenum target, qopengl_GLintpt
     Q_OPENGL_FUNCTIONS_DEBUG
 }
 
-QT_END_NAMESPACE
 
-QT_END_HEADER
+inline void QOpenGLExtensions::glDiscardFramebufferEXT (GLenum target, GLsizei numAttachments, const GLenum *attachments)
+{
+    Q_D(QOpenGLExtensions);
+    Q_ASSERT(QOpenGLExtensions::isInitialized(d));
+    d->DiscardFramebuffer(target,numAttachments, attachments);
+    Q_OPENGL_FUNCTIONS_DEBUG
+}
+QT_END_NAMESPACE
 
 #endif // QOPENGL_EXTENSIONS_P_H

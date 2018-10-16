@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -40,17 +50,16 @@
 
 #include <QtWidgets>
 #include <QtNetwork>
-
-#include <stdlib.h>
+#include <QtCore>
 
 #include "server.h"
 
 Server::Server(QWidget *parent)
-:   QDialog(parent), tcpServer(0), networkSession(0)
+    : QDialog(parent)
+    , statusLabel(new QLabel)
 {
-    statusLabel = new QLabel;
-    quitButton = new QPushButton(tr("Quit"));
-    quitButton->setAutoDefault(false);
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    statusLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
 
     QNetworkConfigurationManager manager;
     if (manager.capabilities() & QNetworkConfigurationManager::NetworkSessionRequired) {
@@ -68,7 +77,7 @@ Server::Server(QWidget *parent)
         }
 
         networkSession = new QNetworkSession(config, this);
-        connect(networkSession, SIGNAL(opened()), this, SLOT(sessionOpened()));
+        connect(networkSession, &QNetworkSession::opened, this, &Server::sessionOpened);
 
         statusLabel->setText(tr("Opening network session."));
         networkSession->open();
@@ -77,31 +86,46 @@ Server::Server(QWidget *parent)
     }
 
     //! [2]
-        fortunes << tr("You've been leading a dog's life. Stay off the furniture.")
-                 << tr("You've got to think about tomorrow.")
-                 << tr("You will be surprised by a loud noise.")
-                 << tr("You will feel hungry again in another hour.")
-                 << tr("You might have mail.")
-                 << tr("You cannot kill time without injuring eternity.")
-                 << tr("Computers are not intelligent. They only think they are.");
+    fortunes << tr("You've been leading a dog's life. Stay off the furniture.")
+             << tr("You've got to think about tomorrow.")
+             << tr("You will be surprised by a loud noise.")
+             << tr("You will feel hungry again in another hour.")
+             << tr("You might have mail.")
+             << tr("You cannot kill time without injuring eternity.")
+             << tr("Computers are not intelligent. They only think they are.");
     //! [2]
-
-        connect(quitButton, SIGNAL(clicked()), this, SLOT(close()));
+    auto quitButton = new QPushButton(tr("Quit"));
+    quitButton->setAutoDefault(false);
+    connect(quitButton, &QAbstractButton::clicked, this, &QWidget::close);
     //! [3]
-        connect(tcpServer, SIGNAL(newConnection()), this, SLOT(sendFortune()));
+    connect(tcpServer, &QTcpServer::newConnection, this, &Server::sendFortune);
     //! [3]
 
-        QHBoxLayout *buttonLayout = new QHBoxLayout;
-        buttonLayout->addStretch(1);
-        buttonLayout->addWidget(quitButton);
-        buttonLayout->addStretch(1);
+    auto buttonLayout = new QHBoxLayout;
+    buttonLayout->addStretch(1);
+    buttonLayout->addWidget(quitButton);
+    buttonLayout->addStretch(1);
 
-        QVBoxLayout *mainLayout = new QVBoxLayout;
-        mainLayout->addWidget(statusLabel);
-        mainLayout->addLayout(buttonLayout);
-        setLayout(mainLayout);
+    QVBoxLayout *mainLayout = nullptr;
+    if (QGuiApplication::styleHints()->showIsFullScreen() || QGuiApplication::styleHints()->showIsMaximized()) {
+        auto outerVerticalLayout = new QVBoxLayout(this);
+        outerVerticalLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Ignored, QSizePolicy::MinimumExpanding));
+        auto outerHorizontalLayout = new QHBoxLayout;
+        outerHorizontalLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::MinimumExpanding, QSizePolicy::Ignored));
+        auto groupBox = new QGroupBox(QGuiApplication::applicationDisplayName());
+        mainLayout = new QVBoxLayout(groupBox);
+        outerHorizontalLayout->addWidget(groupBox);
+        outerHorizontalLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::MinimumExpanding, QSizePolicy::Ignored));
+        outerVerticalLayout->addLayout(outerHorizontalLayout);
+        outerVerticalLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Ignored, QSizePolicy::MinimumExpanding));
+    } else {
+        mainLayout = new QVBoxLayout(this);
+    }
 
-        setWindowTitle(tr("Fortune Server"));
+    mainLayout->addWidget(statusLabel);
+    mainLayout->addLayout(buttonLayout);
+
+    setWindowTitle(QGuiApplication::applicationDisplayName());
 }
 
 void Server::sessionOpened()
@@ -156,17 +180,14 @@ void Server::sendFortune()
 //! [5]
     QByteArray block;
     QDataStream out(&block, QIODevice::WriteOnly);
-    out.setVersion(QDataStream::Qt_4_0);
-//! [4] //! [6]
-    out << (quint16)0;
-    out << fortunes.at(qrand() % fortunes.size());
-    out.device()->seek(0);
-    out << (quint16)(block.size() - sizeof(quint16));
-//! [6] //! [7]
+    out.setVersion(QDataStream::Qt_5_10);
+
+    out << fortunes[QRandomGenerator::global()->bounded(fortunes.size())];
+//! [4] //! [7]
 
     QTcpSocket *clientConnection = tcpServer->nextPendingConnection();
-    connect(clientConnection, SIGNAL(disconnected()),
-            clientConnection, SLOT(deleteLater()));
+    connect(clientConnection, &QAbstractSocket::disconnected,
+            clientConnection, &QObject::deleteLater);
 //! [7] //! [8]
 
     clientConnection->write(block);

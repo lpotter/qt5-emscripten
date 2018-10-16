@@ -3,10 +3,8 @@
 ############################################################
 
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qabstractspinbox
-QT += widgets testlib
+QT += widgets gui-private core-private testlib testlib-private
 SOURCES += tst_qabstractspinbox.cpp
 
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

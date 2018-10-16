@@ -1,9 +1,9 @@
 CONFIG += testcase
 TARGET = tst_qdbusmarshall
 TEMPLATE = subdirs
-CONFIG += ordered
-SUBDIRS = qpong test
+qdbusmarshall.depends = qpong
+SUBDIRS = qpong qdbusmarshall
 
-QT += core-private testlib
+QT = core-private testlib
 
-requires(contains(QT_CONFIG,private_tests))
+requires(qtConfig(private_tests))

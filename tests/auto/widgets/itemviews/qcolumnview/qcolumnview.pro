@@ -1,8 +1,7 @@
 CONFIG += testcase
-CONFIG += parallel_test
 QT += widgets widgets-private
-QT += gui-private core-private testlib
+QT += gui-private core-private testlib testlib-private
 
 SOURCES		+= tst_qcolumnview.cpp
+HEADERS         += ../../../../shared/fakedirmodel.h
 TARGET		= tst_qcolumnview
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

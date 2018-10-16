@@ -1,45 +1,56 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "toolbar.h"
+
+#include <QRandomGenerator>
 
 #include <QMainWindow>
 #include <QMenu>
@@ -51,10 +62,10 @@
 
 #include <stdlib.h>
 
-static QPixmap genIcon(const QSize &iconSize, const QString &, const QColor &color)
+static QPixmap genIcon(const QSize &iconSize, const QString &, const QColor &color, qreal pixelRatio)
 {
-    int w = iconSize.width();
-    int h = iconSize.height();
+    int w = qRound(iconSize.width() * pixelRatio);
+    int h = qRound(iconSize.height() * pixelRatio);
 
     QImage image(w, h, QImage::Format_ARGB32_Premultiplied);
     image.fill(0);
@@ -64,77 +75,80 @@ static QPixmap genIcon(const QSize &iconSize, const QString &, const QColor &col
     extern void render_qt_text(QPainter *, int, int, const QColor &);
     render_qt_text(&p, w, h, color);
 
-    return QPixmap::fromImage(image, Qt::DiffuseDither | Qt::DiffuseAlphaDither);
+    QPixmap pm = QPixmap::fromImage(image, Qt::DiffuseDither | Qt::DiffuseAlphaDither);
+    pm.setDevicePixelRatio(pixelRatio);
+    return pm;
 }
 
-static QPixmap genIcon(const QSize &iconSize, int number, const QColor &color)
-{ return genIcon(iconSize, QString::number(number), color); }
+static QPixmap genIcon(const QSize &iconSize, int number, const QColor &color, qreal pixelRatio)
+{ return genIcon(iconSize, QString::number(number), color, pixelRatio); }
 
 ToolBar::ToolBar(const QString &title, QWidget *parent)
-    : QToolBar(parent), spinbox(0), spinboxAction(0)
+    : QToolBar(parent)
+    , spinbox(nullptr)
+    , spinboxAction(nullptr)
 {
-    tip = 0;
     setWindowTitle(title);
     setObjectName(title);
 
     setIconSize(QSize(32, 32));
 
-    QColor bg(palette().background().color());
+    qreal dpr = devicePixelRatioF();
     menu = new QMenu("One", this);
-    menu->setIcon(genIcon(iconSize(), 1, Qt::black));
-    menu->addAction(genIcon(iconSize(), "A", Qt::blue), "A");
-    menu->addAction(genIcon(iconSize(), "B", Qt::blue), "B");
-    menu->addAction(genIcon(iconSize(), "C", Qt::blue), "C");
+    menu->setIcon(genIcon(iconSize(), 1, Qt::black, dpr));
+    menu->addAction(genIcon(iconSize(), "A", Qt::blue, dpr), "A");
+    menu->addAction(genIcon(iconSize(), "B", Qt::blue, dpr), "B");
+    menu->addAction(genIcon(iconSize(), "C", Qt::blue, dpr), "C");
     addAction(menu->menuAction());
 
-    QAction *two = addAction(genIcon(iconSize(), 2, Qt::white), "Two");
+    QAction *two = addAction(genIcon(iconSize(), 2, Qt::white, dpr), "Two");
     QFont boldFont;
     boldFont.setBold(true);
     two->setFont(boldFont);
 
-    addAction(genIcon(iconSize(), 3, Qt::red), "Three");
-    addAction(genIcon(iconSize(), 4, Qt::green), "Four");
-    addAction(genIcon(iconSize(), 5, Qt::blue), "Five");
-    addAction(genIcon(iconSize(), 6, Qt::yellow), "Six");
+    addAction(genIcon(iconSize(), 3, Qt::red, dpr), "Three");
+    addAction(genIcon(iconSize(), 4, Qt::green, dpr), "Four");
+    addAction(genIcon(iconSize(), 5, Qt::blue, dpr), "Five");
+    addAction(genIcon(iconSize(), 6, Qt::yellow, dpr), "Six");
     orderAction = new QAction(this);
     orderAction->setText(tr("Order Items in Tool Bar"));
-    connect(orderAction, SIGNAL(triggered()), SLOT(order()));
+    connect(orderAction, &QAction::triggered, this, &ToolBar::order);
 
     randomizeAction = new QAction(this);
     randomizeAction->setText(tr("Randomize Items in Tool Bar"));
-    connect(randomizeAction, SIGNAL(triggered()), SLOT(randomize()));
+    connect(randomizeAction, &QAction::triggered, this, &ToolBar::randomize);
 
     addSpinBoxAction = new QAction(this);
     addSpinBoxAction->setText(tr("Add Spin Box"));
-    connect(addSpinBoxAction, SIGNAL(triggered()), SLOT(addSpinBox()));
+    connect(addSpinBoxAction, &QAction::triggered, this, &ToolBar::addSpinBox);
 
     removeSpinBoxAction = new QAction(this);
     removeSpinBoxAction->setText(tr("Remove Spin Box"));
     removeSpinBoxAction->setEnabled(false);
-    connect(removeSpinBoxAction, SIGNAL(triggered()), SLOT(removeSpinBox()));
+    connect(removeSpinBoxAction, &QAction::triggered, this, &ToolBar::removeSpinBox);
 
     movableAction = new QAction(tr("Movable"), this);
     movableAction->setCheckable(true);
-    connect(movableAction, SIGNAL(triggered(bool)), SLOT(changeMovable(bool)));
+    connect(movableAction, &QAction::triggered, this, &ToolBar::changeMovable);
 
     allowedAreasActions = new QActionGroup(this);
     allowedAreasActions->setExclusive(false);
 
     allowLeftAction = new QAction(tr("Allow on Left"), this);
     allowLeftAction->setCheckable(true);
-    connect(allowLeftAction, SIGNAL(triggered(bool)), SLOT(allowLeft(bool)));
+    connect(allowLeftAction, &QAction::triggered, this, &ToolBar::allowLeft);
 
     allowRightAction = new QAction(tr("Allow on Right"), this);
     allowRightAction->setCheckable(true);
-    connect(allowRightAction, SIGNAL(triggered(bool)), SLOT(allowRight(bool)));
+    connect(allowRightAction, &QAction::triggered, this, &ToolBar::allowRight);
 
     allowTopAction = new QAction(tr("Allow on Top"), this);
     allowTopAction->setCheckable(true);
-    connect(allowTopAction, SIGNAL(triggered(bool)), SLOT(allowTop(bool)));
+    connect(allowTopAction, &QAction::triggered, this, &ToolBar::allowTop);
 
     allowBottomAction = new QAction(tr("Allow on Bottom"), this);
     allowBottomAction->setCheckable(true);
-    connect(allowBottomAction, SIGNAL(triggered(bool)), SLOT(allowBottom(bool)));
+    connect(allowBottomAction, &QAction::triggered, this, &ToolBar::allowBottom);
 
     allowedAreasActions->addAction(allowLeftAction);
     allowedAreasActions->addAction(allowRightAction);
@@ -146,31 +160,28 @@ ToolBar::ToolBar(const QString &title, QWidget *parent)
 
     leftAction = new QAction(tr("Place on Left") , this);
     leftAction->setCheckable(true);
-    connect(leftAction, SIGNAL(triggered(bool)), SLOT(placeLeft(bool)));
+    connect(leftAction, &QAction::triggered, this, &ToolBar::placeLeft);
 
     rightAction = new QAction(tr("Place on Right") , this);
     rightAction->setCheckable(true);
-    connect(rightAction, SIGNAL(triggered(bool)), SLOT(placeRight(bool)));
+    connect(rightAction, &QAction::triggered, this, &ToolBar::placeRight);
 
     topAction = new QAction(tr("Place on Top") , this);
     topAction->setCheckable(true);
-    connect(topAction, SIGNAL(triggered(bool)), SLOT(placeTop(bool)));
+    connect(topAction, &QAction::triggered, this, &ToolBar::placeTop);
 
     bottomAction = new QAction(tr("Place on Bottom") , this);
     bottomAction->setCheckable(true);
-    connect(bottomAction, SIGNAL(triggered(bool)), SLOT(placeBottom(bool)));
+    connect(bottomAction, &QAction::triggered, this, &ToolBar::placeBottom);
 
     areaActions->addAction(leftAction);
     areaActions->addAction(rightAction);
     areaActions->addAction(topAction);
     areaActions->addAction(bottomAction);
 
-    toolBarBreakAction = new QAction(tr("Insert break"), this);
-    connect(toolBarBreakAction, SIGNAL(triggered(bool)), this, SLOT(insertToolBarBreak()));
+    connect(movableAction, &QAction::triggered, areaActions, &QActionGroup::setEnabled);
 
-    connect(movableAction, SIGNAL(triggered(bool)), areaActions, SLOT(setEnabled(bool)));
-
-    connect(movableAction, SIGNAL(triggered(bool)), allowedAreasActions, SLOT(setEnabled(bool)));
+    connect(movableAction, &QAction::triggered, allowedAreasActions, &QActionGroup::setEnabled);
 
     menu = new QMenu(title, this);
     menu->addAction(toggleViewAction());
@@ -187,9 +198,9 @@ ToolBar::ToolBar(const QString &title, QWidget *parent)
     menu->addSeparator();
     menu->addActions(areaActions->actions());
     menu->addSeparator();
-    menu->addAction(toolBarBreakAction);
+    menu->addAction(tr("Insert break"), this, &ToolBar::insertToolBarBreak);
 
-    connect(menu, SIGNAL(aboutToShow()), this, SLOT(updateMenu()));
+    connect(menu, &QMenu::aboutToShow, this, &ToolBar::updateMenu);
 
     randomize();
 }
@@ -231,10 +242,9 @@ void ToolBar::updateMenu()
 
 void ToolBar::order()
 {
-    QList<QAction *> ordered, actions1 = actions(),
-                              actions2 = findChildren<QAction *>();
-    while (!actions2.isEmpty()) {
-        QAction *action = actions2.takeFirst();
+    QList<QAction *> ordered;
+    QList<QAction *> actions1 = actions();
+    foreach (QAction *action, findChildren<QAction *>()) {
         if (!actions1.contains(action))
             continue;
         actions1.removeAll(action);
@@ -249,9 +259,10 @@ void ToolBar::order()
 
 void ToolBar::randomize()
 {
-    QList<QAction *> randomized, actions = this->actions();
+    QList<QAction *> randomized;
+    QList<QAction *> actions = this->actions();
     while (!actions.isEmpty()) {
-        QAction *action = actions.takeAt(rand() % actions.size());
+        QAction *action = actions.takeAt(QRandomGenerator::global()->bounded(actions.size()));
         randomized.append(action);
     }
     clear();
@@ -262,9 +273,8 @@ void ToolBar::randomize()
 
 void ToolBar::addSpinBox()
 {
-    if (!spinbox) {
+    if (!spinbox)
         spinbox = new QSpinBox(this);
-    }
     if (!spinboxAction)
         spinboxAction = addWidget(spinbox);
     else
@@ -348,36 +358,4 @@ void ToolBar::insertToolBarBreak()
     Q_ASSERT(mainWindow != 0);
 
     mainWindow->insertToolBarBreak(this);
-}
-
-void ToolBar::enterEvent(QEvent*)
-{
-/*
-    These labels on top of toolbars look darn ugly
-
-    if (tip == 0) {
-        tip = new QLabel(windowTitle(), this);
-        QPalette pal = tip->palette();
-        QColor c = Qt::black;
-        c.setAlpha(100);
-        pal.setColor(QPalette::Window, c);
-        pal.setColor(QPalette::Foreground, Qt::white);
-        tip->setPalette(pal);
-        tip->setAutoFillBackground(true);
-        tip->setMargin(3);
-        tip->setText(windowTitle());
-    }
-    QPoint c = rect().center();
-    QSize hint = tip->sizeHint();
-    tip->setGeometry(c.x() - hint.width()/2, c.y() - hint.height()/2,
-                        hint.width(), hint.height());
-
-    tip->show();
-*/
-}
-
-void ToolBar::leaveEvent(QEvent*)
-{
-    if (tip != 0)
-        tip->hide();
 }

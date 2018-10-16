@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,15 @@
 #ifndef QGRAPHICSVIEW_H
 #define QGRAPHICSVIEW_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtCore/qmetatype.h>
 #include <QtGui/qpainter.h>
 #include <QtWidgets/qscrollarea.h>
 #include <QtWidgets/qgraphicsscene.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(graphicsview);
 
 QT_BEGIN_NAMESPACE
-
-
-#if !defined(QT_NO_GRAPHICSVIEW)
 
 class QGraphicsItem;
 class QPainterPath;
@@ -64,7 +60,6 @@ class Q_WIDGETS_EXPORT QGraphicsView : public QAbstractScrollArea
 {
     Q_OBJECT
     Q_FLAGS(QPainter::RenderHints CacheMode OptimizationFlags)
-    Q_ENUMS(ViewportAnchor DragMode ViewportUpdateMode)
     Q_PROPERTY(QBrush backgroundBrush READ backgroundBrush WRITE setBackgroundBrush)
     Q_PROPERTY(QBrush foregroundBrush READ foregroundBrush WRITE setForegroundBrush)
     Q_PROPERTY(bool interactive READ isInteractive WRITE setInteractive)
@@ -76,7 +71,7 @@ class Q_WIDGETS_EXPORT QGraphicsView : public QAbstractScrollArea
     Q_PROPERTY(ViewportAnchor transformationAnchor READ transformationAnchor WRITE setTransformationAnchor)
     Q_PROPERTY(ViewportAnchor resizeAnchor READ resizeAnchor WRITE setResizeAnchor)
     Q_PROPERTY(ViewportUpdateMode viewportUpdateMode READ viewportUpdateMode WRITE setViewportUpdateMode)
-#ifndef QT_NO_RUBBERBAND
+#if QT_CONFIG(rubberband)
     Q_PROPERTY(Qt::ItemSelectionMode rubberBandSelectionMode READ rubberBandSelectionMode WRITE setRubberBandSelectionMode)
 #endif
     Q_PROPERTY(OptimizationFlags optimizationFlags READ optimizationFlags WRITE setOptimizationFlags)
@@ -87,6 +82,7 @@ public:
         AnchorViewCenter,
         AnchorUnderMouse
     };
+    Q_ENUM(ViewportAnchor)
 
     enum CacheModeFlag {
         CacheNone = 0x0,
@@ -99,6 +95,7 @@ public:
         ScrollHandDrag,
         RubberBandDrag
     };
+    Q_ENUM(DragMode)
 
     enum ViewportUpdateMode {
         FullViewportUpdate,
@@ -107,6 +104,7 @@ public:
         NoViewportUpdate,
         BoundingRectViewportUpdate
     };
+    Q_ENUM(ViewportUpdateMode)
 
     enum OptimizationFlag {
         DontClipPainter = 0x1, // obsolete
@@ -116,11 +114,11 @@ public:
     };
     Q_DECLARE_FLAGS(OptimizationFlags, OptimizationFlag)
 
-    QGraphicsView(QWidget *parent = 0);
-    QGraphicsView(QGraphicsScene *scene, QWidget *parent = 0);
+    QGraphicsView(QWidget *parent = nullptr);
+    QGraphicsView(QGraphicsScene *scene, QWidget *parent = nullptr);
     ~QGraphicsView();
 
-    QSize sizeHint() const;
+    QSize sizeHint() const override;
 
     QPainter::RenderHints renderHints() const;
     void setRenderHint(QPainter::RenderHint hint, bool enabled = true);
@@ -145,9 +143,10 @@ public:
     DragMode dragMode() const;
     void setDragMode(DragMode mode);
 
-#ifndef QT_NO_RUBBERBAND
+#if QT_CONFIG(rubberband)
     Qt::ItemSelectionMode rubberBandSelectionMode() const;
     void setRubberBandSelectionMode(Qt::ItemSelectionMode mode);
+    QRect rubberBandRect() const;
 #endif
 
     CacheMode cacheMode() const;
@@ -215,7 +214,7 @@ public:
     inline QPoint mapFromScene(qreal x, qreal y) const;
     inline QPolygon mapFromScene(qreal x, qreal y, qreal w, qreal h) const;
 
-    QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
     QBrush backgroundBrush() const;
     void setBackgroundBrush(const QBrush &brush);
@@ -228,38 +227,45 @@ public Q_SLOTS:
     void invalidateScene(const QRectF &rect = QRectF(), QGraphicsScene::SceneLayers layers = QGraphicsScene::AllLayers);
     void updateSceneRect(const QRectF &rect);
 
+#if QT_CONFIG(rubberband)
+Q_SIGNALS:
+    void rubberBandChanged(QRect viewportRect, QPointF fromScenePoint, QPointF toScenePoint);
+#endif
+
 protected Q_SLOTS:
-    void setupViewport(QWidget *widget);
+    void setupViewport(QWidget *widget) override;
 
 protected:
-    QGraphicsView(QGraphicsViewPrivate &, QWidget *parent = 0);
-    bool event(QEvent *event);
-    bool viewportEvent(QEvent *event);
+    QGraphicsView(QGraphicsViewPrivate &, QWidget *parent = nullptr);
+    bool event(QEvent *event) override;
+    bool viewportEvent(QEvent *event) override;
 
 #ifndef QT_NO_CONTEXTMENU
-    void contextMenuEvent(QContextMenuEvent *event);
+    void contextMenuEvent(QContextMenuEvent *event) override;
 #endif
-    void dragEnterEvent(QDragEnterEvent *event);
-    void dragLeaveEvent(QDragLeaveEvent *event);
-    void dragMoveEvent(QDragMoveEvent *event);
-    void dropEvent(QDropEvent *event);
-    void focusInEvent(QFocusEvent *event);
-    bool focusNextPrevChild(bool next);
-    void focusOutEvent(QFocusEvent *event);
-    void keyPressEvent(QKeyEvent *event);
-    void keyReleaseEvent(QKeyEvent *event);
-    void mouseDoubleClickEvent(QMouseEvent *event);
-    void mousePressEvent(QMouseEvent *event);
-    void mouseMoveEvent(QMouseEvent *event);
-    void mouseReleaseEvent(QMouseEvent *event);
-#ifndef QT_NO_WHEELEVENT
-    void wheelEvent(QWheelEvent *event);
+#if QT_CONFIG(draganddrop)
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 #endif
-    void paintEvent(QPaintEvent *event);
-    void resizeEvent(QResizeEvent *event);
-    void scrollContentsBy(int dx, int dy);
-    void showEvent(QShowEvent *event);
-    void inputMethodEvent(QInputMethodEvent *event);
+    void focusInEvent(QFocusEvent *event) override;
+    bool focusNextPrevChild(bool next) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QWheelEvent *event) override;
+#endif
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void scrollContentsBy(int dx, int dy) override;
+    void showEvent(QShowEvent *event) override;
+    void inputMethodEvent(QInputMethodEvent *event) override;
 
     virtual void drawBackground(QPainter *painter, const QRectF &rect);
     virtual void drawForeground(QPainter *painter, const QRectF &rect);
@@ -306,10 +312,6 @@ inline QPoint QGraphicsView::mapFromScene(qreal ax, qreal ay) const
 inline QPolygon QGraphicsView::mapFromScene(qreal ax, qreal ay, qreal w, qreal h) const
 { return mapFromScene(QRectF(ax, ay, w, h)); }
 
-#endif // QT_NO_GRAPHICSVIEW
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QGRAPHICSVIEW_H

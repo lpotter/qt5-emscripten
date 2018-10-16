@@ -1,22 +1,15 @@
 CONFIG += testcase
 TARGET = tst_qaccessibility
-requires(contains(QT_CONFIG,accessibility))
-QT += widgets testlib gui-private
-SOURCES  += tst_qaccessibility.cpp
+requires(qtConfig(accessibility))
+QT += testlib core-private gui-private widgets-private testlib-private
+SOURCES += tst_qaccessibility.cpp
+HEADERS += accessiblewidgets.h
 
-unix:!mac:LIBS+=-lm
-
-wince*: {
-	accessneeded.files = $$QT_BUILD_TREE\\plugins\\accessible\\*.dll
-	accessneeded.path = accessible
-	DEPLOYMENT += accessneeded
-}
+unix:!darwin:!haiku:!integity: LIBS += -lm
 
 win32 {
-    !*g++ {
-        include(../../../../src/3rdparty/iaccessible2/iaccessible2.pri)
-        DEFINES += QT_SUPPORTS_IACCESSIBLE2
+    !winrt {
+        QT += windowsuiautomation_support-private
     }
-    LIBS += -loleacc -loleaut32 -lole32
+    LIBS += -luuid -loleacc -loleaut32 -lole32
 }
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

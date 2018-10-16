@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,32 +51,31 @@
 // We mean it.
 //
 
-#include "QtCore/qglobal.h"
+#include <QtGui/private/qtguiglobal_p.h>
+#include "QtCore/qmath.h"
 #include "QtGui/qcolor.h"
 #include "QtGui/qpainter.h"
 #include "QtGui/qimage.h"
+#include "QtGui/qrgba64.h"
 #ifndef QT_FT_BEGIN_HEADER
 #define QT_FT_BEGIN_HEADER
 #define QT_FT_END_HEADER
 #endif
 #include "private/qrasterdefs_p.h"
 #include <private/qsimd_p.h>
-#include <private/qmath_p.h>
+
+#include <QtCore/qsharedpointer.h>
 
 QT_BEGIN_NAMESPACE
 
-#if defined(Q_CC_RVCT)
-// RVCT doesn't like static template functions
-#  define Q_STATIC_TEMPLATE_FUNCTION
-#  define Q_STATIC_INLINE_FUNCTION static __forceinline
-#  define Q_DECL_RESTRICT
-#elif defined(Q_CC_GNU)
-#  define Q_STATIC_TEMPLATE_FUNCTION static __attribute__((always_inline))
-#  define Q_STATIC_INLINE_FUNCTION static inline __attribute__((always_inline))
+#if defined(Q_CC_GNU)
+#  define Q_STATIC_TEMPLATE_FUNCTION static
 #  define Q_DECL_RESTRICT __restrict__
+#elif defined(Q_CC_MSVC)
+#  define Q_STATIC_TEMPLATE_FUNCTION static
+#  define Q_DECL_RESTRICT __restrict
 #else
 #  define Q_STATIC_TEMPLATE_FUNCTION static
-#  define Q_STATIC_INLINE_FUNCTION static inline
 #  define Q_DECL_RESTRICT
 #endif
 
@@ -108,25 +105,25 @@ class QRasterPaintEngineState;
 
 typedef QT_FT_SpanFunc ProcessSpans;
 typedef void (*BitmapBlitFunc)(QRasterBuffer *rasterBuffer,
-                               int x, int y, quint32 color,
+                               int x, int y, const QRgba64 &color,
                                const uchar *bitmap,
                                int mapWidth, int mapHeight, int mapStride);
 
 typedef void (*AlphamapBlitFunc)(QRasterBuffer *rasterBuffer,
-                                 int x, int y, quint32 color,
+                                 int x, int y, const QRgba64 &color,
                                  const uchar *bitmap,
                                  int mapWidth, int mapHeight, int mapStride,
-                                 const QClipData *clip);
+                                 const QClipData *clip, bool useGammaCorrection);
 
 typedef void (*AlphaRGBBlitFunc)(QRasterBuffer *rasterBuffer,
-                                 int x, int y, quint32 color,
+                                 int x, int y, const QRgba64 &color,
                                  const uint *rgbmask,
                                  int mapWidth, int mapHeight, int mapStride,
-                                 const QClipData *clip);
+                                 const QClipData *clip, bool useGammaCorrection);
 
 typedef void (*RectFillFunc)(QRasterBuffer *rasterBuffer,
                              int x, int y, int width, int height,
-                             quint32 color);
+                             const QRgba64 &color);
 
 typedef void (*SrcOverBlendFunc)(uchar *destPixels, int dbpl,
                                  const uchar *src, int spbl,
@@ -134,7 +131,7 @@ typedef void (*SrcOverBlendFunc)(uchar *destPixels, int dbpl,
                                  int const_alpha);
 
 typedef void (*SrcOverScaleFunc)(uchar *destPixels, int dbpl,
-                                 const uchar *src, int spbl,
+                                 const uchar *src, int spbl, int srch,
                                  const QRectF &targetRect,
                                  const QRectF &sourceRect,
                                  const QRect &clipRect,
@@ -162,14 +159,18 @@ struct DrawHelper {
 extern SrcOverBlendFunc qBlendFunctions[QImage::NImageFormats][QImage::NImageFormats];
 extern SrcOverScaleFunc qScaleFunctions[QImage::NImageFormats][QImage::NImageFormats];
 extern SrcOverTransformFunc qTransformFunctions[QImage::NImageFormats][QImage::NImageFormats];
-extern MemRotateFunc qMemRotateFunctions[QImage::NImageFormats][3];
 
 extern DrawHelper qDrawHelper[QImage::NImageFormats];
 
 void qBlendTexture(int count, const QSpan *spans, void *userData);
+extern void qt_memfill64(quint64 *dest, quint64 value, int count);
+extern void qt_memfill32(quint32 *dest, quint32 value, int count);
+extern void qt_memfill16(quint16 *dest, quint16 value, int count);
 
 typedef void (QT_FASTCALL *CompositionFunction)(uint *Q_DECL_RESTRICT dest, const uint *Q_DECL_RESTRICT src, int length, uint const_alpha);
+typedef void (QT_FASTCALL *CompositionFunction64)(QRgba64 *Q_DECL_RESTRICT dest, const QRgba64 *Q_DECL_RESTRICT src, int length, uint const_alpha);
 typedef void (QT_FASTCALL *CompositionFunctionSolid)(uint *dest, int length, uint color, uint const_alpha);
+typedef void (QT_FASTCALL *CompositionFunctionSolid64)(QRgba64 *dest, int length, QRgba64 color, uint const_alpha);
 
 struct LinearGradientValues
 {
@@ -192,30 +193,38 @@ struct RadialGradientValues
 
 struct Operator;
 typedef uint* (QT_FASTCALL *DestFetchProc)(uint *buffer, QRasterBuffer *rasterBuffer, int x, int y, int length);
+typedef QRgba64* (QT_FASTCALL *DestFetchProc64)(QRgba64 *buffer, QRasterBuffer *rasterBuffer, int x, int y, int length);
 typedef void (QT_FASTCALL *DestStoreProc)(QRasterBuffer *rasterBuffer, int x, int y, const uint *buffer, int length);
+typedef void (QT_FASTCALL *DestStoreProc64)(QRasterBuffer *rasterBuffer, int x, int y, const QRgba64 *buffer, int length);
 typedef const uint* (QT_FASTCALL *SourceFetchProc)(uint *buffer, const Operator *o, const QSpanData *data, int y, int x, int length);
+typedef const QRgba64* (QT_FASTCALL *SourceFetchProc64)(QRgba64 *buffer, const Operator *o, const QSpanData *data, int y, int x, int length);
 
 struct Operator
 {
     QPainter::CompositionMode mode;
-    DestFetchProc dest_fetch;
-    DestStoreProc dest_store;
-    SourceFetchProc src_fetch;
+    DestFetchProc destFetch;
+    DestStoreProc destStore;
+    SourceFetchProc srcFetch;
     CompositionFunctionSolid funcSolid;
     CompositionFunction func;
+
+    DestFetchProc64 destFetch64;
+    DestStoreProc64 destStore64;
+    SourceFetchProc64 srcFetch64;
+    CompositionFunctionSolid64 funcSolid64;
+    CompositionFunction64 func64;
+
     union {
         LinearGradientValues linear;
         RadialGradientValues radial;
     };
 };
 
-void qInitDrawhelperAsm();
-
 class QRasterPaintEngine;
 
 struct QSolidData
 {
-    uint color;
+    QRgba64 color;
 };
 
 struct QLinearGradientData
@@ -266,7 +275,8 @@ struct QGradientData
 #define GRADIENT_STOPTABLE_SIZE 1024
 #define GRADIENT_STOPTABLE_SIZE_SHIFT 10
 
-    uint* colorTable; //[GRADIENT_STOPTABLE_SIZE];
+    const QRgba64 *colorTable64; //[GRADIENT_STOPTABLE_SIZE];
+    const QRgb *colorTable32; //[GRADIENT_STOPTABLE_SIZE];
 
     uint alphaColor : 1;
 };
@@ -283,7 +293,7 @@ struct QTextureData
     int y1;
     int x2;
     int y2;
-    int bytesPerLine;
+    qsizetype bytesPerLine;
     QImage::Format format;
     const QVector<QRgb> *colorTable;
     bool hasAlpha;
@@ -326,24 +336,18 @@ struct QSpanData
         QGradientData gradient;
         QTextureData texture;
     };
+    class Pinnable {
+    protected:
+        ~Pinnable() {}
+    }; // QSharedPointer<const void> is not supported
+    QSharedPointer<const Pinnable> cachedGradient;
+
 
     void init(QRasterBuffer *rb, const QRasterPaintEngine *pe);
     void setup(const QBrush &brush, int alpha, QPainter::CompositionMode compositionMode);
     void setupMatrix(const QTransform &matrix, int bilinear);
     void initTexture(const QImage *image, int alpha, QTextureData::Type = QTextureData::Plain, const QRect &sourceRect = QRect());
     void adjustSpanMethods();
-};
-
-struct QDrawHelperGammaTables
-{
-    explicit QDrawHelperGammaTables(qreal smoothing);
-
-    void refresh(qreal smoothing);
-
-    uchar qt_pow_rgb_gamma[256];
-    uchar qt_pow_rgb_invgamma[256];
-    uint qt_pow_gamma[256];
-    uchar qt_pow_invgamma[2048];
 };
 
 static inline uint qt_gradient_clamp(const QGradientData *data, int ipos)
@@ -374,7 +378,13 @@ static inline uint qt_gradient_clamp(const QGradientData *data, int ipos)
 static inline uint qt_gradient_pixel(const QGradientData *data, qreal pos)
 {
     int ipos = int(pos * (GRADIENT_STOPTABLE_SIZE - 1) + qreal(0.5));
-    return data->colorTable[qt_gradient_clamp(data, ipos)];
+    return data->colorTable32[qt_gradient_clamp(data, ipos)];
+}
+
+static inline const QRgba64& qt_gradient_pixel64(const QGradientData *data, qreal pos)
+{
+    int ipos = int(pos * (GRADIENT_STOPTABLE_SIZE - 1) + qreal(0.5));
+    return data->colorTable64[qt_gradient_clamp(data, ipos)];
 }
 
 static inline qreal qRadialDeterminant(qreal a, qreal b, qreal c)
@@ -382,25 +392,24 @@ static inline qreal qRadialDeterminant(qreal a, qreal b, qreal c)
     return (b * b) - (4 * a * c);
 }
 
-template <class RadialFetchFunc>
-const uint * QT_FASTCALL qt_fetch_radial_gradient_template(uint *buffer, const Operator *op, const QSpanData *data,
-                                                           int y, int x, int length)
+template <class RadialFetchFunc, typename BlendType> static
+const BlendType * QT_FASTCALL qt_fetch_radial_gradient_template(BlendType *buffer, const Operator *op,
+                                                                const QSpanData *data, int y, int x, int length)
 {
     // avoid division by zero
     if (qFuzzyIsNull(op->radial.a)) {
-        extern void (*qt_memfill32)(quint32 *dest, quint32 value, int count);
-        qt_memfill32(buffer, 0, length);
+        RadialFetchFunc::memfill(buffer, RadialFetchFunc::null(), length);
         return buffer;
     }
 
-    const uint *b = buffer;
+    const BlendType *b = buffer;
     qreal rx = data->m21 * (y + qreal(0.5))
                + data->dx + data->m11 * (x + qreal(0.5));
     qreal ry = data->m22 * (y + qreal(0.5))
                + data->dy + data->m12 * (x + qreal(0.5));
     bool affine = !data->m13 && !data->m23;
 
-    uint *end = buffer + length;
+    BlendType *end = buffer + length;
     if (affine) {
         rx -= data->gradient.radial.focal.x;
         ry -= data->gradient.radial.focal.y;
@@ -447,7 +456,7 @@ const uint * QT_FASTCALL qt_fetch_radial_gradient_template(uint *buffer, const O
                 qreal b  = 2*(op->radial.dr*data->gradient.radial.focal.radius + gx*op->radial.dx + gy*op->radial.dy);
                 qreal det = qRadialDeterminant(op->radial.a, b, op->radial.sqrfr - (gx*gx + gy*gy));
 
-                quint32 result = 0;
+                BlendType result = RadialFetchFunc::null();
                 if (det >= 0) {
                     qreal detSqrt = qSqrt(det);
 
@@ -457,7 +466,7 @@ const uint * QT_FASTCALL qt_fetch_radial_gradient_template(uint *buffer, const O
                     qreal s = qMax(s0, s1);
 
                     if (data->gradient.radial.focal.radius + op->radial.dr * s >= 0)
-                        result = qt_gradient_pixel(&data->gradient, s);
+                        result = RadialFetchFunc::fetchSingle(data->gradient, s);
                 }
 
                 *buffer = result;
@@ -478,6 +487,15 @@ template <class Simd>
 class QRadialFetchSimd
 {
 public:
+    static uint null() { return 0; }
+    static uint fetchSingle(const QGradientData& gradient, qreal v)
+    {
+        return qt_gradient_pixel(&gradient, v);
+    }
+    static void memfill(uint *buffer, uint fill, int length)
+    {
+        qt_memfill32(buffer, fill, length);
+    }
     static void fetch(uint *buffer, uint *end, const Operator *op, const QSpanData *data, qreal det,
                       qreal delta_det, qreal delta_delta_det, qreal b, qreal delta_b)
     {
@@ -502,7 +520,12 @@ public:
         const typename Simd::Float32x4 v_r0 = Simd::v_dup(data->gradient.radial.focal.radius);
         const typename Simd::Float32x4 v_dr = Simd::v_dup(op->radial.dr);
 
+#if defined(__ARM_NEON__)
+        // NEON doesn't have SIMD sqrt, but uses rsqrt instead that can't be taken of 0.
+        const typename Simd::Float32x4 v_min = Simd::v_dup(std::numeric_limits<float>::epsilon());
+#else
         const typename Simd::Float32x4 v_min = Simd::v_dup(0.0f);
+#endif
         const typename Simd::Float32x4 v_max = Simd::v_dup(float(GRADIENT_STOPTABLE_SIZE-1));
         const typename Simd::Float32x4 v_half = Simd::v_dup(0.5f);
 
@@ -534,7 +557,7 @@ public:
             delta_det4_vec.v = Simd::v_add(delta_det4_vec.v, v_delta_delta_det16); \
             b_vec.v = Simd::v_add(b_vec.v, v_delta_b4); \
             for (int i = 0; i < 4; ++i) \
-                *buffer++ = (extended_mask | v_buffer_mask.i[i]) & data->gradient.colorTable[index_vec.i[i]]; \
+                *buffer++ = (extended_mask | v_buffer_mask.i[i]) & data->gradient.colorTable32[index_vec.i[i]]; \
         }
 
 #define FETCH_RADIAL_LOOP(FETCH_RADIAL_LOOP_CLAMP) \
@@ -558,11 +581,7 @@ public:
     }
 };
 
-#if defined(Q_CC_RVCT)
-#  pragma push
-#  pragma arm
-#endif
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint b) {
+static Q_ALWAYS_INLINE uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint b) {
     uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
     t = (t + ((t >> 8) & 0xff00ff) + 0x800080) >> 8;
     t &= 0xff00ff;
@@ -573,13 +592,10 @@ Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint
     x |= t;
     return x;
 }
-#if defined(Q_CC_RVCT)
-#  pragma pop
-#endif
 
-#if QT_POINTER_SIZE == 8 // 64-bit versions
+#if Q_PROCESSOR_WORDSIZE == 8 // 64-bit versions
 
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
+static Q_ALWAYS_INLINE uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
     quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
     t += (((quint64(y)) | ((quint64(y)) << 24)) & 0x00ff00ff00ff00ff) * b;
     t >>= 8;
@@ -587,24 +603,16 @@ Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint
     return (uint(t)) | (uint(t >> 24));
 }
 
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL(uint x, uint a) {
+static Q_ALWAYS_INLINE uint BYTE_MUL(uint x, uint a) {
     quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
     t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080) >> 8;
     t &= 0x00ff00ff00ff00ff;
     return (uint(t)) | (uint(t >> 24));
 }
 
-Q_STATIC_INLINE_FUNCTION uint PREMUL(uint x) {
-    uint a = x >> 24;
-    quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
-    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080) >> 8;
-    t &= 0x000000ff00ff00ff;
-    return (uint(t)) | (uint(t >> 24)) | (a << 24);
-}
-
 #else // 32-bit versions
 
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
+static Q_ALWAYS_INLINE uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
     uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
     t >>= 8;
     t &= 0xff00ff;
@@ -615,11 +623,7 @@ Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint
     return x;
 }
 
-#if defined(Q_CC_RVCT)
-#  pragma push
-#  pragma arm
-#endif
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL(uint x, uint a) {
+static Q_ALWAYS_INLINE uint BYTE_MUL(uint x, uint a) {
     uint t = (x & 0xff00ff) * a;
     t = (t + ((t >> 8) & 0xff00ff) + 0x800080) >> 8;
     t &= 0xff00ff;
@@ -630,50 +634,246 @@ Q_STATIC_INLINE_FUNCTION uint BYTE_MUL(uint x, uint a) {
     x |= t;
     return x;
 }
-#if defined(Q_CC_RVCT)
-#  pragma pop
 #endif
 
-Q_STATIC_INLINE_FUNCTION uint PREMUL(uint x) {
-    uint a = x >> 24;
-    uint t = (x & 0xff00ff) * a;
-    t = (t + ((t >> 8) & 0xff00ff) + 0x800080) >> 8;
-    t &= 0xff00ff;
+static Q_ALWAYS_INLINE void blend_pixel(quint32 &dst, const quint32 src)
+{
+    if (src >= 0xff000000)
+        dst = src;
+    else if (src != 0)
+        dst = src + BYTE_MUL(dst, qAlpha(~src));
+}
 
-    x = ((x >> 8) & 0xff) * a;
-    x = (x + ((x >> 8) & 0xff) + 0x80);
-    x &= 0xff00;
-    x |= t | (a << 24);
-    return x;
+static Q_ALWAYS_INLINE void blend_pixel(quint32 &dst, const quint32 src, const int const_alpha)
+{
+    if (src != 0) {
+        const quint32 s = BYTE_MUL(src, const_alpha);
+        dst = s + BYTE_MUL(dst, qAlpha(~s));
+    }
+}
+
+#if defined(__SSE2__)
+static Q_ALWAYS_INLINE uint interpolate_4_pixels_sse2(__m128i vt, __m128i vb, uint distx, uint disty)
+{
+    // First interpolate top and bottom pixels in parallel.
+    vt = _mm_unpacklo_epi8(vt, _mm_setzero_si128());
+    vb = _mm_unpacklo_epi8(vb, _mm_setzero_si128());
+    vt = _mm_mullo_epi16(vt, _mm_set1_epi16(256 - disty));
+    vb = _mm_mullo_epi16(vb, _mm_set1_epi16(disty));
+    __m128i vlr = _mm_add_epi16(vt, vb);
+    vlr = _mm_srli_epi16(vlr, 8);
+    // vlr now contains the result of the first two interpolate calls vlr = unpacked((xright << 64) | xleft)
+
+    // Now the last interpolate between left and right..
+    const __m128i vidistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(256 - distx), _MM_SHUFFLE(0, 0, 0, 0));
+    const __m128i vdistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(distx), _MM_SHUFFLE(0, 0, 0, 0));
+    const __m128i vmulx = _mm_unpacklo_epi16(vidistx, vdistx);
+    vlr = _mm_unpacklo_epi16(vlr, _mm_srli_si128(vlr, 8));
+    // vlr now contains the colors of left and right interleaved { la, ra, lr, rr, lg, rg, lb, rb }
+    vlr = _mm_madd_epi16(vlr, vmulx); // Multiply and horizontal add.
+    vlr = _mm_srli_epi32(vlr, 8);
+    vlr = _mm_packs_epi32(vlr, vlr);
+    vlr = _mm_packus_epi16(vlr, vlr);
+    return _mm_cvtsi128_si32(vlr);
+}
+
+static inline uint interpolate_4_pixels(uint tl, uint tr, uint bl, uint br, uint distx, uint disty)
+{
+    __m128i vt = _mm_unpacklo_epi32(_mm_cvtsi32_si128(tl), _mm_cvtsi32_si128(tr));
+    __m128i vb = _mm_unpacklo_epi32(_mm_cvtsi32_si128(bl), _mm_cvtsi32_si128(br));
+    return interpolate_4_pixels_sse2(vt, vb, distx, disty);
+}
+
+static inline uint interpolate_4_pixels(const uint t[], const uint b[], uint distx, uint disty)
+{
+    __m128i vt = _mm_loadl_epi64((const __m128i*)t);
+    __m128i vb = _mm_loadl_epi64((const __m128i*)b);
+    return interpolate_4_pixels_sse2(vt, vb, distx, disty);
+}
+
+static constexpr inline bool hasFastInterpolate4() { return true; }
+
+#elif defined(__ARM_NEON__)
+static Q_ALWAYS_INLINE uint interpolate_4_pixels_neon(uint32x2_t vt32, uint32x2_t vb32, uint distx, uint disty)
+{
+    uint16x8_t vt16 = vmovl_u8(vreinterpret_u8_u32(vt32));
+    uint16x8_t vb16 = vmovl_u8(vreinterpret_u8_u32(vb32));
+    vt16 = vmulq_n_u16(vt16, 256 - disty);
+    vt16 = vmlaq_n_u16(vt16, vb16, disty);
+    vt16 = vshrq_n_u16(vt16, 8);
+    uint16x4_t vl16 = vget_low_u16(vt16);
+    uint16x4_t vr16 = vget_high_u16(vt16);
+    vl16 = vmul_n_u16(vl16, 256 - distx);
+    vl16 = vmla_n_u16(vl16, vr16, distx);
+    vl16 = vshr_n_u16(vl16, 8);
+    uint8x8_t vr = vmovn_u16(vcombine_u16(vl16, vl16));
+    return vget_lane_u32(vreinterpret_u32_u8(vr), 0);
+}
+
+static inline uint interpolate_4_pixels(uint tl, uint tr, uint bl, uint br, uint distx, uint disty)
+{
+    uint32x2_t vt32 = vmov_n_u32(tl);
+    uint32x2_t vb32 = vmov_n_u32(bl);
+    vt32 = vset_lane_u32(tr, vt32, 1);
+    vb32 = vset_lane_u32(br, vb32, 1);
+    return interpolate_4_pixels_neon(vt32, vb32, distx, disty);
+}
+
+static inline uint interpolate_4_pixels(const uint t[], const uint b[], uint distx, uint disty)
+{
+    uint32x2_t vt32 = vld1_u32(t);
+    uint32x2_t vb32 = vld1_u32(b);
+    return interpolate_4_pixels_neon(vt32, vb32, distx, disty);
+}
+
+static constexpr inline bool hasFastInterpolate4() { return true; }
+
+#else
+static inline uint interpolate_4_pixels(uint tl, uint tr, uint bl, uint br, uint distx, uint disty)
+{
+    uint idistx = 256 - distx;
+    uint idisty = 256 - disty;
+    uint xtop = INTERPOLATE_PIXEL_256(tl, idistx, tr, distx);
+    uint xbot = INTERPOLATE_PIXEL_256(bl, idistx, br, distx);
+    return INTERPOLATE_PIXEL_256(xtop, idisty, xbot, disty);
+}
+
+static inline uint interpolate_4_pixels(const uint t[], const uint b[], uint distx, uint disty)
+{
+    return interpolate_4_pixels(t[0], t[1], b[0], b[1], distx, disty);
+}
+
+static constexpr inline bool hasFastInterpolate4() { return false; }
+
+#endif
+
+static inline QRgba64 multiplyAlpha256(QRgba64 rgba64, uint alpha256)
+{
+    return QRgba64::fromRgba64((rgba64.red()   * alpha256) >> 8,
+                               (rgba64.green() * alpha256) >> 8,
+                               (rgba64.blue()  * alpha256) >> 8,
+                               (rgba64.alpha() * alpha256) >> 8);
+}
+static inline QRgba64 interpolate256(QRgba64 x, uint alpha1, QRgba64 y, uint alpha2)
+{
+    return QRgba64::fromRgba64(multiplyAlpha256(x, alpha1) + multiplyAlpha256(y, alpha2));
+}
+
+#ifdef __SSE2__
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    __m128i vt = _mm_loadu_si128((const __m128i*)t);
+    if (disty) {
+       __m128i vb = _mm_loadu_si128((const __m128i*)b);
+        vt = _mm_mulhi_epu16(vt, _mm_set1_epi16(0x10000 - disty));
+        vb = _mm_mulhi_epu16(vb, _mm_set1_epi16(disty));
+        vt = _mm_add_epi16(vt, vb);
+    }
+    if (distx) {
+        const __m128i vdistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(distx), _MM_SHUFFLE(0, 0, 0, 0));
+        const __m128i vidistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(0x10000 - distx), _MM_SHUFFLE(0, 0, 0, 0));
+        vt = _mm_mulhi_epu16(vt, _mm_unpacklo_epi64(vidistx, vdistx));
+        vt = _mm_add_epi16(vt, _mm_srli_si128(vt, 8));
+    }
+#ifdef Q_PROCESSOR_X86_64
+    return QRgba64::fromRgba64(_mm_cvtsi128_si64(vt));
+#else
+    QRgba64 out;
+    _mm_storel_epi64((__m128i*)&out, vt);
+    return out;
+#endif // Q_PROCESSOR_X86_64
+}
+#elif defined(__ARM_NEON__)
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    uint64x1x2_t vt = vld2_u64(reinterpret_cast<const uint64_t *>(t));
+    if (disty) {
+        uint64x1x2_t vb = vld2_u64(reinterpret_cast<const uint64_t *>(b));
+        uint32x4_t vt0 = vmull_n_u16(vreinterpret_u16_u64(vt.val[0]), 0x10000 - disty);
+        uint32x4_t vt1 = vmull_n_u16(vreinterpret_u16_u64(vt.val[1]), 0x10000 - disty);
+        vt0 = vmlal_n_u16(vt0, vreinterpret_u16_u64(vb.val[0]), disty);
+        vt1 = vmlal_n_u16(vt1, vreinterpret_u16_u64(vb.val[1]), disty);
+        vt.val[0] = vreinterpret_u64_u16(vshrn_n_u32(vt0, 16));
+        vt.val[1] = vreinterpret_u64_u16(vshrn_n_u32(vt1, 16));
+    }
+    if (distx) {
+        uint32x4_t vt0 = vmull_n_u16(vreinterpret_u16_u64(vt.val[0]), 0x10000 - distx);
+        vt0 = vmlal_n_u16(vt0, vreinterpret_u16_u64(vt.val[1]), distx);
+        vt.val[0] = vreinterpret_u64_u16(vshrn_n_u32(vt0, 16));
+    }
+    QRgba64 out;
+    vst1_u64(reinterpret_cast<uint64_t *>(&out), vt.val[0]);
+    return out;
+}
+#else
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    const uint dx = distx>>8;
+    const uint dy = disty>>8;
+    const uint idx = 256 - dx;
+    const uint idy = 256 - dy;
+    QRgba64 xtop = interpolate256(t[0], idx, t[1], dx);
+    QRgba64 xbot = interpolate256(b[0], idx, b[1], dx);
+    return interpolate256(xtop, idy, xbot, dy);
+}
+#endif // __SSE2__
+
+#if Q_BYTE_ORDER == Q_BIG_ENDIAN
+static Q_ALWAYS_INLINE quint32 RGBA2ARGB(quint32 x) {
+    quint32 rgb = x >> 8;
+    quint32 a = x << 24;
+    return a | rgb;
+}
+
+static Q_ALWAYS_INLINE quint32 ARGB2RGBA(quint32 x) {
+    quint32 rgb = x << 8;
+    quint32 a = x >> 24;
+    return a | rgb;
+}
+#else
+static Q_ALWAYS_INLINE quint32 RGBA2ARGB(quint32 x) {
+    // RGBA8888 is ABGR32 on little endian.
+    quint32 ag = x & 0xff00ff00;
+    quint32 rg = x & 0x00ff00ff;
+    return ag | (rg  << 16) | (rg >> 16);
+}
+
+static Q_ALWAYS_INLINE quint32 ARGB2RGBA(quint32 x) {
+    return RGBA2ARGB(x);
 }
 #endif
 
-
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16(uint x, uint a) {
+static Q_ALWAYS_INLINE uint BYTE_MUL_RGB16(uint x, uint a) {
     a += 1;
     uint t = (((x & 0x07e0)*a) >> 8) & 0x07e0;
     t |= (((x & 0xf81f)*(a>>2)) >> 6) & 0xf81f;
     return t;
 }
 
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16_32(uint x, uint a) {
+static Q_ALWAYS_INLINE uint BYTE_MUL_RGB16_32(uint x, uint a) {
     uint t = (((x & 0xf81f07e0) >> 5)*a) & 0xf81f07e0;
     t |= (((x & 0x07e0f81f)*a) >> 5) & 0x07e0f81f;
     return t;
 }
 
-#define INV_PREMUL(p)                                   \
-    (qAlpha(p) == 0 ? 0 :                               \
-    ((qAlpha(p) << 24)                                  \
-     | (((255*qRed(p))/ qAlpha(p)) << 16)               \
-     | (((255*qGreen(p)) / qAlpha(p))  << 8)            \
-     | ((255*qBlue(p)) / qAlpha(p))))
+// qt_div_255 is a fast rounded division by 255 using an approximation that is accurate for all positive 16-bit integers
+static Q_DECL_CONSTEXPR Q_ALWAYS_INLINE int qt_div_255(int x) { return (x + (x>>8) + 0x80) >> 8; }
+static Q_DECL_CONSTEXPR Q_ALWAYS_INLINE uint qt_div_65535(uint x) { return (x + (x>>16) + 0x8000U) >> 16; }
+
+static Q_ALWAYS_INLINE uint qAlphaRgb30(uint c)
+{
+    uint a = c >> 30;
+    a |= a << 2;
+    a |= a << 4;
+    return a;
+}
 
 struct quint24 {
+    quint24() = default;
     quint24(uint value);
     operator uint() const;
     uchar data[3];
-} Q_PACKED;
+};
 
 inline quint24::quint24(uint value)
 {
@@ -687,18 +887,21 @@ inline quint24::operator uint() const
     return data[2] | (data[1] << 8) | (data[0] << 16);
 }
 
-template <class T>
+template <class T> Q_STATIC_TEMPLATE_FUNCTION
 void qt_memfill(T *dest, T value, int count);
+
+template<> inline void qt_memfill(quint64 *dest, quint64 color, int count)
+{
+    qt_memfill64(dest, color, count);
+}
 
 template<> inline void qt_memfill(quint32 *dest, quint32 color, int count)
 {
-    extern void (*qt_memfill32)(quint32 *dest, quint32 value, int count);
     qt_memfill32(dest, color, count);
 }
 
 template<> inline void qt_memfill(quint16 *dest, quint16 color, int count)
 {
-    extern void (*qt_memfill16)(quint16 *dest, quint16 value, int count);
     qt_memfill16(dest, color, count);
 }
 
@@ -716,21 +919,21 @@ inline void qt_memfill(T *dest, T value, int count)
     int n = (count + 7) / 8;
     switch (count & 0x07)
     {
-    case 0: do { *dest++ = value;
-    case 7:      *dest++ = value;
-    case 6:      *dest++ = value;
-    case 5:      *dest++ = value;
-    case 4:      *dest++ = value;
-    case 3:      *dest++ = value;
-    case 2:      *dest++ = value;
+    case 0: do { *dest++ = value; Q_FALLTHROUGH();
+    case 7:      *dest++ = value; Q_FALLTHROUGH();
+    case 6:      *dest++ = value; Q_FALLTHROUGH();
+    case 5:      *dest++ = value; Q_FALLTHROUGH();
+    case 4:      *dest++ = value; Q_FALLTHROUGH();
+    case 3:      *dest++ = value; Q_FALLTHROUGH();
+    case 2:      *dest++ = value; Q_FALLTHROUGH();
     case 1:      *dest++ = value;
     } while (--n > 0);
     }
 }
 
-template <class T>
+template <class T> Q_STATIC_TEMPLATE_FUNCTION
 inline void qt_rectfill(T *dest, T value,
-                        int x, int y, int width, int height, int stride)
+                        int x, int y, int width, int height, qsizetype stride)
 {
     char *d = reinterpret_cast<char*>(dest + x) + y * stride;
     if (uint(stride) == (width * sizeof(T))) {
@@ -755,49 +958,40 @@ do {                                          \
     /* Duff's device */                       \
     uint *_d = (uint*)(dest) + length;         \
     const uint *_s = (uint*)(src) + length;    \
-    register int n = ((length) + 7) / 8;      \
+    int n = ((length) + 7) / 8;               \
     switch ((length) & 0x07)                  \
     {                                         \
-    case 0: do { *--_d = *--_s;                 \
-    case 7:      *--_d = *--_s;                 \
-    case 6:      *--_d = *--_s;                 \
-    case 5:      *--_d = *--_s;                 \
-    case 4:      *--_d = *--_s;                 \
-    case 3:      *--_d = *--_s;                 \
-    case 2:      *--_d = *--_s;                 \
+    case 0: do { *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 7:      *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 6:      *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 5:      *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 4:      *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 3:      *--_d = *--_s; Q_FALLTHROUGH(); \
+    case 2:      *--_d = *--_s; Q_FALLTHROUGH(); \
     case 1:      *--_d = *--_s;                 \
     } while (--n > 0);                        \
     }                                         \
-} while (0)
+} while (false)
 
 #define QT_MEMCPY_USHORT(dest, src, length) \
 do {                                          \
     /* Duff's device */                       \
     ushort *_d = (ushort*)(dest);         \
-    const ushort *_s = (ushort*)(src);    \
-    register int n = ((length) + 7) / 8;      \
+    const ushort *_s = (const ushort*)(src);    \
+    int n = ((length) + 7) / 8;               \
     switch ((length) & 0x07)                  \
     {                                         \
-    case 0: do { *_d++ = *_s++;                 \
-    case 7:      *_d++ = *_s++;                 \
-    case 6:      *_d++ = *_s++;                 \
-    case 5:      *_d++ = *_s++;                 \
-    case 4:      *_d++ = *_s++;                 \
-    case 3:      *_d++ = *_s++;                 \
-    case 2:      *_d++ = *_s++;                 \
+    case 0: do { *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 7:      *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 6:      *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 5:      *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 4:      *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 3:      *_d++ = *_s++; Q_FALLTHROUGH(); \
+    case 2:      *_d++ = *_s++; Q_FALLTHROUGH(); \
     case 1:      *_d++ = *_s++;                 \
     } while (--n > 0);                        \
     }                                         \
-} while (0)
-
-#if defined(Q_CC_RVCT)
-#  pragma push
-#  pragma arm
-#endif
-Q_STATIC_INLINE_FUNCTION int qt_div_255(int x) { return (x + (x>>8) + 0x80) >> 8; }
-#if defined(Q_CC_RVCT)
-#  pragma pop
-#endif
+} while (false)
 
 inline ushort qConvertRgb32To16(uint c)
 {
@@ -814,6 +1008,173 @@ inline QRgb qConvertRgb16To32(uint c)
         | ((((c) << 8) & 0xf80000) | (((c) << 3) & 0x70000));
 }
 
+enum QtPixelOrder {
+    PixelOrderRGB,
+    PixelOrderBGR
+};
+
+template<enum QtPixelOrder> inline uint qConvertArgb32ToA2rgb30(QRgb);
+
+template<enum QtPixelOrder> inline uint qConvertRgb32ToRgb30(QRgb);
+
+template<enum QtPixelOrder> inline QRgb qConvertA2rgb30ToArgb32(uint c);
+
+// A combined unpremultiply and premultiply with new simplified alpha.
+// Needed when alpha loses precision relative to other colors during conversion (ARGB32 -> A2RGB30).
+template<unsigned int Shift>
+inline QRgb qRepremultiply(QRgb p)
+{
+    const uint alpha = qAlpha(p);
+    if (alpha == 255 || alpha == 0)
+        return p;
+    p = qUnpremultiply(p);
+    Q_CONSTEXPR  uint mult = 255 / (255 >> Shift);
+    const uint newAlpha = mult * (alpha >> Shift);
+    p = (p & ~0xff000000) | (newAlpha<<24);
+    return qPremultiply(p);
+}
+
+template<unsigned int Shift>
+inline QRgba64 qRepremultiply(QRgba64 p)
+{
+    const uint alpha = p.alpha();
+    if (alpha == 65535 || alpha == 0)
+        return p;
+    p = p.unpremultiplied();
+    Q_CONSTEXPR  uint mult = 65535 / (65535 >> Shift);
+    p.setAlpha(mult * (alpha >> Shift));
+    return p.premultiplied();
+}
+
+template<>
+inline uint qConvertArgb32ToA2rgb30<PixelOrderBGR>(QRgb c)
+{
+    c = qRepremultiply<6>(c);
+    return (c & 0xc0000000)
+        | (((c << 22) & 0x3fc00000) | ((c << 14) & 0x00300000))
+        | (((c << 4) & 0x000ff000) | ((c >> 4) & 0x00000c00))
+        | (((c >> 14) & 0x000003fc) | ((c >> 22) & 0x00000003));
+}
+
+template<>
+inline uint qConvertArgb32ToA2rgb30<PixelOrderRGB>(QRgb c)
+{
+    c = qRepremultiply<6>(c);
+    return (c & 0xc0000000)
+        | (((c << 6) & 0x3fc00000) | ((c >> 2) & 0x00300000))
+        | (((c << 4) & 0x000ff000) | ((c >> 4) & 0x00000c00))
+        | (((c << 2) & 0x000003fc) | ((c >> 6) & 0x00000003));
+}
+
+template<>
+inline uint qConvertRgb32ToRgb30<PixelOrderBGR>(QRgb c)
+{
+    return 0xc0000000
+        | (((c << 22) & 0x3fc00000) | ((c << 14) & 0x00300000))
+        | (((c << 4) & 0x000ff000) | ((c >> 4) & 0x00000c00))
+        | (((c >> 14) & 0x000003fc) | ((c >> 22) & 0x00000003));
+}
+
+template<>
+inline uint qConvertRgb32ToRgb30<PixelOrderRGB>(QRgb c)
+{
+    return 0xc0000000
+        | (((c << 6) & 0x3fc00000) | ((c >> 2) & 0x00300000))
+        | (((c << 4) & 0x000ff000) | ((c >> 4) & 0x00000c00))
+        | (((c << 2) & 0x000003fc) | ((c >> 6) & 0x00000003));
+}
+
+template<>
+inline QRgb qConvertA2rgb30ToArgb32<PixelOrderBGR>(uint c)
+{
+    uint a = c >> 30;
+    a |= a << 2;
+    a |= a << 4;
+    return (a << 24)
+        | ((c << 14) & 0x00ff0000)
+        | ((c >> 4) & 0x0000ff00)
+        | ((c >> 22) & 0x000000ff);
+}
+
+template<>
+inline QRgb qConvertA2rgb30ToArgb32<PixelOrderRGB>(uint c)
+{
+    uint a = c >> 30;
+    a |= a << 2;
+    a |= a << 4;
+    return (a << 24)
+        | ((c >> 6) & 0x00ff0000)
+        | ((c >> 4) & 0x0000ff00)
+        | ((c >> 2) & 0x000000ff);
+}
+
+template<enum QtPixelOrder> inline QRgba64 qConvertA2rgb30ToRgb64(uint rgb);
+
+template<>
+inline QRgba64 qConvertA2rgb30ToRgb64<PixelOrderBGR>(uint rgb)
+{
+    quint16 alpha = rgb >> 30;
+    quint16 blue  = (rgb >> 20) & 0x3ff;
+    quint16 green = (rgb >> 10) & 0x3ff;
+    quint16 red   = rgb & 0x3ff;
+    // Expand the range.
+    alpha |= (alpha << 2);
+    alpha |= (alpha << 4);
+    alpha |= (alpha << 8);
+    red   = (red   << 6) | (red   >> 4);
+    green = (green << 6) | (green >> 4);
+    blue  = (blue  << 6) | (blue  >> 4);
+    return qRgba64(red, green, blue, alpha);
+}
+
+template<>
+inline QRgba64 qConvertA2rgb30ToRgb64<PixelOrderRGB>(uint rgb)
+{
+    quint16 alpha = rgb >> 30;
+    quint16 red   = (rgb >> 20) & 0x3ff;
+    quint16 green = (rgb >> 10) & 0x3ff;
+    quint16 blue  = rgb & 0x3ff;
+    // Expand the range.
+    alpha |= (alpha << 2);
+    alpha |= (alpha << 4);
+    alpha |= (alpha << 8);
+    red   = (red   << 6) | (red   >> 4);
+    green = (green << 6) | (green >> 4);
+    blue  = (blue  << 6) | (blue  >> 4);
+    return qRgba64(red, green, blue, alpha);
+}
+
+template<enum QtPixelOrder> inline unsigned int qConvertRgb64ToRgb30(QRgba64);
+
+template<>
+inline unsigned int qConvertRgb64ToRgb30<PixelOrderBGR>(QRgba64 c)
+{
+    c = qRepremultiply<14>(c);
+    const uint a = c.alpha() >> 14;
+    const uint r = c.red() >> 6;
+    const uint g = c.green() >> 6;
+    const uint b = c.blue() >> 6;
+    return (a << 30) | (b << 20) | (g << 10) | r;
+}
+
+template<>
+inline unsigned int qConvertRgb64ToRgb30<PixelOrderRGB>(QRgba64 c)
+{
+    c = qRepremultiply<14>(c);
+    const uint a = c.alpha() >> 14;
+    const uint r = c.red() >> 6;
+    const uint g = c.green() >> 6;
+    const uint b = c.blue() >> 6;
+    return (a << 30) | (r << 20) | (g << 10) | b;
+}
+
+inline uint qRgbSwapRgb30(uint c)
+{
+    const uint ag = c & 0xc00ffc00;
+    const uint rb = c & 0x3ff003ff;
+    return ag | (rb << 20) | (rb >> 20);
+}
+
 inline int qRed565(quint16 rgb) {
     const int r = (rgb & 0xf800);
     return (r >> 8) | (r >> 13);
@@ -828,6 +1189,32 @@ inline int qBlue565(quint16 rgb) {
     const int b = (rgb & 0x001f);
     return (b << 3) | (b >> 2);
 }
+
+// We manually unalias the variables to make sure the compiler
+// fully optimizes both aliased and unaliased cases.
+#define UNALIASED_CONVERSION_LOOP(buffer, src, count, conversion) \
+    if (src == buffer) { \
+        for (int i = 0; i < count; ++i) \
+            buffer[i] = conversion(buffer[i]); \
+    } else { \
+        for (int i = 0; i < count; ++i) \
+            buffer[i] = conversion(src[i]); \
+    }
+
+
+static Q_ALWAYS_INLINE const uint *qt_convertARGB32ToARGB32PM(uint *buffer, const uint *src, int count)
+{
+    UNALIASED_CONVERSION_LOOP(buffer, src, count, qPremultiply);
+    return buffer;
+}
+
+static Q_ALWAYS_INLINE const uint *qt_convertRGBA8888ToARGB32PM(uint *buffer, const uint *src, int count)
+{
+    UNALIASED_CONVERSION_LOOP(buffer, src, count, [](uint s) { return qPremultiply(RGBA2ARGB(s));});
+    return buffer;
+}
+
+template<bool RGBA> void qt_convertRGBA64ToARGB32(uint *dst, const QRgba64 *src, int count);
 
 const uint qt_bayer_matrix[16][16] = {
     { 0x1, 0xc0, 0x30, 0xf0, 0xc, 0xcc, 0x3c, 0xfc,
@@ -868,113 +1255,67 @@ const uint qt_bayer_matrix[16][16] = {
     ((((argb >> 24) * alpha) >> 8) << 24) | (argb & 0x00ffffff)
 
 
-#if QT_POINTER_SIZE == 8 // 64-bit versions
-#define AMIX(mask) (qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
-#define MIX(mask) (qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
+#if Q_PROCESSOR_WORDSIZE == 8 // 64-bit versions
+#define AMIX(mask) (qMin(((quint64(s)&mask) + (quint64(d)&mask)), quint64(mask)))
+#define MIX(mask) (qMin(((quint64(s)&mask) + (quint64(d)&mask)), quint64(mask)))
 #else // 32 bits
 // The mask for alpha can overflow over 32 bits
-#define AMIX(mask) quint32(qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
+#define AMIX(mask) quint32(qMin(((quint64(s)&mask) + (quint64(d)&mask)), quint64(mask)))
 #define MIX(mask) (qMin(((quint32(s)&mask) + (quint32(d)&mask)), quint32(mask)))
 #endif
 
-inline int comp_func_Plus_one_pixel_const_alpha(uint d, const uint s, const uint const_alpha, const uint one_minus_const_alpha)
+inline uint comp_func_Plus_one_pixel_const_alpha(uint d, const uint s, const uint const_alpha, const uint one_minus_const_alpha)
 {
-    const int result = (AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
+    const uint result = uint(AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
     return INTERPOLATE_PIXEL_255(result, const_alpha, d, one_minus_const_alpha);
 }
 
-inline int comp_func_Plus_one_pixel(uint d, const uint s)
+inline uint comp_func_Plus_one_pixel(uint d, const uint s)
 {
-    const int result = (AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
+    const uint result = uint(AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
     return result;
 }
 
 #undef MIX
 #undef AMIX
 
-// prototypes of all the composition functions
-void QT_FASTCALL comp_func_SourceOver(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_DestinationOver(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Clear(uint *dest, const uint *, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Source(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Destination(uint *, const uint *, int, uint);
-void QT_FASTCALL comp_func_SourceIn(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_DestinationIn(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_SourceOut(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_DestinationOut(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_SourceAtop(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_DestinationAtop(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_XOR(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Plus(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Multiply(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Screen(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Overlay(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Darken(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Lighten(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_ColorDodge(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_ColorBurn(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_HardLight(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_SoftLight(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Difference(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL comp_func_Exclusion(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SourceOrDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SourceAndDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SourceXorDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSourceAndNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSourceOrNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSourceXorDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSource(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSourceAndDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SourceAndNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotSourceOrDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SourceOrNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_ClearDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_SetDestination(uint *dest, const uint *src, int length, uint const_alpha);
-void QT_FASTCALL rasterop_NotDestination(uint *dest, const uint *src, int length, uint const_alpha);
-// prototypes of all the solid composition functions
-void QT_FASTCALL comp_func_solid_SourceOver(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_DestinationOver(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Clear(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Source(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Destination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_SourceIn(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_DestinationIn(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_SourceOut(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_DestinationOut(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_SourceAtop(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_DestinationAtop(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_XOR(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Plus(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Multiply(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Screen(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Overlay(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Darken(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Lighten(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_ColorDodge(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_ColorBurn(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_HardLight(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_SoftLight(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Difference(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL comp_func_solid_Exclusion(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SourceOrDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SourceAndDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SourceXorDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSourceAndNotDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSourceOrNotDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSourceXorDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSource(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSourceAndDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SourceAndNotDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotSourceOrDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SourceOrNotDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_ClearDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_SetDestination(uint *dest, int length, uint color, uint const_alpha);
-void QT_FASTCALL rasterop_solid_NotDestination(uint *dest, int length, uint color, uint const_alpha);
+// must be multiple of 4 for easier SIMD implementations
+static Q_CONSTEXPR int BufferSize = 2048;
 
+// A buffer of intermediate results used by simple bilinear scaling.
+struct IntermediateBuffer
+{
+    // The idea is first to do the interpolation between the row s1 and the row s2
+    // into this intermediate buffer, then later interpolate between two pixel of this buffer.
+    //
+    // buffer_rb is a buffer of red-blue component of the pixel, in the form 0x00RR00BB
+    // buffer_ag is the alpha-green component of the pixel, in the form 0x00AA00GG
+    // +1 for the last pixel to interpolate with, and +1 for rounding errors.
+    quint32 buffer_rb[BufferSize+2];
+    quint32 buffer_ag[BufferSize+2];
+};
 
-struct QPixelLayout;
-typedef const uint *(QT_FASTCALL *ConvertFunc)(uint *buffer, const uint *src, int count,
-                                               const QPixelLayout *layout, const QRgb *clut);
+struct QDitherInfo {
+    int x;
+    int y;
+};
+
+typedef const uint *(QT_FASTCALL *FetchAndConvertPixelsFunc)(uint *buffer, const uchar *src, int index, int count,
+                                                             const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *ConvertAndStorePixelsFunc)(uchar *dest, const uint *src, int index, int count,
+                                                      const QVector<QRgb> *clut, QDitherInfo *dither);
+
+typedef const QRgba64 *(QT_FASTCALL *FetchAndConvertPixelsFunc64)(QRgba64 *buffer, const uchar *src, int index, int count,
+                                                                 const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *ConvertAndStorePixelsFunc64)(uchar *dest, const QRgba64 *src, int index, int count,
+                                                        const QVector<QRgb> *clut, QDitherInfo *dither);
+
+typedef void (QT_FASTCALL *ConvertFunc)(uint *buffer, int count, const QVector<QRgb> *clut);
+typedef void (QT_FASTCALL *Convert64Func)(quint64 *buffer, int count, const QVector<QRgb> *clut);
+typedef const QRgba64 *(QT_FASTCALL *ConvertTo64Func)(QRgba64 *buffer, const uint *src, int count,
+                                                      const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *RbSwapFunc)(uchar *dst, const uchar *src, int count);
+
 
 struct QPixelLayout
 {
@@ -987,32 +1328,27 @@ struct QPixelLayout
         BPP16,
         BPP24,
         BPP32,
+        BPP64,
         BPPCount
     };
 
-    // All numbers in bits.
-    uchar redWidth;
-    uchar redShift;
-    uchar greenWidth;
-    uchar greenShift;
-    uchar blueWidth;
-    uchar blueShift;
-    uchar alphaWidth;
-    uchar alphaShift;
+    bool hasAlphaChannel;
     bool premultiplied;
     BPP bpp;
+    RbSwapFunc rbSwap;
     ConvertFunc convertToARGB32PM;
-    ConvertFunc convertFromARGB32PM;
+    ConvertTo64Func convertToRGBA64PM;
+    FetchAndConvertPixelsFunc fetchToARGB32PM;
+    FetchAndConvertPixelsFunc64 fetchToRGBA64PM;
+    ConvertAndStorePixelsFunc storeFromARGB32PM;
+    ConvertAndStorePixelsFunc storeFromRGB32;
 };
 
-typedef const uint *(QT_FASTCALL *FetchPixelsFunc)(uint *buffer, const uchar *src, int index, int count);
-typedef void (QT_FASTCALL *StorePixelsFunc)(uchar *dest, const uint *src, int index, int count);
+extern ConvertAndStorePixelsFunc64 qStoreFromRGBA64PM[QImage::NImageFormats];
 
 extern QPixelLayout qPixelLayouts[QImage::NImageFormats];
-extern FetchPixelsFunc qFetchPixels[QPixelLayout::BPPCount];
-extern StorePixelsFunc qStorePixels[QPixelLayout::BPPCount];
 
-
+extern MemRotateFunc qMemRotateFunctions[QPixelLayout::BPPCount][3];
 
 QT_END_NAMESPACE
 

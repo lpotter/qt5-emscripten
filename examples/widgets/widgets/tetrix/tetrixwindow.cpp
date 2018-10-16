@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -73,14 +83,25 @@ TetrixWindow::TetrixWindow()
     pauseButton->setFocusPolicy(Qt::NoFocus);
 //! [3] //! [4]
 
-    connect(startButton, SIGNAL(clicked()), board, SLOT(start()));
+    connect(startButton, &QPushButton::clicked, board, &TetrixBoard::start);
 //! [4] //! [5]
-    connect(quitButton , SIGNAL(clicked()), qApp, SLOT(quit()));
-    connect(pauseButton, SIGNAL(clicked()), board, SLOT(pause()));
-    connect(board, SIGNAL(scoreChanged(int)), scoreLcd, SLOT(display(int)));
-    connect(board, SIGNAL(levelChanged(int)), levelLcd, SLOT(display(int)));
-    connect(board, SIGNAL(linesRemovedChanged(int)),
-            linesLcd, SLOT(display(int)));
+    connect(quitButton , &QPushButton::clicked, qApp, &QApplication::quit);
+    connect(pauseButton, &QPushButton::clicked, board, &TetrixBoard::pause);
+#if __cplusplus >= 201402L
+    connect(board, &TetrixBoard::scoreChanged,
+            scoreLcd, qOverload<int>(&QLCDNumber::display));
+    connect(board, &TetrixBoard::levelChanged,
+            levelLcd, qOverload<int>(&QLCDNumber::display));
+    connect(board, &TetrixBoard::linesRemovedChanged,
+            linesLcd, qOverload<int>(&QLCDNumber::display));
+#else
+    connect(board, &TetrixBoard::scoreChanged,
+            scoreLcd, QOverload<int>::of(&QLCDNumber::display));
+    connect(board, &TetrixBoard::levelChanged,
+            levelLcd, QOverload<int>::of(&QLCDNumber::display));
+    connect(board, &TetrixBoard::linesRemovedChanged,
+            linesLcd, QOverload<int>::of(&QLCDNumber::display));
+#endif
 //! [5]
 
 //! [6]
@@ -107,9 +128,9 @@ TetrixWindow::TetrixWindow()
 //! [7]
 QLabel *TetrixWindow::createLabel(const QString &text)
 {
-    QLabel *lbl = new QLabel(text);
-    lbl->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
-    return lbl;
+    QLabel *label = new QLabel(text);
+    label->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
+    return label;
 }
 //! [7]
 

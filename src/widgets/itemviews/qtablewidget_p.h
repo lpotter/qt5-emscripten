@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -52,6 +50,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <qheaderview.h>
 #include <qtablewidget.h>
 #include <qabstractitemmodel.h>
@@ -59,12 +58,9 @@
 #include <private/qtableview_p.h>
 #include <private/qwidgetitemdata_p.h>
 
-#ifndef QT_NO_TABLEWIDGET
+QT_REQUIRE_CONFIG(tablewidget);
 
 QT_BEGIN_NAMESPACE
-
-// workaround for VC++ 6.0 linker bug
-typedef bool(*LessThan)(const QPair<QTableWidgetItem*,int>&,const QPair<QTableWidgetItem*,int>&);
 
 class QTableWidgetMimeData : public QMimeData
 {
@@ -90,6 +86,8 @@ public:
 class QTableModel : public QAbstractTableModel
 {
     Q_OBJECT
+    friend class QTableWidget;
+
 public:
     enum ItemFlagsExtension {
         ItemIsHeaderItem = 128
@@ -98,11 +96,11 @@ public:
     QTableModel(int rows, int columns, QTableWidget *parent);
     ~QTableModel();
 
-    bool insertRows(int row, int count = 1, const QModelIndex &parent = QModelIndex());
-    bool insertColumns(int column, int count = 1, const QModelIndex &parent = QModelIndex());
+    bool insertRows(int row, int count = 1, const QModelIndex &parent = QModelIndex()) override;
+    bool insertColumns(int column, int count = 1, const QModelIndex &parent = QModelIndex()) override;
 
-    bool removeRows(int row, int count = 1, const QModelIndex &parent = QModelIndex());
-    bool removeColumns(int column, int count = 1, const QModelIndex &parent = QModelIndex());
+    bool removeRows(int row, int count = 1, const QModelIndex &parent = QModelIndex()) override;
+    bool removeColumns(int column, int count = 1, const QModelIndex &parent = QModelIndex()) override;
 
     void setItem(int row, int column, QTableWidgetItem *item);
     QTableWidgetItem *takeItem(int row, int column);
@@ -117,7 +115,7 @@ public:
     QTableWidgetItem *horizontalHeaderItem(int section);
     QTableWidgetItem *verticalHeaderItem(int section);
 
-    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const
+    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override
         { return QAbstractTableModel::index(row, column, parent); }
 
     QModelIndex index(const QTableWidgetItem *item) const;
@@ -125,21 +123,21 @@ public:
     void setRowCount(int rows);
     void setColumnCount(int columns);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
 
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-    bool setData(const QModelIndex &index, const QVariant &value, int role);
-    bool setItemData(const QModelIndex &index, const QMap<int, QVariant> &roles);
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    bool setData(const QModelIndex &index, const QVariant &value, int role) override;
+    bool setItemData(const QModelIndex &index, const QMap<int, QVariant> &roles) override;
 
-    QMap<int, QVariant> itemData(const QModelIndex &index) const;
+    QMap<int, QVariant> itemData(const QModelIndex &index) const override;
 
-    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
-    bool setHeaderData(int section, Qt::Orientation orientation, const QVariant &value, int role);
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+    bool setHeaderData(int section, Qt::Orientation orientation, const QVariant &value, int role) override;
 
-    Qt::ItemFlags flags(const QModelIndex &index) const;
+    Qt::ItemFlags flags(const QModelIndex &index) const override;
 
-    void sort(int column, Qt::SortOrder order);
+    void sort(int column, Qt::SortOrder order) override;
     static bool itemLessThan(const QPair<QTableWidgetItem*,int> &left,
                              const QPair<QTableWidgetItem*,int> &right);
     static bool itemGreaterThan(const QPair<QTableWidgetItem*,int> &left,
@@ -159,18 +157,18 @@ public:
 
     void clear();
     void clearContents();
-    void itemChanged(QTableWidgetItem *item);
+    void itemChanged(QTableWidgetItem *item, const QVector<int> &roles = QVector<int>());
 
     QTableWidgetItem *createItem() const;
     const QTableWidgetItem *itemPrototype() const;
     void setItemPrototype(const QTableWidgetItem *item);
 
     // dnd
-    QStringList mimeTypes() const;
-    QMimeData *mimeData(const QModelIndexList &indexes) const;
+    QStringList mimeTypes() const override;
+    QMimeData *mimeData(const QModelIndexList &indexes) const override;
     bool dropMimeData(const QMimeData *data, Qt::DropAction action,
-            int row, int column, const QModelIndex &parent);
-    Qt::DropActions supportedDropActions() const;
+            int row, int column, const QModelIndex &parent) override;
+    Qt::DropActions supportedDropActions() const override;
 
     QMimeData *internalMimeData()  const;
 
@@ -216,7 +214,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_TABLEWIDGET
 
 #endif // QTABLEWIDGET_P_H

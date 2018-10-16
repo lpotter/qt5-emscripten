@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,9 +31,9 @@
 #include <qfontdatabase.h>
 #include <qfontinfo.h>
 #include <qfontmetrics.h>
-#ifndef Q_OS_MAC
-#include <QtPlatformSupport/private/qbasicfontdatabase_p.h>
-#endif
+#include <qtextlayout.h>
+#include <private/qrawfont_p.h>
+#include <qpa/qplatformfontdatabase.h>
 
 class tst_QFontDatabase : public QObject
 {
@@ -54,12 +41,9 @@ Q_OBJECT
 
 public:
     tst_QFontDatabase();
-    virtual ~tst_QFontDatabase();
 
-public slots:
-    void init();
-    void cleanup();
 private slots:
+    void initTestCase();
     void styles_data();
     void styles();
 
@@ -77,33 +61,34 @@ private slots:
     void addAppFont_data();
     void addAppFont();
 
-#ifndef Q_OS_MAC
-    void fontName();
-#endif
+    void aliases();
+    void fallbackFonts();
+
+    void condensedFontWidth();
+    void condensedFontWidthNoFontMerging();
+    void condensedFontMatching();
+
+    void rasterFonts();
+    void smoothFonts();
+
+private:
+    QString m_ledFont;
+    QString m_testFont;
+    QString m_testFontCondensed;
 };
 
 tst_QFontDatabase::tst_QFontDatabase()
 {
-#ifndef Q_OS_IRIX
-    QDir::setCurrent(SRCDIR);
-#endif
 }
 
-tst_QFontDatabase::~tst_QFontDatabase()
+void tst_QFontDatabase::initTestCase()
 {
-
-}
-
-void tst_QFontDatabase::init()
-{
-// TODO: Add initialization code here.
-// This will be executed immediately before each test is run.
-}
-
-void tst_QFontDatabase::cleanup()
-{
-// TODO: Add cleanup code here.
-// This will be executed immediately after each test is run.
+    m_ledFont = QFINDTESTDATA("LED_REAL.TTF");
+    m_testFont = QFINDTESTDATA("testfont.ttf");
+    m_testFontCondensed = QFINDTESTDATA("testfont_condensed.ttf");
+    QVERIFY(!m_ledFont.isEmpty());
+    QVERIFY(!m_testFont.isEmpty());
+    QVERIFY(!m_testFontCondensed.isEmpty());
 }
 
 void tst_QFontDatabase::styles_data()
@@ -121,11 +106,11 @@ void tst_QFontDatabase::styles()
     QStringList styles = fdb.styles( font );
     QStringList::Iterator it = styles.begin();
     while ( it != styles.end() ) {
-	QString style = *it;
-	QString trimmed = style.trimmed();
-	++it;
+        QString style = *it;
+        QString trimmed = style.trimmed();
+        ++it;
 
-	QCOMPARE( style, trimmed );
+        QCOMPARE(style, trimmed);
     }
 }
 
@@ -157,7 +142,7 @@ void tst_QFontDatabase::fixedPitch()
 
     QFontDatabase fdb;
     if (!fdb.families().contains(font))
-	QSKIP( "Font not installed");
+        QSKIP("Font not installed");
 
     QCOMPARE(fdb.isFixedPitch(font), fixedPitch);
 
@@ -235,13 +220,13 @@ void tst_QFontDatabase::addAppFont()
 
     int id;
     if (useMemoryFont) {
-        QFile fontfile("FreeMono.ttf");
+        QFile fontfile(m_ledFont);
         fontfile.open(QIODevice::ReadOnly);
         QByteArray fontdata = fontfile.readAll();
         QVERIFY(!fontdata.isEmpty());
         id = QFontDatabase::addApplicationFontFromData(fontdata);
     } else {
-        id = QFontDatabase::addApplicationFont("FreeMono.ttf");
+        id = QFontDatabase::addApplicationFont(m_ledFont);
     }
 #if defined(Q_OS_HPUX) && defined(QT_NO_FONTCONFIG)
     // Documentation says that X11 systems that don't have fontconfig
@@ -250,11 +235,8 @@ void tst_QFontDatabase::addAppFont()
     return;
 #endif
     QCOMPARE(fontDbChangedSpy.count(), 1);
-// addApplicationFont is supported on Mac, don't skip the test if it breaks.
-#ifndef Q_OS_MAC
     if (id == -1)
         QSKIP("Skip the test since app fonts are not supported on this system");
-#endif
 
     const QStringList addedFamilies = QFontDatabase::applicationFontFamilies(id);
     QVERIFY(!addedFamilies.isEmpty());
@@ -263,25 +245,158 @@ void tst_QFontDatabase::addAppFont()
     QVERIFY(!newFamilies.isEmpty());
     QVERIFY(newFamilies.count() >= oldFamilies.count());
 
-    for (int i = 0; i < addedFamilies.count(); ++i)
-        QVERIFY(newFamilies.contains(addedFamilies.at(i)));
+    for (int i = 0; i < addedFamilies.count(); ++i) {
+        QString family = addedFamilies.at(i);
+        QVERIFY(newFamilies.contains(family));
+        QFont qfont(family);
+        QFontInfo fi(qfont);
+        QCOMPARE(fi.family(), family);
+    }
 
     QVERIFY(QFontDatabase::removeApplicationFont(id));
     QCOMPARE(fontDbChangedSpy.count(), 2);
 
-#ifdef Q_OS_MAC
-    QEXPECT_FAIL("font file", "QTBUG-23062", Continue);
-#endif
     QCOMPARE(db.families(), oldFamilies);
 }
 
-#ifndef Q_OS_MAC
-void tst_QFontDatabase::fontName()
+void tst_QFontDatabase::aliases()
 {
-    QString fontName = QBasicFontDatabase::fontNameFromTTFile(QStringLiteral("FreeMono.ttf"));
-    QCOMPARE(fontName, QStringLiteral("FreeMono"));
+    QFontDatabase db;
+    const QStringList families = db.families();
+    QVERIFY(!families.isEmpty());
+    const QString firstFont = families.front();
+    QVERIFY(db.hasFamily(firstFont));
+    const QString alias = QStringLiteral("AliasToFirstFont") + firstFont;
+    QVERIFY(!db.hasFamily(alias));
+    QPlatformFontDatabase::registerAliasToFontFamily(firstFont, alias);
+    QVERIFY(db.hasFamily(alias));
 }
+
+void tst_QFontDatabase::fallbackFonts()
+{
+    QTextLayout layout;
+    QString s;
+    s.append(QChar(0x31));
+    s.append(QChar(0x05D0));
+    layout.setText(s);
+    layout.beginLayout();
+    layout.createLine();
+    layout.endLayout();
+
+    QList<QGlyphRun> runs = layout.glyphRuns(0, 1);
+    foreach (QGlyphRun run, runs) {
+        QRawFont rawFont = run.rawFont();
+        QVERIFY(rawFont.isValid());
+
+        QCOMPARE(run.glyphIndexes().size(), 1);
+        QVERIFY(run.glyphIndexes().at(0) != 0);
+    }
+}
+
+static QString testString()
+{
+    return QStringLiteral("foo bar");
+}
+
+void tst_QFontDatabase::condensedFontWidthNoFontMerging()
+{
+    int regularFontId = QFontDatabase::addApplicationFont(m_testFont);
+    int condensedFontId = QFontDatabase::addApplicationFont(m_testFontCondensed);
+
+    QVERIFY(!QFontDatabase::applicationFontFamilies(regularFontId).isEmpty());
+    QVERIFY(!QFontDatabase::applicationFontFamilies(condensedFontId).isEmpty());
+
+    QString regularFontName = QFontDatabase::applicationFontFamilies(regularFontId).first();
+    QString condensedFontName = QFontDatabase::applicationFontFamilies(condensedFontId).first();
+
+    QFont condensedFont1(condensedFontName);
+    if (regularFontName == condensedFontName)
+        condensedFont1.setStyleName(QStringLiteral("Condensed"));
+    condensedFont1.setStyleStrategy(QFont::PreferMatch);
+
+    QFont condensedFont2 = condensedFont1;
+    condensedFont2.setStyleStrategy(QFont::StyleStrategy(QFont::NoFontMerging | QFont::PreferMatch));
+
+    QCOMPARE(QFontMetricsF(condensedFont2).horizontalAdvance(QStringLiteral("foobar")),
+             QFontMetricsF(condensedFont1).horizontalAdvance(QStringLiteral("foobar")));
+ }
+
+void tst_QFontDatabase::condensedFontWidth()
+{
+    QFontDatabase db;
+    QFontDatabase::addApplicationFont(m_testFont);
+    QFontDatabase::addApplicationFont(m_testFontCondensed);
+
+    QVERIFY(db.hasFamily("QtBidiTestFont"));
+    if (!db.hasFamily("QtBidiTestFontCondensed"))
+        QSKIP("This platform doesn't support font sub-family names (QTBUG-55625)");
+
+    // Test we really get a condensed font, and a not renormalized one (QTBUG-48043):
+    QFont testFont("QtBidiTestFont");
+    QFont testFontCondensed("QtBidiTestFontCondensed");
+    QFontMetrics fmTF(testFont);
+    QFontMetrics fmTFC(testFontCondensed);
+    QVERIFY(fmTF.horizontalAdvance(testString()) > fmTFC.horizontalAdvance(testString()));
+
+}
+
+void tst_QFontDatabase::condensedFontMatching()
+{
+    QFontDatabase db;
+    QFontDatabase::removeAllApplicationFonts();
+    QFontDatabase::addApplicationFont(m_testFontCondensed);
+    if (!db.hasFamily("QtBidiTestFont"))
+        QSKIP("This platform doesn't support preferred font family names (QTBUG-53478)");
+    QFontDatabase::addApplicationFont(m_testFont);
+
+    // Test we correctly get the condensed font using different font matching methods:
+    QFont tfcByStretch("QtBidiTestFont");
+    tfcByStretch.setStretch(QFont::Condensed);
+    QFont tfcByStyleName("QtBidiTestFont");
+    tfcByStyleName.setStyleName("Condensed");
+
+#ifdef Q_OS_WIN
+    QEXPECT_FAIL("","No matching of sub-family by stretch on Windows", Continue);
 #endif
+
+#ifdef Q_OS_ANDROID
+    QEXPECT_FAIL("", "QTBUG-69216", Continue);
+#endif
+    QCOMPARE(QFontMetrics(tfcByStretch).horizontalAdvance(testString()),
+             QFontMetrics(tfcByStyleName).horizontalAdvance(testString()));
+
+    if (!db.hasFamily("QtBidiTestFontCondensed"))
+        QSKIP("This platform doesn't support font sub-family names (QTBUG-55625)");
+
+    QFont tfcBySubfamilyName("QtBidiTestFontCondensed");
+    QCOMPARE(QFontMetrics(tfcByStyleName).horizontalAdvance(testString()),
+             QFontMetrics(tfcBySubfamilyName).horizontalAdvance(testString()));
+}
+
+void tst_QFontDatabase::rasterFonts()
+{
+    QFont font(QLatin1String("Fixedsys"), 1000);
+    QFontInfo fontInfo(font);
+
+    if (fontInfo.family() != font.family())
+        QSKIP("Fixedsys font not available.");
+
+    QVERIFY(!QFontDatabase().isSmoothlyScalable(font.family()));
+    QVERIFY(fontInfo.pointSize() != font.pointSize());
+}
+
+void tst_QFontDatabase::smoothFonts()
+{
+    QFont font(QLatin1String("Arial"), 1000);
+    QFontInfo fontInfo(font);
+
+    if (fontInfo.family() != font.family())
+        QSKIP("Arial font not available.");
+
+    // Smooth and bitmap scaling are mutually exclusive
+    QVERIFY(QFontDatabase().isSmoothlyScalable(font.family()));
+    QVERIFY(!QFontDatabase().isBitmapScalable(font.family()));
+}
 
 QTEST_MAIN(tst_QFontDatabase)
 #include "tst_qfontdatabase.moc"

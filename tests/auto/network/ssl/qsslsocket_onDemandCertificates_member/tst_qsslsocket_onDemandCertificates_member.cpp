@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,8 +33,12 @@
 #include <QNetworkProxy>
 #include <QAuthenticator>
 
-#include "private/qhostinfo_p.h"
-
+#ifdef QT_BUILD_INTERNAL
+#  include "private/qhostinfo_p.h"
+#  ifndef QT_NO_OPENSSL
+#    include "private/qsslsocket_p.h"
+#  endif // !QT_NO_OPENSSL
+#endif // QT_BUILD_INTERNAL
 #include "../../../network-settings.h"
 
 #ifndef QT_NO_OPENSSL
@@ -61,8 +52,6 @@ class tst_QSslSocket_onDemandCertificates_member : public QObject
     int proxyAuthCalled;
 
 public:
-    tst_QSslSocket_onDemandCertificates_member();
-    virtual ~tst_QSslSocket_onDemandCertificates_member();
 
 #ifndef QT_NO_OPENSSL
     QSslSocketPtr newSocket();
@@ -83,14 +72,6 @@ private:
     QSslSocket *socket;
 #endif // QT_NO_OPENSSL
 };
-
-tst_QSslSocket_onDemandCertificates_member::tst_QSslSocket_onDemandCertificates_member()
-{
-}
-
-tst_QSslSocket_onDemandCertificates_member::~tst_QSslSocket_onDemandCertificates_member()
-{
-}
 
 enum ProxyTests {
     NoProxy = 0x00,
@@ -187,36 +168,78 @@ void tst_QSslSocket_onDemandCertificates_member::proxyAuthenticationRequired(con
 
 #ifndef QT_NO_OPENSSL
 
+static bool waitForEncrypted(QSslSocket *socket)
+{
+    Q_ASSERT(socket);
+
+    QEventLoop eventLoop;
+
+    QTimer connectionTimeoutWatcher;
+    connectionTimeoutWatcher.setSingleShot(true);
+    connectionTimeoutWatcher.connect(&connectionTimeoutWatcher, &QTimer::timeout,
+                                     [&eventLoop]() {
+                                        eventLoop.exit();
+                                     });
+
+    bool encrypted = false;
+    socket->connect(socket, &QSslSocket::encrypted, [&eventLoop, &encrypted](){
+                        eventLoop.exit();
+                        encrypted = true;
+                    });
+
+    socket->connect(socket, QOverload<const QList<QSslError>&>::of(&QSslSocket::sslErrors),
+                    [&eventLoop](){
+                        eventLoop.exit();
+                    });
+
+    // Wait for 30 s. maximum - the default timeout in our QSslSocket::waitForEncrypted ...
+    connectionTimeoutWatcher.start(30000);
+    eventLoop.exec();
+    return encrypted;
+}
+
 void tst_QSslSocket_onDemandCertificates_member::onDemandRootCertLoadingMemberMethods()
 {
-    QString host("codereview.qt-project.org");
+    const QString host("www.qt.io");
 
     // not using any root certs -> should not work
     QSslSocketPtr socket2 = newSocket();
     this->socket = socket2.data();
     socket2->setCaCertificates(QList<QSslCertificate>());
     socket2->connectToHostEncrypted(host, 443);
-    QVERIFY(!socket2->waitForEncrypted());
+    QVERIFY(!waitForEncrypted(socket2.data()));
 
     // default: using on demand loading -> should work
     QSslSocketPtr socket = newSocket();
     this->socket = socket.data();
     socket->connectToHostEncrypted(host, 443);
-    QVERIFY2(socket->waitForEncrypted(), qPrintable(socket->errorString()));
+    QVERIFY2(waitForEncrypted(socket.data()), qPrintable(socket->errorString()));
 
     // not using any root certs again -> should not work
     QSslSocketPtr socket3 = newSocket();
     this->socket = socket3.data();
     socket3->setCaCertificates(QList<QSslCertificate>());
     socket3->connectToHostEncrypted(host, 443);
-    QVERIFY(!socket3->waitForEncrypted());
+    QVERIFY(!waitForEncrypted(socket3.data()));
 
-    // setting empty SSL configuration explicitly -> should not work
+    // setting empty SSL configuration explicitly -> depends on on-demand loading
     QSslSocketPtr socket4 = newSocket();
     this->socket = socket4.data();
-    socket4->setSslConfiguration(QSslConfiguration());
+    QSslConfiguration conf;
+    socket4->setSslConfiguration(conf);
     socket4->connectToHostEncrypted(host, 443);
-    QVERIFY(!socket4->waitForEncrypted());
+#ifdef QT_BUILD_INTERNAL
+    const bool works = QSslSocketPrivate::rootCertOnDemandLoadingSupported();
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    QCOMPARE(works, true);
+#elif defined(Q_OS_MAC)
+    QCOMPARE(works, false);
+#endif // other platforms: undecided.
+    // When we *allow* on-demand loading, we enable it by default; so, on Unix,
+    // it will work without setting any certificates.  Otherwise, the configuration
+    // contains an empty set of certificates, so on-demand loading shall fail.
+   QCOMPARE(waitForEncrypted(socket4.data()), works);
+#endif // QT_BUILD_INTERNAL
 }
 
 #endif // QT_NO_OPENSSL

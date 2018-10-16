@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,15 @@
 #ifndef QLINEEDIT_H
 #define QLINEEDIT_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qframe.h>
 #include <QtGui/qtextcursor.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qmargins.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(lineedit);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_LINEEDIT
 
 class QValidator;
 class QMenu;
@@ -61,12 +57,13 @@ class QCompleter;
 class QStyleOptionFrame;
 class QAbstractSpinBox;
 class QDateTimeEdit;
+class QIcon;
+class QToolButton;
 
 class Q_WIDGETS_EXPORT QLineEdit : public QWidget
 {
     Q_OBJECT
 
-    Q_ENUMS(EchoMode)
     Q_PROPERTY(QString inputMask READ inputMask WRITE setInputMask)
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged USER true)
     Q_PROPERTY(int maxLength READ maxLength WRITE setMaxLength)
@@ -85,10 +82,16 @@ class Q_WIDGETS_EXPORT QLineEdit : public QWidget
     Q_PROPERTY(bool acceptableInput READ hasAcceptableInput)
     Q_PROPERTY(QString placeholderText READ placeholderText WRITE setPlaceholderText)
     Q_PROPERTY(Qt::CursorMoveStyle cursorMoveStyle READ cursorMoveStyle WRITE setCursorMoveStyle)
-
+    Q_PROPERTY(bool clearButtonEnabled READ isClearButtonEnabled WRITE setClearButtonEnabled)
 public:
-    explicit QLineEdit(QWidget* parent=0);
-    explicit QLineEdit(const QString &, QWidget* parent=0);
+    enum ActionPosition {
+        LeadingPosition,
+        TrailingPosition
+    };
+    Q_ENUM(ActionPosition)
+
+    explicit QLineEdit(QWidget *parent = nullptr);
+    explicit QLineEdit(const QString &, QWidget *parent = nullptr);
     ~QLineEdit();
 
     QString text() const;
@@ -104,7 +107,11 @@ public:
     void setFrame(bool);
     bool hasFrame() const;
 
+    void setClearButtonEnabled(bool enable);
+    bool isClearButtonEnabled() const;
+
     enum EchoMode { Normal, NoEcho, Password, PasswordEchoOnEdit };
+    Q_ENUM(EchoMode)
     EchoMode echoMode() const;
     void setEchoMode(EchoMode);
 
@@ -116,13 +123,13 @@ public:
     const QValidator * validator() const;
 #endif
 
-#ifndef QT_NO_COMPLETER
+#if QT_CONFIG(completer)
     void setCompleter(QCompleter *completer);
     QCompleter *completer() const;
 #endif
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
     int cursorPosition() const;
     void setCursorPosition(int);
@@ -147,6 +154,8 @@ public:
     bool hasSelectedText() const;
     QString selectedText() const;
     int selectionStart() const;
+    int selectionEnd() const;
+    int selectionLength() const;
 
     bool isUndoAvailable() const;
     bool isRedoAvailable() const;
@@ -165,6 +174,12 @@ public:
     void setTextMargins(const QMargins &margins);
     void getTextMargins(int *left, int *top, int *right, int *bottom) const;
     QMargins textMargins() const;
+
+#if QT_CONFIG(action)
+    using QWidget::addAction;
+    void addAction(QAction *action, ActionPosition position);
+    QAction *addAction(const QIcon &icon, ActionPosition position);
+#endif
 
 public Q_SLOTS:
     void setText(const QString &);
@@ -192,32 +207,34 @@ Q_SIGNALS:
     void returnPressed();
     void editingFinished();
     void selectionChanged();
+    void inputRejected();
 
 protected:
-    void mousePressEvent(QMouseEvent *);
-    void mouseMoveEvent(QMouseEvent *);
-    void mouseReleaseEvent(QMouseEvent *);
-    void mouseDoubleClickEvent(QMouseEvent *);
-    void keyPressEvent(QKeyEvent *);
-    void focusInEvent(QFocusEvent *);
-    void focusOutEvent(QFocusEvent *);
-    void paintEvent(QPaintEvent *);
-#ifndef QT_NO_DRAGANDDROP
-    void dragEnterEvent(QDragEnterEvent *);
-    void dragMoveEvent(QDragMoveEvent *e);
-    void dragLeaveEvent(QDragLeaveEvent *e);
-    void dropEvent(QDropEvent *);
+    void mousePressEvent(QMouseEvent *) override;
+    void mouseMoveEvent(QMouseEvent *) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    void mouseDoubleClickEvent(QMouseEvent *) override;
+    void keyPressEvent(QKeyEvent *) override;
+    void focusInEvent(QFocusEvent *) override;
+    void focusOutEvent(QFocusEvent *) override;
+    void paintEvent(QPaintEvent *) override;
+#if QT_CONFIG(draganddrop)
+    void dragEnterEvent(QDragEnterEvent *) override;
+    void dragMoveEvent(QDragMoveEvent *e) override;
+    void dragLeaveEvent(QDragLeaveEvent *e) override;
+    void dropEvent(QDropEvent *) override;
 #endif
-    void changeEvent(QEvent *);
+    void changeEvent(QEvent *) override;
 #ifndef QT_NO_CONTEXTMENU
-    void contextMenuEvent(QContextMenuEvent *);
+    void contextMenuEvent(QContextMenuEvent *) override;
 #endif
 
-    void inputMethodEvent(QInputMethodEvent *);
+    void inputMethodEvent(QInputMethodEvent *) override;
     void initStyleOption(QStyleOptionFrame *option) const;
 public:
-    QVariant inputMethodQuery(Qt::InputMethodQuery) const;
-    bool event(QEvent *);
+    QVariant inputMethodQuery(Qt::InputMethodQuery) const override;
+    Q_INVOKABLE QVariant inputMethodQuery(Qt::InputMethodQuery property, QVariant argument) const;
+    bool event(QEvent *) override;
 protected:
     QRect cursorRect() const;
 
@@ -226,6 +243,7 @@ public:
 private:
     friend class QAbstractSpinBox;
     friend class QAccessibleLineEdit;
+    friend class QComboBox;
 #ifdef QT_KEYPAD_NAVIGATION
     friend class QDateTimeEdit;
 #endif
@@ -234,20 +252,18 @@ private:
     Q_PRIVATE_SLOT(d_func(), void _q_handleWindowActivate())
     Q_PRIVATE_SLOT(d_func(), void _q_textEdited(const QString &))
     Q_PRIVATE_SLOT(d_func(), void _q_cursorPositionChanged(int, int))
-#ifndef QT_NO_COMPLETER
-    Q_PRIVATE_SLOT(d_func(), void _q_completionHighlighted(QString))
+#if QT_CONFIG(completer)
+    Q_PRIVATE_SLOT(d_func(), void _q_completionHighlighted(const QString &))
 #endif
 #ifdef QT_KEYPAD_NAVIGATION
     Q_PRIVATE_SLOT(d_func(), void _q_editFocusChange(bool))
 #endif
     Q_PRIVATE_SLOT(d_func(), void _q_selectionChanged())
     Q_PRIVATE_SLOT(d_func(), void _q_updateNeeded(const QRect &))
+    Q_PRIVATE_SLOT(d_func(), void _q_textChanged(const QString &))
+    Q_PRIVATE_SLOT(d_func(), void _q_clearButtonClicked())
 };
 
-#endif // QT_NO_LINEEDIT
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLINEEDIT_H

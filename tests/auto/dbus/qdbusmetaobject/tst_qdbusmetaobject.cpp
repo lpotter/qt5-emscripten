@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -82,9 +69,6 @@ struct Struct4                  // (ssa(ss)sayasx)
 Q_DECLARE_METATYPE(Struct1)
 Q_DECLARE_METATYPE(Struct4)
 Q_DECLARE_METATYPE(StringPair)
-
-Q_DECLARE_METATYPE(QList<Struct1>)
-Q_DECLARE_METATYPE(QList<Struct4>)
 
 Q_DECLARE_METATYPE(const QMetaObject*)
 
@@ -386,8 +370,7 @@ void tst_QDBusMetaObject::types()
 
     QDBusError error;
 
-    QMetaObject *result = QDBusMetaObject::createMetaObject("local.Interface", xml,
-                                                            map, error);
+    const QScopedPointer<QDBusMetaObject> result(QDBusMetaObject::createMetaObject("local.Interface", xml, map, error));
     QVERIFY2(result, qPrintable(error.message()));
 
     QCOMPARE(result->enumeratorCount(), 0);
@@ -445,7 +428,7 @@ void tst_QDBusMetaObject::types()
 class MethodTest1: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     void method() { }
 };
@@ -455,7 +438,7 @@ const char MethodTest1_xml[] =
 class MethodTest2: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     void method(int) { }
 };
@@ -465,7 +448,7 @@ const char MethodTest2_xml[] =
 class MethodTest3: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     void method(int input0) { Q_UNUSED(input0); }
 };
@@ -475,7 +458,7 @@ const char MethodTest3_xml[] =
 class MethodTest4: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     int method() { return 0; }
 };
@@ -487,7 +470,7 @@ const char MethodTest4_xml2[] =
 class MethodTest5: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     int method(int input0) { return input0; }
 };
@@ -500,7 +483,7 @@ const char MethodTest5_xml[] =
 class MethodTest6: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     int method(int input0, int input1) { Q_UNUSED(input0); return input1; }
 };
@@ -514,7 +497,7 @@ const char MethodTest6_xml[] =
 class MethodTest7: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     int method(int input0, int input1, int &output1) { output1 = input1; return input0; }
 };
@@ -529,7 +512,7 @@ const char MethodTest7_xml[] =
 class MethodTest8: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     int method(int input0, int input1, int &output1, int &output2) { output1 = output2 = input1; return input0; }
 };
@@ -545,7 +528,7 @@ const char MethodTest8_xml[] =
 class MethodTest9: public QObject
 {
     Q_OBJECT
-    
+
 public slots:
     Q_NOREPLY void method(int) { }
 };
@@ -580,7 +563,7 @@ void tst_QDBusMetaObject::methods()
 class SignalTest1: public QObject
 {
     Q_OBJECT
-    
+
 signals:
     void signal();
 };
@@ -590,7 +573,7 @@ const char SignalTest1_xml[] =
 class SignalTest2: public QObject
 {
     Q_OBJECT
-    
+
 signals:
     void signal(int);
 };
@@ -600,7 +583,7 @@ const char SignalTest2_xml[] =
 class SignalTest3: public QObject
 {
     Q_OBJECT
-    
+
 signals:
     void signal(int output0);
 };
@@ -610,7 +593,7 @@ const char SignalTest3_xml[] =
 class SignalTest4: public QObject
 {
     Q_OBJECT
-    
+
 signals:
     void signal(int output0, int);
 };

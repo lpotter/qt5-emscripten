@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,13 +51,17 @@
 QT_BEGIN_NAMESPACE
 
 QFramePrivate::QFramePrivate()
-    : frect(QRect(0, 0, 0, 0)),
+    : frect(0, 0, 0, 0),
       frameStyle(QFrame::NoFrame | QFrame::Plain),
       lineWidth(1),
       midLineWidth(0),
       frameWidth(0),
       leftFrameWidth(0), rightFrameWidth(0),
       topFrameWidth(0), bottomFrameWidth(0)
+{
+}
+
+QFramePrivate::~QFramePrivate()
 {
 }
 
@@ -208,6 +210,49 @@ QFrame::QFrame(QFramePrivate &dd, QWidget* parent, Qt::WindowFlags f)
 {
     Q_D(QFrame);
     d->init();
+}
+
+/*!
+    \since 5.5
+
+    Initializes \a option with the values from this QFrame. This method is
+    useful for subclasses when they need a QStyleOptionFrame but don't want to
+    fill in all the information themselves.
+
+    \sa QStyleOption::initFrom()
+*/
+void QFrame::initStyleOption(QStyleOptionFrame *option) const
+{
+    if (!option)
+        return;
+
+    Q_D(const QFrame);
+    option->initFrom(this);
+
+    int frameShape  = d->frameStyle & QFrame::Shape_Mask;
+    int frameShadow = d->frameStyle & QFrame::Shadow_Mask;
+    option->frameShape = Shape(int(option->frameShape) | frameShape);
+    option->rect = frameRect();
+    switch (frameShape) {
+        case QFrame::Box:
+        case QFrame::HLine:
+        case QFrame::VLine:
+        case QFrame::StyledPanel:
+        case QFrame::Panel:
+            option->lineWidth = d->lineWidth;
+            option->midLineWidth = d->midLineWidth;
+            break;
+        default:
+            // most frame styles do not handle customized line and midline widths
+            // (see updateFrameWidth()).
+            option->lineWidth = d->frameWidth;
+            break;
+    }
+
+    if (frameShadow == Sunken)
+        option->state |= QStyle::State_Sunken;
+    else if (frameShadow == Raised)
+        option->state |= QStyle::State_Raised;
 }
 
 
@@ -369,11 +414,8 @@ int QFrame::midLineWidth() const
 void QFramePrivate::updateStyledFrameWidths()
 {
     Q_Q(const QFrame);
-    QStyleOptionFrameV3 opt;
-    opt.initFrom(q);
-    opt.lineWidth = lineWidth;
-    opt.midLineWidth = midLineWidth;
-    opt.frameShape = QFrame::Shape(frameStyle & QFrame::Shape_Mask);
+    QStyleOptionFrame opt;
+    q->initStyleOption(&opt);
 
     QRect cr = q->style()->subElementRect(QStyle::SE_ShapedFrameContents, &opt, q);
     leftFrameWidth = cr.left() - opt.rect.left();
@@ -480,34 +522,8 @@ void QFrame::paintEvent(QPaintEvent *)
  */
 void QFrame::drawFrame(QPainter *p)
 {
-    Q_D(QFrame);
-    QStyleOptionFrameV3 opt;
-    opt.init(this);
-    int frameShape  = d->frameStyle & QFrame::Shape_Mask;
-    int frameShadow = d->frameStyle & QFrame::Shadow_Mask;
-    opt.frameShape = Shape(int(opt.frameShape) | frameShape);
-    opt.rect = frameRect();
-    switch (frameShape) {
-        case QFrame::Box:
-        case QFrame::HLine:
-        case QFrame::VLine:
-        case QFrame::StyledPanel:
-        case QFrame::Panel:
-            opt.lineWidth = d->lineWidth;
-            opt.midLineWidth = d->midLineWidth;
-            break;
-        default:
-            // most frame styles do not handle customized line and midline widths
-            // (see updateFrameWidth()).
-            opt.lineWidth = d->frameWidth;
-            break;
-    }
-
-    if (frameShadow == Sunken)
-        opt.state |= QStyle::State_Sunken;
-    else if (frameShadow == Raised)
-        opt.state |= QStyle::State_Raised;
-
+    QStyleOptionFrame opt;
+    initStyleOption(&opt);
     style()->drawControl(QStyle::CE_ShapedFrame, &opt, p, this);
 }
 
@@ -539,3 +555,5 @@ bool QFrame::event(QEvent *e)
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qframe.cpp"

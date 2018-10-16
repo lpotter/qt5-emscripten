@@ -1,8 +1,5 @@
 TARGET = qgenericbearer
 
-PLUGIN_TYPE = bearer
-load(qt_plugin)
-
 QT = core-private network-private
 
 HEADERS += qgenericengine.h \
@@ -14,3 +11,9 @@ SOURCES += qgenericengine.cpp \
            main.cpp
 
 OTHER_FILES += generic.json
+
+win32:!winrt:LIBS += -liphlpapi
+
+PLUGIN_TYPE = bearer
+PLUGIN_CLASS_NAME = QGenericEnginePlugin
+load(qt_plugin)

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,14 +34,6 @@
 class tst_QSidebar : public QObject {
   Q_OBJECT
 
-public:
-    tst_QSidebar();
-    virtual ~tst_QSidebar();
-
-public Q_SLOTS:
-    void init();
-    void cleanup();
-
 private slots:
     void setUrls();
     void selectUrls();
@@ -62,22 +41,6 @@ private slots:
 
     void goToUrl();
 };
-
-tst_QSidebar::tst_QSidebar()
-{
-}
-
-tst_QSidebar::~tst_QSidebar()
-{
-}
-
-void tst_QSidebar::init()
-{
-}
-
-void tst_QSidebar::cleanup()
-{
-}
 
 void tst_QSidebar::setUrls()
 {
@@ -92,6 +55,9 @@ void tst_QSidebar::setUrls()
 
     QCOMPARE(model->rowCount(), 0);
     qsidebar.setUrls(urls);
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "One of the URLs is not seen as valid on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(qsidebar.urls(), urls);
     QCOMPARE(model->rowCount(), urls.count());
     qsidebar.setUrls(urls);
@@ -121,6 +87,12 @@ void tst_QSidebar::addUrls()
     QAbstractItemModel *model = qsidebar.model();
     QDir testDir = QDir::home();
 
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    // temp and home is the same directory on Android
+    testDir.mkdir(QStringLiteral("test"));
+    QVERIFY(testDir.cd(QStringLiteral("test")));
+#endif
+
     // default
     QCOMPARE(model->rowCount(), 0);
 
@@ -130,6 +102,9 @@ void tst_QSidebar::addUrls()
 
     // test < 0
     qsidebar.addUrls(urls, -1);
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "One of the URLs is not seen as valid on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(model->rowCount(), 2);
 
     // test = 0
@@ -216,6 +191,9 @@ void tst_QSidebar::goToUrl()
 
     QSignalSpy spy(&qsidebar, SIGNAL(goToUrl(QUrl)));
     QTest::mousePress(qsidebar.viewport(), Qt::LeftButton, 0, qsidebar.visualRect(qsidebar.model()->index(0, 0)).center());
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(spy.count(), 1);
     QCOMPARE((spy.value(0)).at(0).toUrl(), urls.first());
 }

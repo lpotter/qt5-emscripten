@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,28 +44,34 @@ private slots:
 
     void caseSensitivity();
     void systemEnvironment();
-#ifndef Q_OS_WINCE
     void putenv();
-#endif
 };
 
 void tst_QProcessEnvironment::operator_eq()
 {
     QProcessEnvironment e1;
-    QVERIFY(e1 == e1);
+    QCOMPARE(e1, e1);
     e1.clear();
-    QVERIFY(e1 == e1);
+    QCOMPARE(e1, e1);
 
     e1 = QProcessEnvironment();
     QProcessEnvironment e2;
-    QVERIFY(e1 == e2);
+    QCOMPARE(e1, e2);
 
     e1.clear();
-    QVERIFY(e1 != e2);
+    QCOMPARE(e1, e2);
 
     e2.clear();
+    QCOMPARE(e1, e2);
 
-    QVERIFY(e1 == e2);
+    e1.insert("FOO", "bar");
+    QVERIFY(e1 != e2);
+
+    e2.insert("FOO", "bar");
+    QCOMPARE(e1, e2);
+
+    e2.insert("FOO", "baz");
+    QVERIFY(e1 != e2);
 }
 
 void tst_QProcessEnvironment::clearAndIsEmpty()
@@ -204,6 +197,15 @@ void tst_QProcessEnvironment::insertEnv()
     QCOMPARE(e.value("Hello"), QString("Another World"));
     QCOMPARE(e.value("FOO2"), QString("bar2"));
     QCOMPARE(e.value("A2"), QString("bc2"));
+
+    QProcessEnvironment e3;
+    e3.insert("FOO2", "bar2");
+    e3.insert("A2", "bc2");
+    e3.insert("Hello", "Another World");
+
+    e3.insert(e3); // mustn't deadlock
+
+    QCOMPARE(e3, e2);
 }
 
 void tst_QProcessEnvironment::caseSensitivity()
@@ -253,12 +255,6 @@ void tst_QProcessEnvironment::systemEnvironment()
 
     QVERIFY(nonexistant.isNull());
 
-#ifdef Q_OS_WINCE
-    // Windows CE has no environment
-    QVERIFY(path.isEmpty());
-    QVERIFY(!system.contains("PATH"));
-    QVERIFY(system.isEmpty());
-#else
     // all other system have environments
     if (path.isEmpty())
         QFAIL("Could not find the PATH environment variable -- please correct the test environment");
@@ -268,18 +264,15 @@ void tst_QProcessEnvironment::systemEnvironment()
 
     QVERIFY(!system.contains(envname));
 
-# ifdef Q_OS_WIN
+#ifdef Q_OS_WIN
     // check case-insensitive too
     QVERIFY(system.contains("path"));
     QCOMPARE(system.value("path"), QString::fromLocal8Bit(path));
 
     QVERIFY(!system.contains(QString(envname).toLower()));
-# endif
 #endif
 }
 
-#ifndef Q_OS_WINCE
-//Windows CE has no environment
 void tst_QProcessEnvironment::putenv()
 {
     static const char envname[] = "WE_RE_SETTING_THIS_ENVIRONMENT_VARIABLE";
@@ -313,7 +306,6 @@ void tst_QProcessEnvironment::putenv()
     QCOMPARE(eAfter.value(lower), QString("Hello, World"));
 # endif
 }
-#endif
 
 QTEST_MAIN(tst_QProcessEnvironment)
 

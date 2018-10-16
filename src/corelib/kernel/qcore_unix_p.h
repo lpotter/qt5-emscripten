@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,8 +52,10 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include "qplatformdefs.h"
 #include "qatomic.h"
+#include "qbytearray.h"
 
 #ifndef Q_OS_UNIX
 # error "qcore_unix_p.h included on a non-Unix system"
@@ -65,33 +66,35 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef Q_OS_NACL
+#elif !defined (Q_OS_VXWORKS)
+# if !defined(Q_OS_HPUX) || defined(__ia64)
+#  include <sys/select.h>
+# endif
+#  include <sys/time.h>
+#else
+#  include <selectLib.h>
+#endif
+
 #include <sys/wait.h>
 #include <errno.h>
 #include <fcntl.h>
+
+#if !defined(QT_POSIX_IPC) && !defined(QT_NO_SHAREDMEMORY) && !defined(Q_OS_ANDROID)
+#  include <sys/ipc.h>
+#endif
 
 #if defined(Q_OS_VXWORKS)
 #  include <ioLib.h>
 #endif
 
-struct sockaddr;
-
-#if defined(Q_OS_LINUX) && defined(O_CLOEXEC)
-# define QT_UNIX_SUPPORTS_THREADSAFE_CLOEXEC 1
-QT_BEGIN_NAMESPACE
-namespace QtLibcSupplement {
-    inline int accept4(int, sockaddr *, QT_SOCKLEN_T *, int)
-    { errno = ENOSYS; return -1; }
-    inline int dup3(int, int, int)
-    { errno = ENOSYS; return -1; }
-    inline int pipe2(int [], int )
-    { errno = ENOSYS; return -1; }
-}
-QT_END_NAMESPACE
-using namespace QT_PREPEND_NAMESPACE(QtLibcSupplement);
-
+#ifdef QT_NO_NATIVE_POLL
+#  include "qpoll_p.h"
 #else
-# define QT_UNIX_SUPPORTS_THREADSAFE_CLOEXEC 0
+#  include <poll.h>
 #endif
+
+struct sockaddr;
 
 #define EINTR_LOOP(var, cmd)                    \
     do {                                        \
@@ -100,50 +103,62 @@ using namespace QT_PREPEND_NAMESPACE(QtLibcSupplement);
 
 QT_BEGIN_NAMESPACE
 
-// Internal operator functions for timevals
-inline timeval &normalizedTimeval(timeval &t)
+Q_DECLARE_TYPEINFO(pollfd, Q_PRIMITIVE_TYPE);
+
+// Internal operator functions for timespecs
+inline timespec &normalizedTimespec(timespec &t)
 {
-    while (t.tv_usec >= 1000000) {
+    while (t.tv_nsec >= 1000000000) {
         ++t.tv_sec;
-        t.tv_usec -= 1000000;
+        t.tv_nsec -= 1000000000;
     }
-    while (t.tv_usec < 0) {
+    while (t.tv_nsec < 0) {
         --t.tv_sec;
-        t.tv_usec += 1000000;
+        t.tv_nsec += 1000000000;
     }
     return t;
 }
-inline bool operator<(const timeval &t1, const timeval &t2)
-{ return t1.tv_sec < t2.tv_sec || (t1.tv_sec == t2.tv_sec && t1.tv_usec < t2.tv_usec); }
-inline bool operator==(const timeval &t1, const timeval &t2)
-{ return t1.tv_sec == t2.tv_sec && t1.tv_usec == t2.tv_usec; }
-inline timeval &operator+=(timeval &t1, const timeval &t2)
+inline bool operator<(const timespec &t1, const timespec &t2)
+{ return t1.tv_sec < t2.tv_sec || (t1.tv_sec == t2.tv_sec && t1.tv_nsec < t2.tv_nsec); }
+inline bool operator==(const timespec &t1, const timespec &t2)
+{ return t1.tv_sec == t2.tv_sec && t1.tv_nsec == t2.tv_nsec; }
+inline bool operator!=(const timespec &t1, const timespec &t2)
+{ return !(t1 == t2); }
+inline timespec &operator+=(timespec &t1, const timespec &t2)
 {
     t1.tv_sec += t2.tv_sec;
-    t1.tv_usec += t2.tv_usec;
-    return normalizedTimeval(t1);
+    t1.tv_nsec += t2.tv_nsec;
+    return normalizedTimespec(t1);
 }
-inline timeval operator+(const timeval &t1, const timeval &t2)
+inline timespec operator+(const timespec &t1, const timespec &t2)
 {
-    timeval tmp;
+    timespec tmp;
     tmp.tv_sec = t1.tv_sec + t2.tv_sec;
-    tmp.tv_usec = t1.tv_usec + t2.tv_usec;
-    return normalizedTimeval(tmp);
+    tmp.tv_nsec = t1.tv_nsec + t2.tv_nsec;
+    return normalizedTimespec(tmp);
 }
-inline timeval operator-(const timeval &t1, const timeval &t2)
+inline timespec operator-(const timespec &t1, const timespec &t2)
 {
-    timeval tmp;
+    timespec tmp;
     tmp.tv_sec = t1.tv_sec - (t2.tv_sec - 1);
-    tmp.tv_usec = t1.tv_usec - (t2.tv_usec + 1000000);
-    return normalizedTimeval(tmp);
+    tmp.tv_nsec = t1.tv_nsec - (t2.tv_nsec + 1000000000);
+    return normalizedTimespec(tmp);
 }
-inline timeval operator*(const timeval &t1, int mul)
+inline timespec operator*(const timespec &t1, int mul)
 {
-    timeval tmp;
+    timespec tmp;
     tmp.tv_sec = t1.tv_sec * mul;
-    tmp.tv_usec = t1.tv_usec * mul;
-    return normalizedTimeval(tmp);
+    tmp.tv_nsec = t1.tv_nsec * mul;
+    return normalizedTimespec(tmp);
 }
+inline timeval timespecToTimeval(const timespec &ts)
+{
+    timeval tv;
+    tv.tv_sec = ts.tv_sec;
+    tv.tv_usec = ts.tv_nsec / 1000;
+    return tv;
+}
+
 
 inline void qt_ignore_sigpipe()
 {
@@ -161,6 +176,14 @@ inline void qt_ignore_sigpipe()
     }
 }
 
+#if defined(Q_PROCESSOR_X86_32) && defined(__GLIBC__)
+#  if !__GLIBC_PREREQ(2, 22)
+Q_CORE_EXPORT int qt_open64(const char *pathname, int flags, mode_t);
+#    undef QT_OPEN
+#    define QT_OPEN qt_open64
+#  endif
+#endif
+
 // don't call QT_OPEN or ::open
 // call qt_safe_open
 static inline int qt_safe_open(const char *pathname, int flags, mode_t mode = 0777)
@@ -168,13 +191,14 @@ static inline int qt_safe_open(const char *pathname, int flags, mode_t mode = 07
 #ifdef O_CLOEXEC
     flags |= O_CLOEXEC;
 #endif
-    register int fd;
+    int fd;
     EINTR_LOOP(fd, QT_OPEN(pathname, flags, mode));
 
-    // unknown flags are ignored, so we have no way of verifying if
-    // O_CLOEXEC was accepted
+#ifndef O_CLOEXEC
     if (fd != -1)
         ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+
     return fd;
 }
 #undef QT_OPEN
@@ -185,22 +209,14 @@ static inline int qt_safe_open(const char *pathname, int flags, mode_t mode = 07
 // call qt_safe_pipe
 static inline int qt_safe_pipe(int pipefd[2], int flags = 0)
 {
-#ifdef O_CLOEXEC
-    Q_ASSERT((flags & ~(O_CLOEXEC | O_NONBLOCK)) == 0);
-#else
     Q_ASSERT((flags & ~O_NONBLOCK) == 0);
-#endif
 
-    register int ret;
-#if QT_UNIX_SUPPORTS_THREADSAFE_CLOEXEC && defined(O_CLOEXEC)
+#ifdef QT_THREADSAFE_CLOEXEC
     // use pipe2
     flags |= O_CLOEXEC;
-    ret = ::pipe2(pipefd, flags); // pipe2 is Linux-specific and is documented not to return EINTR
-    if (ret == 0 || errno != ENOSYS)
-        return ret;
-#endif
-
-    ret = ::pipe(pipefd);
+    return ::pipe2(pipefd, flags); // pipe2 is documented not to return EINTR
+#else
+    int ret = ::pipe(pipefd);
     if (ret == -1)
         return -1;
 
@@ -214,6 +230,7 @@ static inline int qt_safe_pipe(int pipefd[2], int flags = 0)
     }
 
     return 0;
+#endif
 }
 
 #endif // Q_OS_VXWORKS
@@ -223,22 +240,19 @@ static inline int qt_safe_dup(int oldfd, int atleast = 0, int flags = FD_CLOEXEC
 {
     Q_ASSERT(flags == FD_CLOEXEC || flags == 0);
 
-    register int ret;
 #ifdef F_DUPFD_CLOEXEC
-    // use this fcntl
-    if (flags & FD_CLOEXEC) {
-        ret = ::fcntl(oldfd, F_DUPFD_CLOEXEC, atleast);
-        if (ret != -1 || errno != EINVAL)
-            return ret;
-    }
-#endif
-
+    int cmd = F_DUPFD;
+    if (flags & FD_CLOEXEC)
+        cmd = F_DUPFD_CLOEXEC;
+    return ::fcntl(oldfd, cmd, atleast);
+#else
     // use F_DUPFD
-    ret = ::fcntl(oldfd, F_DUPFD, atleast);
+    int ret = ::fcntl(oldfd, F_DUPFD, atleast);
 
     if (flags && ret != -1)
         ::fcntl(ret, F_SETFD, flags);
     return ret;
+#endif
 }
 
 // don't call dup2
@@ -247,15 +261,12 @@ static inline int qt_safe_dup2(int oldfd, int newfd, int flags = FD_CLOEXEC)
 {
     Q_ASSERT(flags == FD_CLOEXEC || flags == 0);
 
-    register int ret;
-#if QT_UNIX_SUPPORTS_THREADSAFE_CLOEXEC && defined(O_CLOEXEC)
+    int ret;
+#ifdef QT_THREADSAFE_CLOEXEC
     // use dup3
-    if (flags & FD_CLOEXEC) {
-        EINTR_LOOP(ret, ::dup3(oldfd, newfd, O_CLOEXEC));
-        if (ret == 0 || errno != ENOSYS)
-            return ret;
-    }
-#endif
+    EINTR_LOOP(ret, ::dup3(oldfd, newfd, flags ? O_CLOEXEC : 0));
+    return ret;
+#else
     EINTR_LOOP(ret, ::dup2(oldfd, newfd));
     if (ret == -1)
         return -1;
@@ -263,6 +274,7 @@ static inline int qt_safe_dup2(int oldfd, int newfd, int flags = FD_CLOEXEC)
     if (flags)
         ::fcntl(newfd, F_SETFD, flags);
     return 0;
+#endif
 }
 
 static inline qint64 qt_safe_read(int fd, void *data, qint64 maxlen)
@@ -291,55 +303,89 @@ static inline qint64 qt_safe_write_nosignal(int fd, const void *data, qint64 len
 
 static inline int qt_safe_close(int fd)
 {
-    register int ret;
+    int ret;
     EINTR_LOOP(ret, QT_CLOSE(fd));
     return ret;
 }
 #undef QT_CLOSE
 #define QT_CLOSE qt_safe_close
 
-// - VxWorks doesn't have processes
-#if !defined(Q_OS_VXWORKS)
+// - VxWorks & iOS/tvOS/watchOS don't have processes
+#if QT_CONFIG(process)
 static inline int qt_safe_execve(const char *filename, char *const argv[],
                                  char *const envp[])
 {
-    register int ret;
+    int ret;
     EINTR_LOOP(ret, ::execve(filename, argv, envp));
     return ret;
 }
 
 static inline int qt_safe_execv(const char *path, char *const argv[])
 {
-    register int ret;
+    int ret;
     EINTR_LOOP(ret, ::execv(path, argv));
     return ret;
 }
 
 static inline int qt_safe_execvp(const char *file, char *const argv[])
 {
-    register int ret;
+    int ret;
     EINTR_LOOP(ret, ::execvp(file, argv));
     return ret;
 }
 
 static inline pid_t qt_safe_waitpid(pid_t pid, int *status, int options)
 {
-    register int ret;
+    int ret;
     EINTR_LOOP(ret, ::waitpid(pid, status, options));
     return ret;
 }
-#endif // Q_OS_VXWORKS
+#endif // QT_CONFIG(process)
 
 #if !defined(_POSIX_MONOTONIC_CLOCK)
 #  define _POSIX_MONOTONIC_CLOCK -1
 #endif
 
 // in qelapsedtimer_mac.cpp or qtimestamp_unix.cpp
-timeval qt_gettime() Q_DECL_NOTHROW;
+timespec qt_gettime() Q_DECL_NOTHROW;
 void qt_nanosleep(timespec amount);
+QByteArray qt_readlink(const char *path);
 
-Q_CORE_EXPORT int qt_safe_select(int nfds, fd_set *fdread, fd_set *fdwrite, fd_set *fdexcept,
-                                 const struct timeval *tv);
+/* non-static */
+inline bool qt_haveLinuxProcfs()
+{
+#ifdef Q_OS_LINUX
+#  ifdef QT_LINUX_ALWAYS_HAVE_PROCFS
+    return true;
+#  else
+    static const bool present = (access("/proc/version", F_OK) == 0);
+    return present;
+#  endif
+#else
+    return false;
+#endif
+}
+
+Q_CORE_EXPORT int qt_safe_poll(struct pollfd *fds, nfds_t nfds, const struct timespec *timeout_ts);
+
+static inline int qt_poll_msecs(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    timespec ts, *pts = nullptr;
+
+    if (timeout >= 0) {
+        ts.tv_sec = timeout / 1000;
+        ts.tv_nsec = (timeout % 1000) * 1000 * 1000;
+        pts = &ts;
+    }
+
+    return qt_safe_poll(fds, nfds, pts);
+}
+
+static inline struct pollfd qt_make_pollfd(int fd, short events)
+{
+    struct pollfd pfd = { fd, events, 0 };
+    return pfd;
+}
 
 // according to X/OPEN we have to define semun ourselves
 // we use prefix as on some systems sem.h will have it

@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -56,19 +55,19 @@
     datagrams.
 
     The most common way to use this class is to bind to an address and port
-    using bind(), then call writeDatagram() and readDatagram() to transfer
-    data. If you want to use the standard QIODevice functions read(),
-    readLine(), write(), etc., you must first connect the socket directly to a
-    peer by calling connectToHost().
+    using bind(), then call writeDatagram() and readDatagram() /
+    receiveDatagram() to transfer data. If you want to use the standard
+    QIODevice functions read(), readLine(), write(), etc., you must first
+    connect the socket directly to a peer by calling connectToHost().
 
     The socket emits the bytesWritten() signal every time a datagram
     is written to the network. If you just want to send datagrams,
     you don't need to call bind().
 
     The readyRead() signal is emitted whenever datagrams arrive. In
-    that case, hasPendingDatagrams() returns true. Call
+    that case, hasPendingDatagrams() returns \c true. Call
     pendingDatagramSize() to obtain the size of the first pending
-    datagram, and readDatagram() to read it.
+    datagram, and readDatagram() or receiveDatagram() to read it.
 
     \note An incoming datagram should be read when you receive the readyRead()
     signal, otherwise this signal will not be emitted for the next datagram.
@@ -95,11 +94,12 @@
     \l{multicastreceiver}{Multicast Receiver} examples illustrate how
     to use QUdpSocket in applications.
 
-    \sa QTcpSocket
+    \sa QTcpSocket, QNetworkDatagram
 */
 
 #include "qudpsocket.h"
 #include "qhostaddress.h"
+#include "qnetworkdatagram.h"
 #include "qnetworkinterface.h"
 #include "qabstractsocket_p.h"
 
@@ -182,8 +182,12 @@ QUdpSocket::~QUdpSocket()
     be bound using IPv6 (or in dual mode, using QHostAddress::Any). You must use
     QHostAddress::AnyIPv4 instead.
 
-    This function returns true if successful; otherwise it returns false
+    This function returns \c true if successful; otherwise it returns \c false
     and sets the socket error accordingly.
+
+    \note Joining IPv6 multicast groups without an interface selection is not
+    supported in all operating systems. Consider using the overload where the
+    interface is specified.
 
     \sa leaveMulticastGroup()
 */
@@ -216,8 +220,11 @@ bool QUdpSocket::joinMulticastGroup(const QHostAddress &groupAddress,
     interface chosen by the operating system. The socket must be in BoundState,
     otherwise an error occurs.
 
-   This function returns true if successful; otherwise it returns false and
+   This function returns \c true if successful; otherwise it returns \c false and
    sets the socket error accordingly.
+
+   \note This function should be called with the same arguments as were passed
+   to joinMulticastGroup().
 
    \sa joinMulticastGroup()
 */
@@ -232,6 +239,9 @@ bool QUdpSocket::leaveMulticastGroup(const QHostAddress &groupAddress)
 
     Leaves the multicast group specified by \a groupAddress on the interface \a
     iface.
+
+    \note This function should be called with the same arguments as were passed
+    to joinMulticastGroup().
 
     \sa joinMulticastGroup()
 */
@@ -284,8 +294,8 @@ void QUdpSocket::setMulticastInterface(const QNetworkInterface &iface)
 #endif // QT_NO_NETWORKINTERFACE
 
 /*!
-    Returns true if at least one datagram is waiting to be read;
-    otherwise returns false.
+    Returns \c true if at least one datagram is waiting to be read;
+    otherwise returns \c false.
 
     \sa pendingDatagramSize(), readDatagram()
 */
@@ -341,15 +351,19 @@ qint64 QUdpSocket::writeDatagram(const char *data, qint64 size, const QHostAddre
     if (state() == UnconnectedState)
         bind();
 
-    qint64 sent = d->socketEngine->writeDatagram(data, size, address, port);
+    qint64 sent = d->socketEngine->writeDatagram(data, size, QIpPacketHeader(address, port));
     d->cachedSocketDescriptor = d->socketEngine->socketDescriptor();
 
     if (sent >= 0) {
         emit bytesWritten(sent);
     } else {
-        d->socketError = d->socketEngine->error();
-        setErrorString(d->socketEngine->errorString());
-        emit error(d->socketError);
+        if (sent == -2) {
+            // Socket engine reports EAGAIN. Treat as a temporary error.
+            d->setErrorAndEmit(QAbstractSocket::TemporaryError,
+                               tr("Unable to send a datagram"));
+            return -1;
+        }
+        d->setErrorAndEmit(d->socketEngine->error(), d->socketEngine->errorString());
     }
     return sent;
 }
@@ -361,7 +375,103 @@ qint64 QUdpSocket::writeDatagram(const char *data, qint64 size, const QHostAddre
 
     Sends the datagram \a datagram to the host address \a host and at
     port \a port.
+
+    The function returns the number of bytes sent if it succeeded or -1 if it
+    encountered an error.
 */
+
+/*!
+    \overload
+
+    Sends the datagram \a datagram to the host address and port numbers
+    contained in \a datagram, using the network interface and hop count limits
+    also set there. If the destination address and port numbers are unset, this
+    function will send to the address that was passed to connectToHost().
+
+    If the destination address is IPv6 with a non-empty
+    \l{QHostAddress::scopeId()}{scope id} but differs from the interface index
+    in \a datagram, it is undefined which interface the operating system will
+    choose to send on.
+
+    The function returns the number of bytes sent if it succeeded or -1 if it
+    encountered an error.
+
+    \warning Calling this function on a connected UDP socket may
+    result in an error and no packet being sent. If you are using a
+    connected socket, use write() to send datagrams.
+
+    \sa QNetworkDatagram::setDestination(), QNetworkDatagram::setHopLimit(), QNetworkDatagram::setInterfaceIndex()
+*/
+qint64 QUdpSocket::writeDatagram(const QNetworkDatagram &datagram)
+{
+    Q_D(QUdpSocket);
+#if defined QUDPSOCKET_DEBUG
+    qDebug("QUdpSocket::writeDatagram(%p, %i, \"%s\", %i)",
+           datagram.d->data.constData(),
+           datagram.d->data.size(),
+           datagram.destinationAddress().toString().toLatin1().constData(),
+           datagram.destinationPort());
+#endif
+    if (!d->doEnsureInitialized(QHostAddress::Any, 0, datagram.destinationAddress()))
+        return -1;
+    if (state() == UnconnectedState)
+        bind();
+
+    qint64 sent = d->socketEngine->writeDatagram(datagram.d->data,
+                                                 datagram.d->data.size(),
+                                                 datagram.d->header);
+    d->cachedSocketDescriptor = d->socketEngine->socketDescriptor();
+
+    if (sent >= 0) {
+        emit bytesWritten(sent);
+    } else {
+        d->setErrorAndEmit(d->socketEngine->error(), d->socketEngine->errorString());
+    }
+    return sent;
+}
+
+/*!
+    Receives a datagram no larger than \a maxSize bytes and returns it in the
+    QNetworkDatagram object, along with the sender's host address and port. If
+    possible, this function will also try to determine the datagram's
+    destination address, port, and the number of hop counts at reception time.
+
+    On failure, returns a QNetworkDatagram that reports \l
+    {QNetworkDatagram::isValid()}{not valid}.
+
+    If \a maxSize is too small, the rest of the datagram will be lost. If \a
+    maxSize is 0, the datagram will be discarded. If \a maxSize is -1 (the
+    default), this function will attempt to read the entire datagram.
+
+    \sa writeDatagram(), hasPendingDatagrams(), pendingDatagramSize()
+*/
+QNetworkDatagram QUdpSocket::receiveDatagram(qint64 maxSize)
+{
+    Q_D(QUdpSocket);
+
+#if defined QUDPSOCKET_DEBUG
+    qDebug("QUdpSocket::receiveDatagram(%lld)", maxSize);
+#endif
+    QT_CHECK_BOUND("QUdpSocket::receiveDatagram()", QNetworkDatagram());
+
+    if (maxSize < 0)
+        maxSize = d->socketEngine->pendingDatagramSize();
+    if (maxSize < 0)
+        return QNetworkDatagram();
+
+    QNetworkDatagram result(QByteArray(maxSize, Qt::Uninitialized));
+    qint64 readBytes = d->socketEngine->readDatagram(result.d->data.data(), maxSize, &result.d->header,
+                                                     QAbstractSocketEngine::WantAll);
+    d->hasPendingData = false;
+    d->socketEngine->setReadNotificationEnabled(true);
+    if (readBytes < 0) {
+        d->setErrorAndEmit(d->socketEngine->error(), d->socketEngine->errorString());
+        readBytes = 0;
+    }
+
+    result.d->data.truncate(readBytes);
+    return result;
+}
 
 /*!
     Receives a datagram no larger than \a maxSize bytes and stores
@@ -387,15 +497,34 @@ qint64 QUdpSocket::readDatagram(char *data, qint64 maxSize, QHostAddress *addres
     qDebug("QUdpSocket::readDatagram(%p, %llu, %p, %p)", data, maxSize, address, port);
 #endif
     QT_CHECK_BOUND("QUdpSocket::readDatagram()", -1);
-    qint64 readBytes = d->socketEngine->readDatagram(data, maxSize, address, port);
-    d_func()->socketEngine->setReadNotificationEnabled(true);
+
+    qint64 readBytes;
+    if (address || port) {
+        QIpPacketHeader header;
+        readBytes = d->socketEngine->readDatagram(data, maxSize, &header,
+                                                  QAbstractSocketEngine::WantDatagramSender);
+        if (address)
+            *address = header.senderAddress;
+        if (port)
+            *port = header.senderPort;
+    } else {
+        readBytes = d->socketEngine->readDatagram(data, maxSize);
+    }
+
+    d->hasPendingData = false;
+    d->socketEngine->setReadNotificationEnabled(true);
     if (readBytes < 0) {
-        d->socketError = d->socketEngine->error();
-        setErrorString(d->socketEngine->errorString());
-        emit error(d->socketError);
+        if (readBytes == -2) {
+            // No pending datagram. Treat as a temporary error.
+            d->setErrorAndEmit(QAbstractSocket::TemporaryError,
+                               tr("No datagram available for reading"));
+            return -1;
+        }
+        d->setErrorAndEmit(d->socketEngine->error(), d->socketEngine->errorString());
     }
     return readBytes;
 }
+
 #endif // QT_NO_UDPSOCKET
 
 QT_END_NAMESPACE

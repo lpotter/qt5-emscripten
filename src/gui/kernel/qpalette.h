@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,11 +40,10 @@
 #ifndef QPALETTE_H
 #define QPALETTE_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtGui/qwindowdefs.h>
 #include <QtGui/qcolor.h>
 #include <QtGui/qbrush.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -57,7 +54,6 @@ class QVariant;
 class Q_GUI_EXPORT QPalette
 {
     Q_GADGET
-    Q_ENUMS(ColorGroup ColorRole)
 public:
     QPalette();
     QPalette(const QColor &button);
@@ -72,15 +68,18 @@ public:
     ~QPalette();
     QPalette &operator=(const QPalette &palette);
 #ifdef Q_COMPILER_RVALUE_REFS
-    inline QPalette &operator=(QPalette &&other)
+    QPalette(QPalette &&other) Q_DECL_NOTHROW
+        : d(other.d), data(other.data)
+    { other.d = nullptr; }
+    inline QPalette &operator=(QPalette &&other) Q_DECL_NOEXCEPT
     {
-        data.resolve_mask = other.data.resolve_mask;
-        data.current_group = other.data.current_group;
+        for_faster_swapping_dont_use = other.for_faster_swapping_dont_use;
         qSwap(d, other.d); return *this;
     }
 #endif
 
-    void swap(QPalette &other) {
+    void swap(QPalette &other) Q_DECL_NOEXCEPT
+    {
         qSwap(d, other.d);
         qSwap(for_faster_swapping_dont_use, other.for_faster_swapping_dont_use);
     }
@@ -89,6 +88,7 @@ public:
 
     // Do not change the order, the serialization format depends on it
     enum ColorGroup { Active, Disabled, Inactive, NColorGroups, Current, All, Normal = Active };
+    Q_ENUM(ColorGroup)
     enum ColorRole { WindowText, Button, Light, Midlight, Dark, Mid,
                      Text, BrightText, ButtonText, Base, Window, Shadow,
                      Highlight, HighlightedText,
@@ -96,9 +96,11 @@ public:
                      AlternateBase,
                      NoRole,
                      ToolTipBase, ToolTipText,
-                     NColorRoles = ToolTipText + 1,
+                     PlaceholderText,
+                     NColorRoles = PlaceholderText + 1,
                      Foreground = WindowText, Background = Window
                    };
+    Q_ENUM(ColorRole)
 
     inline ColorGroup currentColorGroup() const { return static_cast<ColorGroup>(data.current_group); }
     inline void setCurrentColorGroup(ColorGroup cg) { data.current_group = cg; }
@@ -140,6 +142,7 @@ public:
     inline const QBrush &highlightedText() const { return brush(HighlightedText); }
     inline const QBrush &link() const { return brush(Link); }
     inline const QBrush &linkVisited() const { return brush(LinkVisited); }
+    inline const QBrush &placeholderText() const { return brush(PlaceholderText); }
 
     bool operator==(const QPalette &p) const;
     inline bool operator!=(const QPalette &p) const { return !(operator==(p)); }
@@ -176,11 +179,12 @@ private:
     void detach();
 
     QPalettePrivate *d;
+    struct Data {
+        uint current_group : 4;
+        uint resolve_mask : 28;
+    };
     union {
-        struct {
-            uint current_group : 4;
-            uint resolve_mask : 28;
-        } data;
+        Data data;
         quint32 for_faster_swapping_dont_use;
     };
     friend Q_GUI_EXPORT QDataStream &operator<<(QDataStream &s, const QPalette &p);
@@ -209,7 +213,5 @@ Q_GUI_EXPORT QDebug operator<<(QDebug, const QPalette &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QPALETTE_H

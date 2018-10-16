@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,8 +40,9 @@
 #include <qwidgetaction.h>
 #include <qcommonstyle.h>
 #include <qstylefactory.h>
+#include <qscreen.h>
 
-#include "../../../qtest-config.h"
+typedef QList<QGraphicsItem *> QGraphicsItemList;
 
 class EventSpy : public QObject
 {
@@ -83,12 +71,6 @@ protected:
 
 class tst_QGraphicsWidget : public QObject {
 Q_OBJECT
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
 
 private slots:
     void qgraphicswidget();
@@ -172,12 +154,13 @@ private slots:
     void initialShow2();
     void itemChangeEvents();
     void itemSendGeometryPosChangesDeactivated();
-
     void fontPropagatesResolveToChildren();
     void fontPropagatesResolveToGrandChildren();
     void fontPropagatesResolveInParentChange();
     void fontPropagatesResolveViaNonWidget();
     void fontPropagatesResolveFromScene();
+    void tabFocus();
+    void windowFrameSectionAt();
 
     // Task fixes
     void task236127_bspTreeIndexFails();
@@ -185,15 +168,8 @@ private slots:
     void task250119_shortcutContext();
     void QT_BUG_6544_tabFocusFirstUnsetWhenRemovingItems();
     void QT_BUG_12056_tabFocusFirstUnsetWhenRemovingItems();
+    void QTBUG_45867_send_itemChildAddedChange_to_parent();
 };
-
-
-static void sendMouseMove(QWidget *widget, const QPoint &point, Qt::MouseButton button = Qt::NoButton, Qt::MouseButtons buttons = 0)
-{
-    QTest::mouseMove(widget, point);
-    QMouseEvent event(QEvent::MouseMove, point, button, buttons, 0);
-    QApplication::sendEvent(widget, &event);
-}
 
 // Subclass that exposes the protected functions.
 class SubQGraphicsWidget : public QGraphicsWidget {
@@ -202,7 +178,7 @@ public:
         : QGraphicsWidget(parent, windowFlags), eventCount(0)
         { }
 
-    void initStyleOption(QStyleOption *option)
+    void initStyleOption(QStyleOption *option) const
         { QGraphicsWidget::initStyleOption(option); }
 
     void call_changeEvent(QEvent* event)
@@ -250,6 +226,9 @@ public:
     void call_updateGeometry()
         { return QGraphicsWidget::updateGeometry(); }
 
+    Qt::WindowFrameSection call_windowFrameSectionAt(const QPointF &pos) const
+        { return QGraphicsWidget::windowFrameSectionAt(pos); }
+
     int eventCount;
     Qt::LayoutDirection m_painterLayoutDirection;
 
@@ -271,28 +250,6 @@ protected:
         return QGraphicsWidget::event(event);
     }
 };
-
-// This will be called before the first test function is executed.
-// It is only called once.
-void tst_QGraphicsWidget::initTestCase()
-{
-}
-
-// This will be called after the last test function is executed.
-// It is only called once.
-void tst_QGraphicsWidget::cleanupTestCase()
-{
-}
-
-// This will be called before each test function is executed.
-void tst_QGraphicsWidget::init()
-{
-}
-
-// This will be called after every test function.
-void tst_QGraphicsWidget::cleanup()
-{
-}
 
 class SizeHinter : public QGraphicsWidget
 {
@@ -330,14 +287,14 @@ void tst_QGraphicsWidget::qgraphicswidget()
 
     QVERIFY(!widget.isWindow());
     QCOMPARE(widget.boundingRect(), QRectF(0, 0, 0, 0));
-    QCOMPARE(widget.focusWidget(), (QGraphicsWidget*)0);
+    QCOMPARE(widget.focusWidget(), nullptr);
     QCOMPARE(widget.focusPolicy(), Qt::NoFocus);
     QCOMPARE(widget.font(), QFont());
     QCOMPARE(widget.geometry(), QRectF(widget.pos(), widget.size()));
-    QCOMPARE(widget.layout(), (QGraphicsLayout*)0);
+    QCOMPARE(widget.layout(), nullptr);
     QCOMPARE(widget.layoutDirection(), Qt::LeftToRight);
     QCOMPARE(widget.palette(), QPalette());
-    QCOMPARE(widget.parentWidget(), (QGraphicsWidget*)0);
+    QCOMPARE(widget.parentWidget(), nullptr);
     QCOMPARE(widget.rect(), QRectF(QPointF(), widget.size()));
     QCOMPARE(widget.size(), QSizeF(0, 0));
     QVERIFY(widget.style() != (QStyle*)0);
@@ -458,7 +415,7 @@ void tst_QGraphicsWidget::focusWidget_data()
 void tst_QGraphicsWidget::focusWidget()
 {
     SubQGraphicsWidget *parent = new SubQGraphicsWidget;
-    QCOMPARE(parent->focusWidget(), (QGraphicsWidget *)0);
+    QCOMPARE(parent->focusWidget(), nullptr);
     QGraphicsScene scene;
     QEvent windowActivate(QEvent::WindowActivate);
     qApp->sendEvent(&scene, &windowActivate);
@@ -598,7 +555,7 @@ void tst_QGraphicsWidget::focusPolicy_data()
     QTest::addColumn<Qt::FocusPolicy>("focusPolicy2");
 
     for (int i = 0; i < 25; ++i) {
-        QTestData &data = QTest::newRow(QString("%1").arg(i).toLatin1());
+        QTestData &data = QTest::newRow(QByteArray::number(i).constData());
         switch(i % 5) {
         case 0: data << Qt::TabFocus; break;
         case 1: data << Qt::ClickFocus; break;
@@ -1112,13 +1069,13 @@ void tst_QGraphicsWidget::initStyleOption()
 {
     QGraphicsScene scene;
     QGraphicsView view(&scene);
+    view.resize(300, 300);
     view.show();
-    QApplication::setActiveWindow(&view);
     QVERIFY(QTest::qWaitForWindowActive(&view));
 
     view.setAlignment(Qt::AlignTop | Qt::AlignLeft);
     SubQGraphicsWidget *widget = new SubQGraphicsWidget;
-    widget->setAcceptsHoverEvents(true);
+    widget->setAcceptHoverEvents(true);
     QStyleOption option;
     scene.addItem(widget);
 
@@ -1135,10 +1092,8 @@ void tst_QGraphicsWidget::initStyleOption()
     }
     QFETCH(bool, underMouse);
     if (underMouse) {
-        view.resize(300, 300);
-        view.show();
-        QVERIFY(QTest::qWaitForWindowActive(&view));
-        sendMouseMove(view.viewport(), view.mapFromScene(widget->mapToScene(widget->boundingRect().center())));
+        QCursor::setPos(view.viewport()->mapToGlobal(view.mapFromScene(widget->mapToScene(widget->boundingRect().center()))));
+        QTest::qWait(100);
     }
 
     QFETCH(QPalette, palette);
@@ -1155,9 +1110,7 @@ void tst_QGraphicsWidget::initStyleOption()
     bool hasFocus = option.state & QStyle::State_HasFocus;
     QCOMPARE(hasFocus, focus);
     bool isUnderMouse = option.state & QStyle::State_MouseOver;
-#ifndef Q_OS_WINCE
     QCOMPARE(isUnderMouse, underMouse);
-#endif
     // if (layoutDirection != Qt::LeftToRight)
     //QEXPECT_FAIL("", "QApplicaiton::layoutDirection doesn't propagate to QGraphicsWidget", Continue);
     //QCOMPARE(option.direction, layoutDirection);
@@ -1178,7 +1131,7 @@ void tst_QGraphicsWidget::layout()
 {
     SubQGraphicsWidget widget;
     widget.setContentsMargins(10, 5, 50, 100);
-    QCOMPARE(widget.layout(), (QGraphicsLayout *)0);
+    QCOMPARE(widget.layout(), nullptr);
     QFETCH(int, childCount);
 
     QGraphicsLinearLayout *layout = new QGraphicsLinearLayout;
@@ -1214,7 +1167,7 @@ void tst_QGraphicsWidget::layoutDirection()
 {
     QFETCH(Qt::LayoutDirection, layoutDirection);
     QGraphicsScene scene;
-    QGraphicsView *view = new QGraphicsView(&scene);
+    QScopedPointer<QGraphicsView> view(new QGraphicsView(&scene));
     SubQGraphicsWidget widget;
     scene.addItem(&widget);
     QCOMPARE(widget.layoutDirection(), Qt::LeftToRight);
@@ -1229,14 +1182,13 @@ void tst_QGraphicsWidget::layoutDirection()
     widget.setLayoutDirection(layoutDirection);
     QCOMPARE(widget.testAttribute(Qt::WA_SetLayoutDirection), true);
     view->show();
-    QVERIFY(QTest::qWaitForWindowExposed(view));
+    QVERIFY(QTest::qWaitForWindowExposed(view.data()));
     for (int i = 0; i < children.count(); ++i) {
         QTRY_COMPARE(children[i]->layoutDirection(), layoutDirection);
         QTRY_COMPARE(children[i]->testAttribute(Qt::WA_SetLayoutDirection), false);
         view->repaint();
         QTRY_COMPARE(children[i]->m_painterLayoutDirection, layoutDirection);
     }
-    delete view;
 }
 
 void tst_QGraphicsWidget::paint_data()
@@ -1340,9 +1292,9 @@ void tst_QGraphicsWidget::parentWidget()
     SubQGraphicsWidget widgetChild(&standAlongWidget);
     SubQGraphicsWidget itemChild(&standAlongItem);
 
-    QCOMPARE(standAlongWidget.parentWidget(), (QGraphicsWidget*)0);
+    QCOMPARE(standAlongWidget.parentWidget(), nullptr);
     QCOMPARE(widgetChild.parentWidget(), static_cast<QGraphicsWidget*>(&standAlongWidget));
-    QCOMPARE(itemChild.parentWidget(), (QGraphicsWidget*)0);
+    QCOMPARE(itemChild.parentWidget(), nullptr);
 
     for (int i = 0; i < childrenCount; ++i) {
         SubQGraphicsWidget *item = new SubQGraphicsWidget(&standAlongWidget);
@@ -1477,25 +1429,35 @@ void tst_QGraphicsWidget::setTabOrder()
     }
 }
 
-static bool compareFocusChain(QGraphicsView *view, const QList<QGraphicsItem*> &order)
+template <class Iterator>
+bool compareFocusChain(QGraphicsView *view,
+                       Iterator i1, Iterator i2,
+                       QByteArray *errorMessage)
 {
     QGraphicsScene *scene = view->scene();
-    QStringList actual;
     QGraphicsItem *oldFocusItem = scene->focusItem();
-    for (int i = 0; i < order.count(); ++i) {
-        QGraphicsItem *focusItem = scene->focusItem();
-        actual << focusItem->data(0).toString();
-        //qDebug() << "i:" << i << "expected:" << QString::number(uint(order.at(i)), 16) << QString::number(uint(focusItem), 16);
-        if (focusItem != order.at(i)) {
-            qDebug() << "actual:"  << actual;
+    Iterator last = i2 - 1;
+    for (Iterator i = i1; i != i2; ++i) {
+        QGraphicsItem *actualFocusItem = scene->focusItem();
+        QGraphicsItem *expectedFocusItem = *i;
+        if (actualFocusItem != expectedFocusItem) {
+            *errorMessage = "Actual:" + actualFocusItem->data(0).toByteArray()
+                + " expected:" + expectedFocusItem->data(0).toByteArray();
             scene->setFocusItem(oldFocusItem);
             return false;
         }
-        if (i < order.count() - 1)
+        if (i != last)
             QTest::keyPress(view, Qt::Key_Tab);
     }
     scene->setFocusItem(oldFocusItem);
     return true;
+}
+
+template <class Container>
+bool compareFocusChain(QGraphicsView *view, const Container &c,
+                       QByteArray *errorMessage)
+{
+    return compareFocusChain(view, c.constBegin(), c.constEnd(), errorMessage);
 }
 
 void tst_QGraphicsWidget::setTabOrderAndReparent()
@@ -1507,78 +1469,68 @@ void tst_QGraphicsWidget::setTabOrderAndReparent()
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(QApplication::activeWindow(), (QWidget*)&view);
 
-    int i;
-    QGraphicsWidget *w1, *w2, *w3, *w4;
-    for (i = 1; i < 4; ++i) {
-        QGraphicsWidget *wid = new QGraphicsWidget;
-        wid->setFocusPolicy(Qt::StrongFocus);
-        wid->setData(0, QString::fromLatin1("w%1").arg(i));
-        scene.addItem(wid);
-        if (i == 1)
-            w1 = wid;
-        else if (i == 2)
-            w2 = wid;
-        else if (i == 3)
-            w3 = wid;
+    QGraphicsWidget *w[4];
+    for (int i = 0; i < 3; ++i) {
+        w[i] = new QGraphicsWidget;
+        w[i]->setFocusPolicy(Qt::StrongFocus);
+        w[i]->setData(0, 'w' + QByteArray::number(i + 1));
+        scene.addItem(w[i]);
     }
 
-    w1->setFocus();
-    QTRY_VERIFY(w1->hasFocus());
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w1 << w2 << w3));
+    w[0]->setFocus();
+    QTRY_VERIFY(w[0]->hasFocus());
+    QByteArray errorMessage;
+    QVERIFY2(compareFocusChain(&view, w, w + 3, &errorMessage), errorMessage.constData());
 
     QGraphicsWidget *p = new QGraphicsWidget;
     p->setData(0, QLatin1String("parent"));
     p->setFocusPolicy(Qt::StrongFocus);
 
-    w1->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w1 << w2 << w3));
+    w[0]->setFocus();
+    QVERIFY2(compareFocusChain(&view, w, w + 3, &errorMessage), errorMessage.constData());
 
-    w1->setParentItem(p);
-    w2->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() <<  w2 << w3));
+    w[0]->setParentItem(p);
+    w[1]->setFocus();
+    QVERIFY2(compareFocusChain(&view, w + 1, w + 3, &errorMessage), errorMessage.constData());
 
-    w2->setParentItem(p);
-    w3->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w3));
-    w3->setParentItem(p);
-    QCOMPARE(scene.focusItem(), static_cast<QGraphicsItem*>(0));
+    w[1]->setParentItem(p);
+    w[2]->setFocus();
+    QVERIFY2(compareFocusChain(&view, w + 2, w + 3, &errorMessage), errorMessage.constData());
+    w[2]->setParentItem(p);
+    QCOMPARE(scene.focusItem(), nullptr);
 
     scene.addItem(p);
     p->setFocus();
 
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << p << w1 << w2 << w3));
+    QVERIFY2(compareFocusChain(&view, QGraphicsItemList() << p << w[0] << w[1] << w[2],
+             &errorMessage), errorMessage.constData());
     delete p;
 
-    for (i = 1; i < 5; ++i) {
-        QGraphicsWidget *wid = new QGraphicsWidget;
-        wid->setFocusPolicy(Qt::StrongFocus);
-        wid->setData(0, QString::fromLatin1("w%1").arg(i));
-        scene.addItem(wid);
-        if (i == 1)
-            w1 = wid;
-        else if (i == 2)
-            w2 = wid;
-        else if (i == 3)
-            w3 = wid;
-        else if (i == 4)
-            w4 = wid;
+    for (int i = 0; i < 4; ++i) {
+        w[i] = new QGraphicsWidget;
+        w[i]->setFocusPolicy(Qt::StrongFocus);
+        w[i]->setData(0, 'w' + QByteArray::number(i + 1));
+        scene.addItem(w[i]);
     }
-    w4->setParentItem(w1);
-    QGraphicsWidget::setTabOrder(w1, w4);
-    w1->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w1 << w4 << w2 << w3));
+
+    w[3]->setParentItem(w[0]);
+    QGraphicsWidget::setTabOrder(w[0], w[3]);
+    w[0]->setFocus();
+    QVERIFY2(compareFocusChain(&view, QGraphicsItemList() << w[0] << w[3] << w[1] << w[2],
+             &errorMessage), errorMessage.constData());
 
     p = new QGraphicsWidget;
     p->setData(0, QLatin1String("parent"));
     p->setFocusPolicy(Qt::StrongFocus);
 
-    w1->setParentItem(p);
-    w2->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w2 << w3));
+    w[0]->setParentItem(p);
+    w[1]->setFocus();
+    QVERIFY2(compareFocusChain(&view, w + 1, w + 3, &errorMessage), errorMessage.constData());
 
     scene.addItem(p);
-    w2->setFocus();
-    QVERIFY(compareFocusChain(&view, QList<QGraphicsItem*>() << w2 << w3 << p << w1 << w4));
+    w[1]->setFocus();
+    QVERIFY2(compareFocusChain(&view, QGraphicsItemList() << w[1] << w[2] << p << w[0] << w[3],
+             &errorMessage), errorMessage.constData());
 }
 
 void tst_QGraphicsWidget::topLevelWidget_data()
@@ -1696,8 +1648,26 @@ void tst_QGraphicsWidget::verifyFocusChain()
         delete w;
     }
     {
+        // QTBUG-30923:
+        // Child QGraphicsWidget with tabFocusFirst gets removed & deleted should not crash.
+        // This case simulates what QtQuick1 does when you have QGraphicsObject based
+        // item in different qml views that are loaded one after another.
+        QGraphicsItem *parent1 = new QGraphicsRectItem(0); // root item
+        scene.addItem(parent1);
+        for (int i = 0; i < 2; i++) {
+            SubQGraphicsWidget *w1 = new SubQGraphicsWidget(parent1);
+            w1->setFocusPolicy(Qt::StrongFocus);
+            w1->setFocus();
+            QVERIFY(w1->hasFocus());
+            scene.removeItem(w1);
+            delete w1;
+            QApplication::processEvents();
+        }
+        delete parent1;
+    }
+    {
         // remove the tabFocusFirst widget from the scene.
-        QWidget *window = new QWidget;
+        QScopedPointer<QWidget> window(new QWidget);
         QVBoxLayout *layout = new QVBoxLayout;
         window->setLayout(layout);
         QLineEdit *lineEdit = new QLineEdit;
@@ -1717,8 +1687,8 @@ void tst_QGraphicsWidget::verifyFocusChain()
         w1_2->setFocusPolicy(Qt::StrongFocus);
         scene.addItem(w1_2);
         window->show();
-        QApplication::setActiveWindow(window);
-        QVERIFY(QTest::qWaitForWindowActive(window));
+        QApplication::setActiveWindow(window.data());
+        QVERIFY(QTest::qWaitForWindowActive(window.data()));
 
         lineEdit->setFocus();
         QTRY_VERIFY(lineEdit->hasFocus());
@@ -1751,21 +1721,25 @@ void tst_QGraphicsWidget::verifyFocusChain()
         w1_4->setGeometry(75,0,25, 25);
         scene.addItem(w1_4);
         QTRY_VERIFY(w1_3->hasFocus());
-        QTRY_VERIFY(compareFocusChain(view, QList<QGraphicsItem*>() << w1_3 << w1_4));
+        QByteArray errorMessage;
+        const QGraphicsItemList expected = QGraphicsItemList() << w1_3 << w1_4;
+        QTRY_VERIFY2(compareFocusChain(view, expected, &errorMessage), errorMessage.constData());
         QTest::keyPress(QApplication::focusWidget(), Qt::Key_Backtab);
         QTRY_VERIFY(lineEdit->hasFocus());
         // tabFocusFirst should now point to w1_3
         QTest::keyPress(QApplication::focusWidget(), Qt::Key_Tab);
         QTRY_VERIFY(w1_3->hasFocus());
-        QTRY_VERIFY(compareFocusChain(view, QList<QGraphicsItem*>() << w1_3 << w1_4));
-        delete window;
+        QTRY_VERIFY2(compareFocusChain(view, expected, &errorMessage), errorMessage.constData());
     }
 }
 
 void tst_QGraphicsWidget::updateFocusChainWhenChildDie()
 {
+    const QRect availableGeometry = QGuiApplication::primaryScreen()->availableGeometry();
     QGraphicsScene scene;
     QGraphicsView view(&scene);
+    view.resize(200, 150);
+    view.move(availableGeometry.topLeft() + QPoint(50, 50));
     view.show();
     QApplication::setActiveWindow(&view);
     QVERIFY(QTest::qWaitForWindowActive(&view));
@@ -1785,6 +1759,9 @@ void tst_QGraphicsWidget::updateFocusChainWhenChildDie()
     QVERIFY(w1_1->hasFocus());
     QWidget myWidget(0);
     QLineEdit edit(&myWidget);
+    (new QHBoxLayout(&myWidget))->addWidget(&edit);
+    edit.setMinimumWidth(160); // Windows
+    myWidget.move(availableGeometry.topLeft() + QPoint(350, 50));
     myWidget.show();
     edit.setFocus();
     QTRY_VERIFY(edit.hasFocus());
@@ -1793,8 +1770,9 @@ void tst_QGraphicsWidget::updateFocusChainWhenChildDie()
     w->setParentItem(parent);
     //We don't crash perfect
     QVERIFY(w);
-    QTest::mouseMove(view.viewport());
-    QTest::mouseClick(view.viewport(), Qt::LeftButton, 0);
+    const QPoint center(view.viewport()->width() / 2, view.viewport()->height() / 2);
+    QTest::mouseMove(view.viewport(), center);
+    QTest::mouseClick(view.viewport(), Qt::LeftButton, 0, center);
 #ifdef Q_OS_MAC
     QEXPECT_FAIL("", "QTBUG-23699", Continue);
 #endif
@@ -1891,7 +1869,6 @@ enum WhichSize {
 typedef QPair<int, QVariant> Inst;
 
 Q_DECLARE_METATYPE(Inst)
-Q_DECLARE_METATYPE(QVector<Inst>)
 
 void tst_QGraphicsWidget::setSizes_data()
 {
@@ -2080,12 +2057,12 @@ void tst_QGraphicsWidget::task236127_bspTreeIndexFails()
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
-    QTRY_VERIFY(!scene.itemAt(25, 25));
+    QTRY_VERIFY(scene.items(QPointF(25, 25)).isEmpty());
     widget->setGeometry(0, 112, 360, 528);
-    QTRY_COMPARE(scene.itemAt(15, 120), (QGraphicsItem *)widget);
+    QTRY_COMPARE(scene.items(QPointF(15, 120)).value(0, nullptr), (QGraphicsItem *)widget);
     widget2->setGeometry(0, 573, 360, 67);
-    QTRY_COMPARE(scene.itemAt(15, 120), (QGraphicsItem *)widget);
-    QTRY_COMPARE(scene.itemAt(50, 585), (QGraphicsItem *)widget2);
+    QTRY_COMPARE(scene.items(QPointF(15, 120)).value(0, nullptr), (QGraphicsItem *)widget);
+    QTRY_COMPARE(scene.items(QPointF(50, 585)).value(0, nullptr), (QGraphicsItem *)widget2);
 }
 
 void tst_QGraphicsWidget::defaultSize()
@@ -2140,7 +2117,7 @@ void tst_QGraphicsWidget::explicitMouseGrabber()
     QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)widget);
     QCOMPARE(widgetGrabEventSpy.count(), 1);
     widget->ungrabMouse();
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QCOMPARE(widgetUngrabEventSpy.count(), 1);
 
     // Grab while grabbing
@@ -2188,7 +2165,7 @@ void tst_QGraphicsWidget::explicitMouseGrabber()
     QCOMPARE(widgetGrabEventSpy.count(), 4);
     QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)widget);
     widget->ungrabMouse();
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     // Out of order ungrab
     widget->grabMouse();
@@ -2233,7 +2210,7 @@ void tst_QGraphicsWidget::implicitMouseGrabber()
         event.setScenePos(QPointF(50, 50));
         qApp->sendEvent(&scene, &event);
     }
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QCOMPARE(widgetGrabEventSpy.count(), 1);
     QCOMPARE(widgetUngrabEventSpy.count(), 1);
 
@@ -2261,7 +2238,7 @@ void tst_QGraphicsWidget::implicitMouseGrabber()
     QCOMPARE(widgetUngrabEventSpy.count(), 1);
     widget->ungrabMouse();
     QCOMPARE(widgetUngrabEventSpy.count(), 2);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     // Implicit mouse grabber tries to explicitly grab the mouse
     {
@@ -2286,7 +2263,7 @@ void tst_QGraphicsWidget::implicitMouseGrabber()
     QCOMPARE(widgetGrabEventSpy.count(), 3);
     QCOMPARE(widgetUngrabEventSpy.count(), 2);
     widget->ungrabMouse();
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QCOMPARE(widgetGrabEventSpy.count(), 3);
     QCOMPARE(widgetUngrabEventSpy.count(), 3);
 
@@ -2316,7 +2293,7 @@ void tst_QGraphicsWidget::implicitMouseGrabber()
 
     scene.removeItem(widget);
     QCOMPARE(widgetUngrabEventSpy.count(), 4);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 }
 
 class GrabOnPressItem : public QGraphicsRectItem
@@ -2390,7 +2367,7 @@ void tst_QGraphicsWidget::doubleClickAfterExplicitMouseGrab()
         event.setScenePos(QPointF(50, 50));
         qApp->sendEvent(&scene, &event);
     }
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QCOMPARE(item->nrelease, 1);
     QCOMPARE(item->nungrab, 1);
     {
@@ -2412,7 +2389,7 @@ void tst_QGraphicsWidget::doubleClickAfterExplicitMouseGrab()
         event.setScenePos(QPointF(50, 50));
         qApp->sendEvent(&scene, &event);
     }
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
     QCOMPARE(item->nrelease, 2);
     QCOMPARE(item->nungrab, 2);
 }
@@ -2434,7 +2411,7 @@ void tst_QGraphicsWidget::popupMouseGrabber()
     // Hiding it loses the grab again.
     widget->hide();
     QCOMPARE(widgetUngrabEventSpy.count(), 1);
-    QCOMPARE(scene.mouseGrabberItem(), (QGraphicsItem *)0);
+    QCOMPARE(scene.mouseGrabberItem(), nullptr);
 
     // Showing it grabs the mouse again
     widget->show();
@@ -2957,22 +2934,22 @@ protected:
 
 void tst_QGraphicsWidget::respectHFW()
 {
-#if defined(Q_OS_WINCE) || defined(Q_OS_MAC)
-    QSKIP("This test is platform dependent, it fails on wince and mac. Please fix.");
+#if defined(Q_OS_DARWIN)
+    QSKIP("This test is platform dependent, it fails on Apple platforms. Please fix.");
 #else
     QGraphicsScene scene;
     HFWWidget *window = new HFWWidget;
     scene.addItem(window);
-    QGraphicsView *view = new QGraphicsView(&scene);
+    QScopedPointer<QGraphicsView> view(new QGraphicsView(&scene));
     view->resize(400, 400);
     view->setSceneRect(-100, -100, 300,300);
 
     view->show();
     window->setGeometry(0, 0, 70, 70);
-    QVERIFY(QTest::qWaitForWindowActive(view));
+    QVERIFY(QTest::qWaitForWindowActive(view.data()));
 
     {   // here we go - simulate a interactive resize of the window
-        QTest::mouseMove(view, view->mapFromScene(71, 71)); // bottom right corner
+        QTest::mouseMove(view.data(), view->mapFromScene(71, 71)); // bottom right corner
 
         QTest::mousePress(view->viewport(), Qt::LeftButton, 0, view->mapFromScene(71, 71), 200);
         view->grabMouse();
@@ -3158,15 +3135,14 @@ void tst_QGraphicsWidget::initialShow2()
     QGraphicsScene dummyScene(0, 0, 200, 200);
     dummyScene.addItem(new QGraphicsRectItem(0, 0, 100, 100));
 
-    QGraphicsView *dummyView = new QGraphicsView(&dummyScene);
+    QScopedPointer<QGraphicsView> dummyView(new QGraphicsView(&dummyScene));
     dummyView->setWindowFlags(Qt::X11BypassWindowManagerHint);
     EventSpy paintSpy(dummyView->viewport(), QEvent::Paint);
     dummyView->show();
-    qApp->setActiveWindow(dummyView);
-    QVERIFY(QTest::qWaitForWindowActive(dummyView));
+    qApp->setActiveWindow(dummyView.data());
+    QVERIFY(QTest::qWaitForWindowActive(dummyView.data()));
     const int expectedRepaintCount = paintSpy.count();
-    delete dummyView;
-    dummyView = 0;
+    dummyView.reset();
 
     MyGraphicsWidget *widget = new MyGraphicsWidget;
     widget->resize(100, 100);
@@ -3180,9 +3156,6 @@ void tst_QGraphicsWidget::initialShow2()
     qApp->setActiveWindow(&view);
     QVERIFY(QTest::qWaitForWindowActive(&view));
 
-#if defined(Q_OS_WIN) || defined(UBUNTU_LUCID)
-    QEXPECT_FAIL("", "QTBUG-20778", Abort);
-#endif
     QTRY_COMPARE(widget->repaints, expectedRepaintCount);
 }
 
@@ -3207,7 +3180,7 @@ void tst_QGraphicsWidget::itemChangeEvents()
                 valueDuringEvents.insert(QEvent::ParentChange, QVariant::fromValue(parentItem()));
                 break;
             }
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
             case QEvent::CursorChange: {
                 valueDuringEvents.insert(QEvent::CursorChange, int(cursor().shape()));
                 break;
@@ -3258,7 +3231,7 @@ void tst_QGraphicsWidget::itemChangeEvents()
     QVERIFY(!item->isVisible());
     QTRY_VERIFY(!item->valueDuringEvents.value(QEvent::Hide).toBool());
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
     // CursorChange should be triggered after the cursor has changed
     item->setCursor(Qt::PointingHandCursor);
     QTRY_COMPARE(item->valueDuringEvents.value(QEvent::CursorChange).toInt(), int(item->cursor().shape()));
@@ -3301,6 +3274,128 @@ void tst_QGraphicsWidget::itemSendGeometryPosChangesDeactivated()
     item->setPos(QPointF(10, 10));
     QCOMPARE(item->pos(), QPointF(10, 10));
     QCOMPARE(item->geometry(), QRectF(10, 10, 60, 60));
+}
+
+class TabFocusWidget : public QGraphicsWidget
+{
+    Q_OBJECT
+public:
+    TabFocusWidget(const QString &name, QGraphicsItem *parent = 0)
+        : QGraphicsWidget(parent)
+    { setFocusPolicy(Qt::TabFocus); setData(0, name); }
+};
+
+void verifyTabFocus(QGraphicsScene *scene, const QList<QGraphicsWidget *> &chain, bool wrapsAround)
+{
+    QKeyEvent tabEvent(QEvent::KeyPress, Qt::Key_Tab, 0);
+    QKeyEvent backtabEvent(QEvent::KeyPress, Qt::Key_Backtab, 0);
+
+    for (int i = 0; i < chain.size(); ++i)
+        chain.at(i)->clearFocus();
+
+    int n = chain.size() * (wrapsAround ? 3 : 1);
+    for (int i = 0; i < n; ++i)
+    {
+        qApp->sendEvent(scene, &tabEvent);
+        QVERIFY(chain.at(i % chain.size())->hasFocus());
+        QCOMPARE(scene->focusItem(), chain.at(i % chain.size()));
+    }
+    for (int i = n - 2; i >= 0; --i)
+    {
+        qApp->sendEvent(scene, &backtabEvent);
+        QVERIFY(chain.at(i % chain.size())->hasFocus());
+        QCOMPARE(scene->focusItem(), chain.at(i % chain.size()));
+    }
+}
+
+void tst_QGraphicsWidget::tabFocus()
+{
+    QGraphicsScene scene;
+    scene.setFocus();
+
+    QEvent activate(QEvent::WindowActivate);
+    qApp->sendEvent(&scene, &activate);
+
+    TabFocusWidget *widget = new TabFocusWidget("1");
+    scene.addItem(widget);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget, false);
+
+    TabFocusWidget *widget2 = new TabFocusWidget("2");
+    scene.addItem(widget2);
+    scene.setFocusItem(0);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget << widget2, false);
+
+    TabFocusWidget *widget3 = new TabFocusWidget("3");
+    widget3->setFlag(QGraphicsItem::ItemIsPanel);
+    scene.addItem(widget3);
+    QCOMPARE(scene.activePanel(), (QGraphicsItem *)widget3);
+    scene.setActivePanel(0);
+    scene.setFocusItem(0);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget << widget2, false);
+
+    scene.setActivePanel(widget3);
+    QCOMPARE(scene.focusItem(), (QGraphicsItem *)widget3);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3, true);
+
+    TabFocusWidget *widget4 = new TabFocusWidget("4");
+    widget4->setParentItem(widget3);
+    QVERIFY(widget3->hasFocus());
+    widget3->clearFocus();
+    QVERIFY(!widget3->focusItem());
+    QCOMPARE(scene.activePanel(), (QGraphicsItem *)widget3);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4, true);
+
+    QGraphicsWidget *widget5 = new QGraphicsWidget; widget5->setData(0, QLatin1String("5"));
+    widget5->setParentItem(widget3);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4, true);
+
+    widget5->setFocusPolicy(Qt::TabFocus);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget5, true);
+
+    TabFocusWidget *widget6 = new TabFocusWidget("6");
+    widget6->setParentItem(widget4);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget6 << widget5, true);
+
+    TabFocusWidget *widget7 = new TabFocusWidget("7", widget6);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget6 << widget7 << widget5, true);
+
+    TabFocusWidget *widget8 = new TabFocusWidget("8", widget6);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget6 << widget7 << widget8 << widget5, true);
+    widget6->setFlag(QGraphicsItem::ItemIsPanel);
+    widget6->setActive(true);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget6 << widget7 << widget8, true);
+    widget3->setActive(true);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget5, true);
+    widget6->setFlag(QGraphicsItem::ItemIsPanel, false);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget6 << widget7 << widget8 << widget5, true);
+    scene.removeItem(widget6);
+    verifyTabFocus(&scene, QList<QGraphicsWidget *>() << widget3 << widget4 << widget5, true);
+    delete widget6;
+}
+
+void tst_QGraphicsWidget::windowFrameSectionAt()
+{
+    SubQGraphicsWidget widget;
+    widget.setWindowFrameMargins(5, 5, 5, 5);
+    widget.setGeometry(0, 0, 200, 200);
+
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(50, 50)), Qt::NoSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, -2)), Qt::TopLeftSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, 10)), Qt::TopLeftSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, 30)), Qt::LeftSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, 170)), Qt::LeftSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, 198)), Qt::BottomLeftSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(-2, 202)), Qt::BottomLeftSection);
+
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, -2)), Qt::TopRightSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, 10)), Qt::TopRightSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, 30)), Qt::RightSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, 170)), Qt::RightSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, 198)), Qt::BottomRightSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(202, 202)), Qt::BottomRightSection);
+
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(50, -2)), Qt::TopSection);
+    QCOMPARE(widget.call_windowFrameSectionAt(QPointF(50, 202)), Qt::BottomSection);
 }
 
 void tst_QGraphicsWidget::QT_BUG_6544_tabFocusFirstUnsetWhenRemovingItems()
@@ -3351,6 +3446,37 @@ void tst_QGraphicsWidget::QT_BUG_12056_tabFocusFirstUnsetWhenRemovingItems()
     scene.addItem(item3);
 
     //This should not crash
+}
+
+void tst_QGraphicsWidget::QTBUG_45867_send_itemChildAddedChange_to_parent()
+{
+    class GraphicsItem : public QGraphicsItem
+    {
+    public:
+        int m_itemChildAddedChangeNotificationsCount;
+
+        GraphicsItem()
+            : QGraphicsItem(),
+              m_itemChildAddedChangeNotificationsCount(0)
+        {
+        }
+
+        QRectF boundingRect() const override { return QRectF(); }
+
+        void paint(QPainter *, const QStyleOptionGraphicsItem *, QWidget *) override {}
+
+    protected:
+        QVariant itemChange(QGraphicsItem::GraphicsItemChange change, const QVariant &value) override
+        {
+            if (change == QGraphicsItem::ItemChildAddedChange)
+                ++m_itemChildAddedChangeNotificationsCount;
+            return QGraphicsItem::itemChange(change, value);
+        }
+    };
+
+    GraphicsItem item;
+    QGraphicsWidget widget(&item);
+    QCOMPARE(item.m_itemChildAddedChangeNotificationsCount, 1);
 }
 
 QTEST_MAIN(tst_QGraphicsWidget)

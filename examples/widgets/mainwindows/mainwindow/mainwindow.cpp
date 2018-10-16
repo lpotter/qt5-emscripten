@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -52,8 +61,8 @@
 #include <QFile>
 #include <QDataStream>
 #include <QFileDialog>
+#include <QDialogButtonBox>
 #include <QMessageBox>
-#include <QSignalMapper>
 #include <QApplication>
 #include <QPainter>
 #include <QMouseEvent>
@@ -61,9 +70,10 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
-#include <qdebug.h>
+#include <QTextEdit>
+#include <QDebug>
 
-static const char * const message =
+static const char message[] =
     "<p><b>Qt Main Window Example</b></p>"
 
     "<p>This is a demonstration of the QMainWindow, QToolBar and "
@@ -76,21 +86,22 @@ static const char * const message =
     "(right-click) menu.</p>"
 
 #ifdef Q_OS_MAC
-    "<p>On Mac OS X, the \"Black\" dock widget has been created as a "
+    "<p>On OS X, the \"Black\" dock widget has been created as a "
     "<em>Drawer</em>, which is a special kind of QDockWidget.</p>"
 #endif
     ;
 
 Q_DECLARE_METATYPE(QDockWidget::DockWidgetFeatures)
 
-MainWindow::MainWindow(const QMap<QString, QSize> &customSizeHints,
-                        QWidget *parent, Qt::WindowFlags flags)
+MainWindow::MainWindow(const CustomSizeHintMap &customSizeHints,
+                       QWidget *parent, Qt::WindowFlags flags)
     : QMainWindow(parent, flags)
 {
+    Q_UNUSED(message);
     setObjectName("MainWindow");
     setWindowTitle("Qt Main Window Example");
 
-    center = new QTextEdit(this);
+    QTextEdit *center = new QTextEdit(this);
     center->setReadOnly(true);
     center->setMinimumSize(400, 205);
     setCentralWidget(center);
@@ -109,6 +120,10 @@ void MainWindow::actionTriggered(QAction *action)
 
 void MainWindow::setupToolBar()
 {
+#ifdef Q_OS_OSX
+    setUnifiedTitleAndToolBarOnMac(true);
+#endif
+
     for (int i = 0; i < 3; ++i) {
         ToolBar *tb = new ToolBar(QString::fromLatin1("Tool Bar %1").arg(i + 1), this);
         toolBars.append(tb);
@@ -120,51 +135,66 @@ void MainWindow::setupMenuBar()
 {
     QMenu *menu = menuBar()->addMenu(tr("&File"));
 
-    QAction *action = menu->addAction(tr("Save layout..."));
-    connect(action, SIGNAL(triggered()), this, SLOT(saveLayout()));
-
-    action = menu->addAction(tr("Load layout..."));
-    connect(action, SIGNAL(triggered()), this, SLOT(loadLayout()));
-
-    action = menu->addAction(tr("Switch layout direction"));
-    connect(action, SIGNAL(triggered()), this, SLOT(switchLayoutDirection()));
+    menu->addAction(tr("Save layout..."), this, &MainWindow::saveLayout);
+    menu->addAction(tr("Load layout..."), this, &MainWindow::loadLayout);
+    menu->addAction(tr("Switch layout direction"),this, &MainWindow::switchLayoutDirection);
 
     menu->addSeparator();
-
-    menu->addAction(tr("&Quit"), this, SLOT(close()));
+    menu->addAction(tr("&Quit"), this, &QWidget::close);
 
     mainWindowMenu = menuBar()->addMenu(tr("Main window"));
 
-    action = mainWindowMenu->addAction(tr("Animated docks"));
+    QAction *action = mainWindowMenu->addAction(tr("Animated docks"));
     action->setCheckable(true);
     action->setChecked(dockOptions() & AnimatedDocks);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(setDockOptions()));
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
 
     action = mainWindowMenu->addAction(tr("Allow nested docks"));
     action->setCheckable(true);
     action->setChecked(dockOptions() & AllowNestedDocks);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(setDockOptions()));
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
 
     action = mainWindowMenu->addAction(tr("Allow tabbed docks"));
     action->setCheckable(true);
     action->setChecked(dockOptions() & AllowTabbedDocks);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(setDockOptions()));
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
 
     action = mainWindowMenu->addAction(tr("Force tabbed docks"));
     action->setCheckable(true);
     action->setChecked(dockOptions() & ForceTabbedDocks);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(setDockOptions()));
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
 
     action = mainWindowMenu->addAction(tr("Vertical tabs"));
     action->setCheckable(true);
     action->setChecked(dockOptions() & VerticalTabs);
-    connect(action, SIGNAL(toggled(bool)), this, SLOT(setDockOptions()));
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
+
+    action = mainWindowMenu->addAction(tr("Grouped dragging"));
+    action->setCheckable(true);
+    action->setChecked(dockOptions() & GroupedDragging);
+    connect(action, &QAction::toggled, this, &MainWindow::setDockOptions);
 
     QMenu *toolBarMenu = menuBar()->addMenu(tr("Tool bars"));
     for (int i = 0; i < toolBars.count(); ++i)
-        toolBarMenu->addMenu(toolBars.at(i)->menu);
+        toolBarMenu->addMenu(toolBars.at(i)->toolbarMenu());
+
+#ifdef Q_OS_OSX
+    toolBarMenu->addSeparator();
+
+    action = toolBarMenu->addAction(tr("Unified"));
+    action->setCheckable(true);
+    action->setChecked(unifiedTitleAndToolBarOnMac());
+    connect(action, &QAction::toggled, this, &QMainWindow::setUnifiedTitleAndToolBarOnMac);
+#endif
 
     dockWidgetMenu = menuBar()->addMenu(tr("&Dock Widgets"));
+
+    QMenu *aboutMenu = menuBar()->addMenu(tr("About"));
+    QAction *aboutAct = aboutMenu->addAction(tr("&About"), this, &MainWindow::about);
+    aboutAct->setStatusTip(tr("Show the application's About box"));
+
+    QAction *aboutQtAct = aboutMenu->addAction(tr("About &Qt"), qApp, &QApplication::aboutQt);
+    aboutQtAct->setStatusTip(tr("Show the Qt library's About box"));
 }
 
 void MainWindow::setDockOptions()
@@ -182,6 +212,8 @@ void MainWindow::setDockOptions()
         opts |= ForceTabbedDocks;
     if (actions.at(4)->isChecked())
         opts |= VerticalTabs;
+    if (actions.at(5)->isChecked())
+        opts |= GroupedDragging;
 
     QMainWindow::setDockOptions(opts);
 }
@@ -195,8 +227,7 @@ void MainWindow::saveLayout()
     QFile file(fileName);
     if (!file.open(QFile::WriteOnly)) {
         QString msg = tr("Failed to open %1\n%2")
-                        .arg(fileName)
-                        .arg(file.errorString());
+                        .arg(QDir::toNativeSeparators(fileName), file.errorString());
         QMessageBox::warning(this, tr("Error"), msg);
         return;
     }
@@ -212,8 +243,7 @@ void MainWindow::saveLayout()
 
     if (!ok) {
         QString msg = tr("Error writing to %1\n%2")
-                        .arg(fileName)
-                        .arg(file.errorString());
+                        .arg(QDir::toNativeSeparators(fileName), file.errorString());
         QMessageBox::warning(this, tr("Error"), msg);
         return;
     }
@@ -228,8 +258,7 @@ void MainWindow::loadLayout()
     QFile file(fileName);
     if (!file.open(QFile::ReadOnly)) {
         QString msg = tr("Failed to open %1\n%2")
-                        .arg(fileName)
-                        .arg(file.errorString());
+                        .arg(QDir::toNativeSeparators(fileName), file.errorString());
         QMessageBox::warning(this, tr("Error"), msg);
         return;
     }
@@ -254,56 +283,52 @@ void MainWindow::loadLayout()
         ok = restoreState(layout_data);
 
     if (!ok) {
-        QString msg = tr("Error reading %1")
-                        .arg(fileName);
+        QString msg = tr("Error reading %1").arg(QDir::toNativeSeparators(fileName));
         QMessageBox::warning(this, tr("Error"), msg);
         return;
     }
 }
 
-QAction *addAction(QMenu *menu, const QString &text, QActionGroup *group, QSignalMapper *mapper,
-                    int id)
+static QAction *addCornerAction(const QString &text, QMainWindow *mw, QMenu *menu, QActionGroup *group,
+                                Qt::Corner c, Qt::DockWidgetArea a)
 {
-    bool first = group->actions().isEmpty();
-    QAction *result = menu->addAction(text);
+    QAction *result = menu->addAction(text, mw, [=]() { mw->setCorner(c, a); });
     result->setCheckable(true);
-    result->setChecked(first);
     group->addAction(result);
-    QObject::connect(result, SIGNAL(triggered()), mapper, SLOT(map()));
-    mapper->setMapping(result, id);
     return result;
 }
 
-void MainWindow::setupDockWidgets(const QMap<QString, QSize> &customSizeHints)
+void MainWindow::setupDockWidgets(const CustomSizeHintMap &customSizeHints)
 {
     qRegisterMetaType<QDockWidget::DockWidgetFeatures>();
 
-    mapper = new QSignalMapper(this);
-    connect(mapper, SIGNAL(mapped(int)), this, SLOT(setCorner(int)));
-
-    QMenu *corner_menu = dockWidgetMenu->addMenu(tr("Top left corner"));
+    QMenu *cornerMenu = dockWidgetMenu->addMenu(tr("Top left corner"));
     QActionGroup *group = new QActionGroup(this);
     group->setExclusive(true);
-    ::addAction(corner_menu, tr("Top dock area"), group, mapper, 0);
-    ::addAction(corner_menu, tr("Left dock area"), group, mapper, 1);
+    QAction *cornerAction = addCornerAction(tr("Top dock area"), this, cornerMenu, group, Qt::TopLeftCorner, Qt::TopDockWidgetArea);
+    cornerAction->setChecked(true);
+    addCornerAction(tr("Left dock area"), this, cornerMenu, group, Qt::TopLeftCorner, Qt::LeftDockWidgetArea);
 
-    corner_menu = dockWidgetMenu->addMenu(tr("Top right corner"));
+    cornerMenu = dockWidgetMenu->addMenu(tr("Top right corner"));
     group = new QActionGroup(this);
     group->setExclusive(true);
-    ::addAction(corner_menu, tr("Top dock area"), group, mapper, 2);
-    ::addAction(corner_menu, tr("Right dock area"), group, mapper, 3);
+    cornerAction = addCornerAction(tr("Top dock area"), this, cornerMenu, group, Qt::TopRightCorner, Qt::TopDockWidgetArea);
+    cornerAction->setChecked(true);
+    addCornerAction(tr("Right dock area"), this, cornerMenu, group, Qt::TopRightCorner, Qt::RightDockWidgetArea);
 
-    corner_menu = dockWidgetMenu->addMenu(tr("Bottom left corner"));
+    cornerMenu = dockWidgetMenu->addMenu(tr("Bottom left corner"));
     group = new QActionGroup(this);
     group->setExclusive(true);
-    ::addAction(corner_menu, tr("Bottom dock area"), group, mapper, 4);
-    ::addAction(corner_menu, tr("Left dock area"), group, mapper, 5);
+    cornerAction = addCornerAction(tr("Bottom dock area"), this, cornerMenu, group, Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
+    cornerAction->setChecked(true);
+    addCornerAction(tr("Left dock area"), this, cornerMenu, group, Qt::BottomLeftCorner, Qt::LeftDockWidgetArea);
 
-    corner_menu = dockWidgetMenu->addMenu(tr("Bottom right corner"));
+    cornerMenu = dockWidgetMenu->addMenu(tr("Bottom right corner"));
     group = new QActionGroup(this);
     group->setExclusive(true);
-    ::addAction(corner_menu, tr("Bottom dock area"), group, mapper, 6);
-    ::addAction(corner_menu, tr("Right dock area"), group, mapper, 7);
+    cornerAction = addCornerAction(tr("Bottom dock area"), this, cornerMenu, group, Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
+    cornerAction->setChecked(true);
+    addCornerAction(tr("Right dock area"), this, cornerMenu, group, Qt::BottomRightCorner, Qt::RightDockWidgetArea);
 
     dockWidgetMenu->addSeparator();
 
@@ -325,16 +350,16 @@ void MainWindow::setupDockWidgets(const QMap<QString, QSize> &customSizeHints)
     };
     const int setCount = sizeof(sets) / sizeof(Set);
 
+    const QIcon qtIcon(QPixmap(":/res/qt.png"));
     for (int i = 0; i < setCount; ++i) {
         ColorSwatch *swatch = new ColorSwatch(tr(sets[i].name), this, Qt::WindowFlags(sets[i].flags));
-        if (i%2)
-            swatch->setWindowIcon(QIcon(QPixmap(":/res/qt.png")));
+        if (i % 2)
+            swatch->setWindowIcon(qtIcon);
         if (qstrcmp(sets[i].name, "Blue") == 0) {
             BlueTitleBar *titlebar = new BlueTitleBar(swatch);
             swatch->setTitleBarWidget(titlebar);
-            connect(swatch, SIGNAL(topLevelChanged(bool)), titlebar, SLOT(updateMask()));
-            connect(swatch, SIGNAL(featuresChanged(QDockWidget::DockWidgetFeatures)), titlebar, SLOT(updateMask()), Qt::QueuedConnection);
-
+            connect(swatch, &QDockWidget::topLevelChanged, titlebar, &BlueTitleBar::updateMask);
+            connect(swatch, &QDockWidget::featuresChanged, titlebar, &BlueTitleBar::updateMask, Qt::QueuedConnection);
         }
 
         QString name = QString::fromLatin1(sets[i].name);
@@ -342,69 +367,32 @@ void MainWindow::setupDockWidgets(const QMap<QString, QSize> &customSizeHints)
             swatch->setCustomSizeHint(customSizeHints.value(name));
 
         addDockWidget(sets[i].area, swatch);
-        dockWidgetMenu->addMenu(swatch->menu);
+        dockWidgetMenu->addMenu(swatch->colorSwatchMenu());
     }
 
-    createDockWidgetAction = new QAction(tr("Add dock widget..."), this);
-    connect(createDockWidgetAction, SIGNAL(triggered()), this, SLOT(createDockWidget()));
     destroyDockWidgetMenu = new QMenu(tr("Destroy dock widget"), this);
     destroyDockWidgetMenu->setEnabled(false);
-    connect(destroyDockWidgetMenu, SIGNAL(triggered(QAction*)), this, SLOT(destroyDockWidget(QAction*)));
+    connect(destroyDockWidgetMenu, &QMenu::triggered, this, &MainWindow::destroyDockWidget);
 
     dockWidgetMenu->addSeparator();
-    dockWidgetMenu->addAction(createDockWidgetAction);
+    dockWidgetMenu->addAction(tr("Add dock widget..."), this, &MainWindow::createDockWidget);
     dockWidgetMenu->addMenu(destroyDockWidgetMenu);
-}
-
-void MainWindow::setCorner(int id)
-{
-    switch (id) {
-        case 0:
-            QMainWindow::setCorner(Qt::TopLeftCorner, Qt::TopDockWidgetArea);
-            break;
-        case 1:
-            QMainWindow::setCorner(Qt::TopLeftCorner, Qt::LeftDockWidgetArea);
-            break;
-        case 2:
-            QMainWindow::setCorner(Qt::TopRightCorner, Qt::TopDockWidgetArea);
-            break;
-        case 3:
-            QMainWindow::setCorner(Qt::TopRightCorner, Qt::RightDockWidgetArea);
-            break;
-        case 4:
-            QMainWindow::setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
-            break;
-        case 5:
-            QMainWindow::setCorner(Qt::BottomLeftCorner, Qt::LeftDockWidgetArea);
-            break;
-        case 6:
-            QMainWindow::setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
-            break;
-        case 7:
-            QMainWindow::setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
-            break;
-    }
-}
-
-void MainWindow::showEvent(QShowEvent *event)
-{
-    QMainWindow::showEvent(event);
 }
 
 void MainWindow::switchLayoutDirection()
 {
     if (layoutDirection() == Qt::LeftToRight)
-        qApp->setLayoutDirection(Qt::RightToLeft);
+        QApplication::setLayoutDirection(Qt::RightToLeft);
     else
-        qApp->setLayoutDirection(Qt::LeftToRight);
+        QApplication::setLayoutDirection(Qt::LeftToRight);
 }
 
 class CreateDockWidgetDialog : public QDialog
 {
 public:
-    CreateDockWidgetDialog(QWidget *parent = 0);
+    explicit CreateDockWidgetDialog(QWidget *parent = nullptr);
 
-    QString objectName() const;
+    QString enteredObjectName() const { return m_objectName->text(); }
     Qt::DockWidgetArea location() const;
 
 private:
@@ -414,15 +402,17 @@ private:
 
 CreateDockWidgetDialog::CreateDockWidgetDialog(QWidget *parent)
     : QDialog(parent)
+    , m_objectName(new QLineEdit(this))
+    , m_location(new QComboBox(this))
 {
+    setWindowTitle(tr("Add Dock Widget"));
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     QGridLayout *layout = new QGridLayout(this);
 
     layout->addWidget(new QLabel(tr("Object name:")), 0, 0);
-    m_objectName = new QLineEdit;
     layout->addWidget(m_objectName, 0, 1);
 
     layout->addWidget(new QLabel(tr("Location:")), 1, 0);
-    m_location = new QComboBox;
     m_location->setEditable(false);
     m_location->addItem(tr("Top"));
     m_location->addItem(tr("Left"));
@@ -431,23 +421,10 @@ CreateDockWidgetDialog::CreateDockWidgetDialog(QWidget *parent)
     m_location->addItem(tr("Restore"));
     layout->addWidget(m_location, 1, 1);
 
-    QHBoxLayout *buttonLayout = new QHBoxLayout;
-    layout->addLayout(buttonLayout, 2, 0, 1, 2);
-    buttonLayout->addStretch();
-
-    QPushButton *cancelButton = new QPushButton(tr("Cancel"));
-    connect(cancelButton, SIGNAL(clicked()), this, SLOT(reject()));
-    buttonLayout->addWidget(cancelButton);
-    QPushButton *okButton = new QPushButton(tr("Ok"));
-    connect(okButton, SIGNAL(clicked()), this, SLOT(accept()));
-    buttonLayout->addWidget(okButton);
-
-    okButton->setDefault(true);
-}
-
-QString CreateDockWidgetDialog::objectName() const
-{
-    return m_objectName->text();
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    layout->addWidget(buttonBox, 2, 0, 1, 2);
 }
 
 Qt::DockWidgetArea CreateDockWidgetDialog::location() const
@@ -466,13 +443,13 @@ Qt::DockWidgetArea CreateDockWidgetDialog::location() const
 void MainWindow::createDockWidget()
 {
     CreateDockWidgetDialog dialog(this);
-    int ret = dialog.exec();
-    if (ret == QDialog::Rejected)
+    if (dialog.exec() == QDialog::Rejected)
         return;
 
     QDockWidget *dw = new QDockWidget;
-    dw->setObjectName(dialog.objectName());
-    dw->setWindowTitle(dialog.objectName());
+    const QString name = dialog.enteredObjectName();
+    dw->setObjectName(name);
+    dw->setWindowTitle(name);
     dw->setWidget(new QTextEdit);
 
     Qt::DockWidgetArea area = dialog.location();
@@ -494,7 +471,7 @@ void MainWindow::createDockWidget()
 
     extraDockWidgets.append(dw);
     destroyDockWidgetMenu->setEnabled(true);
-    destroyDockWidgetMenu->addAction(new QAction(dialog.objectName(), this));
+    destroyDockWidgetMenu->addAction(new QAction(name, this));
 }
 
 void MainWindow::destroyDockWidget(QAction *action)
@@ -506,4 +483,9 @@ void MainWindow::destroyDockWidget(QAction *action)
 
     if (destroyDockWidgetMenu->isEmpty())
         destroyDockWidgetMenu->setEnabled(false);
+}
+
+void MainWindow::about()
+{
+    QMessageBox::about(this, tr("About MainWindows"), message);
 }

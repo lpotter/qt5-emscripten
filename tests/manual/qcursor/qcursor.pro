@@ -1,3 +1,3 @@
 TEMPLATE = subdirs
 
-SUBDIRS = allcursors grab_override
+SUBDIRS = allcursors childwidget childwindow childwindowcontainer grab_override qcursorhighdpi

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -324,12 +322,24 @@ QPen::QPen(const QBrush &brush, qreal width, Qt::PenStyle s, Qt::PenCapStyle c, 
     Constructs a pen that is a copy of the given \a pen.
 */
 
-QPen::QPen(const QPen &p)
+QPen::QPen(const QPen &p) Q_DECL_NOTHROW
 {
     d = p.d;
-    d->ref.ref();
+    if (d)
+        d->ref.ref();
 }
 
+
+/*!
+    \fn QPen::QPen(QPen &&pen)
+    \since 5.4
+
+    Constructs a pen that is moved from the given \a pen.
+
+    The moved-from pen can only be assigned to, copied, or
+    destroyed. Any other operation (prior to assignment) leads to
+    undefined behavior.
+*/
 
 /*!
     Destroys the pen.
@@ -337,7 +347,7 @@ QPen::QPen(const QPen &p)
 
 QPen::~QPen()
 {
-    if (!d->ref.deref())
+    if (d && !d->ref.deref())
         delete d;
 }
 
@@ -371,11 +381,19 @@ void QPen::detach()
     this pen.
 */
 
-QPen &QPen::operator=(const QPen &p)
+QPen &QPen::operator=(const QPen &p) Q_DECL_NOTHROW
 {
-    qAtomicAssign(d, p.d);
+    QPen(p).swap(*this);
     return *this;
 }
+
+/*!
+    \fn QPen &QPen::operator=(QPen &&other)
+
+    Move-assigns \a other to this QPen instance.
+
+    \since 5.2
+*/
 
 /*!
     \fn void QPen::swap(QPen &other)
@@ -447,15 +465,19 @@ QVector<qreal> QPen::dashPattern() const
 
         switch (d->style) {
         case Qt::DashLine:
+            dd->dashPattern.reserve(2);
             dd->dashPattern << dash << space;
             break;
         case Qt::DotLine:
+            dd->dashPattern.reserve(2);
             dd->dashPattern << dot << space;
             break;
         case Qt::DashDotLine:
+            dd->dashPattern.reserve(4);
             dd->dashPattern << dash << space << dot << space;
             break;
         case Qt::DashDotDotLine:
+            dd->dashPattern.reserve(6);
             dd->dashPattern << dash << space << dot << space << dot << space;
             break;
         default:
@@ -770,7 +792,7 @@ void QPen::setBrush(const QBrush &brush)
 
 
 /*!
-    Returns true if the pen has a solid fill, otherwise false.
+    Returns \c true if the pen has a solid fill, otherwise false.
 
     \sa style(), dashPattern()
 */
@@ -781,7 +803,7 @@ bool QPen::isSolid() const
 
 
 /*!
-    Returns true if the pen is cosmetic; otherwise returns false.
+    Returns \c true if the pen is cosmetic; otherwise returns \c false.
 
     Cosmetic pens are used to draw strokes that have a constant width
     regardless of any transformations applied to the QPainter they are
@@ -819,7 +841,7 @@ void QPen::setCosmetic(bool cosmetic)
 /*!
     \fn bool QPen::operator!=(const QPen &pen) const
 
-    Returns true if the pen is different from the given \a pen;
+    Returns \c true if the pen is different from the given \a pen;
     otherwise false. Two pens are different if they have different
     styles, widths or colors.
 
@@ -829,7 +851,7 @@ void QPen::setCosmetic(bool cosmetic)
 /*!
     \fn bool QPen::operator==(const QPen &pen) const
 
-    Returns true if the pen is equal to the given \a pen; otherwise
+    Returns \c true if the pen is equal to the given \a pen; otherwise
     false. Two pens are equal if they have equal styles, widths and
     colors.
 
@@ -964,6 +986,7 @@ QDataStream &operator>>(QDataStream &s, QPen &p)
             quint32 numDashes;
             s >> numDashes;
             double dash;
+            dashPattern.reserve(numDashes);
             for (quint32 i = 0; i < numDashes; ++i) {
                 s >> dash;
                 dashPattern << dash;
@@ -1010,12 +1033,13 @@ QDebug operator<<(QDebug dbg, const QPen &p)
         "CustomDashLine"
     };
 
+    QDebugStateSaver saver(dbg);
     dbg.nospace() << "QPen(" << p.width() << ',' << p.brush()
                   << ',' << PEN_STYLES[p.style()] << ',' << int(p.capStyle())
                   << ',' << int(p.joinStyle()) << ',' << p.dashPattern()
                   << ',' << p.dashOffset()
                   << ',' << p.miterLimit() << ')';
-    return dbg.space();
+    return dbg;
 }
 #endif
 

@@ -1,44 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-#include <math.h>               // isnan
+#include <qmath.h>               // qIsNan
 #include <qvariant.h>
 
 #ifdef Q_OS_UNIX
@@ -56,42 +43,13 @@ static bool compareFileDescriptors(int fd1, int fd2)
 }
 #endif
 
-Q_DECLARE_METATYPE(QVariant)
-Q_DECLARE_METATYPE(QList<bool>)
-Q_DECLARE_METATYPE(QList<short>)
-Q_DECLARE_METATYPE(QList<ushort>)
-Q_DECLARE_METATYPE(QList<int>)
-Q_DECLARE_METATYPE(QList<uint>)
-Q_DECLARE_METATYPE(QList<qlonglong>)
-Q_DECLARE_METATYPE(QList<qulonglong>)
-Q_DECLARE_METATYPE(QList<double>)
-Q_DECLARE_METATYPE(QList<QDBusVariant>)
-Q_DECLARE_METATYPE(QList<QDateTime>)
-
-Q_DECLARE_METATYPE(QList<QByteArray>)
-Q_DECLARE_METATYPE(QList<QVariantList>)
-Q_DECLARE_METATYPE(QList<QStringList>)
-Q_DECLARE_METATYPE(QList<QList<bool> >)
-Q_DECLARE_METATYPE(QList<QList<short> >)
-Q_DECLARE_METATYPE(QList<QList<ushort> >)
-Q_DECLARE_METATYPE(QList<QList<int> >)
-Q_DECLARE_METATYPE(QList<QList<uint> >)
-Q_DECLARE_METATYPE(QList<QList<qlonglong> >)
-Q_DECLARE_METATYPE(QList<QList<qulonglong> >)
-Q_DECLARE_METATYPE(QList<QList<double> >)
-Q_DECLARE_METATYPE(QList<QList<QDBusObjectPath> >)
-Q_DECLARE_METATYPE(QList<QList<QDBusSignature> >)
-
 typedef QMap<int, QString> IntStringMap;
 typedef QMap<QString, QString> StringStringMap;
 typedef QMap<QDBusObjectPath, QString> ObjectPathStringMap;
 typedef QMap<qlonglong, QDateTime> LLDateTimeMap;
 typedef QMap<QDBusSignature, QString> SignatureStringMap;
-Q_DECLARE_METATYPE(IntStringMap)
 Q_DECLARE_METATYPE(StringStringMap)
-Q_DECLARE_METATYPE(ObjectPathStringMap)
 Q_DECLARE_METATYPE(LLDateTimeMap)
-Q_DECLARE_METATYPE(SignatureStringMap)
 
 static bool compare(const QDBusUnixFileDescriptor &t1, const QDBusUnixFileDescriptor &t2)
 {
@@ -144,7 +102,6 @@ struct MyVariantMapStruct
     { return s == other.s && map == other.map; }
 };
 Q_DECLARE_METATYPE(MyVariantMapStruct)
-Q_DECLARE_METATYPE(QList<MyVariantMapStruct>)
 
 QDBusArgument &operator<<(QDBusArgument &arg, const MyVariantMapStruct &ms)
 {
@@ -170,7 +127,6 @@ struct MyFileDescriptorStruct
     { return compare(fd, other.fd); }
 };
 Q_DECLARE_METATYPE(MyFileDescriptorStruct)
-Q_DECLARE_METATYPE(QList<MyFileDescriptorStruct>)
 
 QDBusArgument &operator<<(QDBusArgument &arg, const MyFileDescriptorStruct &ms)
 {
@@ -359,7 +315,7 @@ bool compare(const QVariant &v1, const QVariant &v2);
 
 bool compare(double d1, double d2)
 {
-    if (isnan(d1) && isnan(d2))
+    if (qIsNaN(d1) && qIsNaN(d2))
         return true;
     return d1 == d2;
 }
@@ -481,7 +437,7 @@ bool compareToArgument(const QDBusArgument &arg, const QVariant &v2)
     case QVariant::DateTime:
         return compare<QDateTime>(arg, v2);
     default:
-        register int id = v2.userType();
+        int id = v2.userType();
         if (id == qMetaTypeId<QDBusObjectPath>())
             return compare<QDBusObjectPath>(arg, v2);
         else if (id == qMetaTypeId<QDBusSignature>())

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -73,7 +60,6 @@ void AccessibilitySceneManager::updateAccessibilitySceneItemFlags()
         if (!interface)
             continue;
         updateItemFlags(m_graphicsItems.value(object), interface);
-        delete interface;
     }
 }
 
@@ -89,15 +75,18 @@ void AccessibilitySceneManager::populateAccessibilityTreeScene()
     populateAccessibilityTreeScene(rootInterface);
 }
 
-void AccessibilitySceneManager::handleUpdate(QObject *object, QAccessible::Event reason)
+void AccessibilitySceneManager::handleUpdate(QAccessibleEvent *event)
 {
+    QObject *object = event->object();
+    QAccessible::Event type = event->type();
+
     QAccessibleInterface *interface = QAccessible::queryAccessibleInterface(object);
     if (!interface)
         return;
 
     QString name = interface->text(QAccessible::Name);
 
-    if (reason == QAccessible::ObjectCreated) {
+    if (type == QAccessible::ObjectCreated) {
   //      qDebug() << "ObjectCreated" << object << name;
         populateAccessibilityScene(interface, m_scene);
     }
@@ -109,7 +98,7 @@ void AccessibilitySceneManager::handleUpdate(QObject *object, QAccessible::Event
         return;
     }
 
-    if (reason == QAccessible::LocationChanged) {
+    if (type == QAccessible::LocationChanged) {
 
         //if (name.startsWith("List"))
             qDebug() << "locationChange" << object << name << interface->rect();
@@ -119,12 +108,10 @@ void AccessibilitySceneManager::handleUpdate(QObject *object, QAccessible::Event
            QAccessibleInterface *child = interface->child(i);
            if (child) {
                updateItem(m_graphicsItems.value(child->object()), child);
-               delete child;
             }
         }
 
-        delete interface;
-    } else if (reason == QAccessible::ObjectDestroyed) {
+    } else if (type == QAccessible::ObjectDestroyed) {
 //        qDebug() << "ObjectDestroyed" << object << name;
         delete m_graphicsItems.value(object);
         m_graphicsItems.remove(object);
@@ -132,28 +119,25 @@ void AccessibilitySceneManager::handleUpdate(QObject *object, QAccessible::Event
         if (object == m_selectedObject) {
             m_selectedObject = 0;
         }
-    } else if (reason == QAccessible::ObjectHide) {
+    } else if (type == QAccessible::ObjectHide) {
 //        qDebug() << "ObjectCreated Hide" << object;
         updateItemFlags(item, interface);
-    } else if (reason == QAccessible::ObjectShow) {
+    } else if (type == QAccessible::ObjectShow) {
 //        qDebug() << "ObjectCreated Show" << object;
         updateItemFlags(item, interface);
-    } else if (reason == QAccessible::ScrollingStart) {
+    } else if (type == QAccessible::ScrollingStart) {
         qDebug() << "ObjectCreated ScrollingStart" << object;
-        QAccessibleInterface *child = 0;
         for (int i = 0; i < interface->childCount(); ++i) {
             QAccessibleInterface *child = interface->child(i);
             if (child) {
                 m_animatedObjects.insert(child->object());
-                delete child;
             }
         }
-    } else if (reason == QAccessible::ScrollingEnd) {
+    } else if (type == QAccessible::ScrollingEnd) {
         // qDebug() << "ObjectCreated ScrollingEnd" << object;
         foreach (QObject *object, m_animatedObjects) {
             updateItem(m_graphicsItems.value(object), interface);
         }
-        delete interface;
         m_animatedObjects.clear();
 
     } else {
@@ -197,10 +181,7 @@ void AccessibilitySceneManager::updateItems(QObject *root)
     for (int i = 0; i < interface->childCount(); ++i) {
         QAccessibleInterface *child = interface->child(i);
         updateItems(child->object());
-        delete child;
     }
-
-    delete interface;
 }
 
 void AccessibilitySceneManager::updateItem(QObject *object)
@@ -213,8 +194,6 @@ void AccessibilitySceneManager::updateItem(QObject *object)
         return;
 
     updateItem(m_graphicsItems.value(object), interface);
-
-    delete interface;
 }
 
 void AccessibilitySceneManager::updateItem(QGraphicsRectItem *item, QAccessibleInterface *interface)
@@ -253,9 +232,21 @@ void AccessibilitySceneManager::updateItemFlags(QGraphicsRectItem *item, QAccess
         }
     }
 
+    if (m_optionsWidget->hideNullObjectItems()) {
+        if (interface->object() == 0) {
+            shouldShow = false;
+        }
+    }
+
+    if (m_optionsWidget->hideNullRectItems()) {
+        if (interface->rect().isNull()) {
+            shouldShow = false;
+        }
+    }
+
     item->setVisible(shouldShow);
 
-    if (interface->object() == m_selectedObject)
+    if (interface->object() && interface->object() == m_selectedObject)
         item->setBrush(QColor(Qt::yellow));
     else
         item->setBrush(QColor(Qt::white));
@@ -320,7 +311,6 @@ void AccessibilitySceneManager::populateAccessibilityScene(QAccessibleInterface 
         QAccessibleInterface *child = interface->child(i);
         updateItems(child->object());
         populateAccessibilityScene(child, scene);
-        delete child;
     }
 }
 
@@ -339,7 +329,6 @@ AccessibilitySceneManager::TreeItem AccessibilitySceneManager::computeLevels(QAc
             TreeItem childLevel = computeLevels(child, level + 1);
             currentLevel.children.append(childLevel);
             currentLevel.width += childLevel.width + m_treeItemHorizontalPadding;
-            delete child;
         }
     }
 
@@ -392,7 +381,7 @@ void AccessibilitySceneManager::addGraphicsItems(AccessibilitySceneManager::Tree
     graphicsItem->setRect(0, 0, m_treeItemWidth, m_treeItemHeight);
     graphicsItem->setFlag(QGraphicsItem::ItemClipsChildrenToShape);
 
-    if (item.object == m_selectedObject)
+    if (item.object && item.object == m_selectedObject)
         graphicsItem->setBrush(QColor(Qt::yellow));
     else
         graphicsItem->setBrush(QColor(Qt::white));
@@ -473,11 +462,7 @@ bool AccessibilitySceneManager::isHidden(QAccessibleInterface *interface)
             return true;
         }
 
-        QAccessibleInterface *parent = current->parent();
-
-        if (current != interface)
-            delete current;
-        current = parent;
+        current = current->parent();
     }
 
     return false;

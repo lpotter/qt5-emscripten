@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include "private/qpaintengineex_p.h"
 #include "QtGui/qpainterpath.h"
 #include "private/qdatabuffer_p.h"
@@ -136,20 +135,20 @@ public:
 
     QRasterPaintEngine(QPaintDevice *device);
     ~QRasterPaintEngine();
-    bool begin(QPaintDevice *device);
-    bool end();
+    bool begin(QPaintDevice *device) override;
+    bool end() override;
 
-    void penChanged();
-    void brushChanged();
-    void brushOriginChanged();
-    void opacityChanged();
-    void compositionModeChanged();
-    void renderHintsChanged();
-    void transformChanged();
-    void clipEnabledChanged();
+    void penChanged() override;
+    void brushChanged() override;
+    void brushOriginChanged() override;
+    void opacityChanged() override;
+    void compositionModeChanged() override;
+    void renderHintsChanged() override;
+    void transformChanged() override;
+    void clipEnabledChanged() override;
 
-    void setState(QPainterState *s);
-    QPainterState *createState(QPainterState *orig) const;
+    void setState(QPainterState *s) override;
+    QPainterState *createState(QPainterState *orig) const override;
     inline QRasterPaintEngineState *state() {
         return static_cast<QRasterPaintEngineState *>(QPaintEngineEx::state());
     }
@@ -162,42 +161,43 @@ public:
 
     void updateMatrix(const QTransform &matrix);
 
-    void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
-    void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode);
-    void fillPath(const QPainterPath &path, QSpanData *fillData);
-    void fillPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
+    virtual void fillPath(const QPainterPath &path, QSpanData *fillData);
+    virtual void fillPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode);
 
-    void drawEllipse(const QRectF &rect);
+    void drawPolygon(const QPointF *points, int pointCount, PolygonDrawMode mode) override;
+    void drawPolygon(const QPoint *points, int pointCount, PolygonDrawMode mode) override;
 
-    void fillRect(const QRectF &rect, const QBrush &brush);
-    void fillRect(const QRectF &rect, const QColor &color);
+    void drawEllipse(const QRectF &rect) override;
 
-    void drawRects(const QRect  *rects, int rectCount);
-    void drawRects(const QRectF *rects, int rectCount);
+    void fillRect(const QRectF &rect, const QBrush &brush) override;
+    void fillRect(const QRectF &rect, const QColor &color) override;
 
-    void drawPixmap(const QPointF &p, const QPixmap &pm);
-    void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr);
-    void drawImage(const QPointF &p, const QImage &img);
+    void drawRects(const QRect  *rects, int rectCount) override;
+    void drawRects(const QRectF *rects, int rectCount) override;
+
+    void drawPixmap(const QPointF &p, const QPixmap &pm) override;
+    void drawPixmap(const QRectF &r, const QPixmap &pm, const QRectF &sr) override;
+    void drawImage(const QPointF &p, const QImage &img) override;
     void drawImage(const QRectF &r, const QImage &pm, const QRectF &sr,
-                   Qt::ImageConversionFlags flags = Qt::AutoColor);
-    void drawTiledPixmap(const QRectF &r, const QPixmap &pm, const QPointF &sr);
-    void drawTextItem(const QPointF &p, const QTextItem &textItem);
+                   Qt::ImageConversionFlags flags = Qt::AutoColor) override;
+    void drawTiledPixmap(const QRectF &r, const QPixmap &pm, const QPointF &sr) override;
+    void drawTextItem(const QPointF &p, const QTextItem &textItem) override;
 
-    void drawLines(const QLine *line, int lineCount);
-    void drawLines(const QLineF *line, int lineCount);
+    void drawLines(const QLine *line, int lineCount) override;
+    void drawLines(const QLineF *line, int lineCount) override;
 
-    void drawPoints(const QPointF *points, int pointCount);
-    void drawPoints(const QPoint *points, int pointCount);
+    void drawPoints(const QPointF *points, int pointCount) override;
+    void drawPoints(const QPoint *points, int pointCount) override;
 
-    void stroke(const QVectorPath &path, const QPen &pen);
-    void fill(const QVectorPath &path, const QBrush &brush);
+    void stroke(const QVectorPath &path, const QPen &pen) override;
+    void fill(const QVectorPath &path, const QBrush &brush) override;
 
-    void clip(const QVectorPath &path, Qt::ClipOperation op);
-    void clip(const QRect &rect, Qt::ClipOperation op);
-    void clip(const QRegion &region, Qt::ClipOperation op);
+    void clip(const QVectorPath &path, Qt::ClipOperation op) override;
+    void clip(const QRect &rect, Qt::ClipOperation op) override;
+    void clip(const QRegion &region, Qt::ClipOperation op) override;
     inline const QClipData *clipData() const;
 
-    void drawStaticTextItem(QStaticTextItem *textItem);
+    void drawStaticTextItem(QStaticTextItem *textItem) override;
     virtual bool drawCachedGlyphs(int numGlyphs, const glyph_t *glyphs, const QFixedPoint *positions,
                                   QFontEngine *fontEngine);
 
@@ -225,14 +225,14 @@ public:
 #endif
 
     QRasterBuffer *rasterBuffer();
-    void alphaPenBlt(const void* src, int bpl, int depth, int rx,int ry,int w,int h);
+    void alphaPenBlt(const void* src, int bpl, int depth, int rx,int ry,int w,int h, bool useGammaCorrection);
 
-    Type type() const { return Raster; }
+    Type type() const override { return Raster; }
 
-    QPoint coordinateOffset() const;
+    QPoint coordinateOffset() const override;
 
-    bool supportsTransformations(QFontEngine *fontEngine) const;
-    bool supportsTransformations(QFontEngine *fontEngine, const QTransform &m) const;
+    bool requiresPretransformedGlyphPositions(QFontEngine *fontEngine, const QTransform &m) const override;
+    bool shouldDrawCachedGlyphs(QFontEngine *fontEngine, const QTransform &m) const override;
 
 protected:
     QRasterPaintEngine(QRasterPaintEnginePrivate &d, QPaintDevice *);
@@ -250,7 +250,7 @@ private:
     QRect toNormalizedFillRect(const QRectF &rect);
 
     inline void ensureBrush(const QBrush &brush) {
-        if (!qbrush_fast_equals(state()->lastBrush, brush) || (brush.style() != Qt::NoBrush && state()->fillFlags))
+        if (!qbrush_fast_equals(state()->lastBrush, brush) || state()->fillFlags)
             updateBrush(brush);
     }
     inline void ensureBrush() { ensureBrush(state()->brush); }
@@ -287,10 +287,12 @@ public:
     void rasterize(QT_FT_Outline *outline, ProcessSpans callback, void *userData, QRasterBuffer *rasterBuffer);
     void updateMatrixData(QSpanData *spanData, const QBrush &brush, const QTransform &brushMatrix);
 
-    void systemStateChanged();
+    void systemStateChanged() override;
 
     void drawImage(const QPointF &pt, const QImage &img, SrcOverBlendFunc func,
                    const QRect &clip, int alpha, const QRect &sr = QRect());
+    void blitImage(const QPointF &pt, const QImage &img,
+                   const QRect &clip, const QRect &sr = QRect());
 
     QTransform brushMatrix() const {
         Q_Q(const QRasterPaintEngine);
@@ -313,6 +315,7 @@ public:
 
     void recalculateFastImages();
     bool canUseFastImageBlending(QPainter::CompositionMode mode, const QImage &image) const;
+    bool canUseImageBlitting(QPainter::CompositionMode mode, const QImage &image) const;
 
     QPaintDevice *device;
     QScopedPointer<QOutlineMapper> outlineMapper;
@@ -323,6 +326,7 @@ public:
 #endif
 
     QRect deviceRect;
+    QRect deviceRectUnclipped;
 
     QStroker basicStroker;
     QScopedPointer<QDashStroker> dashStroker;
@@ -335,7 +339,7 @@ public:
     QSpanData solid_color_filler;
 
 
-    QFontEngineGlyphCache::Type glyphCacheType;
+    QFontEngine::GlyphFormat glyphCacheFormat;
 
     QScopedPointer<QClipData> baseClip;
 
@@ -456,6 +460,8 @@ public:
     int height() const { return m_height; }
     int bytesPerLine() const { return bytes_per_line; }
     int bytesPerPixel() const { return bytes_per_pixel; }
+    template<typename T>
+    int stride() { return bytes_per_line / sizeof(T); }
 
     uchar *buffer() const { return m_buffer; }
 

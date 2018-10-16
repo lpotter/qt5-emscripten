@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,59 +51,66 @@
 #ifndef HTTPWINDOW_H
 #define HTTPWINDOW_H
 
-#include <QDialog>
+#include <QProgressDialog>
 #include <QNetworkAccessManager>
 #include <QUrl>
 
 QT_BEGIN_NAMESPACE
-class QDialogButtonBox;
 class QFile;
 class QLabel;
 class QLineEdit;
-class QProgressDialog;
 class QPushButton;
 class QSslError;
 class QAuthenticator;
 class QNetworkReply;
-
+class QCheckBox;
 
 QT_END_NAMESPACE
+
+class ProgressDialog : public QProgressDialog {
+    Q_OBJECT
+
+public:
+    explicit ProgressDialog(const QUrl &url, QWidget *parent = nullptr);
+
+public slots:
+   void networkReplyProgress(qint64 bytesRead, qint64 totalBytes);
+};
 
 class HttpWindow : public QDialog
 {
     Q_OBJECT
 
 public:
-    HttpWindow(QWidget *parent = 0);
+    explicit HttpWindow(QWidget *parent = nullptr);
 
-    void startRequest(QUrl url);
+    void startRequest(const QUrl &requestedUrl);
 
 private slots:
     void downloadFile();
     void cancelDownload();
     void httpFinished();
     void httpReadyRead();
-    void updateDataReadProgress(qint64 bytesRead, qint64 totalBytes);
     void enableDownloadButton();
-    void slotAuthenticationRequired(QNetworkReply*,QAuthenticator *);
+    void slotAuthenticationRequired(QNetworkReply *, QAuthenticator *authenticator);
 #ifndef QT_NO_SSL
-    void sslErrors(QNetworkReply*,const QList<QSslError> &errors);
+    void sslErrors(QNetworkReply *, const QList<QSslError> &errors);
 #endif
 
 private:
+    QFile *openFileForWrite(const QString &fileName);
+
     QLabel *statusLabel;
-    QLabel *urlLabel;
     QLineEdit *urlLineEdit;
-    QProgressDialog *progressDialog;
     QPushButton *downloadButton;
-    QPushButton *quitButton;
-    QDialogButtonBox *buttonBox;
+    QCheckBox *launchCheckBox;
+    QLineEdit *defaultFileLineEdit;
+    QLineEdit *downloadDirectoryLineEdit;
 
     QUrl url;
     QNetworkAccessManager qnam;
     QNetworkReply *reply;
     QFile *file;
-    int httpGetId;
     bool httpRequestAborted;
 };
 

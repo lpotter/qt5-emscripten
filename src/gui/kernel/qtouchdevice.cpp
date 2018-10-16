@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,11 +43,13 @@
 #include <QMutex>
 #include <QCoreApplication>
 
+#include <private/qdebug_p.h>
+
 QT_BEGIN_NAMESPACE
 
 /*!
     \class QTouchDevice
-    \brief The QTouchDevice class describes the device from with touch events originate.
+    \brief The QTouchDevice class describes the device from which touch events originate.
     \since 5.0
     \ingroup touch
     \inmodule QtGui
@@ -104,6 +104,9 @@ QT_BEGIN_NAMESPACE
 
     \value NormalizedPosition Indicates that the normalized position is available, meaning that normalizedPos()
                               returns a valid value.
+
+    \value MouseEmulation Indicates that the device synthesizes mouse events.
+                          This enum value has been introduced in Qt 5.5.
 */
 
 /*!
@@ -140,6 +143,16 @@ QTouchDevice::Capabilities QTouchDevice::capabilities() const
 }
 
 /*!
+    Returns the maximum number of simultaneous touch points (fingers) that
+    can be detected.
+    \since 5.2
+  */
+int QTouchDevice::maximumTouchPoints() const
+{
+    return d->maxTouchPoints;
+}
+
+/*!
     Returns the touch device name.
 
     This string may often be empty. It is however useful for systems that have
@@ -169,6 +182,15 @@ void QTouchDevice::setCapabilities(Capabilities caps)
 }
 
 /*!
+  Sets the maximum number of simultaneous touchpoints \a max
+  supported by the device and its driver.
+  */
+void QTouchDevice::setMaximumTouchPoints(int max)
+{
+    d->maxTouchPoints = max;
+}
+
+/*!
   Sets the \a name (a unique identifier) for the device. In most systems it is
   enough to leave this unset and keep the default empty name. This identifier
   becomes important when having multiple touch devices and a need to
@@ -179,7 +201,7 @@ void QTouchDevice::setName(const QString &name)
     d->name = name;
 }
 
-typedef QList<QTouchDevice *> TouchDevices;
+typedef QList<const QTouchDevice *> TouchDevices;
 Q_GLOBAL_STATIC(TouchDevices, deviceList)
 static QBasicMutex devicesMutex;
 
@@ -193,36 +215,76 @@ static void cleanupDevicesList()
 /*!
   Returns a list of all registered devices.
 
-  \note The returned list cannot be used to add new devices. Use QWindowSystemInterface::registerTouchDevice() instead.
+  \note The returned list cannot be used to add new devices. To add a simulated
+  touch screen for an autotest, QTest::createTouchDevice() can be used.
+  To add real touch screens to QPA plugins, the private
+  \c QWindowSystemInterface::registerTouchDevice() function can be used.
   */
 QList<const QTouchDevice *> QTouchDevice::devices()
 {
     QMutexLocker lock(&devicesMutex);
-    QList<QTouchDevice *> *devList = deviceList();
-    QList<const QTouchDevice *> constDevList;
-    for (int i = 0, count = devList->count(); i != count; ++i)
-        constDevList.append(devList->at(i));
-    return constDevList;
+    return *deviceList();
 }
 
 /*!
   \internal
   */
-bool QTouchDevicePrivate::isRegistered(QTouchDevice *dev)
+bool QTouchDevicePrivate::isRegistered(const QTouchDevice *dev)
 {
-    QMutexLocker lock(&devicesMutex);
+    QMutexLocker locker(&devicesMutex);
     return deviceList()->contains(dev);
 }
 
+const QTouchDevice *QTouchDevicePrivate::deviceById(quint8 id)
+{
+    QMutexLocker locker(&devicesMutex);
+    for (const QTouchDevice *dev : *deviceList())
+        if (QTouchDevicePrivate::get(const_cast<QTouchDevice *>(dev))->id == id)
+            return dev;
+    return nullptr;
+}
+
 /*!
   \internal
   */
-void QTouchDevicePrivate::registerDevice(QTouchDevice *dev)
+void QTouchDevicePrivate::registerDevice(const QTouchDevice *dev)
 {
     QMutexLocker lock(&devicesMutex);
     if (deviceList()->isEmpty())
         qAddPostRoutine(cleanupDevicesList);
     deviceList()->append(dev);
 }
+
+/*!
+  \internal
+  */
+void QTouchDevicePrivate::unregisterDevice(const QTouchDevice *dev)
+{
+    QMutexLocker lock(&devicesMutex);
+    bool wasRemoved = deviceList()->removeOne(dev);
+    if (wasRemoved && deviceList()->isEmpty())
+        qRemovePostRoutine(cleanupDevicesList);
+}
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug debug, const QTouchDevice *device)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug.noquote();
+    debug << "QTouchDevice(";
+    if (device) {
+        debug << '"' << device->name() << "\", type=";
+        QtDebugUtils::formatQEnum(debug, device->type());
+        debug << ", capabilities=";
+        QtDebugUtils::formatQFlags(debug, device->capabilities());
+        debug << ", maximumTouchPoints=" << device->maximumTouchPoints();
+    } else {
+        debug << '0';
+    }
+    debug << ')';
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE

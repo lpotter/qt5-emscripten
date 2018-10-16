@@ -4,7 +4,4 @@ SUBDIRS       = application \
                 mainwindow \
                 mdi \
                 menus \
-                recentfiles \
                 sdi
-
-QT += widgets

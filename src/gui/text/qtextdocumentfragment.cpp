@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -352,7 +350,7 @@ QTextDocumentFragment::~QTextDocumentFragment()
 }
 
 /*!
-    Returns true if the fragment is empty; otherwise returns false.
+    Returns \c true if the fragment is empty; otherwise returns \c false.
 */
 bool QTextDocumentFragment::isEmpty() const
 {
@@ -410,6 +408,8 @@ QTextDocumentFragment QTextDocumentFragment::fromPlainText(const QString &plainT
     return res;
 }
 
+#ifndef QT_NO_TEXTHTMLPARSER
+
 static QTextListFormat::Style nextListStyle(QTextListFormat::Style style)
 {
     if (style == QTextListFormat::ListDisc)
@@ -419,10 +419,8 @@ static QTextListFormat::Style nextListStyle(QTextListFormat::Style style)
     return style;
 }
 
-#ifndef QT_NO_TEXTHTMLPARSER
-
 QTextHtmlImporter::QTextHtmlImporter(QTextDocument *_doc, const QString &_html, ImportMode mode, const QTextDocument *resourceProvider)
-    : indent(0), compressNextWhitespace(PreserveWhiteSpace), doc(_doc), importMode(mode)
+    : indent(0), headingLevel(0), compressNextWhitespace(PreserveWhiteSpace), doc(_doc), importMode(mode)
 {
     cursor = QTextCursor(doc);
     wsm = QTextHtmlParserNode::WhiteSpaceNormal;
@@ -430,7 +428,7 @@ QTextHtmlImporter::QTextHtmlImporter(QTextDocument *_doc, const QString &_html, 
     QString html = _html;
     const int startFragmentPos = html.indexOf(QLatin1String("<!--StartFragment-->"));
     if (startFragmentPos != -1) {
-        QString qt3RichTextHeader(QLatin1String("<meta name=\"qrichtext\" content=\"1\" />"));
+        const QLatin1String qt3RichTextHeader("<meta name=\"qrichtext\" content=\"1\" />");
 
         // Hack for Qt3
         const bool hasQtRichtextMetaTag = html.contains(qt3RichTextHeader);
@@ -489,7 +487,7 @@ void QTextHtmlImporter::import()
                 && currentNode->id != Html_unknown)
             {
                 hasBlock = false;
-            } else if (hasBlock) {
+            } else if (blockTagClosed && hasBlock) {
                 // when collapsing subsequent block tags we need to clear the block format
                 QTextBlockFormat blockFormat = currentNode->blockFormat;
                 blockFormat.setIndent(indent);
@@ -726,9 +724,9 @@ QTextHtmlImporter::ProcessNodeResult QTextHtmlImporter::processSpecialNodes()
 
             cursor.insertImage(fmt, QTextFrameFormat::Position(currentNode->cssFloat));
 
-            cursor.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor);
+            cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
             cursor.mergeCharFormat(currentNode->charFormat);
-            cursor.movePosition(QTextCursor::Right);
+            cursor.movePosition(QTextCursor::NextCharacter);
             compressNextWhitespace = CollapseWhiteSpace;
 
             hasBlock = false;
@@ -749,8 +747,28 @@ QTextHtmlImporter::ProcessNodeResult QTextHtmlImporter::processSpecialNodes()
             return ContinueWithNextNode;
         }
 
+        case Html_h1:
+            headingLevel = 1;
+            break;
+        case Html_h2:
+            headingLevel = 2;
+            break;
+        case Html_h3:
+            headingLevel = 3;
+            break;
+        case Html_h4:
+            headingLevel = 4;
+            break;
+        case Html_h5:
+            headingLevel = 5;
+            break;
+        case Html_h6:
+            headingLevel = 6;
+            break;
+
         default: break;
     }
+
     return ContinueWithCurrentNode;
 }
 
@@ -827,9 +845,22 @@ bool QTextHtmlImporter::closeTag()
                 break;
 
             case Html_div:
-                if (closedNode->children.isEmpty())
-                    break;
-                // fall through
+                if (cursor.position() > 0) {
+                    const QChar curChar = cursor.document()->characterAt(cursor.position() - 1);
+                    if (!closedNode->children.isEmpty() && curChar != QChar::LineSeparator) {
+                        blockTagClosed = true;
+                    }
+                }
+                break;
+            case Html_h1:
+            case Html_h2:
+            case Html_h3:
+            case Html_h4:
+            case Html_h5:
+            case Html_h6:
+                headingLevel = 0;
+                blockTagClosed = true;
+                break;
             default:
                 if (closedNode->isBlock())
                     blockTagClosed = true;
@@ -853,7 +884,7 @@ QTextHtmlImporter::Table QTextHtmlImporter::scanTable(int tableNodeIdx)
     int tableHeaderRowCount = 0;
     QVector<int> rowNodes;
     rowNodes.reserve(at(tableNodeIdx).children.count());
-    foreach (int row, at(tableNodeIdx).children)
+    for (int row : at(tableNodeIdx).children) {
         switch (at(row).id) {
             case Html_tr:
                 rowNodes += row;
@@ -861,28 +892,30 @@ QTextHtmlImporter::Table QTextHtmlImporter::scanTable(int tableNodeIdx)
             case Html_thead:
             case Html_tbody:
             case Html_tfoot:
-                foreach (int potentialRow, at(row).children)
+                for (int potentialRow : at(row).children) {
                     if (at(potentialRow).id == Html_tr) {
                         rowNodes += potentialRow;
                         if (at(row).id == Html_thead)
                             ++tableHeaderRowCount;
                     }
+                }
                 break;
             default: break;
         }
+    }
 
     QVector<RowColSpanInfo> rowColSpans;
     QVector<RowColSpanInfo> rowColSpanForColumn;
 
     int effectiveRow = 0;
-    foreach (int row, rowNodes) {
+    for (int row : qAsConst(rowNodes)) {
         int colsInRow = 0;
 
-        foreach (int cell, at(row).children)
+        for (int cell : at(row).children) {
             if (at(cell).isTableCell()) {
                 // skip all columns with spans from previous rows
                 while (colsInRow < rowColSpanForColumn.size()) {
-                    const RowColSpanInfo &spanInfo = rowColSpanForColumn[colsInRow];
+                    const RowColSpanInfo &spanInfo = rowColSpanForColumn.at(colsInRow);
 
                     if (spanInfo.row + spanInfo.rowSpan > effectiveRow) {
                         Q_ASSERT(spanInfo.col == colsInRow);
@@ -915,6 +948,7 @@ QTextHtmlImporter::Table QTextHtmlImporter::scanTable(int tableNodeIdx)
                     rowColSpanForColumn[i] = spanInfo;
                 }
             }
+        }
 
         table.columns = qMax(table.columns, colsInRow);
 
@@ -1080,11 +1114,16 @@ QTextHtmlImporter::ProcessNodeResult QTextHtmlImporter::processBlockNode()
         && indent != 0
         && (lists.isEmpty()
             || !hasBlock
-            || !lists.last().list
-            || lists.last().list->itemNumber(cursor.block()) == -1
+            || !lists.constLast().list
+            || lists.constLast().list->itemNumber(cursor.block()) == -1
            )
        ) {
         block.setIndent(indent);
+        modifiedBlockFormat = true;
+    }
+
+    if (headingLevel) {
+        block.setHeadingLevel(headingLevel);
         modifiedBlockFormat = true;
     }
 
@@ -1142,7 +1181,7 @@ QTextHtmlImporter::ProcessNodeResult QTextHtmlImporter::processBlockNode()
         }
         if (hasBlock) {
             QTextBlockFormat fmt;
-            fmt.setIndent(0);
+            fmt.setIndent(currentNode->blockFormat.indent());
             cursor.mergeBlockFormat(fmt);
         }
     }

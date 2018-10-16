@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,17 +34,14 @@
 #include <qgraphicsscene.h>
 #include <qgraphicsview.h>
 #include <qapplication.h>
+#include <QtWidgets/qstyle.h>
+#include <QtWidgets/qproxystyle.h>
 
 class tst_QGraphicsLinearLayout : public QObject {
 Q_OBJECT
 
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
-
 private slots:
+    void initTestCase();
     void qgraphicslinearlayout_data();
     void qgraphicslinearlayout();
 
@@ -86,6 +70,7 @@ private slots:
     void removeItem();
     void setGeometry_data();
     void setGeometry();
+    void defaultSpacing();
     void setSpacing_data();
     void setSpacing();
     void setItemSpacing_data();
@@ -107,6 +92,7 @@ private slots:
     void testOffByOneInLargerLayout();
     void testDefaultAlignment();
     void combineSizePolicies();
+    void hiddenItems();
 
     // Task specific tests
     void task218400_insertStretchCrash();
@@ -154,22 +140,6 @@ void tst_QGraphicsLinearLayout::initTestCase()
     QApplication::setStyle("windows");
 }
 
-// This will be called after the last test function is executed.
-// It is only called once.
-void tst_QGraphicsLinearLayout::cleanupTestCase()
-{
-}
-
-// This will be called before each test function is executed.
-void tst_QGraphicsLinearLayout::init()
-{
-}
-
-// This will be called after every test function.
-void tst_QGraphicsLinearLayout::cleanup()
-{
-}
-
 class RectWidget : public QGraphicsWidget
 {
 public:
@@ -195,7 +165,8 @@ public:
         return QGraphicsWidget::sizeHint(which, constraint);
     }
 
-    QSizeF m_sizeHints[Qt::NSizeHints];
+    // Initializer {} is a workaround for gcc bug 68949
+    QSizeF m_sizeHints[Qt::NSizeHints] {};
     QBrush m_brush;
 };
 
@@ -428,10 +399,11 @@ void tst_QGraphicsLinearLayout::dump_data()
     QTest::addColumn<int>("itemCount");
     QTest::addColumn<int>("layoutCount");
     for (int i = -1; i < 3; ++i) {
-        QTest::newRow(QString("%1, 0, 0").arg(i).toLatin1()) << 0 << 0;
-        QTest::newRow(QString("%1, 0, 5").arg(i).toLatin1()) << 5 << 5;
-        QTest::newRow(QString("%1, 5, 0").arg(i).toLatin1()) << 5 << 5;
-        QTest::newRow(QString("%1, 5, 5").arg(i).toLatin1()) << 5 << 5;
+        const QByteArray iB = QByteArray::number(i);
+        QTest::newRow((iB + ", 0, 0").constData()) << 0 << 0;
+        QTest::newRow((iB + ", 0, 5").constData()) << 5 << 5;
+        QTest::newRow((iB + ", 5, 0").constData()) << 5 << 5;
+        QTest::newRow((iB + ", 5, 5").constData()) << 5 << 5;
     }
 }
 
@@ -514,11 +486,13 @@ void tst_QGraphicsLinearLayout::insertItem_data()
     QTest::addColumn<int>("insertItemAt");
     QTest::addColumn<bool>("isWidget");
     for (int i = -1; i < 4; ++i) {
+        const QByteArray iB = QByteArray::number(i);
         for (int j = 0; j < 2; ++j) {
-            QTest::newRow(QString("0, 0, %1 %2").arg(i).arg(j).toLatin1()) << 0 << 0 << i << (bool)j;
-            QTest::newRow(QString("1, 0, %1 %2").arg(i).arg(j).toLatin1()) << 1 << 0 << i << (bool)j;
-            QTest::newRow(QString("0, 1, %1 %2").arg(i).arg(j).toLatin1()) << 0 << 1 << i << (bool)j;
-            QTest::newRow(QString("2, 2, %1 %2").arg(i).arg(j).toLatin1()) << 2 << 2 << i << (bool)j;
+            const QByteArray postFix = iB + ' ' + QByteArray::number(j);
+            QTest::newRow(("0, 0, " + postFix).constData()) << 0 << 0 << i << (bool)j;
+            QTest::newRow(("1, 0, " + postFix).constData()) << 1 << 0 << i << (bool)j;
+            QTest::newRow(("0, 1, " + postFix).constData()) << 0 << 1 << i << (bool)j;
+            QTest::newRow(("2, 2, " + postFix).constData()) << 2 << 2 << i << (bool)j;
         }
     }
 }
@@ -568,11 +542,13 @@ void tst_QGraphicsLinearLayout::insertStretch_data()
     QTest::addColumn<int>("insertItemAt");
     QTest::addColumn<int>("stretch");
     for (int i = -1; i < 4; ++i) {
+        const QByteArray iB = QByteArray::number(i);
         for (int j = 0; j < 2; ++j) {
-            QTest::newRow(QString("0, 0, %1 %2").arg(i).arg(j).toLatin1()) << 0 << 0 << i << j;
-            QTest::newRow(QString("1, 0, %1 %2").arg(i).arg(j).toLatin1()) << 1 << 0 << i << j;
-            QTest::newRow(QString("0, 1, %1 %2").arg(i).arg(j).toLatin1()) << 0 << 1 << i << j;
-            QTest::newRow(QString("2, 2, %1 %2").arg(i).arg(j).toLatin1()) << 2 << 2 << i << j;
+            const QByteArray postFix = iB + ' ' + QByteArray::number(j);
+            QTest::newRow(("0, 0, " + postFix).constData()) << 0 << 0 << i << j;
+            QTest::newRow(("1, 0, " + postFix).constData()) << 1 << 0 << i << j;
+            QTest::newRow(("0, 1, " + postFix).constData()) << 0 << 1 << i << j;
+            QTest::newRow(("2, 2, " + postFix).constData()) << 2 << 2 << i << j;
         }
     }
 }
@@ -636,7 +612,6 @@ void tst_QGraphicsLinearLayout::insertStretch()
         }
     }
 
-    //QTest::qWait(1000);
     delete widget;
 }
 
@@ -663,7 +638,6 @@ void tst_QGraphicsLinearLayout::invalidate()
     layout.setContentsMargins(0, 0, 0, 0);
     view.show();
     widget->show();
-    //QTest::qWait(1000);
     QVERIFY(QTest::qWaitForWindowExposed(&view));
     qApp->processEvents();
     layout.layoutRequest = 0;
@@ -770,7 +744,7 @@ void tst_QGraphicsLinearLayout::orientation()
 
     layout.setOrientation(orientation);
     QCOMPARE(layout.orientation(), orientation);
-	// important to resize to preferredsize when orientation is switched
+    // important to resize to preferredsize when orientation is switched
     widget->resize(widget->effectiveSizeHint(Qt::PreferredSize));
     qApp->processEvents();
     for (i = 0; i < positions.count(); ++i) {
@@ -789,12 +763,13 @@ void tst_QGraphicsLinearLayout::removeAt_data()
     QTest::addColumn<int>("removeItemAt");
     QTest::addColumn<Qt::Orientation>("orientation");
     for (int i = -1; i < 4; ++i) {
+        const QByteArray iB = QByteArray::number(i);
         for (int k = 0; k < 2; ++k) {
             Qt::Orientation orientation = (k == 0) ? Qt::Vertical : Qt::Horizontal;
-            QTest::newRow(QString("0, 0, %1").arg(i).toLatin1()) << 0 << 0 << i << orientation;
-            QTest::newRow(QString("1, 0, %1").arg(i).toLatin1()) << 1 << 0 << i << orientation;
-            QTest::newRow(QString("0, 1, %1").arg(i).toLatin1()) << 0 << 1 << i << orientation;
-            QTest::newRow(QString("2, 2, %1").arg(i).toLatin1()) << 2 << 2 << i << orientation;
+            QTest::newRow(("0, 0, " + iB).constData()) << 0 << 0 << i << orientation;
+            QTest::newRow(("1, 0, " + iB).constData()) << 1 << 0 << i << orientation;
+            QTest::newRow(("0, 1, " + iB).constData()) << 0 << 1 << i << orientation;
+            QTest::newRow(("2, 2, " + iB).constData()) << 2 << 2 << i << orientation;
         }
     }
 }
@@ -824,7 +799,7 @@ void tst_QGraphicsLinearLayout::removeAt()
         QCOMPARE(wParent, static_cast<QGraphicsLayoutItem *>(&layout));
         layout.removeAt(removeItemAt);
         wParent = w->parentLayoutItem();
-        QCOMPARE(wParent, static_cast<QGraphicsLayoutItem *>(0));
+        QCOMPARE(wParent, nullptr);
         delete w;
     }
     QCOMPARE(layout.count(), itemCount + layoutCount - (w ? 1 : 0));
@@ -843,10 +818,11 @@ void tst_QGraphicsLinearLayout::removeItem_data()
     QTest::addColumn<int>("layoutCount");
     QTest::addColumn<int>("removeItemAt");
     for (int i = -1; i < 4; ++i) {
-        QTest::newRow(QString("0, 0, %1").arg(i).toLatin1()) << 0 << 0 << i;
-        QTest::newRow(QString("1, 0, %1").arg(i).toLatin1()) << 1 << 0 << i;
-        QTest::newRow(QString("0, 1, %1").arg(i).toLatin1()) << 0 << 1 << i;
-        QTest::newRow(QString("2, 2, %1").arg(i).toLatin1()) << 2 << 2 << i;
+        const QByteArray iB = QByteArray::number(i);
+        QTest::newRow(("0, 0, " + iB).constData()) << 0 << 0 << i;
+        QTest::newRow(("1, 0, " + iB).constData()) << 1 << 0 << i;
+        QTest::newRow(("0, 1, " + iB).constData()) << 0 << 1 << i;
+        QTest::newRow(("2, 2, " + iB).constData()) << 2 << 2 << i;
     }
 }
 
@@ -906,6 +882,94 @@ void tst_QGraphicsLinearLayout::setGeometry()
     widget->setGeometry(rect);
     QCOMPARE(layout.geometry(), rect);
     // see also geometry()
+    delete widget;
+}
+
+class LayoutStyle : public QProxyStyle
+{
+public:
+    LayoutStyle(const QString &key)
+        : QProxyStyle(key),
+            horizontalSpacing(-1), verticalSpacing(-1) {}
+
+    virtual int pixelMetric(QStyle::PixelMetric pm, const QStyleOption *option = 0, const QWidget *widget = 0) const override
+    {
+        if (pm == QStyle::PM_LayoutHorizontalSpacing && horizontalSpacing >= 0) {
+            return horizontalSpacing;
+        } else if (pm == QStyle::PM_LayoutVerticalSpacing && verticalSpacing >= 0) {
+            return verticalSpacing;
+        }
+        return QProxyStyle::pixelMetric(pm, option, widget);
+    }
+
+    int horizontalSpacing;
+    int verticalSpacing;
+};
+
+void tst_QGraphicsLinearLayout::defaultSpacing()
+{
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    LayoutStyle *style = new LayoutStyle(QLatin1String("windows"));
+    style->horizontalSpacing = 5;
+    style->verticalSpacing = 3;
+    LayoutStyle *style2 = new LayoutStyle(QLatin1String("windows"));
+    style2->horizontalSpacing = 25;
+    style2->verticalSpacing = 23;
+
+    QGraphicsWidget *widget = new QGraphicsWidget(0, Qt::Window);
+    widget->setStyle(style);
+
+    // Horizontal layout
+    SubQGraphicsLinearLayout *layout = new SubQGraphicsLinearLayout(Qt::Horizontal);
+    widget->setLayout(layout);
+    Q_ASSERT(widget->style());
+    scene.addItem(widget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    view.show();
+
+    for (int i = 0; i < 2; ++i) {
+        QGraphicsWidget *w = new QGraphicsWidget;
+        layout->addItem(w);
+    }
+
+    // Horizontal layout
+    qreal styleSpacing = (qreal)style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+    QCOMPARE(styleSpacing, qreal(5));
+    QCOMPARE(styleSpacing, layout->spacing());
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).width(), qreal(105));
+    style->horizontalSpacing = 15;
+    // If the style method changes return value, the layout must be invalidated by the application
+    layout->invalidate();
+    styleSpacing = (qreal)style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+    QCOMPARE(styleSpacing, qreal(15));
+    QCOMPARE(styleSpacing, layout->spacing());
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).width(), qreal(115));
+    widget->setStyle(style2);
+    // If the style itself changes, the layout will pick that up
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).width(), qreal(125));
+    QCOMPARE(layout->spacing(), qreal(25));
+
+    // Vertical layout
+    widget->setStyle(style);
+    layout->setOrientation(Qt::Vertical);
+    styleSpacing = (qreal)style->pixelMetric(QStyle::PM_LayoutVerticalSpacing);
+    QCOMPARE(styleSpacing, qreal(3));
+    QCOMPARE(styleSpacing, layout->spacing());
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).height(), qreal(103));
+    style->verticalSpacing = 13;
+    // If the style method changes return value, the layout must be invalidated by the application
+    layout->invalidate();
+    styleSpacing = (qreal)style->pixelMetric(QStyle::PM_LayoutVerticalSpacing);
+    QCOMPARE(styleSpacing, qreal(13));
+    QCOMPARE(styleSpacing, layout->spacing());
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).height(), qreal(113));
+    widget->setStyle(style2);
+    // If the style itself changes, the layout will pick that up
+    QCOMPARE(layout->effectiveSizeHint(Qt::PreferredSize).height(), qreal(123));
+    QCOMPARE(layout->spacing(), qreal(23));
+
+
     delete widget;
 }
 
@@ -1053,8 +1117,6 @@ void tst_QGraphicsLinearLayout::itemSpacing()
  */
 
 typedef QList<int> IntList;
-Q_DECLARE_METATYPE(IntList)
-Q_DECLARE_METATYPE(qreal)
 
 void tst_QGraphicsLinearLayout::setStretchFactor_data()
 {
@@ -1147,14 +1209,13 @@ void tst_QGraphicsLinearLayout::testStretch()
     layout->addStretch(2);
     layout->addItem(w2);
     QCOMPARE(layout->count(), 2);
-    QVERIFY(layout->itemAt(0) == w1);
-    QVERIFY(layout->itemAt(1) == w2);
+    QCOMPARE(layout->itemAt(0), w1);
+    QCOMPARE(layout->itemAt(1), w2);
     layout->activate();
 
     //view->setSceneRect(-50, -50, 800, 800);
     //view->show();
     //QVERIFY(QTest::qWaitForWindowExposed(view));
-    //QTest::qWait(5000);
     QCOMPARE(form->geometry().size(), QSizeF(600,600));
     QCOMPARE(w1->geometry(), QRectF(0, 0, 100, 100));
     QCOMPARE(w2->geometry(), QRectF(400, 0, 200, 200));
@@ -1457,7 +1518,7 @@ void tst_QGraphicsLinearLayout::removeLayout()
 
     QGraphicsView view(&scene);
     view.show();
-    QTest::qWait(20);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
 
     QRectF r1 = textEdit->geometry();
     QRectF r2 = pushButton->geometry();
@@ -1471,7 +1532,7 @@ void tst_QGraphicsLinearLayout::removeLayout()
 void tst_QGraphicsLinearLayout::avoidRecursionInInsertItem()
 {
     QGraphicsWidget window(0, Qt::Window);
-	QGraphicsLinearLayout *layout = new QGraphicsLinearLayout(&window);
+    QGraphicsLinearLayout *layout = new QGraphicsLinearLayout(&window);
     QCOMPARE(layout->count(), 0);
     QTest::ignoreMessage(QtWarningMsg, "QGraphicsLinearLayout::insertItem: cannot insert itself");
     layout->insertItem(0, layout);
@@ -1637,6 +1698,41 @@ void tst_QGraphicsLinearLayout::combineSizePolicies()
     w2->setMaximumHeight(50);
     w2->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     QCOMPARE(layout->maximumHeight(), qreal(200));
+}
+
+void tst_QGraphicsLinearLayout::hiddenItems()
+{
+    QGraphicsWidget *widget = new QGraphicsWidget;
+    QGraphicsLinearLayout *layout = new QGraphicsLinearLayout(Qt::Horizontal, widget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(2);
+
+    RectWidget *w1 = new RectWidget;
+    w1->setPreferredSize(QSizeF(20, 20));
+    layout->addItem(w1);
+
+    RectWidget *w2 = new RectWidget;
+    w2->setPreferredSize(QSizeF(20, 20));
+    layout->addItem(w2);
+
+    RectWidget *w3 = new RectWidget;
+    w3->setPreferredSize(QSizeF(20, 20));
+    layout->addItem(w3);
+
+    QCOMPARE(layout->preferredWidth(), qreal(64));
+    w2->hide();
+    QCOMPARE(layout->preferredWidth(), qreal(42));
+    w2->show();
+    QCOMPARE(layout->preferredWidth(), qreal(64));
+    QSizePolicy sp = w2->sizePolicy();
+    sp.setRetainSizeWhenHidden(true);
+    w2->setSizePolicy(sp);
+    QCOMPARE(layout->preferredWidth(), qreal(64));
+    w2->hide();
+    QCOMPARE(layout->preferredWidth(), qreal(64));
+    sp.setRetainSizeWhenHidden(false);
+    w2->setSizePolicy(sp);
+    QCOMPARE(layout->preferredWidth(), qreal(42));
 }
 
 QTEST_MAIN(tst_QGraphicsLinearLayout)

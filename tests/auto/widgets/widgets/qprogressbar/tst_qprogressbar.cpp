@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,6 +29,7 @@
 
 #include <QtTest/QtTest>
 #include "qprogressbar.h"
+#include <qlocale.h>
 #include <qapplication.h>
 #include <qstyleoption.h>
 #include <qdebug.h>
@@ -57,6 +45,7 @@ private slots:
     void destroyIndeterminate();
     void text();
     void format();
+    void setValueRepaint_data();
     void setValueRepaint();
 #ifndef Q_OS_MAC
     void setMinMaxRepaint();
@@ -64,6 +53,7 @@ private slots:
     void sizeHint();
     void formatedText_data();
     void formatedText();
+    void localizedFormattedText();
 
     void task245201_testChangeStyleAndDelete_data();
     void task245201_testChangeStyleAndDelete();
@@ -113,7 +103,9 @@ void tst_QProgressBar::minMaxSameValue()
     QProgressBar bar;
     bar.setRange(10, 10);
     bar.setValue(10);
+    bar.move(300, 300);
     bar.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&bar));
 }
 
 void tst_QProgressBar::destroyIndeterminate()
@@ -123,7 +115,9 @@ void tst_QProgressBar::destroyIndeterminate()
     // it's deleted.
     QPointer<QProgressBar> bar = new QProgressBar;
     bar->setMaximum(0);
+    bar->move(300, 300);
     bar->show();
+    QVERIFY(QTest::qWaitForWindowExposed(bar.data()));
 
     QEventLoop loop;
     QTimer::singleShot(500, bar, SLOT(deleteLater()));
@@ -166,13 +160,12 @@ void tst_QProgressBar::format()
     ProgressBar bar;
     bar.setRange(0, 10);
     bar.setValue(1);
+    bar.move(300, 300);
     bar.show();
     QVERIFY(QTest::qWaitForWindowExposed(&bar));
 
-    QTest::qWait(20);
     bar.repainted = false;
     bar.setFormat("%v of %m (%p%)");
-    QTest::qWait(20);
     QTRY_VERIFY(bar.repainted);
     bar.repainted = false;
     bar.setFormat("%v of %m (%p%)");
@@ -196,20 +189,49 @@ void tst_QProgressBar::format()
     QCOMPARE(bar.text(), QString());
 }
 
+void tst_QProgressBar::setValueRepaint_data()
+{
+    QTest::addColumn<int>("min");
+    QTest::addColumn<int>("max");
+    QTest::addColumn<int>("increment");
+
+    auto add = [](int min, int max, int increment) {
+        QTest::addRow("%d-%d@%d", min, max, increment) << min << max << increment;
+    };
+
+    add(0, 10, 1);
+
+    auto add_set = [=](int min, int max, int increment) {
+        // check corner cases, and adjacent values (to circumvent explicit checks for corner cases)
+        add(min,     max,     increment);
+        add(min + 1, max,     increment);
+        add(min,     max - 1, increment);
+        add(min + 1, max - 1, increment);
+    };
+
+    add_set(INT_MIN, INT_MAX, INT_MAX / 50 + 1);
+    add_set(0, INT_MAX, INT_MAX / 100 + 1);
+    add_set(INT_MIN, 0, INT_MAX / 100 + 1);
+}
+
 void tst_QProgressBar::setValueRepaint()
 {
+    QFETCH(int, min);
+    QFETCH(int, max);
+    QFETCH(int, increment);
+
     ProgressBar pbar;
-    pbar.setMinimum(0);
-    pbar.setMaximum(10);
+    pbar.setMinimum(min);
+    pbar.setMaximum(max);
     pbar.setFormat("%v");
+    pbar.move(300, 300);
     pbar.show();
     QVERIFY(QTest::qWaitForWindowExposed(&pbar));
 
     QApplication::processEvents();
-    for (int i = pbar.minimum(); i < pbar.maximum(); ++i) {
+    for (qint64 i = min; i < max; i += increment) {
         pbar.repainted = false;
-        pbar.setValue(i);
-        QTest::qWait(50);
+        pbar.setValue(int(i));
         QTRY_VERIFY(pbar.repainted);
     }
 }
@@ -224,13 +246,18 @@ void tst_QProgressBar::setMinMaxRepaint()
     pbar.setMinimum(0);
     pbar.setMaximum(10);
     pbar.setFormat("%v");
+    pbar.move(300, 300);
     pbar.show();
+    qApp->setActiveWindow(&pbar);
     QVERIFY(QTest::qWaitForWindowActive(&pbar));
 
     // No repaint when setting minimum to the current minimum
     pbar.repainted = false;
     pbar.setMinimum(0);
     QTest::qWait(50);
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Broken on WinRT - QTBUG-68297", Abort);
+#endif
     QTRY_VERIFY(!pbar.repainted);
 
     // No repaint when setting maximum to the current maximum
@@ -264,9 +291,9 @@ void tst_QProgressBar::sizeHint()
 
     //test if the sizeHint is big enough
     QFontMetrics fm = bar.fontMetrics();
-    QStyleOptionProgressBarV2 opt;
+    QStyleOptionProgressBar opt;
     bar.initStyleOption(&opt);
-    QSize size = QSize(9 * 7 + fm.width(QLatin1Char('0')) * 4, fm.height() + 8);
+    QSize size = QSize(9 * 7 + fm.horizontalAdvance(QLatin1Char('0')) * 4, fm.height() + 8);
     size= bar.style()->sizeFromContents(QStyle::CT_ProgressBar, &opt, size, &bar);
     QSize barSize = bar.sizeHint();
     QVERIFY(barSize.width() >= size.width());
@@ -301,6 +328,40 @@ void tst_QProgressBar::formatedText()
     QCOMPARE(bar.text(), text);
 }
 
+void tst_QProgressBar::localizedFormattedText() // QTBUG-28751
+{
+    QProgressBar bar;
+    const int value = 42;
+    bar.setValue(value);
+    const QString defaultExpectedNumber = QString::number(value);
+    const QString defaultExpectedValue = defaultExpectedNumber + QLatin1Char('%');
+    QCOMPARE(bar.text(), defaultExpectedValue);
+
+    // Temporarily switch to Egyptian, which has a different percent sign and number formatting
+    QLocale egypt(QLocale::Arabic, QLocale::Egypt);
+    bar.setLocale(egypt);
+    const QString egyptianExpectedNumber = egypt.toString(value);
+    const QString egyptianExpectedValue = egyptianExpectedNumber + egypt.percent();
+    if (egyptianExpectedValue == defaultExpectedValue)
+        QSKIP("Egyptian locale does not work on this system.");
+    QCOMPARE(bar.text(), egyptianExpectedValue);
+
+    bar.setLocale(QLocale());
+    QCOMPARE(bar.text(), defaultExpectedValue);
+
+    // Set a custom format containing only the number
+    bar.setFormat(QStringLiteral("%p"));
+    QCOMPARE(bar.text(), defaultExpectedNumber);
+    bar.setLocale(egypt);
+    QCOMPARE(bar.text(), egyptianExpectedNumber);
+
+    // Clear the format
+    bar.resetFormat();
+    QCOMPARE(bar.text(), egyptianExpectedValue);
+    bar.setLocale(QLocale());
+    QCOMPARE(bar.text(), defaultExpectedValue);
+}
+
 void tst_QProgressBar::task245201_testChangeStyleAndDelete_data()
 {
     QTest::addColumn<QString>("style1_str");
@@ -319,7 +380,9 @@ void tst_QProgressBar::task245201_testChangeStyleAndDelete()
 
     QStyle *style = QStyleFactory::create(style1_str);
     bar->setStyle(style);
+    bar->move(300, 300);
     bar->show();
+    QVERIFY(QTest::qWaitForWindowExposed(bar));
     QStyle *style2 = QStyleFactory::create(style2_str);
     bar->setStyle(style2);
     QTest::qWait(10);

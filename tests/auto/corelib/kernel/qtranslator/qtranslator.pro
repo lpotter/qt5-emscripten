@@ -1,8 +1,9 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qtranslator
 QT = core testlib
 SOURCES = tst_qtranslator.cpp
 RESOURCES += qtranslator.qrc
 
-TESTDATA += hellotr_la.qm msgfmt_from_po.qm
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+android:!android-embedded: RESOURCES += android_testdata.qrc
+else: TESTDATA += dependencies_la.qm hellotr_empty.qm hellotr_la.qm msgfmt_from_po.qm
+

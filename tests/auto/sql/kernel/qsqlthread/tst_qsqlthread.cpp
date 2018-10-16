@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,11 +36,7 @@
 #include <QtSql>
 #include "qdebug.h"
 
-#ifdef Q_OS_LINUX
-#include <pthread.h>
-#endif
-
-const QString qtest(qTableName("qtest", __FILE__));
+const QString qtest(qTableName("qtest", __FILE__, QSqlDatabase()));
 // set this define if Oracle is built with threading support
 //#define QOCI_THREADED
 
@@ -81,7 +64,10 @@ public slots:
     void cleanup();
 
 protected slots:
-    void threadFinished() { ++threadFinishedCount; }
+    void threadFinished() {
+        ++threadFinishedCount;
+        qDebug("Thread finished, total finished: %d", threadFinishedCount);
+    }
 
 private slots:
     void simpleThreading_data() { generic_data(); }
@@ -158,9 +144,7 @@ public:
             q.bindValue(1, "threaddy");
             q.bindValue(2, 10);
             QVERIFY_SQL(q, exec());
-#ifdef Q_OS_LINUX
-            pthread_yield();
-#endif
+            QThread::yieldCurrentThread();
         }
     }
 
@@ -193,12 +177,10 @@ public:
         for (int i = 0; i < ProdConIterations; ++i) {
             QVERIFY_SQL(q1, exec("select max(id) from " + qtest));
             q1.first();
-            q2.bindValue("id", q1.value(0));
+            q2.bindValue(":id", q1.value(0));
             q1.clear();
             QVERIFY_SQL(q2, exec());
-#ifdef Q_OS_LINUX
-            pthread_yield();
-#endif
+            QThread::yieldCurrentThread();
         }
     }
 
@@ -303,7 +285,7 @@ void tst_QSqlThread::dropTestTables()
         QSqlDatabase db = QSqlDatabase::database(dbs.dbNames.at(i));
         QSqlQuery q(db);
 
-        tst_Databases::safeDropTables(db, QStringList() << qtest << qTableName("qtest2", __FILE__) << qTableName("emptytable", __FILE__));
+        tst_Databases::safeDropTables(db, QStringList() << qtest << qTableName("qtest2", __FILE__, db) << qTableName("emptytable", __FILE__, db));
     }
 }
 
@@ -316,10 +298,10 @@ void tst_QSqlThread::createTestTables()
         QVERIFY_SQL(q, exec("create table " + qtest
                        + "(id int NOT NULL primary key, name varchar(20), title int)"));
 
-        QVERIFY_SQL(q, exec("create table " + qTableName("qtest2", __FILE__)
+        QVERIFY_SQL(q, exec("create table " + qTableName("qtest2", __FILE__, db)
                        + "(id int NOT NULL primary key, title varchar(20))"));
 
-        QVERIFY_SQL(q, exec("create table " + qTableName("emptytable", __FILE__)
+        QVERIFY_SQL(q, exec("create table " + qTableName("emptytable", __FILE__, db)
                        + "(id int NOT NULL primary key)"));
     }
 }
@@ -335,9 +317,9 @@ void tst_QSqlThread::repopulateTestTables()
         QVERIFY_SQL(q, exec("insert into " + qtest + " values(2, 'trond', 2)"));
         QVERIFY_SQL(q, exec("insert into " + qtest + " values(3, 'vohi', 3)"));
 
-        QVERIFY_SQL(q, exec("delete from " + qTableName("qtest2", __FILE__)));
-        QVERIFY_SQL(q, exec("insert into " + qTableName("qtest2", __FILE__) + " values(1, 'herr')"));
-        QVERIFY_SQL(q, exec("insert into " + qTableName("qtest2", __FILE__) + " values(2, 'mister')"));
+        QVERIFY_SQL(q, exec("delete from " + qTableName("qtest2", __FILE__, db)));
+        QVERIFY_SQL(q, exec("insert into " + qTableName("qtest2", __FILE__, db) + " values(1, 'herr')"));
+        QVERIFY_SQL(q, exec("insert into " + qTableName("qtest2", __FILE__, db) + " values(2, 'mister')"));
     }
 }
 
@@ -350,7 +332,7 @@ void tst_QSqlThread::recreateTestTables()
 
 void tst_QSqlThread::initTestCase()
 {
-    dbs.open();
+    QVERIFY(dbs.open());
     recreateTestTables();
 }
 
@@ -391,8 +373,7 @@ void tst_QSqlThread::simpleThreading()
     t1.start();
     t2.start();
 
-    while (threadFinishedCount < 2)
-        QTest::qWait(100);
+    QTRY_VERIFY(threadFinishedCount >= 2);
 }
 
 // This test creates two threads that clone their db connection and read
@@ -417,12 +398,13 @@ void tst_QSqlThread::readWriteThreading()
     producer.start();
     consumer.start();
 
-    while (threadFinishedCount < 2)
-        QTest::qWait(100);
+    QTRY_VERIFY_WITH_TIMEOUT(threadFinishedCount >= 2, 10000);
 }
 
+#ifdef QOCI_THREADED
 // run with n threads in parallel. Change this constant to hammer the poor DB server even more
 static const int maxThreadCount = 4;
+#endif
 
 void tst_QSqlThread::readFromSingleConnection()
 {
@@ -441,8 +423,7 @@ void tst_QSqlThread::readFromSingleConnection()
         reader->start();
     }
 
-    while (threadFinishedCount < maxThreadCount)
-        QTest::qWait(100);
+    QTRY_VERIFY(threadFinishedCount >= maxThreadCount);
 #endif
 }
 
@@ -467,8 +448,7 @@ void tst_QSqlThread::readWriteFromSingleConnection()
         writer->start();
     }
 
-    while (threadFinishedCount < maxThreadCount * 2)
-        QTest::qWait(100);
+    QTRY_VERIFY(threadFinishedCount >= maxThreadCount * 2);
 #endif
 }
 
@@ -493,8 +473,7 @@ void tst_QSqlThread::preparedReadWriteFromSingleConnection()
         writer->start();
     }
 
-    while (threadFinishedCount < maxThreadCount * 2)
-        QTest::qWait(100);
+    QTRY_VERIFY(threadFinishedCount >= maxThreadCount * 2);
 #endif
 }
 

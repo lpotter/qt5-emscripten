@@ -1,65 +1,68 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
 # include <private/qcore_mac_p.h>
 #endif
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
+
 #include <qapplication.h>
 #include <qdesktopwidget.h>
+#include <private/qdesktopwidget_p.h>
 #include <qevent.h>
-#include <qhash.h>
-#include <qlabel.h>
 #include <qpointer.h>
 #include <qstyle.h>
 #include <qstyleoption.h>
 #include <qstylepainter.h>
 #include <qtimer.h>
-#include <qtooltip.h>
+#if QT_CONFIG(effects)
 #include <private/qeffects_p.h>
+#endif
 #include <qtextdocument.h>
 #include <qdebug.h>
 #include <private/qstylesheetstyle_p.h>
-#ifndef QT_NO_TOOLTIP
 
-#ifdef Q_WS_MAC
+#ifndef QT_NO_TOOLTIP
+#include <qlabel.h>
+#include <qtooltip.h>
+
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
 # include <private/qcore_mac_p.h>
 #include <private/qt_cocoa_helpers_mac_p.h>
 #endif
@@ -107,7 +110,7 @@ QT_BEGIN_NAMESPACE
 
     The default tool tip color and font can be customized with
     setPalette() and setFont(). When a tooltip is currently on
-    display, isVisible() returns true and text() the currently visible
+    display, isVisible() returns \c true and text() the currently visible
     text.
 
     \note Tool tips use the inactive color group of QPalette, because tool
@@ -120,30 +123,32 @@ class QTipLabel : public QLabel
 {
     Q_OBJECT
 public:
-    QTipLabel(const QString &text, QWidget *w);
+    QTipLabel(const QString &text, const QPoint &pos, QWidget *w, int msecDisplayTime);
     ~QTipLabel();
     static QTipLabel *instance;
 
-    bool eventFilter(QObject *, QEvent *);
+    void updateSize(const QPoint &pos);
+
+    bool eventFilter(QObject *, QEvent *) override;
 
     QBasicTimer hideTimer, expireTimer;
 
     bool fadingOut;
 
-    void reuseTip(const QString &text);
+    void reuseTip(const QString &text, int msecDisplayTime, const QPoint &pos);
     void hideTip();
     void hideTipImmediately();
     void setTipRect(QWidget *w, const QRect &r);
-    void restartExpireTimer();
+    void restartExpireTimer(int msecDisplayTime);
     bool tipChanged(const QPoint &pos, const QString &text, QObject *o);
     void placeTip(const QPoint &pos, QWidget *w);
 
     static int getTipScreen(const QPoint &pos, QWidget *w);
 protected:
-    void timerEvent(QTimerEvent *e);
-    void paintEvent(QPaintEvent *e);
-    void mouseMoveEvent(QMouseEvent *e);
-    void resizeEvent(QResizeEvent *e);
+    void timerEvent(QTimerEvent *e) override;
+    void paintEvent(QPaintEvent *e) override;
+    void mouseMoveEvent(QMouseEvent *e) override;
+    void resizeEvent(QResizeEvent *e) override;
 
 #ifndef QT_NO_STYLE_STYLESHEET
 public slots:
@@ -166,7 +171,7 @@ private:
 
 QTipLabel *QTipLabel::instance = 0;
 
-QTipLabel::QTipLabel(const QString &text, QWidget *w)
+QTipLabel::QTipLabel(const QString &text, const QPoint &pos, QWidget *w, int msecDisplayTime)
 #ifndef QT_NO_STYLE_STYLESHEET
     : QLabel(w, Qt::ToolTip | Qt::BypassGraphicsProxyWidget), styleSheetParent(0), widget(0)
 #else
@@ -187,17 +192,19 @@ QTipLabel::QTipLabel(const QString &text, QWidget *w)
     setWindowOpacity(style()->styleHint(QStyle::SH_ToolTipLabel_Opacity, 0, this) / 255.0);
     setMouseTracking(true);
     fadingOut = false;
-    reuseTip(text);
+    reuseTip(text, msecDisplayTime, pos);
 }
 
-void QTipLabel::restartExpireTimer()
+void QTipLabel::restartExpireTimer(int msecDisplayTime)
 {
     int time = 10000 + 40 * qMax(0, text().length()-100);
+    if (msecDisplayTime > 0)
+        time = msecDisplayTime;
     expireTimer.start(time, this);
     hideTimer.stop();
 }
 
-void QTipLabel::reuseTip(const QString &text)
+void QTipLabel::reuseTip(const QString &text, int msecDisplayTime, const QPoint &pos)
 {
 #ifndef QT_NO_STYLE_STYLESHEET
     if (styleSheetParent){
@@ -207,15 +214,30 @@ void QTipLabel::reuseTip(const QString &text)
     }
 #endif
 
-    setWordWrap(Qt::mightBeRichText(text));
+    setWordWrap(true);
     setText(text);
+    updateSize(pos);
+    restartExpireTimer(msecDisplayTime);
+}
+
+void  QTipLabel::updateSize(const QPoint &pos)
+{
     QFontMetrics fm(font());
     QSize extra(1, 0);
     // Make it look good with the default ToolTip font on Mac, which has a small descent.
     if (fm.descent() == 2 && fm.ascent() >= 11)
         ++extra.rheight();
-    resize(sizeHint() + extra);
-    restartExpireTimer();
+    QSize sh = sizeHint();
+    if (wordWrap()) {
+        const QRect screenRect = QGuiApplication::screenAt(pos)->geometry();
+        if (sh.width() > screenRect.width()) {
+            // Try to use widely accepted 75chars max length or 80% of the screen width else.
+            // See https://en.wikipedia.org/wiki/Line_length
+            sh.setWidth(qMin(fm.averageCharWidth() * 75, static_cast<int>(screenRect.width() * .8)));
+            sh.setHeight(heightForWidth(sh.width()));
+        }
+    }
+    resize(sh + extra);
 }
 
 void QTipLabel::paintEvent(QPaintEvent *ev)
@@ -242,13 +264,13 @@ void QTipLabel::resizeEvent(QResizeEvent *e)
 
 void QTipLabel::mouseMoveEvent(QMouseEvent *e)
 {
-    if (rect.isNull())
-        return;
-    QPoint pos = e->globalPos();
-    if (widget)
-        pos = widget->mapFromGlobal(pos);
-    if (!rect.contains(pos))
-        hideTip();
+    if (!rect.isNull()) {
+        QPoint pos = e->globalPos();
+        if (widget)
+            pos = widget->mapFromGlobal(pos);
+        if (!rect.contains(pos))
+            hideTip();
+    }
     QLabel::mouseMoveEvent(e);
 }
 
@@ -271,12 +293,12 @@ void QTipLabel::hideTipImmediately()
 
 void QTipLabel::setTipRect(QWidget *w, const QRect &r)
 {
-    if (!rect.isNull() && !w)
+    if (Q_UNLIKELY(!r.isNull() && !w)) {
         qWarning("QToolTip::setTipRect: Cannot pass null widget if rect is set");
-    else{
-        widget = w;
-        rect = r;
+        return;
     }
+    widget = w;
+    rect = r;
 }
 
 void QTipLabel::timerEvent(QTimerEvent *e)
@@ -285,7 +307,7 @@ void QTipLabel::timerEvent(QTimerEvent *e)
         || e->timerId() == expireTimer.timerId()){
         hideTimer.stop();
         expireTimer.stop();
-#if defined(Q_WS_MAC) && !defined(QT_NO_EFFECTS)
+#if 0 /* Used to be included in Qt4 for Q_WS_MAC */ && QT_CONFIG(effects)
         if (QApplication::isEffectEnabled(Qt::UI_FadeTooltip)){
             // Fade out tip on mac (makes it invisible).
             // The tip will not be deleted until a new tip is shown.
@@ -305,28 +327,46 @@ void QTipLabel::timerEvent(QTimerEvent *e)
 bool QTipLabel::eventFilter(QObject *o, QEvent *e)
 {
     switch (e->type()) {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_MACOS
     case QEvent::KeyPress:
     case QEvent::KeyRelease: {
-        int key = static_cast<QKeyEvent *>(e)->key();
-        Qt::KeyboardModifiers mody = static_cast<QKeyEvent *>(e)->modifiers();
-        if (!(mody & Qt::KeyboardModifierMask)
-            && key != Qt::Key_Shift && key != Qt::Key_Control
-            && key != Qt::Key_Alt && key != Qt::Key_Meta)
-            hideTip();
+        const int key = static_cast<QKeyEvent *>(e)->key();
+        // Anything except key modifiers or caps-lock, etc.
+        if (key < Qt::Key_Shift || key > Qt::Key_ScrollLock)
+            hideTipImmediately();
         break;
     }
 #endif
     case QEvent::Leave:
         hideTip();
         break;
+
+
+#if defined (Q_OS_QNX) // On QNX the window activate and focus events are delayed and will appear
+                       // after the window is shown.
+    case QEvent::WindowActivate:
+    case QEvent::FocusIn:
+        return false;
+    case QEvent::WindowDeactivate:
+        if (o != this)
+            return false;
+        hideTipImmediately();
+        break;
+    case QEvent::FocusOut:
+        if (reinterpret_cast<QWindow*>(o) != windowHandle())
+            return false;
+        hideTipImmediately();
+        break;
+#else
     case QEvent::WindowActivate:
     case QEvent::WindowDeactivate:
+    case QEvent::FocusIn:
+    case QEvent::FocusOut:
+#endif
+    case QEvent::Close: // For QTBUG-55523 (QQC) specifically: Hide tooltip when windows are closed
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonRelease:
     case QEvent::MouseButtonDblClick:
-    case QEvent::FocusIn:
-    case QEvent::FocusOut:
     case QEvent::Wheel:
         hideTipImmediately();
         break;
@@ -342,16 +382,16 @@ bool QTipLabel::eventFilter(QObject *o, QEvent *e)
 
 int QTipLabel::getTipScreen(const QPoint &pos, QWidget *w)
 {
-    if (QApplication::desktop()->isVirtualDesktop())
-        return QApplication::desktop()->screenNumber(pos);
+    if (QDesktopWidgetPrivate::isVirtualDesktop())
+        return QDesktopWidgetPrivate::screenNumber(pos);
     else
-        return QApplication::desktop()->screenNumber(w);
+        return QDesktopWidgetPrivate::screenNumber(w);
 }
 
 void QTipLabel::placeTip(const QPoint &pos, QWidget *w)
 {
 #ifndef QT_NO_STYLE_STYLESHEET
-    if (testAttribute(Qt::WA_StyleSheet) || (w && qobject_cast<QStyleSheetStyle *>(w->style()))) {
+    if (testAttribute(Qt::WA_StyleSheet) || (w && qt_styleSheet(w->style()))) {
         //the stylesheet need to know the real parent
         QTipLabel::instance->setProperty("_q_stylesheet_parent", QVariant::fromValue(w));
         //we force the style to be the QStyleSheetStyle, and force to clear the cache as well.
@@ -362,12 +402,15 @@ void QTipLabel::placeTip(const QPoint &pos, QWidget *w)
         if (w) {
             connect(w, SIGNAL(destroyed()),
                 QTipLabel::instance, SLOT(styleSheetParentDestroyed()));
+            // QTBUG-64550: A font inherited by the style sheet might change the size,
+            // particular on Windows, where the tip is not parented on a window.
+            QTipLabel::instance->updateSize(pos);
         }
     }
 #endif //QT_NO_STYLE_STYLESHEET
 
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     // When in full screen mode, there is no Dock nor Menu so we can use
     // the whole screen for displaying the tooltip. However when not in
     // full screen mode we need to save space for the dock, so we use
@@ -375,16 +418,16 @@ void QTipLabel::placeTip(const QPoint &pos, QWidget *w)
     extern bool qt_mac_app_fullscreen; //qapplication_mac.mm
     QRect screen;
     if(qt_mac_app_fullscreen)
-        screen = QApplication::desktop()->screenGeometry(getTipScreen(pos, w));
+        screen = QDesktopWidgetPrivate::screenGeometry(getTipScreen(pos, w));
     else
-        screen = QApplication::desktop()->availableGeometry(getTipScreen(pos, w));
+        screen = QDesktopWidgetPrivate::availableGeometry(getTipScreen(pos, w));
 #else
-    QRect screen = QApplication::desktop()->screenGeometry(getTipScreen(pos, w));
+    QRect screen = QDesktopWidgetPrivate::screenGeometry(getTipScreen(pos, w));
 #endif
 
     QPoint p = pos;
     p += QPoint(2,
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
                 21
 #else
                 16
@@ -440,6 +483,18 @@ bool QTipLabel::tipChanged(const QPoint &pos, const QString &text, QObject *o)
 
 void QToolTip::showText(const QPoint &pos, const QString &text, QWidget *w, const QRect &rect)
 {
+    showText(pos, text, w, rect, -1);
+}
+
+/*!
+   \since 5.2
+   \overload
+   This is similar to QToolTip::showText(\a pos, \a text, \a w, \a rect) but with an extra parameter \a msecDisplayTime
+   that specifies how long the tool tip will be displayed, in milliseconds.
+*/
+
+void QToolTip::showText(const QPoint &pos, const QString &text, QWidget *w, const QRect &rect, int msecDisplayTime)
+{
     if (QTipLabel::instance && QTipLabel::instance->isVisible()){ // a tip does already exist
         if (text.isEmpty()){ // empty text means hide current tip
             QTipLabel::instance->hideTip();
@@ -452,7 +507,7 @@ void QToolTip::showText(const QPoint &pos, const QString &text, QWidget *w, cons
             if (w)
                 localPos = w->mapFromGlobal(pos);
             if (QTipLabel::instance->tipChanged(localPos, text, w)){
-                QTipLabel::instance->reuseTip(text);
+                QTipLabel::instance->reuseTip(text, msecDisplayTime, pos);
                 QTipLabel::instance->setTipRect(w, rect);
                 QTipLabel::instance->placeTip(pos, w);
             }
@@ -461,27 +516,30 @@ void QToolTip::showText(const QPoint &pos, const QString &text, QWidget *w, cons
     }
 
     if (!text.isEmpty()){ // no tip can be reused, create new tip:
-#ifndef Q_WS_WIN
-        new QTipLabel(text, w); // sets QTipLabel::instance to itself
-#else
+#ifdef Q_OS_WIN32
         // On windows, we can't use the widget as parent otherwise the window will be
         // raised when the tooltip will be shown
-        new QTipLabel(text, QApplication::desktop()->screen(QTipLabel::getTipScreen(pos, w)));
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
+        new QTipLabel(text, pos, QApplication::desktop()->screen(QTipLabel::getTipScreen(pos, w)), msecDisplayTime);
+QT_WARNING_POP
+#else
+        new QTipLabel(text, pos, w, msecDisplayTime); // sets QTipLabel::instance to itself
 #endif
         QTipLabel::instance->setTipRect(w, rect);
         QTipLabel::instance->placeTip(pos, w);
         QTipLabel::instance->setObjectName(QLatin1String("qtooltip_label"));
 
 
-#if !defined(QT_NO_EFFECTS) && !defined(Q_WS_MAC)
+#if QT_CONFIG(effects) && !0 /* Used to be included in Qt4 for Q_WS_MAC */
         if (QApplication::isEffectEnabled(Qt::UI_FadeTooltip))
             qFadeEffect(QTipLabel::instance);
         else if (QApplication::isEffectEnabled(Qt::UI_AnimateTooltip))
             qScrollEffect(QTipLabel::instance);
         else
-            QTipLabel::instance->show();
+            QTipLabel::instance->showNormal();
 #else
-        QTipLabel::instance->show();
+        QTipLabel::instance->showNormal();
 #endif
     }
 }
@@ -512,7 +570,7 @@ void QToolTip::showText(const QPoint &pos, const QString &text, QWidget *w)
 /*!
   \since 4.4
 
-  Returns true if this tooltip is currently shown.
+  Returns \c true if this tooltip is currently shown.
 
   \sa showText()
  */

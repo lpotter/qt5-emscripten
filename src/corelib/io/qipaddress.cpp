@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Intel Corporation
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +39,7 @@
 
 #include "qipaddress_p.h"
 #include "private/qlocale_tools_p.h"
+#include "private/qtools_p.h"
 #include "qvarlengtharray.h"
 
 QT_BEGIN_NAMESPACE
@@ -53,7 +52,7 @@ static QString number(quint8 val, int base = 10)
 }
 
 typedef QVarLengthArray<char, 64> Buffer;
-static bool checkedToAscii(Buffer &buffer, const QChar *begin, const QChar *end)
+static const QChar *checkedToAscii(Buffer &buffer, const QChar *begin, const QChar *end)
 {
     const ushort *const ubegin = reinterpret_cast<const ushort *>(begin);
     const ushort *const uend = reinterpret_cast<const ushort *>(end);
@@ -64,11 +63,11 @@ static bool checkedToAscii(Buffer &buffer, const QChar *begin, const QChar *end)
 
     while (src != uend) {
         if (*src >= 0x7f)
-            return false;
+            return reinterpret_cast<const QChar *>(src);
         *dst++ = *src++;
     }
     *dst = '\0';
-    return true;
+    return 0;
 }
 
 static bool parseIp4Internal(IPv4Address &address, const char *ptr, bool acceptLeadingZero);
@@ -76,7 +75,7 @@ bool parseIp4(IPv4Address &address, const QChar *begin, const QChar *end)
 {
     Q_ASSERT(begin != end);
     Buffer buffer;
-    if (!checkedToAscii(buffer, begin, end))
+    if (checkedToAscii(buffer, begin, end))
         return false;
 
     const char *ptr = buffer.data();
@@ -118,6 +117,9 @@ static bool parseIp4Internal(IPv4Address &address, const char *ptr, bool acceptL
             return false;
         else if (dotCount == 3 || *endptr == '\0')
             return true;
+        if (*endptr != '.')
+            return false;
+
         ++dotCount;
         ptr = endptr + 1;
     }
@@ -137,12 +139,23 @@ void toString(QString &appendTo, IPv4Address address)
                 % number(address);
 }
 
-bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
+/*!
+    \internal
+    \since 5.0
+
+    Parses one IPv6 address from \a begin to \a end and stores the
+    representation in \a address. Returns null if everything was parsed
+    correctly, or the pointer to the first bad character where parsing failed.
+    If the parsing failed for a reason not related to a particular character,
+    returns \a end.
+*/
+const QChar *parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
 {
     Q_ASSERT(begin != end);
     Buffer buffer;
-    if (!checkedToAscii(buffer, begin, end))
-        return false;
+    const QChar *ret = checkedToAscii(buffer, begin, end);
+    if (ret)
+        return ret;
 
     const char *ptr = buffer.data();
 
@@ -158,11 +171,11 @@ bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
     }
     // IPv4-in-IPv6 addresses are stricter in what they accept
     if (dotCount != 0 && dotCount != 3)
-        return false;
+        return end;
 
     memset(address, 0, sizeof address);
     if (colonCount == 2 && end - begin == 2) // "::"
-        return true;
+        return 0;
 
     // if there's a double colon ("::"), this is how many zeroes it means
     int zeroWordsToFill;
@@ -174,7 +187,7 @@ bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
             (ptr[end - begin - 2] == ':' && ptr[end - begin - 1] == ':')) {
         zeroWordsToFill = 9 - colonCount;
     } else if (colonCount < 2 || colonCount > 7) {
-        return false;
+        return end;
     } else {
         zeroWordsToFill = 8 - colonCount;
     }
@@ -183,18 +196,13 @@ bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
 
     int pos = 0;
     while (pos < 15) {
-        const char *endptr;
-        bool ok;
-        quint64 ll = qstrtoull(ptr, &endptr, 16, &ok);
-        quint16 x = ll;
-
-        if (ptr == endptr) {
+        if (*ptr == ':') {
             // empty field, we hope it's "::"
             if (zeroWordsToFill < 1)
-                return false;
+                return begin + (ptr - buffer.data());
             if (pos == 0 || pos == colonCount * 2) {
                 if (ptr[0] == '\0' || ptr[1] != ':')
-                    return false;
+                    return begin + (ptr - buffer.data());
                 ++ptr;
             }
             pos += zeroWordsToFill * 2;
@@ -202,24 +210,33 @@ bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
             ++ptr;
             continue;
         }
-        if (!ok || ll != x)
-            return false;
+
+        const char *endptr;
+        bool ok;
+        quint64 ll = qstrtoull(ptr, &endptr, 16, &ok);
+        quint16 x = ll;
+
+        // Reject malformed fields:
+        // - failed to parse
+        // - too many hex digits
+        if (!ok || endptr > ptr + 4)
+            return begin + (ptr - buffer.data());
 
         if (*endptr == '.') {
             // this could be an IPv4 address
             // it's only valid in the last element
             if (pos != 12)
-                return false;
+                return begin + (ptr - buffer.data());
 
             IPv4Address ip4;
             if (!parseIp4Internal(ip4, ptr, false))
-                return false;
+                return begin + (ptr - buffer.data());
 
             address[12] = ip4 >> 24;
             address[13] = ip4 >> 16;
             address[14] = ip4 >> 8;
             address[15] = ip4;
-            return true;
+            return 0;
         }
 
         address[pos++] = x >> 8;
@@ -228,15 +245,15 @@ bool parseIp6(IPv6Address &address, const QChar *begin, const QChar *end)
         if (*endptr == '\0')
             break;
         if (*endptr != ':')
-            return false;
+            return begin + (endptr - buffer.data());
         ptr = endptr + 1;
     }
-    return pos == 16;
+    return pos == 16 ? 0 : end;
 }
 
 static inline QChar toHex(uchar c)
 {
-    return ushort(c > 9 ? c + 'a' - 0xA : c + '0');
+    return QtMiscUtils::toHexLower(c);
 }
 
 void toString(QString &appendTo, IPv6Address address)

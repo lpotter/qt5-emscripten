@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,7 +51,7 @@
 // We mean it.
 //
 
-#include <QtCore/qglobal.h>
+#include <QtGui/private/qtguiglobal_p.h>
 
 #include <QMap>
 #include <QVector>
@@ -65,7 +63,7 @@ class QImageWriter;
 struct Q_GUI_EXPORT QImageData {        // internal image data
     QImageData();
     ~QImageData();
-    static QImageData *create(const QSize &size, QImage::Format format, int numColors = 0);
+    static QImageData *create(const QSize &size, QImage::Format format);
     static QImageData *create(uchar *data, int w, int h,  int bpl, QImage::Format format, bool readOnly, QImageCleanupFunction cleanupFunction = 0, void *cleanupInfo = 0);
 
     QAtomicInt ref;
@@ -73,19 +71,17 @@ struct Q_GUI_EXPORT QImageData {        // internal image data
     int width;
     int height;
     int depth;
-    int nbytes;               // number of bytes data
+    qsizetype nbytes;               // number of bytes data
     qreal devicePixelRatio;
     QVector<QRgb> colortable;
     uchar *data;
     QImage::Format format;
-    int bytes_per_line;
+    qsizetype bytes_per_line;
     int ser_no;               // serial number
     int detach_no;
 
-    qreal  ldpmx;               // logical dots per meter X (or 0)
-    qreal  ldpmy;               // logical dots per meter Y (or 0)
-    qreal  dpmx;                // device dots per meter X (or 0)
-    qreal  dpmy;                // device dots per meter Y (or 0)
+    qreal  dpmx;                // dots per meter X (or 0)
+    qreal  dpmy;                // dots per meter Y (or 0)
     QPoint  offset;           // offset in pixels
 
     uint own_data : 1;
@@ -110,26 +106,50 @@ struct Q_GUI_EXPORT QImageData {        // internal image data
     QPaintEngine *paintEngine;
 };
 
-void qInitImageConversions();
+typedef void (*Image_Converter)(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
+typedef bool (*InPlace_Image_Converter)(QImageData *data, Qt::ImageConversionFlags);
+
+extern Image_Converter qimage_converter_map[QImage::NImageFormats][QImage::NImageFormats];
+extern InPlace_Image_Converter qimage_inplace_converter_map[QImage::NImageFormats][QImage::NImageFormats];
+
+void convert_generic(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
+void convert_generic_to_rgb64(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
+bool convert_generic_inplace(QImageData *data, QImage::Format dst_format, Qt::ImageConversionFlags);
+
+void dither_to_Mono(QImageData *dst, const QImageData *src, Qt::ImageConversionFlags flags, bool fromalpha);
+
+const uchar *qt_get_bitflip_array();
 Q_GUI_EXPORT void qGamma_correct_back_to_linear_cs(QImage *image);
 
+#if defined(_M_ARM) // QTBUG-42038
+#pragma optimize("", off)
+#endif
 inline int qt_depthForFormat(QImage::Format format)
 {
     int depth = 0;
     switch(format) {
     case QImage::Format_Invalid:
     case QImage::NImageFormats:
-        Q_ASSERT(false);
+        Q_UNREACHABLE();
     case QImage::Format_Mono:
     case QImage::Format_MonoLSB:
         depth = 1;
         break;
     case QImage::Format_Indexed8:
+    case QImage::Format_Alpha8:
+    case QImage::Format_Grayscale8:
         depth = 8;
         break;
     case QImage::Format_RGB32:
     case QImage::Format_ARGB32:
     case QImage::Format_ARGB32_Premultiplied:
+    case QImage::Format_RGBX8888:
+    case QImage::Format_RGBA8888:
+    case QImage::Format_RGBA8888_Premultiplied:
+    case QImage::Format_BGR30:
+    case QImage::Format_A2BGR30_Premultiplied:
+    case QImage::Format_RGB30:
+    case QImage::Format_A2RGB30_Premultiplied:
         depth = 32;
         break;
     case QImage::Format_RGB555:
@@ -145,9 +165,96 @@ inline int qt_depthForFormat(QImage::Format format)
     case QImage::Format_RGB888:
         depth = 24;
         break;
+    case QImage::Format_RGBX64:
+    case QImage::Format_RGBA64:
+    case QImage::Format_RGBA64_Premultiplied:
+        depth = 64;
+        break;
     }
     return depth;
 }
+
+#if defined(_M_ARM)
+#pragma optimize("", on)
+#endif
+
+inline QImage::Format qt_opaqueVersion(QImage::Format format)
+{
+    switch (format) {
+    case QImage::Format_ARGB8565_Premultiplied:
+        return  QImage::Format_RGB16;
+    case QImage::Format_ARGB8555_Premultiplied:
+        return QImage::Format_RGB555;
+    case QImage::Format_ARGB6666_Premultiplied:
+        return  QImage::Format_RGB666;
+    case QImage::Format_ARGB4444_Premultiplied:
+        return QImage::Format_RGB444;
+    case QImage::Format_RGBA8888:
+    case QImage::Format_RGBA8888_Premultiplied:
+        return QImage::Format_RGBX8888;
+    case QImage::Format_A2BGR30_Premultiplied:
+        return QImage::Format_BGR30;
+    case QImage::Format_A2RGB30_Premultiplied:
+        return QImage::Format_RGB30;
+    case QImage::Format_RGBA64:
+    case QImage::Format_RGBA64_Premultiplied:
+        return QImage::Format_RGBX64;
+    case QImage::Format_ARGB32_Premultiplied:
+    case QImage::Format_ARGB32:
+    default:
+        return QImage::Format_RGB32;
+    }
+}
+
+inline QImage::Format qt_alphaVersion(QImage::Format format)
+{
+    switch (format) {
+    case QImage::Format_RGB16:
+        return QImage::Format_ARGB8565_Premultiplied;
+    case QImage::Format_RGB555:
+        return QImage::Format_ARGB8555_Premultiplied;
+    case QImage::Format_RGB666:
+        return QImage::Format_ARGB6666_Premultiplied;
+    case QImage::Format_RGB444:
+        return QImage::Format_ARGB4444_Premultiplied;
+    case QImage::Format_RGBX8888:
+        return QImage::Format_RGBA8888_Premultiplied;
+    case QImage::Format_BGR30:
+        return QImage::Format_A2BGR30_Premultiplied;
+    case QImage::Format_RGB30:
+        return QImage::Format_A2RGB30_Premultiplied;
+    case QImage::Format_RGBX64:
+        return QImage::Format_RGBA64_Premultiplied;
+    default:
+        break;
+    }
+    return QImage::Format_ARGB32_Premultiplied;
+}
+
+inline QImage::Format qt_maybeAlphaVersionWithSameDepth(QImage::Format format)
+{
+    const QImage::Format toFormat = qt_alphaVersion(format);
+    return qt_depthForFormat(format) == qt_depthForFormat(toFormat) ? toFormat : format;
+}
+
+inline QImage::Format qt_opaqueVersionForPainting(QImage::Format format)
+{
+    return qt_opaqueVersion(format);
+}
+
+inline QImage::Format qt_alphaVersionForPainting(QImage::Format format)
+{
+    QImage::Format toFormat = qt_alphaVersion(format);
+#if defined(__ARM_NEON__) || defined(__SSE2__)
+    // If we are switching depth anyway and we have optimized ARGB32PM routines, upgrade to that.
+    if (qt_depthForFormat(format) != qt_depthForFormat(toFormat))
+        toFormat = QImage::Format_ARGB32_Premultiplied;
+#endif
+    return toFormat;
+}
+
+Q_GUI_EXPORT QMap<QString, QString> qt_getImageText(const QImage &image, const QString &description);
+Q_GUI_EXPORT QMap<QString, QString> qt_getImageTextFromDescription(const QString &description);
 
 QT_END_NAMESPACE
 

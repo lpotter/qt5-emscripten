@@ -1,12 +1,11 @@
 TARGET = qdirectfb
 
-PLUGIN_TYPE = platforms
-load(qt_plugin)
+QT += \
+    core-private gui-private \
+    eventdispatcher_support-private service_support-private \
+    fontdatabase_support-private
 
-QT += core-private gui-private platformsupport-private
-
-LIBS += $$QMAKE_LIBS_DIRECTFB
-QMAKE_CXXFLAGS += $$QMAKE_CFLAGS_DIRECTFB
+QMAKE_USE += directfb
 
 SOURCES = main.cpp \
     qdirectfbintegration.cpp \
@@ -29,6 +28,7 @@ HEADERS = qdirectfbintegration.h \
 
 # ### port the GL context
 contains(QT_CONFIG, directfb_egl) {
+    QT += egl_support-private
     HEADERS += qdirectfb_egl.h
     SOURCES += qdirectfb_egl.cpp
     DEFINES += DIRECTFB_GL_EGL
@@ -45,7 +45,9 @@ contains(QT_CONFIG, directfb_egl) {
     SOURCES += qdirectfbeglhooks_stub.cpp
 }
 
-
-CONFIG += qpa/genericunixfontdatabase
-
 OTHER_FILES += directfb.json
+
+PLUGIN_TYPE = platforms
+PLUGIN_CLASS_NAME = QDirectFbIntegrationPlugin
+!equals(TARGET, $$QT_DEFAULT_QPA_PLUGIN): PLUGIN_EXTENDS = -
+load(qt_plugin)

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,15 +51,19 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include "QtCore/qcoreapplication.h"
 #include "private/qcoreapplication_p.h"
+#include "private/qmetaobject_p.h"
 #include "QtNetwork/qhostinfo.h"
 #include "QtCore/qmutex.h"
 #include "QtCore/qwaitcondition.h"
 #include "QtCore/qobject.h"
 #include "QtCore/qpointer.h"
 #include "QtCore/qthread.h"
+#if QT_CONFIG(thread)
 #include "QtCore/qthreadpool.h"
+#endif
 #include "QtCore/qrunnable.h"
 #include "QtCore/qlist.h"
 #include "QtCore/qqueue.h"
@@ -78,10 +80,47 @@ QT_BEGIN_NAMESPACE
 class QHostInfoResult : public QObject
 {
     Q_OBJECT
+
+    QPointer<const QObject> receiver = nullptr;
+    QtPrivate::QSlotObjectBase *slotObj = nullptr;
+
+public:
+    QHostInfoResult() = default;
+    QHostInfoResult(const QObject *receiver, QtPrivate::QSlotObjectBase *slotObj) :
+        receiver(receiver),
+        slotObj(slotObj)
+    {
+        connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this,
+                &QObject::deleteLater);
+        if (slotObj && receiver)
+            moveToThread(receiver->thread());
+    }
+
 public Q_SLOTS:
     inline void emitResultsReady(const QHostInfo &info)
     {
-        emit resultsReady(info);
+        if (slotObj) {
+            QHostInfo copy = info;
+            void *args[2] = { 0, reinterpret_cast<void *>(&copy) };
+            slotObj->call(const_cast<QObject*>(receiver.data()), args);
+            slotObj->destroyIfLastRef();
+        } else {
+            emit resultsReady(info);
+        }
+    }
+
+protected:
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::MetaCall) {
+            auto metaCallEvent = static_cast<QMetaCallEvent *>(event);
+            auto args = metaCallEvent->args();
+            auto hostInfo = reinterpret_cast<QHostInfo *>(args[1]);
+            emitResultsReady(*hostInfo);
+            deleteLater();
+            return true;
+        }
+        return QObject::event(event);
     }
 
 Q_SIGNALS:
@@ -125,6 +164,7 @@ public:
 QHostInfo Q_NETWORK_EXPORT qt_qhostinfo_lookup(const QString &name, QObject *receiver, const char *member, bool *valid, int *id);
 void Q_AUTOTEST_EXPORT qt_qhostinfo_clear_cache();
 void Q_AUTOTEST_EXPORT qt_qhostinfo_enable_cache(bool e);
+void Q_AUTOTEST_EXPORT qt_qhostinfo_cache_inject(const QString &hostname, const QHostInfo &resolution);
 
 class QHostInfoCache
 {
@@ -153,8 +193,10 @@ private:
 class QHostInfoRunnable : public QRunnable
 {
 public:
-    QHostInfoRunnable (QString hn, int i);
-    void run();
+    QHostInfoRunnable(const QString &hn, int i);
+    QHostInfoRunnable(const QString &hn, int i, const QObject *receiver,
+                      QtPrivate::QSlotObjectBase *slotObj);
+    void run() override;
 
     QString toBeLookedUp;
     int id;
@@ -185,7 +227,7 @@ public:
     QHostInfoLookupManager();
     ~QHostInfoLookupManager();
 
-    void clear();
+    void clear() override;
     void work();
 
     // called from QHostInfo
@@ -198,20 +240,25 @@ public:
 
     friend class QHostInfoRunnable;
 protected:
+#if QT_CONFIG(thread)
     QList<QHostInfoRunnable*> currentLookups; // in progress
     QList<QHostInfoRunnable*> postponedLookups; // postponed because in progress for same host
+#endif
     QQueue<QHostInfoRunnable*> scheduledLookups; // not yet started
     QList<QHostInfoRunnable*> finishedLookups; // recently finished
     QList<int> abortedLookups; // ids of aborted lookups
 
+#if QT_CONFIG(thread)
     QThreadPool threadPool;
-
+#endif
     QMutex mutex;
 
     bool wasDeleted;
 
 private slots:
+#if QT_CONFIG(thread)
     void waitForThreadPoolDone() { threadPool.waitForDone(); }
+#endif
 };
 
 QT_END_NAMESPACE

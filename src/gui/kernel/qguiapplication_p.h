@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtGui/private/qtguiglobal_p.h>
 #include <QtGui/qguiapplication.h>
 
 #include <QtCore/QPointF>
@@ -65,17 +64,16 @@
 #include "private/qshortcutmap_p.h"
 #include <qicon.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
+class QColorProfile;
 class QPlatformIntegration;
 class QPlatformTheme;
 class QPlatformDragQtResponse;
-struct QDrawHelperGammaTables;
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 class QDrag;
-#endif // QT_NO_DRAGANDDROP
+#endif // QT_CONFIG(draganddrop)
+class QInputDeviceManager;
 
 class Q_GUI_EXPORT QGuiApplicationPrivate : public QCoreApplicationPrivate
 {
@@ -84,14 +82,19 @@ public:
     QGuiApplicationPrivate(int &argc, char **argv, int flags);
     ~QGuiApplicationPrivate();
 
+    void init();
+
     void createPlatformIntegration();
-    void createEventDispatcher();
-    void setEventDispatcher(QAbstractEventDispatcher *eventDispatcher);
+    void createEventDispatcher() override;
+    void eventDispatcherReady() override;
 
     virtual void notifyLayoutDirectionChange();
     virtual void notifyActiveWindowChange(QWindow *previous);
 
-    virtual bool shouldQuit();
+    virtual bool shouldQuit() override;
+
+    bool shouldQuitInternal(const QWindowList &processedWindows);
+    virtual bool tryCloseAllWindows();
 
     static Qt::KeyboardModifiers modifier_buttons;
     static Qt::MouseButtons mouse_buttons;
@@ -109,7 +112,7 @@ public:
     static QAbstractEventDispatcher *qt_qpa_core_dispatcher()
     {
         if (QCoreApplication::instance())
-            return QCoreApplication::instance()->d_func()->threadData->eventDispatcher;
+            return QCoreApplication::instance()->d_func()->threadData->eventDispatcher.load();
         else
             return 0;
     }
@@ -128,16 +131,18 @@ public:
 
     static void processActivatedEvent(QWindowSystemInterfacePrivate::ActivatedWindowEvent *e);
     static void processWindowStateChangedEvent(QWindowSystemInterfacePrivate::WindowStateChangedEvent *e);
+    static void processWindowScreenChangedEvent(QWindowSystemInterfacePrivate::WindowScreenChangedEvent *e);
+
+    static void processSafeAreaMarginsChangedEvent(QWindowSystemInterfacePrivate::SafeAreaMarginsChangedEvent *e);
 
     static void processWindowSystemEvent(QWindowSystemInterfacePrivate::WindowSystemEvent *e);
 
     static void updateFilteredScreenOrientation(QScreen *screen);
     static void reportScreenOrientationChange(QScreen *screen);
-    static void reportScreenOrientationChange(QWindowSystemInterfacePrivate::ScreenOrientationEvent *e);
-    static void reportGeometryChange(QWindowSystemInterfacePrivate::ScreenGeometryEvent *e);
-    static void reportAvailableGeometryChange(QWindowSystemInterfacePrivate::ScreenAvailableGeometryEvent *e);
-    static void reportLogicalDotsPerInchChange(QWindowSystemInterfacePrivate::ScreenLogicalDotsPerInchEvent *e);
-    static void reportRefreshRateChange(QWindowSystemInterfacePrivate::ScreenRefreshRateEvent *e);
+    static void processScreenOrientationChange(QWindowSystemInterfacePrivate::ScreenOrientationEvent *e);
+    static void processScreenGeometryChange(QWindowSystemInterfacePrivate::ScreenGeometryEvent *e);
+    static void processScreenLogicalDotsPerInchChange(QWindowSystemInterfacePrivate::ScreenLogicalDotsPerInchEvent *e);
+    static void processScreenRefreshRateChange(QWindowSystemInterfacePrivate::ScreenRefreshRateEvent *e);
     static void processThemeChanged(QWindowSystemInterfacePrivate::ThemeChangeEvent *tce);
 
     static void processExposeEvent(QWindowSystemInterfacePrivate::ExposeEvent *e);
@@ -148,25 +153,33 @@ public:
     static void processTabletEnterProximityEvent(QWindowSystemInterfacePrivate::TabletEnterProximityEvent *e);
     static void processTabletLeaveProximityEvent(QWindowSystemInterfacePrivate::TabletLeaveProximityEvent *e);
 
+#ifndef QT_NO_GESTURES
+    static void processGestureEvent(QWindowSystemInterfacePrivate::GestureEvent *e);
+#endif
+
     static void processPlatformPanelEvent(QWindowSystemInterfacePrivate::PlatformPanelEvent *e);
 #ifndef QT_NO_CONTEXTMENU
     static void processContextMenuEvent(QWindowSystemInterfacePrivate::ContextMenuEvent *e);
 #endif
 
-#ifndef QT_NO_DRAGANDDROP
-    static QPlatformDragQtResponse processDrag(QWindow *w, const QMimeData *dropData, const QPoint &p, Qt::DropActions supportedActions);
-    static QPlatformDropQtResponse processDrop(QWindow *w, const QMimeData *dropData, const QPoint &p, Qt::DropActions supportedActions);
+#if QT_CONFIG(draganddrop)
+    static QPlatformDragQtResponse processDrag(QWindow *w, const QMimeData *dropData,
+                                               const QPoint &p, Qt::DropActions supportedActions,
+                                               Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers);
+    static QPlatformDropQtResponse processDrop(QWindow *w, const QMimeData *dropData,
+                                               const QPoint &p, Qt::DropActions supportedActions,
+                                               Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers);
 #endif
 
     static bool processNativeEvent(QWindow *window, const QByteArray &eventType, void *message, long *result);
 
-    static void sendQWindowEventToQPlatformWindow(QWindow *window, QEvent *event);
+    static bool sendQWindowEventToQPlatformWindow(QWindow *window, QEvent *event);
 
     static inline Qt::Alignment visualAlignment(Qt::LayoutDirection direction, Qt::Alignment alignment)
     {
         if (!(alignment & Qt::AlignHorizontal_Mask))
             alignment |= Qt::AlignLeft;
-        if ((alignment & Qt::AlignAbsolute) == 0 && (alignment & (Qt::AlignLeft | Qt::AlignRight))) {
+        if (!(alignment & Qt::AlignAbsolute) && (alignment & (Qt::AlignLeft | Qt::AlignRight))) {
             if (direction == Qt::RightToLeft)
                 alignment ^= (Qt::AlignLeft | Qt::AlignRight);
             alignment |= Qt::AlignAbsolute;
@@ -182,25 +195,38 @@ public:
 
     static QGuiApplicationPrivate *instance() { return self; }
 
+    static QIcon *app_icon;
     static QString *platform_name;
     static QString *displayName;
+    static QString *desktopFileName;
 
     QWindowList modalWindowList;
     static void showModalWindow(QWindow *window);
     static void hideModalWindow(QWindow *window);
     static void updateBlockedStatus(QWindow *window);
     virtual bool isWindowBlocked(QWindow *window, QWindow **blockingWindow = 0) const;
+    virtual bool popupActive() { return false; }
 
-    static Qt::MouseButtons buttons;
     static ulong mousePressTime;
     static Qt::MouseButton mousePressButton;
     static int mousePressX;
     static int mousePressY;
     static int mouse_double_click_distance;
     static QPointF lastCursorPosition;
-    static bool tabletState;
-    static QWindow *tabletPressTarget;
     static QWindow *currentMouseWindow;
+    static QWindow *currentMousePressWindow;
+    static Qt::ApplicationState applicationState;
+    static bool highDpiScalingUpdated;
+    static QPointer<QWindow> currentDragWindow;
+
+    struct TabletPointData {
+        TabletPointData(qint64 devId = 0) : deviceId(devId), state(Qt::NoButton), target(nullptr) {}
+        qint64 deviceId;
+        Qt::MouseButtons state;
+        QWindow *target;
+    };
+    static QVector<TabletPointData> tabletDevicePoints;
+    static TabletPointData &tabletDevicePoint(qint64 deviceId);
 
 #ifndef QT_NO_CLIPBOARD
     static QClipboard *qt_clipboard;
@@ -218,10 +244,13 @@ public:
 
     static QFont *app_font;
 
-    QStyleHints *styleHints;
+    static QString styleOverride;
+    static QStyleHints *styleHints;
     static bool obey_desktop_settings;
-    static bool noGrab;
     QInputMethod *inputMethod;
+
+    QString firstWindowTitle;
+    QIcon forcedWindowIcon;
 
     static QList<QObject *> generic_plugin_list;
 #ifndef QT_NO_SHORTCUT
@@ -229,13 +258,12 @@ public:
 #endif
 
 #ifndef QT_NO_SESSIONMANAGER
+    static bool is_fallback_session_management_enabled;
     QSessionManager *session_manager;
-    QString session_id;
-    QString session_key;
     bool is_session_restored;
     bool is_saving_session;
-    void commitData(QSessionManager& sm);
-    void saveState(QSessionManager& sm);
+    void commitData();
+    void saveState();
 #endif
 
     struct ActiveTouchPointsKey {
@@ -262,28 +290,46 @@ public:
     static int mouseEventCaps(QMouseEvent *event);
     static QVector2D mouseEventVelocity(QMouseEvent *event);
     static void setMouseEventCapsAndVelocity(QMouseEvent *event, int caps, const QVector2D &velocity);
-    static void setMouseEventCapsAndVelocity(QMouseEvent *event, QMouseEvent *other);
 
-    const QDrawHelperGammaTables *gammaTables();
+    static Qt::MouseEventSource mouseEventSource(const QMouseEvent *event);
+    static void setMouseEventSource(QMouseEvent *event, Qt::MouseEventSource source);
+
+    static Qt::MouseEventFlags mouseEventFlags(const QMouseEvent *event);
+    static void setMouseEventFlags(QMouseEvent *event, Qt::MouseEventFlags flags);
+
+    static QInputDeviceManager *inputDeviceManager();
+
+    const QColorProfile *colorProfileForA8Text();
+    const QColorProfile *colorProfileForA32Text();
 
     // hook reimplemented in QApplication to apply the QStyle function on the QIcon
     virtual QPixmap applyQIconStyleHelper(QIcon::Mode, const QPixmap &basePixmap) const { return basePixmap; }
 
+    virtual void notifyWindowIconChanged();
+
+    static void applyWindowGeometrySpecificationTo(QWindow *window);
+
+    static void setApplicationState(Qt::ApplicationState state, bool forcePropagate = false);
+
 protected:
     virtual void notifyThemeChanged();
-#ifndef QT_NO_DRAGANDDROP
+    bool tryCloseRemainingWindows(QWindowList processedWindows);
+#if QT_CONFIG(draganddrop)
     virtual void notifyDragStarted(const QDrag *);
-#endif // QT_NO_DRAGANDDROP
+#endif // QT_CONFIG(draganddrop)
 
 private:
     friend class QDragManager;
 
-    void init();
-
     static QGuiApplicationPrivate *self;
     static QTouchDevice *m_fakeTouchDevice;
     static int m_fakeMouseSourcePointId;
-    QAtomicPointer<QDrawHelperGammaTables> m_gammaTables;
+    QAtomicPointer<QColorProfile> m_a8ColorProfile;
+    QAtomicPointer<QColorProfile> m_a32ColorProfile;
+
+    bool ownGlobalShareContext;
+
+    static QInputDeviceManager *m_inputDeviceManager;
 };
 
 Q_GUI_EXPORT uint qHash(const QGuiApplicationPrivate::ActiveTouchPointsKey &k);
@@ -292,7 +338,5 @@ Q_GUI_EXPORT bool operator==(const QGuiApplicationPrivate::ActiveTouchPointsKey 
                              const QGuiApplicationPrivate::ActiveTouchPointsKey &b);
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QGUIAPPLICATION_P_H

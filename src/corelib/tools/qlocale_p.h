@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +11,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,20 +52,21 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include "QtCore/qstring.h"
 #include "QtCore/qvarlengtharray.h"
 #include "QtCore/qvariant.h"
+#include "QtCore/qnumeric.h"
 
 #include "qlocale.h"
 
-#if defined(Q_OS_BLACKBERRY)
-#include "qsocketnotifier.h"
-#endif
+#include <limits>
+#include <cmath>
 
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_SYSTEMLOCALE
-class QSystemLocale
+class Q_CORE_EXPORT QSystemLocale
 {
 public:
     QSystemLocale();
@@ -119,7 +119,9 @@ public:
         ListToSeparatedString, // QString
         LocaleChanged, // system locale changed
         NativeLanguageName, // QString
-        NativeCountryName // QString
+        NativeCountryName, // QString
+        StandaloneMonthNameLong, // QString, in: int
+        StandaloneMonthNameShort // QString, in: int
     };
     virtual QVariant query(QueryType type, QVariant in) const;
     virtual QLocale fallbackUiLocale() const;
@@ -128,9 +130,11 @@ private:
     QSystemLocale(bool);
     friend class QSystemLocaleSingleton;
 };
+Q_DECLARE_TYPEINFO(QSystemLocale::QueryType, Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(QSystemLocale::CurrencyToStringArgument, Q_MOVABLE_TYPE);
 #endif
 
-#ifdef QT_USE_ICU
+#if QT_CONFIG(icu)
 namespace QIcu {
     QString toUpper(const QByteArray &localeId, const QString &str, bool *ok);
     QString toLower(const QByteArray &localeId, const QString &str, bool *ok);
@@ -155,10 +159,11 @@ struct QLocaleId
     QLocaleId withLikelySubtagsAdded() const;
     QLocaleId withLikelySubtagsRemoved() const;
 
-    QString bcp47Name() const;
+    QByteArray name(char separator = '-') const;
 
     ushort language_id, script_id, country_id;
 };
+Q_DECLARE_TYPEINFO(QLocaleId, Q_PRIMITIVE_TYPE);
 
 struct QLocaleData
 {
@@ -166,90 +171,18 @@ public:
     static const QLocaleData *findLocaleData(QLocale::Language language,
                                              QLocale::Script script,
                                              QLocale::Country country);
+    static const QLocaleData *c();
 
-    quint16 m_language_id, m_script_id, m_country_id;
+    // Maximum number of significant digits needed to represent a double.
+    // We cannot use std::numeric_limits here without constexpr.
+    static const int DoubleMantissaBits = 53;
+    static const int Log10_2_100000 = 30103;    // log10(2) * 100000
+    // same as C++11 std::numeric_limits<T>::max_digits10
+    static const int DoubleMaxSignificant = (DoubleMantissaBits * Log10_2_100000) / 100000 + 2;
 
-    quint16 m_decimal, m_group, m_list, m_percent, m_zero, m_minus, m_plus, m_exponential;
-    quint16 m_quotation_start, m_quotation_end;
-    quint16 m_alternate_quotation_start, m_alternate_quotation_end;
-
-    quint16 m_list_pattern_part_start_idx, m_list_pattern_part_start_size;
-    quint16 m_list_pattern_part_mid_idx, m_list_pattern_part_mid_size;
-    quint16 m_list_pattern_part_end_idx, m_list_pattern_part_end_size;
-    quint16 m_list_pattern_part_two_idx, m_list_pattern_part_two_size;
-    quint16 m_short_date_format_idx, m_short_date_format_size;
-    quint16 m_long_date_format_idx, m_long_date_format_size;
-    quint16 m_short_time_format_idx, m_short_time_format_size;
-    quint16 m_long_time_format_idx, m_long_time_format_size;
-    quint16 m_standalone_short_month_names_idx, m_standalone_short_month_names_size;
-    quint16 m_standalone_long_month_names_idx, m_standalone_long_month_names_size;
-    quint16 m_standalone_narrow_month_names_idx, m_standalone_narrow_month_names_size;
-    quint16 m_short_month_names_idx, m_short_month_names_size;
-    quint16 m_long_month_names_idx, m_long_month_names_size;
-    quint16 m_narrow_month_names_idx, m_narrow_month_names_size;
-    quint16 m_standalone_short_day_names_idx, m_standalone_short_day_names_size;
-    quint16 m_standalone_long_day_names_idx, m_standalone_long_day_names_size;
-    quint16 m_standalone_narrow_day_names_idx, m_standalone_narrow_day_names_size;
-    quint16 m_short_day_names_idx, m_short_day_names_size;
-    quint16 m_long_day_names_idx, m_long_day_names_size;
-    quint16 m_narrow_day_names_idx, m_narrow_day_names_size;
-    quint16 m_am_idx, m_am_size;
-    quint16 m_pm_idx, m_pm_size;
-    char    m_currency_iso_code[3];
-    quint16 m_currency_symbol_idx, m_currency_symbol_size;
-    quint16 m_currency_display_name_idx, m_currency_display_name_size;
-    quint8  m_currency_format_idx, m_currency_format_size;
-    quint8  m_currency_negative_format_idx, m_currency_negative_format_size;
-    quint16 m_language_endonym_idx, m_language_endonym_size;
-    quint16 m_country_endonym_idx, m_country_endonym_size;
-    quint16 m_currency_digits : 2;
-    quint16 m_currency_rounding : 3;
-    quint16 m_first_day_of_week : 3;
-    quint16 m_weekend_start : 3;
-    quint16 m_weekend_end : 3;
-};
-
-class Q_CORE_EXPORT QLocalePrivate : public QSharedData
-{
-public:
-    explicit QLocalePrivate(int index, int numberOptions = 0)
-        : m_index(index), m_numberOptions(numberOptions)
-    {
-        m_data = dataPointerForIndex(index);
-        m_localeID = bcp47Name().toLatin1();
-        m_localeID.replace('-','_');
-    }
-
-    ~QLocalePrivate()
-    {
-    }
-
-    QChar decimal() const { return QChar(m_data->m_decimal); }
-    QChar group() const { return QChar(m_data->m_group); }
-    QChar list() const { return QChar(m_data->m_list); }
-    QChar percent() const { return QChar(m_data->m_percent); }
-    QChar zero() const { return QChar(m_data->m_zero); }
-    QChar plus() const { return QChar(m_data->m_plus); }
-    QChar minus() const { return QChar(m_data->m_minus); }
-    QChar exponential() const { return QChar(m_data->m_exponential); }
-
-    quint16 languageId() const { return m_data->m_language_id; }
-    quint16 countryId() const { return m_data->m_country_id; }
-
-    QString bcp47Name() const;
-
-    QString languageCode() const; // ### QByteArray::fromRawData would be more optimal
-    QString scriptCode() const;
-    QString countryCode() const;
-
-    static QLocale::Language codeToLanguage(const QString &code);
-    static QLocale::Script codeToScript(const QString &code);
-    static QLocale::Country codeToCountry(const QString &code);
-    static void getLangAndCountry(const QString &name, QLocale::Language &lang,
-                                  QLocale::Script &script, QLocale::Country &cntry);
-    static const QLocaleData *dataPointerForIndex(quint16 index);
-
-    QLocale::MeasurementSystem measurementSystem() const;
+    // Maximum number of digits before decimal point to represent a double
+    // Same as std::numeric_limits<double>::max_exponent10 + 1
+    static const int DoubleMaxDigitsBeforeDecimal = 309;
 
     enum DoubleForm {
         DFExponent = 0,
@@ -260,7 +193,7 @@ public:
 
     enum Flags {
         NoFlags             = 0,
-        Alternate           = 0x01,
+        AddTrailingZeroes   = 0x01,
         ZeroPadded          = 0x02,
         LeftAdjusted        = 0x04,
         BlankBeforePositive = 0x08,
@@ -270,13 +203,13 @@ public:
 
         ShowBase            = 0x80,
         UppercaseBase       = 0x100,
-        ForcePoint          = Alternate
+        ZeroPadExponent     = 0x200,
+        ForcePoint          = 0x400
     };
 
-    enum GroupSeparatorMode {
-        FailOnGroupSeparators,
-        ParseGroupSeparators
-    };
+    enum NumberMode { IntegerMode, DoubleStandardMode, DoubleScientificMode };
+
+    typedef QVarLengthArray<char, 256> CharBuff;
 
     static QString doubleToString(const QChar zero, const QChar plus,
                                   const QChar minus, const QChar exponent,
@@ -307,94 +240,212 @@ public:
                                 int base = 10,
                                 int width = -1,
                                 unsigned flags = NoFlags) const;
-    double stringToDouble(const QString &num, bool *ok, GroupSeparatorMode group_sep_mode) const;
-    qint64 stringToLongLong(const QString &num, int base, bool *ok, GroupSeparatorMode group_sep_mode) const;
-    quint64 stringToUnsLongLong(const QString &num, int base, bool *ok, GroupSeparatorMode group_sep_mode) const;
 
+    // this function is meant to be called with the result of stringToDouble or bytearrayToDouble
+    static float convertDoubleToFloat(double d, bool *ok)
+    {
+        if (qIsInf(d))
+            return float(d);
+        if (std::fabs(d) > std::numeric_limits<float>::max()) {
+            if (ok != 0)
+                *ok = false;
+            return 0.0f;
+        }
+        return float(d);
+    }
 
-    static double bytearrayToDouble(const char *num, bool *ok, bool *overflow = 0);
-    static qint64 bytearrayToLongLong(const char *num, int base, bool *ok, bool *overflow = 0);
+    double stringToDouble(QStringView str, bool *ok, QLocale::NumberOptions options) const;
+    qint64 stringToLongLong(QStringView str, int base, bool *ok, QLocale::NumberOptions options) const;
+    quint64 stringToUnsLongLong(QStringView str, int base, bool *ok, QLocale::NumberOptions options) const;
+
+    static double bytearrayToDouble(const char *num, bool *ok);
+    // this function is used in QIntValidator (QtGui)
+    Q_CORE_EXPORT static qint64 bytearrayToLongLong(const char *num, int base, bool *ok);
     static quint64 bytearrayToUnsLongLong(const char *num, int base, bool *ok);
 
-    typedef QVarLengthArray<char, 256> CharBuff;
-    bool numberToCLocale(const QString &num,
-    	    	    	  GroupSeparatorMode group_sep_mode,
-                          CharBuff *result) const;
+    bool numberToCLocale(QStringView s, QLocale::NumberOptions number_options,
+                         CharBuff *result) const;
     inline char digitToCLocale(QChar c) const;
+
+    // this function is used in QIntValidator (QtGui)
+    Q_CORE_EXPORT bool validateChars(QStringView str, NumberMode numMode, QByteArray *buff, int decDigits = -1,
+            QLocale::NumberOptions number_options = QLocale::DefaultNumberOptions) const;
+
+public:
+    quint16 m_language_id, m_script_id, m_country_id;
+
+    // FIXME QTBUG-69324: not all unicode code-points map to single-token UTF-16 :-(
+    quint16 m_decimal, m_group, m_list, m_percent, m_zero, m_minus, m_plus, m_exponential;
+    quint16 m_quotation_start, m_quotation_end;
+    quint16 m_alternate_quotation_start, m_alternate_quotation_end;
+
+    quint16 m_list_pattern_part_start_idx, m_list_pattern_part_start_size;
+    quint16 m_list_pattern_part_mid_idx, m_list_pattern_part_mid_size;
+    quint16 m_list_pattern_part_end_idx, m_list_pattern_part_end_size;
+    quint16 m_list_pattern_part_two_idx, m_list_pattern_part_two_size;
+    quint16 m_short_date_format_idx, m_short_date_format_size;
+    quint16 m_long_date_format_idx, m_long_date_format_size;
+    quint16 m_short_time_format_idx, m_short_time_format_size;
+    quint16 m_long_time_format_idx, m_long_time_format_size;
+    quint16 m_standalone_short_month_names_idx, m_standalone_short_month_names_size;
+    quint16 m_standalone_long_month_names_idx, m_standalone_long_month_names_size;
+    quint16 m_standalone_narrow_month_names_idx, m_standalone_narrow_month_names_size;
+    quint16 m_short_month_names_idx, m_short_month_names_size;
+    quint16 m_long_month_names_idx, m_long_month_names_size;
+    quint16 m_narrow_month_names_idx, m_narrow_month_names_size;
+    quint16 m_standalone_short_day_names_idx, m_standalone_short_day_names_size;
+    quint16 m_standalone_long_day_names_idx, m_standalone_long_day_names_size;
+    quint16 m_standalone_narrow_day_names_idx, m_standalone_narrow_day_names_size;
+    quint16 m_short_day_names_idx, m_short_day_names_size;
+    quint16 m_long_day_names_idx, m_long_day_names_size;
+    quint16 m_narrow_day_names_idx, m_narrow_day_names_size;
+    quint16 m_am_idx, m_am_size;
+    quint16 m_pm_idx, m_pm_size;
+    quint16 m_byte_idx, m_byte_size;
+    quint16 m_byte_si_quantified_idx, m_byte_si_quantified_size;
+    quint16 m_byte_iec_quantified_idx, m_byte_iec_quantified_size;
+    char    m_currency_iso_code[3];
+    quint16 m_currency_symbol_idx, m_currency_symbol_size;
+    quint16 m_currency_display_name_idx, m_currency_display_name_size;
+    quint8  m_currency_format_idx, m_currency_format_size;
+    quint8  m_currency_negative_format_idx, m_currency_negative_format_size;
+    quint16 m_language_endonym_idx, m_language_endonym_size;
+    quint16 m_country_endonym_idx, m_country_endonym_size;
+    quint16 m_currency_digits : 2;
+    quint16 m_currency_rounding : 3;
+    quint16 m_first_day_of_week : 3;
+    quint16 m_weekend_start : 3;
+    quint16 m_weekend_end : 3;
+};
+
+class Q_CORE_EXPORT QLocalePrivate
+{
+public:
+    static QLocalePrivate *create(
+            const QLocaleData *data,
+            QLocale::NumberOptions numberOptions = QLocale::DefaultNumberOptions)
+    {
+        QLocalePrivate *retval = new QLocalePrivate;
+        retval->m_data = data;
+        retval->ref.store(0);
+        retval->m_numberOptions = numberOptions;
+        return retval;
+    }
+
+    static QLocalePrivate *get(QLocale &l) { return l.d; }
+    static const    QLocalePrivate *get(const QLocale &l) { return l.d; }
+
+    QChar decimal() const { return QChar(m_data->m_decimal); }
+    QChar group() const { return QChar(m_data->m_group); }
+    QChar list() const { return QChar(m_data->m_list); }
+    QChar percent() const { return QChar(m_data->m_percent); }
+    QChar zero() const { return QChar(m_data->m_zero); }
+    QChar plus() const { return QChar(m_data->m_plus); }
+    QChar minus() const { return QChar(m_data->m_minus); }
+    QChar exponential() const { return QChar(m_data->m_exponential); }
+
+    quint16 languageId() const { return m_data->m_language_id; }
+    quint16 countryId() const { return m_data->m_country_id; }
+
+    QByteArray bcp47Name(char separator = '-') const;
+
+    inline QLatin1String languageCode() const { return QLocalePrivate::languageToCode(QLocale::Language(m_data->m_language_id)); }
+    inline QLatin1String scriptCode() const { return QLocalePrivate::scriptToCode(QLocale::Script(m_data->m_script_id)); }
+    inline QLatin1String countryCode() const { return QLocalePrivate::countryToCode(QLocale::Country(m_data->m_country_id)); }
+
+    static QLatin1String languageToCode(QLocale::Language language);
+    static QLatin1String scriptToCode(QLocale::Script script);
+    static QLatin1String countryToCode(QLocale::Country country);
+    static QLocale::Language codeToLanguage(QStringView code) Q_DECL_NOTHROW;
+    static QLocale::Script codeToScript(QStringView code) Q_DECL_NOTHROW;
+    static QLocale::Country codeToCountry(QStringView code) Q_DECL_NOTHROW;
+    static void getLangAndCountry(const QString &name, QLocale::Language &lang,
+                                  QLocale::Script &script, QLocale::Country &cntry);
+
+    QLocale::MeasurementSystem measurementSystem() const;
 
     static void updateSystemPrivate();
 
-    enum NumberMode { IntegerMode, DoubleStandardMode, DoubleScientificMode };
-    bool validateChars(const QString &str, NumberMode numMode, QByteArray *buff, int decDigits = -1) const;
-
-    QString dateTimeToString(const QString &format, const QDate *date, const QTime *time,
+    QString dateTimeToString(QStringView format, const QDateTime &datetime,
+                             const QDate &dateOnly, const QTime &timeOnly,
                              const QLocale *q) const;
 
-    friend class QLocale;
-    quint16 m_index;
-    quint16 m_numberOptions;
     const QLocaleData *m_data;
-    QByteArray m_localeID;
+    QBasicAtomicInt ref;
+    QLocale::NumberOptions m_numberOptions;
 };
 
-inline char QLocalePrivate::digitToCLocale(QChar in) const
+template <>
+inline QLocalePrivate *QSharedDataPointer<QLocalePrivate>::clone()
 {
-    const QChar _zero = zero();
-    const QChar _group = group();
-    const ushort zeroUnicode = _zero.unicode();
-    const ushort tenUnicode = zeroUnicode + 10;
+    // cannot use QLocalePrivate's copy constructor
+    // since it is deleted in C++11
+    return QLocalePrivate::create(d->m_data, d->m_numberOptions);
+}
 
-    if (in.unicode() >= zeroUnicode && in.unicode() < tenUnicode)
-        return '0' + in.unicode() - zeroUnicode;
+inline char QLocaleData::digitToCLocale(QChar in) const
+{
+    const ushort tenUnicode = m_zero + 10;
+
+    if (in.unicode() >= m_zero && in.unicode() < tenUnicode)
+        return '0' + in.unicode() - m_zero;
 
     if (in.unicode() >= '0' && in.unicode() <= '9')
         return in.toLatin1();
 
-    if (in == plus())
+    if (in == m_plus || in == QLatin1Char('+'))
         return '+';
 
-    if (in == minus())
+    if (in == m_minus || in == QLatin1Char('-') || in == QChar(0x2212))
         return '-';
 
-    if (in == decimal())
+    if (in == m_decimal)
         return '.';
 
-    if (in == group())
+    if (in == m_group)
         return ',';
 
-    if (in == exponential() || in == exponential().toUpper())
+    if (in == m_exponential || in == QChar::toUpper(m_exponential))
         return 'e';
 
     // In several languages group() is the char 0xA0, which looks like a space.
     // People use a regular space instead of it and complain it doesn't work.
-    if (_group.unicode() == 0xA0 && in.unicode() == ' ')
+    if (m_group == 0xA0 && in.unicode() == ' ')
         return ',';
 
     return 0;
 }
 
-#if defined(Q_OS_BLACKBERRY)
-class QQNXLocaleData: public QObject
-{
-    Q_OBJECT
-public:
-    QQNXLocaleData();
-    virtual ~QQNXLocaleData();
-    void readPPSLocale();
-
-public Q_SLOTS:
-    void updateMeasurementSystem();
-
-public:
-    uint ppsMeasurement;
-    QSocketNotifier *ppsNotifier;
-    int ppsFd;
-};
-#endif
-
-QString qt_readEscapedFormatString(const QString &format, int *idx);
+QString qt_readEscapedFormatString(QStringView format, int *idx);
 bool qt_splitLocaleName(const QString &name, QString &lang, QString &script, QString &cntry);
-int qt_repeatCount(const QString &s, int i);
+int qt_repeatCount(QStringView s);
+
+enum { AsciiSpaceMask = (1u << (' ' - 1)) |
+                        (1u << ('\t' - 1)) |   // 9: HT - horizontal tab
+                        (1u << ('\n' - 1)) |   // 10: LF - line feed
+                        (1u << ('\v' - 1)) |   // 11: VT - vertical tab
+                        (1u << ('\f' - 1)) |   // 12: FF - form feed
+                        (1u << ('\r' - 1)) };  // 13: CR - carriage return
+Q_DECL_CONSTEXPR inline bool ascii_isspace(uchar c)
+{
+    return c >= 1u && c <= 32u && (AsciiSpaceMask >> uint(c - 1)) & 1u;
+}
+
+#if defined(Q_COMPILER_CONSTEXPR)
+Q_STATIC_ASSERT(ascii_isspace(' '));
+Q_STATIC_ASSERT(ascii_isspace('\t'));
+Q_STATIC_ASSERT(ascii_isspace('\n'));
+Q_STATIC_ASSERT(ascii_isspace('\v'));
+Q_STATIC_ASSERT(ascii_isspace('\f'));
+Q_STATIC_ASSERT(ascii_isspace('\r'));
+Q_STATIC_ASSERT(!ascii_isspace('\0'));
+Q_STATIC_ASSERT(!ascii_isspace('\a'));
+Q_STATIC_ASSERT(!ascii_isspace('a'));
+Q_STATIC_ASSERT(!ascii_isspace('\177'));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\200')));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\xA0')));
+Q_STATIC_ASSERT(!ascii_isspace(uchar('\377')));
+#endif
 
 QT_END_NAMESPACE
 

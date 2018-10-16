@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,6 +34,8 @@
 #include <qstringlist.h>
 #include "qmodellistener.h"
 #include <qstringlistmodel.h>
+
+#include <algorithm>
 
 void QModelListener::rowsAboutToBeRemovedOrInserted(const QModelIndex & parent, int start, int end )
 {
@@ -88,6 +77,11 @@ private slots:
 
     void rowsAboutToBeInserted_rowsInserted();
     void rowsAboutToBeInserted_rowsInserted_data();
+
+    void setData_emits_both_roles_data();
+    void setData_emits_both_roles();
+
+    void supportedDragDropActions();
 };
 
 void tst_QStringListModel::rowsAboutToBeRemoved_rowsRemoved_data()
@@ -118,12 +112,6 @@ void tst_QStringListModel::rowsAboutToBeRemoved_rowsRemoved_data()
     QStringList res3;
     QTest::newRow( "data3" )   << strings3 << 0 << 5 << aboutto3 << res3;
 
-    /* Not sure if this is a valid test */
-    QStringList strings4;   strings4    << "One" << "Two" << "Three" << "Four" << "Five";
-    QStringList aboutto4;   aboutto4    << "Five" << "";
-    QStringList res4;       res4        << "One" << "Two" << "Three" << "Four";
-    QTest::newRow( "data4" )   << strings4 << 4 << 2 << aboutto4 << res4;
-
     /*
      * Keep this, template to add more data
     QStringList strings2;   strings2    << "One" << "Two" << "Three" << "Four" << "Five";
@@ -142,22 +130,19 @@ void tst_QStringListModel::rowsAboutToBeRemoved_rowsRemoved()
     QFETCH(QStringList, aboutto);
     QFETCH(QStringList, res);
 
-    QStringListModel *model = new QStringListModel(input);
-    QModelListener *pListener = new QModelListener(&aboutto, &res, model);
-    pListener->connect(model,       SIGNAL(rowsAboutToBeRemoved(QModelIndex,int,int)),
-                       pListener,   SLOT(rowsAboutToBeRemovedOrInserted(QModelIndex,int,int))    );
+    QStringListModel model(input);
+    QModelListener listener(&aboutto, &res, &model);
+    connect(&model, SIGNAL(rowsAboutToBeRemoved(QModelIndex,int,int)),
+            &listener, SLOT(rowsAboutToBeRemovedOrInserted(QModelIndex,int,int)));
 
-    pListener->connect(model,       SIGNAL(rowsRemoved(QModelIndex,int,int)),
-                       pListener,   SLOT(rowsRemovedOrInserted(QModelIndex,int,int))    );
+    connect(&model, SIGNAL(rowsRemoved(QModelIndex,int,int)),
+            &listener, SLOT(rowsRemovedOrInserted(QModelIndex,int,int)));
 
-    model->removeRows(row,count);
+    model.removeRows(row, count);
     // At this point, control goes to our connected slots inn this order:
     // 1. rowsAboutToBeRemovedOrInserted
     // 2. rowsRemovedOrInserted
     // Control returns here
-
-    delete pListener;
-    delete model;
 }
 
 void tst_QStringListModel::rowsAboutToBeInserted_rowsInserted_data()
@@ -206,22 +191,66 @@ void tst_QStringListModel::rowsAboutToBeInserted_rowsInserted()
     QFETCH(QStringList, aboutto);
     QFETCH(QStringList, res);
 
-    QStringListModel *model = new QStringListModel(input);
-    QModelListener *pListener = new QModelListener(&aboutto, &res, model);
-    connect(model,       SIGNAL(rowsAboutToBeInserted(QModelIndex,int,int)),
-                       pListener,   SLOT(rowsAboutToBeRemovedOrInserted(QModelIndex,int,int))    );
+    QStringListModel model(input);
+    QModelListener listener(&aboutto, &res, &model);
+    connect(&model, SIGNAL(rowsAboutToBeInserted(QModelIndex,int,int)),
+            &listener, SLOT(rowsAboutToBeRemovedOrInserted(QModelIndex,int,int)));
 
-    connect(model,       SIGNAL(rowsInserted(QModelIndex,int,int)),
-                       pListener,   SLOT(rowsRemovedOrInserted(QModelIndex,int,int))    );
+    connect(&model, SIGNAL(rowsInserted(QModelIndex,int,int)),
+            &listener, SLOT(rowsRemovedOrInserted(QModelIndex,int,int)));
 
-    model->insertRows(row,count);
+    model.insertRows(row, count);
     // At this point, control goes to our connected slots inn this order:
     // 1. rowsAboutToBeRemovedOrInserted
     // 2. rowsRemovedOrInserted
     // Control returns here
+}
 
-    delete pListener;
-    delete model;
+void tst_QStringListModel::setData_emits_both_roles_data()
+{
+    QTest::addColumn<int>("row");
+    QTest::addColumn<QString>("data");
+    QTest::addColumn<int>("role");
+
+#define ROW(row, string, role) \
+    QTest::newRow(#row " -> " string) << row << QString(string) << int(Qt::role)
+    ROW(0, "1", EditRole);
+    ROW(1, "2", DisplayRole);
+#undef ROW
+}
+
+template <class C>
+C sorted(C c)
+{
+    std::sort(c.begin(), c.end());
+    return qMove(c);
+}
+
+void tst_QStringListModel::setData_emits_both_roles()
+{
+    QFETCH(int, row);
+    QFETCH(QString, data);
+    QFETCH(int, role);
+
+    QStringListModel model(QStringList() << "one" << "two");
+    QVector<int> expected;
+    expected.reserve(2);
+    expected.append(Qt::DisplayRole);
+    expected.append(Qt::EditRole);
+
+    QSignalSpy spy(&model, &QAbstractItemModel::dataChanged);
+    QVERIFY(spy.isValid());
+    model.setData(model.index(row, 0), data, role);
+    QCOMPARE(spy.size(), 1);
+    QCOMPARE(sorted(spy.at(0).at(2).value<QVector<int> >()),
+             expected);
+}
+
+void tst_QStringListModel::supportedDragDropActions()
+{
+    QStringListModel model;
+    QCOMPARE(model.supportedDragActions(), Qt::CopyAction | Qt::MoveAction);
+    QCOMPARE(model.supportedDropActions(), Qt::CopyAction | Qt::MoveAction);
 }
 
 QTEST_MAIN(tst_QStringListModel)

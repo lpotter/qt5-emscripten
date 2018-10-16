@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtNetwork module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,8 +41,7 @@
 #include "qnetworkaccessmanager_p.h"
 #include "QtNetwork/qauthenticator.h"
 #include "private/qnoncontiguousbytedevice_p.h"
-
-#ifndef QT_NO_FTP
+#include <QStringList>
 
 QT_BEGIN_NAMESPACE
 
@@ -59,6 +56,11 @@ static QByteArray makeCacheKey(const QUrl &url)
     return "ftp-connection:" +
         copy.toEncoded(QUrl::RemovePassword | QUrl::RemovePath | QUrl::RemoveQuery |
                        QUrl::RemoveFragment);
+}
+
+QStringList QNetworkAccessFtpBackendFactory::supportedSchemes() const
+{
+    return QStringList(QStringLiteral("ftp"));
 }
 
 QNetworkAccessBackend *
@@ -92,7 +94,7 @@ public:
         setShareable(false);
     }
 
-    void dispose()
+    void dispose() override
     {
         connect(this, SIGNAL(done(bool)), this, SLOT(deleteLater()));
         close();
@@ -100,8 +102,8 @@ public:
 };
 
 QNetworkAccessFtpBackend::QNetworkAccessFtpBackend()
-    : ftp(0), uploadDevice(0), totalBytes(0), helpId(-1), sizeId(-1), mdtmId(-1),
-    supportsSize(false), supportsMdtm(false), state(Idle)
+    : ftp(0), uploadDevice(0), totalBytes(0), helpId(-1), sizeId(-1), mdtmId(-1), pwdId(-1),
+    supportsSize(false), supportsMdtm(false), supportsPwd(false), state(Idle)
 {
 }
 
@@ -110,14 +112,15 @@ QNetworkAccessFtpBackend::~QNetworkAccessFtpBackend()
     //if backend destroyed while in use, then abort (this is the code path from QNetworkReply::abort)
     if (ftp && state != Disconnecting)
         ftp->abort();
-    disconnectFromFtp();
+    disconnectFromFtp(RemoveCachedConnection);
 }
 
 void QNetworkAccessFtpBackend::open()
 {
 #ifndef QT_NO_NETWORKPROXY
     QNetworkProxy proxy;
-    foreach (const QNetworkProxy &p, proxyList()) {
+    const auto proxies = proxyList();
+    for (const QNetworkProxy &p : proxies) {
         // use the first FTP proxy
         // or no proxy at all
         if (p.type() == QNetworkProxy::FtpCachingProxy
@@ -205,7 +208,7 @@ void QNetworkAccessFtpBackend::ftpConnectionReady(QNetworkAccessCache::Cacheable
     // no, defer the actual operation until after we've logged in
 }
 
-void QNetworkAccessFtpBackend::disconnectFromFtp()
+void QNetworkAccessFtpBackend::disconnectFromFtp(CacheCleanupMode mode)
 {
     state = Disconnecting;
 
@@ -213,7 +216,12 @@ void QNetworkAccessFtpBackend::disconnectFromFtp()
         disconnect(ftp, 0, this, 0);
 
         QByteArray key = makeCacheKey(url());
-        QNetworkAccessManagerPrivate::getObjectCache(this)->releaseEntry(key);
+        if (mode == RemoveCachedConnection) {
+            QNetworkAccessManagerPrivate::getObjectCache(this)->removeEntry(key);
+            ftp->dispose();
+        } else {
+            QNetworkAccessManagerPrivate::getObjectCache(this)->releaseEntry(key);
+        }
 
         ftp = 0;
     }
@@ -268,14 +276,7 @@ void QNetworkAccessFtpBackend::ftpDone()
         }
 
         // we're not connected, so remove the cache entry:
-        QByteArray key = makeCacheKey(url());
-        QNetworkAccessManagerPrivate::getObjectCache(this)->removeEntry(key);
-
-        disconnect(ftp, 0, this, 0);
-        ftp->dispose();
-        ftp = 0;
-
-        state = Disconnecting;
+        disconnectFromFtp(RemoveCachedConnection);
         finished();
         return;
     }
@@ -295,32 +296,54 @@ void QNetworkAccessFtpBackend::ftpDone()
         else
             error(QNetworkReply::ContentAccessDenied, msg);
 
-        disconnectFromFtp();
+        disconnectFromFtp(RemoveCachedConnection);
         finished();
     }
 
     if (state == LoggingIn) {
         state = CheckingFeatures;
-        if (operation() == QNetworkAccessManager::GetOperation) {
-            // send help command to find out if server supports "SIZE" and "MDTM"
-            QString command = url().path();
-            command.prepend(QLatin1String("%1 "));
+        // send help command to find out if server supports SIZE, MDTM, and PWD
+        if (operation() == QNetworkAccessManager::GetOperation
+            || operation() == QNetworkAccessManager::PutOperation) {
             helpId = ftp->rawCommand(QLatin1String("HELP")); // get supported commands
         } else {
             ftpDone();
         }
     } else if (state == CheckingFeatures) {
+        // If a URL path starts with // prefix (/%2F decoded), the resource will
+        // be retrieved by an absolute path starting with the root directory.
+        // For the other URLs, the working directory is retrieved by PWD command
+        // and prepended to the resource path as an absolute path starting with
+        // the working directory.
+        state = ResolvingPath;
+        QString path = url().path();
+        if (path.startsWith(QLatin1String("//")) || supportsPwd == false) {
+            ftpDone(); // no commands sent, move to the next state
+        } else {
+            // If a path starts with /~/ prefix, its prefix will be replaced by
+            // the working directory as an absolute path starting with working
+            // directory.
+            if (path.startsWith(QLatin1String("/~/"))) {
+                // Remove leading /~ symbols
+                QUrl newUrl = url();
+                newUrl.setPath(path.mid(2));
+                setUrl(newUrl);
+            }
+
+            // send PWD command to retrieve the working directory
+            pwdId = ftp->rawCommand(QLatin1String("PWD"));
+        }
+    } else if (state == ResolvingPath) {
         state = Statting;
         if (operation() == QNetworkAccessManager::GetOperation) {
             // logged in successfully, send the stat requests (if supported)
-            QString command = url().path();
-            command.prepend(QLatin1String("%1 "));
+            const QString path = url().path();
             if (supportsSize) {
                 ftp->rawCommand(QLatin1String("TYPE I"));
-                sizeId = ftp->rawCommand(command.arg(QLatin1String("SIZE"))); // get size
+                sizeId = ftp->rawCommand(QLatin1String("SIZE ") + path); // get size
             }
             if (supportsMdtm)
-                mdtmId = ftp->rawCommand(command.arg(QLatin1String("MDTM"))); // get modified time
+                mdtmId = ftp->rawCommand(QLatin1String("MDTM ") + path); // get modified time
             if (!supportsSize && !supportsMdtm)
                 ftpDone();      // no commands sent, move to the next state
         } else {
@@ -368,11 +391,39 @@ void QNetworkAccessFtpBackend::ftpRawCommandReply(int code, const QString &text)
             supportsSize = true;
         if (text.contains(QLatin1String("MDTM"), Qt::CaseSensitive))
             supportsMdtm = true;
+        if (text.contains(QLatin1String("PWD"), Qt::CaseSensitive))
+            supportsPwd = true;
+    } else if (id == pwdId && code == 257) {
+        QString pwdPath;
+        int startIndex = text.indexOf('"');
+        int stopIndex = text.lastIndexOf('"');
+        if (stopIndex - startIndex) {
+            // The working directory is a substring between \" symbols.
+            startIndex++; // skip the first \" symbol
+            pwdPath = text.mid(startIndex, stopIndex - startIndex);
+        } else {
+            // If there is no or only one \" symbol, use all the characters of
+            // text.
+            pwdPath = text;
+        }
+
+        // If a URL path starts with the working directory prefix, its resource
+        // will be retrieved from the working directory. Otherwise, the path of
+        // the working directory is prepended to the resource path.
+        QString urlPath = url().path();
+        if (!urlPath.startsWith(pwdPath)) {
+            if (pwdPath.endsWith(QLatin1Char('/')))
+                pwdPath.chop(1);
+            // Prepend working directory to the URL path
+            QUrl newUrl = url();
+            newUrl.setPath(pwdPath % urlPath);
+            setUrl(newUrl);
+        }
     } else if (code == 213) {          // file status
         if (id == sizeId) {
             // reply to the size command
             setHeader(QNetworkRequest::ContentLengthHeader, text.toLongLong());
-#ifndef QT_NO_DATESTRING
+#if QT_CONFIG(datestring)
         } else if (id == mdtmId) {
             QDateTime dt = QDateTime::fromString(text, QLatin1String("yyyyMMddHHmmss"));
             setHeader(QNetworkRequest::LastModifiedHeader, dt);
@@ -382,5 +433,3 @@ void QNetworkAccessFtpBackend::ftpRawCommandReply(int code, const QString &text)
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_FTP

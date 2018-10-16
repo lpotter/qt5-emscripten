@@ -2,13 +2,10 @@ CONFIG += testcase
 TARGET = tst_qpixmap
 
 QT += core-private gui-private testlib
-!contains(QT_CONFIG, no-widgets): QT += widgets widgets-private
+qtHaveModule(widgets): QT += widgets widgets-private
 
 SOURCES  += tst_qpixmap.cpp
-!wince* {
-   win32:LIBS += -lgdi32 -luser32
-}
+win32:!winrt:LIBS += -lgdi32 -luser32
 
 RESOURCES += qpixmap.qrc
 TESTDATA += convertFromImage/* convertFromToHICON/* loadFromData/* images/*
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

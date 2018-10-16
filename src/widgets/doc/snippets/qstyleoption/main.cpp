@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -46,7 +56,7 @@ class MyPushButton : public QPushButton
 public:
     MyPushButton(QWidget *parent = 0);
 
-    void paintEvent(QPaintEvent *);
+    void paintEvent(QPaintEvent *) override;
 };
 
 MyPushButton::MyPushButton(QWidget *parent)
@@ -75,43 +85,10 @@ void MyPushButton::paintEvent(QPaintEvent *)
 class MyStyle : public QStyle
 {
 public:
-    MyStyle();
 
     void drawPrimitive(PrimitiveElement element, const QStyleOption *option,
-                       QPainter *painter, const QWidget *widget);
+                       QPainter *painter, const QWidget *widget) override;
 };
-
-MyStyle::MyStyle()
-{
-//! [1]
-    QStyleOptionFrame *option;
-
-    if (const QStyleOptionFrame *frameOption =
-           qstyleoption_cast<const QStyleOptionFrame *>(option)) {
-        QStyleOptionFrameV2 frameOptionV2(*frameOption);
-
-        // draw the frame using frameOptionV2
-    }
-//! [1]
-
-//! [2]
-    if (const QStyleOptionProgressBar *progressBarOption =
-           qstyleoption_cast<const QStyleOptionProgressBar *>(option)) {
-        QStyleOptionProgressBarV2 progressBarV2(*progressBarOption);
-
-        // draw the progress bar using progressBarV2
-    }
-//! [2]
-
-//! [3]
-    if (const QStyleOptionTab *tabOption =
-           qstyleoption_cast<const QStyleOptionTab *>(option)) {
-        QStyleOptionTabV2 tabV2(*tabOption);
-
-        // draw the tab using tabV2
-   }
-//! [3]
-}
 
 //! [4]
 void MyStyle::drawPrimitive(PrimitiveElement element,

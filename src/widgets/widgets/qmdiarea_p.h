@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,12 +51,14 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qmdiarea.h"
 #include "qmdisubwindow.h"
 
-#ifndef QT_NO_MDIAREA
+QT_REQUIRE_CONFIG(mdiarea);
 
 #include <QList>
+#include <QVector>
 #include <QRect>
 #include <QPoint>
 #include <QtWidgets/qapplication.h>
@@ -88,8 +88,8 @@ class RegularTiler : public Rearranger
     // Rearranges widgets according to a regular tiling pattern
     // covering the entire domain.
     // Both positions and sizes may change.
-    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const;
-    inline Type type() const { return Rearranger::RegularTiler; }
+    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const override;
+    Type type() const override { return Rearranger::RegularTiler; }
 };
 
 class SimpleCascader : public Rearranger
@@ -97,8 +97,8 @@ class SimpleCascader : public Rearranger
     // Rearranges widgets according to a simple, regular cascading pattern.
     // Widgets are resized to minimumSize.
     // Both positions and sizes may change.
-    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const;
-    inline Type type() const { return Rearranger::SimpleCascader; }
+    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const override;
+    Type type() const override { return Rearranger::SimpleCascader; }
 };
 
 class IconTiler : public Rearranger
@@ -106,8 +106,8 @@ class IconTiler : public Rearranger
     // Rearranges icons (assumed to be the same size) according to a regular
     // tiling pattern filling up the domain from the bottom.
     // Only positions may change.
-    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const;
-    inline Type type() const { return Rearranger::IconTiler; }
+    void rearrange(QList<QWidget *> &widgets, const QRect &domain) const override;
+    Type type() const override { return Rearranger::IconTiler; }
 };
 
 class Placer
@@ -116,24 +116,19 @@ public:
     // Places the rectangle defined by 'size' relative to 'rects' and 'domain'.
     // Returns the position of the resulting rectangle.
     virtual QPoint place(
-        const QSize &size, const QList<QRect> &rects, const QRect &domain) const = 0;
+        const QSize &size, const QVector<QRect> &rects, const QRect &domain) const = 0;
     virtual ~Placer() {}
 };
 
 class MinOverlapPlacer : public Placer
 {
-    QPoint place(const QSize &size, const QList<QRect> &rects, const QRect &domain) const;
-    static int accumulatedOverlap(const QRect &source, const QList<QRect> &rects);
-    static QRect findMinOverlapRect(const QList<QRect> &source, const QList<QRect> &rects);
-    static void getCandidatePlacements(
-        const QSize &size, const QList<QRect> &rects, const QRect &domain,
-        QList<QRect> &candidates);
-    static QPoint findBestPlacement(
-        const QRect &domain, const QList<QRect> &rects, QList<QRect> &source);
-    static void findNonInsiders(
-        const QRect &domain, QList<QRect> &source, QList<QRect> &result);
-    static void findMaxOverlappers(
-        const QRect &domain, const QList<QRect> &source, QList<QRect> &result);
+    QPoint place(const QSize &size, const QVector<QRect> &rects, const QRect &domain) const override;
+    static int accumulatedOverlap(const QRect &source, const QVector<QRect> &rects);
+    static QRect findMinOverlapRect(const QVector<QRect> &source, const QVector<QRect> &rects);
+    static QVector<QRect> getCandidatePlacements(const QSize &size, const QVector<QRect> &rects, const QRect &domain);
+    static QPoint findBestPlacement(const QRect &domain, const QVector<QRect> &rects, QVector<QRect> &source);
+    static QVector<QRect> findNonInsiders(const QRect &domain, QVector<QRect> &source);
+    static QVector<QRect> findMaxOverlappers(const QRect &domain, const QVector<QRect> &source);
 };
 } // namespace QMdi
 
@@ -149,26 +144,26 @@ public:
     QMdi::Rearranger *regularTiler;
     QMdi::Rearranger *iconTiler;
     QMdi::Placer *placer;
-#ifndef QT_NO_RUBBERBAND
+#if QT_CONFIG(rubberband)
     QRubberBand *rubberBand;
 #endif
     QMdiAreaTabBar *tabBar;
     QList<QMdi::Rearranger *> pendingRearrangements;
-    QList< QPointer<QMdiSubWindow> > pendingPlacements;
-    QList< QPointer<QMdiSubWindow> > childWindows;
-    QList<int> indicesToActivatedChildren;
+    QVector< QPointer<QMdiSubWindow> > pendingPlacements;
+    QVector< QPointer<QMdiSubWindow> > childWindows;
+    QVector<int> indicesToActivatedChildren;
     QPointer<QMdiSubWindow> active;
     QPointer<QMdiSubWindow> aboutToBecomeActive;
     QBrush background;
     QMdiArea::WindowOrder activationOrder;
     QMdiArea::AreaOptions options;
     QMdiArea::ViewMode viewMode;
-#ifndef QT_NO_TABBAR
+#if QT_CONFIG(tabbar)
     bool documentMode;
     bool tabsClosable;
     bool tabsMovable;
 #endif
-#ifndef QT_NO_TABWIDGET
+#if QT_CONFIG(tabwidget)
     QTabWidget::TabShape tabShape;
     QTabWidget::TabPosition tabPosition;
 #endif
@@ -211,14 +206,14 @@ public:
     bool lastWindowAboutToBeDestroyed() const;
     void setChildActivationEnabled(bool enable = true, bool onlyNextActivationEvent = false) const;
     QRect resizeToMinimumTileSize(const QSize &minSubWindowSize, int subWindowCount);
-    void scrollBarPolicyChanged(Qt::Orientation, Qt::ScrollBarPolicy); // reimp
+    void scrollBarPolicyChanged(Qt::Orientation, Qt::ScrollBarPolicy) override; // reimp
     QMdiSubWindow *nextVisibleSubWindow(int increaseFactor, QMdiArea::WindowOrder,
                                         int removed = -1, int fromIndex = -1) const;
     void highlightNextSubWindow(int increaseFactor);
     QList<QMdiSubWindow *> subWindowList(QMdiArea::WindowOrder, bool reversed = false) const;
     void disconnectSubWindow(QObject *subWindow);
     void setViewMode(QMdiArea::ViewMode mode);
-#ifndef QT_NO_TABBAR
+#if QT_CONFIG(tabbar)
     void updateTabBarGeometry();
     void refreshTabBar();
 #endif
@@ -259,15 +254,8 @@ public:
             subWindow->d_func()->setActive(active, changeFocus);
     }
 
-#ifndef QT_NO_RUBBERBAND
-    inline void showRubberBandFor(QMdiSubWindow *subWindow)
-    {
-        if (!subWindow || !rubberBand)
-            return;
-        rubberBand->setGeometry(subWindow->geometry());
-        rubberBand->raise();
-        rubberBand->show();
-    }
+#if QT_CONFIG(rubberband)
+    void showRubberBandFor(QMdiSubWindow *subWindow);
 
     inline void hideRubberBand()
     {
@@ -275,10 +263,8 @@ public:
             rubberBand->hide();
         indexToHighlighted = -1;
     }
-#endif // QT_NO_RUBBERBAND
+#endif // QT_CONFIG(rubberband)
 };
-
-#endif // QT_NO_MDIAREA
 
 QT_END_NAMESPACE
 

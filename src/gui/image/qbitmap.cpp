@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -191,12 +189,12 @@ QBitmap &QBitmap::operator=(const QPixmap &pixmap)
     } else if (pixmap.depth() == 1) {                // 1-bit pixmap
         QPixmap::operator=(pixmap);                // shallow assignment
     } else {                                        // n-bit depth pixmap
-        QImage image;
-        image = pixmap.toImage();                                // convert pixmap to image
-        *this = fromImage(image);                                // will dither image
+        *this = fromImage(pixmap.toImage());        // will dither image
     }
     return *this;
 }
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 
 /*!
   Destroys the bitmap.
@@ -204,6 +202,8 @@ QBitmap &QBitmap::operator=(const QPixmap &pixmap)
 QBitmap::~QBitmap()
 {
 }
+
+#endif
 
 /*!
     \fn void QBitmap::swap(QBitmap &other)
@@ -221,6 +221,24 @@ QBitmap::operator QVariant() const
     return QVariant(QVariant::Bitmap, this);
 }
 
+static QBitmap makeBitmap(QImage &&image, Qt::ImageConversionFlags flags)
+{
+    // make sure image.color(0) == Qt::color0 (white)
+    // and image.color(1) == Qt::color1 (black)
+    const QRgb c0 = QColor(Qt::black).rgb();
+    const QRgb c1 = QColor(Qt::white).rgb();
+    if (image.color(0) == c0 && image.color(1) == c1) {
+        image.invertPixels();
+        image.setColor(0, c1);
+        image.setColor(1, c0);
+    }
+
+    QScopedPointer<QPlatformPixmap> data(QGuiApplicationPrivate::platformIntegration()->createPlatformPixmap(QPlatformPixmap::BitmapType));
+
+    data->fromImageInPlace(image, flags | Qt::MonoOnly);
+    return QPixmap(data.take());
+}
+
 /*!
     Returns a copy of the given \a image converted to a bitmap using
     the specified image conversion \a flags.
@@ -232,22 +250,24 @@ QBitmap QBitmap::fromImage(const QImage &image, Qt::ImageConversionFlags flags)
     if (image.isNull())
         return QBitmap();
 
-    QImage img = image.convertToFormat(QImage::Format_MonoLSB, flags);
+    return makeBitmap(image.convertToFormat(QImage::Format_MonoLSB, flags), flags);
+}
 
-    // make sure image.color(0) == Qt::color0 (white)
-    // and image.color(1) == Qt::color1 (black)
-    const QRgb c0 = QColor(Qt::black).rgb();
-    const QRgb c1 = QColor(Qt::white).rgb();
-    if (img.color(0) == c0 && img.color(1) == c1) {
-        img.invertPixels();
-        img.setColor(0, c1);
-        img.setColor(1, c0);
-    }
+/*!
+    \since 5.12
+    \overload
 
-    QScopedPointer<QPlatformPixmap> data(QGuiApplicationPrivate::platformIntegration()->createPlatformPixmap(QPlatformPixmap::BitmapType));
+    Returns a copy of the given \a image converted to a bitmap using
+    the specified image conversion \a flags.
 
-    data->fromImage(img, flags | Qt::MonoOnly);
-    return QPixmap(data.take());
+    \sa fromData()
+*/
+QBitmap QBitmap::fromImage(QImage &&image, Qt::ImageConversionFlags flags)
+{
+    if (image.isNull())
+        return QBitmap();
+
+    return makeBitmap(std::move(image).convertToFormat(QImage::Format_MonoLSB, flags), flags);
 }
 
 /*!
@@ -275,7 +295,7 @@ QBitmap QBitmap::fromData(const QSize &size, const uchar *bits, QImage::Format m
     int bytesPerLine = (size.width() + 7) / 8;
     for (int y = 0; y < size.height(); ++y)
         memcpy(image.scanLine(y), bits + bytesPerLine * y, bytesPerLine);
-    return QBitmap::fromImage(image);
+    return QBitmap::fromImage(std::move(image));
 }
 
 /*!

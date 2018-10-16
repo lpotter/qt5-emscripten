@@ -1,8 +1,11 @@
 TARGET = tst_bench_qdbustype
 QT -= gui
-QT += dbus dbus-private testlib
-QMAKE_CXXFLAGS += $$QT_CFLAGS_DBUS
-LIBS_PRIVATE += $$QT_LIBS_DBUS
+QT += core-private dbus-private testlib
+qtConfig(dbus-linked) {
+    DEFINES += QT_LINKED_LIBDBUS
+    QMAKE_USE += dbus
+} else {
+    SOURCES += ../../../../src/dbus/qdbus_symbols.cpp
+}
 
 SOURCES += main.cpp
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

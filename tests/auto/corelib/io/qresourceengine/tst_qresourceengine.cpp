@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,10 +29,20 @@
 
 #include <QtTest/QtTest>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QMimeDatabase>
 
 class tst_QResourceEngine: public QObject
 {
     Q_OBJECT
+
+public:
+    tst_QResourceEngine()
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+        : m_runtimeResourceRcc(QFileInfo(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/runtime_resource.rcc")).absoluteFilePath())
+#else
+        : m_runtimeResourceRcc(QFINDTESTDATA("runtime_resource.rcc"))
+#endif
+    {}
 
 private slots:
     void initTestCase();
@@ -59,22 +56,49 @@ private slots:
     void searchPath();
     void doubleSlashInRoot();
     void setLocale();
+    void lastModified();
+    void resourcesInStaticPlugins();
+
+private:
+    const QString m_runtimeResourceRcc;
 };
 
-Q_DECLARE_METATYPE(QLocale)
-Q_DECLARE_METATYPE(qlonglong)
 
 void tst_QResourceEngine::initTestCase()
 {
-    QVERIFY(QResource::registerResource(QFINDTESTDATA("runtime_resource.rcc")));
-    QVERIFY(QResource::registerResource(QFINDTESTDATA("runtime_resource.rcc"), "/secondary_root/"));
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QString sourcePath(QStringLiteral(":/android_testdata/"));
+    QString dataPath(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+
+    QDirIterator it(sourcePath, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+
+        QFileInfo fileInfo = it.fileInfo();
+        if (!fileInfo.isDir()) {
+            QString destination(dataPath + QLatin1Char('/') + fileInfo.filePath().mid(sourcePath.length()));
+            QFileInfo destinationFileInfo(destination);
+            if (!destinationFileInfo.exists()) {
+                QVERIFY(QDir().mkpath(destinationFileInfo.path()));
+                QVERIFY(QFile::copy(fileInfo.filePath(), destination));
+                QVERIFY(QFileInfo(destination).exists());
+            }
+        }
+    }
+
+    QVERIFY(QDir::setCurrent(dataPath));
+#endif
+
+    QVERIFY(!m_runtimeResourceRcc.isEmpty());
+    QVERIFY(QResource::registerResource(m_runtimeResourceRcc));
+    QVERIFY(QResource::registerResource(m_runtimeResourceRcc, "/secondary_root/"));
 }
 
 void tst_QResourceEngine::cleanupTestCase()
 {
     // make sure we don't leak memory
-    QVERIFY(QResource::unregisterResource(QFINDTESTDATA("runtime_resource.rcc")));
-    QVERIFY(QResource::unregisterResource(QFINDTESTDATA("runtime_resource.rcc"), "/secondary_root/"));
+    QVERIFY(QResource::unregisterResource(m_runtimeResourceRcc));
+    QVERIFY(QResource::unregisterResource(m_runtimeResourceRcc, "/secondary_root/"));
 }
 
 void tst_QResourceEngine::checkStructure_data()
@@ -88,16 +112,36 @@ void tst_QResourceEngine::checkStructure_data()
 
     QFileInfo info;
 
+    QStringList rootContents;
+    rootContents << QLatin1String("aliasdir")
+                 << QLatin1String("otherdir")
+                 << QLatin1String("qt-project.org")
+                 << QLatin1String("runtime_resource")
+                 << QLatin1String("searchpath1")
+                 << QLatin1String("searchpath2")
+                 << QLatin1String("secondary_root")
+                 << QLatin1String("staticplugin")
+                 << QLatin1String("test")
+                 << QLatin1String("withoutslashes");
+
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    rootContents.insert(1, QLatin1String("android_testdata"));
+#endif
+
+#if defined(BUILTIN_TESTDATA)
+    rootContents.insert(9, QLatin1String("testqrc"));
+#endif
+
+
     QTest::newRow("root dir")          << QString(":/")
                                        << QString()
-                                       << (QStringList() << "search_file.txt")
-                                       << (QStringList() << QLatin1String("aliasdir") << QLatin1String("otherdir")
-                                           << QLatin1String("qt-project.org")
-                                           << QLatin1String("runtime_resource")
-                                           << QLatin1String("searchpath1") << QLatin1String("searchpath2")
-                                           << QLatin1String("secondary_root")
-                                           << QLatin1String("test")
-                                           << QLatin1String("withoutslashes"))
+                                       << (QStringList()
+#if defined(BUILTIN_TESTDATA)
+                                           << "parentdir.txt"
+                                           << "runtime_resource.rcc"
+#endif
+                                           << "search_file.txt")
+                                       << rootContents
                                        << QLocale::c()
                                        << qlonglong(0);
 
@@ -303,6 +347,11 @@ void tst_QResourceEngine::checkStructure()
     QFETCH(QLocale, locale);
     QFETCH(qlonglong, contentsSize);
 
+    // We rely on the existence of the root "qt-project.org" in resources. For
+    // static builds on MSVC these resources are only added if they are used.
+    QMimeDatabase db;
+    Q_UNUSED(db);
+
     bool directory = (containedDirs.size() + containedFiles.size() > 0);
     QLocale::setDefault(locale);
 
@@ -404,7 +453,7 @@ void tst_QResourceEngine::checkUnregisterResource_data()
     QTest::addColumn<int>("size");
 
     QTest::newRow("currentdir.txt") << QFINDTESTDATA("runtime_resource.rcc") << QString("/check_unregister/")
-                                    << QString(":/check_unregister/runtime_resource/test/abc/123/+++/currentdir.txt") 
+                                    << QString(":/check_unregister/runtime_resource/test/abc/123/+++/currentdir.txt")
                                     << (int)QFileInfo(QFINDTESTDATA("testqrc/currentdir.txt")).size();
 }
 
@@ -457,6 +506,30 @@ void tst_QResourceEngine::setLocale()
 
     // the reset the default locale back
     QLocale::setDefault(QLocale::system());
+}
+
+void tst_QResourceEngine::lastModified()
+{
+    {
+        QFileInfo fi(":/");
+        QVERIFY(fi.exists());
+        QVERIFY2(!fi.lastModified().isValid(), qPrintable(fi.lastModified().toString()));
+    }
+    {
+        QFileInfo fi(":/search_file.txt");
+        QVERIFY(fi.exists());
+        QVERIFY(fi.lastModified().isValid());
+    }
+}
+
+Q_IMPORT_PLUGIN(PluginClass)
+void tst_QResourceEngine::resourcesInStaticPlugins()
+{
+    // We built a separate static plugin and attempted linking against
+    // it. That should successfully register the resources linked into
+    // the plugin via moc generated Q_INIT_RESOURCE calls in a
+    // Q_CONSTRUCTOR_FUNCTION.
+    QVERIFY(QFile::exists(":/staticplugin/main.cpp"));
 }
 
 QTEST_MAIN(tst_QResourceEngine)

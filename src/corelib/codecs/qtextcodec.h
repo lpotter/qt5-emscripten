@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +42,6 @@
 
 #include <QtCore/qstring.h>
 #include <QtCore/qlist.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -83,11 +79,17 @@ public:
     static QTextCodec *codecForUtfText(const QByteArray &ba, QTextCodec *defaultCodec);
 
     bool canEncode(QChar) const;
+#if QT_STRINGVIEW_LEVEL < 2
     bool canEncode(const QString&) const;
+#endif
+    bool canEncode(QStringView) const;
 
     QString toUnicode(const QByteArray&) const;
     QString toUnicode(const char* chars) const;
+#if QT_STRINGVIEW_LEVEL < 2
     QByteArray fromUnicode(const QString& uc) const;
+#endif
+    QByteArray fromUnicode(QStringView uc) const;
     enum ConversionFlag {
         DefaultConversion,
         ConvertInvalidToNull = 0x80000000,
@@ -98,7 +100,7 @@ public:
 
     struct Q_CORE_EXPORT ConverterState {
         ConverterState(ConversionFlags f = DefaultConversion)
-            : flags(f), remainingChars(0), invalidChars(0), d(0) { state_data[0] = state_data[1] = state_data[2] = 0; }
+            : flags(f), remainingChars(0), invalidChars(0), d(nullptr) { state_data[0] = state_data[1] = state_data[2] = 0; }
         ~ConverterState();
         ConversionFlags flags;
         int remainingChars;
@@ -109,9 +111,9 @@ public:
         Q_DISABLE_COPY(ConverterState)
     };
 
-    QString toUnicode(const char *in, int length, ConverterState *state = 0) const
+    QString toUnicode(const char *in, int length, ConverterState *state = nullptr) const
         { return convertToUnicode(in, length, state); }
-    QByteArray fromUnicode(const QChar *in, int length, ConverterState *state = 0) const
+    QByteArray fromUnicode(const QChar *in, int length, ConverterState *state = nullptr) const
         { return convertFromUnicode(in, length, state); }
 
     QTextDecoder* makeDecoder(ConversionFlags flags = DefaultConversion) const;
@@ -137,9 +139,12 @@ class Q_CORE_EXPORT QTextEncoder {
     Q_DISABLE_COPY(QTextEncoder)
 public:
     explicit QTextEncoder(const QTextCodec *codec) : c(codec), state() {}
-    QTextEncoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags);
+    explicit QTextEncoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags);
     ~QTextEncoder();
+#if QT_STRINGVIEW_LEVEL < 2
     QByteArray fromUnicode(const QString& str);
+#endif
+    QByteArray fromUnicode(QStringView str);
     QByteArray fromUnicode(const QChar *uc, int len);
     bool hasFailure() const;
 private:
@@ -151,12 +156,13 @@ class Q_CORE_EXPORT QTextDecoder {
     Q_DISABLE_COPY(QTextDecoder)
 public:
     explicit QTextDecoder(const QTextCodec *codec) : c(codec), state() {}
-    QTextDecoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags);
+    explicit QTextDecoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags);
     ~QTextDecoder();
     QString toUnicode(const char* chars, int len);
     QString toUnicode(const QByteArray &ba);
     void toUnicode(QString *target, const char *chars, int len);
     bool hasFailure() const;
+    bool needsMoreData() const;
 private:
     const QTextCodec *c;
     QTextCodec::ConverterState state;
@@ -165,7 +171,5 @@ private:
 #endif // QT_NO_TEXTCODEC
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTEXTCODEC_H

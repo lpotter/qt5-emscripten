@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -37,14 +47,6 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-
-//! [0]
-QLineEdit *lineEdit = static_cast<QLineEdit *>(
-        qt_find_obj_child(myWidget, "QLineEdit", "my line edit"));
-if (lineEdit)
-    lineEdit->setText("Default");
-//! [0]
-
 
 //! [1]
 QObject *obj = new QPushButton;
@@ -99,7 +101,7 @@ public:
     MainWindow();
 
 protected:
-    bool eventFilter(QObject *obj, QEvent *ev);
+    bool eventFilter(QObject *obj, QEvent *ev) override;
 
 private:
     QTextEdit *textEdit;
@@ -145,7 +147,7 @@ public:
     MyObject(QObject *parent = 0);
 
 protected:
-    void timerEvent(QTimerEvent *event);
+    void timerEvent(QTimerEvent *event) override;
 };
 
 MyObject::MyObject(QObject *parent)
@@ -154,6 +156,17 @@ MyObject::MyObject(QObject *parent)
     startTimer(50);     // 50-millisecond timer
     startTimer(1000);   // 1-second timer
     startTimer(60000);  // 1-minute timer
+
+    using namespace std::chrono;
+    startTimer(milliseconds(50));
+    startTimer(seconds(1));
+    startTimer(minutes(1));
+
+    // since C++14 we can use std::chrono::duration literals, e.g.:
+    startTimer(100ms);
+    startTimer(5s);
+    startTimer(2min);
+    startTimer(1h);
 }
 
 void MyObject::timerEvent(QTimerEvent *event)
@@ -202,7 +215,7 @@ class KeyPressEater : public QObject
     ...
 
 protected:
-    bool eventFilter(QObject *obj, QEvent *event);
+    bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
 bool KeyPressEater::eventFilter(QObject *obj, QEvent *event)
@@ -367,22 +380,6 @@ public:
 };
 //! [35]
 
-
-//! [36]
-Q_PROPERTY(type name
-           READ getFunction
-           [WRITE setFunction]
-           [RESET resetFunction]
-           [NOTIFY notifySignal]
-           [DESIGNABLE bool]
-           [SCRIPTABLE bool]
-           [STORED bool]
-	   [USER bool]
-           [CONSTANT]
-           [FINAL])
-//! [36]
-
-
 //! [37]
 Q_PROPERTY(QString title READ title WRITE setTitle USER true)
 //! [37]
@@ -392,38 +389,37 @@ Q_PROPERTY(QString title READ title WRITE setTitle USER true)
 class MyClass : public QObject
 {
     Q_OBJECT
-    Q_ENUMS(Priority)
 
 public:
     MyClass(QObject *parent = 0);
     ~MyClass();
 
     enum Priority { High, Low, VeryHigh, VeryLow };
+    Q_ENUM(Priority)
     void setPriority(Priority priority);
     Priority priority() const;
 };
 //! [38]
 
 
-//! [39a]
+//! [39]
 class QLibrary : public QObject
 {
-    ...
-    Q_FLAGS(LoadHint LoadHints)
-    ...
-//! [39a]
+    Q_OBJECT
 
-//! [39b]
-    ...
 public:
+    ...
+
     enum LoadHint {
         ResolveAllSymbolsHint = 0x01,
         ExportExternalSymbolsHint = 0x02,
         LoadArchiveMemberHint = 0x04
     };
     Q_DECLARE_FLAGS(LoadHints, LoadHint)
+    Q_FLAG(LoadHints)
     ...
-//! [39b]
+}
+//! [39]
 
 
 //! [40]
@@ -435,17 +431,17 @@ QString example = tr("Example");
 //! [40]
 
 //! [41]
-QPushButton *button = parentWidget->findChild<QPushButton *>("button1", Qt::FindDirectChildOnly);
+QPushButton *button = parentWidget->findChild<QPushButton *>("button1", Qt::FindDirectChildrenOnly);
 //! [41]
 
 
 //! [42]
-QListWidget *list = parentWidget->findChild<QListWidget *>(QString(), Qt::FindDirectChildOnly);
+QListWidget *list = parentWidget->findChild<QListWidget *>(QString(), Qt::FindDirectChildrenOnly);
 //! [42]
 
 
 //! [43]
-QList<QPushButton *> childButtons = parentWidget.findChildren<QPushButton *>(QString(), Qt::FindDirectChildOnly);
+QList<QPushButton *> childButtons = parentWidget.findChildren<QPushButton *>(QString(), Qt::FindDirectChildrenOnly);
 //! [43]
 
 //! [44]
@@ -480,12 +476,55 @@ QObject::disconnect(lineEdit, &QLineEdit::textChanged,
 //! [48]
 
 //! [49]
-if (isSignalConnected(QMetaMethod::fromSignal(&MyObject::valueChanged))) {
+static const QMetaMethod valueChangedSignal = QMetaMethod::fromSignal(&MyObject::valueChanged);
+if (isSignalConnected(valueChangedSignal)) {
     QByteArray data;
     data = get_the_value();       // expensive operation
     emit valueChanged(data);
 }
 //! [49]
+
+//! [50]
+void someFunction();
+QPushButton *button = new QPushButton;
+QObject::connect(button, &QPushButton::clicked, this, someFunction, Qt::QueuedConnection);
+//! [50]
+
+//! [51]
+QByteArray page = ...;
+QTcpSocket *socket = new QTcpSocket;
+socket->connectToHost("qt-project.org", 80);
+QObject::connect(socket, &QTcpSocket::connected, this, [=] () {
+        socket->write("GET " + page + "\r\n");
+    }, Qt::AutoConnection);
+//! [51]
+
+//! [52]
+class MyClass : public QWidget
+{
+    Q_OBJECT
+
+public:
+    MyClass(QWidget *parent = 0);
+    ~MyClass();
+
+    bool event(QEvent* ev) override
+    {
+        if (ev->type() == QEvent::PolishRequest) {
+            // overwrite handling of PolishRequest if any
+            doThings();
+            return true;
+        } else  if (ev->type() == QEvent::Show) {
+            // complement handling of Show if any
+            doThings2();
+            QWidget::event(ev);
+            return true;
+        }
+        // Make sure the rest of events are handled
+        return QWidget::event(ev);
+    }
+};
+//! [52]
 
 //! [meta data]
 //: This is a comment for the translator.

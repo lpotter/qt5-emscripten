@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,11 +39,11 @@
 
 #include <qdrag.h>
 #include "private/qguiapplication_p.h"
+#include "qpa/qplatformintegration.h"
+#include "qpa/qplatformdrag.h"
 #include <qpixmap.h>
 #include <qpoint.h>
 #include "qdnd_p.h"
-
-#ifndef QT_NO_DRAGANDDROP
 
 QT_BEGIN_NAMESPACE
 
@@ -101,9 +99,9 @@ QT_BEGIN_NAMESPACE
     \l{QWidget::mouseMoveEvent()}{mouseMoveEvent()} to check whether a QDrag is
     required.
 
-    \sa {Drag and Drop}, QClipboard, QMimeData, QWindowsMime, QMacPasteboardMime,
+    \sa {Drag and Drop}, QClipboard, QMimeData, QMacPasteboardMime,
         {Draggable Icons Example}, {Draggable Text Example}, {Drop Site Example},
-	    {Fridge Magnets Example}
+        {Fridge Magnets Example}
 */
 
 /*!
@@ -226,11 +224,13 @@ QObject *QDrag::target() const
     from are specified in \a supportedActions. The default proposed action will be selected
     among the allowed actions in the following order: Move, Copy and Link.
 
-    \b{Note:} On Linux and Mac OS X, the drag and drop operation
+    \b{Note:} On Linux and \macos, the drag and drop operation
     can take some time, but this function does not block the event
     loop. Other events are still delivered to the application while
     the operation is performed. On Windows, the Qt event loop is
     blocked during the operation.
+
+    \sa cancel()
 */
 
 Qt::DropAction QDrag::exec(Qt::DropActions supportedActions)
@@ -248,13 +248,13 @@ Qt::DropAction QDrag::exec(Qt::DropActions supportedActions)
     The \a defaultDropAction determines which action will be proposed when the user performs a
     drag without using modifier keys.
 
-    \b{Note:} On Linux and Mac OS X, the drag and drop operation
+    \b{Note:} On Linux and \macos, the drag and drop operation
     can take some time, but this function does not block the event
     loop. Other events are still delivered to the application while
     the operation is performed. On Windows, the Qt event loop is
     blocked during the operation. However, QDrag::exec() on
-	Windows causes processEvents() to be called frequently to keep the GUI responsive.
-	If any loops or operations are called while a drag operation is active, it will block the drag operation.
+    Windows causes processEvents() to be called frequently to keep the GUI responsive.
+    If any loops or operations are called while a drag operation is active, it will block the drag operation.
 */
 
 Qt::DropAction QDrag::exec(Qt::DropActions supportedActions, Qt::DropAction defaultDropAction)
@@ -317,14 +317,13 @@ Qt::DropAction QDrag::start(Qt::DropActions request)
     to override the default native cursors. To revert to using the
     native cursor for \a action pass in a null QPixmap as \a cursor.
 
-    The \a action can only be CopyAction, MoveAction or LinkAction.
-    All other values of DropAction are ignored.
+    Note: setting the drag cursor for IgnoreAction may not work on
+    all platforms. X11 and macOS has been tested to work. Windows
+    does not support it.
 */
 void QDrag::setDragCursor(const QPixmap &cursor, Qt::DropAction action)
 {
     Q_D(QDrag);
-    if (action != Qt::CopyAction && action != Qt::MoveAction && action != Qt::LinkAction)
-        return;
     if (cursor.isNull())
         d->customCursors.remove(action);
     else
@@ -385,6 +384,21 @@ Qt::DropAction QDrag::defaultAction() const
     Q_D(const QDrag);
     return d->default_action;
 }
+
+/*!
+    Cancels a drag operation initiated by Qt.
+
+    \note This is currently implemented on Windows and X11.
+
+    \since 5.7
+    \sa exec()
+*/
+void QDrag::cancel()
+{
+    if (QPlatformDrag *platformDrag = QGuiApplicationPrivate::platformIntegration()->drag())
+        platformDrag->cancelDrag();
+}
+
 /*!
     \fn void QDrag::actionChanged(Qt::DropAction action)
 
@@ -404,5 +418,3 @@ Qt::DropAction QDrag::defaultAction() const
 */
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_DRAGANDDROP

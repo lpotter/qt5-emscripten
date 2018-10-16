@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -77,6 +64,19 @@ struct Struct4                  // (ssa(ss)sayasx)
     QStringList m6;
     qlonglong m7;
 };
+struct Struct5                  // a{sa{sv}} - non-standard outer struct is used as a local
+{                               // container, see marshalling operator below.
+    QVariantMap m1;
+    QVariantMap m2;
+    QVariantMap m3;
+};
+struct Struct6                  // av - non-standard outer struct is used as a local container,
+{                               // see marshalling operator below.
+    QVariant v1;
+    QVariant v2;
+    QVariant v3;
+};
+
 
 struct Invalid0 { };            // empty
 struct Invalid1 { };            // s
@@ -92,11 +92,8 @@ Q_DECLARE_METATYPE(Struct2)
 Q_DECLARE_METATYPE(Struct3)
 Q_DECLARE_METATYPE(Struct4)
 Q_DECLARE_METATYPE(StringPair)
-
-Q_DECLARE_METATYPE(QList<Struct1>)
-Q_DECLARE_METATYPE(QList<Struct2>)
-Q_DECLARE_METATYPE(QList<Struct3>)
-Q_DECLARE_METATYPE(QList<Struct4>)
+Q_DECLARE_METATYPE(Struct5)
+Q_DECLARE_METATYPE(Struct6)
 
 Q_DECLARE_METATYPE(Invalid0)
 Q_DECLARE_METATYPE(Invalid1)
@@ -107,14 +104,9 @@ Q_DECLARE_METATYPE(Invalid5)
 Q_DECLARE_METATYPE(Invalid6)
 Q_DECLARE_METATYPE(Invalid7)
 
-Q_DECLARE_METATYPE(QList<Invalid0>)
-
 typedef QMap<int, QString> IntStringMap;
 typedef QMap<QString, QString> StringStringMap;
 typedef QMap<QString, Struct1> StringStruct1Map;
-Q_DECLARE_METATYPE(IntStringMap)
-Q_DECLARE_METATYPE(StringStringMap)
-Q_DECLARE_METATYPE(StringStruct1Map)
 
 Q_DECLARE_METATYPE(QVariant::Type)
 
@@ -156,6 +148,34 @@ QDBusArgument &operator<<(QDBusArgument &arg, const Struct4 &s)
     arg.beginStructure();
     arg << s.m1 << s.m2 << s.m3 << s.m4 << s.m5 << s.m6 << s.m7;
     arg.endStructure();
+    return arg;
+}
+
+QDBusArgument &operator<<(QDBusArgument &arg, const Struct5 &s)
+{
+    arg.beginMap(qMetaTypeId<QString>(), qMetaTypeId<QVariantMap>());
+
+    arg.beginMapEntry();
+    arg << QStringLiteral("map1") << s.m1;
+    arg.endMapEntry();
+
+    arg.beginMapEntry();
+    arg << QStringLiteral("map2") << s.m2;
+    arg.endMapEntry();
+
+    arg.beginMapEntry();
+    arg << QStringLiteral("map3") << s.m3;
+    arg.endMapEntry();
+
+    arg.endMap();
+    return arg;
+}
+
+QDBusArgument &operator<<(QDBusArgument &arg, const Struct6 &s)
+{
+    arg.beginArray(qMetaTypeId<QDBusVariant>());
+    arg << QDBusVariant(s.v1) << QDBusVariant(s.v2) << QDBusVariant(s.v3);
+    arg.endArray();
     return arg;
 }
 
@@ -212,6 +232,10 @@ const QDBusArgument &operator>>(const QDBusArgument &arg, Struct3 &)
 { return arg; }
 const QDBusArgument &operator>>(const QDBusArgument &arg, Struct4 &)
 { return arg; }
+const QDBusArgument &operator>>(const QDBusArgument &arg, Struct5 &)
+{ return arg; }
+const QDBusArgument &operator>>(const QDBusArgument &arg, Struct6 &)
+{ return arg; }
 const QDBusArgument &operator>>(const QDBusArgument &arg, StringPair &)
 { return arg; }
 const QDBusArgument &operator>>(const QDBusArgument &arg, Invalid0 &)
@@ -238,6 +262,8 @@ void tst_QDBusMetaType::initTestCase()
     qDBusRegisterMetaType<Struct2>();
     qDBusRegisterMetaType<Struct3>();
     qDBusRegisterMetaType<Struct4>();
+    qDBusRegisterMetaType<Struct5>();
+    qDBusRegisterMetaType<Struct6>();
     qDBusRegisterMetaType<StringPair>();
 
     qDBusRegisterMetaType<QList<Struct1> >();
@@ -314,6 +340,10 @@ void tst_QDBusMetaType::dynamicTypes_data()
 
     QTest::newRow("Struct4") << QVariant::Type(qMetaTypeId<Struct4>()) << "(ssa(ss)sayasx)";
     QTest::newRow("QList<Struct4>") << QVariant::Type(qMetaTypeId<QList<Struct4> >()) << "a(ssa(ss)sayasx)";
+
+    QTest::newRow("Struct5") << QVariant::Type(qMetaTypeId<Struct5>()) << "a{sa{sv}}";
+
+    QTest::newRow("Struct6") << QVariant::Type(qMetaTypeId<Struct6>()) << "av";
 
     QTest::newRow("QMap<int,QString>") << QVariant::Type(intStringMap) << "a{is}";
     QTest::newRow("QMap<QString,QString>") << QVariant::Type(stringStringMap) << "a{ss}";

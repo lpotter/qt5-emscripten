@@ -1,8 +1,12 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_quuid
 QT = core testlib
 SOURCES = ../tst_quuid.cpp
+
+darwin {
+    OBJECTIVE_SOURCES = ../tst_quuid_darwin.mm
+    LIBS += -framework Foundation
+}
 
 CONFIG(debug_and_release_target) {
     CONFIG(debug, debug|release) {
@@ -13,4 +17,3 @@ CONFIG(debug_and_release_target) {
 } else {
     DESTDIR = ..
 }
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the tools applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -69,9 +56,6 @@ namespace CPP {
         int compare(const FontHandle &) const;
     private:
         const DomFont *m_domFont;
-#if defined(Q_OS_MAC) && defined(Q_CC_GNU) && (__GNUC__ == 3 && __GNUC_MINOR__ == 3)
-        friend uint qHash(const FontHandle &);
-#endif
     };
     inline bool operator ==(const FontHandle &f1, const FontHandle &f2) { return f1.compare(f2) == 0; }
     inline bool operator  <(const FontHandle &f1, const FontHandle &f2) { return f1.compare(f2) < 0; }
@@ -83,9 +67,6 @@ namespace CPP {
         int compare(const IconHandle &) const;
     private:
         const DomResourceIcon *m_domIcon;
-#if defined(Q_OS_MAC) && defined(Q_CC_GNU) && (__GNUC__ == 3 && __GNUC_MINOR__ == 3)
-        friend uint qHash(const IconHandle &);
-#endif
     };
     inline bool operator ==(const IconHandle &i1, const IconHandle &i2) { return i1.compare(i2) == 0; }
     inline bool operator  <(const IconHandle &i1, const IconHandle &i2) { return i1.compare(i2) < 0; }
@@ -97,15 +78,9 @@ namespace CPP {
         int compare(const SizePolicyHandle &) const;
     private:
         const DomSizePolicy *m_domSizePolicy;
-#if defined(Q_OS_MAC) && defined(Q_CC_GNU) && (__GNUC__ == 3 && __GNUC_MINOR__ == 3)
-        friend uint qHash(const SizePolicyHandle &);
-#endif
     };
     inline bool operator ==(const SizePolicyHandle &f1, const SizePolicyHandle &f2) { return f1.compare(f2) == 0; }
-#if !(defined(Q_OS_MAC) && defined(Q_CC_GNU) && (__GNUC__ == 3 && __GNUC_MINOR__ == 3))
     inline bool operator  <(const SizePolicyHandle &f1, const SizePolicyHandle &f2) { return f1.compare(f2) < 0; }
-#endif
-
 
 
 struct WriteInitialization : public TreeWalker
@@ -113,52 +88,46 @@ struct WriteInitialization : public TreeWalker
     typedef QList<DomProperty*> DomPropertyList;
     typedef QHash<QString, DomProperty*> DomPropertyMap;
 
-    WriteInitialization(Uic *uic, bool activateScripts);
+    WriteInitialization(Uic *uic);
 
 //
 // widgets
 //
-    void acceptUI(DomUI *node);
-    void acceptWidget(DomWidget *node);
-    void acceptWidgetScripts(const DomScripts &, DomWidget *node, const  DomWidgets &childWidgets);
+    void acceptUI(DomUI *node) override;
+    void acceptWidget(DomWidget *node) override;
 
-    void acceptLayout(DomLayout *node);
-    void acceptSpacer(DomSpacer *node);
-    void acceptLayoutItem(DomLayoutItem *node);
+    void acceptLayout(DomLayout *node) override;
+    void acceptSpacer(DomSpacer *node) override;
+    void acceptLayoutItem(DomLayoutItem *node) override;
 
 //
 // actions
 //
-    void acceptActionGroup(DomActionGroup *node);
-    void acceptAction(DomAction *node);
-    void acceptActionRef(DomActionRef *node);
+    void acceptActionGroup(DomActionGroup *node) override;
+    void acceptAction(DomAction *node) override;
+    void acceptActionRef(DomActionRef *node) override;
 
 //
 // tab stops
 //
-    void acceptTabStops(DomTabStops *tabStops);
+    void acceptTabStops(DomTabStops *tabStops) override;
 
 //
 // custom widgets
 //
-    void acceptCustomWidgets(DomCustomWidgets *node);
-    void acceptCustomWidget(DomCustomWidget *node);
+    void acceptCustomWidgets(DomCustomWidgets *node) override;
+    void acceptCustomWidget(DomCustomWidget *node) override;
 
 //
 // layout defaults/functions
 //
-    void acceptLayoutDefault(DomLayoutDefault *node)   { m_LayoutDefaultHandler.acceptLayoutDefault(node); }
-    void acceptLayoutFunction(DomLayoutFunction *node) { m_LayoutDefaultHandler.acceptLayoutFunction(node); }
+    void acceptLayoutDefault(DomLayoutDefault *node) override   { m_LayoutDefaultHandler.acceptLayoutDefault(node); }
+    void acceptLayoutFunction(DomLayoutFunction *node) override { m_LayoutDefaultHandler.acceptLayoutFunction(node); }
 
 //
 // signal/slot connections
 //
-    void acceptConnection(DomConnection *connection);
-
-//
-// images
-//
-    void acceptImage(DomImage *image);
+    void acceptConnection(DomConnection *connection) override;
 
     enum {
         Use43UiFile = 0,
@@ -173,7 +142,7 @@ private:
     QString iconCall(const DomProperty *prop);
     QString pixCall(const DomProperty *prop) const;
     QString pixCall(const QString &type, const QString &text) const;
-    QString trCall(const QString &str, const QString &comment = QString()) const;
+    QString trCall(const QString &str, const QString &comment = QString(), const QString &id = QString()) const;
     QString trCall(DomString *str, const QString &defaultString = QString()) const;
     QString noTrCall(DomString *str, const QString &defaultString = QString()) const;
     QString autoTrCall(DomString *str, const QString &defaultString = QString()) const;
@@ -192,6 +161,7 @@ private:
 // special initialization
 //
     class Item {
+        Q_DISABLE_COPY(Item)
     public:
         Item(const QString &itemClassName, const QString &indent, QTextStream &setupUiStream, QTextStream &retranslateUiStream, Driver *driver);
         ~Item();
@@ -207,15 +177,15 @@ private:
         int setupUiCount() const { return m_setupUiData.setters.count(); }
         int retranslateUiCount() const { return m_retranslateUiData.setters.count(); }
     private:
-        struct ItemData {
-            ItemData() : policy(DontGenerate) {}
+        struct ItemData
+        {
             QMultiMap<QString, QString> setters; // directive to setter
             QSet<QString> directives;
             enum TemporaryVariableGeneratorPolicy { // policies with priority, number describes the priority
                 DontGenerate = 1,
                 GenerateWithMultiDirective = 2,
                 Generate = 3
-            } policy;
+            } policy = DontGenerate;
         };
         ItemData m_setupUiData;
         ItemData m_retranslateUiData;
@@ -246,7 +216,7 @@ private:
     void initializeComboBox(DomWidget *w);
     void initializeListWidget(DomWidget *w);
     void initializeTreeWidget(DomWidget *w);
-    QList<Item *> initializeTreeWidgetItems(const QList<DomItem *> &domItems);
+    QList<Item *> initializeTreeWidgetItems(const QVector<DomItem *> &domItems);
     void initializeTableWidget(DomWidget *w);
 
     QString disableSorting(DomWidget *w, const QString &varName);
@@ -254,13 +224,14 @@ private:
 
     QString findDeclaration(const QString &name);
     DomWidget *findWidget(QLatin1String widgetClass);
-    DomImage *findImage(const QString &name) const;
 
     bool isValidObject(const QString &name) const;
 
 private:
     QString writeFontProperties(const DomFont *f);
     QString writeIconProperties(const DomResourceIcon *i);
+    void writePixmapFunctionIcon(QTextStream &output, const QString &iconName,
+                                 const QString &indent, const DomResourceIcon *i) const;
     QString writeSizePolicy(const DomSizePolicy *sp);
     QString writeBrushInitialization(const DomBrush *brush);
     void addButtonGroup(const DomWidget *node, const QString &varName);
@@ -276,34 +247,26 @@ private:
 
     struct Buddy
     {
-        Buddy(const QString &oN, const QString &b)
-            : objName(oN), buddy(b) {}
         QString objName;
         QString buddy;
     };
+    friend class QTypeInfo<Buddy>;
 
     QStack<DomWidget*> m_widgetChain;
     QStack<DomLayout*> m_layoutChain;
     QStack<DomActionGroup*> m_actionGroupChain;
-    QList<Buddy> m_buddies;
+    QVector<Buddy> m_buddies;
 
     QSet<QString> m_buttonGroups;
     QHash<QString, DomWidget*> m_registeredWidgets;
-    QHash<QString, DomImage*> m_registeredImages;
     QHash<QString, DomAction*> m_registeredActions;
     typedef QHash<uint, QString> ColorBrushHash;
     ColorBrushHash m_colorBrushHash;
     // Map from font properties to  font variable name for reuse
     // Map from size policy to  variable for reuse
-#if defined(Q_OS_MAC) && defined(Q_CC_GNU) && (__GNUC__ == 3 && __GNUC_MINOR__ == 3)
-    typedef QHash<FontHandle, QString> FontPropertiesNameMap;
-    typedef QHash<IconHandle, QString> IconPropertiesNameMap;
-    typedef QHash<SizePolicyHandle, QString> SizePolicyNameMap;
-#else
     typedef QMap<FontHandle, QString> FontPropertiesNameMap;
     typedef QMap<IconHandle, QString> IconPropertiesNameMap;
     typedef QMap<SizePolicyHandle, QString> SizePolicyNameMap;
-#endif
     FontPropertiesNameMap m_fontPropertiesNameMap;
     IconPropertiesNameMap m_iconPropertiesNameMap;
     SizePolicyNameMap     m_sizePolicyNameMap;
@@ -346,13 +309,14 @@ private:
 
     QString m_delayedActionInitialization;
     QTextStream m_actionOut;
-    const bool m_activateScripts;
 
     bool m_layoutWidget;
     bool m_firstThemeIcon;
 };
 
 } // namespace CPP
+
+Q_DECLARE_TYPEINFO(CPP::WriteInitialization::Buddy, Q_MOVABLE_TYPE);
 
 QT_END_NAMESPACE
 

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,12 +32,18 @@
 #include <QtCore/QSettings>
 #include <private/qsettings_p.h>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QDateTime>
 #include <QtCore/QtGlobal>
 #include <QtCore/QMetaType>
 #include <QtCore/QString>
 #include <QtCore/QDir>
 #include <QtCore/QThread>
+#include <QtCore/QSysInfo>
 #include <QtGui/QKeySequence>
+
+#include <QtCore>
+#include <QtGui>
+#include "tst_qmetatype.h"
 
 #include <cctype>
 #include <stdlib.h>
@@ -65,6 +58,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(Q_OS_DARWIN)
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 Q_DECLARE_METATYPE(QSettings::Format)
 
 #ifndef QSETTINGS_P_H_VERSION
@@ -73,14 +70,45 @@ Q_DECLARE_METATYPE(QSettings::Format)
 
 QT_FORWARD_DECLARE_CLASS(QSettings)
 
+static inline bool canWriteNativeSystemSettings()
+{
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
+    HKEY key;
+    const LONG result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"Software", 0, KEY_WRITE, &key);
+    if (result == ERROR_SUCCESS)
+        RegCloseKey(key);
+    else
+        qErrnoWarning(result, "RegOpenKeyEx failed");
+    return result == ERROR_SUCCESS;
+#elif defined(Q_OS_DARWIN)
+    CFStringRef key = CFSTR("canWriteNativeSystemSettings");
+    #define ANY_APP_USER_AND_HOST kCFPreferencesAnyApplication, kCFPreferencesAnyUser, kCFPreferencesAnyHost
+    CFPreferencesSetValue(key, CFSTR("true"), ANY_APP_USER_AND_HOST);
+    if (CFPreferencesSynchronize(ANY_APP_USER_AND_HOST)) {
+        // Cleanup
+        CFPreferencesSetValue(key, 0, ANY_APP_USER_AND_HOST);
+        CFPreferencesSynchronize(ANY_APP_USER_AND_HOST);
+        return true;
+    } else {
+        return false;
+    }
+#else
+    return true;
+#endif
+}
+
+static const char insufficientPermissionSkipMessage[] = "Insufficient permissions for this test.";
+
 class tst_QSettings : public QObject
 {
     Q_OBJECT
 
+public:
+    tst_QSettings();
+
 public slots:
     void initTestCase();
-    void init();
-    void cleanup();
+    void cleanup() { cleanupTestFiles(); }
 private slots:
     void getSetCheck();
     void ctor_data();
@@ -90,6 +118,10 @@ private slots:
     void remove();
     void contains();
     void sync();
+    void syncNonWriteableDir();
+#ifdef Q_OS_WIN
+    void syncAlternateDataStream();
+#endif
     void setFallbacksEnabled();
     void setFallbacksEnabled_data();
     void fromFile_data();
@@ -105,7 +137,11 @@ private slots:
     void testUpdateRequestEvent();
     void testThreadSafety();
     void testEmptyData();
+    void testEmptyKey();
     void testResourceFiles();
+    void testRegistryShortRootNames();
+    void testRegistry32And64Bit();
+    void trailingWhitespace();
 #ifdef Q_OS_MAC
     void fileName();
 #endif
@@ -118,7 +154,7 @@ private slots:
 #if !defined(Q_OS_WIN) && !defined(QT_QSETTINGS_ALWAYS_CASE_SENSITIVE_AND_FORGET_ORIGINAL_KEY_ORDER)
     void dontReorderIniKeysNeedlessly();
 #endif
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     void consistentRegistryStorage();
 #endif
 
@@ -137,6 +173,8 @@ private slots:
     void testNormalizedKey();
     void testVariantTypes_data();
     void testVariantTypes();
+    void testMetaTypes_data();
+    void testMetaTypes();
 #endif
     void rainersSyncBugOnMac_data();
     void rainersSyncBugOnMac();
@@ -144,6 +182,17 @@ private slots:
 
     void testByteArray_data();
     void testByteArray();
+    void testByteArrayNativeFormat();
+    void iniCodec();
+    void bom();
+    void embeddedZeroByte_data();
+    void embeddedZeroByte();
+
+    void testXdg();
+private:
+    void cleanupTestFiles();
+
+    const bool m_canWriteNativeSystemSettings;
 };
 
 // Testing get/set functions
@@ -158,35 +207,16 @@ void tst_QSettings::getSetCheck()
     QCOMPARE(true, obj1.fallbacksEnabled());
 }
 
-#if defined(Q_OS_WINCE)
-static void removePath(const QString& _path)
-{
-    QString path = _path;
-    QDir dir(path);
-    if (!dir.exists())
-        return;
-    QStringList entries = dir.entryList();
-    foreach(QString name, entries) {
-        QString absolute = path + name;
-        if (QFileInfo(absolute).isDir())
-            removePath(absolute+"\\");
-        else
-            QFile::remove(absolute);
-    }
-    dir.cdUp();
-    if (path[path.size()-1] == '\\')
-        path = path.left(path.size()-1);
-    dir.rmdir(path.mid(path.lastIndexOf('\\')+1));
-}
-#endif
-
-static QString settingsPath(const char *path = "")
+static QString settingsPath(const char *path = nullptr)
 {
     // Temporary path for files that are specified explicitly in the constructor.
-    QString tempPath = QDir::tempPath();
-    if (tempPath.endsWith("/"))
-        tempPath.truncate(tempPath.size() - 1);
-    return QDir::toNativeSeparators(tempPath + "/tst_QSettings/" + QLatin1String(path));
+#ifndef Q_OS_WINRT
+    static const QString tempPath = QDir::tempPath() + QLatin1String("/tst_QSettings");
+#else
+    static const QString tempPath = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+        + QLatin1String("/tst_QSettings");
+#endif
+    return path && *path ? tempPath + QLatin1Char('/') + QLatin1String(path) : tempPath;
 }
 
 static bool readCustom1File(QIODevice &device, QSettings::SettingsMap &map)
@@ -256,47 +286,53 @@ static void populateWithFormats()
     QTest::newRow("custom2") << QSettings::CustomFormat2;
 }
 
+tst_QSettings::tst_QSettings()
+    : m_canWriteNativeSystemSettings(canWriteNativeSystemSettings())
+{
+    QStandardPaths::setTestModeEnabled(true);
+}
+
 void tst_QSettings::initTestCase()
 {
+    if (!m_canWriteNativeSystemSettings)
+        qWarning("The test is not running with administrative rights. Some tests will be skipped.");
     QSettings::Format custom1 = QSettings::registerFormat("custom1", readCustom1File, writeCustom1File);
     QSettings::Format custom2 = QSettings::registerFormat("custom2", readCustom2File, writeCustom2File
 #ifndef QT_QSETTINGS_ALWAYS_CASE_SENSITIVE_AND_FORGET_ORIGINAL_KEY_ORDER
                                                           , Qt::CaseInsensitive
 #endif
                                                           );
-    QVERIFY(custom1 == QSettings::CustomFormat1);
-    QVERIFY(custom2 == QSettings::CustomFormat2);
+    QCOMPARE(custom1, QSettings::CustomFormat1);
+    QCOMPARE(custom2, QSettings::CustomFormat2);
+
+    cleanupTestFiles();
 }
 
-void tst_QSettings::init()
+void tst_QSettings::cleanupTestFiles()
 {
     QSettings::setSystemIniPath(settingsPath("__system__"));
     QSettings::setUserIniPath(settingsPath("__user__"));
 
-#if defined(Q_OS_WIN)
+    QDir settingsDir(settingsPath());
+    if (settingsDir.exists())
+        QVERIFY(settingsDir.removeRecursively());
+
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     QSettings("HKEY_CURRENT_USER\\Software\\software.org", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\software.org", QSettings::NativeFormat).clear();
     QSettings("HKEY_CURRENT_USER\\Software\\other.software.org", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\other.software.org", QSettings::NativeFormat).clear();
     QSettings("HKEY_CURRENT_USER\\Software\\foo", QSettings::NativeFormat).clear();
     QSettings("HKEY_CURRENT_USER\\Software\\bar", QSettings::NativeFormat).clear();
     QSettings("HKEY_CURRENT_USER\\Software\\bat", QSettings::NativeFormat).clear();
     QSettings("HKEY_CURRENT_USER\\Software\\baz", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\foo", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\bar", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\bat", QSettings::NativeFormat).clear();
-    QSettings("HKEY_LOCAL_MACHINE\\Software\\baz", QSettings::NativeFormat).clear();
-    if (QDir(settingsPath()).exists()) {
-#if defined(Q_OS_WINCE)
-        removePath(settingsPath());
-#else
-        if (QSysInfo::windowsVersion() & QSysInfo::WV_NT_based)
-            system(QString("rmdir /Q /S %1").arg(settingsPath()).toLatin1());
-        else
-            system(QString("deltree /Y %1").arg(settingsPath()).toLatin1());
-#endif
+    if (m_canWriteNativeSystemSettings) {
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\software.org", QSettings::NativeFormat).clear();
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\other.software.org", QSettings::NativeFormat).clear();
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\foo", QSettings::NativeFormat).clear();
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\bar", QSettings::NativeFormat).clear();
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\bat", QSettings::NativeFormat).clear();
+        QSettings("HKEY_LOCAL_MACHINE\\Software\\baz", QSettings::NativeFormat).clear();
     }
-#elif defined(Q_OS_DARWIN)
+#elif defined(Q_OS_DARWIN) || defined(Q_OS_WINRT)
     QSettings(QSettings::UserScope, "software.org", "KillerAPP").clear();
     QSettings(QSettings::SystemScope, "software.org", "KillerAPP").clear();
     QSettings(QSettings::UserScope, "other.software.org", "KillerAPP").clear();
@@ -307,17 +343,16 @@ void tst_QSettings::init()
     QSettings(QSettings::SystemScope, "other.software.org").clear();
 #endif
 
-#if !defined(Q_OS_WIN)
-    system(QString("chmod -R u+rw %1 2> /dev/null").arg(settingsPath()).toLatin1());
-    system(QString("rm -fr %1 2> /dev/null").arg(settingsPath()).toLatin1());
+    const QString foo(QLatin1String("foo"));
+
+#if defined(Q_OS_WINRT)
+    QSettings(foo, QSettings::NativeFormat).clear();
+    QFile fooFile(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QLatin1Char('/') + foo);
+#else
+    QFile fooFile(foo);
 #endif
-
-    QFile::remove("foo");
-}
-
-void tst_QSettings::cleanup()
-{
-    init();
+    if (fooFile.exists())
+        QVERIFY2(fooFile.remove(), qPrintable(fooFile.errorString()));
 }
 
 /*
@@ -333,6 +368,9 @@ void tst_QSettings::ctor()
 {
     QFETCH(QSettings::Format, format);
 
+    if (!m_canWriteNativeSystemSettings && format == QSettings::NativeFormat)
+        QSKIP(insufficientPermissionSkipMessage);
+
     {
         QSettings settings1(format, QSettings::UserScope, "software.org", "KillerAPP");
         QSettings settings2(format, QSettings::UserScope, "software.org");
@@ -345,30 +383,29 @@ void tst_QSettings::ctor()
         QSettings settings8(format, QSettings::SystemScope, "software.org");
 
         // test QSettings::format() while we're at it
-        QVERIFY(settings1.format() == format);
-        QVERIFY(settings2.format() == format);
-        QVERIFY(settings3.format() == format);
-        QVERIFY(settings4.format() == format);
+        QCOMPARE(settings1.format(), format);
+        QCOMPARE(settings2.format(), format);
+        QCOMPARE(settings3.format(), format);
+        QCOMPARE(settings4.format(), format);
 
         // test QSettings::scope() while we're at it
-        QVERIFY(settings1.scope() == QSettings::UserScope);
-        QVERIFY(settings2.scope() == QSettings::UserScope);
-        QVERIFY(settings3.scope() == QSettings::SystemScope);
-        QVERIFY(settings4.scope() == QSettings::SystemScope);
+        QCOMPARE(settings1.scope(), QSettings::UserScope);
+        QCOMPARE(settings2.scope(), QSettings::UserScope);
+        QCOMPARE(settings3.scope(), QSettings::SystemScope);
+        QCOMPARE(settings4.scope(), QSettings::SystemScope);
 
         // test QSettings::organizationName() while we're at it
-        QVERIFY(settings1.organizationName() == "software.org");
-        QVERIFY(settings2.organizationName() == "software.org");
-        QVERIFY(settings3.organizationName() == "software.org");
-        QVERIFY(settings4.organizationName() == "software.org");
+        QCOMPARE(settings1.organizationName(), QLatin1String("software.org"));
+        QCOMPARE(settings2.organizationName(), QLatin1String("software.org"));
+        QCOMPARE(settings3.organizationName(), QLatin1String("software.org"));
+        QCOMPARE(settings4.organizationName(), QLatin1String("software.org"));
 
         // test QSettings::applicationName() while we're at it
         QCOMPARE(settings1.applicationName(), QString("KillerAPP"));
         QVERIFY(settings2.applicationName().isEmpty());
-        QVERIFY(settings3.applicationName() == "KillerAPP");
+        QCOMPARE(settings3.applicationName(), QLatin1String("KillerAPP"));
         QVERIFY(settings4.applicationName().isEmpty());
 
-#if !defined(Q_OS_BLACKBERRY)
         /*
             Go forwards.
         */
@@ -425,22 +462,6 @@ void tst_QSettings::ctor()
         QCOMPARE(settings2.value("key 1").toString(), QString("bilboh"));
         QCOMPARE(settings3.value("key 1").toString(), QString("catha"));
         QCOMPARE(settings4.value("key 1").toString(), QString("quirko"));
-#else
-        /*
-            No fallback mechanism and a single scope on Blackberry OS
-        */
-        settings2.setValue("key 1", QString("whoa"));
-        QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
-        QCOMPARE(settings4.value("key 1").toString(), QString("whoa"));
-        QVERIFY(!settings1.contains("key 1"));
-        QVERIFY(!settings3.contains("key 1"));
-
-        settings1.setValue("key 1", QString("blah"));
-        QCOMPARE(settings1.value("key 1").toString(), QString("blah"));
-        QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
-        QCOMPARE(settings3.value("key 1").toString(), QString("blah"));
-        QCOMPARE(settings4.value("key 1").toString(), QString("whoa"));
-#endif
 
         /*
             Test the copies again.
@@ -477,17 +498,10 @@ void tst_QSettings::ctor()
         QSettings settings3(format, QSettings::SystemScope, "software.org", "KillerAPP");
         QSettings settings4(format, QSettings::SystemScope, "software.org");
 
-#if !defined(Q_OS_BLACKBERRY)
         QCOMPARE(settings1.value("key 1").toString(), QString("gurgle"));
         QCOMPARE(settings2.value("key 1").toString(), QString("bilboh"));
         QCOMPARE(settings3.value("key 1").toString(), QString("catha"));
         QCOMPARE(settings4.value("key 1").toString(), QString("quirko"));
-#else
-        QCOMPARE(settings1.value("key 1").toString(), QString("blah"));
-        QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
-        QCOMPARE(settings3.value("key 1").toString(), QString("blah"));
-        QCOMPARE(settings4.value("key 1").toString(), QString("whoa"));
-#endif
 
         /*
             Test problem keys.
@@ -506,24 +520,26 @@ void tst_QSettings::ctor()
         QCOMPARE(settings1.value("%General/%General").toInt(), 11);
 
         /*
-            Test that the organization and product parameters is
-            case-insensitive on Windows and Mac, case-sensitive on
-            Unix.
+            Test that the organization and product parameters are
+            case-insensitive on case-insensitive file systems.
         */
         QSettings settings5(format, QSettings::UserScope, "SoftWare.ORG", "killerApp");
+
+        bool caseSensitive = true;
+#if defined(Q_OS_MAC)
         if (format == QSettings::NativeFormat) {
-#if defined(Q_OS_WIN) || defined(Q_OS_DARWIN)
-            QCOMPARE(settings5.value("key 1").toString(), QString("gurgle"));
-#else
-            QVERIFY(!settings5.contains("key 1"));
-#endif
+            // more details in QMacSettingsPrivate::QMacSettingsPrivate(), organization was comify()-ed
+            caseSensitive = settings5.fileName().contains("SoftWare.ORG");;
         } else {
-#if defined(Q_OS_WIN) || defined(Q_OS_DARWIN)
-            QCOMPARE(settings5.value("key 1").toString(), QString("gurgle"));
-#else
-            QVERIFY(!settings5.contains("key 1"));
-#endif
+            caseSensitive = pathconf(settings5.fileName().toLatin1().constData(), _PC_CASE_SENSITIVE);
         }
+#elif defined(Q_OS_WIN32) || defined(Q_OS_WINRT)
+        caseSensitive = false;
+#endif
+        if (caseSensitive)
+            QVERIFY(!settings5.contains("key 1"));
+        else
+            QVERIFY(settings5.contains("key 1"));
     }
 
     {
@@ -539,7 +555,7 @@ void tst_QSettings::ctor()
         settings1.endGroup();
 
         // test QSettings::scope() while we're at it
-        QVERIFY(settings1.scope() == QSettings::UserScope);
+        QCOMPARE(settings1.scope(), QSettings::UserScope);
 
         // test QSettings::organizationName() while we're at it
         QVERIFY(settings1.organizationName().isEmpty());
@@ -591,8 +607,8 @@ void tst_QSettings::ctor()
             QCoreApplication::instance()->setOrganizationName("");
             QCoreApplication::instance()->setApplicationName("");
             QSettings settings;
-#ifdef Q_OS_MAC
-            QEXPECT_FAIL("native", "Default settings on Mac are valid, despite organization domain, name, and app name being null", Continue);
+#if defined(Q_OS_MAC) || defined(Q_OS_WINRT)
+            QEXPECT_FAIL("native", "Default settings on Mac/WinRT are valid, despite organization domain, name, and app name being null", Continue);
 #endif
             QCOMPARE(settings.status(), QSettings::AccessError);
             QCoreApplication::instance()->setOrganizationName("software.org");
@@ -606,28 +622,28 @@ void tst_QSettings::ctor()
         }
 
         QSettings settings(format, QSettings::UserScope, "", "");
-#ifdef Q_OS_MAC
-        QEXPECT_FAIL("native", "Default settings on Mac are valid, despite organization domain, name, and app name being null", Continue);
+#if defined(Q_OS_MAC) || defined(Q_OS_WINRT)
+        QEXPECT_FAIL("native", "Default settings on Mac/WinRT are valid, despite organization domain, name, and app name being null", Continue);
 #endif
         QCOMPARE(settings.status(), QSettings::AccessError);
         QSettings settings2(format, QSettings::UserScope, "software.org", "KillerAPP");
         QCOMPARE(settings2.status(), QSettings::NoError);
 
         // test QSettings::format() while we're at it
-        QVERIFY(settings.format() == format);
-        QVERIFY(settings2.format() == format);
+        QCOMPARE(settings.format(), format);
+        QCOMPARE(settings2.format(), format);
 
         // test QSettings::scope() while we're at it
-        QVERIFY(settings.scope() == QSettings::UserScope);
-        QVERIFY(settings2.scope() == QSettings::UserScope);
+        QCOMPARE(settings.scope(), QSettings::UserScope);
+        QCOMPARE(settings2.scope(), QSettings::UserScope);
 
         // test QSettings::organizationName() while we're at it
         QVERIFY(settings.organizationName().isEmpty());
-        QVERIFY(settings2.organizationName() == "software.org");
+        QCOMPARE(settings2.organizationName(), QLatin1String("software.org"));
 
         // test QSettings::applicationName() while we're at it
         QVERIFY(settings.applicationName().isEmpty());
-        QVERIFY(settings2.applicationName() == "KillerAPP");
+        QCOMPARE(settings2.applicationName(), QLatin1String("KillerAPP"));
     }
 }
 
@@ -641,7 +657,6 @@ void tst_QSettings::testByteArray_data()
 #ifndef QT_NO_COMPRESS
     QTest::newRow("compressed") << qCompress(bytes);
 #endif
-    QTest::newRow("with \\0") << bytes + '\0' + bytes;
 }
 
 void tst_QSettings::testByteArray()
@@ -650,14 +665,102 @@ void tst_QSettings::testByteArray()
 
     // write
     {
-        QSettings settings("Trolltech", "tst_qsettings");
+        QSettings settings("QtProject", "tst_qsettings");
         settings.setValue("byteArray", data);
     }
     // read
     {
-        QSettings settings("Trolltech", "tst_qsettings");
+        QSettings settings("QtProject", "tst_qsettings");
         QByteArray ret = settings.value("byteArray", data).toByteArray();
         QCOMPARE(ret, data);
+    }
+}
+
+void tst_QSettings::testByteArrayNativeFormat()
+{
+#ifndef Q_OS_MACOS
+    QSKIP("This test is specific to macOS plist reading.");
+#else
+    QSettings settings(":/resourcefile6.plist", QSettings::NativeFormat);
+    QCOMPARE(settings.value("passwordData"), QVariant(QByteArray::fromBase64("RBxVAAsDVsO/")));
+#endif
+}
+
+void tst_QSettings::iniCodec()
+{
+    {
+        QSettings settings("QtProject", "tst_qsettings");
+        settings.setIniCodec("cp1251");
+        QByteArray ba;
+        ba.resize(256);
+        for (int i = 0; i < ba.size(); i++)
+            ba[i] = i;
+        settings.setValue("array",ba);
+    }
+    {
+        QSettings settings("QtProject", "tst_qsettings");
+        settings.setIniCodec("cp1251");
+        QByteArray ba = settings.value("array").toByteArray();
+        QCOMPARE(ba.size(), 256);
+        for (int i = 0; i < ba.size(); i++)
+            QCOMPARE((uchar)ba.at(i), (uchar)i);
+    }
+
+}
+
+void tst_QSettings::bom()
+{
+    QSettings s(":/bom.ini", QSettings::IniFormat);
+    QStringList allkeys = s.allKeys();
+    QCOMPARE(allkeys.size(), 2);
+    QVERIFY(allkeys.contains("section1/foo1"));
+    QVERIFY(allkeys.contains("section2/foo2"));
+}
+
+void tst_QSettings::embeddedZeroByte_data()
+{
+    QTest::addColumn<QVariant>("value");
+
+    QByteArray bytes("hello\0world", 11);
+
+    QTest::newRow("bytearray\\0") << QVariant(bytes);
+    QTest::newRow("string\\0") << QVariant(QString::fromLatin1(bytes.data(), bytes.size()));
+
+    bytes = QByteArray("@String(");
+
+    QTest::newRow("@bytearray") << QVariant(bytes);
+    QTest::newRow("@string") << QVariant(QString(bytes));
+
+    bytes = QByteArray("@String(\0test", 13);
+
+    QTest::newRow("@bytearray\\0") << QVariant(bytes);
+    QTest::newRow("@string\\0") << QVariant(QString::fromLatin1(bytes.data(), bytes.size()));
+}
+
+void tst_QSettings::embeddedZeroByte()
+{
+    QFETCH(QVariant, value);
+    {
+        QSettings settings("QtProject", "tst_qsettings");
+        settings.setValue(QTest::currentDataTag(), value);
+    }
+    {
+        QSettings settings("QtProject", "tst_qsettings");
+        QVariant outValue = settings.value(QTest::currentDataTag());
+
+        switch (value.type()) {
+        case QVariant::ByteArray:
+            QCOMPARE(outValue.toByteArray(), value.toByteArray());
+            break;
+        case QVariant::String:
+            QCOMPARE(outValue.toString(), value.toString());
+            break;
+        default:
+            Q_UNREACHABLE();
+        }
+
+        if (value.toByteArray().contains(QChar::Null))
+            QVERIFY(outValue.toByteArray().contains(QChar::Null));
     }
 }
 
@@ -694,7 +797,9 @@ void tst_QSettings::testErrorHandling()
 #ifdef Q_OS_WIN
     QSKIP("Windows doesn't support most file modes, including read-only directories, so this test is moot.");
 #elif defined(Q_OS_UNIX)
+#if !defined(Q_OS_VXWORKS)  // VxWorks does not have users/groups
     if (::getuid() == 0)
+#endif
         QSKIP("Running this test as root doesn't work, since file perms do not bother him");
 #else
     QFETCH(int, filePerms);
@@ -758,7 +863,6 @@ void tst_QSettings::testErrorHandling()
 #endif // !Q_OS_WIN
 }
 
-Q_DECLARE_METATYPE(QVariant)
 Q_DECLARE_METATYPE(QSettings::Status)
 
 #ifdef QT_BUILD_INTERNAL
@@ -804,7 +908,6 @@ void tst_QSettings::testIniParsing_data()
 #ifdef QT_BUILD_INTERNAL
 void tst_QSettings::testIniParsing()
 {
-    qRegisterMetaType<QVariant>("QVariant");
     qRegisterMetaType<QSettings::Status>("QSettings::Status");
 
     QDir dir(settingsPath());
@@ -1040,6 +1143,106 @@ void tst_QSettings::setValue()
 }
 
 #ifdef QT_BUILD_INTERNAL
+
+template<int MetaTypeId>
+static void testMetaTypesHelper(QSettings::Format format)
+{
+    typedef typename MetaEnumToType<MetaTypeId>::Type Type;
+    const char *key = QMetaType::typeName(MetaTypeId);
+    Type *value = TestValueFactory<MetaTypeId>::create();
+    QVariant inputVariant = QVariant::fromValue(*value);
+
+    static const QSettings::Scope scope = QSettings::UserScope;
+    static const QString organization("example.org");
+    static const QString applicationName("FooApp");
+
+    {
+        QSettings settings(format, scope, organization, applicationName);
+        settings.setValue(key, inputVariant);
+    }
+
+    QConfFile::clearCache();
+
+    {
+        QSettings settings(format, scope, organization, applicationName);
+        QVariant outputVariant = settings.value(key);
+        if (MetaTypeId != QMetaType::QVariant)
+            QVERIFY(outputVariant.canConvert(MetaTypeId));
+        if (outputVariant.type() != inputVariant.type())
+            qWarning() << "type mismatch between" << inputVariant << "and" << outputVariant;
+        QCOMPARE(qvariant_cast<Type >(outputVariant), *value);
+    }
+
+    delete value;
+}
+
+#define FOR_EACH_NONSUPPORTED_METATYPE(F)\
+    F(Void) \
+    F(Nullptr) \
+    F(QObjectStar) \
+    F(QModelIndex) \
+    F(QJsonObject) \
+    F(QJsonValue) \
+    F(QJsonArray) \
+    F(QJsonDocument) \
+    F(QPersistentModelIndex) \
+    F(QCborSimpleType) \
+    F(QCborValue) \
+    F(QCborArray) \
+    F(QCborMap) \
+
+#define EXCLUDE_NON_SUPPORTED_METATYPES(MetaTypeName) \
+template<> void testMetaTypesHelper<QMetaType::MetaTypeName>(QSettings::Format) \
+{ \
+    QSKIP("This metatype is not supported by QSettings."); \
+}
+FOR_EACH_NONSUPPORTED_METATYPE(EXCLUDE_NON_SUPPORTED_METATYPES)
+#undef EXCLUDE_NON_SUPPORTED_METATYPES
+
+void tst_QSettings::testMetaTypes_data()
+{
+    QTest::addColumn<QSettings::Format>("format");
+    QTest::addColumn<int>("type");
+
+#define ADD_METATYPE_TEST_ROW(MetaTypeName, MetaTypeId, RealType) \
+    { \
+        const char *formatName = QMetaEnum::fromType<QSettings::Format>().valueToKey(formats[i]); \
+        const char *typeName = QMetaType::typeName(QMetaType::MetaTypeName); \
+        QTest::newRow(QString("%1:%2").arg(formatName).arg(typeName).toLatin1().constData()) \
+            << QSettings::Format(formats[i]) << int(QMetaType::MetaTypeName); \
+    }
+    int formats[] = { QSettings::NativeFormat, QSettings::IniFormat };
+    for (int i = 0; i < int(sizeof(formats) / sizeof(int)); ++i) {
+        FOR_EACH_CORE_METATYPE(ADD_METATYPE_TEST_ROW)
+    }
+#undef ADD_METATYPE_TEST_ROW
+}
+
+typedef void (*TypeTestFunction)(QSettings::Format);
+
+void tst_QSettings::testMetaTypes()
+{
+    struct TypeTestFunctionGetter
+    {
+        static TypeTestFunction get(int type)
+        {
+            switch (type) {
+#define RETURN_CREATE_FUNCTION(MetaTypeName, MetaTypeId, RealType) \
+            case QMetaType::MetaTypeName: \
+            return testMetaTypesHelper<QMetaType::MetaTypeName>;
+FOR_EACH_CORE_METATYPE(RETURN_CREATE_FUNCTION)
+#undef RETURN_CREATE_FUNCTION
+            }
+            return 0;
+        }
+    };
+
+    QFETCH(QSettings::Format, format);
+    QFETCH(int, type);
+
+    TypeTestFunctionGetter::get(type)(format);
+}
+
 void tst_QSettings::testVariantTypes_data()
 {
     populateWithFormats();
@@ -1122,6 +1325,9 @@ void tst_QSettings::testVariantTypes()
     QList<QVariant> l4;
     l4 << QVariant(m2) << QVariant(l2) << QVariant(l3);
     testVal("key13", l4, QVariantList, List);
+    QDateTime dt = QDateTime::currentDateTime();
+    dt.setOffsetFromUtc(3600);
+    testVal("key14", dt, QDateTime, DateTime);
 
     // We store key sequences as strings instead of binary variant blob, for improved
     // readability in the resulting format.
@@ -1139,16 +1345,16 @@ void tst_QSettings::remove()
 {
     QSettings settings0(QSettings::UserScope, "software.org", "KillerAPP");
     int initialNumKeys = settings0.allKeys().size();
-    QCOMPARE(settings0.value("key 1", "123").toString(), QString("123"));
+    QCOMPARE(settings0.value("key 1", "123").toString(), QLatin1String("123"));
     settings0.remove("key 1");
-    QCOMPARE(settings0.value("key 1", "456").toString(), QString("456"));
+    QCOMPARE(settings0.value("key 1", "456").toString(), QLatin1String("456"));
 
     settings0.setValue("key 1", "bubloo");
-    QCOMPARE(settings0.value("key 1").toString(), QString("bubloo"));
+    QCOMPARE(settings0.value("key 1").toString(), QLatin1String("bubloo"));
     settings0.remove("key 2");
-    QCOMPARE(settings0.value("key 1").toString(), QString("bubloo"));
+    QCOMPARE(settings0.value("key 1").toString(), QLatin1String("bubloo"));
     settings0.remove("key 1");
-    QCOMPARE(settings0.value("key 1", "789").toString(), QString("789"));
+    QCOMPARE(settings0.value("key 1", "789").toString(), QLatin1String("789"));
 
     /*
       Make sure that removing a key removes all the subkeys.
@@ -1260,51 +1466,54 @@ void tst_QSettings::remove()
 
     QSettings settings1(QSettings::UserScope, "software.org", "KillerAPP");
     QSettings settings2(QSettings::UserScope, "software.org");
-    QSettings settings3(QSettings::SystemScope, "software.org", "KillerAPP");
-    QSettings settings4(QSettings::SystemScope, "software.org");
 
-    settings4.setValue("key 1", "doodah");
-    settings3.setValue("key 1", "blah");
+    QScopedPointer<QSettings> settings3;
+    QScopedPointer<QSettings> settings4;
+
+    if (m_canWriteNativeSystemSettings) {
+        settings3.reset(new QSettings(QSettings::SystemScope, "software.org", "KillerAPP"));
+        settings4.reset(new QSettings(QSettings::SystemScope, "software.org"));
+        settings3->setValue("key 1", "blah");
+        settings4->setValue("key 1", "doodah");
+    }
+
     settings2.setValue("key 1", "whoa");
     settings1.setValue("key 1", "gurgle");
     QCOMPARE(settings1.value("key 1").toString(), QString("gurgle"));
     QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
 
-#if !defined(Q_OS_BLACKBERRY)
-    QCOMPARE(settings3.value("key 1").toString(), QString("blah"));
-    QCOMPARE(settings4.value("key 1").toString(), QString("doodah"));
+    if (m_canWriteNativeSystemSettings) {
+        QCOMPARE(settings3->value("key 1").toString(), QString("blah"));
+        QCOMPARE(settings4->value("key 1").toString(), QString("doodah"));
+    }
 
     settings1.remove("key 1");
     QCOMPARE(settings1.value("key 1").toString(), QString("whoa"));
     QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
-    QCOMPARE(settings3.value("key 1").toString(), QString("blah"));
-    QCOMPARE(settings4.value("key 1").toString(), QString("doodah"));
+    if (m_canWriteNativeSystemSettings) {
+        QCOMPARE(settings3->value("key 1").toString(), QString("blah"));
+        QCOMPARE(settings4->value("key 1").toString(), QString("doodah"));
+    }
 
-    settings2.remove("key 1");
-    QCOMPARE(settings1.value("key 1").toString(), QString("blah"));
-    QCOMPARE(settings2.value("key 1").toString(), QString("doodah"));
-    QCOMPARE(settings3.value("key 1").toString(), QString("blah"));
-    QCOMPARE(settings4.value("key 1").toString(), QString("doodah"));
+    if (m_canWriteNativeSystemSettings) {
+        settings2.remove("key 1");
+        QCOMPARE(settings1.value("key 1").toString(), QString("blah"));
+        QCOMPARE(settings2.value("key 1").toString(), QString("doodah"));
+        QCOMPARE(settings3->value("key 1").toString(), QString("blah"));
+        QCOMPARE(settings4->value("key 1").toString(), QString("doodah"));
 
-    settings3.remove("key 1");
-    QCOMPARE(settings1.value("key 1").toString(), QString("doodah"));
-    QCOMPARE(settings2.value("key 1").toString(), QString("doodah"));
-    QCOMPARE(settings3.value("key 1").toString(), QString("doodah"));
-    QCOMPARE(settings4.value("key 1").toString(), QString("doodah"));
+        settings3->remove("key 1");
+        QCOMPARE(settings1.value("key 1").toString(), QString("doodah"));
+        QCOMPARE(settings2.value("key 1").toString(), QString("doodah"));
+        QCOMPARE(settings3->value("key 1").toString(), QString("doodah"));
+        QCOMPARE(settings4->value("key 1").toString(), QString("doodah"));
 
-    settings4.remove("key 1");
-    QVERIFY(!settings1.contains("key 1"));
-    QVERIFY(!settings2.contains("key 1"));
-    QVERIFY(!settings3.contains("key 1"));
-    QVERIFY(!settings4.contains("key 1"));
-#else
-    settings1.remove("key 1");
-    QCOMPARE(settings2.value("key 1").toString(), QString("whoa"));
-
-    settings2.remove("key 1");
-    QVERIFY(!settings1.contains("key 1"));
-    QVERIFY(!settings2.contains("key 1"));
-#endif
+        settings4->remove("key 1");
+        QVERIFY(!settings1.contains("key 1"));
+        QVERIFY(!settings2.contains("key 1"));
+        QVERIFY(!settings3->contains("key 1"));
+        QVERIFY(!settings4->contains("key 1"));
+    }
 
     /*
       Get ready for the next part of the test.
@@ -1312,13 +1521,18 @@ void tst_QSettings::remove()
 
     settings1.clear();
     settings2.clear();
-    settings3.clear();
-    settings4.clear();
+    if (m_canWriteNativeSystemSettings) {
+        settings3->clear();
+        settings4->clear();
+    }
 
     settings1.sync();
     settings2.sync();
-    settings3.sync();
-    settings4.sync();
+
+    if (m_canWriteNativeSystemSettings) {
+        settings3->sync();
+        settings4->sync();
+    }
 
     /*
       Check that recursive removes work correctly when some of the
@@ -1380,7 +1594,7 @@ void tst_QSettings::remove()
 void tst_QSettings::contains()
 {
     QSettings settings1(QSettings::UserScope, "software.org", "KillerAPP");
-    int initialNumKeys = settings1.allKeys().size(); // 0 on all platforms but Mac OS X.
+    int initialNumKeys = settings1.allKeys().size(); // 0 on all platforms but OS X.
     settings1.setValue("alpha/beta/geometry", -7);
     settings1.setValue("alpha/beta/geometry/x", 1);
     settings1.setValue("alpha/beta/geometry/y", 2);
@@ -1437,7 +1651,7 @@ void tst_QSettings::contains()
     }
 
     settings1.endGroup();
-    QVERIFY(settings1.group() == "alpha");
+    QCOMPARE(settings1.group(), QLatin1String("alpha"));
     keys = settings1.allKeys();
     QCOMPARE(keys.size(), expectedResult.size() + 3);
     for (i = 0; i < keys.size(); ++i) {
@@ -1493,7 +1707,7 @@ void tst_QSettings::sync()
 
     // Now "some other app" will change other.software.org.ini
     QString userConfDir = settingsPath("__user__") + QDir::separator();
-#if !defined(Q_OS_WINCE)
+#if !defined(Q_OS_WINRT)
     unlink((userConfDir + "other.software.org.ini").toLatin1());
     rename((userConfDir + "software.org.ini").toLatin1(),
            (userConfDir + "other.software.org.ini").toLatin1());
@@ -1544,6 +1758,78 @@ void tst_QSettings::sync()
     QCOMPARE(settings1.allKeys().count(), 11);
 }
 
+void tst_QSettings::syncNonWriteableDir()
+{
+    QTemporaryDir tempDir;
+    QVERIFY2(tempDir.isValid(), qUtf8Printable(tempDir.errorString()));
+
+    // first, create a file
+    QString filename = tempDir.path() + "/config.ini";
+    {
+        QFile f(filename);
+        QVERIFY2(f.open(QIODevice::WriteOnly), qUtf8Printable(f.errorString()));
+    }
+
+    // second, make the dir unwriteable
+    QVERIFY(QFile::setPermissions(tempDir.path(), QFile::ReadUser | QFile::ExeUser));
+    struct UndoSetPermissions {
+        QString name;
+        UndoSetPermissions(const QString &name) : name(name) {}
+        ~UndoSetPermissions()
+        { QFile::setPermissions(name, QFile::ReadUser | QFile::WriteUser | QFile::ExeUser); }
+    };
+    UndoSetPermissions undo(tempDir.path());    // otherwise, QTemporaryDir will fail
+
+    {
+        QSettings settings(filename, QSettings::IniFormat);
+        QVERIFY(settings.isAtomicSyncRequired());
+        settings.setAtomicSyncRequired(false);
+        settings.setValue("alpha/beta", 1);
+        settings.sync();
+        QCOMPARE(settings.status(), QSettings::NoError);
+    }
+
+    QVERIFY(QFileInfo(filename).size() != 0);
+    QSettings settings(filename, QSettings::IniFormat);
+    QCOMPARE(settings.value("alpha/beta"), QVariant(1));
+}
+
+#ifdef Q_OS_WIN
+void tst_QSettings::syncAlternateDataStream()
+{
+    QTemporaryDir tempDir;
+    QVERIFY2(tempDir.isValid(), qUtf8Printable(tempDir.errorString()));
+
+    // first, create a file
+    QString filename = tempDir.path() + "/file";
+    {
+        QFile f(filename);
+        QVERIFY2(f.open(QIODevice::WriteOnly), qUtf8Printable(f.errorString()));
+    }
+
+    // then create an ADS
+    filename += ":config.ini";
+    {
+        QFile f(filename);
+        if (!f.open(QIODevice::WriteOnly))
+            QSKIP("Could not create ADS file (" + f.errorString().toUtf8() + ") - FAT drive?");
+    }
+
+    {
+        QSettings settings(filename, QSettings::IniFormat);
+        QVERIFY(settings.isAtomicSyncRequired());
+        settings.setAtomicSyncRequired(false);
+        settings.setValue("alpha/beta", 1);
+        settings.sync();
+        QCOMPARE(settings.status(), QSettings::NoError);
+    }
+
+    QVERIFY(QFileInfo(filename).size() != 0);
+    QSettings settings(filename, QSettings::IniFormat);
+    QCOMPARE(settings.value("alpha/beta"), QVariant(1));
+}
+#endif
+
 void tst_QSettings::setFallbacksEnabled_data()
 {
     populateWithFormats();
@@ -1552,6 +1838,9 @@ void tst_QSettings::setFallbacksEnabled_data()
 void tst_QSettings::setFallbacksEnabled()
 {
     QFETCH(QSettings::Format, format);
+
+    if (!m_canWriteNativeSystemSettings && format == QSettings::NativeFormat)
+        QSKIP(insufficientPermissionSkipMessage);
 
     QSettings settings1(format, QSettings::UserScope, "software.org", "KillerAPP");
     QSettings settings2(format, QSettings::UserScope, "software.org");
@@ -1599,7 +1888,6 @@ void tst_QSettings::setFallbacksEnabled()
         main associated file when fallbacks are turned off.
     */
 
-#if !defined(Q_OS_BLACKBERRY)
     QCOMPARE(settings1.value("key 1").toString(), QString("alpha"));
     QCOMPARE(settings2.value("key 1").toString(), QString("beta"));
     QCOMPARE(settings3.value("key 1").toString(), QString("gamma"));
@@ -1629,22 +1917,6 @@ void tst_QSettings::setFallbacksEnabled()
     QCOMPARE(settings1.value("key 5").toString(), QString(""));
     QVERIFY(settings1.contains("key 1"));
     QVERIFY(!settings1.contains("key 5"));
-#else
-    QCOMPARE(settings1.value("key 1").toString(), QString("gamma"));
-    QCOMPARE(settings2.value("key 1").toString(), QString("delta"));
-    QCOMPARE(settings3.value("key 1").toString(), QString("gamma"));
-    QCOMPARE(settings4.value("key 1").toString(), QString("delta"));
-
-    QCOMPARE(settings1.value("key 2").toString(), QString("gamma"));
-    QCOMPARE(settings2.value("key 2").toString(), QString("beta"));
-    QCOMPARE(settings3.value("key 2").toString(), QString("gamma"));
-    QCOMPARE(settings4.value("key 2").toString(), QString("beta"));
-
-    QCOMPARE(settings1.value("key 3").toString(), QString("gamma"));
-    QCOMPARE(settings2.value("key 3").toString(), QString("delta"));
-    QCOMPARE(settings3.value("key 3").toString(), QString("gamma"));
-    QCOMPARE(settings4.value("key 3").toString(), QString("delta"));
-#endif
 }
 
 void tst_QSettings::testChildKeysAndGroups_data()
@@ -1670,14 +1942,18 @@ void tst_QSettings::testChildKeysAndGroups()
 
     settings1.beginGroup("/alpha");
     QCOMPARE(settings1.childKeys(), QStringList());
-    QCOMPARE(settings1.childGroups(), QStringList() << "beta" << "gamma");
+    QStringList children = settings1.childGroups();
+    children.sort();
+    QCOMPARE(children, QStringList() << "beta" << "gamma");
 
     settings1.beginGroup("/beta");
     QCOMPARE(settings1.childKeys(), QStringList() << "geometry");
     QCOMPARE(settings1.childGroups(), QStringList() << "geometry");
 
     settings1.beginGroup("/geometry");
-    QCOMPARE(settings1.childKeys(), QStringList()  << "height" << "width" << "x" << "y");
+    children = settings1.childKeys();
+    children.sort();
+    QCOMPARE(children, QStringList()  << "height" << "width" << "x" << "y");
     QCOMPARE(settings1.childGroups(), QStringList());
 
     settings1.beginGroup("/width");
@@ -1712,31 +1988,38 @@ void tst_QSettings::testChildKeysAndGroups()
 
 void tst_QSettings::testUpdateRequestEvent()
 {
+    const QString oldCur = QDir::currentPath();
+    QString dataLocation = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QVERIFY(QDir::root().mkpath(dataLocation));
+    QDir::setCurrent(dataLocation);
+
     QFile::remove("foo");
     QVERIFY(!QFile::exists("foo"));
 
     QSettings settings1("foo", QSettings::IniFormat);
     QVERIFY(!QFile::exists("foo"));
-    QVERIFY(QFileInfo("foo").size() == 0);
+    QCOMPARE(QFileInfo("foo").size(), qint64(0));
     settings1.setValue("key1", 1);
-    QVERIFY(QFileInfo("foo").size() == 0);
+    QCOMPARE(QFileInfo("foo").size(), qint64(0));
 
     QTRY_VERIFY(QFileInfo("foo").size() > 0);
 
     settings1.remove("key1");
     QVERIFY(QFileInfo("foo").size() > 0);
 
-    QTRY_VERIFY(QFileInfo("foo").size() == 0);
+    QTRY_COMPARE(QFileInfo("foo").size(), qint64(0));
 
     settings1.setValue("key2", 2);
-    QVERIFY(QFileInfo("foo").size() == 0);
+    QCOMPARE(QFileInfo("foo").size(), qint64(0));
 
     QTRY_VERIFY(QFileInfo("foo").size() > 0);
 
     settings1.clear();
     QVERIFY(QFileInfo("foo").size() > 0);
 
-    QTRY_VERIFY(QFileInfo("foo").size() == 0);
+    QTRY_COMPARE(QFileInfo("foo").size(), qint64(0));
+
+    QDir::setCurrent(oldCur);
 }
 
 const int NumIterations = 5;
@@ -1849,7 +2132,7 @@ void tst_QSettings::testNormalizedKey()
 
 void tst_QSettings::testEmptyData()
 {
-    QString filename(QDir::tempPath() + "/empty.ini");
+    QString filename(settingsPath("empty.ini"));
     QFile::remove(filename);
     QVERIFY(!QFile::exists(filename));
 
@@ -1879,7 +2162,7 @@ void tst_QSettings::testEmptyData()
         settings.setValue("vList", vList);
         settings.setValue("vList2", vList2);
         settings.setValue("vList3", vList3);
-        QVERIFY(settings.status() == QSettings::NoError);
+        QCOMPARE(settings.status(), QSettings::NoError);
     }
     {
         QSettings settings(filename, QSettings::IniFormat);
@@ -1892,11 +2175,11 @@ void tst_QSettings::testEmptyData()
         QCOMPARE(settings.value("vList").toList(), vList);
         QCOMPARE(settings.value("vList2").toList(), vList2);
         QCOMPARE(settings.value("vList3").toList(), vList3);
-        QVERIFY(settings.status() == QSettings::NoError);
+        QCOMPARE(settings.status(), QSettings::NoError);
     }
 
     {
-        QSettings settings("Trolltech", "tst_qsettings");
+        QSettings settings("QtProject", "tst_qsettings");
         settings.setValue("nullString", nullString);
         settings.setValue("emptyString", emptyString);
         settings.setValue("emptyList", emptyList);
@@ -1906,10 +2189,10 @@ void tst_QSettings::testEmptyData()
         settings.setValue("vList", vList);
         settings.setValue("vList2", vList2);
         settings.setValue("vList3", vList3);
-        QVERIFY(settings.status() == QSettings::NoError);
+        QCOMPARE(settings.status(), QSettings::NoError);
     }
     {
-        QSettings settings("Trolltech", "tst_qsettings");
+        QSettings settings("QtProject", "tst_qsettings");
         QCOMPARE(settings.value("nullString").toString(), nullString);
         QCOMPARE(settings.value("emptyString").toString(), emptyString);
         QCOMPARE(settings.value("emptyList").toStringList(), emptyList);
@@ -1919,26 +2202,111 @@ void tst_QSettings::testEmptyData()
         QCOMPARE(settings.value("vList").toList(), vList);
         QCOMPARE(settings.value("vList2").toList(), vList2);
         QCOMPARE(settings.value("vList3").toList(), vList3);
-        QVERIFY(settings.status() == QSettings::NoError);
+        QCOMPARE(settings.status(), QSettings::NoError);
     }
     QFile::remove(filename);
+}
+
+void tst_QSettings::testEmptyKey()
+{
+    QSettings settings;
+    QTest::ignoreMessage(QtWarningMsg, "QSettings::value: Empty key passed");
+    const QVariant value = settings.value(QString());
+    QCOMPARE(value, QVariant());
+    QTest::ignoreMessage(QtWarningMsg, "QSettings::setValue: Empty key passed");
+    settings.setValue(QString(), value);
 }
 
 void tst_QSettings::testResourceFiles()
 {
     QSettings settings(":/resourcefile.ini", QSettings::IniFormat);
-    QVERIFY(settings.status() == QSettings::NoError);
+    QCOMPARE(settings.status(), QSettings::NoError);
     QVERIFY(!settings.isWritable());
     QCOMPARE(settings.value("Field 1/Bottom").toInt(), 89);
     settings.setValue("Field 1/Bottom", 90);
 
     // the next two lines check the statu quo; another behavior would be possible
-    QVERIFY(settings.status() == QSettings::NoError);
+    QCOMPARE(settings.status(), QSettings::NoError);
     QCOMPARE(settings.value("Field 1/Bottom").toInt(), 90);
 
     settings.sync();
-    QVERIFY(settings.status() == QSettings::AccessError);
+    QCOMPARE(settings.status(), QSettings::AccessError);
     QCOMPARE(settings.value("Field 1/Bottom").toInt(), 90);
+}
+
+void tst_QSettings::testRegistryShortRootNames()
+{
+#ifndef Q_OS_WIN
+    QSKIP("This test is specific to the Windows registry only.");
+#else
+    QVERIFY(QSettings("HKEY_CURRENT_USER", QSettings::NativeFormat).childGroups() == QSettings("HKCU", QSettings::NativeFormat).childGroups());
+    QVERIFY(QSettings("HKEY_LOCAL_MACHINE", QSettings::NativeFormat).childGroups() == QSettings("HKLM", QSettings::NativeFormat).childGroups());
+    QVERIFY(QSettings("HKEY_CLASSES_ROOT", QSettings::NativeFormat).childGroups() == QSettings("HKCR", QSettings::NativeFormat).childGroups());
+    QVERIFY(QSettings("HKEY_USERS", QSettings::NativeFormat).childGroups() == QSettings("HKU", QSettings::NativeFormat).childGroups());
+#endif
+}
+
+void tst_QSettings::testRegistry32And64Bit()
+{
+#if !defined (Q_OS_WIN) || defined(Q_OS_WINRT)
+    QSKIP("This test is specific to the Windows registry.", SkipAll);
+#else
+
+    const QString key("HKEY_LOCAL_MACHINE\\Software");
+    const QString keyWow("HKEY_LOCAL_MACHINE\\Software\\Wow6432Node");
+
+#ifndef Q_OS_WIN64
+    // This branch is taken at compile time if targeting 32-bit; it does not
+    // necessarily mean that the OS running the test is 32-bit (it could be
+    // e.g. 64-bit).
+    QCOMPARE(QSettings(key, QSettings::NativeFormat).childGroups(),
+             QSettings(key, QSettings::Registry32Format).childGroups());
+
+    // Detect whether we are running under 64-bit Windows.
+    typedef BOOL (WINAPI *IsWow64ProcessPtr)(HANDLE hProcess, PBOOL Wow64Process);
+    IsWow64ProcessPtr IsWow64Process = (IsWow64ProcessPtr)QLibrary::resolve(
+                "kernel32.dll", "IsWow64Process");
+
+    if (IsWow64Process) {
+        BOOL IsWow64 = FALSE;
+        if (IsWow64Process(GetCurrentProcess(), &IsWow64) && IsWow64) {
+            // The 64-bit registry's "Wow6432Node" key should match the 32-bit registry.
+            // If we are not on 32-bit Windows, these should never be the same,
+            // because the 64-bit registry has a "Wow6432Node" key.
+            QCOMPARE(QSettings(keyWow, QSettings::Registry64Format).childGroups(),
+                     QSettings(key, QSettings::Registry32Format).childGroups());
+        }
+    }
+#else
+    // This branch is taken at compile time if targeting 64-bit; it does not
+    // necessarily mean that the OS running the test is 64-bit (it could be
+    // e.g. 128-bit).
+    QCOMPARE(QSettings(key, QSettings::NativeFormat).childGroups(),
+             QSettings(key, QSettings::Registry64Format).childGroups());
+
+    // The 64-bit registry's "Wow6432Node" key should match the 32-bit registry.
+    QCOMPARE(QSettings(keyWow, QSettings::Registry64Format).childGroups(),
+             QSettings(key, QSettings::Registry32Format).childGroups());
+#endif
+
+#endif
+}
+
+void tst_QSettings::trailingWhitespace()
+{
+    {
+        QSettings s("tst_QSettings_trailingWhitespace");
+        s.setValue("trailingSpace", "x  ");
+        s.setValue("trailingTab", "x\t");
+        s.setValue("trailingNewline", "x\n");
+    }
+    {
+        QSettings s("tst_QSettings_trailingWhitespace");
+        QCOMPARE(s.value("trailingSpace").toString(), QLatin1String("x  "));
+        QCOMPARE(s.value("trailingTab").toString(), QLatin1String("x\t"));
+        QCOMPARE(s.value("trailingNewline").toString(), QLatin1String("x\n"));
+        s.clear();
+    }
 }
 
 void tst_QSettings::fromFile_data()
@@ -1950,12 +2318,17 @@ void tst_QSettings::fromFile()
 {
     QFETCH(QSettings::Format, format);
 
+    const QString oldCur = QDir::currentPath();
+    QString dataLocation = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QVERIFY(QDir::root().mkpath(dataLocation));
+    QDir::setCurrent(dataLocation);
+
     QFile::remove("foo");
     QVERIFY(!QFile::exists("foo"));
 
     QString path = "foo";
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     if (format == QSettings::NativeFormat)
         path = "\\HKEY_CURRENT_USER\\Software\\foo";
 #endif
@@ -1974,7 +2347,7 @@ void tst_QSettings::fromFile()
         QCOMPARE(settings2.value("alpha").toInt(), 2);
 
         settings1.sync();
-#ifndef Q_OS_WIN
+#if !defined(Q_OS_WIN)
         QVERIFY(QFile::exists("foo"));
 #endif
         QCOMPARE(settings1.value("alpha").toInt(), 2);
@@ -1997,6 +2370,8 @@ void tst_QSettings::fromFile()
         QCOMPARE(settings1.value("gamma/foo.bar").toInt(), 4);
         QCOMPARE(settings1.allKeys().size(), 3);
     }
+
+    QDir::setCurrent(oldCur);
 }
 
 #ifdef QT_BUILD_INTERNAL
@@ -2032,14 +2407,14 @@ void tst_QSettings::setIniCodec()
 
         {
             QFile inFile(settings4.fileName());
-            inFile.open(QIODevice::ReadOnly);
+            inFile.open(QIODevice::ReadOnly | QIODevice::Text);
             actualContents4 = inFile.readAll();
             inFile.close();
         }
 
         {
             QFile inFile(settings5.fileName());
-            inFile.open(QIODevice::ReadOnly);
+            inFile.open(QIODevice::ReadOnly | QIODevice::Text);
             actualContents5 = inFile.readAll();
             inFile.close();
         }
@@ -2047,9 +2422,6 @@ void tst_QSettings::setIniCodec()
 
     QConfFile::clearCache();
 
-#ifdef Q_OS_WIN
-    QEXPECT_FAIL("", "QTBUG-25446", Abort);
-#endif
     QCOMPARE(actualContents4, expeContents4);
     QCOMPARE(actualContents5, expeContents5);
 
@@ -2338,7 +2710,6 @@ void tst_QSettings::testArrays()
     }
     settings2.endArray();
 
-#if !defined (Q_OS_BLACKBERRY)
     size1 = settings1.beginReadArray("strings");
     QCOMPARE(size1, 3);
 
@@ -2349,7 +2720,6 @@ void tst_QSettings::testArrays()
         QCOMPARE(str, fiveStrings.at(i));
     }
     settings1.endArray();
-#endif
 }
 
 #ifdef QT_BUILD_INTERNAL
@@ -2408,7 +2778,7 @@ QString escapeWeirdChars(const QString &s)
         QChar c = s.at(i);
         if (c.unicode() < ' ' || c.unicode() > '~'
             || (escapeNextDigit && c.unicode() >= '0' && c.unicode() <= 'f')) {
-            result += QString("\\x%1").arg(c.unicode(), 0, 16);
+            result += QLatin1String("\\x") + QString::number(c.unicode(), 16);
             escapeNextDigit = true;
         } else {
             result += c;
@@ -2459,7 +2829,7 @@ void tst_QSettings::testEscapes()
         QString s = QSettingsPrivate::variantToString(v); \
         QCOMPARE(s, escStr); \
         QCOMPARE(QVariant(QSettingsPrivate::stringToVariant(escStr)), v); \
-        QVERIFY(val == v.func()); \
+        QVERIFY((val) == v.func());                                     \
     }
 
 #define testBadEscape(escStr, vStr) \
@@ -2732,10 +3102,22 @@ void tst_QSettings::isWritable()
         QSettings s1(format, QSettings::SystemScope, "software.org", "KillerAPP");
         QSettings s2(format, QSettings::SystemScope, "software.org", "Something Different");
         QSettings s3(format, QSettings::SystemScope, "foo.org", "Something Different");
-        if (s1.contains("foo")) {
+
+        if (s1.status() == QSettings::NoError && s1.contains("foo")) {
+#if defined(Q_OS_MACX)
+            QVERIFY(s1.isWritable());
+            if (format == QSettings::NativeFormat) {
+                QVERIFY(!s2.isWritable());
+                QVERIFY(!s3.isWritable());
+            } else {
+                QVERIFY(s2.isWritable());
+                QVERIFY(s3.isWritable());
+            }
+#else
             QVERIFY(s1.isWritable());
             QVERIFY(s2.isWritable());
             QVERIFY(s3.isWritable());
+#endif
         } else {
             QVERIFY(!s1.isWritable());
             QVERIFY(!s2.isWritable());
@@ -2756,8 +3138,10 @@ void tst_QSettings::childGroups()
 {
     QFETCH(QSettings::Format, format);
 
+    const QSettings::Scope scope = m_canWriteNativeSystemSettings ? QSettings::SystemScope : QSettings::UserScope;
+
     {
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         settings.setValue("alpha", "1");
         settings.setValue("alpha/a", "2");
         settings.setValue("alpha/b", "3");
@@ -2774,7 +3158,7 @@ void tst_QSettings::childGroups()
 
     for (int pass = 0; pass < 3; ++pass) {
         QConfFile::clearCache();
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         settings.setFallbacksEnabled(false);
         if (pass == 1) {
             settings.value("gamma/d");
@@ -2783,7 +3167,9 @@ void tst_QSettings::childGroups()
         }
 
         settings.beginGroup("gamma");
-        QCOMPARE(settings.childGroups(), QStringList() << "d" << "f");
+        QStringList childGroups = settings.childGroups();
+        childGroups.sort();
+        QCOMPARE(childGroups, QStringList() << "d" << "f");
         settings.beginGroup("d");
         QCOMPARE(settings.childGroups(), QStringList());
         settings.endGroup();
@@ -2798,14 +3184,20 @@ void tst_QSettings::childGroups()
         settings.endGroup();
 
         settings.beginGroup("/omicron///h/i///");
-        QCOMPARE(settings.childGroups(), QStringList() << "j" << "k");
+        childGroups = settings.childGroups();
+        childGroups.sort();
+        QCOMPARE(childGroups, QStringList() << "j" << "k");
         settings.endGroup();
 
         settings.beginGroup("////");
-        QCOMPARE(settings.childGroups(), QStringList() << "alpha" << "gamma" << "omicron" << "zeta");
+        childGroups = settings.childGroups();
+        childGroups.sort();
+        QCOMPARE(childGroups, QStringList() << "alpha" << "gamma" << "omicron" << "zeta");
         settings.endGroup();
 
-        QCOMPARE(settings.childGroups(), QStringList() << "alpha" << "gamma" << "omicron" << "zeta");
+        childGroups = settings.childGroups();
+        childGroups.sort();
+        QCOMPARE(childGroups, QStringList() << "alpha" << "gamma" << "omicron" << "zeta");
     }
 }
 #endif
@@ -2822,8 +3214,10 @@ void tst_QSettings::childKeys()
 {
     QFETCH(QSettings::Format, format);
 
+    const QSettings::Scope scope = m_canWriteNativeSystemSettings ? QSettings::SystemScope : QSettings::UserScope;
+
     {
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         settings.setValue("alpha", "1");
         settings.setValue("alpha/a", "2");
         settings.setValue("alpha/b", "3");
@@ -2840,7 +3234,7 @@ void tst_QSettings::childKeys()
 
     for (int pass = 0; pass < 3; ++pass) {
         QConfFile::clearCache();
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         settings.setFallbacksEnabled(false);
         if (pass == 1) {
             settings.value("gamma/d");
@@ -2856,7 +3250,9 @@ void tst_QSettings::childKeys()
         settings.endGroup();
 
         settings.beginGroup("alpha");
-        QCOMPARE(settings.childKeys(), QStringList() << "a" << "b" << "c");
+        QStringList childKeys = settings.childKeys();
+        childKeys.sort();
+        QCOMPARE(childKeys, QStringList() << "a" << "b" << "c");
         settings.endGroup();
 
         settings.beginGroup("d");
@@ -2868,10 +3264,14 @@ void tst_QSettings::childKeys()
         settings.endGroup();
 
         settings.beginGroup("////");
-        QCOMPARE(settings.childKeys(), QStringList() << "alpha" << "beta" << "gamma");
+        childKeys = settings.childKeys();
+        childKeys.sort();
+        QCOMPARE(childKeys, QStringList() << "alpha" << "beta" << "gamma");
         settings.endGroup();
 
-        QCOMPARE(settings.childKeys(), QStringList() << "alpha" << "beta" << "gamma");
+        childKeys = settings.childKeys();
+        childKeys.sort();
+        QCOMPARE(childKeys, QStringList() << "alpha" << "beta" << "gamma");
     }
 }
 #endif
@@ -2892,15 +3292,17 @@ void tst_QSettings::allKeys()
     allKeys << "alpha" << "alpha/a" << "alpha/b" << "alpha/c" << "beta" << "gamma" << "gamma/d"
             << "gamma/d/e" << "gamma/f/g" << "omicron/h/i/j/x" << "omicron/h/i/k/y" << "zeta/z";
 
+    const QSettings::Scope scope = m_canWriteNativeSystemSettings ? QSettings::SystemScope : QSettings::UserScope;
+
     {
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         for (int i = 0; i < allKeys.size(); ++i)
             settings.setValue(allKeys.at(i), QString::number(i + 1));
     }
 
     for (int pass = 0; pass < 3; ++pass) {
         QConfFile::clearCache();
-        QSettings settings(format, QSettings::SystemScope, "software.org");
+        QSettings settings(format, scope, "software.org");
         settings.setFallbacksEnabled(false);
 
         if (pass == 1) {
@@ -2910,14 +3312,18 @@ void tst_QSettings::allKeys()
         }
 
         settings.beginGroup("gamma");
-        QCOMPARE(settings.allKeys(), QStringList() << "d" << "d/e" << "f/g");
+        QStringList keys = settings.allKeys();
+        keys.sort();
+        QCOMPARE(keys, QStringList() << "d" << "d/e" << "f/g");
         settings.beginGroup("d");
         QCOMPARE(settings.allKeys(), QStringList() << "e");
         settings.endGroup();
         settings.endGroup();
 
         settings.beginGroup("alpha");
-        QCOMPARE(settings.allKeys(), QStringList() << "a" << "b" << "c");
+        keys = settings.allKeys();
+        keys.sort();
+        QCOMPARE(keys, QStringList() << "a" << "b" << "c");
         settings.endGroup();
 
         settings.beginGroup("d");
@@ -2925,14 +3331,20 @@ void tst_QSettings::allKeys()
         settings.endGroup();
 
         settings.beginGroup("/omicron///h/i///");
-        QCOMPARE(settings.allKeys(), QStringList() << "j/x" << "k/y");
+        keys = settings.allKeys();
+        keys.sort();
+        QCOMPARE(keys, QStringList() << "j/x" << "k/y");
         settings.endGroup();
 
         settings.beginGroup("////");
-        QCOMPARE(settings.allKeys(), allKeys);
+        keys = settings.allKeys();
+        keys.sort();
+        QCOMPARE(keys, allKeys);
         settings.endGroup();
 
-        QCOMPARE(settings.allKeys(), allKeys);
+        keys = settings.allKeys();
+        keys.sort();
+        QCOMPARE(keys, allKeys);
     }
 }
 #endif
@@ -2952,7 +3364,7 @@ void tst_QSettings::registerFormat()
     // so we can test error handling
 
     QSettings::Format custom3 = QSettings::registerFormat("custom3", readCustom3File, writeCustom3File);
-    QVERIFY(custom3 == QSettings::CustomFormat3);
+    QCOMPARE(custom3, QSettings::CustomFormat3);
 
     QDir dir(settingsPath());
     QVERIFY(dir.mkpath("someDir"));
@@ -3022,7 +3434,6 @@ void tst_QSettings::setPath()
         path checks that it has no bad side effects.
     */
     for (int i = 0; i < 2; ++i) {
-#if !defined(Q_OS_BLACKBERRY)
 #if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
         TEST_PATH(i == 0, "conf", NativeFormat, UserScope, "alpha")
         TEST_PATH(i == 0, "conf", NativeFormat, SystemScope, "beta")
@@ -3033,34 +3444,28 @@ void tst_QSettings::setPath()
         TEST_PATH(i == 0, "custom1", CustomFormat1, SystemScope, "zeta")
         TEST_PATH(i == 0, "custom2", CustomFormat2, UserScope, "eta")
         TEST_PATH(i == 0, "custom2", CustomFormat2, SystemScope, "iota")
-#else // Q_OS_BLACKBERRY: no system scope
-        TEST_PATH(i == 0, "conf", NativeFormat, UserScope, "alpha")
-        TEST_PATH(i == 0, "ini", IniFormat, UserScope, "gamma")
-        TEST_PATH(i == 0, "custom1", CustomFormat1, UserScope, "epsilon")
-        TEST_PATH(i == 0, "custom2", CustomFormat2, UserScope, "eta")
-#endif
     }
 }
 
 void tst_QSettings::setDefaultFormat()
 {
-    QVERIFY(QSettings::defaultFormat() == QSettings::NativeFormat);
+    QCOMPARE(QSettings::defaultFormat(), QSettings::NativeFormat);
 
     QSettings::setDefaultFormat(QSettings::CustomFormat1);
     QSettings settings1("org", "app");
     QSettings settings2(QSettings::SystemScope, "org", "app");
     QSettings settings3;
 
-    QVERIFY(settings1.format() == QSettings::NativeFormat);
-    QVERIFY(settings2.format() == QSettings::NativeFormat);
-    QVERIFY(settings3.format() == QSettings::CustomFormat1);
+    QCOMPARE(settings1.format(), QSettings::NativeFormat);
+    QCOMPARE(settings2.format(), QSettings::NativeFormat);
+    QCOMPARE(settings3.format(), QSettings::CustomFormat1);
 
     QSettings::setDefaultFormat(QSettings::NativeFormat);
-    QVERIFY(QSettings::defaultFormat() == QSettings::NativeFormat);
+    QCOMPARE(QSettings::defaultFormat(), QSettings::NativeFormat);
 
-    QVERIFY(settings1.format() == QSettings::NativeFormat);
-    QVERIFY(settings2.format() == QSettings::NativeFormat);
-    QVERIFY(settings3.format() == QSettings::CustomFormat1);
+    QCOMPARE(settings1.format(), QSettings::NativeFormat);
+    QCOMPARE(settings2.format(), QSettings::NativeFormat);
+    QCOMPARE(settings3.format(), QSettings::CustomFormat1);
 }
 
 void tst_QSettings::dontCreateNeedlessPaths()
@@ -3115,13 +3520,13 @@ void tst_QSettings::dontReorderIniKeysNeedlessly()
     QString outFileName2;
 
     QTemporaryFile outFile;
-    outFile.open();
+    QVERIFY2(outFile.open(), qPrintable(outFile.errorString()));
     outFile.write(contentsBefore);
     outFileName = outFile.fileName();
     outFile.close();
 
     QSettings settings(outFileName, QSettings::IniFormat);
-    QVERIFY(settings.status() == QSettings::NoError);
+    QCOMPARE(settings.status(), QSettings::NoError);
     QVERIFY(settings.isWritable());
 
     settings.setValue("Field 1/Bottom", 90);
@@ -3146,6 +3551,11 @@ void tst_QSettings::rainersSyncBugOnMac_data()
 void tst_QSettings::rainersSyncBugOnMac()
 {
     QFETCH(QSettings::Format, format);
+
+#if defined(Q_OS_DARWIN) || defined(Q_OS_WINRT)
+    if (format == QSettings::NativeFormat)
+        QSKIP("Apple OSes do not support direct reads from and writes to .plist files, due to caching and background syncing. See QTBUG-34899.");
+#endif
 
     QString fileName;
 
@@ -3177,7 +3587,7 @@ void tst_QSettings::recursionBug()
     }
 }
 
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
 
 static DWORD readKeyType(HKEY handle, const QString &rSubKey)
 {
@@ -3235,6 +3645,78 @@ void tst_QSettings::consistentRegistryStorage()
     }
 }
 #endif
+
+#if defined(QT_BUILD_INTERNAL) && defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN) && !defined(Q_OS_ANDROID) && !defined(QT_NO_STANDARDPATHS)
+QT_BEGIN_NAMESPACE
+extern void clearDefaultPaths();
+QT_END_NAMESPACE
+#endif
+void tst_QSettings::testXdg()
+{
+#if defined(QT_BUILD_INTERNAL) && defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN) && !defined(Q_OS_ANDROID) && !defined(QT_NO_STANDARDPATHS)
+    // Note: The XDG_CONFIG_DIRS test must be done before overriding the system path
+    // by QSettings::setPath/setSystemIniPath (used in cleanupTestFiles()).
+    clearDefaultPaths();
+
+    // Initialize the env. variable & populate testing files.
+    const QStringList config_dirs = { settingsPath("xdg_1st"), settingsPath("xdg_2nd"), settingsPath("xdg_3rd") };
+    qputenv("XDG_CONFIG_DIRS", config_dirs.join(':').toUtf8());
+    QList<QSettings *> xdg_orgs, xdg_apps;
+    for (const auto & dir : config_dirs) {
+        xdg_orgs << new QSettings{dir + "/software.org.conf", QSettings::NativeFormat};
+        xdg_apps << new QSettings{dir + "/software.org/KillerAPP.conf", QSettings::NativeFormat};
+    }
+    Q_ASSERT(config_dirs.size() == 3 && xdg_orgs.size() == 3 && xdg_apps.size() == 3);
+    for (int i = 0; i < 3; ++i) {
+        xdg_orgs[i]->setValue("all", QString{"all_org%1"}.arg(i));
+        xdg_apps[i]->setValue("all", QString{"all_app%1"}.arg(i));
+        xdg_orgs[i]->setValue("all_only_org", QString{"all_only_org%1"}.arg(i));
+        xdg_apps[i]->setValue("all_only_app", QString{"all_only_app%1"}.arg(i));
+
+        if (i > 0) {
+            xdg_orgs[i]->setValue("from2nd", QString{"from2nd_org%1"}.arg(i));
+            xdg_apps[i]->setValue("from2nd", QString{"from2nd_app%1"}.arg(i));
+            xdg_orgs[i]->setValue("from2nd_only_org", QString{"from2nd_only_org%1"}.arg(i));
+            xdg_apps[i]->setValue("from2nd_only_app", QString{"from2nd_only_app%1"}.arg(i));
+        }
+
+        if (i > 1) {
+            xdg_orgs[i]->setValue("from3rd", QString{"from3rd_org%1"}.arg(i));
+            xdg_apps[i]->setValue("from3rd", QString{"from3rd_app%1"}.arg(i));
+            xdg_orgs[i]->setValue("from3rd_only_org", QString{"from3rd_only_org%1"}.arg(i));
+            xdg_apps[i]->setValue("from3rd_only_app", QString{"from3rd_only_app%1"}.arg(i));
+        }
+    }
+    qDeleteAll(xdg_apps);
+    qDeleteAll(xdg_orgs);
+
+    // Do the test.
+    QSettings app{QSettings::SystemScope, "software.org", "KillerAPP"}, org{QSettings::SystemScope, "software.org"};
+
+    QVERIFY(app.value("all").toString() == "all_app0");
+    QVERIFY(org.value("all").toString() == "all_org0");
+    QVERIFY(app.value("all_only_org").toString() == "all_only_org0");
+    QVERIFY(org.value("all_only_org").toString() == "all_only_org0");
+    QVERIFY(app.value("all_only_app").toString() == "all_only_app0");
+    QVERIFY(org.value("all_only_app").toString() == QString{});
+
+    QVERIFY(app.value("from2nd").toString() == "from2nd_app1");
+    QVERIFY(org.value("from2nd").toString() == "from2nd_org1");
+    QVERIFY(app.value("from2nd_only_org").toString() == "from2nd_only_org1");
+    QVERIFY(org.value("from2nd_only_org").toString() == "from2nd_only_org1");
+    QVERIFY(app.value("from2nd_only_app").toString() == "from2nd_only_app1");
+    QVERIFY(org.value("from2nd_only_app").toString() == QString{});
+
+    QVERIFY(app.value("from3rd").toString() == "from3rd_app2");
+    QVERIFY(org.value("from3rd").toString() == "from3rd_org2");
+    QVERIFY(app.value("from3rd_only_org").toString() == "from3rd_only_org2");
+    QVERIFY(org.value("from3rd_only_org").toString() == "from3rd_only_org2");
+    QVERIFY(app.value("from3rd_only_app").toString() == "from3rd_only_app2");
+    QVERIFY(org.value("from3rd_only_app").toString() == QString{});
+#else
+    QSKIP("This test is performed in QT_BUILD_INTERNAL on Q_XDG_PLATFORM with use of standard paths only.");
+#endif
+}
 
 QTEST_MAIN(tst_QSettings)
 #include "tst_qsettings.moc"

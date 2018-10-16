@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,24 +40,53 @@
 
 #include "qtextimagehandler_p.h"
 
-#include <qcoreapplication.h>
+#include <qguiapplication.h>
 #include <qtextformat.h>
 #include <qpainter.h>
 #include <qdebug.h>
+#include <qfile.h>
 #include <private/qtextengine_p.h>
 #include <qpalette.h>
 #include <qthread.h>
 
 QT_BEGIN_NAMESPACE
 
-static QPixmap getPixmap(QTextDocument *doc, const QTextImageFormat &format)
+extern QString qt_findAtNxFile(const QString &baseFileName, qreal targetDevicePixelRatio,
+                               qreal *sourceDevicePixelRatio);
+static QString resolveFileName(QString fileName, QUrl *url, qreal targetDevicePixelRatio,
+                               qreal *sourceDevicePixelRatio)
+{
+    // We might use the fileName for loading if url loading fails
+    // try to make sure it is a valid file path.
+    // Also, QFile{Info}::exists works only on filepaths (not urls)
+
+    if (url->isValid()) {
+      if (url->scheme() == QLatin1String("qrc")) {
+        fileName = fileName.right(fileName.length() - 3);
+      }
+      else if (url->scheme() == QLatin1String("file")) {
+        fileName = url->toLocalFile();
+      }
+    }
+
+    if (targetDevicePixelRatio <= 1.0)
+        return fileName;
+
+    // try to find a Nx version
+    return qt_findAtNxFile(fileName, targetDevicePixelRatio, sourceDevicePixelRatio);
+}
+
+
+static QPixmap getPixmap(QTextDocument *doc, const QTextImageFormat &format, const qreal devicePixelRatio = 1.0)
 {
     QPixmap pm;
 
     QString name = format.name();
-    if (name.startsWith(QLatin1String(":/"))) // auto-detect resources
+    if (name.startsWith(QLatin1String(":/"))) // auto-detect resources and convert them to url
         name.prepend(QLatin1String("qrc"));
     QUrl url = QUrl(name);
+    qreal sourcePixelRatio = 1.0;
+    name = resolveFileName(name, &url, devicePixelRatio, &sourcePixelRatio);
     const QVariant data = doc->resource(QTextDocument::ImageResource, url);
     if (data.type() == QVariant::Pixmap || data.type() == QVariant::Image) {
         pm = qvariant_cast<QPixmap>(data);
@@ -68,22 +95,24 @@ static QPixmap getPixmap(QTextDocument *doc, const QTextImageFormat &format)
     }
 
     if (pm.isNull()) {
-        QString context;
 #if 0
+        QString context;
         // ### Qt5
         QTextBrowser *browser = qobject_cast<QTextBrowser *>(doc->parent());
         if (browser)
             context = browser->source().toString();
 #endif
+        // try direct loading
         QImage img;
-        if (img.isNull()) { // try direct loading
-            name = format.name(); // remove qrc:/ prefix again
-            if (name.isEmpty() || !img.load(name))
-                return QPixmap(QLatin1String(":/qt-project.org/styles/commonstyle/images/file-16.png"));
-        }
+        if (name.isEmpty() || !img.load(name))
+            return QPixmap(QLatin1String(":/qt-project.org/styles/commonstyle/images/file-16.png"));
+
         pm = QPixmap::fromImage(img);
         doc->addResource(QTextDocument::ImageResource, url, pm);
     }
+
+    if (name.contains(QLatin1String("@2x")))
+        pm.setDevicePixelRatio(sourcePixelRatio);
 
     return pm;
 }
@@ -100,17 +129,20 @@ static QSize getPixmapSize(QTextDocument *doc, const QTextImageFormat &format)
     QSize size(width, height);
     if (!hasWidth || !hasHeight) {
         pm = getPixmap(doc, format);
+        const int pmWidth = pm.width() / pm.devicePixelRatio();
+        const int pmHeight = pm.height() / pm.devicePixelRatio();
+
         if (!hasWidth) {
             if (!hasHeight)
-                size.setWidth(pm.width());
+                size.setWidth(pmWidth);
             else
-                size.setWidth(qRound(height * (pm.width() / (qreal) pm.height())));
+                size.setWidth(qRound(height * (pmWidth / (qreal) pmHeight)));
         }
         if (!hasHeight) {
             if (!hasWidth)
-                size.setHeight(pm.height());
+                size.setHeight(pmHeight);
             else
-                size.setHeight(qRound(width * (pm.height() / (qreal) pm.width())));
+                size.setHeight(qRound(width * (pmHeight / (qreal) pmWidth)));
         }
     }
 
@@ -127,7 +159,7 @@ static QSize getPixmapSize(QTextDocument *doc, const QTextImageFormat &format)
     return size;
 }
 
-static QImage getImage(QTextDocument *doc, const QTextImageFormat &format)
+static QImage getImage(QTextDocument *doc, const QTextImageFormat &format, const qreal devicePixelRatio = 1.0)
 {
     QImage image;
 
@@ -135,6 +167,8 @@ static QImage getImage(QTextDocument *doc, const QTextImageFormat &format)
     if (name.startsWith(QLatin1String(":/"))) // auto-detect resources
         name.prepend(QLatin1String("qrc"));
     QUrl url = QUrl(name);
+    qreal sourcePixelRatio = 1.0;
+    name = resolveFileName(name, &url, devicePixelRatio, &sourcePixelRatio);
     const QVariant data = doc->resource(QTextDocument::ImageResource, url);
     if (data.type() == QVariant::Image) {
         image = qvariant_cast<QImage>(data);
@@ -143,21 +177,23 @@ static QImage getImage(QTextDocument *doc, const QTextImageFormat &format)
     }
 
     if (image.isNull()) {
-        QString context;
-
 #if 0
+        QString context;
         // ### Qt5
         QTextBrowser *browser = qobject_cast<QTextBrowser *>(doc->parent());
         if (browser)
             context = browser->source().toString();
 #endif
-        if (image.isNull()) { // try direct loading
-            name = format.name(); // remove qrc:/ prefix again
-            if (name.isEmpty() || !image.load(name))
-                return QImage(QLatin1String(":/qt-project.org/styles/commonstyle/images/file-16.png"));
-        }
+        // try direct loading
+
+        if (name.isEmpty() || !image.load(name))
+            return QImage(QLatin1String(":/qt-project.org/styles/commonstyle/images/file-16.png"));
+
         doc->addResource(QTextDocument::ImageResource, url, image);
     }
+
+    if (sourcePixelRatio != 1.0)
+        image.setDevicePixelRatio(sourcePixelRatio);
 
     return image;
 }
@@ -175,9 +211,9 @@ static QSize getImageSize(QTextDocument *doc, const QTextImageFormat &format)
     if (!hasWidth || !hasHeight) {
         image = getImage(doc, format);
         if (!hasWidth)
-            size.setWidth(image.width());
+            size.setWidth(image.width() / image.devicePixelRatio());
         if (!hasHeight)
-            size.setHeight(image.height());
+            size.setHeight(image.height() / image.devicePixelRatio());
     }
 
     qreal scale = 1.0;
@@ -221,10 +257,10 @@ void QTextImageHandler::drawObject(QPainter *p, const QRectF &rect, QTextDocumen
         const QTextImageFormat imageFormat = format.toImageFormat();
 
     if (QCoreApplication::instance()->thread() != QThread::currentThread()) {
-        const QImage image = getImage(doc, imageFormat);
+        const QImage image = getImage(doc, imageFormat, p->device()->devicePixelRatioF());
         p->drawImage(rect, image, image.rect());
     } else {
-        const QPixmap pixmap = getPixmap(doc, imageFormat);
+        const QPixmap pixmap = getPixmap(doc, imageFormat, p->device()->devicePixelRatioF());
         p->drawPixmap(rect, pixmap, pixmap.rect());
     }
 }

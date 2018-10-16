@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -37,10 +37,9 @@
     drawing, ensuring that they look exactly like the equivalent
     native widgets.
 
-    Qt comes with a selection of built-in styles. Some styles are only
-    available on specific platforms (such as the Mac, GTK+ and Windows
-    Vista styles). Custom styles are made available as plugins or by
-    creating an instance of a specific style class with
+    Qt comes with a selection of built-in styles. Certain styles are only
+    available on specific platforms. Custom styles are made available as
+    plugins or by creating an instance of a specific style class with
     QStyleFactory::create() and setting it with QApplication::setStyle().
 
     \section1 Customizing a Style
@@ -84,7 +83,7 @@
 
     \annotatedlist appearance
 
-    \section1 The QStyle implementation
+    \section1 The QStyle Implementation
 
     The API of QStyle contains functions that draw the widgets, static
     helper functions to do common and difficult tasks (e.g.,
@@ -115,7 +114,7 @@
 
     The widget is passed as the last argument in case the style needs
     it to perform special effects (such as animated default buttons on
-    Mac OS X), but it isn't mandatory.
+    \macos), but it isn't mandatory.
 
     In the course of this section, we will look at the style elements,
     the style options, and the functions of QStyle. Finally, we describe
@@ -989,9 +988,7 @@
     The style option for tabs (QStyleOptionTab) contains the necessary
     information for drawing tabs. The option contains the position of
     the tab in the tab bar, the position of the selected tab, the
-    shape of the tab, the text, and the icon. After Qt 4.1, the option
-    should be cast to a QStyleOptionTabV2, which also contains the
-    icon's size.
+    shape of the tab, the text, the icon, and the icon's size.
 
     As the Java style tabs don't overlap, we also present an image of
     a tab widget in the common style. Note that if you want the tabs
@@ -1024,7 +1021,7 @@
     Note that individual tabs may be disabled even if the tab bar
     is not. The tab will be active if the tab bar is active.
 
-    Here follows a table of QStyleOptionTabV2's members:
+    Here follows a table of QStyleOptionTab's members:
 
     \table 90%
         \header
@@ -1450,7 +1447,7 @@
             \li Content
         \row
             \li features
-            \li Flags of the QStyleOptionFrameV2::FrameFeatures
+            \li Flags of the QStyleOptionFrame::FrameFeatures
                enum describing the frame of the group box.
         \row
             \li lineWidth
@@ -1501,7 +1498,7 @@
 
     \image javastyle/progressbarimage.png
 
-    The style option for QProgressBar is QStyleOptionProgressBarV2.
+    The style option for QProgressBar is QStyleOptionProgressBar.
     The bar does not set any state flags, but the other members of the
     option are:
 
@@ -1632,7 +1629,7 @@
     toolbars with equal orientation (vertical or horizontal) placed
     next to each other.
 
-    \l{QToolbar}{QToolbar}s in Qt consist of three elements:
+    \l{QToolBar}{Toolbars} in Qt consist of three elements:
     \c CE_ToolBar, \c PE_IndicatorToolBarHandle, and
     \c PE_IndicatorToolBarSeparator. It is QMainWindowLayout that
     calculates the bounding rectangles (i.e., position and size of the
@@ -1647,7 +1644,7 @@
     The dotted lines indicate that the QToolBar keeps an instance of
     QToolBarLayout and that QToolBarSeparators are kept by
     QToolBarLayout. When the toolbar is floating (i.e., has its own
-    window) the \c PE_FrameMenu element is drawn, else QToolbar draws
+    window) the \c PE_FrameMenu element is drawn, else QToolBar draws
     \c CE_ToolBar.
 
     Here is an image of a toolbar in the Java style:

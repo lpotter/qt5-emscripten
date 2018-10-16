@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,47 +40,135 @@
 #ifndef QWINDOWSEGLCONTEXT_H
 #define QWINDOWSEGLCONTEXT_H
 
-#include <QtPlatformSupport/private/qeglplatformcontext_p.h>
-#include <QSharedPointer>
+#include "qwindowsopenglcontext.h"
+#include "qwindowsopengltester.h"
+#include <EGL/egl.h>
 
 QT_BEGIN_NAMESPACE
 
-class QWindowsEGLStaticContext
+struct QWindowsLibEGL
+{
+    bool init();
+
+    EGLint (EGLAPIENTRY * eglGetError)(void);
+    EGLDisplay (EGLAPIENTRY * eglGetDisplay)(EGLNativeDisplayType display_id);
+    EGLBoolean (EGLAPIENTRY * eglInitialize)(EGLDisplay dpy, EGLint *major, EGLint *minor);
+    EGLBoolean (EGLAPIENTRY * eglTerminate)(EGLDisplay dpy);
+    EGLBoolean (EGLAPIENTRY * eglChooseConfig)(EGLDisplay dpy, const EGLint *attrib_list,
+                                               EGLConfig *configs, EGLint config_size,
+                                               EGLint *num_config);
+    EGLBoolean (EGLAPIENTRY * eglGetConfigAttrib)(EGLDisplay dpy, EGLConfig config,
+                                                  EGLint attribute, EGLint *value);
+    EGLSurface (EGLAPIENTRY * eglCreateWindowSurface)(EGLDisplay dpy, EGLConfig config,
+                                                      EGLNativeWindowType win,
+                                                      const EGLint *attrib_list);
+    EGLSurface (EGLAPIENTRY * eglCreatePbufferSurface)(EGLDisplay dpy, EGLConfig config,
+                                                       const EGLint *attrib_list);
+    EGLBoolean (EGLAPIENTRY * eglDestroySurface)(EGLDisplay dpy, EGLSurface surface);
+    EGLBoolean (EGLAPIENTRY * eglBindAPI)(EGLenum api);
+    EGLBoolean (EGLAPIENTRY * eglSwapInterval)(EGLDisplay dpy, EGLint interval);
+    EGLContext (EGLAPIENTRY * eglCreateContext)(EGLDisplay dpy, EGLConfig config,
+                                                EGLContext share_context,
+                                                const EGLint *attrib_list);
+    EGLBoolean (EGLAPIENTRY * eglDestroyContext)(EGLDisplay dpy, EGLContext ctx);
+    EGLBoolean (EGLAPIENTRY * eglMakeCurrent)(EGLDisplay dpy, EGLSurface draw,
+                                              EGLSurface read, EGLContext ctx);
+    EGLContext (EGLAPIENTRY * eglGetCurrentContext)(void);
+    EGLSurface (EGLAPIENTRY * eglGetCurrentSurface)(EGLint readdraw);
+    EGLDisplay (EGLAPIENTRY * eglGetCurrentDisplay)(void);
+    EGLBoolean (EGLAPIENTRY * eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
+    QFunctionPointer (EGLAPIENTRY *eglGetProcAddress)(const char *procname);
+
+    EGLDisplay (EGLAPIENTRY * eglGetPlatformDisplayEXT)(EGLenum platform, void *native_display, const EGLint *attrib_list);
+
+private:
+#if !defined(QT_STATIC) || defined(QT_OPENGL_DYNAMIC)
+    void *resolve(const char *name);
+    HMODULE m_lib;
+#endif
+};
+
+struct QWindowsLibGLESv2
+{
+    bool init();
+
+#if !defined(QT_STATIC) || defined(QT_OPENGL_DYNAMIC)
+    void *moduleHandle() const { return m_lib; }
+#else
+    void *moduleHandle() const { return nullptr; }
+#endif
+
+    const GLubyte * (APIENTRY * glGetString)(GLenum name);
+
+#if !defined(QT_STATIC) || defined(QT_OPENGL_DYNAMIC)
+    void *resolve(const char *name);
+private:
+    HMODULE m_lib;
+#endif
+};
+
+class QWindowsEGLStaticContext : public QWindowsStaticOpenGLContext
 {
     Q_DISABLE_COPY(QWindowsEGLStaticContext)
+
 public:
-    static QWindowsEGLStaticContext *create();
-    ~QWindowsEGLStaticContext();
+    static QWindowsEGLStaticContext *create(QWindowsOpenGLTester::Renderers preferredType);
+    ~QWindowsEGLStaticContext() override;
 
     EGLDisplay display() const { return m_display; }
 
+    QWindowsOpenGLContext *createContext(QOpenGLContext *context) override;
+    void *moduleHandle() const override { return libGLESv2.moduleHandle(); }
+    QOpenGLContext::OpenGLModuleType moduleType() const override { return QOpenGLContext::LibGLES; }
+
+    void *createWindowSurface(void *nativeWindow, void *nativeConfig, int *err) override;
+    void destroyWindowSurface(void *nativeSurface) override;
+
+    QSurfaceFormat formatFromConfig(EGLDisplay display, EGLConfig config, const QSurfaceFormat &referenceFormat);
+
+    static QWindowsLibEGL libEGL;
+    static QWindowsLibGLESv2 libGLESv2;
+
 private:
-    QWindowsEGLStaticContext(EGLDisplay display, int version);
+    explicit QWindowsEGLStaticContext(EGLDisplay display);
+    static bool initializeAngle(QWindowsOpenGLTester::Renderers preferredType, HDC dc,
+                                EGLDisplay *display, EGLint *major, EGLint *minor);
 
     const EGLDisplay m_display;
-    const int m_version; //! majorVersion<<8 + minorVersion
 };
 
-class QWindowsEGLContext : public QEGLPlatformContext
+class QWindowsEGLContext : public QWindowsOpenGLContext
 {
 public:
-    typedef QSharedPointer<QWindowsEGLStaticContext> QWindowsEGLStaticContextPtr;
-
-    QWindowsEGLContext(const QWindowsEGLStaticContextPtr& staticContext,
+    QWindowsEGLContext(QWindowsEGLStaticContext *staticContext,
                        const QSurfaceFormat &format,
                        QPlatformOpenGLContext *share);
+    ~QWindowsEGLContext() override;
 
-    ~QWindowsEGLContext();
+    bool makeCurrent(QPlatformSurface *surface) override;
+    void doneCurrent() override;
+    void swapBuffers(QPlatformSurface *surface) override;
+    QFunctionPointer getProcAddress(const char *procName) override;
 
-    static bool hasThreadedOpenGLCapability();
+    QSurfaceFormat format() const override { return m_format; }
+    bool isSharing() const override { return m_shareContext != EGL_NO_CONTEXT; }
+    bool isValid() const override { return m_eglContext != EGL_NO_CONTEXT; }
 
-    bool makeCurrent(QPlatformSurface *surface);
-
-protected:
-    EGLSurface eglSurfaceForPlatformSurface(QPlatformSurface *surface);
+    void *nativeContext() const override { return m_eglContext; }
+    void *nativeDisplay() const override { return m_eglDisplay; }
+    void *nativeConfig() const override { return m_eglConfig; }
 
 private:
-    const QWindowsEGLStaticContextPtr m_staticContext;
+    EGLConfig chooseConfig(const QSurfaceFormat &format);
+
+    QWindowsEGLStaticContext *m_staticContext;
+    EGLContext m_eglContext;
+    EGLContext m_shareContext;
+    EGLDisplay m_eglDisplay;
+    EGLConfig m_eglConfig;
+    QSurfaceFormat m_format;
+    EGLenum m_api = EGL_OPENGL_ES_API;
+    int m_swapInterval = -1;
 };
 
 QT_END_NAMESPACE

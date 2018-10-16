@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -43,8 +41,6 @@
 #define QABSTRACTANIMATION_H
 
 #include <QtCore/qobject.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -59,8 +55,7 @@ class QAbstractAnimationPrivate;
 class Q_CORE_EXPORT QAbstractAnimation : public QObject
 {
     Q_OBJECT
-    Q_ENUMS(State)
-    Q_ENUMS(Direction)
+
     Q_PROPERTY(State state READ state NOTIFY stateChanged)
     Q_PROPERTY(int loopCount READ loopCount WRITE setLoopCount)
     Q_PROPERTY(int currentTime READ currentTime WRITE setCurrentTime)
@@ -73,19 +68,21 @@ public:
         Forward,
         Backward
     };
+    Q_ENUM(Direction)
 
     enum State {
         Stopped,
         Paused,
         Running
     };
+    Q_ENUM(State)
 
     enum DeletionPolicy {
         KeepWhenStopped = 0,
         DeleteWhenStopped
     };
 
-    QAbstractAnimation(QObject *parent = 0);
+    QAbstractAnimation(QObject *parent = nullptr);
     virtual ~QAbstractAnimation();
 
     State state() const;
@@ -120,8 +117,8 @@ public Q_SLOTS:
     void setCurrentTime(int msecs);
 
 protected:
-    QAbstractAnimation(QAbstractAnimationPrivate &dd, QObject *parent = 0);
-    bool event(QEvent *event);
+    QAbstractAnimation(QAbstractAnimationPrivate &dd, QObject *parent = nullptr);
+    bool event(QEvent *event) override;
 
     virtual void updateCurrentTime(int currentTime) = 0;
     virtual void updateState(QAbstractAnimation::State newState, QAbstractAnimation::State oldState);
@@ -139,7 +136,7 @@ class Q_CORE_EXPORT QAnimationDriver : public QObject
     Q_DECLARE_PRIVATE(QAnimationDriver)
 
 public:
-    QAnimationDriver(QObject *parent = 0);
+    QAnimationDriver(QObject *parent = nullptr);
     ~QAnimationDriver();
 
     virtual void advance();
@@ -151,6 +148,7 @@ public:
 
     virtual qint64 elapsed() const;
 
+    // ### Qt6: Remove these two functions
     void setStartTime(qint64 startTime);
     qint64 startTime() const;
 
@@ -159,11 +157,12 @@ Q_SIGNALS:
     void stopped();
 
 protected:
+    // ### Qt6: Remove timestep argument
     void advanceAnimation(qint64 timeStep = -1);
     virtual void start();
     virtual void stop();
 
-    QAnimationDriver(QAnimationDriverPrivate &dd, QObject *parent = 0);
+    QAnimationDriver(QAnimationDriverPrivate &dd, QObject *parent = nullptr);
 
 private:
     friend class QUnifiedTimer;
@@ -176,7 +175,5 @@ private:
 #endif //QT_NO_ANIMATION
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QABSTRACTANIMATION_H

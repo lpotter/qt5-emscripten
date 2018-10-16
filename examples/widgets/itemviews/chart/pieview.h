@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -51,44 +61,44 @@ class PieView : public QAbstractItemView
 public:
     PieView(QWidget *parent = 0);
 
-    QRect visualRect(const QModelIndex &index) const;
-    void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible);
-    QModelIndex indexAt(const QPoint &point) const;
+    QRect visualRect(const QModelIndex &index) const override;
+    void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible) override;
+    QModelIndex indexAt(const QPoint &point) const override;
 
 protected slots:
     void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight,
-                     const QVector<int> &roles = QVector<int>());
-    void rowsInserted(const QModelIndex &parent, int start, int end);
-    void rowsAboutToBeRemoved(const QModelIndex &parent, int start, int end);
+                     const QVector<int> &roles = QVector<int>()) override;
+    void rowsInserted(const QModelIndex &parent, int start, int end) override;
+    void rowsAboutToBeRemoved(const QModelIndex &parent, int start, int end) override;
 
 protected:
-    bool edit(const QModelIndex &index, EditTrigger trigger, QEvent *event);
+    bool edit(const QModelIndex &index, EditTrigger trigger, QEvent *event) override;
     QModelIndex moveCursor(QAbstractItemView::CursorAction cursorAction,
-                           Qt::KeyboardModifiers modifiers);
+                           Qt::KeyboardModifiers modifiers) override;
 
-    int horizontalOffset() const;
-    int verticalOffset() const;
+    int horizontalOffset() const override;
+    int verticalOffset() const override;
 
-    bool isIndexHidden(const QModelIndex &index) const;
+    bool isIndexHidden(const QModelIndex &index) const override;
 
-    void setSelection(const QRect&, QItemSelectionModel::SelectionFlags command);
+    void setSelection(const QRect&, QItemSelectionModel::SelectionFlags command) override;
 
-    void mousePressEvent(QMouseEvent *event);
+    void mousePressEvent(QMouseEvent *event) override;
 
-    void mouseMoveEvent(QMouseEvent *event);
-    void mouseReleaseEvent(QMouseEvent *event);
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
-    void paintEvent(QPaintEvent *event);
-    void resizeEvent(QResizeEvent *event);
-    void scrollContentsBy(int dx, int dy);
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void scrollContentsBy(int dx, int dy) override;
 
-    QRegion visualRegionForSelection(const QItemSelection &selection) const;
+    QRegion visualRegionForSelection(const QItemSelection &selection) const override;
 
 private:
     QRect itemRect(const QModelIndex &item) const;
     QRegion itemRegion(const QModelIndex &index) const;
     int rows(const QModelIndex &index = QModelIndex()) const;
-    void updateGeometries();
+    void updateGeometries() override;
 
     int margin;
     int totalSize;

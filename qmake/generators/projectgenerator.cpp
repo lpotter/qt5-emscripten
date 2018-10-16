@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,17 +50,14 @@ QString project_builtin_regx() //calculate the builtin regular expression..
     return ret;
 }
 
-ProjectGenerator::ProjectGenerator() : MakefileGenerator(), init_flag(false)
+ProjectGenerator::ProjectGenerator() : MakefileGenerator()
 {
 }
 
 void
 ProjectGenerator::init()
 {
-    if(init_flag)
-        return;
     int file_count = 0;
-    init_flag = true;
     verifyCompilers();
 
     project->loadSpec();
@@ -111,10 +95,8 @@ ProjectGenerator::init()
                         dir += Option::dir_sep;
                     if (Option::recursive) {
                         QStringList files = QDir(dir).entryList(QDir::Files);
-                        for(int i = 0; i < (int)files.count(); i++) {
-                            if(files[i] != "." && files[i] != "..")
-                                dirs.append(dir + files[i] + QDir::separator() + builtin_regex);
-                        }
+                        for (int i = 0; i < files.count(); i++)
+                            dirs.append(dir + files[i] + QDir::separator() + builtin_regex);
                     }
                     regex = builtin_regex;
                 } else {
@@ -136,17 +118,15 @@ ProjectGenerator::init()
                     dir = regex.left(s+1);
                     regex = regex.right(regex.length() - (s+1));
                 }
+                const QDir d(dir);
                 if (Option::recursive) {
-                    QStringList entries = QDir(dir).entryList(QDir::Dirs);
-                    for(int i = 0; i < (int)entries.count(); i++) {
-                        if(entries[i] != "." && entries[i] != "..") {
-                            dirs.append(dir + entries[i] + QDir::separator() + regex);
-                        }
-                    }
+                    QStringList entries = d.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+                    for (int i = 0; i < entries.count(); i++)
+                        dirs.append(dir + entries[i] + QDir::separator() + regex);
                 }
-                QStringList files = QDir(dir).entryList(QDir::nameFiltersFromString(regex));
+                QStringList files = d.entryList(QDir::nameFiltersFromString(regex));
                 for(int i = 0; i < (int)files.count(); i++) {
-                    QString file = dir + files[i];
+                    QString file = d.absoluteFilePath(files[i]);
                     if (addFile(file)) {
                         add_depend = true;
                         file_count++;
@@ -171,7 +151,7 @@ ProjectGenerator::init()
                 QString newdir = pd;
                 QFileInfo fi(fileInfo(newdir));
                 if(fi.isDir()) {
-                    newdir = fileFixify(newdir);
+                    newdir = fileFixify(newdir, FileFixifyFromOutdir);
                     ProStringList &subdirs = v["SUBDIRS"];
                     if(exists(fi.filePath() + QDir::separator() + fi.fileName() + Option::pro_ext) &&
                        !subdirs.contains(newdir, Qt::CaseInsensitive)) {
@@ -182,20 +162,19 @@ ProjectGenerator::init()
                             QString nd = newdir;
                             if(nd == ".")
                                 nd = "";
-                            else if(!nd.isEmpty() && !nd.endsWith(QString(QChar(QDir::separator()))))
+                            else if (!nd.isEmpty() && !nd.endsWith(QDir::separator()))
                                 nd += QDir::separator();
                             nd += profiles[i];
                             fileFixify(nd);
-                            if(profiles[i] != "." && profiles[i] != ".." &&
-                               !subdirs.contains(nd, Qt::CaseInsensitive) && !out_file.endsWith(nd))
+                            if (!subdirs.contains(nd, Qt::CaseInsensitive) && !out_file.endsWith(nd))
                                 subdirs.append(nd);
                         }
                     }
                     if (Option::recursive) {
-                        QStringList dirs = QDir(newdir).entryList(QDir::Dirs);
+                        QStringList dirs = QDir(newdir).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
                         for(int i = 0; i < (int)dirs.count(); i++) {
                             QString nd = fileFixify(newdir + QDir::separator() + dirs[i]);
-                            if(dirs[i] != "." && dirs[i] != ".." && !knownDirs.contains(nd, Qt::CaseInsensitive))
+                            if (!knownDirs.contains(nd, Qt::CaseInsensitive))
                                 knownDirs.append(nd);
                         }
                     }
@@ -207,12 +186,13 @@ ProjectGenerator::init()
                     dir = regx.left(s+1);
                     regx = regx.right(regx.length() - (s+1));
                 }
-                QStringList files = QDir(dir).entryList(QDir::nameFiltersFromString(regx), QDir::Dirs);
+                QStringList files = QDir(dir).entryList(QDir::nameFiltersFromString(regx),
+                                                        QDir::Dirs | QDir::NoDotAndDotDot);
                 ProStringList &subdirs = v["SUBDIRS"];
                 for(int i = 0; i < (int)files.count(); i++) {
                     QString newdir(dir + files[i]);
                     QFileInfo fi(fileInfo(newdir));
-                    if(fi.fileName() != "." && fi.fileName() != "..") {
+                    {
                         newdir = fileFixify(newdir);
                         if(exists(fi.filePath() + QDir::separator() + fi.fileName() + Option::pro_ext) &&
                            !subdirs.contains(newdir)) {
@@ -249,7 +229,7 @@ ProjectGenerator::init()
 
     ProStringList &h = v["HEADERS"];
     bool no_qt_files = true;
-    static const char *srcs[] = { "SOURCES", "YACCSOURCES", "LEXSOURCES", "FORMS", 0 };
+    static const char *srcs[] = { "SOURCES", "YACCSOURCES", "LEXSOURCES", "FORMS", nullptr };
     for (int i = 0; srcs[i]; i++) {
         const ProStringList &l = v[srcs[i]];
         QMakeSourceFileInfo::SourceFileType type = QMakeSourceFileInfo::TYPE_C;
@@ -324,7 +304,7 @@ ProjectGenerator::init()
         for (ProStringList::ConstIterator it2 = tmp.begin(); it2 != tmp.end(); ++it2) {
             ProStringList &inputs = project->values((*it2).toKey());
             for (ProStringList::Iterator input = inputs.begin(); input != inputs.end(); ++input) {
-                QString path = replaceExtraCompilerVariables(tmp_out, (*input).toQString(), QString());
+                QString path = replaceExtraCompilerVariables(tmp_out, (*input).toQString(), QString(), NoShell);
                 path = fixPathToQmake(path).section('/', -1);
                 for(int i = 0; i < var_out.size(); ++i) {
                     ProString v = var_out.at(i);
@@ -347,8 +327,8 @@ ProjectGenerator::writeMakefile(QTextStream &t)
     t << "######################################################################" << endl;
     t << "# Automatically generated by qmake (" QMAKE_VERSION_STR ") " << QDateTime::currentDateTime().toString() << endl;
     t << "######################################################################" << endl << endl;
-    if (!Option::globals->precmds.isEmpty())
-        t << Option::globals->precmds << endl;
+    if (!Option::globals->extra_cmds[QMakeEvalBefore].isEmpty())
+        t << Option::globals->extra_cmds[QMakeEvalBefore] << endl;
     t << getWritableVar("TEMPLATE_ASSIGN", false);
     if(project->first("TEMPLATE_ASSIGN") == "subdirs") {
         t << endl << "# Directories" << "\n"
@@ -363,8 +343,18 @@ ProjectGenerator::writeMakefile(QTextStream &t)
         t << getWritableVar("TARGET_ASSIGN")
           << getWritableVar("CONFIG", false)
           << getWritableVar("CONFIG_REMOVE", false)
-          << getWritableVar("DEPENDPATH")
           << getWritableVar("INCLUDEPATH") << endl;
+
+        t << "# The following define makes your compiler warn you if you use any\n"
+             "# feature of Qt which has been marked as deprecated (the exact warnings\n"
+             "# depend on your compiler). Please consult the documentation of the\n"
+             "# deprecated API in order to know how to port your code away from it.\n"
+             "DEFINES += QT_DEPRECATED_WARNINGS\n"
+             "\n"
+             "# You can also make your code fail to compile if you use deprecated APIs.\n"
+             "# In order to do so, uncomment the following line.\n"
+             "# You can also select to disable deprecated APIs only up to a certain version of Qt.\n"
+             "#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0\n\n";
 
         t << "# Input" << "\n";
         t << getWritableVar("HEADERS")
@@ -375,8 +365,8 @@ ProjectGenerator::writeMakefile(QTextStream &t)
           << getWritableVar("RESOURCES")
           << getWritableVar("TRANSLATIONS");
     }
-    if (!Option::globals->postcmds.isEmpty())
-        t << Option::globals->postcmds << endl;
+    if (!Option::globals->extra_cmds[QMakeEvalAfter].isEmpty())
+        t << Option::globals->extra_cmds[QMakeEvalAfter] << endl;
     return true;
 }
 
@@ -396,7 +386,7 @@ ProjectGenerator::addConfig(const QString &cfg, bool add)
 bool
 ProjectGenerator::addFile(QString file)
 {
-    file = fileFixify(file, qmake_getpwd());
+    file = fileFixify(file, FileFixifyToIndir);
     QString dir;
     int s = file.lastIndexOf(Option::dir_sep);
     if(s != -1)
@@ -483,18 +473,11 @@ ProjectGenerator::getWritableVar(const char *vk, bool)
 bool
 ProjectGenerator::openOutput(QFile &file, const QString &build) const
 {
-    QString outdir;
-    if(!file.fileName().isEmpty()) {
-        QFileInfo fi(fileInfo(file.fileName()));
-        if(fi.isDir())
-            outdir = fi.path() + QDir::separator();
-    }
-    if(!outdir.isEmpty() || file.fileName().isEmpty()) {
-        QString dir = qmake_getpwd();
-        int s = dir.lastIndexOf('/');
-        if(s != -1)
-            dir = dir.right(dir.length() - (s + 1));
-        file.setFileName(outdir + dir + Option::pro_ext);
+    ProString fileName = file.fileName();
+    if (!fileName.endsWith(Option::pro_ext)) {
+        if (fileName.isEmpty())
+            fileName = fileInfo(Option::output_dir).fileName();
+        file.setFileName(fileName + Option::pro_ext);
     }
     return MakefileGenerator::openOutput(file, build);
 }
@@ -505,7 +488,7 @@ ProjectGenerator::fixPathToQmake(const QString &file)
 {
     QString ret = file;
     if(Option::dir_sep != QLatin1String("/"))
-        ret = ret.replace(Option::dir_sep, QLatin1String("/"));
+        ret.replace(Option::dir_sep, QLatin1String("/"));
     return ret;
 }
 

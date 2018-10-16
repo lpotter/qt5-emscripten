@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Intel Corporation.
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -50,9 +48,9 @@
 #include <QtCore/qstringlist.h>
 #endif
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
+
+Q_CORE_EXPORT uint qHash(const QUrlQuery &key, uint seed = 0) Q_DECL_NOTHROW;
 
 class QUrlQueryPrivate;
 class Q_CORE_EXPORT QUrlQuery
@@ -64,8 +62,7 @@ public:
     QUrlQuery(const QUrlQuery &other);
     QUrlQuery &operator=(const QUrlQuery &other);
 #ifdef Q_COMPILER_RVALUE_REFS
-    QUrlQuery &operator=(QUrlQuery &&other)
-    { qSwap(d, other.d); return *this; }
+    QUrlQuery &operator=(QUrlQuery &&other) Q_DECL_NOTHROW { swap(other); return *this; }
 #endif
     ~QUrlQuery();
 
@@ -73,7 +70,7 @@ public:
     bool operator!=(const QUrlQuery &other) const
     { return !(*this == other); }
 
-    void swap(QUrlQuery &other) { qSwap(d, other.d); }
+    void swap(QUrlQuery &other) Q_DECL_NOTHROW { qSwap(d, other.d); }
 
     bool isEmpty() const;
     bool isDetached() const;
@@ -105,6 +102,7 @@ public:
 
 private:
     friend class QUrl;
+    friend Q_CORE_EXPORT uint qHash(const QUrlQuery &key, uint seed) Q_DECL_NOTHROW;
     QSharedDataPointer<QUrlQueryPrivate> d;
 public:
     typedef QSharedDataPointer<QUrlQueryPrivate> DataPtr;
@@ -129,7 +127,7 @@ inline QStringList QUrl::allQueryItemValues(const QString &key) const
 inline void QUrl::removeQueryItem(const QString &key)
 { QUrlQuery q(*this); q.removeQueryItem(key); setQuery(q); }
 inline void QUrl::removeAllQueryItems(const QString &key)
-{ QUrlQuery q(*this); q.removeAllQueryItems(key); }
+{ QUrlQuery q(*this); q.removeAllQueryItems(key); setQuery(q); }
 
 inline void QUrl::addEncodedQueryItem(const QByteArray &key, const QByteArray &value)
 { QUrlQuery q(*this); q.addQueryItem(fromEncodedComponent_helper(key), fromEncodedComponent_helper(value)); setQuery(q); }
@@ -140,7 +138,7 @@ inline QByteArray QUrl::encodedQueryItemValue(const QByteArray &key) const
 inline void QUrl::removeEncodedQueryItem(const QByteArray &key)
 { QUrlQuery q(*this); q.removeQueryItem(fromEncodedComponent_helper(key)); setQuery(q); }
 inline void QUrl::removeAllEncodedQueryItems(const QByteArray &key)
-{ QUrlQuery q(*this); q.removeAllQueryItems(fromEncodedComponent_helper(key)); }
+{ QUrlQuery q(*this); q.removeAllQueryItems(fromEncodedComponent_helper(key)); setQuery(q); }
 
 inline void QUrl::setEncodedQueryItems(const QList<QPair<QByteArray, QByteArray> > &qry)
 {
@@ -162,17 +160,15 @@ inline QList<QPair<QByteArray, QByteArray> > QUrl::encodedQueryItems() const
 }
 inline QList<QByteArray> QUrl::allEncodedQueryItemValues(const QByteArray &key) const
 {
-    QStringList items = QUrlQuery(*this).allQueryItemValues(fromEncodedComponent_helper(key), QUrl::FullyEncoded);
+    const QStringList items = QUrlQuery(*this).allQueryItemValues(fromEncodedComponent_helper(key), QUrl::FullyEncoded);
     QList<QByteArray> result;
     result.reserve(items.size());
-    Q_FOREACH (const QString &item, items)
+    for (const QString &item : items)
         result << item.toLatin1();
     return result;
 }
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QURLQUERY_H

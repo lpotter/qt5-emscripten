@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -42,12 +52,12 @@
 
 #include <QGraphicsScene>
 #include <QPainter>
+#include <QRandomGenerator>
 #include <QStyleOption>
+#include <qmath.h>
 
-#include <math.h>
-
-static const double Pi = 3.14159265358979323846264338327950288419717;
-static double TwoPi = 2.0 * Pi;
+const qreal Pi = M_PI;
+const qreal TwoPi = 2 * M_PI;
 
 static qreal normalizeAngle(qreal angle)
 {
@@ -61,9 +71,9 @@ static qreal normalizeAngle(qreal angle)
 //! [0]
 Mouse::Mouse()
     : angle(0), speed(0), mouseEyeDirection(0),
-      color(qrand() % 256, qrand() % 256, qrand() % 256)
+      color(QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256), QRandomGenerator::global()->bounded(256))
 {
-    setRotation(qrand() % (360 * 16));
+    setRotation(QRandomGenerator::global()->bounded(360 * 16));
 }
 //! [0]
 
@@ -130,9 +140,7 @@ void Mouse::advance(int step)
 //! [5]
     QLineF lineToCenter(QPointF(0, 0), mapFromScene(0, 0));
     if (lineToCenter.length() > 150) {
-        qreal angleToCenter = ::acos(lineToCenter.dx() / lineToCenter.length());
-        if (lineToCenter.dy() < 0)
-            angleToCenter = TwoPi - angleToCenter;
+        qreal angleToCenter = std::atan2(lineToCenter.dy(), lineToCenter.dx());
         angleToCenter = normalizeAngle((Pi - angleToCenter) + Pi / 2);
 
         if (angleToCenter < Pi && angleToCenter > Pi / 4) {
@@ -159,11 +167,9 @@ void Mouse::advance(int step)
     foreach (QGraphicsItem *item, dangerMice) {
         if (item == this)
             continue;
-        
+
         QLineF lineToMouse(QPointF(0, 0), mapFromItem(item, 0, 0));
-        qreal angleToMouse = ::acos(lineToMouse.dx() / lineToMouse.length());
-        if (lineToMouse.dy() < 0)
-            angleToMouse = TwoPi - angleToMouse;
+        qreal angleToMouse = std::atan2(lineToMouse.dy(), lineToMouse.dx());
         angleToMouse = normalizeAngle((Pi - angleToMouse) + Pi / 2);
 
         if (angleToMouse >= 0 && angleToMouse < Pi / 2) {
@@ -180,16 +186,16 @@ void Mouse::advance(int step)
 
     // Add some random movement
 //! [10]
-    if (dangerMice.size() > 1 && (qrand() % 10) == 0) {
-        if (qrand() % 1)
-            angle += (qrand() % 100) / 500.0;
+    if (dangerMice.size() > 1 && QRandomGenerator::global()->bounded(10) == 0) {
+        if (QRandomGenerator::global()->bounded(1))
+            angle += QRandomGenerator::global()->bounded(1 / 500.0);
         else
-            angle -= (qrand() % 100) / 500.0;
+            angle -= QRandomGenerator::global()->bounded(1 / 500.0);
     }
 //! [10]
 
 //! [11]
-    speed += (-50 + qrand() % 100) / 100.0;
+    speed += (-50 + QRandomGenerator::global()->bounded(100)) / 100.0;
 
     qreal dx = ::sin(angle) * 10;
     mouseEyeDirection = (qAbs(dx / 5) < 1) ? 0 : dx / 5;

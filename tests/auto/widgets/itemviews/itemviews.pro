@@ -17,10 +17,6 @@ SUBDIRS=\
    qtreewidget \
    qtreewidgetitemiterator \
 
-!contains(QT_CONFIG, private_tests): SUBDIRS -= \
+!qtConfig(private_tests): SUBDIRS -= \
     qcolumnview \
     qlistwidget \
-
-# This test takes too long to run on IRIX, so skip it on that platform
-irix-*:SUBDIRS -= qitemview
-

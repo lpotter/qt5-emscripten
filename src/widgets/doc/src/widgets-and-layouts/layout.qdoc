@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -32,8 +32,8 @@
     \brief A tour of the standard layout managers and an introduction to custom
     layouts.
 
-    \previouspage Widgets and Layouts
-    \contentspage Widgets and Layouts
+    \previouspage Qt Widgets
+    \contentspage Qt Widgets
     \nextpage {Styles and Style Aware Widgets}{Styles}
 
     \ingroup frameworks-technologies
@@ -57,20 +57,20 @@
     is set on a widget in this way, it takes charge of the following tasks:
 
     \list
-    \li Positioning of child widgets.
-    \li Sensible default sizes for windows.
-    \li Sensible minimum sizes for windows.
-    \li Resize handling.
+    \li Positioning of child widgets
+    \li Sensible default sizes for windows
+    \li Sensible minimum sizes for windows
+    \li Resize handling
     \li Automatic updates when contents change:
         \list
-        \li Font size, text or other contents of child widgets.
-        \li Hiding or showing a child widget.
-        \li Removal of child widgets.
+        \li Font size, text or other contents of child widgets
+        \li Hiding or showing a child widget
+        \li Removal of child widgets
         \endlist
     \endlist
 
     \section1 Qt's Layout Classes
-    
+
     Qt's layout classes were designed for hand-written C++ code, allowing
     measurements to be specified in pixels for simplicity, so they are easy to
     understand and use. The code generated for forms created using Qt Designer also
@@ -136,11 +136,11 @@
     the fifth argument to QGridLayout::addWidget().
 
     QFormLayout will add two widgets on a row, commonly a QLabel and a QLineEdit
-    to create forms. Adding a QLabel and a QLineEdit on the same row will set 
-    the QLineEdit as the QLabel's buddy. The following code will use the 
+    to create forms. Adding a QLabel and a QLineEdit on the same row will set
+    the QLineEdit as the QLabel's buddy. The following code will use the
     QFormLayout to place three \l{QPushButton}{QPushButtons} and a corresponding
-    QLineEdit on a row. 
-    
+    QLineEdit on a row.
+
     \snippet layouts/layouts.cpp 18
     \snippet layouts/layouts.cpp 19
     \snippet layouts/layouts.cpp 20
@@ -197,7 +197,7 @@
 
 
     \section2 Stretch Factors
-    \keyword stretch factor
+    \target stretch factor
 
     Widgets are normally created without any stretch factor set. When they are
     laid out in a layout the widgets are given a share of space in accordance
@@ -219,7 +219,7 @@
     \section1 Custom Widgets in Layouts
 
     When you make your own widget class, you should also communicate its layout
-    properties. If the widget has a one of Qt's layouts, this is already taken
+    properties. If the widget uses one of Qt's layouts, this is already taken
     care of. If the widget does not have any child widgets, or uses manual
     layout, you can change the behavior of the widget using any or all of the
     following mechanisms:
@@ -249,7 +249,7 @@
 
     For further guidance when implementing these functions, see the
     \e{Qt Quarterly} article
-    \l{http://doc.qt.nokia.com/qq/qq04-height-for-width.html}
+    \l{http://doc.qt.io/archives/qq/qq04-height-for-width.html}
     {Trading Height for Width}.
 
 
@@ -327,7 +327,7 @@
     Then we define two functions that iterate over the layout: \c{itemAt()}
     and \c{takeAt()}. These functions are used internally by the layout system
     to handle deletion of widgets. They are also available for application
-    programmers. 
+    programmers.
 
     \c{itemAt()} returns the item at the given index. \c{takeAt()} removes the
     item at the given index, and returns it. In this case we use the list index
@@ -348,7 +348,7 @@
     \snippet code/doc_src_layout.cpp 4
 
     The layout takes over responsibility of the items added. Since QLayoutItem
-    does not inherit QObject, we must delete the items manually. In the 
+    does not inherit QObject, we must delete the items manually. In the
     destructor, we remove each item from the list using \c{takeAt()}, and
     then delete it.
 
@@ -386,5 +386,12 @@
             then set it. (This does not only apply to layouts, you should do
             the same if you implement your own resizeEvent(), for example.)
     \endlist
-*/
 
+    \section1 Layout Examples
+
+    Many Qt Widgets \l{Qt Widgets Examples}{examples} already use layouts,
+    however, several examples exist to showcase various layouts.
+
+    \annotatedlist examples-layout
+
+*/

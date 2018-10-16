@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -54,15 +41,6 @@ class tst_QCalendarWidget : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QCalendarWidget();
-    virtual ~tst_QCalendarWidget();
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
-
 private slots:
     void getSetCheck();
     void buttonClickCheck();
@@ -75,6 +53,8 @@ private slots:
     void showPrevNext();
 
     void firstDayOfWeek();
+
+    void contentsMargins();
 };
 
 // Testing get/set functions
@@ -173,6 +153,9 @@ void tst_QCalendarWidget::getSetCheck()
 
 void tst_QCalendarWidget::buttonClickCheck()
 {
+#ifdef Q_OS_WINRT
+    QSKIP("Fails on WinRT - QTBUG-68297");
+#endif
     QCalendarWidget object;
     QSize size = object.sizeHint();
     object.setGeometry(0,0,size.width(), size.height());
@@ -183,24 +166,22 @@ void tst_QCalendarWidget::buttonClickCheck()
     QDate selectedDate(2005, 1, 1);
     //click on the month buttons
     int month = object.monthShown();
-    QToolButton *button = qFindChild<QToolButton *>(&object, "qt_calendar_prevmonth");
+    QToolButton *button = object.findChild<QToolButton *>("qt_calendar_prevmonth");
     QTest::mouseClick(button, Qt::LeftButton);
-	QCOMPARE(month > 1 ? month-1 : 12, object.monthShown());
-    button = qFindChild<QToolButton *>(&object, "qt_calendar_nextmonth");
+    QCOMPARE(month > 1 ? month-1 : 12, object.monthShown());
+    button = object.findChild<QToolButton *>("qt_calendar_nextmonth");
     QTest::mouseClick(button, Qt::LeftButton);
     QCOMPARE(month, object.monthShown());
 
-    button = qFindChild<QToolButton *>(&object, "qt_calendar_yearbutton");
+    button = object.findChild<QToolButton *>("qt_calendar_yearbutton");
     QTest::mouseClick(button, Qt::LeftButton, Qt::NoModifier, button->rect().center(), 2);
     QVERIFY(!button->isVisible());
-    QSpinBox *spinbox = qFindChild<QSpinBox *>(&object, "qt_calendar_yearedit");
-    QTest::qWait(500);
+    QSpinBox *spinbox = object.findChild<QSpinBox *>("qt_calendar_yearedit");
     QTest::keyClick(spinbox, '2');
     QTest::keyClick(spinbox, '0');
     QTest::keyClick(spinbox, '0');
     QTest::keyClick(spinbox, '6');
-    QTest::qWait(500);
-    QWidget *widget = qFindChild<QWidget *>(&object, "qt_calendar_calendarview");
+    QWidget *widget = object.findChild<QWidget *>("qt_calendar_calendarview");
     QTest::mouseMove(widget);
     QTest::mouseClick(widget, Qt::LeftButton);
     QCOMPARE(2006, object.yearShown());
@@ -212,11 +193,11 @@ void tst_QCalendarWidget::buttonClickCheck()
     object.setDateRange(QDate(2006,1,1), QDate(2006,2,28));
     object.setSelectedDate(QDate(2006,1,1));
     object.showSelectedDate();
-    button = qFindChild<QToolButton *>(&object, "qt_calendar_prevmonth");
+    button = object.findChild<QToolButton *>("qt_calendar_prevmonth");
     QTest::mouseClick(button, Qt::LeftButton);
     QCOMPARE(1, object.monthShown());
 
-    button = qFindChild<QToolButton *>(&object, "qt_calendar_nextmonth");
+    button = object.findChild<QToolButton *>("qt_calendar_nextmonth");
     QTest::mouseClick(button, Qt::LeftButton);
     QCOMPARE(2, object.monthShown());
     QTest::mouseClick(button, Qt::LeftButton);
@@ -271,31 +252,6 @@ void tst_QCalendarWidget::setWeekdayFormat()
     }
 }
 
-tst_QCalendarWidget::tst_QCalendarWidget()
-{
-}
-
-tst_QCalendarWidget::~tst_QCalendarWidget()
-{
-}
-
-void tst_QCalendarWidget::initTestCase()
-{
-}
-
-void tst_QCalendarWidget::cleanupTestCase()
-{
-}
-
-void tst_QCalendarWidget::init()
-{
-}
-
-void tst_QCalendarWidget::cleanup()
-{
-}
-
-
 typedef void (QCalendarWidget::*ShowFunc)();
 Q_DECLARE_METATYPE(ShowFunc)
 
@@ -330,6 +286,10 @@ void tst_QCalendarWidget::showPrevNext()
     QFETCH(QDate, dateOrigin);
     QFETCH(QDate, expectedDate);
 
+#ifdef Q_OS_WINRT
+    QSKIP("Fails on WinRT - QTBUG-68297");
+#endif
+
     QCalendarWidget calWidget;
     calWidget.show();
     QVERIFY(QTest::qWaitForWindowExposed(&calWidget));
@@ -350,8 +310,7 @@ void tst_QCalendarWidget::showPrevNext()
     QCOMPARE(calWidget.monthShown(), expectedDate.month());
 
     // QTBUG-4058
-    QTest::qWait(20);
-    QToolButton *button = qFindChild<QToolButton *>(&calWidget, "qt_calendar_prevmonth");
+    QToolButton *button = calWidget.findChild<QToolButton *>("qt_calendar_prevmonth");
     QTest::mouseClick(button, Qt::LeftButton);
     expectedDate = expectedDate.addMonths(-1);
     QCOMPARE(calWidget.yearShown(), expectedDate.year());
@@ -397,6 +356,14 @@ void tst_QCalendarWidget::firstDayOfWeek()
     QCOMPARE(calendar.locale(), germanLocale);
     QCOMPARE(parent->locale(), hausaLocale);
     QCOMPARE(calendar.firstDayOfWeek(), germanLocale.firstDayOfWeek());
+}
+
+void tst_QCalendarWidget::contentsMargins()
+{
+    QCalendarWidget calendar1;
+    QCalendarWidget calendar2;
+    calendar2.setContentsMargins(10, 5, 20, 30);
+    QCOMPARE(calendar1.minimumSizeHint() + QSize(30, 35), calendar2.minimumSizeHint());
 }
 
 QTEST_MAIN(tst_QCalendarWidget)

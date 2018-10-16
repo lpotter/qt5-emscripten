@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,10 +40,9 @@
 #ifndef QVECTOR3D_H
 #define QVECTOR3D_H
 
+#include <QtGui/qtguiglobal.h>
 #include <QtCore/qpoint.h>
 #include <QtCore/qmetatype.h>
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -53,16 +50,19 @@ QT_BEGIN_NAMESPACE
 class QMatrix4x4;
 class QVector2D;
 class QVector4D;
+class QRect;
 
 #ifndef QT_NO_VECTOR3D
 
 class Q_GUI_EXPORT QVector3D
 {
 public:
-    QVector3D();
-    QVector3D(float xpos, float ypos, float zpos);
-    explicit QVector3D(const QPoint& point);
-    explicit QVector3D(const QPointF& point);
+    Q_DECL_CONSTEXPR QVector3D();
+    explicit QVector3D(Qt::Initialization) {}
+    Q_DECL_CONSTEXPR QVector3D(float xpos, float ypos, float zpos) : v{xpos, ypos, zpos} {}
+
+    Q_DECL_CONSTEXPR explicit QVector3D(const QPoint& point);
+    Q_DECL_CONSTEXPR explicit QVector3D(const QPointF& point);
 #ifndef QT_NO_VECTOR2D
     QVector3D(const QVector2D& vector);
     QVector3D(const QVector2D& vector, float zpos);
@@ -73,13 +73,16 @@ public:
 
     bool isNull() const;
 
-    float x() const;
-    float y() const;
-    float z() const;
+    Q_DECL_CONSTEXPR float x() const;
+    Q_DECL_CONSTEXPR float y() const;
+    Q_DECL_CONSTEXPR float z() const;
 
     void setX(float x);
     void setY(float y);
     void setZ(float z);
+
+    float &operator[](int i);
+    float operator[](int i) const;
 
     float length() const;
     float lengthSquared() const;
@@ -92,28 +95,35 @@ public:
     QVector3D &operator*=(float factor);
     QVector3D &operator*=(const QVector3D& vector);
     QVector3D &operator/=(float divisor);
+    inline QVector3D &operator/=(const QVector3D &vector);
 
-    static float dotProduct(const QVector3D& v1, const QVector3D& v2);
-    static QVector3D crossProduct(const QVector3D& v1, const QVector3D& v2);
+    static float dotProduct(const QVector3D& v1, const QVector3D& v2); //In Qt 6 convert to inline and constexpr
+    static QVector3D crossProduct(const QVector3D& v1, const QVector3D& v2); //in Qt 6 convert to inline and constexpr
+
     static QVector3D normal(const QVector3D& v1, const QVector3D& v2);
     static QVector3D normal
         (const QVector3D& v1, const QVector3D& v2, const QVector3D& v3);
 
+    QVector3D project(const QMatrix4x4 &modelView, const QMatrix4x4 &projection, const QRect &viewport) const;
+    QVector3D unproject(const QMatrix4x4 &modelView, const QMatrix4x4 &projection, const QRect &viewport) const;
+
+    float distanceToPoint(const QVector3D& point) const;
     float distanceToPlane(const QVector3D& plane, const QVector3D& normal) const;
     float distanceToPlane(const QVector3D& plane1, const QVector3D& plane2, const QVector3D& plane3) const;
     float distanceToLine(const QVector3D& point, const QVector3D& direction) const;
 
-    friend inline bool operator==(const QVector3D &v1, const QVector3D &v2);
-    friend inline bool operator!=(const QVector3D &v1, const QVector3D &v2);
-    friend inline const QVector3D operator+(const QVector3D &v1, const QVector3D &v2);
-    friend inline const QVector3D operator-(const QVector3D &v1, const QVector3D &v2);
-    friend inline const QVector3D operator*(float factor, const QVector3D &vector);
-    friend inline const QVector3D operator*(const QVector3D &vector, float factor);
-    friend const QVector3D operator*(const QVector3D &v1, const QVector3D& v2);
-    friend inline const QVector3D operator-(const QVector3D &vector);
-    friend inline const QVector3D operator/(const QVector3D &vector, float divisor);
+    Q_DECL_CONSTEXPR friend inline bool operator==(const QVector3D &v1, const QVector3D &v2);
+    Q_DECL_CONSTEXPR friend inline bool operator!=(const QVector3D &v1, const QVector3D &v2);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator+(const QVector3D &v1, const QVector3D &v2);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator-(const QVector3D &v1, const QVector3D &v2);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator*(float factor, const QVector3D &vector);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator*(const QVector3D &vector, float factor);
+    Q_DECL_CONSTEXPR friend const QVector3D operator*(const QVector3D &v1, const QVector3D& v2);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator-(const QVector3D &vector);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator/(const QVector3D &vector, float divisor);
+    Q_DECL_CONSTEXPR friend inline const QVector3D operator/(const QVector3D &vector, const QVector3D &divisor);
 
-    friend inline bool qFuzzyCompare(const QVector3D& v1, const QVector3D& v2);
+    Q_DECL_CONSTEXPR friend inline bool qFuzzyCompare(const QVector3D& v1, const QVector3D& v2);
 
 #ifndef QT_NO_VECTOR2D
     QVector2D toVector2D() const;
@@ -122,13 +132,13 @@ public:
     QVector4D toVector4D() const;
 #endif
 
-    QPoint toPoint() const;
-    QPointF toPointF() const;
+    Q_DECL_CONSTEXPR QPoint toPoint() const;
+    Q_DECL_CONSTEXPR QPointF toPointF() const;
 
     operator QVariant() const;
 
 private:
-    float xp, yp, zp;
+    float v[3];
 
     friend class QVector2D;
     friend class QVector4D;
@@ -138,129 +148,156 @@ private:
 #endif
 };
 
-Q_DECLARE_TYPEINFO(QVector3D, Q_MOVABLE_TYPE);
+Q_DECLARE_TYPEINFO(QVector3D, Q_PRIMITIVE_TYPE);
 
-inline QVector3D::QVector3D() : xp(0.0f), yp(0.0f), zp(0.0f) {}
+Q_DECL_CONSTEXPR inline QVector3D::QVector3D() : v{0.0f, 0.0f, 0.0f} {}
 
-inline QVector3D::QVector3D(float xpos, float ypos, float zpos) : xp(xpos), yp(ypos), zp(zpos) {}
+Q_DECL_CONSTEXPR inline QVector3D::QVector3D(const QPoint& point) : v{float(point.x()), float(point.y()), float(0.0f)} {}
 
-inline QVector3D::QVector3D(const QPoint& point) : xp(point.x()), yp(point.y()), zp(0.0f) {}
-
-inline QVector3D::QVector3D(const QPointF& point) : xp(point.x()), yp(point.y()), zp(0.0f) {}
+Q_DECL_CONSTEXPR inline QVector3D::QVector3D(const QPointF& point) : v{float(point.x()), float(point.y()), 0.0f} {}
 
 inline bool QVector3D::isNull() const
 {
-    return qIsNull(xp) && qIsNull(yp) && qIsNull(zp);
+    return qIsNull(v[0]) && qIsNull(v[1]) && qIsNull(v[2]);
 }
 
-inline float QVector3D::x() const { return xp; }
-inline float QVector3D::y() const { return yp; }
-inline float QVector3D::z() const { return zp; }
+Q_DECL_CONSTEXPR inline float QVector3D::x() const { return v[0]; }
+Q_DECL_CONSTEXPR inline float QVector3D::y() const { return v[1]; }
+Q_DECL_CONSTEXPR inline float QVector3D::z() const { return v[2]; }
 
-inline void QVector3D::setX(float aX) { xp = aX; }
-inline void QVector3D::setY(float aY) { yp = aY; }
-inline void QVector3D::setZ(float aZ) { zp = aZ; }
+inline void QVector3D::setX(float aX) { v[0] = aX; }
+inline void QVector3D::setY(float aY) { v[1] = aY; }
+inline void QVector3D::setZ(float aZ) { v[2] = aZ; }
+
+inline float &QVector3D::operator[](int i)
+{
+    Q_ASSERT(uint(i) < 3u);
+    return v[i];
+}
+
+inline float QVector3D::operator[](int i) const
+{
+    Q_ASSERT(uint(i) < 3u);
+    return v[i];
+}
 
 inline QVector3D &QVector3D::operator+=(const QVector3D &vector)
 {
-    xp += vector.xp;
-    yp += vector.yp;
-    zp += vector.zp;
+    v[0] += vector.v[0];
+    v[1] += vector.v[1];
+    v[2] += vector.v[2];
     return *this;
 }
 
 inline QVector3D &QVector3D::operator-=(const QVector3D &vector)
 {
-    xp -= vector.xp;
-    yp -= vector.yp;
-    zp -= vector.zp;
+    v[0] -= vector.v[0];
+    v[1] -= vector.v[1];
+    v[2] -= vector.v[2];
     return *this;
 }
 
 inline QVector3D &QVector3D::operator*=(float factor)
 {
-    xp *= factor;
-    yp *= factor;
-    zp *= factor;
+    v[0] *= factor;
+    v[1] *= factor;
+    v[2] *= factor;
     return *this;
 }
 
 inline QVector3D &QVector3D::operator*=(const QVector3D& vector)
 {
-    xp *= vector.xp;
-    yp *= vector.yp;
-    zp *= vector.zp;
+    v[0] *= vector.v[0];
+    v[1] *= vector.v[1];
+    v[2] *= vector.v[2];
     return *this;
 }
 
 inline QVector3D &QVector3D::operator/=(float divisor)
 {
-    xp /= divisor;
-    yp /= divisor;
-    zp /= divisor;
+    v[0] /= divisor;
+    v[1] /= divisor;
+    v[2] /= divisor;
     return *this;
 }
 
-inline bool operator==(const QVector3D &v1, const QVector3D &v2)
+inline QVector3D &QVector3D::operator/=(const QVector3D &vector)
 {
-    return v1.xp == v2.xp && v1.yp == v2.yp && v1.zp == v2.zp;
+    v[0] /= vector.v[0];
+    v[1] /= vector.v[1];
+    v[2] /= vector.v[2];
+    return *this;
 }
 
-inline bool operator!=(const QVector3D &v1, const QVector3D &v2)
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_CLANG("-Wfloat-equal")
+QT_WARNING_DISABLE_GCC("-Wfloat-equal")
+Q_DECL_CONSTEXPR inline bool operator==(const QVector3D &v1, const QVector3D &v2)
 {
-    return v1.xp != v2.xp || v1.yp != v2.yp || v1.zp != v2.zp;
+    return v1.v[0] == v2.v[0] && v1.v[1] == v2.v[1] && v1.v[2] == v2.v[2];
 }
 
-inline const QVector3D operator+(const QVector3D &v1, const QVector3D &v2)
+Q_DECL_CONSTEXPR inline bool operator!=(const QVector3D &v1, const QVector3D &v2)
 {
-    return QVector3D(v1.xp + v2.xp, v1.yp + v2.yp, v1.zp + v2.zp);
+    return v1.v[0] != v2.v[0] || v1.v[1] != v2.v[1] || v1.v[2] != v2.v[2];
+}
+QT_WARNING_POP
+
+Q_DECL_CONSTEXPR inline const QVector3D operator+(const QVector3D &v1, const QVector3D &v2)
+{
+    return QVector3D(v1.v[0] + v2.v[0], v1.v[1] + v2.v[1], v1.v[2] + v2.v[2]);
 }
 
-inline const QVector3D operator-(const QVector3D &v1, const QVector3D &v2)
+Q_DECL_CONSTEXPR inline const QVector3D operator-(const QVector3D &v1, const QVector3D &v2)
 {
-    return QVector3D(v1.xp - v2.xp, v1.yp - v2.yp, v1.zp - v2.zp);
+    return QVector3D(v1.v[0] - v2.v[0], v1.v[1] - v2.v[1], v1.v[2] - v2.v[2]);
 }
 
-inline const QVector3D operator*(float factor, const QVector3D &vector)
+Q_DECL_CONSTEXPR inline const QVector3D operator*(float factor, const QVector3D &vector)
 {
-    return QVector3D(vector.xp * factor, vector.yp * factor, vector.zp * factor);
+    return QVector3D(vector.v[0] * factor, vector.v[1] * factor, vector.v[2] * factor);
 }
 
-inline const QVector3D operator*(const QVector3D &vector, float factor)
+Q_DECL_CONSTEXPR inline const QVector3D operator*(const QVector3D &vector, float factor)
 {
-    return QVector3D(vector.xp * factor, vector.yp * factor, vector.zp * factor);
+    return QVector3D(vector.v[0] * factor, vector.v[1] * factor, vector.v[2] * factor);
 }
 
-inline const QVector3D operator*(const QVector3D &v1, const QVector3D& v2)
+Q_DECL_CONSTEXPR inline const QVector3D operator*(const QVector3D &v1, const QVector3D& v2)
 {
-    return QVector3D(v1.xp * v2.xp, v1.yp * v2.yp, v1.zp * v2.zp);
+    return QVector3D(v1.v[0] * v2.v[0], v1.v[1] * v2.v[1], v1.v[2] * v2.v[2]);
 }
 
-inline const QVector3D operator-(const QVector3D &vector)
+Q_DECL_CONSTEXPR inline const QVector3D operator-(const QVector3D &vector)
 {
-    return QVector3D(-vector.xp, -vector.yp, -vector.zp);
+    return QVector3D(-vector.v[0], -vector.v[1], -vector.v[2]);
 }
 
-inline const QVector3D operator/(const QVector3D &vector, float divisor)
+Q_DECL_CONSTEXPR inline const QVector3D operator/(const QVector3D &vector, float divisor)
 {
-    return QVector3D(vector.xp / divisor, vector.yp / divisor, vector.zp / divisor);
+    return QVector3D(vector.v[0] / divisor, vector.v[1] / divisor, vector.v[2] / divisor);
 }
 
-inline bool qFuzzyCompare(const QVector3D& v1, const QVector3D& v2)
+Q_DECL_CONSTEXPR inline const QVector3D operator/(const QVector3D &vector, const QVector3D &divisor)
 {
-    return qFuzzyCompare(v1.xp, v2.xp) &&
-           qFuzzyCompare(v1.yp, v2.yp) &&
-           qFuzzyCompare(v1.zp, v2.zp);
+    return QVector3D(vector.v[0] / divisor.v[0], vector.v[1] / divisor.v[1], vector.v[2] / divisor.v[2]);
 }
 
-inline QPoint QVector3D::toPoint() const
+Q_DECL_CONSTEXPR inline bool qFuzzyCompare(const QVector3D& v1, const QVector3D& v2)
 {
-    return QPoint(qRound(xp), qRound(yp));
+    return qFuzzyCompare(v1.v[0], v2.v[0]) &&
+           qFuzzyCompare(v1.v[1], v2.v[1]) &&
+           qFuzzyCompare(v1.v[2], v2.v[2]);
 }
 
-inline QPointF QVector3D::toPointF() const
+Q_DECL_CONSTEXPR inline QPoint QVector3D::toPoint() const
 {
-    return QPointF(qreal(xp), qreal(yp));
+    return QPoint(qRound(v[0]), qRound(v[1]));
+}
+
+Q_DECL_CONSTEXPR inline QPointF QVector3D::toPointF() const
+{
+    return QPointF(qreal(v[0]), qreal(v[1]));
 }
 
 #ifndef QT_NO_DEBUG_STREAM
@@ -275,7 +312,5 @@ Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QVector3D &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif

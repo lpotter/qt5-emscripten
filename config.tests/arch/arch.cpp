@@ -1,8 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Copyright (C) 2012 Intel Corporation
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the FOO module of the Qt Toolkit.
 **
@@ -11,70 +11,39 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #define QGLOBAL_H
-#include "../../src/corelib/global/qprocessordetection.h"
+#include "../../src/corelib/global/archdetect.cpp"
 #include <stdio.h>
 
 extern const char msg[];
-const char msg[] = "==Qt=magic=Qt== Architecture:"
-
-#if defined(Q_PROCESSOR_ALPHA)
-"alpha"
-#elif defined(Q_PROCESSOR_ARM)
-"arm"
-#elif defined(Q_PROCESSOR_AVR32)
-"avr32"
-#elif defined(Q_PROCESSOR_BLACKFIN)
-"bfin"
-#elif defined(Q_PROCESSOR_X86_32)
-"i386"
-#elif defined(Q_PROCESSOR_X86_64)
-"x86_64"
-#elif defined(Q_PROCESSOR_IA64)
-"ia64"
-#elif defined(Q_PROCESSOR_MIPS)
-"mips"
-#elif defined(Q_PROCESSOR_POWER)
-"power"
-#elif defined(Q_PROCESSOR_S390)
-"s390"
-#elif defined(Q_PROCESSOR_SH)
-"sh"
-#elif defined(Q_PROCESSOR_SPARC)
-"sparc"
-#else
-"unknown"
-#endif
-                   ;
+const char msg[] = "==Qt=magic=Qt== Architecture:" ARCH_PROCESSOR;
 
 extern const char msg2[];
 const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
@@ -94,6 +63,10 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 // Advanced Bit Manipulation, AMD Barcelona (family 10h)
 " abm"
 #endif
+#ifdef __ADX__
+// Multi-Precision Add-Carry Instruction Extensions, Intel Core 5th generation ("Broadwell")
+" adx"
+#endif
 #ifdef __AES__
 // AES New Instructions, Intel Core-i7 second generation ("Sandy Bridge")
 " aes"
@@ -103,15 +76,67 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 " avx"
 #endif
 #ifdef __AVX2__
-// AVX 2, Intel codename "Haswell"
+// AVX 2, Intel Core 4th Generation ("Haswell")
 " avx2"
 #endif
+#ifdef __AVX512F__
+// AVX512 Foundation, Intel Xeon Scalable ("Skylake" server), some Intel Core 7th generation ("Skylake")
+" avx512f"
+#endif
+#ifdef __AVX512CD__
+// AVX512 Conflict Detection, Intel Xeon Scalable ("Skylake" server), some Intel Core 7th generation ("Skylake")
+" avx512cd"
+#endif
+#ifdef __AVX512DQ__
+// AVX512 Double & Quadword, Intel Xeon Scalable ("Skylake" server), some Intel Core 7th generation ("Skylake")
+" avx512dq"
+#endif
+#ifdef __AVX512BW__
+// AVX512 Byte & Word, Intel Xeon Scalable ("Skylake" server), some Intel Core 7th generation ("Skylake")
+" avx512bw"
+#endif
+#ifdef __AVX512ER__
+// AVX512 Exponentiation & Reciprocal, Intel Xeon Phi codename "Knights Landing"
+" avx512ef"
+#endif
+#ifdef __AVX512PF__
+// AVX512 Prefetch, Intel Xeon Phi codename "Knights Landing"
+" avx512pf"
+#endif
+#ifdef __AVX512VL__
+// AVX512 Vector Length, Intel Xeon Scalable ("Skylake" server), some Intel Core 7th generation ("Skylake")
+" avx512vl"
+#endif
+#ifdef __AVX512IFMA__
+// AVX512 Integer Fused Multiply-Add, Intel processor codename "Cannonlake"
+" avx512ifma"
+#endif
+#ifdef __AVX512VBMI__
+// AVX512 Vector Byte Manipulation Instructions, Intel processor codename "Cannonlake"
+" avx512vbmi"
+#endif
+#ifdef __AVX512VBMI2__
+// AVX512 Vector Byte Manipulation Instructions #2, Intel processor codename "Ice Lake"
+" avx512vbmi2"
+#endif
+#ifdef __AVX512VPOPCNTDQ__
+// AVX512 Vector Population Count Double & Quad, Future Intel Xeon Phi processor codename "Knights Mill", Intel processor codename "Ice Lake"
+" avx512vpopcntdq"
+#endif
+#ifdef __AVX5124FMAPS__
+// AVX512 4-iteration Fused Multiply Accumulation Packed Single, Future Intel Xeon Phi processor codename "Knights Mill"
+" avx5124fmaps"
+#endif
+#ifdef __AVX5124VNNIW__
+// AVX512 4-iteration Vector Neural Network Instructions Word, Future Intel Xeon Phi processor codename "Knights Mill"
+" avx5124vnniw"
+#endif
 #ifdef __BMI__
-// Bit Manipulation Instructions 1, Intel codename "Haswell", AMD "Bulldozer 2"
+// Bit Manipulation Instructions 1, Intel Core 4th Generation ("Haswell"), AMD "Bulldozer 2"
 " bmi"
 #endif
 #ifdef __BMI2__
-// Bit Manipulation Instructions 2, Intel codename "Haswell"
+// Bit Manipulation Instructions 2, Intel Core 4th Generation ("Haswell")
 " bmi2"
 #endif
 #ifdef __GCC_HAVE_SYNC_COMPARE_AND_SWAP_16
@@ -120,11 +145,11 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 " cx16"
 #endif
 #ifdef __F16C__
-// 16-bit floating point conversion, Intel codename "Ivy Bridge"
+// 16-bit floating point conversion, Intel Core 3rd Generation ("Ivy Bridge")
 " f16c"
 #endif
 #ifdef __FMA__
-// Fused Multiply-Add with 3 arguments, Intel codename "Haswell", AMD "Bulldozer 2"
+// Fused Multiply-Add with 3 arguments, Intel Core 4th Generation ("Haswell"), AMD "Bulldozer 2"
 // a.k.a. "FMA3"
 " fma"
 #endif
@@ -133,15 +158,23 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 " fma4"
 #endif
 #ifdef __FSGSBASE__
-// rdfsgsbase, wrfsgsbase, Intel codename "Ivy Bridge"
+// rdfsgsbase, wrfsgsbase, Intel Core 3rd Generation ("Ivy Bridge")
 " fsgsbase"
+#endif
+#ifdef __GFNI__
+// Galois Field new instructions, Intel processor codename "Ice Lake"
+" gfni"
+#endif
+#ifdef __IBT__
+// Indirect Branch Tracking, Intel processor TBA
+" ibt"
 #endif
 #ifdef __LWP__
 // LWP instructions, AMD "Bulldozer"
 " lwp"
 #endif
 #ifdef __LZCNT__
-// Leading-Zero bit count, Intel codename "Haswell"
+// Leading-Zero bit count, Intel Core 4th Generation ("Haswell")
 " lzcnt"
 #endif
 #ifdef __MMX__
@@ -151,6 +184,10 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 #ifdef __MOVBE__
 // Move Big Endian, Intel Atom & "Haswell"
 " movbe"
+#endif
+#ifdef __MPX__
+// Memory Protection Extensions, Intel Core processor codename "Skylake"
+" mpx"
 #endif
 #ifdef __NO_SAHF__
 // missing SAHF instruction in 64-bit, up to Intel Pentium 4 64-bit ("Nocona"), AMD Athlon FX
@@ -165,9 +202,37 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 // Population Count (count of set bits), Intel Core-i7 second generation ("Sandy Bridge")
 " popcnt"
 #endif
+#ifdef __PREFETCHWT1__
+// Prefetch data for writing with T1 hint, Intel processor TBA
+" prefetchwt1"
+#endif
+#ifdef __PRFCHW__
+// Prefetch data for writing, Intel Core 5th Generation ("Broadwell")
+" prfchw"
+#endif
+#ifdef __RDPID__
+// Read Processor ID, Intel processors codename "Ice Lake" and "Goldmont Plus"
+" rdpid"
+#endif
 #ifdef __RDRND__
-// Random number generator, Intel codename "Ivy Bridge"
+// Random number generator, Intel Core 3rd Generation ("Ivy Bridge")
 " rdrnd"
+#endif
+#ifdef __RDSEED__
+// Random number generator, Intel Core 5th Generation ("Broadwell")
+" rdseed"
+#endif
+#ifdef __RTM__
+// Restricted Transactional Memory, Intel Core 4th Generation ("Haswell")
+" rtm"
+#endif
+#ifdef __SHA__
+// SHA-1 and SHA-256 instructions, Intel processors codename "Cannon Lake" and "Goldmont"
+" sha"
+#endif
+#ifdef __SHSTK__
+// Shadow stack, Intel processor TBA
+" shstk"
 #endif
 #if defined(__SSE__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1) || defined(_M_X64)
 // Streaming SIMD Extensions, Intel Pentium III, AMD Athlon
@@ -210,11 +275,14 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 #endif
 
 // -- ARM --
-#ifdef __ARM_NEON__
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
 " neon"
 #endif
 #ifdef __IWMMXT__
 " iwmmxt"
+#endif
+#ifdef __ARM_FEATURE_CRC32
+" crc32"
 #endif
 
 // -- SPARC --
@@ -240,10 +308,20 @@ const char msg2[] = "==Qt=magic=Qt== Sub-architecture:"
 #ifdef __ALTIVEC__
 " altivec"
 #endif
+#ifdef __SPE__
+" spe"
+#endif
+#ifdef __VSX__
+" vsx"
+#endif
                    "";
+
+extern const char msg3[];
+const char msg3[] = "==Qt=magic=Qt== Build-ABI:" ARCH_FULL;
 
 int main()
 {
     puts(msg);
     puts(msg2);
+    puts(msg3);
 }

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,16 +43,19 @@
 #include "qwindowsintegration.h"
 #include "qwindowsmousehandler.h"
 
-#include <QtCore/QDebug>
-#include <QtCore/QObject>
-#include <QtCore/QRect>
-#include <QtCore/QRectF>
-#include <QtCore/QTextBoundaryFinder>
+#include <QtCore/qdebug.h>
+#include <QtCore/qobject.h>
+#include <QtCore/qrect.h>
+#include <QtCore/qtextboundaryfinder.h>
 
-#include <QtGui/QInputMethodEvent>
-#include <QtGui/QTextCharFormat>
-#include <QtGui/QPalette>
-#include <QtGui/QGuiApplication>
+#include <QtGui/qevent.h>
+#include <QtGui/qtextformat.h>
+#include <QtGui/qpalette.h>
+#include <QtGui/qguiapplication.h>
+
+#include <private/qhighdpiscaling_p.h>
+
+#include <algorithm>
 
 QT_BEGIN_NAMESPACE
 
@@ -81,22 +82,26 @@ static inline QByteArray debugComposition(int lParam)
 // Cancel current IME composition.
 static inline void imeNotifyCancelComposition(HWND hwnd)
 {
+    if (!hwnd) {
+        qWarning() << __FUNCTION__ << "called with" << hwnd;
+        return;
+    }
     const HIMC himc = ImmGetContext(hwnd);
     ImmNotifyIME(himc, NI_COMPOSITIONSTR, CPS_CANCEL, 0);
     ImmReleaseContext(hwnd, himc);
 }
 
-// Query a QObject for an InputMethod-related value
-// by sending a QInputMethodQueryEvent.
-template <class T>
-    bool inputMethodQuery(QObject *fo, Qt::InputMethodQuery query, T *result)
+static inline LCID languageIdFromLocaleId(LCID localeId)
 {
-    QInputMethodQueryEvent queryEvent(query);
-    if (!QCoreApplication::sendEvent(fo, &queryEvent))
-        return false;
-    *result = qvariant_cast<T>(queryEvent.value(query));
-    return true;
+    return localeId & 0xFFFF;
 }
+
+static inline LCID currentInputLanguageId()
+{
+    return languageIdFromLocaleId(reinterpret_cast<quintptr>(GetKeyboardLayout(0)));
+}
+
+Q_CORE_EXPORT QLocale qt_localeFromLCID(LCID id); // from qlocale_win.cpp
 
 /*!
     \class QWindowsInputContext
@@ -158,22 +163,33 @@ template <class T>
 */
 
 
-
-QWindowsInputContext::CompositionContext::CompositionContext() :
-    hwnd(0), haveCaret(false), position(0), isComposing(false)
-{
-}
-
 QWindowsInputContext::QWindowsInputContext() :
     m_WM_MSIME_MOUSE(RegisterWindowMessage(L"MSIMEMouseOperation")),
-    m_endCompositionRecursionGuard(false)
+    m_languageId(currentInputLanguageId()),
+    m_locale(qt_localeFromLCID(m_languageId))
 {
-    connect(qApp->inputMethod(), SIGNAL(cursorRectangleChanged()),
-            this, SLOT(cursorRectChanged()));
+    const quint32 bmpData = 0;
+    m_transparentBitmap = CreateBitmap(2, 2, 1, 1, &bmpData);
+
+    connect(QGuiApplication::inputMethod(), &QInputMethod::cursorRectangleChanged,
+            this, &QWindowsInputContext::cursorRectChanged);
 }
 
 QWindowsInputContext::~QWindowsInputContext()
 {
+    if (m_transparentBitmap)
+        DeleteObject(m_transparentBitmap);
+}
+
+bool QWindowsInputContext::hasCapability(Capability capability) const
+{
+    switch (capability) {
+    case QPlatformInputContext::HiddenTextCapability:
+        return false; // QTBUG-40691, do not show IME on desktop for password entry fields.
+    default:
+        break;
+    }
+    return true;
 }
 
 /*!
@@ -185,20 +201,110 @@ void QWindowsInputContext::reset()
     QPlatformInputContext::reset();
     if (!m_compositionContext.hwnd)
         return;
-    QObject *fo = qApp->focusObject();
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__<< fo;
-    if (!fo)
-        return;
-    if (m_compositionContext.isComposing) {
+    qCDebug(lcQpaInputMethods) << __FUNCTION__;
+    if (m_compositionContext.isComposing && !m_compositionContext.focusObject.isNull()) {
         QInputMethodEvent event;
         if (!m_compositionContext.composition.isEmpty())
             event.setCommitString(m_compositionContext.composition);
-        QCoreApplication::sendEvent(fo, &event);
+        QCoreApplication::sendEvent(m_compositionContext.focusObject, &event);
         endContextComposition();
     }
     imeNotifyCancelComposition(m_compositionContext.hwnd);
     doneContext();
+}
+
+void QWindowsInputContext::setFocusObject(QObject *)
+{
+    // ### fixme: On Windows 8.1, it has been observed that the Input context
+    // remains active when this happens resulting in a lock-up. Consecutive
+    // key events still have VK_PROCESSKEY set and are thus ignored.
+    if (m_compositionContext.isComposing)
+        reset();
+    updateEnabled();
+}
+
+HWND QWindowsInputContext::getVirtualKeyboardWindowHandle() const
+{
+    return ::FindWindowA("IPTip_Main_Window", nullptr);
+}
+
+QRectF QWindowsInputContext::keyboardRect() const
+{
+    if (HWND hwnd = getVirtualKeyboardWindowHandle()) {
+        RECT rect;
+        if (::GetWindowRect(hwnd, &rect)) {
+            return QRectF(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+        }
+    }
+    return QRectF();
+}
+
+bool QWindowsInputContext::isInputPanelVisible() const
+{
+    HWND hwnd = getVirtualKeyboardWindowHandle();
+    return hwnd && ::IsWindowEnabled(hwnd) && ::IsWindowVisible(hwnd);
+}
+
+void QWindowsInputContext::showInputPanel()
+{
+    if (!inputMethodAccepted())
+        return;
+
+    QWindow *window = QGuiApplication::focusWindow();
+    if (!window)
+        return;
+
+    QWindowsWindow *platformWindow = QWindowsWindow::windowsWindowOf(window);
+    if (!platformWindow)
+        return;
+
+    // Create an invisible 2x2 caret, which will be kept at the microfocus position.
+    // It is important for triggering the on-screen keyboard in touch-screen devices,
+    // for some Chinese input methods, and for Magnifier's "follow keyboard" feature.
+    if (!m_caretCreated && m_transparentBitmap)
+        m_caretCreated = CreateCaret(platformWindow->handle(), m_transparentBitmap, 0, 0);
+
+    // For some reason, the on-screen keyboard is only triggered on the Surface
+    // with Windows 10 if the Windows IME is (re)enabled _after_ the caret is shown.
+    if (m_caretCreated) {
+        cursorRectChanged();
+        ShowCaret(platformWindow->handle());
+        setWindowsImeEnabled(platformWindow, false);
+        setWindowsImeEnabled(platformWindow, true);
+    }
+}
+
+void QWindowsInputContext::hideInputPanel()
+{
+    if (m_caretCreated) {
+        DestroyCaret();
+        m_caretCreated = false;
+    }
+}
+
+void QWindowsInputContext::updateEnabled()
+{
+    if (!QGuiApplication::focusObject())
+        return;
+    if (QWindowsWindow *platformWindow = QWindowsWindow::windowsWindowOf(QGuiApplication::focusWindow())) {
+        const bool accepted = inputMethodAccepted();
+        if (QWindowsContext::verbose > 1)
+            qCDebug(lcQpaInputMethods) << __FUNCTION__ << platformWindow->window() << "accepted=" << accepted;
+        QWindowsInputContext::setWindowsImeEnabled(platformWindow, accepted);
+    }
+}
+
+void QWindowsInputContext::setWindowsImeEnabled(QWindowsWindow *platformWindow, bool enabled)
+{
+    if (!platformWindow)
+        return;
+    if (enabled) {
+        // Re-enable Windows IME by associating default context.
+        ImmAssociateContextEx(platformWindow->handle(), 0, IACE_DEFAULT);
+    } else {
+        // Disable Windows IME by associating 0 context.
+        ImmAssociateContext(platformWindow->handle(), 0);
+    }
 }
 
 /*!
@@ -207,20 +313,34 @@ void QWindowsInputContext::reset()
 
 void QWindowsInputContext::update(Qt::InputMethodQueries queries)
 {
+    if (queries & Qt::ImEnabled)
+        updateEnabled();
     QPlatformInputContext::update(queries);
 }
 
 void QWindowsInputContext::cursorRectChanged()
 {
-    if (!m_compositionContext.hwnd)
-        return;
-    const QInputMethod *inputMethod = qApp->inputMethod();
-    QRect cursorRectangle = inputMethod->cursorRectangle().toRect();
-    if (!cursorRectangle.isValid())
+    QWindow *window = QGuiApplication::focusWindow();
+    if (!window)
         return;
 
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__<< cursorRectangle;
+    qreal factor = QHighDpiScaling::factor(window);
+
+    const QInputMethod *inputMethod = QGuiApplication::inputMethod();
+    const QRectF cursorRectangleF = inputMethod->cursorRectangle();
+    if (!cursorRectangleF.isValid())
+        return;
+
+    const QRect cursorRectangle =
+        QRectF(cursorRectangleF.topLeft() * factor, cursorRectangleF.size() * factor).toRect();
+
+    if (m_caretCreated)
+        SetCaretPos(cursorRectangle.x(), cursorRectangle.y());
+
+    if (!m_compositionContext.hwnd)
+        return;
+
+    qCDebug(lcQpaInputMethods) << __FUNCTION__<< cursorRectangle;
 
     const HIMC himc = ImmGetContext(m_compositionContext.hwnd);
     if (!himc)
@@ -242,9 +362,6 @@ void QWindowsInputContext::cursorRectChanged()
     candf.rcArea.right = cursorRectangle.x() + cursorRectangle.width();
     candf.rcArea.bottom = cursorRectangle.y() + cursorRectangle.height();
 
-    if (m_compositionContext.haveCaret)
-        SetCaretPos(cursorRectangle.x(), cursorRectangle.y());
-
     ImmSetCompositionWindow(himc, &cf);
     ImmSetCandidateWindow(himc, &candf);
     ImmReleaseContext(m_compositionContext.hwnd, himc);
@@ -257,8 +374,7 @@ void QWindowsInputContext::invokeAction(QInputMethod::Action action, int cursorP
         return;
     }
 
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__ << cursorPosition << action;
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << cursorPosition << action;
     if (cursorPosition < 0 || cursorPosition > m_compositionContext.composition.size())
         reset();
 
@@ -266,13 +382,10 @@ void QWindowsInputContext::invokeAction(QInputMethod::Action action, int cursorP
     // position.
     const HIMC himc = ImmGetContext(m_compositionContext.hwnd);
     const HWND imeWindow = ImmGetDefaultIMEWnd(m_compositionContext.hwnd);
-    SendMessage(imeWindow, m_WM_MSIME_MOUSE, MAKELONG(MAKEWORD(MK_LBUTTON, cursorPosition == 0 ? 2 : 1), cursorPosition), (LPARAM)himc);
+    const WPARAM mouseOperationCode =
+        MAKELONG(MAKEWORD(MK_LBUTTON, cursorPosition == 0 ? 2 : 1), cursorPosition);
+    SendMessage(imeWindow, m_WM_MSIME_MOUSE, mouseOperationCode, LPARAM(himc));
     ImmReleaseContext(m_compositionContext.hwnd, himc);
-}
-
-QWindowsInputContext *QWindowsInputContext::instance()
-{
-    return static_cast<QWindowsInputContext *>(QWindowsIntegration::instance()->inputContext());
 }
 
 static inline QString getCompositionString(HIMC himc, DWORD dwIndex)
@@ -280,7 +393,7 @@ static inline QString getCompositionString(HIMC himc, DWORD dwIndex)
     enum { bufferSize = 256 };
     wchar_t buffer[bufferSize];
     const int length = ImmGetCompositionString(himc, dwIndex, buffer, bufferSize * sizeof(wchar_t));
-    return QString::fromWCharArray(buffer,  length / sizeof(wchar_t));
+    return QString::fromWCharArray(buffer,  size_t(length) / sizeof(wchar_t));
 }
 
 // Determine the converted string range as pair of start/length to be selected.
@@ -330,18 +443,17 @@ static inline QTextFormat standardFormat(StandardFormat format)
 
 bool QWindowsInputContext::startComposition(HWND hwnd)
 {
-    const QObject *fo = qApp->focusObject();
+    QObject *fo = QGuiApplication::focusObject();
     if (!fo)
         return false;
     // This should always match the object.
-    QWindow *window = qApp->focusWindow();
+    QWindow *window = QGuiApplication::focusWindow();
     if (!window)
         return false;
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__ << fo << window;
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << fo << window << "language=" << m_languageId;
     if (!fo || QWindowsWindow::handleOf(window) != hwnd)
         return false;
-    initContext(hwnd);
+    initContext(hwnd, fo);
     startContextComposition();
     return true;
 }
@@ -355,6 +467,7 @@ void QWindowsInputContext::startContextComposition()
     m_compositionContext.isComposing = true;
     m_compositionContext.composition.clear();
     m_compositionContext.position = 0;
+    cursorRectChanged(); // position cursor initially.
     update(Qt::ImQueryAll);
 }
 
@@ -398,12 +511,10 @@ static inline QList<QInputMethodEvent::Attribute>
 
 bool QWindowsInputContext::composition(HWND hwnd, LPARAM lParamIn)
 {
-    QObject *fo = qApp->focusObject();
     const int lParam = int(lParamIn);
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << '>' << __FUNCTION__ << fo << debugComposition(lParam)
-                 << " composing=" << m_compositionContext.isComposing;
-    if (!fo || m_compositionContext.hwnd != hwnd || !lParam)
+    qCDebug(lcQpaInputMethods) << '>' << __FUNCTION__ << m_compositionContext.focusObject
+        << debugComposition(lParam) << " composing=" << m_compositionContext.isComposing;
+    if (m_compositionContext.focusObject.isNull() || m_compositionContext.hwnd != hwnd || !lParam)
         return false;
     const HIMC himc = ImmGetContext(m_compositionContext.hwnd);
     if (!himc)
@@ -438,14 +549,13 @@ bool QWindowsInputContext::composition(HWND hwnd, LPARAM lParamIn)
     if (lParam & GCS_RESULTSTR) {
         // A fixed result, return the converted string
         event->setCommitString(getCompositionString(himc, GCS_RESULTSTR));
-        endContextComposition();
+        if (!(lParam & GCS_DELTASTART))
+            endContextComposition();
     }
-    const bool result = QCoreApplication::sendEvent(fo, event.data());
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << '<' << __FUNCTION__ << "sending markup="
-                  << event->attributes().size()
-                  << " commit=" << event->commitString()
-                  << " to " << fo << " returns " << result;
+    const bool result = QCoreApplication::sendEvent(m_compositionContext.focusObject, event.data());
+    qCDebug(lcQpaInputMethods) << '<' << __FUNCTION__ << "sending markup="
+        << event->attributes().size() << " commit=" << event->commitString()
+        << " to " << m_compositionContext.focusObject << " returns " << result;
     update(Qt::ImQueryAll);
     ImmReleaseContext(m_compositionContext.hwnd, himc);
     return result;
@@ -453,23 +563,29 @@ bool QWindowsInputContext::composition(HWND hwnd, LPARAM lParamIn)
 
 bool QWindowsInputContext::endComposition(HWND hwnd)
 {
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__ << m_endCompositionRecursionGuard << hwnd;
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << m_endCompositionRecursionGuard << hwnd;
     // Googles Pinyin Input Method likes to call endComposition again
     // when we call notifyIME with CPS_CANCEL, so protect ourselves
     // against that.
     if (m_endCompositionRecursionGuard || m_compositionContext.hwnd != hwnd)
         return false;
-    QObject *fo = qApp->focusObject();
-    if (!fo)
+    if (m_compositionContext.focusObject.isNull())
         return false;
+
+    // QTBUG-58300: Ignore WM_IME_ENDCOMPOSITION when CTRL is pressed to prevent
+    // for example the text being cleared when pressing CTRL+A
+    if (m_locale.language() == QLocale::Korean
+        && QGuiApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier)) {
+        reset();
+        return true;
+    }
 
     m_endCompositionRecursionGuard = true;
 
     imeNotifyCancelComposition(m_compositionContext.hwnd);
     if (m_compositionContext.isComposing) {
         QInputMethodEvent event;
-        QCoreApplication::sendEvent(fo, &event);
+        QCoreApplication::sendEvent(m_compositionContext.focusObject, &event);
     }
     doneContext();
 
@@ -477,16 +593,13 @@ bool QWindowsInputContext::endComposition(HWND hwnd)
     return true;
 }
 
-void QWindowsInputContext::initContext(HWND hwnd)
+void QWindowsInputContext::initContext(HWND hwnd, QObject *focusObject)
 {
     if (m_compositionContext.hwnd)
         doneContext();
     m_compositionContext.hwnd = hwnd;
-    // Create a hidden caret which is kept at the microfocus
-    // position in update(). This is important for some
-    // Chinese input methods.
-    m_compositionContext.haveCaret = CreateCaret(hwnd, 0, 1, 1);
-    HideCaret(hwnd);
+    m_compositionContext.focusObject = focusObject;
+
     update(Qt::ImQueryAll);
     m_compositionContext.isComposing = false;
     m_compositionContext.position = 0;
@@ -496,12 +609,11 @@ void QWindowsInputContext::doneContext()
 {
     if (!m_compositionContext.hwnd)
         return;
-    if (m_compositionContext.haveCaret)
-        DestroyCaret();
     m_compositionContext.hwnd = 0;
     m_compositionContext.composition.clear();
     m_compositionContext.position = 0;
-    m_compositionContext.isComposing = m_compositionContext.haveCaret = false;
+    m_compositionContext.isComposing = false;
+    m_compositionContext.focusObject = 0;
 }
 
 bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
@@ -514,15 +626,29 @@ bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
         if (size < 0)
             return false;
         *result = size;
-        return true;
     }
-        break;
+        return true;
     case IMR_CONFIRMRECONVERTSTRING:
         return true;
     default:
         break;
     }
     return false;
+}
+
+void QWindowsInputContext::handleInputLanguageChanged(WPARAM wparam, LPARAM lparam)
+{
+    const LCID newLanguageId = languageIdFromLocaleId(WORD(lparam));
+    if (newLanguageId == m_languageId)
+        return;
+    const LCID oldLanguageId = m_languageId;
+    m_languageId = newLanguageId;
+    m_locale = qt_localeFromLCID(m_languageId);
+    emitLocaleChanged();
+
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << hex << showbase
+        << oldLanguageId  << "->" << newLanguageId << "Character set:"
+        << DWORD(wparam) << dec << noshowbase << m_locale;
 }
 
 /*!
@@ -538,25 +664,24 @@ bool QWindowsInputContext::handleIME_Request(WPARAM wParam,
 
 int QWindowsInputContext::reconvertString(RECONVERTSTRING *reconv)
 {
-    QObject *fo = qApp->focusObject();
+    QObject *fo = QGuiApplication::focusObject();
     if (!fo)
         return false;
 
-    QString surroundingText;
-    if (!inputMethodQuery(fo, Qt::ImSurroundingText, &surroundingText))
+    const QVariant surroundingTextV = QInputMethod::queryFocusObject(Qt::ImSurroundingText, QVariant());
+    if (!surroundingTextV.isValid())
         return -1;
-    const DWORD memSize = sizeof(RECONVERTSTRING)
-            + (surroundingText.length() + 1) * sizeof(ushort);
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__ << " reconv=" << reconv
-                 << " surroundingText=" << surroundingText
-                 << " size=" << memSize;
+    const QString surroundingText = surroundingTextV.toString();
+    const int memSize = int(sizeof(RECONVERTSTRING))
+        + (surroundingText.length() + 1) * int(sizeof(ushort));
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << " reconv=" << reconv
+        << " surroundingText=" << surroundingText << " size=" << memSize;
     // If memory is not allocated, return the required size.
     if (!reconv)
-        return surroundingText.isEmpty() ? -1 : int(memSize);
+        return surroundingText.isEmpty() ? -1 : memSize;
 
-    int pos = 0;
-    inputMethodQuery(fo, Qt::ImCursorPosition, &pos);
+    const QVariant posV = QInputMethod::queryFocusObject(Qt::ImCursorPosition, QVariant());
+    const int pos = posV.isValid() ? posV.toInt() : 0;
     // Find the word in the surrounding text.
     QTextBoundaryFinder bounds(QTextBoundaryFinder::Word, surroundingText);
     bounds.setPosition(pos);
@@ -565,26 +690,25 @@ int QWindowsInputContext::reconvertString(RECONVERTSTRING *reconv)
     const int startPos = bounds.position();
     bounds.toNextBoundary();
     const int endPos = bounds.position();
-    if (QWindowsContext::verboseInputMethods)
-        qDebug() << __FUNCTION__ << " boundary=" << startPos << endPos;
+    qCDebug(lcQpaInputMethods) << __FUNCTION__ << " boundary=" << startPos << endPos;
     // Select the text, this will be overwritten by following IME events.
     QList<QInputMethodEvent::Attribute> attributes;
     attributes << QInputMethodEvent::Attribute(QInputMethodEvent::Selection, startPos, endPos-startPos, QVariant());
     QInputMethodEvent selectEvent(QString(), attributes);
     QCoreApplication::sendEvent(fo, &selectEvent);
 
-    reconv->dwSize = memSize;
+    reconv->dwSize = DWORD(memSize);
     reconv->dwVersion = 0;
 
-    reconv->dwStrLen = surroundingText.size();
+    reconv->dwStrLen = DWORD(surroundingText.size());
     reconv->dwStrOffset = sizeof(RECONVERTSTRING);
-    reconv->dwCompStrLen = endPos - startPos; // TCHAR count.
-    reconv->dwCompStrOffset = startPos * sizeof(ushort); // byte count.
+    reconv->dwCompStrLen = DWORD(endPos - startPos); // TCHAR count.
+    reconv->dwCompStrOffset = DWORD(startPos) * sizeof(ushort); // byte count.
     reconv->dwTargetStrLen = reconv->dwCompStrLen;
     reconv->dwTargetStrOffset = reconv->dwCompStrOffset;
     ushort *pastReconv = reinterpret_cast<ushort *>(reconv + 1);
-    qCopy(surroundingText.utf16(), surroundingText.utf16() + surroundingText.size(),
-          pastReconv);
+    std::copy(surroundingText.utf16(), surroundingText.utf16() + surroundingText.size(),
+              QT_MAKE_UNCHECKED_ARRAY_ITERATOR(pastReconv));
     return memSize;
 }
 

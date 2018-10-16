@@ -3,6 +3,8 @@ SOURCES  += ../tst_qclipboard.cpp
 TARGET = ../tst_qclipboard
 QT += testlib
 
+osx: LIBS += -framework AppKit
+
 win32 {
   CONFIG(debug, debug|release) {
     TARGET = ../../debug/tst_qclipboard
@@ -11,11 +13,6 @@ win32 {
   }
 }
 
-wince* {
-  DEPLOYMENT += rsc reg_resource
-}
-
-TEST_HELPER_INSTALLS = \
+!android:!winrt: TEST_HELPER_INSTALLS = \
     ../copier/copier \
     ../paster/paster
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

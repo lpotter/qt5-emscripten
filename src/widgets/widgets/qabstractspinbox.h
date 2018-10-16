@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,15 +40,13 @@
 #ifndef QABSTRACTSPINBOX_H
 #define QABSTRACTSPINBOX_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qwidget.h>
 #include <QtGui/qvalidator.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(spinbox);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_SPINBOX
 
 class QLineEdit;
 
@@ -61,8 +57,6 @@ class Q_WIDGETS_EXPORT QAbstractSpinBox : public QWidget
 {
     Q_OBJECT
 
-    Q_ENUMS(ButtonSymbols)
-    Q_ENUMS(CorrectionMode)
     Q_PROPERTY(bool wrapping READ wrapping WRITE setWrapping)
     Q_PROPERTY(bool frame READ hasFrame WRITE setFrame)
     Q_PROPERTY(Qt::Alignment alignment READ alignment WRITE setAlignment)
@@ -74,8 +68,9 @@ class Q_WIDGETS_EXPORT QAbstractSpinBox : public QWidget
     Q_PROPERTY(CorrectionMode correctionMode READ correctionMode WRITE setCorrectionMode)
     Q_PROPERTY(bool acceptableInput READ hasAcceptableInput)
     Q_PROPERTY(bool keyboardTracking READ keyboardTracking WRITE setKeyboardTracking)
+    Q_PROPERTY(bool showGroupSeparator READ isGroupSeparatorShown WRITE setGroupSeparatorShown)
 public:
-    explicit QAbstractSpinBox(QWidget *parent = 0);
+    explicit QAbstractSpinBox(QWidget *parent = nullptr);
     ~QAbstractSpinBox();
 
     enum StepEnabledFlag { StepNone = 0x00, StepUpEnabled = 0x01,
@@ -83,11 +78,13 @@ public:
     Q_DECLARE_FLAGS(StepEnabled, StepEnabledFlag)
 
     enum ButtonSymbols { UpDownArrows, PlusMinus, NoButtons };
+    Q_ENUM(ButtonSymbols)
 
     ButtonSymbols buttonSymbols() const;
     void setButtonSymbols(ButtonSymbols bs);
 
     enum CorrectionMode  { CorrectToPreviousValue, CorrectToNearestValue };
+    Q_ENUM(CorrectionMode)
 
     void setCorrectionMode(CorrectionMode cm);
     CorrectionMode correctionMode() const;
@@ -116,41 +113,53 @@ public:
     void setAccelerated(bool on);
     bool isAccelerated() const;
 
-    QSize sizeHint() const;
-    QSize minimumSizeHint() const;
-    void interpretText();
-    bool event(QEvent *event);
+    void setGroupSeparatorShown(bool shown);
+    bool isGroupSeparatorShown() const;
 
-    QVariant inputMethodQuery(Qt::InputMethodQuery) const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+    void interpretText();
+    bool event(QEvent *event) override;
+
+    QVariant inputMethodQuery(Qt::InputMethodQuery) const override;
 
     virtual QValidator::State validate(QString &input, int &pos) const;
     virtual void fixup(QString &input) const;
 
     virtual void stepBy(int steps);
+
+    enum StepType {
+        DefaultStepType,
+        AdaptiveDecimalStepType
+    };
+    Q_ENUM(StepType)
+
 public Q_SLOTS:
     void stepUp();
     void stepDown();
     void selectAll();
     virtual void clear();
 protected:
-    void resizeEvent(QResizeEvent *event);
-    void keyPressEvent(QKeyEvent *event);
-    void keyReleaseEvent(QKeyEvent *event);
-#ifndef QT_NO_WHEELEVENT
-    void wheelEvent(QWheelEvent *event);
+    void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+#if QT_CONFIG(wheelevent)
+    void wheelEvent(QWheelEvent *event) override;
 #endif
-    void focusInEvent(QFocusEvent *event);
-    void focusOutEvent(QFocusEvent *event);
-    void contextMenuEvent(QContextMenuEvent *event);
-    void changeEvent(QEvent *event);
-    void closeEvent(QCloseEvent *event);
-    void hideEvent(QHideEvent *event);
-    void mousePressEvent(QMouseEvent *event);
-    void mouseReleaseEvent(QMouseEvent *event);
-    void mouseMoveEvent(QMouseEvent *event);
-    void timerEvent(QTimerEvent *event);
-    void paintEvent(QPaintEvent *event);
-    void showEvent(QShowEvent *event);
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+#if QT_CONFIG(contextmenu)
+    void contextMenuEvent(QContextMenuEvent *event) override;
+#endif
+    void changeEvent(QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void timerEvent(QTimerEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void initStyleOption(QStyleOptionSpinBox *option) const;
 
     QLineEdit *lineEdit() const;
@@ -160,7 +169,7 @@ protected:
 Q_SIGNALS:
     void editingFinished();
 protected:
-    QAbstractSpinBox(QAbstractSpinBoxPrivate &dd, QWidget *parent = 0);
+    QAbstractSpinBox(QAbstractSpinBoxPrivate &dd, QWidget *parent = nullptr);
 
 private:
     Q_PRIVATE_SLOT(d_func(), void _q_editorTextChanged(const QString &))
@@ -168,13 +177,10 @@ private:
 
     Q_DECLARE_PRIVATE(QAbstractSpinBox)
     Q_DISABLE_COPY(QAbstractSpinBox)
+    friend class QAccessibleAbstractSpinBox;
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(QAbstractSpinBox::StepEnabled)
 
-#endif // QT_NO_SPINBOX
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QABSTRACTSPINBOX_H

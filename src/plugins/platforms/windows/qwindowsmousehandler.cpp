@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,11 +45,14 @@
 #include "qwindowsscreen.h"
 
 #include <qpa/qwindowsysteminterface.h>
-#include <QtGui/QGuiApplication>
-#include <QtGui/QScreen>
+#include <QtGui/qguiapplication.h>
+#include <QtGui/qscreen.h>
+#include <QtGui/qtouchdevice.h>
+#include <QtGui/qwindow.h>
+#include <QtGui/qcursor.h>
 
-#include <QtCore/QDebug>
-#include <QtCore/QScopedArrayPointer>
+#include <QtCore/qdebug.h>
+#include <QtCore/qscopedpointer.h>
 
 #include <windowsx.h>
 
@@ -116,6 +117,27 @@ static inline void compressMouseMove(MSG *msg)
     }
 }
 
+static inline QTouchDevice *createTouchDevice()
+{
+    const int digitizers = GetSystemMetrics(SM_DIGITIZER);
+    if (!(digitizers & (NID_INTEGRATED_TOUCH | NID_EXTERNAL_TOUCH)))
+        return 0;
+    const int tabletPc = GetSystemMetrics(SM_TABLETPC);
+    const int maxTouchPoints = GetSystemMetrics(SM_MAXIMUMTOUCHES);
+    qCDebug(lcQpaEvents) << "Digitizers:" << hex << showbase << (digitizers & ~NID_READY)
+        << "Ready:" << (digitizers & NID_READY) << dec << noshowbase
+        << "Tablet PC:" << tabletPc << "Max touch points:" << maxTouchPoints;
+    QTouchDevice *result = new QTouchDevice;
+    result->setType(digitizers & NID_INTEGRATED_TOUCH
+                    ? QTouchDevice::TouchScreen : QTouchDevice::TouchPad);
+    QTouchDevice::Capabilities capabilities = QTouchDevice::Position | QTouchDevice::Area | QTouchDevice::NormalizedPosition;
+    if (result->type() == QTouchDevice::TouchPad)
+        capabilities |= QTouchDevice::MouseEmulation;
+    result->setCapabilities(capabilities);
+    result->setMaximumTouchPoints(maxTouchPoints);
+    return result;
+}
+
 /*!
     \class QWindowsMouseHandler
     \brief Windows mouse handler
@@ -126,13 +148,13 @@ static inline void compressMouseMove(MSG *msg)
     \ingroup qt-lighthouse-win
 */
 
-QWindowsMouseHandler::QWindowsMouseHandler() :
-    m_windowUnderMouse(0),
-    m_trackedWindow(0),
-    m_touchDevice(0),
-    m_leftButtonDown(false),
-    m_previousCaptureWindow(0)
+QWindowsMouseHandler::QWindowsMouseHandler() = default;
+
+QTouchDevice *QWindowsMouseHandler::ensureTouchDevice()
 {
+    if (!m_touchDevice)
+        m_touchDevice = createTouchDevice();
+    return m_touchDevice;
 }
 
 Qt::MouseButtons QWindowsMouseHandler::queryMouseButtons()
@@ -152,36 +174,158 @@ Qt::MouseButtons QWindowsMouseHandler::queryMouseButtons()
     return result;
 }
 
+static QPoint lastMouseMovePos;
+
+namespace {
+struct MouseEvent {
+    QEvent::Type type;
+    Qt::MouseButton button;
+};
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug d, const MouseEvent &e)
+{
+    QDebugStateSaver saver(d);
+    d.nospace();
+    d << "MouseEvent(" << e.type << ", " << e.button << ')';
+    return d;
+}
+#endif // QT_NO_DEBUG_STREAM
+} // namespace
+
+static inline Qt::MouseButton extraButton(WPARAM wParam) // for WM_XBUTTON...
+{
+    return GET_XBUTTON_WPARAM(wParam) == XBUTTON1 ? Qt::BackButton : Qt::ForwardButton;
+}
+
+static inline MouseEvent eventFromMsg(const MSG &msg)
+{
+    switch (msg.message) {
+    case WM_MOUSEMOVE:
+        return {QEvent::MouseMove, Qt::NoButton};
+    case WM_LBUTTONDOWN:
+        return {QEvent::MouseButtonPress, Qt::LeftButton};
+    case WM_LBUTTONUP:
+        return {QEvent::MouseButtonRelease, Qt::LeftButton};
+    case WM_LBUTTONDBLCLK:
+        return {QEvent::MouseButtonDblClick, Qt::LeftButton};
+    case WM_MBUTTONDOWN:
+        return {QEvent::MouseButtonPress, Qt::MidButton};
+    case WM_MBUTTONUP:
+        return {QEvent::MouseButtonRelease, Qt::MidButton};
+    case WM_MBUTTONDBLCLK:
+        return {QEvent::MouseButtonDblClick, Qt::MidButton};
+    case WM_RBUTTONDOWN:
+        return {QEvent::MouseButtonPress, Qt::RightButton};
+    case WM_RBUTTONUP:
+        return {QEvent::MouseButtonRelease, Qt::RightButton};
+    case WM_RBUTTONDBLCLK:
+        return {QEvent::MouseButtonDblClick, Qt::RightButton};
+    case WM_XBUTTONDOWN:
+        return {QEvent::MouseButtonPress, extraButton(msg.wParam)};
+    case WM_XBUTTONUP:
+        return {QEvent::MouseButtonRelease, extraButton(msg.wParam)};
+    case WM_XBUTTONDBLCLK:
+        return {QEvent::MouseButtonDblClick, extraButton(msg.wParam)};
+    case WM_NCMOUSEMOVE:
+        return {QEvent::NonClientAreaMouseMove, Qt::NoButton};
+    case WM_NCLBUTTONDOWN:
+        return {QEvent::NonClientAreaMouseButtonPress, Qt::LeftButton};
+    case WM_NCLBUTTONUP:
+        return {QEvent::NonClientAreaMouseButtonRelease, Qt::LeftButton};
+    case WM_NCLBUTTONDBLCLK:
+        return {QEvent::NonClientAreaMouseButtonDblClick, Qt::LeftButton};
+    case WM_NCMBUTTONDOWN:
+        return {QEvent::NonClientAreaMouseButtonPress, Qt::MidButton};
+    case WM_NCMBUTTONUP:
+        return {QEvent::NonClientAreaMouseButtonRelease, Qt::MidButton};
+    case WM_NCMBUTTONDBLCLK:
+        return {QEvent::NonClientAreaMouseButtonDblClick, Qt::MidButton};
+    case WM_NCRBUTTONDOWN:
+        return {QEvent::NonClientAreaMouseButtonPress, Qt::RightButton};
+    case WM_NCRBUTTONUP:
+        return {QEvent::NonClientAreaMouseButtonRelease, Qt::RightButton};
+    case WM_NCRBUTTONDBLCLK:
+        return {QEvent::NonClientAreaMouseButtonDblClick, Qt::RightButton};
+    default: // WM_MOUSELEAVE
+        break;
+    }
+    return {QEvent::None, Qt::NoButton};
+}
+
 bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
                                                QtWindows::WindowsEventType et,
                                                MSG msg, LRESULT *result)
 {
+    enum : quint64 { signatureMask = 0xffffff00, miWpSignature = 0xff515700 };
+
     if (et == QtWindows::MouseWheelEvent)
         return translateMouseWheelEvent(window, hwnd, msg, result);
 
     const QPoint winEventPosition(GET_X_LPARAM(msg.lParam), GET_Y_LPARAM(msg.lParam));
+    QPoint clientPosition;
+    QPoint globalPosition;
     if (et & QtWindows::NonClientEventFlag) {
-        const QPoint globalPosition = winEventPosition;
-        const QPoint clientPosition = QWindowsGeometryHint::mapFromGlobal(hwnd, globalPosition);
+        globalPosition = winEventPosition;
+        clientPosition = QWindowsGeometryHint::mapFromGlobal(hwnd, globalPosition);
+    } else {
+        clientPosition = winEventPosition;
+        globalPosition = QWindowsGeometryHint::mapToGlobal(hwnd, winEventPosition);
+    }
+
+    // Windows sends a mouse move with no buttons pressed to signal "Enter"
+    // when a window is shown over the cursor. Discard the event and only use
+    // it for generating QEvent::Enter to be consistent with other platforms -
+    // X11 and macOS.
+    bool discardEvent = false;
+    if (msg.message == WM_MOUSEMOVE) {
+        const bool samePosition = globalPosition == lastMouseMovePos;
+        lastMouseMovePos = globalPosition;
+        if (msg.wParam == 0 && (m_windowUnderMouse.isNull() || samePosition))
+            discardEvent = true;
+    }
+
+    Qt::MouseEventSource source = Qt::MouseEventNotSynthesized;
+
+    const MouseEvent mouseEvent = eventFromMsg(msg);
+
+    // Check for events synthesized from touch. Lower byte is touch index, 0 means pen.
+    static const bool passSynthesizedMouseEvents =
+            !(QWindowsIntegration::instance()->options() & QWindowsIntegration::DontPassOsMouseEventsSynthesizedFromTouch);
+    // Check for events synthesized from touch. Lower 7 bits are touch/pen index, bit 8 indicates touch.
+    // However, when tablet support is active, extraInfo is a packet serial number. This is not a problem
+    // since we do not want to ignore mouse events coming from a tablet.
+    // See https://msdn.microsoft.com/en-us/library/windows/desktop/ms703320.aspx
+    const quint64 extraInfo = quint64(GetMessageExtraInfo());
+    if ((extraInfo & signatureMask) == miWpSignature) {
+        if (extraInfo & 0x80) { // Bit 7 indicates touch event, else tablet pen.
+            source = Qt::MouseEventSynthesizedBySystem;
+            if (!passSynthesizedMouseEvents)
+                return false;
+        }
+    }
+
+    if (mouseEvent.type >= QEvent::NonClientAreaMouseMove && mouseEvent.type <= QEvent::NonClientAreaMouseButtonDblClick) {
         const Qt::MouseButtons buttons = QWindowsMouseHandler::queryMouseButtons();
         QWindowSystemInterface::handleFrameStrutMouseEvent(window, clientPosition,
                                                            globalPosition, buttons,
-                                                           QWindowsKeyMapper::queryKeyboardModifiers());
+                                                           mouseEvent.button, mouseEvent.type,
+                                                           QWindowsKeyMapper::queryKeyboardModifiers(),
+                                                           source);
         return false; // Allow further event processing (dragging of windows).
     }
 
     *result = 0;
     if (msg.message == WM_MOUSELEAVE) {
-        if (QWindowsContext::verboseEvents)
-            qDebug() << "WM_MOUSELEAVE for " << window << " previous window under mouse = " << m_windowUnderMouse << " tracked window =" << m_trackedWindow;
+        qCDebug(lcQpaEvents) << mouseEvent << "for" << window << "previous window under mouse="
+            << m_windowUnderMouse << "tracked window=" << m_trackedWindow;
 
         // When moving out of a window, WM_MOUSEMOVE within the moved-to window is received first,
         // so if m_trackedWindow is not the window here, it means the cursor has left the
         // application.
         if (window == m_trackedWindow) {
             QWindow *leaveTarget = m_windowUnderMouse ? m_windowUnderMouse : m_trackedWindow;
-            if (QWindowsContext::verboseEvents)
-                qDebug() << "Generating leave event for " << leaveTarget;
+            qCDebug(lcQpaEvents) << "Generating leave event for " << leaveTarget;
             QWindowSystemInterface::handleLeaveEvent(leaveTarget);
             m_trackedWindow = 0;
             m_windowUnderMouse = 0;
@@ -190,7 +334,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
     }
 
     QWindowsWindow *platformWindow = static_cast<QWindowsWindow *>(window->handle());
-    const Qt::MouseButtons buttons = keyStateToMouseButtons((int)msg.wParam);
+    const Qt::MouseButtons buttons = keyStateToMouseButtons(int(msg.wParam));
 
     // If the window was recently resized via mouse doubleclick on the frame or title bar,
     // we don't get WM_LBUTTONDOWN or WM_LBUTTONDBLCLK for the second click,
@@ -207,48 +351,55 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
             // Capture is necessary so we don't get WM_MOUSELEAVEs to confuse matters.
             // This autocapture is released normally when button is released.
             if (!platformWindow->hasMouseCapture()) {
-                QWindowsWindow::baseWindowOf(window)->applyCursor();
+                platformWindow->applyCursor();
                 platformWindow->setMouseGrabEnabled(true);
                 platformWindow->setFlag(QWindowsWindow::AutoMouseCapture);
-                if (QWindowsContext::verboseEvents)
-                    qDebug() << "Automatic mouse capture for missing buttondown event" << window;
+                qCDebug(lcQpaEvents) << "Automatic mouse capture for missing buttondown event" << window;
             }
             m_previousCaptureWindow = window;
             return true;
-        } else if (m_leftButtonDown && !actualLeftDown) {
-            m_leftButtonDown = false;
         }
+        if (m_leftButtonDown && !actualLeftDown)
+            m_leftButtonDown = false;
     }
 
-    const QPoint globalPosition = QWindowsGeometryHint::mapToGlobal(hwnd, winEventPosition);
+    // In this context, neither an invisible nor a transparent window (transparent regarding mouse
+    // events, "click-through") can be considered as the window under mouse.
     QWindow *currentWindowUnderMouse = platformWindow->hasMouseCapture() ?
-        QWindowsScreen::windowAt(globalPosition) : window;
+        QWindowsScreen::windowAt(globalPosition, CWP_SKIPINVISIBLE | CWP_SKIPTRANSPARENT) : window;
+    while (currentWindowUnderMouse && currentWindowUnderMouse->flags() & Qt::WindowTransparentForInput)
+        currentWindowUnderMouse = currentWindowUnderMouse->parent();
+    // QTBUG-44332: When Qt is running at low integrity level and
+    // a Qt Window is parented on a Window of a higher integrity process
+    // using QWindow::fromWinId() (for example, Qt running in a browser plugin)
+    // ChildWindowFromPointEx() may not find the Qt window (failing with ERROR_ACCESS_DENIED)
+    if (!currentWindowUnderMouse) {
+        const QRect clientRect(QPoint(0, 0), window->size());
+        if (clientRect.contains(winEventPosition))
+            currentWindowUnderMouse = window;
+    }
 
     compressMouseMove(&msg);
     // Qt expects the platform plugin to capture the mouse on
     // any button press until release.
     if (!platformWindow->hasMouseCapture()
-        && (msg.message == WM_LBUTTONDOWN || msg.message == WM_MBUTTONDOWN
-            || msg.message == WM_RBUTTONDOWN || msg.message == WM_XBUTTONDOWN
-            || msg.message == WM_LBUTTONDBLCLK || msg.message == WM_MBUTTONDBLCLK
-            || msg.message == WM_RBUTTONDBLCLK || msg.message == WM_XBUTTONDBLCLK)) {
+        && (mouseEvent.type == QEvent::MouseButtonPress || mouseEvent.type == QEvent::MouseButtonDblClick)) {
         platformWindow->setMouseGrabEnabled(true);
         platformWindow->setFlag(QWindowsWindow::AutoMouseCapture);
-        if (QWindowsContext::verboseEvents)
-            qDebug() << "Automatic mouse capture " << window;
+        qCDebug(lcQpaEvents) << "Automatic mouse capture " << window;
+        // Implement "Click to focus" for native child windows (unless it is a native widget window).
+        if (!window->isTopLevel() && !window->inherits("QWidgetWindow") && QGuiApplication::focusWindow() != window)
+            window->requestActivate();
     } else if (platformWindow->hasMouseCapture()
                && platformWindow->testFlag(QWindowsWindow::AutoMouseCapture)
-               && (msg.message == WM_LBUTTONUP || msg.message == WM_MBUTTONUP
-                   || msg.message == WM_RBUTTONUP || msg.message == WM_XBUTTONUP)
+               && mouseEvent.type == QEvent::MouseButtonRelease
                && !buttons) {
         platformWindow->setMouseGrabEnabled(false);
-        if (QWindowsContext::verboseEvents)
-            qDebug() << "Releasing automatic mouse capture " << window;
+        qCDebug(lcQpaEvents) << "Releasing automatic mouse capture " << window;
     }
 
     const bool hasCapture = platformWindow->hasMouseCapture();
     const bool currentNotCapturing = hasCapture && currentWindowUnderMouse != window;
-#ifndef Q_OS_WINCE
     // Enter new window: track to generate leave event.
     // If there is an active capture, only track if the current window is capturing,
     // so we don't get extra leave when cursor leaves the application.
@@ -262,7 +413,6 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
             qWarning("TrackMouseEvent failed.");
         m_trackedWindow =  window;
     }
-#endif // !Q_OS_WINCE
 
     // No enter or leave events are sent as long as there is an autocapturing window.
     if (!hasCapture || !platformWindow->testFlag(QWindowsWindow::AutoMouseCapture)) {
@@ -275,8 +425,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
                 && (!hasCapture || window == m_windowUnderMouse))
             || (hasCapture && m_previousCaptureWindow != window && m_windowUnderMouse
                 && m_windowUnderMouse != window)) {
-            if (QWindowsContext::verboseEvents)
-                qDebug() << "Synthetic leave for " << m_windowUnderMouse;
+            qCDebug(lcQpaEvents) << "Synthetic leave for " << m_windowUnderMouse;
             QWindowSystemInterface::handleLeaveEvent(m_windowUnderMouse);
             if (currentNotCapturing) {
                 // Clear tracking if capturing and current window is not the capturing window
@@ -284,7 +433,7 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
                 m_trackedWindow = 0;
                 // We are not officially in any window, but we need to set some cursor to clear
                 // whatever cursor the left window had, so apply the cursor of the capture window.
-                QWindowsWindow::baseWindowOf(window)->applyCursor();
+                platformWindow->applyCursor();
             }
         }
         // Enter is needed if:
@@ -295,12 +444,13 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
                 && (!hasCapture || currentWindowUnderMouse == window))
             || (m_previousCaptureWindow && window != m_previousCaptureWindow && currentWindowUnderMouse
                 && currentWindowUnderMouse != m_previousCaptureWindow)) {
-            if (QWindowsContext::verboseEvents)
-                qDebug() << "Entering " << currentWindowUnderMouse;
-            QWindowsWindow::baseWindowOf(currentWindowUnderMouse)->applyCursor();
-            QWindowSystemInterface::handleEnterEvent(currentWindowUnderMouse,
-                                                     currentWindowUnderMouse->mapFromGlobal(globalPosition),
-                                                     globalPosition);
+            QPoint localPosition;
+            qCDebug(lcQpaEvents) << "Entering " << currentWindowUnderMouse;
+            if (QWindowsWindow *wumPlatformWindow = QWindowsWindow::windowsWindowOf(currentWindowUnderMouse)) {
+                localPosition = wumPlatformWindow->mapFromGlobal(globalPosition);
+                wumPlatformWindow->applyCursor();
+            }
+            QWindowSystemInterface::handleEnterEvent(currentWindowUnderMouse, localPosition, globalPosition);
         }
         // We need to track m_windowUnderMouse separately from m_trackedWindow, as
         // Windows mouse tracking will not trigger WM_MOUSELEAVE for leaving window when
@@ -308,37 +458,71 @@ bool QWindowsMouseHandler::translateMouseEvent(QWindow *window, HWND hwnd,
         m_windowUnderMouse = currentWindowUnderMouse;
     }
 
-    QWindowSystemInterface::handleMouseEvent(window, winEventPosition, globalPosition, buttons,
-                                             QWindowsKeyMapper::queryKeyboardModifiers());
+    if (!discardEvent && mouseEvent.type != QEvent::None) {
+        QWindowSystemInterface::handleMouseEvent(window, winEventPosition, globalPosition, buttons,
+                                                 mouseEvent.button, mouseEvent.type,
+                                                 QWindowsKeyMapper::queryKeyboardModifiers(),
+                                                 source);
+    }
     m_previousCaptureWindow = hasCapture ? window : 0;
-    return true;
+    // QTBUG-48117, force synchronous handling for the extra buttons so that WM_APPCOMMAND
+    // is sent for unhandled WM_XBUTTONDOWN.
+    return (msg.message != WM_XBUTTONUP && msg.message != WM_XBUTTONDOWN && msg.message != WM_XBUTTONDBLCLK)
+        || QWindowSystemInterface::flushWindowSystemEvents();
 }
 
 static bool isValidWheelReceiver(QWindow *candidate)
 {
     if (candidate) {
         const QWindow *toplevel = QWindowsWindow::topLevelOf(candidate);
-        if (const QWindowsWindow *ww = QWindowsWindow::baseWindowOf(toplevel))
+        if (toplevel->handle() && toplevel->handle()->isForeignWindow())
+            return true;
+        if (const QWindowsWindow *ww = QWindowsWindow::windowsWindowOf(toplevel))
             return !ww->testFlag(QWindowsWindow::BlockedByModal);
     }
 
     return false;
 }
 
+static void redirectWheelEvent(QWindow *window, const QPoint &globalPos, int delta,
+                               Qt::Orientation orientation, Qt::KeyboardModifiers mods)
+{
+    // Redirect wheel event to one of the following, in order of preference:
+    // 1) The window under mouse
+    // 2) The window receiving the event
+    // If a window is blocked by modality, it can't get the event.
+
+    QWindow *receiver = QWindowsScreen::windowAt(globalPos, CWP_SKIPINVISIBLE);
+    while (receiver && receiver->flags().testFlag(Qt::WindowTransparentForInput))
+        receiver = receiver->parent();
+    bool handleEvent = true;
+    if (!isValidWheelReceiver(receiver)) {
+        receiver = window;
+        if (!isValidWheelReceiver(receiver))
+            handleEvent = false;
+    }
+
+    if (handleEvent) {
+        const QPoint point = (orientation == Qt::Vertical) ? QPoint(0, delta) : QPoint(delta, 0);
+        QWindowSystemInterface::handleWheelEvent(receiver,
+                                                 QWindowsGeometryHint::mapFromGlobal(receiver, globalPos),
+                                                 globalPos, QPoint(), point, mods);
+    }
+}
+
 bool QWindowsMouseHandler::translateMouseWheelEvent(QWindow *window, HWND,
                                                     MSG msg, LRESULT *)
 {
-    const Qt::MouseButtons buttons = keyStateToMouseButtons((int)msg.wParam);
-    const Qt::KeyboardModifiers mods = keyStateToModifiers((int)msg.wParam);
+    const Qt::KeyboardModifiers mods = keyStateToModifiers(int(msg.wParam));
 
     int delta;
     if (msg.message == WM_MOUSEWHEEL || msg.message == WM_MOUSEHWHEEL)
-        delta = (short) HIWORD (msg.wParam);
+        delta = GET_WHEEL_DELTA_WPARAM(msg.wParam);
     else
-        delta = (int) msg.wParam;
+        delta = int(msg.wParam);
 
     Qt::Orientation orientation = (msg.message == WM_MOUSEHWHEEL
-                                  || (buttons & Qt::AltModifier)) ?
+                                  || (mods & Qt::AltModifier)) ?
                                   Qt::Horizontal : Qt::Vertical;
 
     // according to the MSDN documentation on WM_MOUSEHWHEEL:
@@ -348,25 +532,39 @@ bool QWindowsMouseHandler::translateMouseWheelEvent(QWindow *window, HWND,
     if (msg.message == WM_MOUSEHWHEEL)
         delta = -delta;
 
-    // Redirect wheel event to one of the following, in order of preference:
-    // 1) The window under mouse
-    // 2) The window receiving the event
-    // If a window is blocked by modality, it can't get the event.
     const QPoint globalPos(GET_X_LPARAM(msg.lParam), GET_Y_LPARAM(msg.lParam));
-    QWindow *receiver = QWindowsScreen::windowAt(globalPos);
-    bool handleEvent = true;
-    if (!isValidWheelReceiver(receiver)) {
-        receiver = window;
-        if (!isValidWheelReceiver(receiver))
-            handleEvent = false;
+    redirectWheelEvent(window, globalPos, delta, orientation, mods);
+
+    return true;
+}
+
+bool QWindowsMouseHandler::translateScrollEvent(QWindow *window, HWND,
+                                                MSG msg, LRESULT *)
+{
+    // This is a workaround against some touchpads that send WM_HSCROLL instead of WM_MOUSEHWHEEL.
+    // We could also handle vertical scroll here but there's no reason to, there's no bug for vertical
+    // (broken vertical scroll would have been noticed long time ago), so lets keep the change small
+    // and minimize the chance for regressions.
+
+    int delta = 0;
+    switch (LOWORD(msg.wParam)) {
+    case SB_LINELEFT:
+        delta = 120;
+        break;
+    case SB_LINERIGHT:
+        delta = -120;
+        break;
+    case SB_PAGELEFT:
+        delta = 240;
+        break;
+    case SB_PAGERIGHT:
+        delta = -240;
+        break;
+    default:
+        return false;
     }
 
-    if (handleEvent) {
-        QWindowSystemInterface::handleWheelEvent(receiver,
-                                                 QWindowsGeometryHint::mapFromGlobal(receiver, globalPos),
-                                                 globalPos,
-                                                 delta, orientation, mods);
-    }
+    redirectWheelEvent(window, QCursor::pos(), delta, Qt::Horizontal, Qt::NoModifier);
 
     return true;
 }
@@ -376,23 +574,31 @@ bool QWindowsMouseHandler::translateTouchEvent(QWindow *window, HWND,
                                                QtWindows::WindowsEventType,
                                                MSG msg, LRESULT *)
 {
-#ifndef Q_OS_WINCE
     typedef QWindowSystemInterface::TouchPoint QTouchPoint;
     typedef QList<QWindowSystemInterface::TouchPoint> QTouchPointList;
 
-    const QRect screenGeometry = window->screen()->geometry();
+    if (!QWindowsContext::instance()->initTouch()) {
+        qWarning("Unable to initialize touch handling.");
+        return true;
+    }
 
-    const int winTouchPointCount = msg.wParam;
+    const QScreen *screen = window->screen();
+    if (!screen)
+        screen = QGuiApplication::primaryScreen();
+    if (!screen)
+        return true;
+    const QRect screenGeometry = screen->geometry();
+
+    const int winTouchPointCount = int(msg.wParam);
     QScopedArrayPointer<TOUCHINPUT> winTouchInputs(new TOUCHINPUT[winTouchPointCount]);
-    memset(winTouchInputs.data(), 0, sizeof(TOUCHINPUT) * winTouchPointCount);
+    memset(winTouchInputs.data(), 0, sizeof(TOUCHINPUT) * size_t(winTouchPointCount));
 
     QTouchPointList touchPoints;
     touchPoints.reserve(winTouchPointCount);
     Qt::TouchPointStates allStates = 0;
 
-    Q_ASSERT(QWindowsContext::user32dll.getTouchInputInfo);
-
-    QWindowsContext::user32dll.getTouchInputInfo((HANDLE) msg.lParam, msg.wParam, winTouchInputs.data(), sizeof(TOUCHINPUT));
+    GetTouchInputInfo(reinterpret_cast<HTOUCHINPUT>(msg.lParam),
+                      UINT(msg.wParam), winTouchInputs.data(), sizeof(TOUCHINPUT));
     for (int i = 0; i < winTouchPointCount; ++i) {
         const TOUCHINPUT &winTouchInput = winTouchInputs[i];
         int id = m_touchInputIDToTouchPointID.value(winTouchInput.dwID, -1);
@@ -406,10 +612,9 @@ bool QWindowsMouseHandler::translateTouchEvent(QWindow *window, HWND,
         if (m_lastTouchPositions.contains(id))
             touchPoint.normalPosition = m_lastTouchPositions.value(id);
 
-        QPointF screenPos = QPointF(qreal(winTouchInput.x) / qreal(100.), qreal(winTouchInput.y) / qreal(100.));
+        const QPointF screenPos = QPointF(winTouchInput.x, winTouchInput.y) / qreal(100.);
         if (winTouchInput.dwMask & TOUCHINPUTMASKF_CONTACTAREA)
-            touchPoint.area.setSize(QSizeF(qreal(winTouchInput.cxContact) / qreal(100.),
-                                           qreal(winTouchInput.cyContact) / qreal(100.)));
+            touchPoint.area.setSize(QSizeF(winTouchInput.cxContact, winTouchInput.cyContact) / qreal(100.));
         touchPoint.area.moveCenter(screenPos);
         QPointF normalPosition = QPointF(screenPos.x() / screenGeometry.width(),
                                          screenPos.y() / screenGeometry.height());
@@ -434,27 +639,27 @@ bool QWindowsMouseHandler::translateTouchEvent(QWindow *window, HWND,
         touchPoints.append(touchPoint);
     }
 
-    QWindowsContext::user32dll.closeTouchInputHandle((HANDLE) msg.lParam);
+    CloseTouchInputHandle(reinterpret_cast<HTOUCHINPUT>(msg.lParam));
 
     // all touch points released, forget the ids we've seen, they may not be reused
     if (allStates == Qt::TouchPointReleased)
         m_touchInputIDToTouchPointID.clear();
 
-    if (!m_touchDevice) {
-        m_touchDevice = new QTouchDevice;
-        // TODO: Device used to be hardcoded to screen in previous code.
-        m_touchDevice->setType(QTouchDevice::TouchScreen);
-        m_touchDevice->setCapabilities(QTouchDevice::Position | QTouchDevice::Area | QTouchDevice::NormalizedPosition);
-        QWindowSystemInterface::registerTouchDevice(m_touchDevice);
-    }
-
     QWindowSystemInterface::handleTouchEvent(window,
                                              m_touchDevice,
-                                             touchPoints);
+                                             touchPoints,
+                                             QWindowsKeyMapper::queryKeyboardModifiers());
     return true;
-#else
+}
+
+bool QWindowsMouseHandler::translateGestureEvent(QWindow *window, HWND hwnd,
+                                                 QtWindows::WindowsEventType,
+                                                 MSG msg, LRESULT *)
+{
+    Q_UNUSED(window)
+    Q_UNUSED(hwnd)
+    Q_UNUSED(msg)
     return false;
-#endif
 }
 
 QT_END_NAMESPACE

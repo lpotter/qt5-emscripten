@@ -1,3 +1,6 @@
+QT += widgets
+requires(qtConfig(completer))
+
 HEADERS   = fsmodel.h \
             mainwindow.h
 SOURCES   = fsmodel.cpp \
@@ -6,9 +9,5 @@ SOURCES   = fsmodel.cpp \
 RESOURCES = completer.qrc
 
 # install
-target.path = $$[QT_INSTALL_EXAMPLES]/tools/completer
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/tools/completer
 INSTALLS += target
-
-QT += widgets
-
-simulator: warning(This example might not fully work on Simulator platform)

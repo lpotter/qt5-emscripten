@@ -1,6 +1,5 @@
-CONFIG += testcase parallel_test
+CONFIG += testcase
 TARGET = tst_qresultstore
-QT = core-private testlib concurrent
+QT = core-private testlib
 SOURCES = tst_qresultstore.cpp
 DEFINES += QT_STRICT_ITERATORS
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

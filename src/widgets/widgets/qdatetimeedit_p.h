@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,47 +51,57 @@
 // We mean it.
 //
 
-#include "QtWidgets/qcombobox.h"
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qcalendarwidget.h"
 #include "QtWidgets/qspinbox.h"
 #include "QtWidgets/qtoolbutton.h"
 #include "QtWidgets/qmenu.h"
-#include "QtWidgets/qlabel.h"
 #include "QtWidgets/qdatetimeedit.h"
 #include "private/qabstractspinbox_p.h"
-#include "private/qdatetime_p.h"
+#include "private/qdatetimeparser_p.h"
 
 #include "qdebug.h"
-
-#ifndef QT_NO_DATETIMEEDIT
 
 QT_BEGIN_NAMESPACE
 
 class QCalendarPopup;
-class QDateTimeEditPrivate : public QAbstractSpinBoxPrivate, public QDateTimeParser
+class Q_AUTOTEST_EXPORT QDateTimeEditPrivate : public QAbstractSpinBoxPrivate, public QDateTimeParser
 {
     Q_DECLARE_PUBLIC(QDateTimeEdit)
 public:
     QDateTimeEditPrivate();
+    ~QDateTimeEditPrivate();
 
     void init(const QVariant &var);
     void readLocaleSettings();
 
-    void emitSignals(EmitPolicy ep, const QVariant &old);
-    QString textFromValue(const QVariant &f) const;
-    QVariant valueFromText(const QString &f) const;
-    virtual void _q_editorCursorPositionChanged(int oldpos, int newpos);
-    virtual void interpret(EmitPolicy ep);
-    virtual void clearCache() const;
-
     QDateTime validateAndInterpret(QString &input, int &, QValidator::State &state,
                                    bool fixup = false) const;
     void clearSection(int index);
-    virtual QString displayText() const { return edit->text(); } // this is from QDateTimeParser
+
+    // Override QAbstractSpinBoxPrivate:
+    void emitSignals(EmitPolicy ep, const QVariant &old) override;
+    QString textFromValue(const QVariant &f) const override;
+    QVariant valueFromText(const QString &f) const override;
+    void _q_editorCursorPositionChanged(int oldpos, int newpos) override;
+    void interpret(EmitPolicy ep) override;
+    void clearCache() const override;
+    QStyle::SubControl newHoverControl(const QPoint &pos) override;
+    void updateEditFieldGeometry() override;
+    QVariant getZeroVariant() const override;
+    void setRange(const QVariant &min, const QVariant &max) override;
+    void updateEdit() override;
+
+    // Override QDateTimeParser:
+    QString displayText() const override { return edit->text(); }
+    QDateTime getMinimum() const override { return minimum.toDateTime(); }
+    QDateTime getMaximum() const override { return maximum.toDateTime(); }
+    QLocale locale() const override { return q_func()->locale(); }
+    QString getAmPmText(AmPm ap, Case cs) const override;
+    int cursorPosition() const override { return edit ? edit->cursorPosition() : -1; }
 
     int absoluteIndex(QDateTimeEdit::Section s, int index) const;
     int absoluteIndex(const SectionNode &s) const;
-    void updateEdit();
     QDateTime stepBy(int index, int steps, bool test = false) const;
     int sectionAt(int pos) const;
     int closestSection(int index, bool forward) const;
@@ -103,17 +111,7 @@ public:
     void updateCache(const QVariant &val, const QString &str) const;
 
     void updateTimeSpec();
-    virtual QDateTime getMinimum() const { return minimum.toDateTime(); }
-    virtual QDateTime getMaximum() const { return maximum.toDateTime(); }
-    virtual QLocale locale() const { return q_func()->locale(); }
     QString valueToText(const QVariant &var) const { return textFromValue(var); }
-    QString getAmPmText(AmPm ap, Case cs) const;
-    int cursorPosition() const { return edit ? edit->cursorPosition() : -1; }
-
-    virtual QStyle::SubControl newHoverControl(const QPoint &pos);
-    virtual void updateEditFieldGeometry();
-    virtual QVariant getZeroVariant() const;
-    virtual void setRange(const QVariant &min, const QVariant &max);
 
     void _q_resetButton();
     void updateArrow(QStyle::StateFlag state);
@@ -165,10 +163,10 @@ private Q_SLOTS:
     void dateSelectionChanged();
 
 protected:
-    void hideEvent(QHideEvent *);
-    void mousePressEvent(QMouseEvent *e);
-    void mouseReleaseEvent(QMouseEvent *);
-    bool event(QEvent *e);
+    void hideEvent(QHideEvent *) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    bool event(QEvent *e) override;
 
 private:
     QCalendarWidget *verifyCalendarInstance();
@@ -179,7 +177,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_DATETIMEEDIT
 
 #endif // QDATETIMEEDIT_P_H

@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,10 @@
 
 #include <QtCore/qpropertyanimation.h>
 #include <QtWidgets/qwidget.h>
+#include <QtWidgets/qstyle.h>
+#if QT_CONFIG(mainwindow)
 #include <private/qmainwindowlayout_p.h>
+#endif
 
 #include "qwidgetanimator_p.h"
 
@@ -54,15 +55,15 @@ QWidgetAnimator::QWidgetAnimator(QMainWindowLayout *layout) : m_mainWindowLayout
 void QWidgetAnimator::abort(QWidget *w)
 {
 #ifndef QT_NO_ANIMATION
-    AnimationMap::iterator it = m_animation_map.find(w);
-    if (it == m_animation_map.end())
+    const auto it = m_animation_map.constFind(w);
+    if (it == m_animation_map.cend())
         return;
     QPropertyAnimation *anim = *it;
     m_animation_map.erase(it);
     if (anim) {
         anim->stop();
     }
-#ifndef QT_NO_MAINWINDOW
+#if QT_CONFIG(mainwindow)
     m_mainWindowLayout->animationFinished(w);
 #endif
 #else
@@ -91,24 +92,28 @@ void QWidgetAnimator::animate(QWidget *widget, const QRect &_final_geometry, boo
         QRect(QPoint(-500 - widget->width(), -500 - widget->height()), widget->size());
 
 #ifndef QT_NO_ANIMATION
-    AnimationMap::const_iterator it = m_animation_map.constFind(widget);
-    if (it != m_animation_map.constEnd() && (*it)->endValue().toRect() == final_geometry)
-        return;
+    //If the QStyle has animations, animate
+    if (const int animationDuration = widget->style()->styleHint(QStyle::SH_Widget_Animation_Duration, 0, widget)) {
+        AnimationMap::const_iterator it = m_animation_map.constFind(widget);
+        if (it != m_animation_map.constEnd() && (*it)->endValue().toRect() == final_geometry)
+            return;
 
-    QPropertyAnimation *anim = new QPropertyAnimation(widget, "geometry", widget);
-    anim->setDuration(animate ? 200 : 0);
-    anim->setEasingCurve(QEasingCurve::InOutQuad);
-    anim->setEndValue(final_geometry);
-    m_animation_map[widget] = anim;
-    connect(anim, SIGNAL(finished()), SLOT(animationFinished()));
-    anim->start(QPropertyAnimation::DeleteWhenStopped);
-#else
+        QPropertyAnimation *anim = new QPropertyAnimation(widget, "geometry", widget);
+        anim->setDuration(animate ? animationDuration : 0);
+        anim->setEasingCurve(QEasingCurve::InOutQuad);
+        anim->setEndValue(final_geometry);
+        m_animation_map[widget] = anim;
+        connect(anim, SIGNAL(finished()), SLOT(animationFinished()));
+        anim->start(QPropertyAnimation::DeleteWhenStopped);
+    } else
+#endif //QT_NO_ANIMATION
+    {
     //we do it in one shot
     widget->setGeometry(final_geometry);
-#ifndef QT_NO_MAINWINDOW
+#if QT_CONFIG(mainwindow)
     m_mainWindowLayout->animationFinished(widget);
-#endif //QT_NO_MAINWINDOW
-#endif //QT_NO_ANIMATION
+#endif // QT_CONFIG(mainwindow)
+    }
 }
 
 bool QWidgetAnimator::animating() const
@@ -117,3 +122,5 @@ bool QWidgetAnimator::animating() const
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qwidgetanimator_p.cpp"

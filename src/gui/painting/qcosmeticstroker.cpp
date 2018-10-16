@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,8 +39,8 @@
 
 #include "qcosmeticstroker_p.h"
 #include "private/qpainterpath_p.h"
+#include "private/qrgba64_p.h"
 #include <qdebug.h>
-#include <math.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -70,8 +68,8 @@ static inline uint sourceOver(uint d, uint color)
 inline static int F16Dot16FixedDiv(int x, int y)
 {
     if (qAbs(x) > 0x7fff)
-        return (((qlonglong)x) << 16) / y;
-    return (x << 16) / y;
+        return qlonglong(x) * (1<<16) / y;
+    return x * (1<<16) / y;
 }
 
 typedef void (*DrawPixel)(QCosmeticStroker *stroker, int x, int y, int coverage);
@@ -133,10 +131,15 @@ struct NoDasher {
 
 };
 
+/*
+ * The return value is the result of the clipLine() call performed at the start
+ * of each of the two functions, aka "false" means completely outside the devices
+ * rect.
+ */
 template<DrawPixel drawPixel, class Dasher>
-static void drawLine(QCosmeticStroker *stroker, qreal x1, qreal y1, qreal x2, qreal y2, int caps);
+static bool drawLine(QCosmeticStroker *stroker, qreal x1, qreal y1, qreal x2, qreal y2, int caps);
 template<DrawPixel drawPixel, class Dasher>
-static void drawLineAA(QCosmeticStroker *stroker, qreal x1, qreal y1, qreal x2, qreal y2, int caps);
+static bool drawLineAA(QCosmeticStroker *stroker, qreal x1, qreal y1, qreal x2, qreal y2, int caps);
 
 inline void drawPixel(QCosmeticStroker *stroker, int x, int y, int coverage)
 {
@@ -144,12 +147,14 @@ inline void drawPixel(QCosmeticStroker *stroker, int x, int y, int coverage)
     if (x < cl.x() || x > cl.right() || y < cl.y() || y > cl.bottom())
         return;
 
-    int lastx = stroker->spans[stroker->current_span-1].x + stroker->spans[stroker->current_span-1].len ;
-    int lasty = stroker->spans[stroker->current_span-1].y;
+    if (stroker->current_span > 0) {
+        const int lastx = stroker->spans[stroker->current_span-1].x + stroker->spans[stroker->current_span-1].len ;
+        const int lasty = stroker->spans[stroker->current_span-1].y;
 
-    if (stroker->current_span == QCosmeticStroker::NSPANS || y < lasty || (y == lasty && x < lastx)) {
-        stroker->blend(stroker->current_span, stroker->spans, &stroker->state->penData);
-        stroker->current_span = 0;
+        if (stroker->current_span == QCosmeticStroker::NSPANS || y < lasty || (y == lasty && x < lastx)) {
+            stroker->blend(stroker->current_span, stroker->spans, &stroker->state->penData);
+            stroker->current_span = 0;
+        }
     }
 
     stroker->spans[stroker->current_span].x = ushort(x);
@@ -284,19 +289,23 @@ void QCosmeticStroker::setup()
     drawCaps = state->lastPen.capStyle() != Qt::FlatCap;
 
     if (strokeSelection & FastDraw) {
-        color = INTERPOLATE_PIXEL_256(state->penData.solid.color, opacity, 0, 0);
+        color = multiplyAlpha256(state->penData.solid.color, opacity).toArgb32();
         QRasterBuffer *buffer = state->penData.rasterBuffer;
         pixels = (uint *)buffer->buffer();
-        ppl = buffer->bytesPerLine()>>2;
+        ppl = buffer->stride<quint32>();
     }
 
-    // setup FP clip bounds
-    xmin = clip.left() - 1;
-    xmax = clip.right() + 2;
-    ymin = clip.top() - 1;
-    ymax = clip.bottom() + 2;
+    // line drawing produces different results with different clips, so
+    // we need to clip consistently when painting to the same device
 
-    lastPixel.x = -1;
+    // setup FP clip bounds
+    xmin = deviceRect.left() - 1;
+    xmax = deviceRect.right() + 2;
+    ymin = deviceRect.top() - 1;
+    ymax = deviceRect.bottom() + 2;
+
+    lastPixel.x = INT_MIN;
+    lastPixel.y = INT_MIN;
 }
 
 // returns true if the whole line gets clipped away
@@ -316,11 +325,11 @@ bool QCosmeticStroker::clipLine(qreal &x1, qreal &y1, qreal &x2, qreal &y2)
         x1 = xmax;
     }
     if (x2 < xmin) {
-        lastPixel.x = -1;
+        lastPixel.x = INT_MIN;
         y2 += (y2 - y1)/(x2 - x1) * (xmin - x2);
         x2 = xmin;
     } else if (x2 > xmax) {
-        lastPixel.x = -1;
+        lastPixel.x = INT_MIN;
         y2 += (y2 - y1)/(x2 - x1) * (xmax - x2);
         x2 = xmax;
     }
@@ -337,11 +346,11 @@ bool QCosmeticStroker::clipLine(qreal &x1, qreal &y1, qreal &x2, qreal &y2)
         y1 = ymax;
     }
     if (y2 < ymin) {
-        lastPixel.x = -1;
+        lastPixel.x = INT_MIN;
         x2 += (x2 - x1)/(y2 - y1) * (ymin - y2);
         y2 = ymin;
     } else if (y2 > ymax) {
-        lastPixel.x = -1;
+        lastPixel.x = INT_MIN;
         x2 += (x2 - x1)/(y2 - y1) * (ymax - y2);
         y2 = ymax;
     }
@@ -349,7 +358,7 @@ bool QCosmeticStroker::clipLine(qreal &x1, qreal &y1, qreal &x2, qreal &y2)
     return false;
 
   clipped:
-    lastPixel.x = -1;
+    lastPixel.x = INT_MIN;
     return true;
 }
 
@@ -365,7 +374,7 @@ void QCosmeticStroker::drawLine(const QPointF &p1, const QPointF &p2)
     QPointF end = p2 * state->matrix;
 
     patternOffset = state->lastPen.dashOffset()*64;
-    lastPixel.x = -1;
+    lastPixel.x = INT_MIN;
 
     stroke(this, start.x(), start.y(), end.x(), end.y(), drawCaps ? CapBegin|CapEnd : 0);
 
@@ -408,8 +417,8 @@ void QCosmeticStroker::calculateLastPoint(qreal rx1, qreal ry1, qreal rx2, qreal
     // by calculating the direction and last pixel of the last segment in the contour.
     // the info is then used to perform dropout control when drawing the first line segment
     // of the contour
-    lastPixel.x = -1;
-    lastPixel.y = -1;
+    lastPixel.x = INT_MIN;
+    lastPixel.y = INT_MIN;
 
     if (clipLine(rx1, ry1, rx2, ry2))
         return;
@@ -432,13 +441,14 @@ void QCosmeticStroker::calculateLastPoint(qreal rx1, qreal ry1, qreal rx2, qreal
             qSwap(x1, x2);
         }
         int xinc = F16Dot16FixedDiv(x2 - x1, y2 - y1);
-        int x = x1 << 10;
+        int x = x1 * (1<<10);
 
         int y = (y1 + 32) >> 6;
         int ys = (y2 + 32) >> 6;
 
+        int round = (xinc > 0) ? 32 : 0;
         if (y != ys) {
-            x += ( ((((y << 6) + 32 - y1)))  * xinc ) >> 6;
+            x += ((y * (1<<6)) + round - y1) * xinc >> 6;
 
             if (swapped) {
                 lastPixel.x = x >> 16;
@@ -468,8 +478,9 @@ void QCosmeticStroker::calculateLastPoint(qreal rx1, qreal ry1, qreal rx2, qreal
         int x = (x1 + 32) >> 6;
         int xs = (x2 + 32) >> 6;
 
+        int round = (yinc > 0) ? 32 : 0;
         if (x != xs) {
-            y += ( ((((x << 6) + 32 - x1)))  * yinc ) >> 6;
+            y += ((x * (1<<6)) + round - x1) * yinc >> 6;
 
             if (swapped) {
                 lastPixel.x = x;
@@ -524,7 +535,8 @@ void QCosmeticStroker::drawPath(const QVectorPath &path)
 
             QPointF p = QPointF(points[0], points[1]) * state->matrix;
             patternOffset = state->lastPen.dashOffset()*64;
-            lastPixel.x = -1;
+            lastPixel.x = INT_MIN;
+            lastPixel.y = INT_MIN;
 
             bool closed;
             const QPainterPath::ElementType *e = subPath(type, end, points, &closed);
@@ -534,7 +546,7 @@ void QCosmeticStroker::drawPath(const QVectorPath &path)
                 QPointF p2 = QPointF(p[-2], p[-1]) * state->matrix;
                 calculateLastPoint(p1.x(), p1.y(), p2.x(), p2.y());
             }
-            int caps = (!closed & drawCaps) ? CapBegin : NoCaps;
+            int caps = (!closed && drawCaps) ? CapBegin : NoCaps;
 //            qDebug() << "closed =" << closed << capString(caps);
 
             points += 2;
@@ -578,17 +590,24 @@ void QCosmeticStroker::drawPath(const QVectorPath &path)
         QPointF p = QPointF(points[0], points[1]) * state->matrix;
         QPointF movedTo = p;
         patternOffset = state->lastPen.dashOffset()*64;
-        lastPixel.x = -1;
+        lastPixel.x = INT_MIN;
+        lastPixel.y = INT_MIN;
 
+        const qreal *begin = points;
         const qreal *end = points + 2*path.elementCount();
         // handle closed path case
         bool closed = path.hasImplicitClose() || (points[0] == end[-2] && points[1] == end[-1]);
-        int caps = (!closed & drawCaps) ? CapBegin : NoCaps;
+        int caps = (!closed && drawCaps) ? CapBegin : NoCaps;
         if (closed) {
-            QPointF p2 = QPointF(end[-2], end[-1]) * state->matrix;
+            QPointF p2;
+            if (points[0] == end[-2] && points[1] == end[-1] && path.elementCount() > 2)
+                p2 = QPointF(end[-4], end[-3]) * state->matrix;
+            else
+                p2 = QPointF(end[-2], end[-1]) * state->matrix;
             calculateLastPoint(p2.x(), p2.y(), p.x(), p.y());
         }
 
+        bool fastPenAliased = (state->flags.fast_pen && !state->flags.antialiased);
         points += 2;
         while (points < end) {
             QPointF p2 = QPointF(points[0], points[1]) * state->matrix;
@@ -596,9 +615,18 @@ void QCosmeticStroker::drawPath(const QVectorPath &path)
             if (!closed && drawCaps && points == end - 2)
                 caps |= CapEnd;
 
-            stroke(this, p.x(), p.y(), p2.x(), p2.y(), caps);
+            bool moveNextStart = stroke(this, p.x(), p.y(), p2.x(), p2.y(), caps);
 
-            p = p2;
+            /* fix for gaps in polylines with fastpen and aliased in a sequence
+               of points with small distances: if current point p2 has been dropped
+               out, keep last non dropped point p.
+
+               However, if the line was completely outside the devicerect, we
+               still need to update p to avoid drawing the line after this one from
+               a bad starting position.
+            */
+            if (!fastPenAliased || moveNextStart || points == begin + 2 || points == end - 2)
+                p = p2;
             points += 2;
             caps = NoCaps;
         }
@@ -702,10 +730,12 @@ static inline void capAdjust(int caps, int &x1, int &x2, int &y, int yinc)
   the drawing shifts from horizontal to vertical or back.
   */
 template<DrawPixel drawPixel, class Dasher>
-static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2, qreal ry2, int caps)
+static bool drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2, qreal ry2, int caps)
 {
+    bool didDraw = qAbs(rx2 - rx1) + qAbs(ry2 - ry1) >= 1.0;
+
     if (stroker->clipLine(rx1, ry1, rx2, ry2))
-        return;
+        return true;
 
     const int half = stroker->legacyRounding ? 31 : 0;
     int x1 = toF26Dot6(rx1) + half;
@@ -733,7 +763,7 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
             dir = QCosmeticStroker::BottomToTop;
         }
         int xinc = F16Dot16FixedDiv(x2 - x1, y2 - y1);
-        int x = x1 << 10;
+        int x = x1 * (1<<10);
 
         if ((stroker->lastDir ^ QCosmeticStroker::VerticalMask) == dir)
             caps |= swapped ? QCosmeticStroker::CapEnd : QCosmeticStroker::CapBegin;
@@ -742,9 +772,15 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
 
         int y = (y1 + 32) >> 6;
         int ys = (y2 + 32) >> 6;
+        int round = (xinc > 0) ? 32 : 0;
+
+        // If capAdjust made us round away from what calculateLastPoint gave us,
+        // round back the other way so we start and end on the right point.
+        if ((caps & QCosmeticStroker::CapBegin) && stroker->lastPixel.y == y + 1)
+           y++;
 
         if (y != ys) {
-            x += ( ((((y << 6) + 32 - y1)))  * xinc ) >> 6;
+            x += ((y * (1<<6)) + round - y1) * xinc >> 6;
 
             // calculate first and last pixel and perform dropout control
             QCosmeticStroker::Point first;
@@ -756,7 +792,7 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                 qSwap(first, last);
 
             bool axisAligned = qAbs(xinc) < (1 << 14);
-            if (stroker->lastPixel.x >= 0) {
+            if (stroker->lastPixel.x > INT_MIN) {
                 if (first.x == stroker->lastPixel.x &&
                     first.y == stroker->lastPixel.y) {
                     // remove duplicated pixel
@@ -778,12 +814,20 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                         --y;
                         x -= xinc;
                     }
+                } else if (stroker->lastDir == dir &&
+                           ((qAbs(stroker->lastPixel.x - first.x) <= 1 &&
+                             qAbs(stroker->lastPixel.y - first.y) > 1))) {
+                    x += xinc >> 1;
+                    if (swapped)
+                        last.x = (x >> 16);
+                    else
+                        last.x = (x + (ys - y - 1)*xinc) >> 16;
                 }
             }
             stroker->lastDir = dir;
             stroker->lastAxisAligned = axisAligned;
 
-            Dasher dasher(stroker, swapped, y << 6, ys << 6);
+            Dasher dasher(stroker, swapped, y * (1<<6), ys * (1<<6));
 
             do {
                 if (dasher.on())
@@ -791,11 +835,12 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                 dasher.adjust();
                 x += xinc;
             } while (++y < ys);
+            didDraw = true;
         }
     } else {
         // horizontal
         if (!dx)
-            return;
+            return true;
 
         QCosmeticStroker::Direction dir = QCosmeticStroker::LeftToRight;
 
@@ -808,7 +853,7 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
             dir = QCosmeticStroker::RightToLeft;
         }
         int yinc = F16Dot16FixedDiv(y2 - y1, x2 - x1);
-        int y = y1 << 10;
+        int y = y1 * (1<<10);
 
         if ((stroker->lastDir ^ QCosmeticStroker::HorizontalMask) == dir)
             caps |= swapped ? QCosmeticStroker::CapEnd : QCosmeticStroker::CapBegin;
@@ -817,9 +862,15 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
 
         int x = (x1 + 32) >> 6;
         int xs = (x2 + 32) >> 6;
+        int round = (yinc > 0) ? 32 : 0;
+
+        // If capAdjust made us round away from what calculateLastPoint gave us,
+        // round back the other way so we start and end on the right point.
+        if ((caps & QCosmeticStroker::CapBegin) && stroker->lastPixel.x == x + 1)
+            x++;
 
         if (x != xs) {
-            y += ( ((((x << 6) + 32 - x1)))  * yinc ) >> 6;
+            y += ((x * (1<<6)) + round - x1) * yinc >> 6;
 
             // calculate first and last pixel to perform dropout control
             QCosmeticStroker::Point first;
@@ -831,7 +882,7 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                 qSwap(first, last);
 
             bool axisAligned = qAbs(yinc) < (1 << 14);
-            if (stroker->lastPixel.x >= 0) {
+            if (stroker->lastPixel.x > INT_MIN) {
                 if (first.x == stroker->lastPixel.x && first.y == stroker->lastPixel.y) {
                     // remove duplicated pixel
                     if (swapped) {
@@ -852,12 +903,20 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                         --x;
                         y -= yinc;
                     }
+                } else if (stroker->lastDir == dir &&
+                           ((qAbs(stroker->lastPixel.x - first.x) <= 1 &&
+                             qAbs(stroker->lastPixel.y - first.y) > 1))) {
+                    y += yinc >> 1;
+                    if (swapped)
+                        last.y = (y >> 16);
+                    else
+                        last.y = (y + (xs - x - 1)*yinc) >> 16;
                 }
             }
             stroker->lastDir = dir;
             stroker->lastAxisAligned = axisAligned;
 
-            Dasher dasher(stroker, swapped, x << 6, xs << 6);
+            Dasher dasher(stroker, swapped, x * (1<<6), xs * (1<<6));
 
             do {
                 if (dasher.on())
@@ -865,17 +924,19 @@ static void drawLine(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2,
                 dasher.adjust();
                 y += yinc;
             } while (++x < xs);
+            didDraw = true;
         }
     }
     stroker->lastPixel = last;
+    return didDraw;
 }
 
 
 template<DrawPixel drawPixel, class Dasher>
-static void drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2, qreal ry2, int caps)
+static bool drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx2, qreal ry2, int caps)
 {
     if (stroker->clipLine(rx1, ry1, rx2, ry2))
-        return;
+        return true;
 
     int x1 = toF26Dot6(rx1);
     int y1 = toF26Dot6(ry1);
@@ -898,7 +959,7 @@ static void drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx
             caps = swapCaps(caps);
         }
 
-        int x = (x1 - 32) << 10;
+        int x = (x1 - 32) * (1<<10);
         x -= ( ((y1 & 63) - 32)  * xinc ) >> 6;
 
         capAdjust(caps, y1, y2, x, xinc);
@@ -949,7 +1010,7 @@ static void drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx
     } else {
         // horizontal
         if (!dx)
-            return;
+            return true;
 
         int yinc = F16Dot16FixedDiv(dy, dx);
 
@@ -961,7 +1022,7 @@ static void drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx
             caps = swapCaps(caps);
         }
 
-        int y = (y1 - 32) << 10;
+        int y = (y1 - 32) * (1<<10);
         y -= ( ((x1 & 63) - 32)  * yinc ) >> 6;
 
         capAdjust(caps, x1, x2, y, yinc);
@@ -1011,6 +1072,7 @@ static void drawLineAA(QCosmeticStroker *stroker, qreal rx1, qreal ry1, qreal rx
             drawPixel(stroker, x, (y>>16) + 1, alpha * alphaEnd >> 6);
         }
     }
+    return true;
 }
 
 QT_END_NAMESPACE

@@ -7,6 +7,5 @@ SOURCES += \
     $$PWD/qevdevkeyboardhandler.cpp \
     $$PWD/qevdevkeyboardmanager.cpp
 
-contains(QT_CONFIG, libudev) {
-    LIBS += $$QMAKE_LIBS_LIBUDEV
-}
+qtConfig(libudev): \
+    QMAKE_USE_PRIVATE += libudev

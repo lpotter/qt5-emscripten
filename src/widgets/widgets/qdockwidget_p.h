@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -53,18 +51,18 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qstyleoption.h"
 #include "private/qwidget_p.h"
 #include "QtWidgets/qboxlayout.h"
 #include "QtWidgets/qdockwidget.h"
 
-#ifndef QT_NO_DOCKWIDGET
+QT_REQUIRE_CONFIG(dockwidget);
 
 QT_BEGIN_NAMESPACE
 
 class QGridLayout;
 class QWidgetResizeHandler;
-class QRubberBand;
 class QDockWidgetTitleButton;
 class QSpacerItem;
 class QDockWidgetItem;
@@ -84,11 +82,11 @@ class QDockWidgetPrivate : public QWidgetPrivate
 
 public:
     inline QDockWidgetPrivate()
-	: QWidgetPrivate(), state(0),
+        : QWidgetPrivate(), state(0),
           features(QDockWidget::DockWidgetClosable
                    | QDockWidget::DockWidgetMovable
                    | QDockWidget::DockWidgetFloatable),
-          allowedAreas(Qt::AllDockWidgetAreas)
+          allowedAreas(Qt::AllDockWidgetAreas), resizer(0)
     { }
 
     void init();
@@ -101,7 +99,7 @@ public:
     QDockWidget::DockWidgetFeatures features;
     Qt::DockWidgetAreas allowedAreas;
 
-    QWidgetResizeHandler *resizer;
+    QFont font;
 
 #ifndef QT_NO_ACTION
     QAction *toggleViewAction;
@@ -118,14 +116,19 @@ public:
     void setWindowState(bool floating, bool unplug = false, const QRect &rect = QRect());
     void nonClientAreaMouseEvent(QMouseEvent *event);
     void initDrag(const QPoint &pos, bool nca);
-    void startDrag();
+    void startDrag(bool group = true);
     void endDrag(bool abort = false);
     void moveEvent(QMoveEvent *event);
+    void recalculatePressPos(QResizeEvent *event);
 
     void unplug(const QRect &rect);
     void plug(const QRect &rect);
+    void setResizerActive(bool active);
 
     bool isAnimating() const;
+
+private:
+    QWidgetResizeHandler *resizer;
 };
 
 class Q_WIDGETS_EXPORT QDockWidgetLayout : public QLayout
@@ -134,18 +137,18 @@ class Q_WIDGETS_EXPORT QDockWidgetLayout : public QLayout
 public:
     QDockWidgetLayout(QWidget *parent = 0);
     ~QDockWidgetLayout();
-    void addItem(QLayoutItem *item);
-    QLayoutItem *itemAt(int index) const;
-    QLayoutItem *takeAt(int index);
-    int count() const;
+    void addItem(QLayoutItem *item) override;
+    QLayoutItem *itemAt(int index) const override;
+    QLayoutItem *takeAt(int index) override;
+    int count() const override;
 
-    QSize maximumSize() const;
-    QSize minimumSize() const;
-    QSize sizeHint() const;
+    QSize maximumSize() const override;
+    QSize minimumSize() const override;
+    QSize sizeHint() const override;
 
     QSize sizeFromContent(const QSize &content, bool floating) const;
 
-    void setGeometry(const QRect &r);
+    void setGeometry(const QRect &r) override;
 
     enum Role { Content, CloseButton, FloatButton, TitleBar, RoleCount };
     QWidget *widgetForRole(Role r) const;
@@ -157,6 +160,7 @@ public:
     int minimumTitleWidth() const;
     int titleHeight() const;
     void updateMaxSize();
+    static bool wmSupportsNativeWindowDeco();
     bool nativeWindowDeco() const;
     bool nativeWindowDeco(bool floating) const;
 
@@ -176,9 +180,9 @@ class QDockWidgetItem : public QWidgetItem
 {
 public:
     QDockWidgetItem(QDockWidget *dockWidget);
-    QSize minimumSize() const;
-    QSize maximumSize() const;
-    QSize sizeHint() const;
+    QSize minimumSize() const override;
+    QSize maximumSize() const override;
+    QSize sizeHint() const override;
 
 private:
     inline QLayoutItem *dockWidgetChildItem() const;
@@ -201,7 +205,5 @@ inline QDockWidgetLayout *QDockWidgetItem::dockWidgetLayout() const
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_DOCKWIDGET
 
 #endif // QDYNAMICDOCKWIDGET_P_H

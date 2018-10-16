@@ -1,40 +1,27 @@
 /*
 *********************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the autotests of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +31,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'tablewidgeteditor.ui'
 **
-** Created: Fri Sep 4 10:17:15 2009
-**      by: Qt User Interface Compiler version 4.6.0
+** Created by: Qt User Interface Compiler version 5.0.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -54,9 +40,7 @@
 #define TABLEWIDGETEDITOR_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QButtonGroup>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QGridLayout>
@@ -120,28 +104,28 @@ public:
     void setupUi(QDialog *qdesigner_internal__TableWidgetEditor)
     {
         if (qdesigner_internal__TableWidgetEditor->objectName().isEmpty())
-            qdesigner_internal__TableWidgetEditor->setObjectName(QStringLiteral("qdesigner_internal__TableWidgetEditor"));
+            qdesigner_internal__TableWidgetEditor->setObjectName(QString::fromUtf8("qdesigner_internal__TableWidgetEditor"));
         qdesigner_internal__TableWidgetEditor->resize(591, 455);
         gridLayout_4 = new QGridLayout(qdesigner_internal__TableWidgetEditor);
-        gridLayout_4->setObjectName(QStringLiteral("gridLayout_4"));
+        gridLayout_4->setObjectName(QString::fromUtf8("gridLayout_4"));
         itemsBox = new QGroupBox(qdesigner_internal__TableWidgetEditor);
-        itemsBox->setObjectName(QStringLiteral("itemsBox"));
+        itemsBox->setObjectName(QString::fromUtf8("itemsBox"));
         gridLayout = new QGridLayout(itemsBox);
-        gridLayout->setObjectName(QStringLiteral("gridLayout"));
+        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         tableWidget = new QTableWidget(itemsBox);
-        tableWidget->setObjectName(QStringLiteral("tableWidget"));
+        tableWidget->setObjectName(QString::fromUtf8("tableWidget"));
 
         gridLayout->addWidget(tableWidget, 0, 0, 1, 1);
 
         horizontalLayout_5 = new QHBoxLayout();
-        horizontalLayout_5->setObjectName(QStringLiteral("horizontalLayout_5"));
+        horizontalLayout_5->setObjectName(QString::fromUtf8("horizontalLayout_5"));
         label_3 = new QLabel(itemsBox);
-        label_3->setObjectName(QStringLiteral("label_3"));
+        label_3->setObjectName(QString::fromUtf8("label_3"));
 
         horizontalLayout_5->addWidget(label_3);
 
         itemIconSelector = new qdesigner_internal::IconSelector(itemsBox);
-        itemIconSelector->setObjectName(QStringLiteral("itemIconSelector"));
+        itemIconSelector->setObjectName(QString::fromUtf8("itemIconSelector"));
 
         horizontalLayout_5->addWidget(itemIconSelector);
 
@@ -156,14 +140,14 @@ public:
         gridLayout_4->addWidget(itemsBox, 0, 0, 1, 1);
 
         buttonBox = new QDialogButtonBox(qdesigner_internal__TableWidgetEditor);
-        buttonBox->setObjectName(QStringLiteral("buttonBox"));
+        buttonBox->setObjectName(QString::fromUtf8("buttonBox"));
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel|QDialogButtonBox::Ok);
 
         gridLayout_4->addWidget(buttonBox, 1, 0, 1, 2);
 
         widget = new QWidget(qdesigner_internal__TableWidgetEditor);
-        widget->setObjectName(QStringLiteral("widget"));
+        widget->setObjectName(QString::fromUtf8("widget"));
         QSizePolicy sizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
         sizePolicy.setHorizontalStretch(0);
         sizePolicy.setVerticalStretch(0);
@@ -171,13 +155,13 @@ public:
         widget->setSizePolicy(sizePolicy);
         verticalLayout = new QVBoxLayout(widget);
         verticalLayout->setContentsMargins(0, 0, 0, 0);
-        verticalLayout->setObjectName(QStringLiteral("verticalLayout"));
+        verticalLayout->setObjectName(QString::fromUtf8("verticalLayout"));
         columnsBox = new QGroupBox(widget);
-        columnsBox->setObjectName(QStringLiteral("columnsBox"));
+        columnsBox->setObjectName(QString::fromUtf8("columnsBox"));
         gridLayout_2 = new QGridLayout(columnsBox);
-        gridLayout_2->setObjectName(QStringLiteral("gridLayout_2"));
+        gridLayout_2->setObjectName(QString::fromUtf8("gridLayout_2"));
         columnsListWidget = new QListWidget(columnsBox);
-        columnsListWidget->setObjectName(QStringLiteral("columnsListWidget"));
+        columnsListWidget->setObjectName(QString::fromUtf8("columnsListWidget"));
         QSizePolicy sizePolicy1(QSizePolicy::Ignored, QSizePolicy::Expanding);
         sizePolicy1.setHorizontalStretch(0);
         sizePolicy1.setVerticalStretch(0);
@@ -188,14 +172,14 @@ public:
         gridLayout_2->addWidget(columnsListWidget, 0, 0, 1, 1);
 
         horizontalLayout_3 = new QHBoxLayout();
-        horizontalLayout_3->setObjectName(QStringLiteral("horizontalLayout_3"));
+        horizontalLayout_3->setObjectName(QString::fromUtf8("horizontalLayout_3"));
         newColumnButton = new QToolButton(columnsBox);
-        newColumnButton->setObjectName(QStringLiteral("newColumnButton"));
+        newColumnButton->setObjectName(QString::fromUtf8("newColumnButton"));
 
         horizontalLayout_3->addWidget(newColumnButton);
 
         deleteColumnButton = new QToolButton(columnsBox);
-        deleteColumnButton->setObjectName(QStringLiteral("deleteColumnButton"));
+        deleteColumnButton->setObjectName(QString::fromUtf8("deleteColumnButton"));
 
         horizontalLayout_3->addWidget(deleteColumnButton);
 
@@ -204,12 +188,12 @@ public:
         horizontalLayout_3->addItem(spacerItem);
 
         moveColumnUpButton = new QToolButton(columnsBox);
-        moveColumnUpButton->setObjectName(QStringLiteral("moveColumnUpButton"));
+        moveColumnUpButton->setObjectName(QString::fromUtf8("moveColumnUpButton"));
 
         horizontalLayout_3->addWidget(moveColumnUpButton);
 
         moveColumnDownButton = new QToolButton(columnsBox);
-        moveColumnDownButton->setObjectName(QStringLiteral("moveColumnDownButton"));
+        moveColumnDownButton->setObjectName(QString::fromUtf8("moveColumnDownButton"));
 
         horizontalLayout_3->addWidget(moveColumnDownButton);
 
@@ -217,14 +201,14 @@ public:
         gridLayout_2->addLayout(horizontalLayout_3, 1, 0, 1, 1);
 
         horizontalLayout_2 = new QHBoxLayout();
-        horizontalLayout_2->setObjectName(QStringLiteral("horizontalLayout_2"));
+        horizontalLayout_2->setObjectName(QString::fromUtf8("horizontalLayout_2"));
         label = new QLabel(columnsBox);
-        label->setObjectName(QStringLiteral("label"));
+        label->setObjectName(QString::fromUtf8("label"));
 
         horizontalLayout_2->addWidget(label);
 
         columnIconSelector = new qdesigner_internal::IconSelector(columnsBox);
-        columnIconSelector->setObjectName(QStringLiteral("columnIconSelector"));
+        columnIconSelector->setObjectName(QString::fromUtf8("columnIconSelector"));
 
         horizontalLayout_2->addWidget(columnIconSelector);
 
@@ -239,11 +223,11 @@ public:
         verticalLayout->addWidget(columnsBox);
 
         rowsBox = new QGroupBox(widget);
-        rowsBox->setObjectName(QStringLiteral("rowsBox"));
+        rowsBox->setObjectName(QString::fromUtf8("rowsBox"));
         gridLayout_3 = new QGridLayout(rowsBox);
-        gridLayout_3->setObjectName(QStringLiteral("gridLayout_3"));
+        gridLayout_3->setObjectName(QString::fromUtf8("gridLayout_3"));
         rowsListWidget = new QListWidget(rowsBox);
-        rowsListWidget->setObjectName(QStringLiteral("rowsListWidget"));
+        rowsListWidget->setObjectName(QString::fromUtf8("rowsListWidget"));
         sizePolicy1.setHeightForWidth(rowsListWidget->sizePolicy().hasHeightForWidth());
         rowsListWidget->setSizePolicy(sizePolicy1);
         rowsListWidget->setFocusPolicy(Qt::TabFocus);
@@ -251,14 +235,14 @@ public:
         gridLayout_3->addWidget(rowsListWidget, 0, 0, 1, 1);
 
         horizontalLayout_4 = new QHBoxLayout();
-        horizontalLayout_4->setObjectName(QStringLiteral("horizontalLayout_4"));
+        horizontalLayout_4->setObjectName(QString::fromUtf8("horizontalLayout_4"));
         newRowButton = new QToolButton(rowsBox);
-        newRowButton->setObjectName(QStringLiteral("newRowButton"));
+        newRowButton->setObjectName(QString::fromUtf8("newRowButton"));
 
         horizontalLayout_4->addWidget(newRowButton);
 
         deleteRowButton = new QToolButton(rowsBox);
-        deleteRowButton->setObjectName(QStringLiteral("deleteRowButton"));
+        deleteRowButton->setObjectName(QString::fromUtf8("deleteRowButton"));
 
         horizontalLayout_4->addWidget(deleteRowButton);
 
@@ -267,12 +251,12 @@ public:
         horizontalLayout_4->addItem(spacerItem2);
 
         moveRowUpButton = new QToolButton(rowsBox);
-        moveRowUpButton->setObjectName(QStringLiteral("moveRowUpButton"));
+        moveRowUpButton->setObjectName(QString::fromUtf8("moveRowUpButton"));
 
         horizontalLayout_4->addWidget(moveRowUpButton);
 
         moveRowDownButton = new QToolButton(rowsBox);
-        moveRowDownButton->setObjectName(QStringLiteral("moveRowDownButton"));
+        moveRowDownButton->setObjectName(QString::fromUtf8("moveRowDownButton"));
 
         horizontalLayout_4->addWidget(moveRowDownButton);
 
@@ -280,14 +264,14 @@ public:
         gridLayout_3->addLayout(horizontalLayout_4, 1, 0, 1, 1);
 
         horizontalLayout = new QHBoxLayout();
-        horizontalLayout->setObjectName(QStringLiteral("horizontalLayout"));
+        horizontalLayout->setObjectName(QString::fromUtf8("horizontalLayout"));
         label_2 = new QLabel(rowsBox);
-        label_2->setObjectName(QStringLiteral("label_2"));
+        label_2->setObjectName(QString::fromUtf8("label_2"));
 
         horizontalLayout->addWidget(label_2);
 
         rowIconSelector = new qdesigner_internal::IconSelector(rowsBox);
-        rowIconSelector->setObjectName(QStringLiteral("rowIconSelector"));
+        rowIconSelector->setObjectName(QString::fromUtf8("rowIconSelector"));
 
         horizontalLayout->addWidget(rowIconSelector);
 
@@ -327,54 +311,54 @@ public:
 
     void retranslateUi(QDialog *qdesigner_internal__TableWidgetEditor)
     {
-        qdesigner_internal__TableWidgetEditor->setWindowTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Edit Table Widget", 0));
-        itemsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Items", 0));
+        qdesigner_internal__TableWidgetEditor->setWindowTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Edit Table Widget", nullptr));
+        itemsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Items", nullptr));
 #ifndef QT_NO_TOOLTIP
-        tableWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Items", 0));
+        tableWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Items", nullptr));
 #endif // QT_NO_TOOLTIP
-        label_3->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", 0));
-        columnsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Columns", 0));
+        label_3->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", nullptr));
+        columnsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Columns", nullptr));
 #ifndef QT_NO_TOOLTIP
-        columnsListWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Columns", 0));
-#endif // QT_NO_TOOLTIP
-#ifndef QT_NO_TOOLTIP
-        newColumnButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New Column", 0));
-#endif // QT_NO_TOOLTIP
-        newColumnButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New", 0));
-#ifndef QT_NO_TOOLTIP
-        deleteColumnButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete Column", 0));
-#endif // QT_NO_TOOLTIP
-        deleteColumnButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete", 0));
-#ifndef QT_NO_TOOLTIP
-        moveColumnUpButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Column Up", 0));
-#endif // QT_NO_TOOLTIP
-        moveColumnUpButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "U", 0));
-#ifndef QT_NO_TOOLTIP
-        moveColumnDownButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Column Down", 0));
-#endif // QT_NO_TOOLTIP
-        moveColumnDownButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "D", 0));
-        label->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", 0));
-        rowsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Rows", 0));
-#ifndef QT_NO_TOOLTIP
-        rowsListWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Rows", 0));
+        columnsListWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Columns", nullptr));
 #endif // QT_NO_TOOLTIP
 #ifndef QT_NO_TOOLTIP
-        newRowButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New Row", 0));
+        newColumnButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New Column", nullptr));
 #endif // QT_NO_TOOLTIP
-        newRowButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New", 0));
+        newColumnButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New", nullptr));
 #ifndef QT_NO_TOOLTIP
-        deleteRowButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete Row", 0));
+        deleteColumnButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete Column", nullptr));
 #endif // QT_NO_TOOLTIP
-        deleteRowButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete", 0));
+        deleteColumnButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete", nullptr));
 #ifndef QT_NO_TOOLTIP
-        moveRowUpButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Row Up", 0));
+        moveColumnUpButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Column Up", nullptr));
 #endif // QT_NO_TOOLTIP
-        moveRowUpButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "U", 0));
+        moveColumnUpButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "U", nullptr));
 #ifndef QT_NO_TOOLTIP
-        moveRowDownButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Row Down", 0));
+        moveColumnDownButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Column Down", nullptr));
 #endif // QT_NO_TOOLTIP
-        moveRowDownButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "D", 0));
-        label_2->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", 0));
+        moveColumnDownButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "D", nullptr));
+        label->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", nullptr));
+        rowsBox->setTitle(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Rows", nullptr));
+#ifndef QT_NO_TOOLTIP
+        rowsListWidget->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Table Rows", nullptr));
+#endif // QT_NO_TOOLTIP
+#ifndef QT_NO_TOOLTIP
+        newRowButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New Row", nullptr));
+#endif // QT_NO_TOOLTIP
+        newRowButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "New", nullptr));
+#ifndef QT_NO_TOOLTIP
+        deleteRowButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete Row", nullptr));
+#endif // QT_NO_TOOLTIP
+        deleteRowButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Delete", nullptr));
+#ifndef QT_NO_TOOLTIP
+        moveRowUpButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Row Up", nullptr));
+#endif // QT_NO_TOOLTIP
+        moveRowUpButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "U", nullptr));
+#ifndef QT_NO_TOOLTIP
+        moveRowDownButton->setToolTip(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Move Row Down", nullptr));
+#endif // QT_NO_TOOLTIP
+        moveRowDownButton->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "D", nullptr));
+        label_2->setText(QApplication::translate("qdesigner_internal::TableWidgetEditor", "Icon", nullptr));
     } // retranslateUi
 
 };

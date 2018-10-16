@@ -1,7 +1,8 @@
 /****************************************************************************
 **
+** Copyright (C) 2018 The Qt Company Ltd.
 ** Copyright (C) 2012 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author James Turner <james.turner@kdab.com>
-** Contact: http://www.qt-project.org/legal
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,67 +11,67 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include <qpa/qplatformtheme.h>
+
 #include "qcocoamenuitem.h"
 
+#include "qcocoansmenu.h"
 #include "qcocoamenu.h"
+#include "qcocoamenubar.h"
+#include "messages.h"
 #include "qcocoahelpers.h"
-#include "qcocoaautoreleasepool.h"
 #include "qt_mac_p.h"
 #include "qcocoaapplication.h" // for custom application category
 #include "qcocoamenuloader.h"
+#include <QtGui/private/qcoregraphics_p.h>
 
 #include <QtCore/QDebug>
 
-static inline QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *getMenuLoader()
-{
-    return [NSApp QT_MANGLE_NAMESPACE(qt_qcocoamenuLoader)];
-}
-
+QT_BEGIN_NAMESPACE
 
 static quint32 constructModifierMask(quint32 accel_key)
 {
     quint32 ret = 0;
     const bool dontSwap = qApp->testAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
     if ((accel_key & Qt::CTRL) == Qt::CTRL)
-        ret |= (dontSwap ? NSControlKeyMask : NSCommandKeyMask);
+        ret |= (dontSwap ? NSEventModifierFlagControl : NSEventModifierFlagCommand);
     if ((accel_key & Qt::META) == Qt::META)
-        ret |= (dontSwap ? NSCommandKeyMask : NSControlKeyMask);
+        ret |= (dontSwap ? NSEventModifierFlagCommand : NSEventModifierFlagControl);
     if ((accel_key & Qt::ALT) == Qt::ALT)
-        ret |= NSAlternateKeyMask;
+        ret |= NSEventModifierFlagOption;
     if ((accel_key & Qt::SHIFT) == Qt::SHIFT)
-        ret |= NSShiftKeyMask;
+        ret |= NSEventModifierFlagShift;
     return ret;
 }
 
+#ifndef QT_NO_SHORTCUT
 // return an autoreleased string given a QKeySequence (currently only looks at the first one).
 NSString *keySequenceToKeyEqivalent(const QKeySequence &accel)
 {
@@ -78,6 +79,9 @@ NSString *keySequenceToKeyEqivalent(const QKeySequence &accel)
     QChar cocoa_key = qt_mac_qtKey2CocoaKey(Qt::Key(accel_key));
     if (cocoa_key.isNull())
         cocoa_key = QChar(accel_key).toLower().unicode();
+    // Similar to qt_mac_removePrivateUnicode change the delete key so the symbol is correctly seen in native menubar
+    if (cocoa_key.unicode() == NSDeleteFunctionKey)
+        cocoa_key = NSDeleteCharacter;
     return [NSString stringWithCharacters:&cocoa_key.unicode() length:1];
 }
 
@@ -86,32 +90,44 @@ NSUInteger keySequenceModifierMask(const QKeySequence &accel)
 {
     return constructModifierMask(accel[0]);
 }
+#endif
 
 QCocoaMenuItem::QCocoaMenuItem() :
-    m_native(NULL),
-    m_menu(NULL),
+    m_native(nil),
+    m_itemView(nil),
+    m_menu(nullptr),
+    m_role(NoRole),
+    m_iconSize(16),
+    m_textSynced(false),
     m_isVisible(true),
     m_enabled(true),
+    m_parentEnabled(true),
     m_isSeparator(false),
-    m_role(NoRole),
     m_checked(false),
-    m_merged(false),
-    m_tag(0)
+    m_merged(false)
 {
 }
 
 QCocoaMenuItem::~QCocoaMenuItem()
 {
+    QMacAutoReleasePool pool;
+
+    if (m_menu && m_menu->menuParent() == this)
+        m_menu->setMenuParent(nullptr);
     if (m_merged) {
-        [m_native setHidden:YES];
+        m_native.hidden = YES;
+    } else {
+        if (m_menu && m_menu->attachedItem() == m_native)
+            m_menu->setAttachedItem(nil);
+        [m_native release];
     }
 
-    [m_native release];
+    [m_itemView release];
 }
 
 void QCocoaMenuItem::setText(const QString &text)
 {
-    m_text = qt_mac_removeAmpersandEscapes(text);
+    m_text = text;
 }
 
 void QCocoaMenuItem::setIcon(const QIcon &icon)
@@ -124,10 +140,19 @@ void QCocoaMenuItem::setMenu(QPlatformMenu *menu)
     if (menu == m_menu)
         return;
 
-    QCocoaAutoReleasePool pool;
+    if (m_menu && m_menu->menuParent() == this) {
+        m_menu->setMenuParent(nullptr);
+        // Free the menu from its parent's influence
+        m_menu->propagateEnabledState(true);
+        if (m_native && m_menu->attachedItem() == m_native)
+            m_menu->setAttachedItem(nil);
+    }
+
+    QMacAutoReleasePool pool;
     m_menu = static_cast<QCocoaMenu *>(menu);
     if (m_menu) {
-        m_menu->setParentItem(this);
+        m_menu->setMenuParent(this);
+        m_menu->propagateEnabledState(isEnabled());
     } else {
         // we previously had a menu, but no longer
         // clear out our item so the nexy sync() call builds a new one
@@ -153,13 +178,17 @@ void QCocoaMenuItem::setFont(const QFont &font)
 
 void QCocoaMenuItem::setRole(MenuRole role)
 {
+    if (role != m_role)
+        m_textSynced = false; // Changing role deserves a second chance.
     m_role = role;
 }
 
+#ifndef QT_NO_SHORTCUT
 void QCocoaMenuItem::setShortcut(const QKeySequence& shortcut)
 {
     m_shortcut = shortcut;
 }
+#endif
 
 void QCocoaMenuItem::setChecked(bool isChecked)
 {
@@ -168,197 +197,267 @@ void QCocoaMenuItem::setChecked(bool isChecked)
 
 void QCocoaMenuItem::setEnabled(bool enabled)
 {
-    m_enabled = enabled;
+    if (m_enabled != enabled) {
+        m_enabled = enabled;
+        if (m_menu)
+            m_menu->propagateEnabledState(isEnabled());
+    }
+}
+
+void QCocoaMenuItem::setNativeContents(WId item)
+{
+    NSView *itemView = (NSView *)item;
+    if (m_itemView == itemView)
+        return;
+    [m_itemView release];
+    m_itemView = [itemView retain];
+    m_itemView.autoresizesSubviews = YES;
+    m_itemView.autoresizingMask = NSViewWidthSizable;
+    m_itemView.hidden = NO;
+    m_itemView.needsDisplay = YES;
 }
 
 NSMenuItem *QCocoaMenuItem::sync()
 {
-    if (m_isSeparator != [m_native isSeparatorItem]) {
+    if (m_isSeparator != m_native.separatorItem) {
         [m_native release];
-        if (m_isSeparator) {
-            m_native = [[NSMenuItem separatorItem] retain];
-            [m_native setTag:reinterpret_cast<NSInteger>(this)];
-        } else
+        if (m_isSeparator)
+            m_native = [[QCocoaNSMenuItem separatorItemWithPlatformMenuItem:this] retain];
+        else
             m_native = nil;
     }
 
-    if (m_menu) {
-        if (m_native != m_menu->nsMenuItem()) {
-            [m_native release];
-            m_native = [m_menu->nsMenuItem() retain];
-            [m_native setTag:reinterpret_cast<NSInteger>(this)];
-        }
-    }
+    if ((m_role != NoRole && !m_textSynced) || m_merged) {
+        QCocoaMenuBar *menubar = nullptr;
+        if (m_role == TextHeuristicRole) {
+            // Recognized menu roles are only found in the first menus below the menubar
+            QObject *p = menuParent();
+            int depth = 1;
+            while (depth < 3 && p && !(menubar = qobject_cast<QCocoaMenuBar *>(p))) {
+                ++depth;
+                QCocoaMenuObject *menuObject = dynamic_cast<QCocoaMenuObject *>(p);
+                Q_ASSERT(menuObject);
+                p = menuObject->menuParent();
+            }
 
-    if ((m_role != NoRole) || m_merged) {
+            if (menubar && depth < 3)
+                m_detectedRole = detectMenuRole(m_text);
+            else
+                m_detectedRole = NoRole;
+        }
+
+        QCocoaMenuLoader *loader = [QCocoaMenuLoader sharedMenuLoader];
         NSMenuItem *mergeItem = nil;
-        QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *loader = getMenuLoader();
-        switch (m_role) {
-        case ApplicationSpecificRole:
-            mergeItem = [loader appSpecificMenuItem];
-            break;
+        const auto role = effectiveRole();
+        switch (role) {
         case AboutRole:
             mergeItem = [loader aboutMenuItem];
             break;
         case AboutQtRole:
             mergeItem = [loader aboutQtMenuItem];
             break;
-        case QuitRole:
-            mergeItem = [loader quitMenuItem];
-            break;
         case PreferencesRole:
             mergeItem = [loader preferencesMenuItem];
             break;
-        case TextHeuristicRole: {
-            QString aboutString = tr("About").toLower();
-            if (m_text.startsWith(aboutString, Qt::CaseInsensitive)
-                || m_text.endsWith(aboutString, Qt::CaseInsensitive))
-            {
-                if (m_text.indexOf(QRegExp(QString::fromLatin1("qt$"), Qt::CaseInsensitive)) == -1)
-                    mergeItem = [loader aboutMenuItem];
-                else
-                    mergeItem = [loader aboutQtMenuItem];
-
-                m_merged = true;
-            } else if (m_text.startsWith(tr("Config"), Qt::CaseInsensitive)
-                       || m_text.startsWith(tr("Preference"), Qt::CaseInsensitive)
-                       || m_text.startsWith(tr("Options"), Qt::CaseInsensitive)
-                       || m_text.startsWith(tr("Setting"), Qt::CaseInsensitive)
-                       || m_text.startsWith(tr("Setup"), Qt::CaseInsensitive)) {
-                mergeItem = [loader preferencesMenuItem];
-            } else if (m_text.startsWith(tr("Quit"), Qt::CaseInsensitive)
-                       || m_text.startsWith(tr("Exit"), Qt::CaseInsensitive)) {
-                mergeItem = [loader quitMenuItem];
-            }
-
+        case ApplicationSpecificRole:
+            mergeItem = [loader appSpecificMenuItem:this];
+            break;
+        case QuitRole:
+            mergeItem = [loader quitMenuItem];
+            break;
+        case CutRole:
+        case CopyRole:
+        case PasteRole:
+        case SelectAllRole:
+            if (menubar)
+                mergeItem = menubar->itemForRole(role);
+            break;
+        case NoRole:
+            // The heuristic couldn't resolve the menu role
+            m_textSynced = false;
+            break;
+        default:
+            if (!m_text.isEmpty())
+                m_textSynced = true;
             break;
         }
 
-        default:
-            qWarning() << Q_FUNC_INFO << "unsupported role" << (int) m_role;
-        }
-
         if (mergeItem) {
+            m_textSynced = true;
             m_merged = true;
+            [mergeItem retain];
             [m_native release];
             m_native = mergeItem;
-            [m_native retain]; // balance out release!
-            [m_native setTag:reinterpret_cast<NSInteger>(this)];
+            if (auto *nativeItem = qt_objc_cast<QCocoaNSMenuItem *>(m_native))
+                nativeItem.platformMenuItem = this;
         } else if (m_merged) {
             // was previously merged, but no longer
             [m_native release];
             m_native = nil; // create item below
             m_merged = false;
         }
+    } else if (!m_text.isEmpty()) {
+        m_textSynced = true; // NoRole, and that was set explicitly. So, nothing to do anymore.
     }
 
     if (!m_native) {
-        m_native = [[NSMenuItem alloc] initWithTitle:QCFString::toNSString(m_text)
-            action:nil
-                keyEquivalent:@""];
-        [m_native retain];
-        [m_native setTag:reinterpret_cast<NSInteger>(this)];
+        m_native = [[QCocoaNSMenuItem alloc] initWithPlatformMenuItem:this];
+        m_native.title = m_text.toNSString();
     }
 
-//  [m_native setHidden:YES];
-//  [m_native setHidden:NO];
-   [m_native setHidden: !m_isVisible];
-    [m_native setEnabled: m_enabled];
-    QString text = m_text;
-    QKeySequence accel = m_shortcut;
+    resolveTargetAction();
 
-    {
-        int st = text.lastIndexOf(QLatin1Char('\t'));
-        if (st != -1) {
-            accel = QKeySequence(text.right(text.length()-(st+1)));
-            text.remove(st, text.length()-st);
-        }
-    }
+    m_native.hidden = !m_isVisible;
+    m_native.view = m_itemView;
 
-    text = mergeText();
-    accel = mergeAccel();
+    QString text = mergeText();
+#ifndef QT_NO_SHORTCUT
+    QKeySequence accel = mergeAccel();
 
     // Show multiple key sequences as part of the menu text.
     if (accel.count() > 1)
         text += QLatin1String(" (") + accel.toString(QKeySequence::NativeText) + QLatin1String(")");
+#endif
 
-    QString finalString = qt_mac_removeMnemonics(text);
+    QString finalString = QPlatformTheme::removeMnemonics(text);
+    bool useAttributedTitle = false;
     // Cocoa Font and title
     if (m_font.resolve()) {
-        NSFont *customMenuFont = [NSFont fontWithName:QCFString::toNSString(m_font.family())
+        NSFont *customMenuFont = [NSFont fontWithName:m_font.family().toNSString()
                                   size:m_font.pointSize()];
-        NSArray *keys = [NSArray arrayWithObjects:NSFontAttributeName, nil];
-        NSArray *objects = [NSArray arrayWithObjects:customMenuFont, nil];
-        NSDictionary *attributes = [NSDictionary dictionaryWithObjects:objects forKeys:keys];
-        NSAttributedString *str = [[[NSAttributedString alloc] initWithString:QCFString::toNSString(finalString)
-                                 attributes:attributes] autorelease];
-       [m_native setAttributedTitle: str];
-    } else {
-       [m_native setTitle: QCFString::toNSString(finalString)];
+        if (customMenuFont) {
+            NSAttributedString *str = [[[NSAttributedString alloc] initWithString:finalString.toNSString()
+                                     attributes:@{NSFontAttributeName: customMenuFont}] autorelease];
+            m_native.attributedTitle = str;
+            useAttributedTitle = true;
+        }
     }
+    if (!useAttributedTitle)
+       m_native.title = finalString.toNSString();
 
+#ifndef QT_NO_SHORTCUT
     if (accel.count() == 1) {
-        [m_native setKeyEquivalent:keySequenceToKeyEqivalent(accel)];
-        [m_native setKeyEquivalentModifierMask:keySequenceModifierMask(accel)];
-    } else {
-        [m_native setKeyEquivalent:@""];
-        [m_native setKeyEquivalentModifierMask:NSCommandKeyMask];
+        m_native.keyEquivalent = keySequenceToKeyEqivalent(accel);
+        m_native.keyEquivalentModifierMask = keySequenceModifierMask(accel);
+    } else
+#endif
+    {
+        m_native.keyEquivalent = @"";
+        m_native.keyEquivalentModifierMask = NSEventModifierFlagCommand;
     }
 
+    NSImage *img = nil;
     if (!m_icon.isNull()) {
-        NSImage *img = static_cast<NSImage *>(qt_mac_create_nsimage(m_icon.pixmap(16, QIcon::Normal)));
-        [m_native setImage: img];
-        [img release];
+        img = qt_mac_create_nsimage(m_icon, m_iconSize);
+        img.size = CGSizeMake(m_iconSize, m_iconSize);
     }
+    m_native.image = img;
+    [img release];
 
-    [m_native setState:m_checked ?  NSOnState : NSOffState];
+    m_native.state = m_checked ?  NSOnState : NSOffState;
     return m_native;
 }
 
 QString QCocoaMenuItem::mergeText()
 {
-    extern QString qt_mac_applicationmenu_string(int type);
-    QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *loader = getMenuLoader();
+    QCocoaMenuLoader *loader = [QCocoaMenuLoader sharedMenuLoader];
     if (m_native == [loader aboutMenuItem]) {
-        return qt_mac_applicationmenu_string(6).arg(qt_mac_applicationName());
+        return qt_mac_applicationmenu_string(AboutAppMenuItem).arg(qt_mac_applicationName());
     } else if (m_native== [loader aboutQtMenuItem]) {
         if (m_text == QString("About Qt"))
-            return tr("About Qt");
+            return msgAboutQt();
         else
             return m_text;
     } else if (m_native == [loader preferencesMenuItem]) {
-        return qt_mac_applicationmenu_string(4);
+        return qt_mac_applicationmenu_string(PreferencesAppMenuItem);
     } else if (m_native == [loader quitMenuItem]) {
-        return qt_mac_applicationmenu_string(5).arg(qt_mac_applicationName());
+        return qt_mac_applicationmenu_string(QuitAppMenuItem).arg(qt_mac_applicationName());
+    } else if (m_text.contains('\t')) {
+        return m_text.left(m_text.indexOf('\t'));
     }
     return m_text;
 }
 
+#ifndef QT_NO_SHORTCUT
 QKeySequence QCocoaMenuItem::mergeAccel()
 {
-    QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *loader = getMenuLoader();
+    QCocoaMenuLoader *loader = [QCocoaMenuLoader sharedMenuLoader];
     if (m_native == [loader preferencesMenuItem])
         return QKeySequence(QKeySequence::Preferences);
     else if (m_native == [loader quitMenuItem])
         return QKeySequence(QKeySequence::Quit);
+    else if (m_text.contains('\t'))
+        return QKeySequence(m_text.mid(m_text.indexOf('\t') + 1), QKeySequence::NativeText);
 
     return m_shortcut;
 }
+#endif
 
 void QCocoaMenuItem::syncMerged()
 {
     if (!m_merged) {
-        qWarning() << Q_FUNC_INFO << "Trying to sync a non-merged item";
+        qWarning("Trying to sync a non-merged item");
         return;
     }
-    [m_native setTag:reinterpret_cast<NSInteger>(this)];
-    [m_native setHidden: !m_isVisible];
+
+    m_native.hidden = !m_isVisible;
 }
 
-void QCocoaMenuItem::syncModalState(bool modal)
+void QCocoaMenuItem::setParentEnabled(bool enabled)
 {
-    if (modal)
-        [m_native setEnabled:NO];
-    else
-        [m_native setEnabled:m_enabled];
+    if (m_parentEnabled != enabled) {
+        m_parentEnabled = enabled;
+        if (m_menu)
+            m_menu->propagateEnabledState(isEnabled());
+    }
 }
+
+QPlatformMenuItem::MenuRole QCocoaMenuItem::effectiveRole() const
+{
+    if (m_role > TextHeuristicRole)
+        return m_role;
+    else
+        return m_detectedRole;
+}
+
+void QCocoaMenuItem::setIconSize(int size)
+{
+    m_iconSize = size;
+}
+
+void QCocoaMenuItem::resolveTargetAction()
+{
+    if (m_native.separatorItem)
+        return;
+
+    // Some items created by QCocoaMenuLoader are not
+    // instances of QCocoaNSMenuItem and have their
+    // target/action set as Interface Builder would.
+    if (![m_native isMemberOfClass:[QCocoaNSMenuItem class]])
+        return;
+
+    // Use the responder chain and ensure native modal dialogs
+    // continue receiving cut/copy/paste/etc. key equivalents.
+    SEL roleAction;
+    switch (effectiveRole()) {
+    case CutRole:
+        roleAction = @selector(cut:);
+        break;
+    case CopyRole:
+        roleAction = @selector(copy:);
+        break;
+    case PasteRole:
+        roleAction = @selector(paste:);
+        break;
+    case SelectAllRole:
+        roleAction = @selector(selectAll:);
+        break;
+    default:
+        roleAction = @selector(qt_itemFired:);
+    }
+
+    m_native.action = roleAction;
+    m_native.target = nil;
+}
+
+QT_END_NAMESPACE

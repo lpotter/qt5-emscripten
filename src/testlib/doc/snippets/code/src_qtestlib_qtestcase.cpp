@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -147,19 +157,25 @@ namespace QTest {
     {
         QByteArray ba = "MyPoint(";
         ba += QByteArray::number(point.x()) + ", " + QByteArray::number(point.y());
-        ba += ")";
+        ba += ')';
         return qstrdup(ba.data());
     }
 }
 //! [16]
 
-
-//! [17]
-int i = 0;
-while (myNetworkServerNotResponding() && i++ < 50)
-    QTest::qWait(250);
-//! [17]
-
+//! [toString-overload]
+namespace MyNamespace {
+    char *toString(const MyPoint &point)
+    {
+        // bring QTest::toString overloads into scope:
+        using QTest::toString;
+        // delegate char* handling to QTest::toString(QByteArray):
+        return toString("MyPoint(" +
+                        QByteArray::number(point.x()) + ", " +
+                        QByteArray::number(point.y()) + ')');
+    }
+}
+//! [toString-overload]
 
 //! [18]
 MyTestObject test1;
@@ -183,6 +199,17 @@ void myTestFunction_data()
     QTest::newRow("a null string") << QString();
 }
 //! [20]
+
+
+//! [addRow]
+void myTestFunction_data()
+{
+    QTest::addColumn<int>("input");
+    QTest::addColumn<QString>("output");
+    QTest::addRow("%d", 0) << 0 << QString("0");
+    QTest::addRow("%d", 1) << 1 << QString("1");
+}
+//! [addRow]
 
 
 //! [21]
@@ -211,26 +238,22 @@ void MyTestClass::cleanup()
 QTest::qSleep(250);
 //! [23]
 
-//! [24]
-QWidget widget;
-widget.show();
-QTest::qWaitForWindowShown(&widget);
-//! [24]
 
 //! [25]
+QTouchDevice *dev = QTest::createTouchDevice();
 QWidget widget;
 
-QTest::touchEvent(&widget)
+QTest::touchEvent(&widget, dev)
     .press(0, QPoint(10, 10));
-QTest::touchEvent(&widget)
+QTest::touchEvent(&widget, dev)
     .stationary(0)
     .press(1, QPoint(40, 10));
-QTest::touchEvent(&widget)
+QTest::touchEvent(&widget, dev)
     .move(0, QPoint(12, 12))
     .move(1, QPoint(45, 5));
-QTest::touchEvent(&widget)
-    .release(0)
-    .release(1);
+QTest::touchEvent(&widget, dev)
+    .release(0, QPoint(12, 12))
+    .release(1, QPoint(45, 5));
 //! [25]
 
 
@@ -259,6 +282,17 @@ void TestBenchmark::simple()
     }
 }
 //! [27]
+
+//! [28]
+QTest::keyClick(myWindow, 'a');
+//! [28]
+
+
+//! [29]
+QTest::keyClick(myWindow, Qt::Key_Escape);
+
+QTest::keyClick(myWindow, Qt::Key_Escape, Qt::ShiftModifier, 200);
+//! [29]
 
 }
 

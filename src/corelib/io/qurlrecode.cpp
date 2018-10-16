@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Intel Corporation
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,36 +10,37 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
 #include "qurl.h"
+#include "private/qutfcodec_p.h"
+#include "private/qtools_p.h"
+#include "private/qsimd_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -112,59 +113,6 @@ static const uchar defaultActionTable[96] = {
 // mask tables, in negative polarity
 // 0x00 if it belongs to this category
 // 0xff if it doesn't
-
-static const uchar delimsMask[96] = {
-    0xff, // space
-    0x00, // '!' (sub-delim)
-    0xff, // '"'
-    0x00, // '#' (gen-delim)
-    0x00, // '$' (gen-delim)
-    0xff, // '%' (percent)
-    0x00, // '&' (gen-delim)
-    0x00, // "'" (sub-delim)
-    0x00, // '(' (sub-delim)
-    0x00, // ')' (sub-delim)
-    0x00, // '*' (sub-delim)
-    0x00, // '+' (sub-delim)
-    0x00, // ',' (sub-delim)
-    0xff, // '-' (unreserved)
-    0xff, // '.' (unreserved)
-    0x00, // '/' (gen-delim)
-
-    0xff, 0xff, 0xff, 0xff, 0xff,  // '0' to '4' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // '5' to '9' (unreserved)
-    0x00, // ':' (gen-delim)
-    0x00, // ';' (sub-delim)
-    0xff, // '<'
-    0x00, // '=' (sub-delim)
-    0xff, // '>'
-    0x00, // '?' (gen-delim)
-
-    0x00, // '@' (gen-delim)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'A' to 'E' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'F' to 'J' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'K' to 'O' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'P' to 'T' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // 'U' to 'Z' (unreserved)
-    0x00, // '[' (gen-delim)
-    0xff, // '\'
-    0x00, // ']' (gen-delim)
-    0xff, // '^'
-    0xff, // '_' (unreserved)
-
-    0xff, // '`'
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'a' to 'e' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'f' to 'j' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'k' to 'o' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff,  // 'p' to 't' (unreserved)
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // 'u' to 'z' (unreserved)
-    0xff, // '{'
-    0xff, // '|'
-    0xff, // '}'
-    0xff, // '~' (unreserved)
-
-    0xff  // BSKP
-};
 
 static const uchar reservedMask[96] = {
     0xff, // space
@@ -257,8 +205,7 @@ static inline ushort decodePercentEncoding(const ushort *input)
 
 static inline ushort encodeNibble(ushort c)
 {
-    static const uchar hexnumbers[] = "0123456789ABCDEF";
-    return hexnumbers[c & 0xf];
+    return ushort(QtMiscUtils::toHexUpper(c));
 }
 
 static void ensureDetached(QString &result, ushort *&output, const ushort *begin, const ushort *input, const ushort *end,
@@ -285,110 +232,97 @@ static void ensureDetached(QString &result, ushort *&output, const ushort *begin
     }
 }
 
+namespace {
+struct QUrlUtf8Traits : public QUtf8BaseTraitsNoAscii
+{
+    // From RFC 3987:
+    //    iunreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~" / ucschar
+    //
+    //    ucschar        = %xA0-D7FF / %xF900-FDCF / %xFDF0-FFEF
+    //                   / %x10000-1FFFD / %x20000-2FFFD / %x30000-3FFFD
+    //                   / %x40000-4FFFD / %x50000-5FFFD / %x60000-6FFFD
+    //                   / %x70000-7FFFD / %x80000-8FFFD / %x90000-9FFFD
+    //                   / %xA0000-AFFFD / %xB0000-BFFFD / %xC0000-CFFFD
+    //                   / %xD0000-DFFFD / %xE1000-EFFFD
+    //
+    //    iprivate       = %xE000-F8FF / %xF0000-FFFFD / %x100000-10FFFD
+    //
+    // That RFC allows iprivate only as part of iquery, but we don't know here
+    // whether we're looking at a query or another part of an URI, so we accept
+    // them too. The definition above excludes U+FFF0 to U+FFFD from appearing
+    // unencoded, but we see no reason for its exclusion, so we allow them to
+    // be decoded (and we need U+FFFD the replacement character to indicate
+    // failure to decode).
+    //
+    // That means we must disallow:
+    //  * unpaired surrogates (QUtf8Functions takes care of that for us)
+    //  * non-characters
+    static const bool allowNonCharacters = false;
+
+    // override: our "bytes" are three percent-encoded UTF-16 characters
+    static void appendByte(ushort *&ptr, uchar b)
+    {
+        // b >= 0x80, by construction, so percent-encode
+        *ptr++ = '%';
+        *ptr++ = encodeNibble(b >> 4);
+        *ptr++ = encodeNibble(b & 0xf);
+    }
+
+    static uchar peekByte(const ushort *ptr, int n = 0)
+    {
+        // decodePercentEncoding returns ushort(-1) if it can't decode,
+        // which means we return 0xff, which is not a valid continuation byte.
+        // If ptr[i * 3] is not '%', we'll multiply by zero and return 0,
+        // also not a valid continuation byte (if it's '%', we multiply by 1).
+        return uchar(decodePercentEncoding(ptr + n * 3))
+                * uchar(ptr[n * 3] == '%');
+    }
+
+    static qptrdiff availableBytes(const ushort *ptr, const ushort *end)
+    {
+        return (end - ptr) / 3;
+    }
+
+    static void advanceByte(const ushort *&ptr, int n = 1)
+    {
+        ptr += n * 3;
+    }
+};
+}
+
 // returns true if we performed an UTF-8 decoding
 static bool encodedUtf8ToUtf16(QString &result, ushort *&output, const ushort *begin, const ushort *&input,
                                const ushort *end, ushort decoded)
 {
-    int charsNeeded;
-    uint min_uc;
-    uint uc;
-
-    if (decoded <= 0xC1) {
-        // an UTF-8 first character must be at least 0xC0
-        // however, all 0xC0 and 0xC1 first bytes can only produce overlong sequences
-        return false;
-    } else if (decoded < 0xe0) {
-        charsNeeded = 2;
-        min_uc = 0x80;
-        uc = decoded & 0x1f;
-    } else if (decoded < 0xf0) {
-        charsNeeded = 3;
-        min_uc = 0x800;
-        uc = decoded & 0x0f;
-    } else if (decoded < 0xf5) {
-        charsNeeded = 4;
-        min_uc = 0x10000;
-        uc = decoded & 0x07;
-    } else {
-        // the last Unicode character is U+10FFFF
-        // it's encoded in UTF-8 as "\xF4\x8F\xBF\xBF"
-        // therefore, a byte higher than 0xF4 is not the UTF-8 first byte
-        return false;
-    }
-
-    // are there enough remaining?
-    if (end - input < 3*charsNeeded)
+    uint ucs4, *dst = &ucs4;
+    const ushort *src = input + 3;// skip the %XX that yielded \a decoded
+    int charsNeeded = QUtf8Functions::fromUtf8<QUrlUtf8Traits>(decoded, dst, src, end);
+    if (charsNeeded < 0)
         return false;
 
-    if (input[3] != '%')
-        return false;
-
-    // first continuation character
-    decoded = decodePercentEncoding(input + 3);
-    if ((decoded & 0xc0) != 0x80)
-        return false;
-    uc <<= 6;
-    uc |= decoded & 0x3f;
-
-    if (charsNeeded > 2) {
-        if (input[6] != '%')
-            return false;
-
-        // second continuation character
-        decoded = decodePercentEncoding(input + 6);
-        if ((decoded & 0xc0) != 0x80)
-            return false;
-        uc <<= 6;
-        uc |= decoded & 0x3f;
-
-        if (charsNeeded > 3) {
-            if (input[9] != '%')
-                return false;
-
-            // third continuation character
-            decoded = decodePercentEncoding(input + 9);
-            if ((decoded & 0xc0) != 0x80)
-                return false;
-            uc <<= 6;
-            uc |= decoded & 0x3f;
-        }
-    }
-
-    // we've decoded something; safety-check it
-    if (uc < min_uc)
-        return false;
-    if (QChar::isSurrogate(uc) || QChar::isNonCharacter(uc) || uc > QChar::LastValidCodePoint)
-        return false;
-
-    if (!QChar::requiresSurrogates(uc)) {
+    if (!QChar::requiresSurrogates(ucs4)) {
         // UTF-8 decoded and no surrogates are required
         // detach if necessary
-        ensureDetached(result, output, begin, input, end, -9 * charsNeeded + 1);
-        *output++ = uc;
+        // possibilities are: 6 chars (%XX%XX) -> one char; 9 chars (%XX%XX%XX) -> one char
+        ensureDetached(result, output, begin, input, end, -3 * charsNeeded + 1);
+        *output++ = ucs4;
     } else {
         // UTF-8 decoded to something that requires a surrogate pair
-        ensureDetached(result, output, begin, input, end, -9 * charsNeeded + 2);
-        *output++ = QChar::highSurrogate(uc);
-        *output++ = QChar::lowSurrogate(uc);
+        // compressing from %XX%XX%XX%XX (12 chars) to two
+        ensureDetached(result, output, begin, input, end, -10);
+        *output++ = QChar::highSurrogate(ucs4);
+        *output++ = QChar::lowSurrogate(ucs4);
     }
-    input += charsNeeded * 3 - 1;
+
+    input = src - 1;
     return true;
 }
 
 static void unicodeToEncodedUtf8(QString &result, ushort *&output, const ushort *begin,
                                  const ushort *&input, const ushort *end, ushort decoded)
 {
-    uint uc = decoded;
-    if (QChar::isHighSurrogate(uc)) {
-        if (input < end && QChar::isLowSurrogate(input[1]))
-            uc = QChar::surrogateToUcs4(uc, input[1]);
-    }
-
-    // note: we will encode bad UTF-16 to UTF-8
-    // but they don't get decoded back
-
-    // calculate the utf8 length
-    int utf8len = uc >= 0x10000 ? 4 : uc >= 0x800 ? 3 : 2;
+    // calculate the utf8 length and ensure enough space is available
+    int utf8len = QChar::isHighSurrogate(decoded) ? 4 : decoded >= 0x800 ? 3 : 2;
 
     // detach
     if (!output) {
@@ -410,50 +344,32 @@ static void unicodeToEncodedUtf8(QString &result, ushort *&output, const ushort 
         }
     }
 
-    // write the sequence
-    if (uc < 0x800) {
-        // first of two bytes
-        uchar c = 0xc0 | uchar(uc >> 6);
+    ++input;
+    int res = QUtf8Functions::toUtf8<QUrlUtf8Traits>(decoded, output, input, end);
+    --input;
+    if (res < 0) {
+        // bad surrogate pair sequence
+        // we will encode bad UTF-16 to UTF-8
+        // but they don't get decoded back
+
+        // first of three bytes
+        uchar c = 0xe0 | uchar(decoded >> 12);
+        *output++ = '%';
+        *output++ = 'E';
+        *output++ = encodeNibble(c & 0xf);
+
+        // second byte
+        c = 0x80 | (uchar(decoded >> 6) & 0x3f);
         *output++ = '%';
         *output++ = encodeNibble(c >> 4);
         *output++ = encodeNibble(c & 0xf);
-    } else {
-        uchar c;
-        if (uc > 0xFFFF) {
-            // first two of four bytes
-            c = 0xf0 | uchar(uc >> 18);
-            *output++ = '%';
-            *output++ = 'F';
-            *output++ = encodeNibble(c & 0xf);
 
-            // continuation byte
-            c = 0x80 | (uchar(uc >> 12) & 0x3f);
-            *output++ = '%';
-            *output++ = encodeNibble(c >> 4);
-            *output++ = encodeNibble(c & 0xf);
-
-            // this was a surrogate pair
-            ++input;
-        } else {
-            // first of three bytes
-            c = 0xe0 | uchar(uc >> 12);
-            *output++ = '%';
-            *output++ = 'E';
-            *output++ = encodeNibble(c & 0xf);
-        }
-
-        // continuation byte
-        c = 0x80 | (uchar(uc >> 6) & 0x3f);
+        // third byte
+        c = 0x80 | (decoded & 0x3f);
         *output++ = '%';
         *output++ = encodeNibble(c >> 4);
         *output++ = encodeNibble(c & 0xf);
     }
-
-    // continuation byte
-    uchar c = 0x80 | (uc & 0x3f);
-    *output++ = '%';
-    *output++ = encodeNibble(c >> 4);
-    *output++ = encodeNibble(c & 0xf);
 }
 
 static int recode(QString &result, const ushort *begin, const ushort *end, QUrl::ComponentFormattingOptions encoding,
@@ -463,10 +379,9 @@ static int recode(QString &result, const ushort *begin, const ushort *end, QUrl:
     const ushort *input = begin;
     ushort *output = 0;
 
+    EncodingAction action = EncodeCharacter;
     for ( ; input != end; ++input) {
-        register ushort c;
-        EncodingAction action;
-
+        ushort c;
         // try a run where no change is necessary
         for ( ; input != end; ++input) {
             c = *input;
@@ -483,7 +398,7 @@ static int recode(QString &result, const ushort *begin, const ushort *end, QUrl:
         break;
 
 non_trivial:
-        register uint decoded;
+        uint decoded;
         if (c == '%' && retryBadEncoding) {
             // always write "%25"
             ensureDetached(result, output, begin, input, end);
@@ -560,41 +475,155 @@ non_trivial:
     return 0;
 }
 
-static int decode(QString &appendTo, const ushort *begin, const ushort *end)
+/*
+ * Returns true if the input it checked (if it checked anything) is not
+ * encoded. A return of false indicates there's a percent at \a input that
+ * needs to be decoded.
+ */
+#ifdef __SSE2__
+static bool simdCheckNonEncoded(ushort *&output, const ushort *&input, const ushort *end)
 {
-    const int origSize = appendTo.size();
-    const ushort *input = begin;
-    ushort *output = 0;
-    while (input != end) {
-        if (*input != '%') {
-            if (output)
-                *output++ = *input;
-            ++input;
-            continue;
+#  ifdef __AVX2__
+    const __m256i percents256 = _mm256_broadcastw_epi16(_mm_cvtsi32_si128('%'));
+    const __m128i percents = _mm256_castsi256_si128(percents256);
+#  else
+    const __m128i percents = _mm_set1_epi16('%');
+#  endif
+
+    uint idx = 0;
+    quint32 mask = 0;
+    if (input + 16 <= end) {
+        qptrdiff offset = 0;
+        for ( ; input + offset + 16 <= end; offset += 16) {
+#  ifdef __AVX2__
+            // do 32 bytes at a time using AVX2
+            __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input + offset));
+            __m256i comparison = _mm256_cmpeq_epi16(data, percents256);
+            mask = _mm256_movemask_epi8(comparison);
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(output + offset), data);
+#  else
+            // do 32 bytes at a time using unrolled SSE2
+            __m128i data1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(input + offset));
+            __m128i data2 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(input + offset + 8));
+            __m128i comparison1 = _mm_cmpeq_epi16(data1, percents);
+            __m128i comparison2 = _mm_cmpeq_epi16(data2, percents);
+            uint mask1 = _mm_movemask_epi8(comparison1);
+            uint mask2 = _mm_movemask_epi8(comparison2);
+
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(output + offset), data1);
+            if (!mask1)
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(output + offset + 8), data2);
+            mask = mask1 | (mask2 << 16);
+#  endif
+
+            if (mask) {
+                idx = qCountTrailingZeroBits(mask) / 2;
+                break;
+            }
         }
 
-        if (Q_UNLIKELY(!output)) {
-            // detach
+        input += offset;
+        if (output)
+            output += offset;
+    } else if (input + 8 <= end) {
+        // do 16 bytes at a time
+        __m128i data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(input));
+        __m128i comparison = _mm_cmpeq_epi16(data, percents);
+        mask = _mm_movemask_epi8(comparison);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(output), data);
+        idx = qCountTrailingZeroBits(quint16(mask)) / 2;
+    } else if (input + 4 <= end) {
+        // do 8 bytes only
+        __m128i data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(input));
+        __m128i comparison = _mm_cmpeq_epi16(data, percents);
+        mask = _mm_movemask_epi8(comparison) & 0xffu;
+        _mm_storel_epi64(reinterpret_cast<__m128i *>(output), data);
+        idx = qCountTrailingZeroBits(quint8(mask)) / 2;
+    } else {
+        // no percents found (because we didn't check)
+        return true;
+    }
+
+    // advance to the next non-encoded
+    input += idx;
+    output += idx;
+
+    return !mask;
+}
+#else
+static bool simdCheckNonEncoded(...)
+{
+    return true;
+}
+#endif
+
+/*!
+    \since 5.0
+    \internal
+
+    This function decodes a percent-encoded string located from \a begin to \a
+    end, by appending each character to \a appendTo. It returns the number of
+    characters appended. Each percent-encoded sequence is decoded as follows:
+
+    \list
+      \li from %00 to %7F: the exact decoded value is appended;
+      \li from %80 to %FF: QChar::ReplacementCharacter is appended;
+      \li bad encoding: original input is copied to the output, undecoded.
+    \endlist
+
+    Given the above, it's important for the input to already have all UTF-8
+    percent sequences decoded by qt_urlRecode (that is, the input should not
+    have been processed with QUrl::EncodeUnicode).
+
+    The input should also be a valid percent-encoded sequence (the output of
+    qt_urlRecode is always valid).
+*/
+static int decode(QString &appendTo, const ushort *begin, const ushort *end)
+{
+    // fast check whether there's anything to be decoded in the first place
+    const ushort *input = QtPrivate::qustrchr(QStringView(begin, end), '%');
+    if (Q_LIKELY(input == end))
+        return 0;           // nothing to do, it was already decoded!
+
+    // detach
+    const int origSize = appendTo.size();
+    appendTo.resize(origSize + (end - begin));
+    ushort *output = reinterpret_cast<ushort *>(appendTo.begin()) + origSize;
+    memcpy(static_cast<void *>(output), static_cast<const void *>(begin), (input - begin) * sizeof(ushort));
+    output += input - begin;
+
+    while (input != end) {
+        // something was encoded
+        Q_ASSERT(*input == '%');
+
+        if (Q_UNLIKELY(end - input < 3 || !isHex(input[1]) || !isHex(input[2]))) {
+            // badly-encoded data
             appendTo.resize(origSize + (end - begin));
-            output = reinterpret_cast<ushort *>(appendTo.begin()) + origSize;
-            memcpy(output, begin, (input - begin) * sizeof(ushort));
-            output += input - begin;
+            memcpy(static_cast<void *>(appendTo.begin() + origSize), static_cast<const void *>(begin), (end - begin) * sizeof(ushort));
+            return end - begin;
         }
 
         ++input;
-        Q_ASSERT(input <= end - 2); // we need two characters
-        Q_ASSERT(isHex(input[0]));
-        Q_ASSERT(isHex(input[1]));
         *output++ = decodeNibble(input[0]) << 4 | decodeNibble(input[1]);
+        if (output[-1] >= 0x80)
+            output[-1] = QChar::ReplacementCharacter;
         input += 2;
+
+        // search for the next percent, copying from input to output
+        if (simdCheckNonEncoded(output, input, end)) {
+            while (input != end) {
+                ushort uc = *input;
+                if (uc == '%')
+                    break;
+                *output++ = uc;
+                ++input;
+            }
+        }
     }
 
-    if (output) {
-        int len = output - reinterpret_cast<ushort *>(appendTo.begin());
-        appendTo.truncate(len);
-        return len - origSize;
-    }
-    return 0;
+    int len = output - reinterpret_cast<ushort *>(appendTo.begin());
+    appendTo.truncate(len);
+    return len - origSize;
 }
 
 template <size_t N>
@@ -613,8 +642,6 @@ static void maskTable(uchar (&table)[N], const uchar (&mask)[N])
 
     The \a encoding option modifies the default behaviour:
     \list
-    \li QUrl::EncodeDelimiters: if set, delimiters will be left untransformed (note: not encoded!);
-                                if unset, delimiters will be decoded
     \li QUrl::DecodeReserved: if set, reserved characters will be decoded;
                               if unset, reserved characters will be encoded
     \li QUrl::EncodeSpaces: if set, spaces will be encoded to "%20"; if unset, they will be " "
@@ -635,6 +662,9 @@ static void maskTable(uchar (&table)[N], const uchar (&mask)[N])
     handled. It consists of a sequence of 16-bit values, where the low 8 bits
     indicate the character in question and the high 8 bits are either \c
     EncodeCharacter, \c LeaveCharacter or \c DecodeCharacter.
+
+    This function corrects percent-encoded errors by interpreting every '%' as
+    meaning "%25" (all percents in the same content).
  */
 
 Q_AUTOTEST_EXPORT int
@@ -646,24 +676,11 @@ qt_urlRecode(QString &appendTo, const QChar *begin, const QChar *end,
         return decode(appendTo, reinterpret_cast<const ushort *>(begin), reinterpret_cast<const ushort *>(end));
     }
 
-    if (!(encoding & QUrl::EncodeDelimiters) && encoding & QUrl::DecodeReserved) {
-        // reset the table
-        memset(actionTable, DecodeCharacter, sizeof actionTable);
-        if (encoding & QUrl::EncodeSpaces)
-            actionTable[0] = EncodeCharacter;
-
-        // these are always encoded
-        actionTable['%' - ' '] = EncodeCharacter;
-        actionTable[0x7F - ' '] = EncodeCharacter;
-    } else {
-        memcpy(actionTable, defaultActionTable, sizeof actionTable);
-        if (!(encoding & QUrl::EncodeDelimiters))
-            maskTable(actionTable, delimsMask);
-        if (encoding & QUrl::DecodeReserved)
-            maskTable(actionTable, reservedMask);
-        if (!(encoding & QUrl::EncodeSpaces))
-            actionTable[0] = DecodeCharacter; // decode
-    }
+    memcpy(actionTable, defaultActionTable, sizeof actionTable);
+    if (encoding & QUrl::DecodeReserved)
+        maskTable(actionTable, reservedMask);
+    if (!(encoding & QUrl::EncodeSpaces))
+        actionTable[0] = DecodeCharacter; // decode
 
     if (tableModifications) {
         for (const ushort *p = tableModifications; *p; ++p)
@@ -673,6 +690,9 @@ qt_urlRecode(QString &appendTo, const QChar *begin, const QChar *end,
     return recode(appendTo, reinterpret_cast<const ushort *>(begin), reinterpret_cast<const ushort *>(end),
                   encoding, actionTable, false);
 }
+
+// qstring.cpp
+bool qt_is_ascii(const char *&ptr, const char *end) Q_DECL_NOTHROW;
 
 /*!
     \internal
@@ -694,12 +714,7 @@ QString qt_urlRecodeByteArray(const QByteArray &ba)
     // control points below 0x20 are fine in QString
     const char *in = ba.constData();
     const char *const end = ba.constEnd();
-    for ( ; in < end; ++in) {
-        if (*in & 0x80)
-            break;
-    }
-
-    if (in == end) {
+    if (qt_is_ascii(in, end)) {
         // no non-ASCII found, we're safe to convert to QString
         return QString::fromLatin1(ba, ba.size());
     }

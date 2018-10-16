@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2017 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -41,13 +51,13 @@
 #ifndef SSLCLIENT_H
 #define SSLCLIENT_H
 
-#include <QtWidgets/QWidget>
-#include <QtNetwork/QAbstractSocket>
-#include <QtNetwork/QSslSocket>
+#include <QtNetwork>
+
+QT_REQUIRE_CONFIG(ssl);
+
+#include <QtWidgets>
 
 QT_BEGIN_NAMESPACE
-class QSslSocket;
-class QToolButton;
 class Ui_Form;
 QT_END_NAMESPACE
 
@@ -55,9 +65,9 @@ class SslClient : public QWidget
 {
     Q_OBJECT
 public:
-    SslClient(QWidget *parent = 0);
+    explicit SslClient(QWidget *parent = nullptr);
     ~SslClient();
-    
+
 private slots:
     void updateEnabledState();
     void secureConnect();
@@ -65,16 +75,20 @@ private slots:
     void socketEncrypted();
     void socketReadyRead();
     void sendData();
+    void socketError(QAbstractSocket::SocketError error);
     void sslErrors(const QList<QSslError> &errors);
     void displayCertificateInfo();
 
 private:
+    void setupUi();
+    void setupSecureSocket();
     void appendString(const QString &line);
 
-    QSslSocket *socket;
-    QToolButton *padLock;
-    Ui_Form *form;
-    bool executingDialog;
+    QSslSocket *socket = nullptr;
+    QToolButton *padLock = nullptr;
+    Ui_Form *form = nullptr;
+    bool handlingSocketError = false;
+    bool executingDialog = false;
 };
 
 #endif

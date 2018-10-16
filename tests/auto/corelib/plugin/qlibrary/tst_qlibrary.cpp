@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -101,12 +88,6 @@
 # define PREFIX         "lib"
 #endif
 
-static QString sys_qualifiedLibraryName(const QString &fileName)
-{
-    QString appDir = QCoreApplication::applicationDirPath();
-    return appDir + "/" + PREFIX + fileName + SUFFIX;
-}
-
 QT_FORWARD_DECLARE_CLASS(QLibrary)
 class tst_QLibrary : public QObject
 {
@@ -119,6 +100,13 @@ enum QLibraryOperation {
     OperationMask = 7,
     DontSetFileName = 0x100
 };
+
+    QString sys_qualifiedLibraryName(const QString &fileName);
+
+    QString directory;
+#ifdef Q_OS_ANDROID
+    QSharedPointer<QTemporaryDir> temporaryDir;
+#endif
 private slots:
     void initTestCase();
 
@@ -143,24 +131,56 @@ private slots:
     void multipleInstancesForOneLibrary();
 };
 
+QString tst_QLibrary::sys_qualifiedLibraryName(const QString &fileName)
+{
+    return directory + QLatin1Char('/') + PREFIX + fileName + SUFFIX;
+}
+
 typedef int (*VersionFunction)(void);
 
 void tst_QLibrary::initTestCase()
 {
+#ifdef Q_OS_ANDROID
+    auto tempDir = QEXTRACTTESTDATA("android_test_data");
+
+    QVERIFY2(QDir::setCurrent(tempDir->path()), qPrintable("Could not chdir to " + tempDir->path()));
+
+    // copy :/library_path into ./library_path
+    QVERIFY(QDir().mkdir("library_path"));
+    QDirIterator iterator(":/library_path", QDirIterator::Subdirectories);
+    while (iterator.hasNext()) {
+        iterator.next();
+        QFileInfo sourceFileInfo(iterator.path());
+        QFileInfo targetFileInfo("./library_path/" + sourceFileInfo.fileName());
+        if (!targetFileInfo.exists()) {
+            QDir().mkpath(targetFileInfo.path());
+            QVERIFY(QFile::copy(sourceFileInfo.filePath(), targetFileInfo.filePath()));
+        }
+    }
+    directory = tempDir->path();
+    temporaryDir = std::move(tempDir);
+#elif !defined(Q_OS_WINRT)
     // chdir to our testdata directory, and use relative paths in some tests.
     QString testdatadir = QFileInfo(QFINDTESTDATA("library_path")).absolutePath();
     QVERIFY2(QDir::setCurrent(testdatadir), qPrintable("Could not chdir to " + testdatadir));
+    directory = QCoreApplication::applicationDirPath();
+#elif defined(Q_OS_WINRT)
+    directory = QCoreApplication::applicationDirPath();
+#endif
 }
 
 void tst_QLibrary::version_data()
 {
+#ifdef Q_OS_ANDROID
+    QSKIP("Versioned .so files are not generated for Android, so this test is not applicable.");
+#endif
     QTest::addColumn<QString>("lib");
     QTest::addColumn<int>("loadversion");
     QTest::addColumn<int>("resultversion");
 
     QTest::newRow( "ok00, version 1" ) << "mylib" << 1 << 1;
     QTest::newRow( "ok00, version 2" ) << "mylib" << 2 << 2;
-    QTest::newRow( "ok00, default to last version" ) << "mylib" << -1 << 2;
+    QTest::newRow( "ok00, load without version" ) << "mylib" << -1 << 2;
 }
 
 void tst_QLibrary::version()
@@ -170,7 +190,7 @@ void tst_QLibrary::version()
     QFETCH( int, resultversion );
 
 #if !defined(Q_OS_AIX) && !defined(Q_OS_WIN)
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
     QLibrary library( appDir + QLatin1Char('/') + lib, loadversion );
     QVERIFY2(library.load(), qPrintable(library.errorString()));
 
@@ -190,7 +210,7 @@ void tst_QLibrary::load_data()
     QTest::addColumn<QString>("lib");
     QTest::addColumn<bool>("result");
 
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
 
     QTest::newRow( "ok00" ) << appDir + "/mylib" << true;
     QTest::newRow( "notexist" ) << appDir + "/nolib" << false;
@@ -200,7 +220,7 @@ void tst_QLibrary::load_data()
     QTest::newRow("ok (libmylib ver. 1)") << appDir + "/libmylib" <<true;
 #endif
 
-# if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
+# if defined(Q_OS_WIN32)
     QTest::newRow( "ok01 (with suffix)" ) << appDir + "/mylib.dll" << true;
     QTest::newRow( "ok02 (with non-standard suffix)" ) << appDir + "/mylib.dl2" << true;
     QTest::newRow( "ok03 (with many dots)" ) << appDir + "/system.qt.test.mylib.dll" << true;
@@ -231,13 +251,9 @@ void tst_QLibrary::unload_data()
     QTest::addColumn<QString>("lib");
     QTest::addColumn<bool>("result");
 
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
 
     QTest::newRow( "mylib" ) << appDir + "/mylib" << true;
-#ifdef Q_OS_MAC
-    if (QSysInfo::MacintoshVersion <= QSysInfo::MV_10_3)
-        QEXPECT_FAIL("mylib", "dlcompat cannot unload libraries", Continue);
-#endif
     QTest::newRow( "ok01" ) << appDir + "/nolib" << false;
 }
 
@@ -258,7 +274,7 @@ void tst_QLibrary::unload()
 
 void tst_QLibrary::unload_after_implicit_load()
 {
-    QLibrary library( QCoreApplication::applicationDirPath() + "/mylib" );
+    QLibrary library( directory + "/mylib" );
     QFunctionPointer p = library.resolve("mylibversion");
     QVERIFY(p); // Check if it was loaded
     QVERIFY(library.isLoaded());
@@ -272,7 +288,7 @@ void tst_QLibrary::resolve_data()
     QTest::addColumn<QString>("symbol");
     QTest::addColumn<bool>("goodPointer");
 
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
 
     QTest::newRow( "ok00" ) << appDir + "/mylib" << QString("mylibversion") << true;
     QTest::newRow( "bad00" ) << appDir + "/mylib" << QString("nosym") << false;
@@ -317,15 +333,10 @@ void tst_QLibrary::isLibrary_data()
     QTest::newRow(".sl") << QString("mylib.sl") << sl_VALID;
     QTest::newRow(".so") << QString("mylib.so") << so_VALID;
     QTest::newRow(".so+version") << QString("mylib.so.0") << so_VALID;
-
-    // special tests:
-#ifndef Q_OS_MAC
     QTest::newRow("version+.so") << QString("libc-2.7.so") << so_VALID;
     QTest::newRow("version+.so+version") << QString("liboil-0.3.so.0.1.0") << so_VALID;
-#else
-    QTest::newRow("version+.so") << QString("libc-2.7.so") << false;
-    QTest::newRow("version+.so+version") << QString("liboil-0.3.so.0.1.0") << false;
-#endif
+
+    // special tests:
 #ifdef Q_OS_MAC
     QTest::newRow("good (libmylib.1.0.0.dylib)") << QString("libmylib.1.0.0.dylib") << true;
     QTest::newRow("good (libmylib.dylib)") << QString("libmylib.dylib") << true;
@@ -353,15 +364,11 @@ void tst_QLibrary::errorString_data()
     QTest::addColumn<bool>("success");
     QTest::addColumn<QString>("errorString");
 
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
 
     QTest::newRow("bad load()") << (int)Load << QString("nosuchlib") << false << QString("Cannot load library nosuchlib: .*");
     QTest::newRow("call errorString() on QLibrary with no d-pointer (crashtest)") << (int)(Load | DontSetFileName) << QString() << false << QString("Unknown error");
-#ifdef Q_OS_WINCE
-    QTest::newRow("bad resolve") << (int)Resolve << appDir + "/mylib" << false << QString("Cannot resolve symbol \"nosuchsymbol\" in .*: .*");
-#else
     QTest::newRow("bad resolve") << (int)Resolve << appDir + "/mylib" << false << QString("Cannot resolve symbol \"nosuchsymbol\" in \\S+: .*");
-#endif
     QTest::newRow("good resolve") << (int)Resolve << appDir + "/mylib" << true << QString("Unknown error");
 
 #ifdef Q_OS_WIN
@@ -421,20 +428,11 @@ void tst_QLibrary::loadHints_data()
     QTest::addColumn<bool>("result");
 
     QLibrary::LoadHints lh;
-#if defined(Q_OS_AIX)
-    if (QFile::exists("/usr/lib/libGL.a") || QFile::exists("/usr/X11R6/lib/libGL.a")) {
-# if QT_POINTER_SIZE == 4
-        QTest::newRow( "ok03 (Archive member)" ) << "libGL.a(shr.o)" << int(QLibrary::LoadArchiveMemberHint) << true;
-# else
-        QTest::newRow( "ok03 (Archive member)" ) << "libGL.a(shr_64.o)" << int(QLibrary::LoadArchiveMemberHint) << true;
-#endif
-    }
-#endif
 
-    QString appDir = QCoreApplication::applicationDirPath();
+    QString appDir = directory;
 
     lh |= QLibrary::ResolveAllSymbolsHint;
-# if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
+# if defined(Q_OS_WIN32) || defined(Q_OS_WINRT)
     QTest::newRow( "ok01 (with suffix)" ) << appDir + "/mylib.dll" << int(lh) << true;
     QTest::newRow( "ok02 (with non-standard suffix)" ) << appDir + "/mylib.dl2" << int(lh) << true;
     QTest::newRow( "ok03 (with many dots)" ) << appDir + "/system.qt.test.mylib.dll" << int(lh) << true;
@@ -456,10 +454,21 @@ void tst_QLibrary::loadHints()
     if (int(loadHints) != 0) {
         lh |= library.loadHints();
         library.setLoadHints(lh);
+
+        // confirm that another QLibrary doesn't get affected - QTBUG-39642
+        QCOMPARE(QLibrary().loadHints(), QLibrary::LoadHints());
     }
     library.setFileName(lib);
     QCOMPARE(library.loadHints(), lh);
     bool ok = library.load();
+
+    // we can't change the hints anymore
+    library.setLoadHints(QLibrary::LoadHints());
+    QCOMPARE(library.loadHints(), lh);
+
+    // confirm that a new QLibrary inherits the hints too
+    QCOMPARE(QLibrary(lib).loadHints(), lh);
+
     if ( result ) {
         QVERIFY( ok );
         QVERIFY(library.unload());
@@ -475,14 +484,9 @@ void tst_QLibrary::fileName_data()
 
     QTest::newRow( "ok02" ) << sys_qualifiedLibraryName(QLatin1String("mylib"))
                             << sys_qualifiedLibraryName(QLatin1String("mylib"));
-#ifdef Q_OS_WIN
-#ifndef Q_OS_WINCE
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     QTest::newRow( "ok03" ) << "user32"
                             << "USER32.dll";
-#else
-    QTest::newRow( "ok03" ) << "coredll"
-                            << "coredll.dll";
-#endif
 #endif
 }
 
@@ -504,7 +508,7 @@ void tst_QLibrary::fileName()
 
 void tst_QLibrary::multipleInstancesForOneLibrary()
 {
-    QString lib = QCoreApplication::applicationDirPath() + "/mylib";
+    QString lib = directory + "/mylib";
 
     {
         QLibrary lib1(lib);

@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,322 +10,76 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
-#include "qcocoahelpers.h"
+#include <qpa/qplatformtheme.h>
 
-#include "qcocoaautoreleasepool.h"
+#include "qcocoahelpers.h"
+#include "qnsview.h"
 
 #include <QtCore>
 #include <QtGui>
 #include <qpa/qplatformscreen.h>
 #include <private/qguiapplication_p.h>
+#include <private/qwindow_p.h>
+#include <QtGui/private/qcoregraphics_p.h>
 
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QWidget>
 #endif
 
+#include <algorithm>
+
 QT_BEGIN_NAMESPACE
+
+Q_LOGGING_CATEGORY(lcQpaWindow, "qt.qpa.window");
+Q_LOGGING_CATEGORY(lcQpaDrawing, "qt.qpa.drawing");
+Q_LOGGING_CATEGORY(lcQpaMouse, "qt.qpa.input.mouse");
+Q_LOGGING_CATEGORY(lcQpaScreen, "qt.qpa.screen");
 
 //
 // Conversion Functions
 //
 
-QStringList qt_mac_NSArrayToQStringList(void *nsarray)
+QStringList qt_mac_NSArrayToQStringList(NSArray<NSString *> *array)
 {
     QStringList result;
-    NSArray *array = static_cast<NSArray *>(nsarray);
-    for (NSUInteger i=0; i<[array count]; ++i)
-        result << QCFString::toQString([array objectAtIndex:i]);
+    for (NSString *string in array)
+        result << QString::fromNSString(string);
     return result;
 }
 
-void *qt_mac_QStringListToNSMutableArrayVoid(const QStringList &list)
+NSMutableArray<NSString *> *qt_mac_QStringListToNSMutableArray(const QStringList &list)
 {
-    NSMutableArray *result = [NSMutableArray arrayWithCapacity:list.size()];
-    for (int i=0; i<list.size(); ++i){
-        [result addObject:reinterpret_cast<const NSString *>(QCFString::toCFStringRef(list[i]))];
-    }
+    NSMutableArray<NSString *> *result = [NSMutableArray<NSString *> arrayWithCapacity:list.size()];
+    for (const QString &string : list)
+        [result addObject:string.toNSString()];
     return result;
-}
-
-static void drawImageReleaseData (void *info, const void *, size_t)
-{
-    delete static_cast<QImage *>(info);
-}
-
-CGImageRef qt_mac_image_to_cgimage(const QImage &img)
-{
-    if (img.width() <= 0 || img.height() <= 0) {
-        qWarning() << Q_FUNC_INFO <<
-            "trying to set" << img.width() << "x" << img.height() << "size for CGImage";
-        return 0;
-    }
-
-    QImage *image;
-    if (img.depth() != 32)
-        image = new QImage(img.convertToFormat(QImage::Format_ARGB32_Premultiplied));
-    else
-        image = new QImage(img);
-
-    uint cgflags = kCGImageAlphaNone;
-    switch (image->format()) {
-    case QImage::Format_ARGB32_Premultiplied:
-        cgflags = kCGImageAlphaPremultipliedFirst;
-        break;
-    case QImage::Format_ARGB32:
-        cgflags = kCGImageAlphaFirst;
-        break;
-    case QImage::Format_RGB32:
-        cgflags = kCGImageAlphaNoneSkipFirst;
-    default:
-        break;
-    }
-    cgflags |= kCGBitmapByteOrder32Host;
-    QCFType<CGDataProviderRef> dataProvider = CGDataProviderCreateWithData(image,
-                                                          static_cast<const QImage *>(image)->bits(),
-                                                          image->byteCount(),
-                                                          drawImageReleaseData);
-
-    return CGImageCreate(image->width(), image->height(), 8, 32,
-                                        image->bytesPerLine(),
-                                        qt_mac_genericColorSpace(),
-                                        cgflags, dataProvider, 0, false, kCGRenderingIntentDefault);
-
-}
-
-NSImage *qt_mac_cgimage_to_nsimage(CGImageRef image)
-{
-    QCocoaAutoReleasePool pool;
-    NSImage *newImage = 0;
-    NSRect imageRect = NSMakeRect(0.0, 0.0, CGImageGetWidth(image), CGImageGetHeight(image));
-    newImage = [[NSImage alloc] initWithSize:imageRect.size];
-    [newImage lockFocus];
-    {
-        CGContextRef imageContext = (CGContextRef)[[NSGraphicsContext currentContext] graphicsPort];
-        CGContextDrawImage(imageContext, *(CGRect*)&imageRect, image);
-    }
-    [newImage unlockFocus];
-    return newImage;
-}
-
-NSImage *qt_mac_create_nsimage(const QPixmap &pm)
-{
-    QImage image = pm.toImage();
-    CGImageRef cgImage = qt_mac_image_to_cgimage(image);
-    NSImage *nsImage = qt_mac_cgimage_to_nsimage(cgImage);
-    CGImageRelease(cgImage);
-    return nsImage;
-}
-
-HIMutableShapeRef qt_mac_QRegionToHIMutableShape(const QRegion &region)
-{
-    HIMutableShapeRef shape = HIShapeCreateMutable();
-    QVector<QRect> rects = region.rects();
-    if (!rects.isEmpty()) {
-        int n = rects.count();
-        const QRect *qt_r = rects.constData();
-        while (n--) {
-            CGRect cgRect = CGRectMake(qt_r->x(), qt_r->y(), qt_r->width(), qt_r->height());
-            HIShapeUnionWithRect(shape, &cgRect);
-            ++qt_r;
-        }
-    }
-    return shape;
-}
-
-NSSize qt_mac_toNSSize(const QSize &qtSize)
-{
-    return NSMakeSize(qtSize.width(), qtSize.height());
-}
-
-NSRect qt_mac_toNSRect(const QRect &rect)
-{
-    return NSMakeRect(rect.x(), rect.y(), rect.width(), rect.height());
-}
-
-QRect qt_mac_toQRect(const NSRect &rect)
-{
-    return QRect(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
-}
-
-QColor qt_mac_toQColor(const NSColor *color)
-{
-    QColor qtColor;
-    NSString *colorSpace = [color colorSpaceName];
-    if (colorSpace == NSDeviceCMYKColorSpace) {
-        CGFloat cyan, magenta, yellow, black, alpha;
-        [color getCyan:&cyan magenta:&magenta yellow:&yellow black:&black alpha:&alpha];
-        qtColor.setCmykF(cyan, magenta, yellow, black, alpha);
-    } else {
-        NSColor *tmpColor;
-        tmpColor = [color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
-        CGFloat red, green, blue, alpha;
-        [tmpColor getRed:&red green:&green blue:&blue alpha:&alpha];
-        qtColor.setRgbF(red, green, blue, alpha);
-    }
-    return qtColor;
-}
-
-
-// Use this method to keep all the information in the TextSegment. As long as it is ordered
-// we are in OK shape, and we can influence that ourselves.
-struct KeyPair
-{
-    QChar cocoaKey;
-    Qt::Key qtKey;
-};
-
-bool operator==(const KeyPair &entry, QChar qchar)
-{
-    return entry.cocoaKey == qchar;
-}
-
-bool operator<(const KeyPair &entry, QChar qchar)
-{
-    return entry.cocoaKey < qchar;
-}
-
-bool operator<(QChar qchar, const KeyPair &entry)
-{
-    return qchar < entry.cocoaKey;
-}
-
-bool operator<(const Qt::Key &key, const KeyPair &entry)
-{
-    return key < entry.qtKey;
-}
-
-bool operator<(const KeyPair &entry, const Qt::Key &key)
-{
-    return entry.qtKey < key;
-}
-
-static bool qtKey2CocoaKeySortLessThan(const KeyPair &entry1, const KeyPair &entry2)
-{
-    return entry1.qtKey < entry2.qtKey;
-}
-
-static const int NumEntries = 59;
-static const KeyPair entries[NumEntries] = {
-    { NSEnterCharacter, Qt::Key_Enter },
-    { NSBackspaceCharacter, Qt::Key_Backspace },
-    { NSTabCharacter, Qt::Key_Tab },
-    { NSNewlineCharacter, Qt::Key_Return },
-    { NSCarriageReturnCharacter, Qt::Key_Return },
-    { NSBackTabCharacter, Qt::Key_Backtab },
-    { kEscapeCharCode, Qt::Key_Escape },
-    // Cocoa sends us delete when pressing backspace!
-    // (NB when we reverse this list in qtKey2CocoaKey, there
-    // will be two indices of Qt::Key_Backspace. But is seems to work
-    // ok for menu shortcuts (which uses that function):
-    { NSDeleteCharacter, Qt::Key_Backspace },
-    { NSUpArrowFunctionKey, Qt::Key_Up },
-    { NSDownArrowFunctionKey, Qt::Key_Down },
-    { NSLeftArrowFunctionKey, Qt::Key_Left },
-    { NSRightArrowFunctionKey, Qt::Key_Right },
-    { NSF1FunctionKey, Qt::Key_F1 },
-    { NSF2FunctionKey, Qt::Key_F2 },
-    { NSF3FunctionKey, Qt::Key_F3 },
-    { NSF4FunctionKey, Qt::Key_F4 },
-    { NSF5FunctionKey, Qt::Key_F5 },
-    { NSF6FunctionKey, Qt::Key_F6 },
-    { NSF7FunctionKey, Qt::Key_F7 },
-    { NSF8FunctionKey, Qt::Key_F8 },
-    { NSF9FunctionKey, Qt::Key_F8 },
-    { NSF10FunctionKey, Qt::Key_F10 },
-    { NSF11FunctionKey, Qt::Key_F11 },
-    { NSF12FunctionKey, Qt::Key_F12 },
-    { NSF13FunctionKey, Qt::Key_F13 },
-    { NSF14FunctionKey, Qt::Key_F14 },
-    { NSF15FunctionKey, Qt::Key_F15 },
-    { NSF16FunctionKey, Qt::Key_F16 },
-    { NSF17FunctionKey, Qt::Key_F17 },
-    { NSF18FunctionKey, Qt::Key_F18 },
-    { NSF19FunctionKey, Qt::Key_F19 },
-    { NSF20FunctionKey, Qt::Key_F20 },
-    { NSF21FunctionKey, Qt::Key_F21 },
-    { NSF22FunctionKey, Qt::Key_F22 },
-    { NSF23FunctionKey, Qt::Key_F23 },
-    { NSF24FunctionKey, Qt::Key_F24 },
-    { NSF25FunctionKey, Qt::Key_F25 },
-    { NSF26FunctionKey, Qt::Key_F26 },
-    { NSF27FunctionKey, Qt::Key_F27 },
-    { NSF28FunctionKey, Qt::Key_F28 },
-    { NSF29FunctionKey, Qt::Key_F29 },
-    { NSF30FunctionKey, Qt::Key_F30 },
-    { NSF31FunctionKey, Qt::Key_F31 },
-    { NSF32FunctionKey, Qt::Key_F32 },
-    { NSF33FunctionKey, Qt::Key_F33 },
-    { NSF34FunctionKey, Qt::Key_F34 },
-    { NSF35FunctionKey, Qt::Key_F35 },
-    { NSInsertFunctionKey, Qt::Key_Insert },
-    { NSDeleteFunctionKey, Qt::Key_Delete },
-    { NSHomeFunctionKey, Qt::Key_Home },
-    { NSEndFunctionKey, Qt::Key_End },
-    { NSPageUpFunctionKey, Qt::Key_PageUp },
-    { NSPageDownFunctionKey, Qt::Key_PageDown },
-    { NSPrintScreenFunctionKey, Qt::Key_Print },
-    { NSScrollLockFunctionKey, Qt::Key_ScrollLock },
-    { NSPauseFunctionKey, Qt::Key_Pause },
-    { NSSysReqFunctionKey, Qt::Key_SysReq },
-    { NSMenuFunctionKey, Qt::Key_Menu },
-    { NSHelpFunctionKey, Qt::Key_Help },
-};
-static const KeyPair * const end = entries + NumEntries;
-
-QChar qt_mac_qtKey2CocoaKey(Qt::Key key)
-{
-    // The first time this function is called, create a reverse
-    // lookup table sorted on Qt Key rather than Cocoa key:
-    static QVector<KeyPair> rev_entries(NumEntries);
-    static bool mustInit = true;
-    if (mustInit){
-        mustInit = false;
-        for (int i=0; i<NumEntries; ++i)
-            rev_entries[i] = entries[i];
-        qSort(rev_entries.begin(), rev_entries.end(), qtKey2CocoaKeySortLessThan);
-    }
-    const QVector<KeyPair>::iterator i
-            = qBinaryFind(rev_entries.begin(), rev_entries.end(), key);
-    if (i == rev_entries.end())
-        return QChar();
-    return i->cocoaKey;
-}
-
-Qt::Key qt_mac_cocoaKey2QtKey(QChar keyCode)
-{
-    const KeyPair *i = qBinaryFind(entries, end, keyCode);
-    if (i == end)
-        return Qt::Key(keyCode.toUpper().unicode());
-    return i->qtKey;
 }
 
 struct dndenum_mapper
@@ -338,6 +92,7 @@ struct dndenum_mapper
 static dndenum_mapper dnd_enums[] = {
     { NSDragOperationLink,  Qt::LinkAction, true },
     { NSDragOperationMove,  Qt::MoveAction, true },
+    { NSDragOperationDelete,  Qt::MoveAction, true },
     { NSDragOperationCopy,  Qt::CopyAction, true },
     { NSDragOperationGeneric,  Qt::CopyAction, false },
     { NSDragOperationEvery, Qt::ActionMask, false },
@@ -388,182 +143,73 @@ Qt::DropActions qt_mac_mapNSDragOperations(NSDragOperation nsActions)
     return actions;
 }
 
+/*!
+    Returns the view cast to a QNSview if possible.
 
+    If the view is not a QNSView, nil is returned, which is safe to
+    send messages to, effectivly making [qnsview_cast(view) message]
+    a no-op.
+
+    For extra verbosity and clearer code, please consider checking
+    that the platform window is not a foreign window before using
+    this cast, via QPlatformWindow::isForeignWindow().
+
+    Do not use this method soley to check for foreign windows, as
+    that will make the code harder to read for people not working
+    primarily on macOS, who do not know the difference between the
+    NSView and QNSView cases.
+*/
+QNSView *qnsview_cast(NSView *view)
+{
+    return qt_objc_cast<QNSView *>(view);
+}
 
 //
 // Misc
 //
 
-// Changes the process type for this process to kProcessTransformToForegroundApplication,
+// Sets the activation policy for this process to NSApplicationActivationPolicyRegular,
 // unless either LSUIElement or LSBackgroundOnly is set in the Info.plist.
 void qt_mac_transformProccessToForegroundApplication()
 {
-    ProcessSerialNumber psn;
-    if (GetCurrentProcess(&psn) == noErr) {
-        bool forceTransform = true;
-        CFTypeRef value = CFBundleGetValueForInfoDictionaryKey(CFBundleGetMainBundle(),
-                                                               CFSTR("LSUIElement"));
+    bool forceTransform = true;
+    CFTypeRef value = CFBundleGetValueForInfoDictionaryKey(CFBundleGetMainBundle(),
+                                                           CFSTR("LSUIElement"));
+    if (value) {
+        CFTypeID valueType = CFGetTypeID(value);
+        // Officially it's supposed to be a string, a boolean makes sense, so we'll check.
+        // A number less so, but OK.
+        if (valueType == CFStringGetTypeID())
+            forceTransform = !(QString::fromCFString(static_cast<CFStringRef>(value)).toInt());
+        else if (valueType == CFBooleanGetTypeID())
+            forceTransform = !CFBooleanGetValue(static_cast<CFBooleanRef>(value));
+        else if (valueType == CFNumberGetTypeID()) {
+            int valueAsInt;
+            CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberIntType, &valueAsInt);
+            forceTransform = !valueAsInt;
+        }
+    }
+
+    if (forceTransform) {
+        value = CFBundleGetValueForInfoDictionaryKey(CFBundleGetMainBundle(),
+                                                     CFSTR("LSBackgroundOnly"));
         if (value) {
             CFTypeID valueType = CFGetTypeID(value);
-            // Officially it's supposed to be a string, a boolean makes sense, so we'll check.
-            // A number less so, but OK.
-            if (valueType == CFStringGetTypeID())
-                forceTransform = !(QCFString::toQString(static_cast<CFStringRef>(value)).toInt());
-            else if (valueType == CFBooleanGetTypeID())
+            if (valueType == CFBooleanGetTypeID())
                 forceTransform = !CFBooleanGetValue(static_cast<CFBooleanRef>(value));
+            else if (valueType == CFStringGetTypeID())
+                forceTransform = !(QString::fromCFString(static_cast<CFStringRef>(value)).toInt());
             else if (valueType == CFNumberGetTypeID()) {
                 int valueAsInt;
                 CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberIntType, &valueAsInt);
                 forceTransform = !valueAsInt;
             }
         }
-
-        if (forceTransform) {
-            value = CFBundleGetValueForInfoDictionaryKey(CFBundleGetMainBundle(),
-                                                         CFSTR("LSBackgroundOnly"));
-            if (value) {
-                CFTypeID valueType = CFGetTypeID(value);
-                if (valueType == CFBooleanGetTypeID())
-                    forceTransform = !CFBooleanGetValue(static_cast<CFBooleanRef>(value));
-                else if (valueType == CFStringGetTypeID())
-                    forceTransform = !(QCFString::toQString(static_cast<CFStringRef>(value)).toInt());
-                else if (valueType == CFNumberGetTypeID()) {
-                    int valueAsInt;
-                    CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberIntType, &valueAsInt);
-                    forceTransform = !valueAsInt;
-                }
-            }
-        }
-
-        if (forceTransform) {
-            TransformProcessType(&psn, kProcessTransformToForegroundApplication);
-        }
-    }
-}
-
-QString qt_mac_removeMnemonics(const QString &original)
-{
-    QString returnText(original.size(), 0);
-    int finalDest = 0;
-    int currPos = 0;
-    int l = original.length();
-    while (l) {
-        if (original.at(currPos) == QLatin1Char('&')
-            && (l == 1 || original.at(currPos + 1) != QLatin1Char('&'))) {
-            ++currPos;
-            --l;
-            if (l == 0)
-                break;
-        }
-        returnText[finalDest] = original.at(currPos);
-        ++currPos;
-        ++finalDest;
-        --l;
-    }
-    returnText.truncate(finalDest);
-    return returnText;
-}
-
-
-CGColorSpaceRef m_genericColorSpace = 0;
-QHash<CGDirectDisplayID, CGColorSpaceRef> m_displayColorSpaceHash;
-bool m_postRoutineRegistered = false;
-
-CGColorSpaceRef qt_mac_genericColorSpace()
-{
-#if 0
-    if (!m_genericColorSpace) {
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_4
-        if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_4) {
-            m_genericColorSpace = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
-        } else
-#endif
-        {
-            m_genericColorSpace = CGColorSpaceCreateDeviceRGB();
-        }
-        if (!m_postRoutineRegistered) {
-            m_postRoutineRegistered = true;
-            qAddPostRoutine(QCoreGraphicsPaintEngine::cleanUpMacColorSpaces);
-        }
-    }
-    return m_genericColorSpace;
-#else
-    // Just return the main display colorspace for the moment.
-    return qt_mac_displayColorSpace(0);
-#endif
-}
-
-/*
-    Ideally, we should pass the widget in here, and use CGGetDisplaysWithRect() etc.
-    to support multiple displays correctly.
-*/
-CGColorSpaceRef qt_mac_displayColorSpace(const QWidget *widget)
-{
-    CGColorSpaceRef colorSpace;
-
-    CGDirectDisplayID displayID;
-    CMProfileRef displayProfile = 0;
-    if (widget == 0) {
-        displayID = CGMainDisplayID();
-    } else {
-        displayID = CGMainDisplayID();
-        /*
-        ### get correct display
-        const QRect &qrect = widget->window()->geometry();
-        CGRect rect = CGRectMake(qrect.x(), qrect.y(), qrect.width(), qrect.height());
-        CGDisplayCount throwAway;
-        CGDisplayErr dErr = CGGetDisplaysWithRect(rect, 1, &displayID, &throwAway);
-        if (dErr != kCGErrorSuccess)
-            return macDisplayColorSpace(0); // fall back on main display
-        */
-    }
-    if ((colorSpace = m_displayColorSpaceHash.value(displayID)))
-        return colorSpace;
-
-    CMError err = CMGetProfileByAVID((CMDisplayIDType)displayID, &displayProfile);
-    if (err == noErr) {
-        colorSpace = CGColorSpaceCreateWithPlatformColorSpace(displayProfile);
-    } else if (widget) {
-        return qt_mac_displayColorSpace(0); // fall back on main display
     }
 
-    if (colorSpace == 0)
-        colorSpace = CGColorSpaceCreateDeviceRGB();
-
-    m_displayColorSpaceHash.insert(displayID, colorSpace);
-    CMCloseProfile(displayProfile);
-    if (!m_postRoutineRegistered) {
-        m_postRoutineRegistered = true;
-        void qt_mac_cleanUpMacColorSpaces();
-        qAddPostRoutine(qt_mac_cleanUpMacColorSpaces);
+    if (forceTransform) {
+        [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
     }
-    return colorSpace;
-}
-
-void qt_mac_cleanUpMacColorSpaces()
-{
-    if (m_genericColorSpace) {
-        CFRelease(m_genericColorSpace);
-        m_genericColorSpace = 0;
-    }
-    QHash<CGDirectDisplayID, CGColorSpaceRef>::const_iterator it = m_displayColorSpaceHash.constBegin();
-    while (it != m_displayColorSpaceHash.constEnd()) {
-        if (it.value())
-            CFRelease(it.value());
-        ++it;
-    }
-    m_displayColorSpaceHash.clear();
-}
-
-CGColorSpaceRef qt_mac_colorSpaceForDeviceType(const QPaintDevice *paintDevice)
-{
-#ifdef QT_NO_WIDGETS
-    return qt_mac_displayColorSpace(0);
-#else
-    bool isWidget = (paintDevice->devType() == QInternal::Widget);
-    return qt_mac_displayColorSpace(isWidget ? static_cast<const QWidget *>(paintDevice): 0);
-#endif
-
 }
 
 QString qt_mac_applicationName()
@@ -571,12 +217,12 @@ QString qt_mac_applicationName()
     QString appName;
     CFTypeRef string = CFBundleGetValueForInfoDictionaryKey(CFBundleGetMainBundle(), CFSTR("CFBundleName"));
     if (string)
-        appName = QCFString::toQString(static_cast<CFStringRef>(string));
+        appName = QString::fromCFString(static_cast<CFStringRef>(string));
 
     if (appName.isEmpty()) {
         QString arg0 = QGuiApplicationPrivate::instance()->appName();
         if (arg0.contains("/")) {
-            QStringList parts = arg0.split("/");
+            QStringList parts = arg0.split(QLatin1Char('/'));
             appName = parts.at(parts.count() - 1);
         } else {
             appName = arg0;
@@ -585,226 +231,281 @@ QString qt_mac_applicationName()
     return appName;
 }
 
-NSRect qt_mac_flipRect(const QRect &rect, QWindow *window)
+// -------------------------------------------------------------------------
+
+/*!
+    \fn QPointF qt_mac_flip(const QPointF &pos, const QRectF &reference)
+    \fn QRectF qt_mac_flip(const QRectF &rect, const QRectF &reference)
+
+    Flips the Y coordinate of the point/rect between quadrant I and IV.
+
+    The native coordinate system on macOS uses quadrant I, with origin
+    in bottom left, and Qt uses quadrant IV, with origin in top left.
+
+    By flipping the Y coordinate, we can map the point/rect between
+    the two coordinate systems.
+
+    The flip is always in relation to a reference rectangle, e.g.
+    the frame of the parent view, or the screen geometry. In the
+    latter case the specialized QCocoaScreen::mapFrom/To functions
+    should be used instead.
+*/
+QPointF qt_mac_flip(const QPointF &pos, const QRectF &reference)
 {
-    QPlatformScreen *onScreen = QPlatformScreen::platformScreenForWindow(window);
-    int flippedY = onScreen->geometry().height() - rect.y() - rect.height();
-    return NSMakeRect(rect.x(), flippedY, rect.width(), rect.height());
+    return QPointF(pos.x(), reference.height() - pos.y());
 }
 
-OSStatus qt_mac_drawCGImage(CGContextRef inContext, const CGRect *inBounds, CGImageRef inImage)
+QRectF qt_mac_flip(const QRectF &rect, const QRectF &reference)
 {
-    // Verbatim copy if HIViewDrawCGImage (as shown on Carbon-Dev)
-    OSStatus err = noErr;
-
-    require_action(inContext != NULL, InvalidContext, err = paramErr);
-    require_action(inBounds != NULL, InvalidBounds, err = paramErr);
-    require_action(inImage != NULL, InvalidImage, err = paramErr);
-
-    CGContextSaveGState( inContext );
-    CGContextTranslateCTM (inContext, 0, inBounds->origin.y + CGRectGetMaxY(*inBounds));
-    CGContextScaleCTM(inContext, 1, -1);
-
-    CGContextDrawImage(inContext, *inBounds, inImage);
-
-    CGContextRestoreGState(inContext);
-InvalidImage:
-InvalidBounds:
-InvalidContext:
-        return err;
+    return QRectF(qt_mac_flip(rect.bottomLeft(), reference), rect.size());
 }
 
-CGFloat qt_mac_get_scalefactor()
-{
-    return [[NSScreen mainScreen] userSpaceScaleFactor];
-}
+// -------------------------------------------------------------------------
 
+/*!
+  \fn Qt::MouseButton cocoaButton2QtButton(NSInteger buttonNum)
+
+  Returns the Qt::Button that corresponds to an NSEvent.buttonNumber.
+
+  \note AppKit will use buttonNumber 0 to indicate both "left button"
+  and "no button". Only NSEvents that describes mouse press/release
+  events (e.g NSEventTypeOtherMouseDown) will contain a valid
+  button number.
+*/
 Qt::MouseButton cocoaButton2QtButton(NSInteger buttonNum)
 {
-    switch (buttonNum) {
-    case 0:
-        return Qt::LeftButton;
-    case 1:
-        return Qt::RightButton;
-    case 2:
-        return Qt::MidButton;
-    case 3:
-        return Qt::XButton1;
-    case 4:
-        return Qt::XButton2;
-    default:
+    if (buttonNum >= 0 && buttonNum <= 31)
+        return Qt::MouseButton(1 << buttonNum);
+    return Qt::NoButton;
+}
+
+/*!
+  \fn Qt::MouseButton cocoaButton2QtButton(NSEvent *event)
+
+  Returns the Qt::Button that corresponds to an NSEvent.buttonNumber.
+
+  \note AppKit will use buttonNumber 0 to indicate both "left button"
+  and "no button". Only NSEvents that describes mouse press/release/dragging
+  events (e.g NSEventTypeOtherMouseDown) will contain a valid
+  button number.
+
+  \note Wacom tablet might not return the correct button number for NSEvent buttonNumber
+  on right clicks. Decide here that the button is the "right" button.
+*/
+Qt::MouseButton cocoaButton2QtButton(NSEvent *event)
+{
+    switch (event.type) {
+    case NSEventTypeMouseMoved:
         return Qt::NoButton;
+
+    case NSEventTypeRightMouseUp:
+    case NSEventTypeRightMouseDown:
+    case NSEventTypeRightMouseDragged:
+        return Qt::RightButton;
+
+    default:
+        break;
     }
+
+    return cocoaButton2QtButton(event.buttonNumber);
 }
 
-bool qt_mac_execute_apple_script(const char *script, long script_len, AEDesc *ret) {
-    OSStatus err;
-    AEDesc scriptTextDesc;
-    ComponentInstance theComponent = 0;
-    OSAID scriptID = kOSANullScript, resultID = kOSANullScript;
+/*!
+  \fn QEvent::Type cocoaEvent2QtMouseEvent(NSEvent *event)
 
-    // set up locals to a known state
-    AECreateDesc(typeNull, 0, 0, &scriptTextDesc);
-    scriptID = kOSANullScript;
-    resultID = kOSANullScript;
-
-    // open the scripting component
-    theComponent = OpenDefaultComponent(kOSAComponentType, typeAppleScript);
-    if (!theComponent) {
-        err = paramErr;
-        goto bail;
-    }
-
-    // put the script text into an aedesc
-    err = AECreateDesc(typeUTF8Text, script, script_len, &scriptTextDesc);
-    if (err != noErr)
-        goto bail;
-
-    // compile the script
-    err = OSACompile(theComponent, &scriptTextDesc, kOSAModeNull, &scriptID);
-    if (err != noErr)
-        goto bail;
-
-    // run the script
-    err = OSAExecute(theComponent, scriptID, kOSANullScript, kOSAModeNull, &resultID);
-
-    // collect the results - if any
-    if (ret) {
-        AECreateDesc(typeNull, 0, 0, ret);
-        if (err == errOSAScriptError)
-            OSAScriptError(theComponent, kOSAErrorMessage, typeChar, ret);
-        else if (err == noErr && resultID != kOSANullScript)
-            OSADisplay(theComponent, resultID, typeChar, kOSAModeNull, ret);
-    }
-bail:
-    AEDisposeDesc(&scriptTextDesc);
-    if (scriptID != kOSANullScript)
-        OSADispose(theComponent, scriptID);
-    if (resultID != kOSANullScript)
-        OSADispose(theComponent, resultID);
-    if (theComponent)
-        CloseComponent(theComponent);
-    return err == noErr;
-}
-
-bool qt_mac_execute_apple_script(const char *script, AEDesc *ret)
+  Returns the QEvent::Type that corresponds to an NSEvent.type.
+*/
+QEvent::Type cocoaEvent2QtMouseEvent(NSEvent *event)
 {
-    return qt_mac_execute_apple_script(script, qstrlen(script), ret);
+    switch (event.type) {
+    case NSEventTypeLeftMouseDown:
+    case NSEventTypeRightMouseDown:
+    case NSEventTypeOtherMouseDown:
+        return QEvent::MouseButtonPress;
+
+    case NSEventTypeLeftMouseUp:
+    case NSEventTypeRightMouseUp:
+    case NSEventTypeOtherMouseUp:
+        return QEvent::MouseButtonRelease;
+
+    case NSEventTypeLeftMouseDragged:
+    case NSEventTypeRightMouseDragged:
+    case NSEventTypeOtherMouseDragged:
+        return QEvent::MouseMove;
+
+    case NSEventTypeMouseMoved:
+        return QEvent::MouseMove;
+
+    default:
+        break;
+    }
+
+    return QEvent::None;
 }
 
-bool qt_mac_execute_apple_script(const QString &script, AEDesc *ret)
+/*!
+  \fn Qt::MouseButtons cocoaMouseButtons2QtMouseButtons(NSInteger pressedMouseButtons)
+
+  Returns the Qt::MouseButtons that corresponds to an NSEvent.pressedMouseButtons.
+*/
+Qt::MouseButtons cocoaMouseButtons2QtMouseButtons(NSInteger pressedMouseButtons)
 {
-    const QByteArray l = script.toUtf8(); return qt_mac_execute_apple_script(l.constData(), l.size(), ret);
+  return static_cast<Qt::MouseButton>(pressedMouseButtons & Qt::MouseButtonMask);
+}
+
+/*!
+  \fn Qt::MouseButtons currentlyPressedMouseButtons()
+
+  Returns the Qt::MouseButtons that corresponds to an NSEvent.pressedMouseButtons.
+*/
+Qt::MouseButtons currentlyPressedMouseButtons()
+{
+  return cocoaMouseButtons2QtMouseButtons(NSEvent.pressedMouseButtons);
 }
 
 QString qt_mac_removeAmpersandEscapes(QString s)
 {
-    int i = 0;
-    while (i < s.size()) {
-        ++i;
-        if (s.at(i-1) != QLatin1Char('&'))
-            continue;
-        if (i < s.size() && s.at(i) == QLatin1Char('&'))
-            ++i;
-        s.remove(i-1,1);
-    }
-    return s.trimmed();
-}
-
-/*! \internal
-
- Returns the CoreGraphics CGContextRef of the paint device. 0 is
- returned if it can't be obtained. It is the caller's responsibility to
- CGContextRelease the context when finished using it.
-
- \warning This function is only available on Mac OS X.
- \warning This function is duplicated in qmacstyle_mac.mm
- */
-CGContextRef qt_mac_cg_context(const QPaintDevice *pdev)
-{
-    if (pdev->devType() == QInternal::Pixmap) {
-        const QPixmap *pm = static_cast<const QPixmap*>(pdev);
-        CGColorSpaceRef colorspace = qt_mac_colorSpaceForDeviceType(pdev);
-        uint flags = kCGImageAlphaPremultipliedFirst;
-        flags |= kCGBitmapByteOrder32Host;
-        CGContextRef ret = 0;
-
-        QPlatformPixmap *data = const_cast<QPixmap *>(pm)->data_ptr().data();
-        if (data && data->classId() == QPlatformPixmap::RasterClass) {
-            QImage *image = data->buffer();
-            ret = CGBitmapContextCreate(image->bits(), image->width(), image->height(),
-                                        8, image->bytesPerLine(), colorspace, flags);
-        } else {
-            qDebug() << "qt_mac_cg_context: Unsupported pixmap class";
-        }
-
-        CGContextTranslateCTM(ret, 0, pm->height());
-        CGContextScaleCTM(ret, 1, -1);
-        return ret;
-    } else if (pdev->devType() == QInternal::Widget) {
-        //CGContextRef ret = static_cast<CGContextRef>(static_cast<const QWidget *>(pdev)->macCGHandle());
-        ///CGContextRetain(ret);
-        //return ret;
-        qDebug() << "qt_mac_cg_context: not implemented: Widget class";
-        return 0;
-    }
-    return 0;
-}
-
-CGImageRef qt_mac_toCGImage(const QImage &qImage, bool isMask, uchar **dataCopy)
-{
-    int width = qImage.width();
-    int height = qImage.height();
-
-    if (width <= 0 || height <= 0) {
-        qWarning() << Q_FUNC_INFO <<
-            "setting invalid size" << width << "x" << height << "for qnsview image";
-        return 0;
-    }
-
-    const uchar *imageData = qImage.bits();
-    if (dataCopy) {
-        delete[] *dataCopy;
-        *dataCopy = new uchar[qImage.byteCount()];
-        memcpy(*dataCopy, imageData, qImage.byteCount());
-    }
-    int bitDepth = qImage.depth();
-    int colorBufferSize = 8;
-    int bytesPrLine = qImage.bytesPerLine();
-
-    CGDataProviderRef cgDataProviderRef = CGDataProviderCreateWithData(
-                NULL,
-                dataCopy ? *dataCopy : imageData,
-                qImage.byteCount(),
-                NULL);
-
-    CGImageRef cgImage = 0;
-    if (isMask) {
-        cgImage = CGImageMaskCreate(width,
-                                    height,
-                                    colorBufferSize,
-                                    bitDepth,
-                                    bytesPrLine,
-                                    cgDataProviderRef,
-                                    NULL,
-                                    false);
-    } else {
-        CGColorSpaceRef cgColourSpaceRef = CGColorSpaceCreateDeviceRGB();
-        cgImage = CGImageCreate(width,
-                                height,
-                                colorBufferSize,
-                                bitDepth,
-                                bytesPrLine,
-                                cgColourSpaceRef,
-                                kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst,
-                                cgDataProviderRef,
-                                NULL,
-                                false,
-                                kCGRenderingIntentDefault);
-        CGColorSpaceRelease(cgColourSpaceRef);
-    }
-    CGDataProviderRelease(cgDataProviderRef);
-    return cgImage;
+    return QPlatformTheme::removeMnemonics(s).trimmed();
 }
 
 QT_END_NAMESPACE
+
+/*! \internal
+
+    This NSView derived class is used to add OK/Cancel
+    buttons to NSColorPanel and NSFontPanel. It replaces
+    the panel's content view, while reparenting the former
+    content view into itself. It also takes care of setting
+    the target-action for the OK/Cancel buttons and making
+    sure the layout is consistent.
+ */
+@implementation QNSPanelContentsWrapper {
+    NSButton *_okButton;
+    NSButton *_cancelButton;
+    NSView *_panelContents;
+    NSEdgeInsets _panelContentsMargins;
+}
+
+@synthesize okButton = _okButton;
+@synthesize cancelButton = _cancelButton;
+@synthesize panelContents = _panelContents;
+@synthesize panelContentsMargins = _panelContentsMargins;
+
+- (instancetype)initWithPanelDelegate:(id<QNSPanelDelegate>)panelDelegate
+{
+    if ((self = [super initWithFrame:NSZeroRect])) {
+        // create OK and Cancel buttons and add these as subviews
+        _okButton = [self createButtonWithTitle:"&OK"];
+        _okButton.action = @selector(onOkClicked);
+        _okButton.target = panelDelegate;
+
+        _cancelButton = [self createButtonWithTitle:"Cancel"];
+        _cancelButton.action = @selector(onCancelClicked);
+        _cancelButton.target = panelDelegate;
+
+        _panelContents = nil;
+
+        _panelContentsMargins = NSEdgeInsetsMake(0, 0, 0, 0);
+    }
+
+    return self;
+}
+
+- (void)dealloc
+{
+    [_okButton release];
+    _okButton = nil;
+    [_cancelButton release];
+    _cancelButton = nil;
+
+    _panelContents = nil;
+
+    [super dealloc];
+}
+
+- (NSButton *)createButtonWithTitle:(const char *)title
+{
+    NSButton *button = [[NSButton alloc] initWithFrame:NSZeroRect];
+    button.buttonType = NSMomentaryLightButton;
+    button.bezelStyle = NSRoundedBezelStyle;
+    const QString &cleanTitle = QPlatformTheme::removeMnemonics(QCoreApplication::translate("QDialogButtonBox", title));
+    // FIXME: Not obvious, from Cocoa's documentation, that QString::toNSString() makes a deep copy
+    button.title = (NSString *)cleanTitle.toCFString();
+    ((NSButtonCell *)button.cell).font =
+            [NSFont systemFontOfSize:[NSFont systemFontSizeForControlSize:NSControlSizeRegular]];
+    [self addSubview:button];
+    return button;
+}
+
+- (void)layout
+{
+    static const CGFloat ButtonMinWidth = 78.0; // 84.0 for Carbon
+    static const CGFloat ButtonMinHeight = 32.0;
+    static const CGFloat ButtonSpacing = 0.0;
+    static const CGFloat ButtonTopMargin = 0.0;
+    static const CGFloat ButtonBottomMargin = 7.0;
+    static const CGFloat ButtonSideMargin = 9.0;
+
+    NSSize frameSize = self.frame.size;
+
+    [self.okButton sizeToFit];
+    NSSize okSizeHint = self.okButton.frame.size;
+
+    [self.cancelButton sizeToFit];
+    NSSize cancelSizeHint = self.cancelButton.frame.size;
+
+    const CGFloat buttonWidth = qMin(qMax(ButtonMinWidth,
+                                          qMax(okSizeHint.width, cancelSizeHint.width)),
+                                     CGFloat((frameSize.width - 2.0 * ButtonSideMargin - ButtonSpacing) * 0.5));
+    const CGFloat buttonHeight = qMax(ButtonMinHeight,
+                                     qMax(okSizeHint.height, cancelSizeHint.height));
+
+    NSRect okRect = { { frameSize.width - ButtonSideMargin - buttonWidth,
+                        ButtonBottomMargin },
+                      { buttonWidth, buttonHeight } };
+    self.okButton.frame = okRect;
+    self.okButton.needsDisplay = YES;
+
+    NSRect cancelRect = { { okRect.origin.x - ButtonSpacing - buttonWidth,
+                            ButtonBottomMargin },
+                            { buttonWidth, buttonHeight } };
+    self.cancelButton.frame = cancelRect;
+    self.cancelButton.needsDisplay = YES;
+
+    // The third view should be the original panel contents. Cache it.
+    if (!self.panelContents)
+        for (NSView *view in self.subviews)
+            if (view != self.okButton && view != self.cancelButton) {
+                _panelContents = view;
+                break;
+            }
+
+    const CGFloat buttonBoxHeight = ButtonBottomMargin + buttonHeight + ButtonTopMargin;
+    const NSRect panelContentsFrame = NSMakeRect(
+                self.panelContentsMargins.left,
+                buttonBoxHeight + self.panelContentsMargins.bottom,
+                frameSize.width - (self.panelContentsMargins.left + self.panelContentsMargins.right),
+                frameSize.height - buttonBoxHeight - (self.panelContentsMargins.top + self.panelContentsMargins.bottom));
+    self.panelContents.frame = panelContentsFrame;
+    self.panelContents.needsDisplay = YES;
+
+    self.needsDisplay = YES;
+    [super layout];
+}
+
+// -------------------------------------------------------------------------
+
+io_object_t q_IOObjectRetain(io_object_t obj)
+{
+    kern_return_t ret = IOObjectRetain(obj);
+    Q_ASSERT(!ret);
+    return obj;
+}
+
+void q_IOObjectRelease(io_object_t obj)
+{
+    kern_return_t ret = IOObjectRelease(obj);
+    Q_ASSERT(!ret);
+}
+
+@end

@@ -1,3 +1,4 @@
-TEMPLATE = subdirs
-SUBDIRS = defaultoptimize
-contains(QT_CONFIG,private_tests):SUBDIRS += alwaysoptimize
+CONFIG += testcase
+TARGET = tst_qregularexpression
+QT = core testlib
+SOURCES = tst_qregularexpression.cpp

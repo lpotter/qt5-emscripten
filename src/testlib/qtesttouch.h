@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,17 +45,16 @@
 #pragma qt_no_master_include
 #endif
 
-#include <QtTest/qtest_global.h>
+#include <QtTest/qttestglobal.h>
 #include <QtTest/qtestassert.h>
 #include <QtTest/qtestsystem.h>
 #include <QtTest/qtestspontaneevent.h>
 #include <QtCore/qmap.h>
 #include <QtGui/qevent.h>
+#include <QtGui/qwindow.h>
 #ifdef QT_WIDGETS_LIB
 #include <QtWidgets/qwidget.h>
 #endif
-
-QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
 
@@ -68,6 +65,7 @@ Q_GUI_EXPORT  void qt_handleTouchEvent(QWindow *w, QTouchDevice *device,
 
 namespace QTest
 {
+    Q_GUI_EXPORT QTouchDevice * createTouchDevice(QTouchDevice::DeviceType devType = QTouchDevice::TouchScreen);
 
     class QTouchEventSequence
     {
@@ -77,21 +75,21 @@ namespace QTest
             if (commitWhenDestroyed)
                 commit();
         }
-        QTouchEventSequence& press(int touchId, const QPoint &pt, QWindow *window = 0)
+        QTouchEventSequence& press(int touchId, const QPoint &pt, QWindow *window = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(window, pt));
             p.setState(Qt::TouchPointPressed);
             return *this;
         }
-        QTouchEventSequence& move(int touchId, const QPoint &pt, QWindow *window = 0)
+        QTouchEventSequence& move(int touchId, const QPoint &pt, QWindow *window = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(window, pt));
             p.setState(Qt::TouchPointMoved);
             return *this;
         }
-        QTouchEventSequence& release(int touchId, const QPoint &pt, QWindow *window = 0)
+        QTouchEventSequence& release(int touchId, const QPoint &pt, QWindow *window = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(window, pt));
@@ -106,21 +104,21 @@ namespace QTest
         }
 
 #ifdef QT_WIDGETS_LIB
-        QTouchEventSequence& press(int touchId, const QPoint &pt, QWidget *widget = 0)
+        QTouchEventSequence& press(int touchId, const QPoint &pt, QWidget *widget = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(widget, pt));
             p.setState(Qt::TouchPointPressed);
             return *this;
         }
-        QTouchEventSequence& move(int touchId, const QPoint &pt, QWidget *widget = 0)
+        QTouchEventSequence& move(int touchId, const QPoint &pt, QWidget *widget = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(widget, pt));
             p.setState(Qt::TouchPointMoved);
             return *this;
         }
-        QTouchEventSequence& release(int touchId, const QPoint &pt, QWidget *widget = 0)
+        QTouchEventSequence& release(int touchId, const QPoint &pt, QWidget *widget = nullptr)
         {
             QTouchEvent::TouchPoint &p = point(touchId);
             p.setScreenPos(mapToScreen(widget, pt));
@@ -132,6 +130,7 @@ namespace QTest
         void commit(bool processEvents = true)
         {
             if (!points.isEmpty()) {
+                qSleep(1);
                 if (targetWindow)
                 {
                     qt_handleTouchEvent(targetWindow, device, points.values());
@@ -152,14 +151,14 @@ namespace QTest
 private:
 #ifdef QT_WIDGETS_LIB
         QTouchEventSequence(QWidget *widget, QTouchDevice *aDevice, bool autoCommit)
-            : targetWidget(widget), targetWindow(0), device(aDevice), commitWhenDestroyed(autoCommit)
+            : targetWidget(widget), targetWindow(nullptr), device(aDevice), commitWhenDestroyed(autoCommit)
         {
         }
 #endif
         QTouchEventSequence(QWindow *window, QTouchDevice *aDevice, bool autoCommit)
             :
 #ifdef QT_WIDGETS_LIB
-              targetWidget(0),
+              targetWidget(nullptr),
 #endif
               targetWindow(window), device(aDevice), commitWhenDestroyed(autoCommit)
         {
@@ -206,13 +205,13 @@ private:
         QWindow *targetWindow;
         QTouchDevice *device;
         bool commitWhenDestroyed;
-#ifdef QT_WIDGETS_LIB
-        friend QTouchEventSequence touchEvent(QWidget *, QTouchDevice*, bool);
+#if defined(QT_WIDGETS_LIB) || defined(Q_CLANG_QDOC)
+        friend QTouchEventSequence touchEvent(QWidget *widget, QTouchDevice *device, bool autoCommit);
 #endif
-        friend QTouchEventSequence touchEvent(QWindow *, QTouchDevice*, bool);
+        friend QTouchEventSequence touchEvent(QWindow *window, QTouchDevice *device, bool autoCommit);
     };
 
-#ifdef QT_WIDGETS_LIB
+#if defined(QT_WIDGETS_LIB) || defined(Q_CLANG_QDOC)
     inline
     QTouchEventSequence touchEvent(QWidget *widget,
                                    QTouchDevice *device,
@@ -232,7 +231,5 @@ private:
 }
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QTESTTOUCH_H

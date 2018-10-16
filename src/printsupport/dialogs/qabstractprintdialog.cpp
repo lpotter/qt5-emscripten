@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -45,14 +43,7 @@
 #include "qprinter.h"
 #include "private/qprinter_p.h"
 
-#ifndef QT_NO_PRINTDIALOG
-
 QT_BEGIN_NAMESPACE
-
-// hack
-class QPrintDialogPrivate : public QAbstractPrintDialogPrivate
-{
-};
 
 /*!
     \class QAbstractPrintDialog
@@ -149,20 +140,20 @@ QAbstractPrintDialog::~QAbstractPrintDialog()
 */
 void QPrintDialog::setOption(PrintDialogOption option, bool on)
 {
-    Q_D(QPrintDialog);
+    auto *d = static_cast<QAbstractPrintDialogPrivate *>(d_ptr.data());
     if (!(d->options & option) != !on)
         setOptions(d->options ^ option);
 }
 
 /*!
-    Returns true if the given \a option is enabled; otherwise, returns
+    Returns \c true if the given \a option is enabled; otherwise, returns
     false.
 
     \sa options, setOption()
 */
 bool QPrintDialog::testOption(PrintDialogOption option) const
 {
-    Q_D(const QPrintDialog);
+    auto *d = static_cast<const QAbstractPrintDialogPrivate *>(d_ptr.data());
     return (d->options & option) != 0;
 }
 
@@ -181,7 +172,7 @@ bool QPrintDialog::testOption(PrintDialogOption option) const
 */
 void QPrintDialog::setOptions(PrintDialogOptions options)
 {
-    Q_D(QPrintDialog);
+    auto *d = static_cast<QAbstractPrintDialogPrivate *>(d_ptr.data());
 
     PrintDialogOptions changed = (options ^ d->options);
     if (!changed)
@@ -192,7 +183,7 @@ void QPrintDialog::setOptions(PrintDialogOptions options)
 
 QPrintDialog::PrintDialogOptions QPrintDialog::options() const
 {
-    Q_D(const QPrintDialog);
+    auto *d = static_cast<const QAbstractPrintDialogPrivate *>(d_ptr.data());
     return d->options;
 }
 
@@ -395,17 +386,16 @@ void QAbstractPrintDialogPrivate::setPrinter(QPrinter *newPrinter)
     settings for each available printer can be modified via the dialog's
     \uicontrol{Properties} push button.
 
-    On Windows and Mac OS X, the native print dialog is used, which means that
+    On Windows and \macos, the native print dialog is used, which means that
     some QWidget and QDialog properties set on the dialog won't be respected.
-    The native print dialog on Mac OS X does not support setting printer options,
+    The native print dialog on \macos does not support setting printer options,
     i.e. setOptions() and setOption() have no effect.
 
     In Qt 4.4, it was possible to use the static functions to show a sheet on
-    Mac OS X. This is no longer supported in Qt 4.5. If you want this
+    \macos. This is no longer supported in Qt 4.5. If you want this
     functionality, use QPrintDialog::open().
 
-    \sa QPageSetupDialog, QPrinter, {Pixelator Example}, {Order Form Example},
-        {Image Viewer Example}, {Scribble Example}
+    \sa QPageSetupDialog, QPrinter
 */
 
 /*!
@@ -461,18 +451,22 @@ void QAbstractPrintDialog::setOptionTabs(const QList<QWidget*> &tabs)
   is shown with exec(), done() causes the local event loop to finish,
   and exec() to return \a result.
 
+  \note This function does not apply to the Native Print Dialog on the Mac
+  \macos and Windows platforms, because the dialog is required to be modal
+  and only the user can close it.
+
   \sa QDialog::done()
 */
 void QPrintDialog::done(int result)
 {
-    Q_D(QPrintDialog);
+    auto *d = static_cast<QAbstractPrintDialogPrivate *>(d_ptr.data());
     QDialog::done(result);
     if (result == Accepted)
         emit accepted(printer());
     if (d->receiverToDisconnectOnClose) {
         disconnect(this, SIGNAL(accepted(QPrinter*)),
                    d->receiverToDisconnectOnClose, d->memberToDisconnectOnClose);
-        d->receiverToDisconnectOnClose = 0;
+        d->receiverToDisconnectOnClose = nullptr;
     }
     d->memberToDisconnectOnClose.clear();
 }
@@ -488,7 +482,7 @@ void QPrintDialog::done(int result)
 */
 void QPrintDialog::open(QObject *receiver, const char *member)
 {
-    Q_D(QPrintDialog);
+    auto *d = static_cast<QAbstractPrintDialogPrivate *>(d_ptr.data());
     connect(this, SIGNAL(accepted(QPrinter*)), receiver, member);
     d->receiverToDisconnectOnClose = receiver;
     d->memberToDisconnectOnClose = member;
@@ -496,5 +490,3 @@ void QPrintDialog::open(QObject *receiver, const char *member)
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_PRINTDIALOG

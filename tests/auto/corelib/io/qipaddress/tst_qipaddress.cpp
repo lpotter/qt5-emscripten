@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Intel Corporation.
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -194,6 +181,7 @@ void tst_QIpAddress::invalidParseIp4_data()
     QTest::newRow("..") << "..";
     QTest::newRow("...") << "...";
     QTest::newRow("....") << "....";
+    QTest::newRow(".1.2.3") << ".1.2.3";
     QTest::newRow("1.") << "1.";
     QTest::newRow("1.2.") << "1.2.";
     QTest::newRow("1.2.3.") << "1.2.3.";
@@ -217,8 +205,20 @@ void tst_QIpAddress::invalidParseIp4_data()
     // bad hex
     QTest::newRow("0x1g") << "0x1g";
 
+    // negative numbers
+    QTest::newRow("-1") << "-1";
+    QTest::newRow("-1.1") << "-1.1";
+    QTest::newRow("1.-1") << "1.-1";
+    QTest::newRow("1.1.1.-1") << "1.1.1.-1";
+    QTest::newRow("300-05") << "300-05";
+    QTest::newRow("127.-1") << "127.-1";
+    QTest::newRow("-127-10") << "-127-10";
+    QTest::newRow("198.-16") << "198-16";
+    QTest::newRow("-127.-0.") << "-127.-0.";
+
     // letters
     QTest::newRow("abc") << "abc";
+    QTest::newRow("localhost") << "localhost";
     QTest::newRow("1.2.3a.4") << "1.2.3a.4";
     QTest::newRow("a.2.3.4") << "a.2.3.4";
     QTest::newRow("1.2.3.4a") << "1.2.3.4a";
@@ -251,6 +251,7 @@ void tst_QIpAddress::ip4ToString_data()
 
     QTest::newRow("0.0.0.0") << 0u << "0.0.0.0";
     QTest::newRow("1.2.3.4") << 0x01020304u << "1.2.3.4";
+    QTest::newRow("127.0.0.1") << 0x7f000001u << "127.0.0.1";
     QTest::newRow("111.222.33.44") << 0x6fde212cu << "111.222.33.44";
     QTest::newRow("255.255.255.255") << 0xffffffffu << "255.255.255.255";
 }
@@ -286,9 +287,6 @@ void tst_QIpAddress::parseIp6_data()
     QTest::newRow("ffee:ddcc:bbaa:9988:7766:5544:3322:1100")
             << "ffee:ddcc:bbaa:9988:7766:5544:3322:1100"
             << Ip6(0xffee, 0xddcc, 0xbbaa, 0x9988, 0x7766, 0x5544, 0x3322, 0x1100);
-
-    // too many zeroes
-    QTest::newRow("0:0:0:0:0:0:0:00103") << "0:0:0:0:0:0:0:00103" << Ip6(0,0,0,0,0,0,0,0x103);
 
     // double-colon
     QTest::newRow("::1:2:3:4:5:6:7") << "::1:2:3:4:5:6:7" << Ip6(0,1,2,3,4,5,6,7);
@@ -361,7 +359,7 @@ void tst_QIpAddress::parseIp6()
 #endif
 
     Ip6 result;
-    bool ok = QIPAddressUtils::parseIp6(result.u8, address.constBegin(), address.constEnd());
+    bool ok = QIPAddressUtils::parseIp6(result.u8, address.constBegin(), address.constEnd()) == 0;
     QVERIFY(ok);
     QCOMPARE(result, expected);
 }
@@ -380,6 +378,9 @@ void tst_QIpAddress::invalidParseIp6_data()
 
     // too big number
     QTest::newRow("0:0:0:0:0:0:0:10103") << "0:0:0:0:0:0:0:10103";
+
+    // too many zeroes
+    QTest::newRow("0:0:0:0:0:0:0:00103") << "0:0:0:0:0:0:0:00103";
 
     // too short
     QTest::newRow("0:0:0:0:0:0:0:") << "0:0:0:0:0:0:0:";
@@ -437,11 +438,13 @@ void tst_QIpAddress::invalidParseIp6()
 #if defined(__GLIBC__) && defined(AF_INET6)
     Ip6 inet_result;
     bool inet_ok = inet_pton(AF_INET6, address.toLatin1(), &inet_result.u8);
+    if (__GLIBC_MINOR__ < 26)
+        QEXPECT_FAIL("0:0:0:0:0:0:0:00103", "Bug fixed in glibc 2.26", Continue);
     QVERIFY(!inet_ok);
 #endif
 
     Ip6 result;
-    bool ok = QIPAddressUtils::parseIp6(result.u8, address.constBegin(), address.constEnd());
+    bool ok = QIPAddressUtils::parseIp6(result.u8, address.constBegin(), address.constEnd()) == 0;
     QVERIFY(!ok);
 }
 

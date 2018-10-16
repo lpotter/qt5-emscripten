@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the qmake application of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,7 +34,6 @@
 
 #include <proitems.h>
 
-#include <qatomic.h>
 #include <qlist.h>
 #include <qstring.h>
 #include <qstringlist.h>
@@ -63,8 +49,13 @@ enum DotNET {
     NET2005 = 0x80,
     NET2008 = 0x90,
     NET2010 = 0xa0,
-    NET2012 = 0xb0
+    NET2012 = 0xb0,
+    NET2013 = 0xc0,
+    NET2015 = 0xd0,
+    NET2017 = 0xe0
 };
+
+DotNET vsVersionFromString(const ProString &versionString);
 
 /*
     This Object model is of course VERY simplyfied,
@@ -79,12 +70,6 @@ enum DotNET {
     forcing the tool to utilize default values.
     False/True values will be in the output...
 */
-enum customBuildCheck {
-    none,
-    mocSrc,
-    mocHdr,
-    lexyacc
-};
 enum triState {
     unset = -1,
     _False = 0,
@@ -106,10 +91,10 @@ enum asmListingOption {
     asmListingAsmSrc
 };
 enum basicRuntimeCheckOption {
-    runtimeBasicCheckNone,
-    runtimeCheckStackFrame,
-    runtimeCheckUninitVariables,
-    runtimeBasicCheckAll
+    runtimeBasicCheckNone = 0,
+    runtimeCheckStackFrame = 1,
+    runtimeCheckUninitVariables = 2,
+    runtimeBasicCheckAll = runtimeCheckStackFrame | runtimeCheckUninitVariables
 };
 enum browseInfoOption {
     brInfoNone,
@@ -293,6 +278,10 @@ enum inlineExpansionOption {
     expandOnlyInline,
     expandAnySuitable,
     expandDefault // Not useful number, but stops the output
+};
+enum linkerDebugOption {
+    linkerDebugOptionNone,
+    linkerDebugOptionFastLink
 };
 enum linkIncrementalType {
     linkIncrementalDefault,
@@ -494,8 +483,8 @@ class VCCLCompilerTool : public VCToolBase
 public:
     // Functions
     VCCLCompilerTool();
-    virtual ~VCCLCompilerTool(){}
-    bool parseOption(const char* option);
+
+    bool parseOption(const char* option) override;
 
     // Variables
     QStringList             AdditionalIncludeDirectories;
@@ -510,6 +499,7 @@ public:
     callingConventionOption CallingConvention;
     CompileAsOptions        CompileAs;
     compileAsManagedOptions CompileAsManaged;
+    triState                CompileAsWinRT;
     triState                CompileOnly;
     debugOption             DebugInformationFormat;
     triState                DefaultCharIsUnsigned;
@@ -561,6 +551,7 @@ public:
     QStringList             UndefinePreprocessorDefinitions;
     pchOption               UsePrecompiledHeader;
     triState                UseUnicodeForAssemblerListing;
+    QStringList             TreatSpecificWarningsAsErrors;
     triState                WarnAsError;
     warningLevelOption      WarningLevel;
     triState                WholeProgramOptimization;
@@ -579,6 +570,9 @@ public:
     QString                 PreprocessOutputPath;
 
     VCConfiguration*        config;
+
+private:
+    bool parseRuntimeCheckOption(char c, int *rtc);
 };
 
 class VCLinkerTool : public VCToolBase
@@ -586,8 +580,8 @@ class VCLinkerTool : public VCToolBase
 public:
     // Functions
     VCLinkerTool();
-    virtual ~VCLinkerTool(){}
-    bool parseOption(const char* option);
+
+    bool parseOption(const char* option) override;
 
     // Variables
     QStringList             AdditionalDependencies;
@@ -602,6 +596,7 @@ public:
     QStringList             ForceSymbolReferences;
     QString                 FunctionOrder;
     triState                GenerateDebugInformation;
+    linkerDebugOption       DebugInfoOption;
     triState                GenerateMapFile;
     qlonglong               HeapCommitSize;
     qlonglong               HeapReserveSize;
@@ -609,6 +604,7 @@ public:
     QStringList             IgnoreDefaultLibraryNames;
     triState                IgnoreEmbeddedIDL;
     triState                IgnoreImportLibrary;
+    triState                ImageHasSafeExceptionHandlers;
     QString                 ImportLibrary;
     addressAwarenessType    LargeAddressAware;
     triState                LinkDLL;
@@ -668,7 +664,21 @@ public:
     QString                 KeyFile;
     QString                 LinkErrorReporting;
 
+    // VS2012
+    triState                GenerateWindowsMetadata;
+    QString                 WindowsMetadataFile;
+
     VCConfiguration*        config;
+};
+
+class VCManifestTool : public VCToolBase
+{
+public:
+    VCManifestTool();
+
+    bool parseOption(const char* option) override;
+
+    triState                EmbedManifest;
 };
 
 class VCMIDLTool : public VCToolBase
@@ -676,8 +686,8 @@ class VCMIDLTool : public VCToolBase
 public:
     // Functions
     VCMIDLTool();
-    virtual ~VCMIDLTool(){}
-    bool parseOption(const char* option);
+
+    bool parseOption(const char* option) override;
 
     // Variables
     QStringList             AdditionalIncludeDirectories;
@@ -730,8 +740,8 @@ class VCLibrarianTool : public VCToolBase
 public:
     // Functions
     VCLibrarianTool();
-    virtual ~VCLibrarianTool(){}
-    bool parseOption(const char*){ return false; }
+
+    bool parseOption(const char*) override { return false; }
 
     // Variables
     QStringList             AdditionalDependencies;
@@ -751,8 +761,8 @@ class VCCustomBuildTool : public VCToolBase
 public:
     // Functions
     VCCustomBuildTool();
-    virtual ~VCCustomBuildTool(){}
-    bool parseOption(const char*){ return false; }
+
+    bool parseOption(const char*) override { return false; }
 
     // Variables
     QStringList             AdditionalDependencies;
@@ -770,8 +780,8 @@ class VCResourceCompilerTool : public VCToolBase
 public:
     // Functions
     VCResourceCompilerTool();
-    virtual ~VCResourceCompilerTool(){}
-    bool parseOption(const char*){ return false; }
+
+    bool parseOption(const char*) override { return false; }
 
     // Variables
     QStringList             AdditionalIncludeDirectories;
@@ -791,7 +801,6 @@ class VCDeploymentTool
 public:
     // Functions
     VCDeploymentTool();
-    virtual ~VCDeploymentTool() {}
 
     // Variables
     QString                 DeploymentTag;
@@ -805,8 +814,8 @@ class VCEventTool : public VCToolBase
 protected:
     // Functions
     VCEventTool(const QString &eventName);
-    virtual ~VCEventTool(){}
-    bool parseOption(const char*){ return false; }
+
+    bool parseOption(const char*) override { return false; }
 
 public:
     // Variables
@@ -822,21 +831,35 @@ class VCPostBuildEventTool : public VCEventTool
 {
 public:
     VCPostBuildEventTool();
-    ~VCPostBuildEventTool(){}
 };
 
 class VCPreBuildEventTool : public VCEventTool
 {
 public:
     VCPreBuildEventTool();
-    ~VCPreBuildEventTool(){}
 };
 
 class VCPreLinkEventTool : public VCEventTool
 {
 public:
     VCPreLinkEventTool();
-    ~VCPreLinkEventTool(){}
+};
+
+class VCWinDeployQtTool : public VCToolBase
+{
+public:
+    VCWinDeployQtTool() {}
+
+protected:
+    bool parseOption(const char *) override { return false; }
+
+public:
+    // Variables
+    QString                 Record;
+    QString                 CommandLine;
+    bool                    ExcludedFromBuild;
+
+    VCConfiguration *       config;
 };
 
 class VCConfiguration
@@ -844,9 +867,10 @@ class VCConfiguration
 public:
     // Functions
     VCConfiguration();
-    ~VCConfiguration(){}
 
+    bool                    suppressUnknownOptionWarnings;
     DotNET                  CompilerVersion;
+    bool                    WinRT;
 
     // Variables
     triState                ATLMinimizesCRunTimeLibraryUsage;
@@ -862,6 +886,7 @@ public:
     QString                 PrimaryOutput;
     QString                 PrimaryOutputExtension;
     QString                 ProgramDatabase;
+    QString                 PlatformToolSet;
     triState                RegisterOutput;
     useOfATL                UseOfATL;
     useOfMfc                UseOfMfc;
@@ -871,13 +896,14 @@ public:
     VCCLCompilerTool        compiler;
     VCLinkerTool            linker;
     VCLibrarianTool         librarian;
-    VCCustomBuildTool       custom;
+    VCManifestTool          manifestTool;
     VCMIDLTool              idl;
     VCPostBuildEventTool    postBuild;
     VCPreBuildEventTool     preBuild;
     VCDeploymentTool        deployment;
     VCPreLinkEventTool      preLink;
     VCResourceCompilerTool  resource;
+    VCWinDeployQtTool       windeployqt;
 };
 
 struct VCFilterFile
@@ -886,24 +912,15 @@ struct VCFilterFile
     { excludeFromBuild = false; }
     VCFilterFile(const QString &filename, bool exclude = false )
     { file = filename; excludeFromBuild = exclude; }
-    VCFilterFile(const QString &filename, const QString &additional, bool exclude = false )
-    { file = filename; excludeFromBuild = exclude; additionalFile = additional; }
-    bool operator==(const VCFilterFile &other){
-        return file == other.file
-               && additionalFile == other.additionalFile
-               && excludeFromBuild == other.excludeFromBuild;
-    }
 
     bool                    excludeFromBuild;
     QString                 file;
-    QString                 additionalFile; // For tools like MOC
 };
 
 #ifndef QT_NO_DEBUG_OUTPUT
 inline QDebug operator<<(QDebug dbg, const VCFilterFile &p)
 {
     dbg.nospace() << "VCFilterFile(file(" << p.file
-                  << ") additionalFile(" << p.additionalFile
                   << ") excludeFromBuild(" << p.excludeFromBuild << "))" << endl;
     return dbg.space();
 }
@@ -915,7 +932,6 @@ class VCFilter
 public:
     // Functions
     VCFilter();
-    ~VCFilter(){}
 
     void addFile(const QString& filename);
     void addFile(const VCFilterFile& fileInfo);
@@ -923,6 +939,7 @@ public:
     void addFiles(const ProStringList& fileList);
     bool addExtraCompiler(const VCFilterFile &info);
     void modifyPCHstage(QString str);
+    VCFilterFile findFile(const QString &filePath, bool *found) const;
 
     // Variables
     QString                 Name;
@@ -933,8 +950,6 @@ public:
     VCConfiguration*        Config;
     QList<VCFilterFile>     Files;
 
-    customBuildCheck	    CustomBuild;
-
     bool                    useCustomBuildTool;
     VCCustomBuildTool       CustomBuildTool;
 
@@ -942,7 +957,7 @@ public:
     VCCLCompilerTool        CompilerTool;
 };
 
-typedef QList<VCFilter> VCFilterList;
+typedef QVector<VCFilter> VCFilterList;
 class VCProjectSingleConfig
 {
 public:
@@ -956,9 +971,6 @@ public:
         Resources,
         Extras
     };
-    // Functions
-    VCProjectSingleConfig(){}
-    ~VCProjectSingleConfig(){}
 
     // Variables
     QString                 Name;
@@ -968,6 +980,7 @@ public:
     QString                 SccProjectName;
     QString                 SccLocalPath;
     QString                 PlatformName;
+    QString                 SdkVersion;
 
     // XML sub-parts
     VCConfiguration         Configuration;
@@ -979,13 +992,16 @@ public:
     VCFilter                TranslationFiles;
     VCFilter                FormFiles;
     VCFilter                ResourceFiles;
+    VCFilter                DeploymentFiles;
+    VCFilter                DistributionFiles;
     VCFilterList            ExtraCompilersFiles;
 
     bool                    flat_files;
 
-    // Accessor for extracompilers
-    VCFilter               &filterForExtraCompiler(const QString &compilerName);
+    const VCFilter &filterByName(const QString &name) const;
+    const VCFilter &filterForExtraCompiler(const QString &compilerName) const;
 };
+Q_DECLARE_TYPEINFO(VCProjectSingleConfig, Q_MOVABLE_TYPE);
 
 // Tree & Flat view of files --------------------------------------------------
 class VCFilter;
@@ -1021,7 +1037,7 @@ public:
         return Uindex;
     }
 
-    void addElement(const QString &filepath, const VCFilterFile &allInfo){
+    void addElement(const QString &filepath, const VCFilterFile &allInfo) override {
         QString newNodeName(filepath);
 
         int index = pathIndex(filepath);
@@ -1038,7 +1054,7 @@ public:
             n->addElement(filepath.mid(index+1), allInfo);
     }
 
-    void removeElements() {
+    void removeElements() override {
         ChildrenMap::ConstIterator it = children.constBegin();
         ChildrenMap::ConstIterator end = children.constEnd();
         for( ; it != end; it++) {
@@ -1048,8 +1064,8 @@ public:
         children.clear();
     }
 
-    void generateXML(XmlOutput &xml, const QString &tagName, VCProject &tool, const QString &filter);
-    bool hasElements() {
+    void generateXML(XmlOutput &xml, const QString &tagName, VCProject &tool, const QString &filter) override;
+    bool hasElements() override {
         return children.size() != 0;
     }
 };
@@ -1072,7 +1088,7 @@ public:
         return Uindex;
     }
 
-    void addElement(const QString &filepath, const VCFilterFile &allInfo){
+    void addElement(const QString &filepath, const VCFilterFile &allInfo) override {
         QString newKey(filepath);
 
         int index = pathIndex(filepath);
@@ -1084,12 +1100,12 @@ public:
         children.insert(newKey + "\0" + allInfo.file, allInfo);
     }
 
-    void removeElements() {
+    void removeElements() override {
         children.clear();
     }
 
-    void generateXML(XmlOutput &xml, const QString &tagName, VCProject &proj, const QString &filter);
-    bool hasElements() {
+    void generateXML(XmlOutput &xml, const QString &tagName, VCProject &proj, const QString &filter) override;
+    bool hasElements() override {
         return children.size() != 0;
     }
 };
@@ -1106,6 +1122,7 @@ public:
     QString                 SccProjectName;
     QString                 SccLocalPath;
     QString                 PlatformName;
+    QString                 SdkVersion;
 
     // Single projects
     QList<VCProjectSingleConfig>  SingleProjects;
@@ -1124,12 +1141,14 @@ public:
 
     virtual void write(XmlOutput &, const VCCLCompilerTool &);
     virtual void write(XmlOutput &, const VCLinkerTool &);
+    virtual void write(XmlOutput &, const VCManifestTool &);
     virtual void write(XmlOutput &, const VCMIDLTool &);
     virtual void write(XmlOutput &, const VCCustomBuildTool &);
     virtual void write(XmlOutput &, const VCLibrarianTool &);
     virtual void write(XmlOutput &, const VCResourceCompilerTool &);
     virtual void write(XmlOutput &, const VCEventTool &);
     virtual void write(XmlOutput &, const VCDeploymentTool &);
+    virtual void write(XmlOutput &, const VCWinDeployQtTool &);
     virtual void write(XmlOutput &, const VCConfiguration &);
     virtual void write(XmlOutput &, VCFilter &);
 

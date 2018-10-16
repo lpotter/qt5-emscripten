@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Intel Corporation.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,41 +11,38 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
 
+#include <QtCore/qglobal.h>
+
 #ifndef QTYPEINFO_H
 #define QTYPEINFO_H
 
-#include <QtCore/qglobal.h>
-
-QT_BEGIN_HEADER
 QT_BEGIN_NAMESPACE
 
 /*
@@ -60,11 +58,14 @@ class QTypeInfo
 {
 public:
     enum {
+        isSpecialized = std::is_enum<T>::value, // don't require every enum to be marked manually
         isPointer = false,
-        isComplex = true,
+        isIntegral = std::is_integral<T>::value,
+        isComplex = !isIntegral && !std::is_enum<T>::value,
         isStatic = true,
+        isRelocatable = std::is_enum<T>::value,
         isLarge = (sizeof(T)>sizeof(void*)),
-        isDummy = false,
+        isDummy = false, //### Qt6: remove
         sizeOf = sizeof(T)
     };
 };
@@ -74,9 +75,12 @@ class QTypeInfo<void>
 {
 public:
     enum {
+        isSpecialized = true,
         isPointer = false,
+        isIntegral = false,
         isComplex = false,
         isStatic = false,
+        isRelocatable = false,
         isLarge = false,
         isDummy = false,
         sizeOf = 0
@@ -88,14 +92,43 @@ class QTypeInfo<T*>
 {
 public:
     enum {
+        isSpecialized = true,
         isPointer = true,
+        isIntegral = false,
         isComplex = false,
         isStatic = false,
+        isRelocatable = true,
         isLarge = false,
         isDummy = false,
         sizeOf = sizeof(T*)
     };
 };
+
+/*!
+    \class QTypeInfoQuery
+    \inmodule QtCore
+    \internal
+    \brief QTypeInfoQuery is used to query the values of a given QTypeInfo<T>
+
+    We use it because there may be some QTypeInfo<T> specializations in user
+    code that don't provide certain flags that we added after Qt 5.0. They are:
+    \list
+      \li isRelocatable: defaults to !isStatic
+    \endlist
+
+    DO NOT specialize this class elsewhere.
+*/
+// apply defaults for a generic QTypeInfo<T> that didn't provide the new values
+template <typename T, typename = void>
+struct QTypeInfoQuery : public QTypeInfo<T>
+{
+    enum { isRelocatable = !QTypeInfo<T>::isStatic };
+};
+
+// if QTypeInfo<T>::isRelocatable exists, use it
+template <typename T>
+struct QTypeInfoQuery<T, typename std::enable_if<QTypeInfo<T>::isRelocatable || true>::type> : public QTypeInfo<T>
+{};
 
 /*!
     \class QTypeInfoMerger
@@ -111,7 +144,7 @@ public:
 
     To create a proper QTypeInfo specialization for A struct, we have to check
     all sub-components; B, C and D, then take the lowest common denominator and call
-    Q_DECLATE_TYPEINFO with the resulting flags. An easier and less fragile approach is to
+    Q_DECLARE_TYPEINFO with the resulting flags. An easier and less fragile approach is to
     use QTypeInfoMerger, which does that automatically. So struct A would have
     the following QTypeInfo definition:
 
@@ -122,10 +155,16 @@ class QTypeInfoMerger
 {
 public:
     enum {
-        isComplex = QTypeInfo<T1>::isComplex || QTypeInfo<T2>::isComplex || QTypeInfo<T3>::isComplex || QTypeInfo<T4>::isComplex,
-        isStatic = QTypeInfo<T1>::isStatic || QTypeInfo<T2>::isStatic || QTypeInfo<T3>::isStatic || QTypeInfo<T4>::isStatic,
+        isSpecialized = true,
+        isComplex = QTypeInfoQuery<T1>::isComplex || QTypeInfoQuery<T2>::isComplex
+                    || QTypeInfoQuery<T3>::isComplex || QTypeInfoQuery<T4>::isComplex,
+        isStatic = QTypeInfoQuery<T1>::isStatic || QTypeInfoQuery<T2>::isStatic
+                    || QTypeInfoQuery<T3>::isStatic || QTypeInfoQuery<T4>::isStatic,
+        isRelocatable = QTypeInfoQuery<T1>::isRelocatable && QTypeInfoQuery<T2>::isRelocatable
+                    && QTypeInfoQuery<T3>::isRelocatable && QTypeInfoQuery<T4>::isRelocatable,
         isLarge = sizeof(T) > sizeof(void*),
         isPointer = false,
+        isIntegral = false,
         isDummy = false,
         sizeOf = sizeof(T)
     };
@@ -138,21 +177,51 @@ class QTypeInfo< CONTAINER<T> > \
 { \
 public: \
     enum { \
+        isSpecialized = true, \
         isPointer = false, \
+        isIntegral = false, \
         isComplex = true, \
+        isRelocatable = true, \
         isStatic = false, \
         isLarge = (sizeof(CONTAINER<T>) > sizeof(void*)), \
         isDummy = false, \
         sizeOf = sizeof(CONTAINER<T>) \
     }; \
-};
+}
 
-Q_DECLARE_MOVABLE_CONTAINER(QList)
-Q_DECLARE_MOVABLE_CONTAINER(QVector)
-Q_DECLARE_MOVABLE_CONTAINER(QQueue)
-Q_DECLARE_MOVABLE_CONTAINER(QStack)
-Q_DECLARE_MOVABLE_CONTAINER(QLinkedList)
-Q_DECLARE_MOVABLE_CONTAINER(QSet)
+Q_DECLARE_MOVABLE_CONTAINER(QList);
+Q_DECLARE_MOVABLE_CONTAINER(QVector);
+Q_DECLARE_MOVABLE_CONTAINER(QQueue);
+Q_DECLARE_MOVABLE_CONTAINER(QStack);
+Q_DECLARE_MOVABLE_CONTAINER(QLinkedList);
+Q_DECLARE_MOVABLE_CONTAINER(QSet);
+
+#undef Q_DECLARE_MOVABLE_CONTAINER
+
+/* These cannot be movable before ### Qt 6, for BC reasons */
+#define Q_DECLARE_MOVABLE_CONTAINER(CONTAINER) \
+template <typename K, typename V> class CONTAINER; \
+template <typename K, typename V> \
+class QTypeInfo< CONTAINER<K, V> > \
+{ \
+public: \
+    enum { \
+        isSpecialized = true, \
+        isPointer = false, \
+        isIntegral = false, \
+        isComplex = true, \
+        isStatic = (QT_VERSION < QT_VERSION_CHECK(6, 0, 0)), \
+        isRelocatable = true, \
+        isLarge = (sizeof(CONTAINER<K, V>) > sizeof(void*)), \
+        isDummy = false, \
+        sizeOf = sizeof(CONTAINER<K, V>) \
+    }; \
+}
+
+Q_DECLARE_MOVABLE_CONTAINER(QMap);
+Q_DECLARE_MOVABLE_CONTAINER(QMultiMap);
+Q_DECLARE_MOVABLE_CONTAINER(QHash);
+Q_DECLARE_MOVABLE_CONTAINER(QMultiHash);
 
 #undef Q_DECLARE_MOVABLE_CONTAINER
 
@@ -168,8 +237,9 @@ enum { /* TYPEINFO flags */
     Q_COMPLEX_TYPE = 0,
     Q_PRIMITIVE_TYPE = 0x1,
     Q_STATIC_TYPE = 0,
-    Q_MOVABLE_TYPE = 0x2,
-    Q_DUMMY_TYPE = 0x4
+    Q_MOVABLE_TYPE = 0x2,               // ### Qt6: merge movable and relocatable once QList no longer depends on it
+    Q_DUMMY_TYPE = 0x4,
+    Q_RELOCATABLE_TYPE = 0x8
 };
 
 #define Q_DECLARE_TYPEINFO_BODY(TYPE, FLAGS) \
@@ -177,10 +247,13 @@ class QTypeInfo<TYPE > \
 { \
 public: \
     enum { \
+        isSpecialized = true, \
         isComplex = (((FLAGS) & Q_PRIMITIVE_TYPE) == 0), \
         isStatic = (((FLAGS) & (Q_MOVABLE_TYPE | Q_PRIMITIVE_TYPE)) == 0), \
+        isRelocatable = !isStatic || ((FLAGS) & Q_RELOCATABLE_TYPE), \
         isLarge = (sizeof(TYPE)>sizeof(void*)), \
         isPointer = false, \
+        isIntegral = std::is_integral< TYPE >::value, \
         isDummy = (((FLAGS) & Q_DUMMY_TYPE) != 0), \
         sizeOf = sizeof(TYPE) \
     }; \
@@ -204,20 +277,22 @@ Q_DECLARE_TYPEINFO_BODY(QFlags<T>, Q_PRIMITIVE_TYPE);
    where 'type' is the name of the type to specialize.  NOTE: shared
    types must define a member-swap, and be defined in the same
    namespace as Qt for this to work.
-*/
-#define Q_DECLARE_SHARED_STL(TYPE) \
-QT_END_NAMESPACE \
-namespace std { \
-    template<> inline void swap<QT_PREPEND_NAMESPACE(TYPE)>(QT_PREPEND_NAMESPACE(TYPE) &value1, QT_PREPEND_NAMESPACE(TYPE) &value2) \
-    { value1.swap(value2); } \
-} \
-QT_BEGIN_NAMESPACE
 
-#define Q_DECLARE_SHARED(TYPE)                                          \
-Q_DECLARE_TYPEINFO(TYPE, Q_MOVABLE_TYPE); \
-template <> inline void qSwap<TYPE>(TYPE &value1, TYPE &value2) \
-{ value1.swap(value2); } \
-Q_DECLARE_SHARED_STL(TYPE)
+   If the type was already released without Q_DECLARE_SHARED applied,
+   _and_ without an explicit Q_DECLARE_TYPEINFO(type, Q_MOVABLE_TYPE),
+   then use Q_DECLARE_SHARED_NOT_MOVABLE_UNTIL_QT6(type) to mark the
+   type shared (incl. swap()), without marking it movable (which
+   would change the memory layout of QList, a BiC change.
+*/
+
+#define Q_DECLARE_SHARED_IMPL(TYPE, FLAGS) \
+Q_DECLARE_TYPEINFO(TYPE, FLAGS); \
+inline void swap(TYPE &value1, TYPE &value2) \
+    Q_DECL_NOEXCEPT_EXPR(noexcept(value1.swap(value2))) \
+{ value1.swap(value2); }
+#define Q_DECLARE_SHARED(TYPE) Q_DECLARE_SHARED_IMPL(TYPE, Q_MOVABLE_TYPE)
+#define Q_DECLARE_SHARED_NOT_MOVABLE_UNTIL_QT6(TYPE) \
+                               Q_DECLARE_SHARED_IMPL(TYPE, QT_VERSION >= QT_VERSION_CHECK(6,0,0) ? Q_MOVABLE_TYPE : Q_RELOCATABLE_TYPE)
 
 /*
    QTypeInfo primitive specializations
@@ -236,11 +311,32 @@ Q_DECLARE_TYPEINFO(qint64, Q_PRIMITIVE_TYPE);
 Q_DECLARE_TYPEINFO(quint64, Q_PRIMITIVE_TYPE);
 Q_DECLARE_TYPEINFO(float, Q_PRIMITIVE_TYPE);
 Q_DECLARE_TYPEINFO(double, Q_PRIMITIVE_TYPE);
-#ifndef Q_OS_DARWIN
+
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+// ### Qt 6: remove the other branch
+// This was required so that QList<T> for these types allocates out of the array storage
 Q_DECLARE_TYPEINFO(long double, Q_PRIMITIVE_TYPE);
-#endif
+#  ifdef Q_COMPILER_UNICODE_STRINGS
+Q_DECLARE_TYPEINFO(char16_t, Q_PRIMITIVE_TYPE);
+Q_DECLARE_TYPEINFO(char32_t, Q_PRIMITIVE_TYPE);
+#  endif
+#  if !defined(Q_CC_MSVC) || defined(_NATIVE_WCHAR_T_DEFINED)
+Q_DECLARE_TYPEINFO(wchar_t, Q_PRIMITIVE_TYPE);
+#  endif
+#else
+#  ifndef Q_OS_DARWIN
+Q_DECLARE_TYPEINFO(long double, Q_PRIMITIVE_TYPE);
+#  else
+Q_DECLARE_TYPEINFO(long double, Q_RELOCATABLE_TYPE);
+#  endif
+#  ifdef Q_COMPILER_UNICODE_STRINGS
+Q_DECLARE_TYPEINFO(char16_t, Q_RELOCATABLE_TYPE);
+Q_DECLARE_TYPEINFO(char32_t, Q_RELOCATABLE_TYPE);
+#  endif
+#  if !defined(Q_CC_MSVC) || defined(_NATIVE_WCHAR_T_DEFINED)
+Q_DECLARE_TYPEINFO(wchar_t, Q_RELOCATABLE_TYPE);
+#  endif
+#endif // Qt 6
 
 QT_END_NAMESPACE
-QT_END_HEADER
-
 #endif // QTYPEINFO_H

@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -77,14 +64,10 @@ public:
 class tst_QSyntaxHighlighter : public QObject
 {
     Q_OBJECT
-public:
-    inline tst_QSyntaxHighlighter() {}
-
-public slots:
-    void init();
-    void cleanup();
 
 private slots:
+    void init();
+    void cleanup();
     void basic();
     void basicTwo();
     void removeFormatsOnDelete();
@@ -128,7 +111,7 @@ void tst_QSyntaxHighlighter::cleanup()
 class TestHighlighter : public QSyntaxHighlighter
 {
 public:
-    inline TestHighlighter(const QList<QTextLayout::FormatRange> &fmts, QTextDocument *parent)
+    inline TestHighlighter(const QVector<QTextLayout::FormatRange> &fmts, QTextDocument *parent)
         : QSyntaxHighlighter(parent), formats(fmts), highlighted(false), callCount(0) {}
     inline TestHighlighter(QObject *parent)
         : QSyntaxHighlighter(parent) {}
@@ -146,24 +129,15 @@ public:
                 ++callCount;
             }
 
-            QList<QTextLayout::FormatRange> formats;
+            QVector<QTextLayout::FormatRange> formats;
             bool highlighted;
             int callCount;
             QString highlightedText;
 };
 
-QT_BEGIN_NAMESPACE
-bool operator==(const QTextLayout::FormatRange &lhs, const QTextLayout::FormatRange &rhs)
-{
-    return lhs.start == rhs.start
-        && lhs.length == rhs.length
-        && lhs.format == rhs.format;
-}
-QT_END_NAMESPACE
-
 void tst_QSyntaxHighlighter::basic()
 {
-    QList<QTextLayout::FormatRange> formats;
+    QVector<QTextLayout::FormatRange> formats;
     QTextLayout::FormatRange range;
     range.start = 0;
     range.length = 2;
@@ -187,7 +161,7 @@ void tst_QSyntaxHighlighter::basic()
     QVERIFY(hl->highlighted);
     QVERIFY(lout->documentChangedCalled);
 
-    QVERIFY(doc->begin().layout()->additionalFormats() == formats);
+    QCOMPARE(doc->begin().layout()->formats(), formats);
 }
 
 class CommentTestHighlighter : public QSyntaxHighlighter
@@ -230,7 +204,7 @@ void tst_QSyntaxHighlighter::basicTwo()
 
 void tst_QSyntaxHighlighter::removeFormatsOnDelete()
 {
-    QList<QTextLayout::FormatRange> formats;
+    QVector<QTextLayout::FormatRange> formats;
     QTextLayout::FormatRange range;
     range.start = 0;
     range.length = 9;
@@ -245,9 +219,9 @@ void tst_QSyntaxHighlighter::removeFormatsOnDelete()
     QVERIFY(lout->documentChangedCalled);
 
     lout->documentChangedCalled = false;
-    QVERIFY(!doc->begin().layout()->additionalFormats().isEmpty());
+    QVERIFY(!doc->begin().layout()->formats().isEmpty());
     delete hl;
-    QVERIFY(doc->begin().layout()->additionalFormats().isEmpty());
+    QVERIFY(doc->begin().layout()->formats().isEmpty());
     QVERIFY(lout->documentChangedCalled);
 }
 
@@ -288,8 +262,7 @@ void tst_QSyntaxHighlighter::highlightOnInit()
     cursor.insertText("World");
 
     TestHighlighter *hl = new TestHighlighter(doc);
-    QTest::qWait(100);
-    QVERIFY(hl->highlighted);
+    QTRY_VERIFY(hl->highlighted);
 }
 
 class StateTestHighlighter : public QSyntaxHighlighter
@@ -328,8 +301,7 @@ void tst_QSyntaxHighlighter::stopHighlightingWhenStateDoesNotChange()
     cursor.insertText("changestate");
 
     StateTestHighlighter *hl = new StateTestHighlighter(doc);
-    QTest::qWait(100);
-    QVERIFY(hl->highlighted);
+    QTRY_VERIFY(hl->highlighted);
 
     hl->reset();
 
@@ -415,7 +387,7 @@ void tst_QSyntaxHighlighter::highlightToEndOfDocument2()
 
 void tst_QSyntaxHighlighter::preservePreeditArea()
 {
-    QList<QTextLayout::FormatRange> formats;
+    QVector<QTextLayout::FormatRange> formats;
     QTextLayout::FormatRange range;
     range.start = 0;
     range.length = 8;
@@ -442,12 +414,12 @@ void tst_QSyntaxHighlighter::preservePreeditArea()
     hl->callCount = 0;
 
     cursor.beginEditBlock();
-    layout->setAdditionalFormats(formats);
+    layout->setFormats(formats);
     cursor.endEditBlock();
 
     QCOMPARE(hl->callCount, 1);
 
-    formats = layout->additionalFormats();
+    formats = layout->formats();
     QCOMPARE(formats.count(), 3);
 
     range = formats.at(0);
@@ -488,13 +460,12 @@ void tst_QSyntaxHighlighter::avoidUnnecessaryRehighlight()
     QVERIFY(hl->highlighted);
 
     hl->highlighted = false;
-    QTest::qWait(100);
-    QVERIFY(!hl->highlighted);
+    QTRY_VERIFY(!hl->highlighted);
 }
 
 void tst_QSyntaxHighlighter::noContentsChangedDuringHighlight()
 {
-    QList<QTextLayout::FormatRange> formats;
+    QVector<QTextLayout::FormatRange> formats;
     QTextLayout::FormatRange range;
     range.start = 0;
     range.length = 10;
@@ -527,26 +498,26 @@ void tst_QSyntaxHighlighter::rehighlight()
 void tst_QSyntaxHighlighter::rehighlightBlock()
 {
     TestHighlighter *hl = new TestHighlighter(doc);
-    
+
     cursor.movePosition(QTextCursor::Start);
     cursor.beginEditBlock();
     cursor.insertText("Hello");
     cursor.insertBlock();
     cursor.insertText("World");
     cursor.endEditBlock();
-    
+
     hl->callCount = 0;
     hl->highlightedText.clear();
     QTextBlock block = doc->begin();
     hl->rehighlightBlock(block);
-    
+
     QCOMPARE(hl->highlightedText, QString("Hello"));
     QCOMPARE(hl->callCount, 1);
-    
+
     hl->callCount = 0;
     hl->highlightedText.clear();
     hl->rehighlightBlock(block.next());
-    
+
     QCOMPARE(hl->highlightedText, QString("World"));
     QCOMPARE(hl->callCount, 1);
 }

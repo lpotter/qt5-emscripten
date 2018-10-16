@@ -1,11 +1,9 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qicon
 
 QT += testlib
-!contains(QT_CONFIG, no-widgets): QT += widgets
+qtHaveModule(widgets): QT += widgets
 SOURCES += tst_qicon.cpp
-RESOURCES = tst_qicon.qrc
+RESOURCES = tst_qicon.qrc tst_qicon.cpp
 
-TESTDATA += icons/* *.png *.svg *.svgz
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+TESTDATA += icons/* second_icons/* fallback_icons/* *.png *.svg *.svgz

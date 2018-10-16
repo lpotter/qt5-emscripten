@@ -1,12 +1,22 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:BSD$
-** You may use this file under the terms of the BSD license as follows:
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
+**
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
 ** "Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are
@@ -17,8 +27,8 @@
 **     notice, this list of conditions and the following disclaimer in
 **     the documentation and/or other materials provided with the
 **     distribution.
-**   * Neither the name of Digia Plc and its Subsidiary(-ies) nor the names
-**     of its contributors may be used to endorse or promote products derived
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
 **     from this software without specific prior written permission.
 **
 **
@@ -49,24 +59,24 @@ AddressWidget::AddressWidget(QWidget *parent)
 {
     table = new TableModel(this);
     newAddressTab = new NewAddressTab(this);
-    connect(newAddressTab, SIGNAL(sendDetails(QString, QString)),
-        this, SLOT(addEntry(QString, QString)));
+    connect(newAddressTab, &NewAddressTab::sendDetails,
+        this, &AddressWidget::addEntry);
 
-    addTab(newAddressTab, "Address Book");    
+    addTab(newAddressTab, "Address Book");
 
     setupTabs();
 }
 //! [0]
 
 //! [2]
-void AddressWidget::addEntry()
-{    
+void AddressWidget::showAddEntryDialog()
+{
     AddDialog aDialog;
 
     if (aDialog.exec()) {
         QString name = aDialog.nameText->text();
         QString address = aDialog.addressText->toPlainText();
-        
+
         addEntry(name, address);
     }
 }
@@ -74,11 +84,8 @@ void AddressWidget::addEntry()
 
 //! [3]
 void AddressWidget::addEntry(QString name, QString address)
-{    
-    QList<QPair<QString, QString> >list = table->getList();
-    QPair<QString, QString> pair(name, address);
-
-    if (!list.contains(pair)) {
+{
+    if (!table->getContacts().contains({ name, address })) {
         table->insertRows(0, 1, QModelIndex());
 
         QModelIndex index = table->index(0, 0, QModelIndex());
@@ -110,14 +117,14 @@ void AddressWidget::editEntry()
         QModelIndex nameIndex = table->index(row, 0, QModelIndex());
         QVariant varName = table->data(nameIndex, Qt::DisplayRole);
         name = varName.toString();
-    
+
         QModelIndex addressIndex = table->index(row, 1, QModelIndex());
         QVariant varAddr = table->data(addressIndex, Qt::DisplayRole);
         address = varAddr.toString();
     }
 //! [4a]
-    
-//! [4b]    
+
+//! [4b]
     AddDialog aDialog;
     aDialog.setWindowTitle(tr("Edit a Contact"));
 
@@ -141,7 +148,7 @@ void AddressWidget::removeEntry()
     QTableView *temp = static_cast<QTableView*>(currentWidget());
     QSortFilterProxyModel *proxy = static_cast<QSortFilterProxyModel*>(temp->model());
     QItemSelectionModel *selectionModel = temp->selectionModel();
-    
+
     QModelIndexList indexes = selectionModel->selectedRows();
 
     foreach (QModelIndex index, indexes) {
@@ -163,28 +170,33 @@ void AddressWidget::setupTabs()
 
     for (int i = 0; i < groups.size(); ++i) {
         QString str = groups.at(i);
-        
+        QString regExp = QString("^[%1].*").arg(str);
+
         proxyModel = new QSortFilterProxyModel(this);
         proxyModel->setSourceModel(table);
+        proxyModel->setFilterRegExp(QRegExp(regExp, Qt::CaseInsensitive));
+        proxyModel->setFilterKeyColumn(0);
 
         QTableView *tableView = new QTableView;
         tableView->setModel(proxyModel);
-        tableView->setSortingEnabled(true);
+
         tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
         tableView->horizontalHeader()->setStretchLastSection(true);
         tableView->verticalHeader()->hide();
         tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
         tableView->setSelectionMode(QAbstractItemView::SingleSelection);
 
-        QString newStr = QString("^[%1].*").arg(str);
+        tableView->setSortingEnabled(true);
 
-        proxyModel->setFilterRegExp(QRegExp(newStr, Qt::CaseInsensitive));
-        proxyModel->setFilterKeyColumn(0);
-        proxyModel->sort(0, Qt::AscendingOrder);
-    
         connect(tableView->selectionModel(),
-            SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
-            this, SIGNAL(selectionChanged(QItemSelection)));
+            &QItemSelectionModel::selectionChanged,
+            this, &AddressWidget::selectionChanged);
+
+        connect(this, &QTabWidget::currentChanged, this, [this](int tabIndex) {
+            auto *tableView = qobject_cast<QTableView *>(widget(tabIndex));
+            if (tableView)
+                emit selectionChanged(tableView->selectionModel()->selection());
+        });
 
         addTab(tableView, str);
     }
@@ -202,18 +214,16 @@ void AddressWidget::readFromFile(const QString &fileName)
         return;
     }
 
-    QList<QPair<QString, QString> > pairs = table->getList();
+    QList<Contact> contacts;
     QDataStream in(&file);
-    in >> pairs;
+    in >> contacts;
 
-    if (pairs.isEmpty()) {
+    if (contacts.isEmpty()) {
         QMessageBox::information(this, tr("No contacts in file"),
                                  tr("The file you are attempting to open contains no contacts."));
     } else {
-        for (int i=0; i<pairs.size(); ++i) {
-            QPair<QString, QString> p = pairs.at(i);
-            addEntry(p.first, p.second);
-        }
+        for (const auto &contact: qAsConst(contacts))
+            addEntry(contact.name, contact.address);
     }
 }
 //! [7]
@@ -228,8 +238,7 @@ void AddressWidget::writeToFile(const QString &fileName)
         return;
     }
 
-    QList<QPair<QString, QString> > pairs = table->getList();
     QDataStream out(&file);
-    out << pairs;
+    out << table->getContacts();
 }
 //! [6]

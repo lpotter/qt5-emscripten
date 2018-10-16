@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,28 +39,32 @@
 
 #include "qtoolbar.h"
 
-#ifndef QT_NO_TOOLBAR
-
 #include <qapplication.h>
+#if QT_CONFIG(combobox)
 #include <qcombobox.h>
+#endif
 #include <qevent.h>
 #include <qlayout.h>
 #include <qmainwindow.h>
 #include <qmenu.h>
+#if QT_CONFIG(menubar)
 #include <qmenubar.h>
+#endif
+#if QT_CONFIG(rubberband)
 #include <qrubberband.h>
+#endif
 #include <qsignalmapper.h>
 #include <qstylepainter.h>
+#include <qstyleoption.h>
 #include <qtoolbutton.h>
 #include <qwidgetaction.h>
 #include <qtimer.h>
 #include <private/qwidgetaction_p.h>
-#ifdef Q_WS_MAC
-#include <private/qt_mac_p.h>
-#include <private/qt_cocoa_helpers_mac_p.h>
-#endif
-
 #include <private/qmainwindowlayout_p.h>
+
+#ifdef Q_OS_OSX
+#include <qpa/qplatformnativeinterface.h>
+#endif
 
 #include "qtoolbar_p.h"
 #include "qtoolbarseparator_p.h"
@@ -73,14 +75,6 @@
 #define POPUP_TIMER_INTERVAL 500
 
 QT_BEGIN_NAMESPACE
-
-#ifdef Q_WS_MAC
-static void qt_mac_updateToolBarButtonHint(QWidget *parentWidget)
-{
-    if (!(parentWidget->windowFlags() & Qt::CustomizeWindowHint))
-        parentWidget->setWindowFlags(parentWidget->windowFlags() | Qt::MacWindowToolBarButtonHint);
-}
-#endif
 
 // qmainwindow.cpp
 extern QMainWindowLayout *qt_mainwindow_layout(const QMainWindow *window);
@@ -103,17 +97,6 @@ void QToolBarPrivate::init()
 
     layout = new QToolBarLayout(q);
     layout->updateMarginAndSpacing();
-
-#ifdef Q_WS_MAC
-    if (q->parentWidget() && q->parentWidget()->isWindow()) {
-        // Make sure that the window has the "toolbar" button.
-        QWidget *parentWidget = q->parentWidget();
-        qt_mac_updateToolBarButtonHint(parentWidget);
-        reinterpret_cast<QToolBar *>(parentWidget)->d_func()->createWinId(); // Please let me create your winId...
-        extern OSWindowRef qt_mac_window_for(const QWidget *); // qwidget_mac.cpp
-        macWindowToolbarShow(q->parentWidget(), true);
-    }
-#endif
 
     toggleViewAction = new QAction(q);
     toggleViewAction->setCheckable(true);
@@ -158,12 +141,8 @@ void QToolBarPrivate::updateWindowFlags(bool floating, bool unplug)
 
     flags |= Qt::FramelessWindowHint;
 
-    if (unplug) {
+    if (unplug)
         flags |= Qt::X11BypassWindowManagerHint;
-#ifdef Q_WS_MAC
-        flags |= Qt::WindowStaysOnTopHint;
-#endif
-    }
 
     q->setWindowFlags(flags);
 }
@@ -251,10 +230,8 @@ void QToolBarPrivate::endDrag()
         if (!layout->plug(state->widgetItem)) {
             if (q->isFloatable()) {
                 layout->restore();
-#if defined(Q_WS_X11) || defined(Q_WS_MAC)
                 setWindowState(true); // gets rid of the X11BypassWindowManager window flag
                                       // and activates the resizer
-#endif
                 q->activateWindow();
             } else {
                 layout->revert(state->widgetItem);
@@ -272,8 +249,8 @@ bool QToolBarPrivate::mousePressEvent(QMouseEvent *event)
     QStyleOptionToolBar opt;
     q->initStyleOption(&opt);
     if (q->style()->subElementRect(QStyle::SE_ToolBarHandle, &opt, q).contains(event->pos()) == false) {
-#ifdef Q_WS_MAC
-        // When using the unified toolbar on Mac OS X the user can can click and
+#ifdef Q_OS_OSX
+        // When using the unified toolbar on OS X, the user can click and
         // drag between toolbar contents to move the window. Make this work by
         // implementing the standard mouse-dragging code and then call
         // window->move() in mouseMoveEvent below.
@@ -306,7 +283,7 @@ bool QToolBarPrivate::mouseReleaseEvent(QMouseEvent*)
         endDrag();
         return true;
     } else {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_OSX
         if (!macWindowDragging)
             return false;
         macWindowDragging = false;
@@ -322,7 +299,7 @@ bool QToolBarPrivate::mouseMoveEvent(QMouseEvent *event)
     Q_Q(QToolBar);
 
     if (!state) {
-#ifdef Q_WS_MAC
+#ifdef Q_OS_OSX
         if (!macWindowDragging)
             return false;
         QWidget *w = q->window();
@@ -349,7 +326,7 @@ bool QToolBarPrivate::mouseMoveEvent(QMouseEvent *event)
 
             startDrag(moving);
             if (!moving && !wasDragging) {
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
                 grabMouseWhileInWindow();
 #else
                 q->grabMouse();
@@ -421,18 +398,18 @@ void QToolBarPrivate::plug(const QRect &r)
     or insertAction(). Groups of buttons can be separated using
     addSeparator() or insertSeparator(). If a toolbar button is not
     appropriate, a widget can be inserted instead using addWidget() or
-    insertWidget(); examples of suitable widgets are QSpinBox,
-    QDoubleSpinBox, and QComboBox. When a toolbar button is pressed it
+    insertWidget(). Examples of suitable widgets are QSpinBox,
+    QDoubleSpinBox, and QComboBox. When a toolbar button is pressed, it
     emits the actionTriggered() signal.
 
-    A toolbar can be fixed in place in a particular area (e.g. at the
-    top of the window), or it can be movable (isMovable()) between
-    toolbar areas; see allowedAreas() and isAreaAllowed().
+    A toolbar can be fixed in place in a particular area (e.g., at the
+    top of the window), or it can be movable between toolbar areas;
+    see setMovable(), isMovable(), allowedAreas() and isAreaAllowed().
 
     When a toolbar is resized in such a way that it is too small to
     show all the items it contains, an extension button will appear as
     the last item in the toolbar. Pressing the extension button will
-    pop up a menu containing the items that does not currently fit in
+    pop up a menu containing the items that do not currently fit in
     the toolbar.
 
     When a QToolBar is not a child of a QMainWindow, it loses the ability
@@ -446,17 +423,8 @@ void QToolBarPrivate::plug(const QRect &r)
 /*!
     \fn bool QToolBar::isAreaAllowed(Qt::ToolBarArea area) const
 
-    Returns true if this toolbar is dockable in the given \a area;
-    otherwise returns false.
-*/
-
-/*!
-    \fn void QToolBar::addAction(QAction *action)
-    \overload
-
-    Appends the action \a action to the toolbar's list of actions.
-
-    \sa QMenu::addAction(), QWidget::addAction()
+    Returns \c true if this toolbar is dockable in the given \a area;
+    otherwise returns \c false.
 */
 
 /*!
@@ -464,7 +432,7 @@ void QToolBarPrivate::plug(const QRect &r)
 
     This signal is emitted when an action in this toolbar is triggered.
     This happens when the action's tool button is pressed, or when the
-    action is triggered in some other way outside the tool bar. The parameter
+    action is triggered in some other way outside the toolbar. The parameter
     holds the triggered \a action.
 */
 
@@ -481,7 +449,7 @@ void QToolBarPrivate::plug(const QRect &r)
 /*!
     \fn void QToolBar::iconSizeChanged(const QSize &iconSize)
 
-    This signal is emitted when the icon size is changed.  The \a
+    This signal is emitted when the icon size is changed. The \a
     iconSize parameter holds the toolbar's new icon size.
 
     \sa iconSize, QMainWindow::iconSize
@@ -501,7 +469,7 @@ void QToolBarPrivate::plug(const QRect &r)
     \fn void QToolBar::orientationChanged(Qt::Orientation orientation)
 
     This signal is emitted when the orientation of the toolbar changes.
-    The new orientation is specified by the \a orientation given.
+    The \a orientation parameter holds the toolbar's new orientation.
 
     \sa orientation
 */
@@ -556,10 +524,8 @@ QToolBar::QToolBar(QWidget *parent)
     \sa setWindowTitle()
 */
 QToolBar::QToolBar(const QString &title, QWidget *parent)
-    : QWidget(*new QToolBarPrivate, parent, 0)
+    : QToolBar(parent)
 {
-    Q_D(QToolBar);
-    d->init();
     setWindowTitle(title);
 }
 
@@ -569,23 +535,13 @@ QToolBar::QToolBar(const QString &title, QWidget *parent)
 */
 QToolBar::~QToolBar()
 {
-    // Remove the toolbar button if there is nothing left.
-    QMainWindow *mainwindow = qobject_cast<QMainWindow *>(parentWidget());
-    if (mainwindow) {
-#ifdef Q_WS_MAC
-        QMainWindowLayout *mainwin_layout = qt_mainwindow_layout(mainwindow);
-        if (mainwin_layout && mainwin_layout->layoutState.toolBarAreaLayout.isEmpty()
-                && mainwindow->testAttribute(Qt::WA_WState_Created))
-            macWindowToolbarShow(mainwindow, false);
-#endif
-    }
 }
 
 /*! \property QToolBar::movable
     \brief whether the user can move the toolbar within the toolbar area,
-    or between toolbar areas
+    or between toolbar areas.
 
-    By default, this property is true.
+    By default, this property is \c true.
 
     This property only makes sense if the toolbar is in a
     QMainWindow.
@@ -631,7 +587,7 @@ void QToolBar::setFloatable(bool floatable)
     \property QToolBar::floating
     \brief whether the toolbar is an independent window.
 
-    By default, this property is true.
+    By default, this property is \c true.
 
     \sa QWidget::isWindow()
 */
@@ -665,12 +621,6 @@ void QToolBar::setAllowedAreas(Qt::ToolBarAreas areas)
 Qt::ToolBarAreas QToolBar::allowedAreas() const
 {
     Q_D(const QToolBar);
-#ifdef Q_WS_MAC
-    if (QMainWindow *window = qobject_cast<QMainWindow *>(parentWidget())) {
-        if (window->unifiedTitleAndToolBarOnMac()) // Don't allow drags to the top (for now).
-            return (d->allowedAreas & ~Qt::TopToolBarArea);
-    }
-#endif
     return d->allowedAreas;
 }
 
@@ -681,8 +631,8 @@ Qt::ToolBarAreas QToolBar::allowedAreas() const
 
     This function should not be used when the toolbar is managed
     by QMainWindow. You can use QMainWindow::addToolBar() or
-    QMainWindow::insertToolBar() if you wish to move a toolbar (that
-    is already added to a main window) to another Qt::ToolBarArea.
+    QMainWindow::insertToolBar() if you wish to move a toolbar that
+    is already added to a main window to another Qt::ToolBarArea.
 */
 
 void QToolBar::setOrientation(Qt::Orientation orientation)
@@ -694,9 +644,9 @@ void QToolBar::setOrientation(Qt::Orientation orientation)
     d->orientation = orientation;
 
     if (orientation == Qt::Vertical)
- 	setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred));
+        setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred));
     else
- 	setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed));
+        setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed));
 
     d->layout->invalidate();
     d->layout->activate();
@@ -759,6 +709,10 @@ void QToolBar::setIconSize(const QSize &iconSize)
     as \l{QAction}s. Note that if you add a QToolButton with the
     addWidget() method, it will not get this button style.
 
+    To have the style of toolbuttons follow the system settings, set this property to Qt::ToolButtonFollowStyle.
+    On Unix, the user settings from the desktop environment will be used.
+    On other platforms, Qt::ToolButtonFollowStyle means icon only.
+
     The default is Qt::ToolButtonIconOnly.
 */
 
@@ -789,8 +743,6 @@ void QToolBar::clear()
 }
 
 /*!
-    \overload
-
     Creates a new action with the given \a text. This action is added to
     the end of the toolbar.
 */
@@ -833,7 +785,7 @@ QAction *QToolBar::addAction(const QString &text,
 /*!
     \overload
 
-    Creates a new action with the icon \a icon and text \a text. This
+    Creates a new action with the given \a icon and \a text. This
     action is added to the end of the toolbar. The action's
     \l{QAction::triggered()}{triggered()} signal is connected to \a
     member in \a receiver.
@@ -846,6 +798,82 @@ QAction *QToolBar::addAction(const QIcon &icon, const QString &text,
     addAction(action);
     return action;
 }
+
+/*!\fn template<typename PointerToMemberFunction> QAction *QToolBar::addAction(const QString &text, const QObject *receiver, PointerToMemberFunction method)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a text. This action is added to
+    the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a method of the \a receiver.
+*/
+
+/*!\fn template<typename Functor> QAction *QToolBar::addAction(const QString &text, Functor functor)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a text. This action is added to
+    the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a functor.
+*/
+
+/*!\fn template<typename Functor> QAction *QToolBar::addAction(const QString &text, const QObject *context, Functor functor)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a text. This action is added to
+    the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a functor.
+
+    If \a context is destroyed, the functor will not be called.
+*/
+
+/*!\fn template<typename PointerToMemberFunction> QAction *QToolBar::addAction(const QIcon &icon, const QString &text, const QObject *receiver, PointerToMemberFunction method)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a icon and \a text. This
+    action is added to the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a method of the \a receiver.
+*/
+
+/*!\fn template<typename Functor> QAction *QToolBar::addAction(const QIcon &icon, const QString &text, Functor functor)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a icon and \a text. This
+    action is added to the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a functor.
+*/
+
+/*!\fn template<typename Functor> QAction *QToolBar::addAction(const QIcon &icon, const QString &text, const QObject *context, Functor functor)
+
+    \since 5.6
+
+    \overload
+
+    Creates a new action with the given \a icon and \a text. This
+    action is added to the end of the toolbar. The action's
+    \l{QAction::triggered()}{triggered()} signal is connected to the
+    \a functor.
+
+    If \a context is destroyed, the functor will not be called.
+*/
 
 /*!
      Adds a separator to the end of the toolbar.
@@ -880,7 +908,7 @@ QAction *QToolBar::insertSeparator(QAction *before)
 
     The toolbar takes ownership of \a widget.
 
-    If you add a QToolButton with this method, the tools bar's
+    If you add a QToolButton with this method, the toolbar's
     Qt::ToolButtonStyle will not be respected.
 
     \note You should use QAction::setVisible() to change the
@@ -1083,14 +1111,22 @@ static bool waitForPopup(QToolBar *tb, QWidget *popup)
     return false;
 }
 
-#if defined(Q_WS_MAC)
-static bool toolbarInUnifiedToolBar(QToolBar *toolbar)
+#ifdef Q_OS_OSX
+static void enableMacToolBar(QToolBar *toolbar, bool enable)
 {
-    const QMainWindow *mainWindow = qobject_cast<const QMainWindow *>(toolbar->parentWidget());
-    return mainWindow && mainWindow->unifiedTitleAndToolBarOnMac()
-            && mainWindow->toolBarArea(toolbar) == Qt::TopToolBarArea;
+    QPlatformNativeInterface *nativeInterface = QApplication::platformNativeInterface();
+    if (!nativeInterface)
+        return;
+    QPlatformNativeInterface::NativeResourceForIntegrationFunction function =
+        nativeInterface->nativeResourceFunctionForIntegration("setContentBorderAreaEnabled");
+    if (!function)
+        return; // Not Cocoa platform plugin.
+
+    typedef void (*SetContentBorderAreaEnabledFunction)(QWindow *window, void *identifier, bool enabled);
+    (reinterpret_cast<SetContentBorderAreaEnabledFunction>(function))(toolbar->window()->windowHandle(), toolbar, enable);
 }
 #endif
+
 
 /*! \reimp */
 bool QToolBar::event(QEvent *event)
@@ -1111,26 +1147,16 @@ bool QToolBar::event(QEvent *event)
     case QEvent::Hide:
         if (!isHidden())
             break;
-        // fallthrough intended
+        Q_FALLTHROUGH();
     case QEvent::Show:
         d->toggleViewAction->setChecked(event->type() == QEvent::Show);
+#ifdef Q_OS_OSX
+        enableMacToolBar(this, event->type() == QEvent::Show);
+#endif
         emit visibilityChanged(event->type() == QEvent::Show);
-#if defined(Q_WS_MAC)
-        if (toolbarInUnifiedToolBar(this)) {
-             // I can static_cast because I did the qobject_cast in the if above, therefore
-            // we must have a QMainWindowLayout here.
-            QMainWindowLayout *mwLayout = qt_mainwindow_layout(qobject_cast<QMainWindow *>(parentWidget()));
-            mwLayout->fixSizeInUnifiedToolbar(this);
-            mwLayout->syncUnifiedToolbarVisibility();
-        }
-#endif // Q_WS_MAC
         break;
     case QEvent::ParentChange:
         d->layout->checkUsePopupMenu();
-#if defined(Q_WS_MAC)
-        if (parentWidget() && parentWidget()->isWindow())
-            qt_mac_updateToolBarButtonHint(parentWidget());
-#endif
         break;
 
     case QEvent::MouseButtonPress: {
@@ -1162,17 +1188,6 @@ bool QToolBar::event(QEvent *event)
         if (d->mouseMoveEvent(static_cast<QMouseEvent*>(event)))
             return true;
         break;
-#ifdef Q_OS_WINCE
-    case QEvent::ContextMenu:
-        {
-            QContextMenuEvent* contextMenuEvent = static_cast<QContextMenuEvent*>(event);
-            QWidget* child = childAt(contextMenuEvent->pos());
-            QAbstractButton* button = qobject_cast<QAbstractButton*>(child);
-            if (button)
-                button->setDown(false);
-        }
-        break;
-#endif
     case QEvent::Leave:
         if (d->state != 0 && d->state->dragging) {
 #ifdef Q_OS_WIN
@@ -1269,5 +1284,3 @@ void QToolBar::initStyleOption(QStyleOptionToolBar *option) const
 QT_END_NAMESPACE
 
 #include "moc_qtoolbar.cpp"
-
-#endif // QT_NO_TOOLBAR

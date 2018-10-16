@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,7 +29,6 @@
 
 #include <QtTest/QtTest>
 #include <qtextbrowser.h>
-#include <qdatetime.h>
 #include <qapplication.h>
 #include <qscrollbar.h>
 
@@ -80,15 +66,11 @@ QVariant TestBrowser::loadResource(int type, const QUrl &name)
 class tst_QTextBrowser : public QObject
 {
     Q_OBJECT
-public:
-    tst_QTextBrowser();
-    virtual ~tst_QTextBrowser();
 
-public slots:
+private slots:
     void init();
     void cleanup();
 
-private slots:
     void noReloadOnAnchorJump();
     void bgColorOnSourceChange();
     void forwardButton();
@@ -100,6 +82,7 @@ private slots:
     void clearHistory();
     void sourceInsideLoadResource();
     void textInteractionFlags_vs_readOnly();
+    void inputMethodAttribute_vs_readOnly();
     void anchorsWithSelfBuiltHtml();
     void relativeNonLocalUrls();
     void adjacentAnchors();
@@ -111,14 +94,6 @@ private slots:
 private:
     TestBrowser *browser;
 };
-
-tst_QTextBrowser::tst_QTextBrowser()
-{
-}
-
-tst_QTextBrowser::~tst_QTextBrowser()
-{
-}
 
 void tst_QTextBrowser::init()
 {
@@ -138,7 +113,7 @@ void tst_QTextBrowser::cleanup()
 
 void tst_QTextBrowser::noReloadOnAnchorJump()
 {
-    QUrl url = QUrl::fromLocalFile("anchor.html");
+    QUrl url = QUrl::fromLocalFile(QFINDTESTDATA("anchor.html"));
 
     browser->htmlLoadAttempts = 0;
     browser->setSource(url);
@@ -149,16 +124,16 @@ void tst_QTextBrowser::noReloadOnAnchorJump()
     browser->setSource(url);
     QCOMPARE(browser->htmlLoadAttempts, 1);
     QVERIFY(!browser->toPlainText().isEmpty());
-    QVERIFY(browser->source() == url);
+    QCOMPARE(browser->source(), url);
 }
 
 void tst_QTextBrowser::bgColorOnSourceChange()
 {
-    browser->setSource(QUrl::fromLocalFile("pagewithbg.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("pagewithbg.html")));
     QVERIFY(browser->document()->rootFrame()->frameFormat().hasProperty(QTextFormat::BackgroundBrush));
-    QVERIFY(browser->document()->rootFrame()->frameFormat().background().color() == Qt::blue);
+    QCOMPARE(browser->document()->rootFrame()->frameFormat().background().color(), QColor(Qt::blue));
 
-    browser->setSource(QUrl::fromLocalFile("pagewithoutbg.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("pagewithoutbg.html")));
     QVERIFY(!browser->document()->rootFrame()->frameFormat().hasProperty(QTextFormat::BackgroundBrush));
 }
 
@@ -171,35 +146,35 @@ void tst_QTextBrowser::forwardButton()
     QVERIFY(browser->historyTitle(0).isEmpty());
     QVERIFY(browser->historyTitle(1).isEmpty());
 
-    browser->setSource(QUrl::fromLocalFile("pagewithbg.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("pagewithbg.html")));
 
     QVERIFY(!forwardEmissions.isEmpty());
     QVariant val = forwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == false);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(!val.toBool());
 
     QVERIFY(!backwardEmissions.isEmpty());
     val = backwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == false);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(!val.toBool());
 
     QVERIFY(browser->historyTitle(-1).isEmpty());
-    QCOMPARE(browser->historyUrl(0), QUrl::fromLocalFile("pagewithbg.html"));
+    QCOMPARE(browser->historyUrl(0), QUrl::fromLocalFile(QFINDTESTDATA("pagewithbg.html")));
     QCOMPARE(browser->documentTitle(), QString("Page With BG"));
     QCOMPARE(browser->historyTitle(0), QString("Page With BG"));
     QVERIFY(browser->historyTitle(1).isEmpty());
 
-    browser->setSource(QUrl::fromLocalFile("anchor.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("anchor.html")));
 
     QVERIFY(!forwardEmissions.isEmpty());
     val = forwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == false);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(!val.toBool());
 
     QVERIFY(!backwardEmissions.isEmpty());
     val = backwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == true);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(val.toBool());
 
     QCOMPARE(browser->historyTitle(-1), QString("Page With BG"));
     QCOMPARE(browser->historyTitle(0), QString("Sample Anchor"));
@@ -209,38 +184,41 @@ void tst_QTextBrowser::forwardButton()
 
     QVERIFY(!forwardEmissions.isEmpty());
     val = forwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == true);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(val.toBool());
 
     QVERIFY(!backwardEmissions.isEmpty());
     val = backwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == false);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(!val.toBool());
 
     QVERIFY(browser->historyTitle(-1).isEmpty());
     QCOMPARE(browser->historyTitle(0), QString("Page With BG"));
     QCOMPARE(browser->historyTitle(1), QString("Sample Anchor"));
 
-    browser->setSource(QUrl("pagewithoutbg.html"));
+    browser->setSource(QUrl(QFINDTESTDATA("pagewithoutbg.html")));
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QVERIFY(!forwardEmissions.isEmpty());
     val = forwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == false);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(!val.toBool());
 
     QVERIFY(!backwardEmissions.isEmpty());
     val = backwardEmissions.takeLast()[0];
-    QVERIFY(val.type() == QVariant::Bool);
-    QVERIFY(val.toBool() == true);
+    QCOMPARE(val.type(), QVariant::Bool);
+    QVERIFY(val.toBool());
 }
 
 void tst_QTextBrowser::viewportPositionInHistory()
 {
-    browser->setSource(QUrl::fromLocalFile("bigpage.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("bigpage.html")));
     browser->scrollToAnchor("bottom");
     QVERIFY(browser->verticalScrollBar()->value() > 0);
 
-    browser->setSource(QUrl::fromLocalFile("pagewithbg.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("pagewithbg.html")));
     QCOMPARE(browser->verticalScrollBar()->value(), 0);
 
     browser->backward();
@@ -249,43 +227,45 @@ void tst_QTextBrowser::viewportPositionInHistory()
 
 void tst_QTextBrowser::relativeLinks()
 {
-    qRegisterMetaType<QUrl>("QUrl");
+#ifdef BUILTIN_TESTDATA
+    QSKIP("Relative links cannot be checked when resources are used to package tests.");
+#endif
     QSignalSpy sourceChangedSpy(browser, SIGNAL(sourceChanged(QUrl)));
     browser->setSource(QUrl("subdir/../qtextbrowser.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("subdir/../qtextbrowser.html"));
     browser->setSource(QUrl("subdir/index.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("subdir/index.html"));
     browser->setSource(QUrl("anchor.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("anchor.html"));
     browser->setSource(QUrl("subdir/index.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("subdir/index.html"));
 
     // using QUrl::fromLocalFile()
     browser->setSource(QUrl::fromLocalFile("anchor.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("file:anchor.html"));
     browser->setSource(QUrl("subdir/../qtextbrowser.html"));
     QVERIFY(!browser->document()->isEmpty());
-    QVERIFY(sourceChangedSpy.count() == 1);
+    QCOMPARE(sourceChangedSpy.count(), 1);
     QCOMPARE(sourceChangedSpy.takeFirst()[0].toUrl(), QUrl("subdir/../qtextbrowser.html"));
 }
 
 void tst_QTextBrowser::anchors()
 {
-    browser->setSource(QUrl::fromLocalFile("bigpage.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("bigpage.html")));
     browser->setSource(QUrl("#bottom"));
     QVERIFY(browser->verticalScrollBar()->value() > 0);
 
-    browser->setSource(QUrl::fromLocalFile("bigpage.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("bigpage.html")));
     browser->setSource(QUrl("#id-anchor"));
     QVERIFY(browser->verticalScrollBar()->value() > 0);
 }
@@ -445,6 +425,9 @@ void tst_QTextBrowser::clearHistory()
 
 void tst_QTextBrowser::sourceInsideLoadResource()
 {
+#ifdef Q_OS_WINRT
+    QSKIP("Paths cannot be compared if applications are sandboxed.");
+#endif
     QUrl url = QUrl::fromLocalFile("pagewithimage.html");
     browser->setSource(url);
     QCOMPARE(browser->lastResource, QUrl::fromLocalFile(QDir::current().filePath("foobar.png")));
@@ -455,13 +438,23 @@ void tst_QTextBrowser::sourceInsideLoadResource()
 void tst_QTextBrowser::textInteractionFlags_vs_readOnly()
 {
     QVERIFY(browser->isReadOnly());
-    QVERIFY(browser->textInteractionFlags() == Qt::TextBrowserInteraction);
+    QCOMPARE(browser->textInteractionFlags(), Qt::TextBrowserInteraction);
     browser->setReadOnly(true);
-    QVERIFY(browser->textInteractionFlags() == Qt::TextBrowserInteraction);
+    QCOMPARE(browser->textInteractionFlags(), Qt::TextBrowserInteraction);
     browser->setReadOnly(false);
-    QVERIFY(browser->textInteractionFlags() == Qt::TextEditorInteraction);
+    QCOMPARE(browser->textInteractionFlags(), Qt::TextEditorInteraction);
     browser->setReadOnly(true);
-    QVERIFY(browser->textInteractionFlags() == Qt::TextBrowserInteraction);
+    QCOMPARE(browser->textInteractionFlags(), Qt::TextBrowserInteraction);
+}
+
+void tst_QTextBrowser::inputMethodAttribute_vs_readOnly()
+{
+    QVERIFY(browser->isReadOnly());
+    QVERIFY(!browser->testAttribute(Qt::WA_InputMethodEnabled));
+    browser->setReadOnly(false);
+    QVERIFY(browser->testAttribute(Qt::WA_InputMethodEnabled));
+    browser->setReadOnly(true);
+    QVERIFY(!browser->testAttribute(Qt::WA_InputMethodEnabled));
 }
 
 void tst_QTextBrowser::anchorsWithSelfBuiltHtml()
@@ -530,18 +523,22 @@ void tst_QTextBrowser::adjacentAnchors()
 
 void tst_QTextBrowser::loadResourceOnRelativeLocalFiles()
 {
+#ifndef BUILTIN_TESTDATA
     browser->setSource(QUrl::fromLocalFile("subdir/index.html"));
+#else
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("subdir/index.html")));
+#endif
     QVERIFY(!browser->toPlainText().isEmpty());
     QVariant v = browser->loadResource(QTextDocument::HtmlResource, QUrl("../anchor.html"));
     QVERIFY(v.isValid());
-    QVERIFY(v.type() == QVariant::ByteArray);
+    QCOMPARE(v.type(), QVariant::ByteArray);
     QVERIFY(!v.toByteArray().isEmpty());
 }
 
 void tst_QTextBrowser::focusIndicator()
 {
     HackBrowser *browser = new HackBrowser;
-    browser->setSource(QUrl::fromLocalFile("firstpage.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("firstpage.html")));
     QVERIFY(!browser->textCursor().hasSelection());
 
     browser->focusTheNextChild();
@@ -593,7 +590,7 @@ void tst_QTextBrowser::focusIndicator()
 void tst_QTextBrowser::focusHistory()
 {
     HackBrowser *browser = new HackBrowser;
-    browser->setSource(QUrl::fromLocalFile("firstpage.html"));
+    browser->setSource(QUrl::fromLocalFile(QFINDTESTDATA("firstpage.html")));
     QVERIFY(!browser->textCursor().hasSelection());
 
     browser->focusTheNextChild();
@@ -667,7 +664,7 @@ void tst_QTextBrowser::urlEncoding()
     QCOMPARE(spy.count(), 1);
 
     QUrl url = spy.at(0).at(0).toUrl();
-    QVERIFY(url.toEncoded() == QByteArray("http://www.google.com/q=%22"));
+    QCOMPARE(url.toEncoded(), QByteArray("http://www.google.com/q=%22"));
 
     delete browser;
 }

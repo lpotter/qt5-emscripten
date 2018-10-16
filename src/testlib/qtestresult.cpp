@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtTest module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,8 +44,11 @@
 #include <QtTest/qtestdata.h>
 #include <QtTest/qtestassert.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+static const char *currentAppName = 0;
 
 QT_BEGIN_NAMESPACE
 
@@ -59,11 +60,10 @@ namespace QTest
     static const char *currentTestObjectName = 0;
     static bool failed = false;
     static bool skipCurrentTest = false;
+    static bool blacklistCurrentTest = false;
 
     static const char *expectFailComment = 0;
     static int expectFailMode = 0;
-
-    static const char *currentAppname = 0;
 }
 
 void QTestResult::reset()
@@ -76,8 +76,14 @@ void QTestResult::reset()
 
     QTest::expectFailComment = 0;
     QTest::expectFailMode = 0;
+    QTest::blacklistCurrentTest = false;
 
     QTestLog::resetCounters();
+}
+
+void QTestResult::setBlacklistCurrentTest(bool b)
+{
+    QTest::blacklistCurrentTest = b;
 }
 
 bool QTestResult::currentTestFailed()
@@ -104,6 +110,8 @@ void QTestResult::setCurrentTestData(QTestData *data)
 {
     QTest::currentTestData = data;
     QTest::failed = false;
+    if (data)
+        QTestLog::enterTestData(data);
 }
 
 void QTestResult::setCurrentTestFunction(const char *func)
@@ -138,7 +146,10 @@ void QTestResult::finishedCurrentTestDataCleanup()
 {
     // If the current test hasn't failed or been skipped, then it passes.
     if (!QTest::failed && !QTest::skipCurrentTest) {
-        QTestLog::addPass("");
+        if (QTest::blacklistCurrentTest)
+            QTestLog::addBPass("");
+        else
+            QTestLog::addPass("");
     }
 
     QTest::failed = false;
@@ -232,17 +243,17 @@ bool QTestResult::verify(bool statement, const char *statementStr,
 {
     QTEST_ASSERT(statementStr);
 
-    char msg[1024];
+    char msg[1024] = {'\0'};
 
     if (QTestLog::verboseLevel() >= 2) {
         qsnprintf(msg, 1024, "QVERIFY(%s)", statementStr);
         QTestLog::info(msg, file, line);
     }
 
-    const char * format = QTest::expectFailMode
-        ? "'%s' returned TRUE unexpectedly. (%s)"
-        : "'%s' returned FALSE. (%s)";
-    qsnprintf(msg, 1024, format, statementStr, description ? description : "");
+    if (!statement && !QTest::expectFailMode)
+        qsnprintf(msg, 1024, "'%s' returned FALSE. (%s)", statementStr, description ? description : "");
+    else if (statement && QTest::expectFailMode)
+        qsnprintf(msg, 1024, "'%s' returned TRUE unexpectedly. (%s)", statementStr, description ? description : "");
 
     return checkStatement(statement, msg, file, line);
 }
@@ -255,25 +266,31 @@ bool QTestResult::compare(bool success, const char *failureMsg,
     QTEST_ASSERT(expected);
     QTEST_ASSERT(actual);
 
-    char msg[1024];
+    const size_t maxMsgLen = 1024;
+    char msg[maxMsgLen] = {'\0'};
 
     if (QTestLog::verboseLevel() >= 2) {
-        qsnprintf(msg, 1024, "QCOMPARE(%s, %s)", actual, expected);
+        qsnprintf(msg, maxMsgLen, "QCOMPARE(%s, %s)", actual, expected);
         QTestLog::info(msg, file, line);
     }
 
     if (!failureMsg)
         failureMsg = "Compared values are not the same";
 
-    if (success && QTest::expectFailMode) {
-        qsnprintf(msg, 1024, "QCOMPARE(%s, %s) returned TRUE unexpectedly.", actual, expected);
+    if (success) {
+        if (QTest::expectFailMode) {
+            qsnprintf(msg, maxMsgLen,
+                      "QCOMPARE(%s, %s) returned TRUE unexpectedly.", actual, expected);
+        }
     } else if (val1 || val2) {
-        qsnprintf(msg, 1024, "%s\n   Actual   (%s): %s\n   Expected (%s): %s",
+        size_t len1 = mbstowcs(NULL, actual, maxMsgLen);    // Last parameter is not ignored on QNX
+        size_t len2 = mbstowcs(NULL, expected, maxMsgLen);  // (result is never larger than this).
+        qsnprintf(msg, maxMsgLen, "%s\n   Actual   (%s)%*s %s\n   Expected (%s)%*s %s",
                   failureMsg,
-                  actual, val1 ? val1 : "<null>",
-                  expected, val2 ? val2 : "<null>");
+                  actual, qMax(len1, len2) - len1 + 1, ":", val1 ? val1 : "<null>",
+                  expected, qMax(len1, len2) - len2 + 1, ":", val2 ? val2 : "<null>");
     } else
-        qsnprintf(msg, 1024, "%s", failureMsg);
+        qsnprintf(msg, maxMsgLen, "%s", failureMsg);
 
     delete [] val1;
     delete [] val2;
@@ -285,7 +302,10 @@ void QTestResult::addFailure(const char *message, const char *file, int line)
 {
     clearExpectFail();
 
-    QTestLog::addFail(message, file, line);
+    if (QTest::blacklistCurrentTest)
+        QTestLog::addBFail(message, file, line);
+    else
+        QTestLog::addFail(message, file, line);
     QTest::failed = true;
 }
 
@@ -316,14 +336,14 @@ bool QTestResult::skipCurrentTest()
     return QTest::skipCurrentTest;
 }
 
-void QTestResult::setCurrentAppname(const char *appname)
+void QTestResult::setCurrentAppName(const char *appName)
 {
-    QTest::currentAppname = appname;
+    ::currentAppName = appName;
 }
 
-const char *QTestResult::currentAppname()
+const char *QTestResult::currentAppName()
 {
-    return QTest::currentAppname;
+    return ::currentAppName;
 }
 
 QT_END_NAMESPACE

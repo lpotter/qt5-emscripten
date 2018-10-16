@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +31,7 @@
 #include <QtTest/qtesttouch.h>
 
 #include <qevent.h>
+#include <qtouchdevice.h>
 #include <qwidget.h>
 #include <qlayout.h>
 #include <qgesture.h>
@@ -52,7 +40,6 @@
 #include <qgraphicswidget.h>
 #include <qgraphicsview.h>
 #include <qmainwindow.h>
-#include <qpa/qwindowsysteminterface.h>
 
 #include <qdebug.h>
 
@@ -316,17 +303,9 @@ class tst_Gestures : public QObject
 {
 Q_OBJECT
 
-public:
-    tst_Gestures();
-    virtual ~tst_Gestures();
-
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
-    void init();
-    void cleanup();
-
-private slots:
     void customGesture();
     void autoCancelingGestures();
     void gestureOverChild();
@@ -352,6 +331,9 @@ private slots:
     void graphicsViewParentPropagation();
     void panelPropagation();
     void panelStacksBehindParent();
+#ifdef Q_OS_MACOS
+    void deleteMacPanGestureRecognizerTargetWidget();
+#endif
     void deleteGestureTargetWidget();
     void deleteGestureTargetItem_data();
     void deleteGestureTargetItem();
@@ -361,14 +343,6 @@ private slots:
     void testReuseCanceledGestures();
     void bug_13501_gesture_not_accepted();
 };
-
-tst_Gestures::tst_Gestures()
-{
-}
-
-tst_Gestures::~tst_Gestures()
-{
-}
 
 void tst_Gestures::initTestCase()
 {
@@ -380,14 +354,6 @@ void tst_Gestures::initTestCase()
 void tst_Gestures::cleanupTestCase()
 {
     QGestureRecognizer::unregisterRecognizer(CustomGesture::GestureType);
-}
-
-void tst_Gestures::init()
-{
-}
-
-void tst_Gestures::cleanup()
-{
 }
 
 void tst_Gestures::customGesture()
@@ -1469,7 +1435,7 @@ void tst_Gestures::ungrabGesture() // a method on QWidget
     QPointer<QGesture> customGestureB;
     customGestureB = *(b->gestures.begin());
     QVERIFY(!customGestureB.isNull());
-    QVERIFY(customGestureA.data() == customGestureB.data());
+    QCOMPARE(customGestureA.data(), customGestureB.data());
     QCOMPARE(customGestureB->gestureType(), CustomGesture::GestureType);
 
     a->gestures.clear();
@@ -1545,7 +1511,7 @@ void tst_Gestures::autoCancelGestures()
     QVERIFY(QTest::qWaitForWindowExposed(&parent));
 
     /*
-      An event is send to both the child and the parent, when the child gets it a gesture is triggered
+      An event is sent to both the child and the parent, when the child gets it a gesture is triggered
       and send to the child.
       When the parent gets the event a new gesture is triggered and delivered to the parent. When the
       parent gets it he accepts it and that causes the cancel policy to activate.
@@ -1843,6 +1809,31 @@ void tst_Gestures::panelStacksBehindParent()
     QCOMPARE(panel->gestureEventsReceived, TotalGestureEventsCount);
     QCOMPARE(panel->gestureOverrideEventsReceived, 0);
 }
+
+#ifdef Q_OS_MACOS
+void tst_Gestures::deleteMacPanGestureRecognizerTargetWidget()
+{
+    QWidget window;
+    window.resize(400,400);
+    QGraphicsScene scene;
+    QGraphicsView *view = new QGraphicsView(&scene, &window);
+    view->resize(400, 400);
+    window.show();
+
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTouchDevice *device = QTest::createTouchDevice();
+    // QMacOSPenGestureRecognizer will start a timer on a touch press event
+    QTest::touchEvent(&window, device).press(1, QPoint(100, 100), &window);
+    delete view;
+
+    // wait until after that the QMacOSPenGestureRecognizer timer (300ms) is triggered.
+    // This is needed so that the whole test does not finish before the timer triggers
+    // and to make sure it crashes while executing *this* function. (otherwise it might give the
+    // impression that some of the subsequent test function caused the crash...)
+
+    QTest::qWait(400);  // DO NOT CRASH while waiting
+}
+#endif
 
 void tst_Gestures::deleteGestureTargetWidget()
 {
@@ -2336,9 +2327,7 @@ void tst_Gestures::bug_13501_gesture_not_accepted()
     w.show();
     QVERIFY(QTest::qWaitForWindowExposed(&w));
     //QTest::mousePress(&ignoreEvent, Qt::LeftButton);
-    QTouchDevice *device = new QTouchDevice;
-    device->setType(QTouchDevice::TouchScreen);
-    QWindowSystemInterface::registerTouchDevice(device);
+    QTouchDevice *device = QTest::createTouchDevice();
     QTest::touchEvent(&w, device).press(0, QPoint(10, 10), &w);
 }
 

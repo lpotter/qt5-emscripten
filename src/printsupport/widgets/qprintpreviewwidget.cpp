@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,8 +47,6 @@
 #include <QtWidgets/qgraphicsview.h>
 #include <QtWidgets/qscrollbar.h>
 #include <QtWidgets/qstyleoption.h>
-
-#ifndef QT_NO_PRINTPREVIEWWIDGET
 
 QT_BEGIN_NAMESPACE
 
@@ -68,13 +64,13 @@ public:
         setCacheMode(DeviceCoordinateCache);
     }
 
-    inline QRectF boundingRect() const
+    QRectF boundingRect() const override
     { return brect; }
 
     inline int pageNumber() const
     { return pageNum; }
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *item, QWidget *widget);
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *item, QWidget *widget) override;
 
 private:
     int pageNum;
@@ -149,7 +145,7 @@ class GraphicsView : public QGraphicsView
 {
     Q_OBJECT
 public:
-    GraphicsView(QWidget* parent = 0)
+    GraphicsView(QWidget* parent = nullptr)
         : QGraphicsView(parent)
     {
 #ifdef Q_OS_MAC
@@ -160,13 +156,16 @@ signals:
     void resized();
 
 protected:
-    void resizeEvent(QResizeEvent* e)
+    void resizeEvent(QResizeEvent* e) override
     {
-        QGraphicsView::resizeEvent(e);
+        {
+            const QSignalBlocker blocker(verticalScrollBar()); // Don't change page, QTBUG-14517
+            QGraphicsView::resizeEvent(e);
+        }
         emit resized();
     }
 
-    void showEvent(QShowEvent* e)
+    void showEvent(QShowEvent* e) override
     {
         QGraphicsView::showEvent(e);
         emit resized();
@@ -180,7 +179,7 @@ class QPrintPreviewWidgetPrivate : public QWidgetPrivate
     Q_DECLARE_PUBLIC(QPrintPreviewWidget)
 public:
     QPrintPreviewWidgetPrivate()
-        : scene(0), curPage(1),
+        : scene(nullptr), curPage(1),
           viewMode(QPrintPreviewWidget::SinglePageView),
           zoomMode(QPrintPreviewWidget::FitInView),
           zoomFactor(1), initialized(false), fitting(true)
@@ -228,8 +227,8 @@ void QPrintPreviewWidgetPrivate::_q_fit(bool doFitting)
     if (doFitting && fitting) {
         QRect viewRect = graphicsView->viewport()->rect();
         if (zoomMode == QPrintPreviewWidget::FitInView) {
-            QList<QGraphicsItem*> containedItems = graphicsView->items(viewRect, Qt::ContainsItemBoundingRect);
-            foreach(QGraphicsItem* item, containedItems) {
+            const QList<QGraphicsItem*> containedItems = graphicsView->items(viewRect, Qt::ContainsItemBoundingRect);
+            for (QGraphicsItem* item : containedItems) {
                 PageItem* pg = static_cast<PageItem*>(item);
                 if (pg->pageNumber() == curPage)
                     return;
@@ -294,9 +293,9 @@ int QPrintPreviewWidgetPrivate::calcCurrentPage()
     int maxArea = 0;
     int newPage = curPage;
     QRect viewRect = graphicsView->viewport()->rect();
-    QList<QGraphicsItem*> items = graphicsView->items(viewRect);
-    for (int i=0; i<items.size(); ++i) {
-        PageItem* pg = static_cast<PageItem*>(items.at(i));
+    const QList<QGraphicsItem*> items = graphicsView->items(viewRect);
+    for (auto *item : items) {
+        PageItem* pg = static_cast<PageItem*>(item);
         QRect overlap = graphicsView->mapFromScene(pg->sceneBoundingRect()).boundingRect() & viewRect;
         int area = overlap.width() * overlap.height();
         if (area > maxArea) {
@@ -325,8 +324,7 @@ void QPrintPreviewWidgetPrivate::init()
     scene->setBackgroundBrush(Qt::gray);
     graphicsView->setScene(scene);
 
-    QVBoxLayout *layout = new QVBoxLayout;
-    q->setLayout(layout);
+    QVBoxLayout *layout = new QVBoxLayout(q);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(graphicsView);
 }
@@ -334,17 +332,17 @@ void QPrintPreviewWidgetPrivate::init()
 void QPrintPreviewWidgetPrivate::populateScene()
 {
     // remove old pages
-    for (int i = 0; i < pages.size(); i++)
-        scene->removeItem(pages.at(i));
+    for (auto *page : qAsConst(pages))
+        scene->removeItem(page);
     qDeleteAll(pages);
     pages.clear();
 
-    int numPages = pictures.count();
-    QSize paperSize = printer->paperRect().size();
-    QRect pageRect = printer->pageRect();
+    QSize paperSize = printer->pageLayout().fullRectPixels(printer->resolution()).size();
+    QRect pageRect = printer->pageLayout().paintRectPixels(printer->resolution());
 
-    for (int i = 0; i < numPages; i++) {
-        PageItem* item = new PageItem(i+1, pictures.at(i), paperSize, pageRect);
+    int page = 1;
+    for (auto *picture : qAsConst(pictures)) {
+        PageItem* item = new PageItem(page++, picture, paperSize, pageRect);
         scene->addItem(item);
         pages.append(item);
     }
@@ -830,5 +828,3 @@ QT_END_NAMESPACE
 
 #include "moc_qprintpreviewwidget.cpp"
 #include "qprintpreviewwidget.moc"
-
-#endif // QT_NO_PRINTPREVIEWWIDGET

@@ -1,6 +1,10 @@
 CONFIG += testcase
 TARGET = tst_qmenu
-QT += widgets testlib
+QT += gui-private widgets testlib testlib-private
 SOURCES  += tst_qmenu.cpp
-
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+macx:{
+    OBJECTIVE_SOURCES += tst_qmenu_mac.mm
+    LIBS += -lobjc
+} else {
+    DEFINES += QTEST_QPA_MOUSE_HANDLING
+}

@@ -1,6 +1,8 @@
 TEMPLATE = subdirs
-CONFIG += ordered
 
-SUBDIRS += \
-    app \
-    test
+!winrt {
+    test.depends = app
+    SUBDIRS += app
+}
+
+SUBDIRS += test

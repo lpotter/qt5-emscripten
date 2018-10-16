@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,7 +31,7 @@
 
 #include "../../../../auto/sql/kernel/qsqldatabase/tst_databases.h"
 
-const QString qtest(qTableName( "qtest", __FILE__ ));
+const QString qtest(qTableName("qtest", __FILE__, QSqlDatabase()));
 
 class tst_QSqlQuery : public QObject
 {
@@ -63,6 +50,8 @@ public slots:
 private slots:
     void benchmark_data() { generic_data(); }
     void benchmark();
+    void benchmarkSelectPrepared_data() { generic_data(); }
+    void benchmarkSelectPrepared();
 
 private:
     // returns all database connections
@@ -117,6 +106,7 @@ void tst_QSqlQuery::cleanup()
     QFETCH( QString, dbName );
     QSqlDatabase db = QSqlDatabase::database( dbName );
     CHECK_DATABASE( db );
+    const QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
 
     if ( QTest::currentTestFunction() == QLatin1String( "numRowsAffected" )
             || QTest::currentTestFunction() == QLatin1String( "transactions" )
@@ -126,8 +116,7 @@ void tst_QSqlQuery::cleanup()
         populateTestTables( db );
     }
 
-    if ( QTest::currentTestFailed() && ( db.driverName().startsWith( "QOCI" )
-                                         || db.driverName().startsWith( "QODBC" ) ) ) {
+    if (QTest::currentTestFailed() && (dbType == QSqlDriver::Oracle || db.driverName().startsWith("QODBC"))) {
         //since Oracle ODBC totally craps out on error, we init again
         db.close();
         db.open();
@@ -146,88 +135,90 @@ void tst_QSqlQuery::generic_data(const QString& engine)
 
 void tst_QSqlQuery::dropTestTables( QSqlDatabase db )
 {
+    QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
     QStringList tablenames;
     // drop all the table in case a testcase failed
     tablenames <<  qtest
-               << qTableName( "qtest_null", __FILE__ )
-               << qTableName( "qtest_blob", __FILE__ )
-               << qTableName( "qtest_bittest", __FILE__ )
-               << qTableName( "qtest_nullblob", __FILE__ )
-               << qTableName( "qtest_rawtest", __FILE__ )
-               << qTableName( "qtest_precision", __FILE__ )
-               << qTableName( "qtest_prepare", __FILE__ )
-               << qTableName( "qtestj1", __FILE__ )
-               << qTableName( "qtestj2", __FILE__ )
-               << qTableName( "char1Select", __FILE__ )
-               << qTableName( "char1SU", __FILE__ )
-               << qTableName( "qxmltest", __FILE__ )
-               << qTableName( "qtest_exerr", __FILE__ )
-               << qTableName( "qtest_empty", __FILE__ )
-               << qTableName( "clobby", __FILE__ )
-               << qTableName( "bindtest", __FILE__ )
-               << qTableName( "more_results", __FILE__ )
-               << qTableName( "blobstest", __FILE__ )
-               << qTableName( "oraRowId", __FILE__ )
-               << qTableName( "qtest_batch", __FILE__ )
-               << qTableName("bug6421", __FILE__).toUpper()
-               << qTableName("bug5765", __FILE__)
-               << qTableName("bug6852", __FILE__)
-               << qTableName( "qtest_lockedtable", __FILE__ )
-               << qTableName( "Planet", __FILE__ )
-               << qTableName( "task_250026", __FILE__ )
-               << qTableName( "task_234422", __FILE__ )
-               << qTableName("test141895", __FILE__)
-               << qTableName("qtest_oraOCINumber", __FILE__);
+               << qTableName("qtest_null", __FILE__, db)
+               << qTableName("qtest_blob", __FILE__, db)
+               << qTableName("qtest_bittest", __FILE__, db)
+               << qTableName("qtest_nullblob", __FILE__, db)
+               << qTableName("qtest_rawtest", __FILE__, db)
+               << qTableName("qtest_precision", __FILE__, db)
+               << qTableName("qtest_prepare", __FILE__, db)
+               << qTableName("qtestj1", __FILE__, db)
+               << qTableName("qtestj2", __FILE__, db)
+               << qTableName("char1Select", __FILE__, db)
+               << qTableName("char1SU", __FILE__, db)
+               << qTableName("qxmltest", __FILE__, db)
+               << qTableName("qtest_exerr", __FILE__, db)
+               << qTableName("qtest_empty", __FILE__, db)
+               << qTableName("clobby", __FILE__, db)
+               << qTableName("bindtest", __FILE__, db)
+               << qTableName("more_results", __FILE__, db)
+               << qTableName("blobstest", __FILE__, db)
+               << qTableName("oraRowId", __FILE__, db)
+               << qTableName("qtest_batch", __FILE__, db)
+               << qTableName("bug6421", __FILE__, db).toUpper()
+               << qTableName("bug5765", __FILE__, db)
+               << qTableName("bug6852", __FILE__, db)
+               << qTableName("qtest_lockedtable", __FILE__, db)
+               << qTableName("Planet", __FILE__, db)
+               << qTableName("task_250026", __FILE__, db)
+               << qTableName("task_234422", __FILE__, db)
+               << qTableName("test141895", __FILE__, db)
+               << qTableName("qtest_oraOCINumber", __FILE__, db);
 
-    if ( db.driverName().startsWith("QPSQL") )
-        tablenames << qTableName("task_233829", __FILE__);
+    if (dbType == QSqlDriver::PostgreSQL)
+        tablenames << qTableName("task_233829", __FILE__, db);
 
-    if ( db.driverName().startsWith("QSQLITE") )
-        tablenames << qTableName( "record_sqlite", __FILE__ );
+    if (dbType == QSqlDriver::SQLite)
+        tablenames << qTableName("record_sqlite", __FILE__, db);
 
-    if ( tst_Databases::isSqlServer( db ) || db.driverName().startsWith( "QOCI" ) )
-        tablenames << qTableName( "qtest_longstr", __FILE__ );
+    if (dbType == QSqlDriver::MSSqlServer || dbType == QSqlDriver::Oracle)
+        tablenames << qTableName("qtest_longstr", __FILE__, db);
 
-    if (tst_Databases::isSqlServer( db ))
-        db.exec("DROP PROCEDURE " + qTableName("test141895_proc", __FILE__));
+    if (dbType == QSqlDriver::MSSqlServer)
+        db.exec("DROP PROCEDURE " + qTableName("test141895_proc", __FILE__, db));
 
-    if (tst_Databases::isMySQL( db ))
-        db.exec("DROP PROCEDURE IF EXISTS "+qTableName("bug6852_proc", __FILE__));
+    if (dbType == QSqlDriver::MySqlServer)
+        db.exec("DROP PROCEDURE IF EXISTS "+qTableName("bug6852_proc", __FILE__, db));
 
     tst_Databases::safeDropTables( db, tablenames );
 
-    if ( db.driverName().startsWith( "QOCI" ) ) {
+    if (dbType == QSqlDriver::Oracle) {
         QSqlQuery q( db );
-        q.exec( "DROP PACKAGE " + qTableName("pkg", __FILE__) );
+        q.exec("DROP PACKAGE " + qTableName("pkg", __FILE__, db));
     }
 }
 
 void tst_QSqlQuery::createTestTables( QSqlDatabase db )
 {
+    const QString qtestNull = qTableName("qtest_null", __FILE__, db);
     QSqlQuery q( db );
-
-    if ( db.driverName().startsWith( "QMYSQL" ) )
+    QSqlDriver::DbmsType dbType = tst_Databases::getDatabaseType(db);
+    if (dbType == QSqlDriver::MySqlServer)
         // ### stupid workaround until we find a way to hardcode this
         // in the MySQL server startup script
         q.exec( "set table_type=innodb" );
-    else if (tst_Databases::isPostgreSQL(db))
+    else if (dbType == QSqlDriver::PostgreSQL)
         QVERIFY_SQL( q, exec("set client_min_messages='warning'"));
 
-    if (tst_Databases::isPostgreSQL(db))
+    if (dbType == QSqlDriver::PostgreSQL)
         QVERIFY_SQL( q, exec( "create table " + qtest + " (id serial NOT NULL, t_varchar varchar(20), t_char char(20), primary key(id)) WITH OIDS" ) );
     else
         QVERIFY_SQL( q, exec( "create table " + qtest + " (id int "+tst_Databases::autoFieldName(db) +" NOT NULL, t_varchar varchar(20), t_char char(20), primary key(id))" ) );
 
-    if ( tst_Databases::isSqlServer( db ) || db.driverName().startsWith( "QTDS" ) )
-        QVERIFY_SQL( q, exec( "create table " + qTableName( "qtest_null", __FILE__ ) + " (id int null, t_varchar varchar(20) null)" ) );
+    if (dbType == QSqlDriver::MSSqlServer || dbType == QSqlDriver::Sybase)
+        QVERIFY_SQL(q, exec("create table " + qtestNull + " (id int null, t_varchar varchar(20) null)"));
     else
-        QVERIFY_SQL( q, exec( "create table " + qTableName( "qtest_null", __FILE__ ) + " (id int, t_varchar varchar(20))" ) );
+        QVERIFY_SQL(q, exec("create table " + qtestNull + " (id int, t_varchar varchar(20))"));
 }
 
 void tst_QSqlQuery::populateTestTables( QSqlDatabase db )
 {
     QSqlQuery q( db );
-    const QString qtest_null(qTableName( "qtest_null", __FILE__ ));
+    const QString qtest_null(qTableName("qtest_null", __FILE__, db));
     q.exec( "delete from " + qtest );
     QVERIFY_SQL( q, exec( "insert into " + qtest + " values (1, 'VarChar1', 'Char1')" ) );
     QVERIFY_SQL( q, exec( "insert into " + qtest + " values (2, 'VarChar2', 'Char2')" ) );
@@ -251,7 +242,7 @@ void tst_QSqlQuery::benchmark()
         QSKIP( "Test requires MySQL >= 5.0");
 
     QSqlQuery q(db);
-    const QString tableName(qTableName("benchmark", __FILE__));
+    const QString tableName(qTableName("benchmark", __FILE__, db));
 
     tst_Databases::safeDropTable( db, tableName );
 
@@ -268,6 +259,44 @@ void tst_QSqlQuery::benchmark()
     }
 
     tst_Databases::safeDropTable( db, tableName );
+}
+
+void tst_QSqlQuery::benchmarkSelectPrepared()
+{
+    QFETCH( QString, dbName );
+    QSqlDatabase db = QSqlDatabase::database(dbName);
+    CHECK_DATABASE(db);
+    if (tst_Databases::getMySqlVersion(db).section(QChar('.'), 0, 0).toInt() < 5)
+        QSKIP("Test requires MySQL >= 5.0");
+
+    QSqlQuery q(db);
+    const QString tableName(qTableName("benchmark", __FILE__, db));
+
+    tst_Databases::safeDropTable(db, tableName);
+
+    QVERIFY_SQL(q, exec("CREATE TABLE " + tableName + "(id INT NOT NULL)"));
+
+    const int NUM_ROWS = 1000;
+    int expectedSum = 0;
+    QString fillQuery = "INSERT INTO " + tableName + " VALUES (0)";
+    for (int i = 1; i < NUM_ROWS; ++i) {
+        fillQuery += ", (" + QString::number(i) + QLatin1Char(')');
+        expectedSum += i;
+    }
+    QVERIFY_SQL(q, exec(fillQuery));
+
+    QVERIFY_SQL(q, prepare("SELECT id FROM "+tableName));
+    QBENCHMARK {
+        QVERIFY_SQL(q, exec());
+        int sum = 0;
+
+        while (q.next())
+            sum += q.value(0).toInt();
+
+        QCOMPARE(sum, expectedSum);
+    }
+
+    tst_Databases::safeDropTable(db, tableName);
 }
 
 #include "main.moc"

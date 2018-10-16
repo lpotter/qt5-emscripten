@@ -1,5 +1,4 @@
 CONFIG += testcase
-CONFIG += parallel_test
 TARGET = tst_qfontdialog
 
 QT += widgets widgets-private testlib
@@ -7,10 +6,11 @@ QT += core-private gui-private
 
 SOURCES  += tst_qfontdialog.cpp
 
-mac {
+RESOURCES += testfonts.qrc
+
+osx {
 #    ### fixme
 #    OBJECTIVE_SOURCES += tst_qfontdialog_mac_helpers.mm
-#    LIBS += -framework Cocoa
+#    LIBS += -framework AppKit
 }
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

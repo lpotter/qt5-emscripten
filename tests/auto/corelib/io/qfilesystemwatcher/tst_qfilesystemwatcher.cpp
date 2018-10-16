@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -44,6 +31,9 @@
 
 #include <QTemporaryDir>
 #include <QFileSystemWatcher>
+#include <QElapsedTimer>
+#include <QTextStream>
+#include <QDir>
 
 /* All tests need to run in temporary directories not used
  * by the application to avoid non-deterministic failures on Windows
@@ -59,13 +49,14 @@ private slots:
     void basicTest_data();
     void basicTest();
 
-    void watchDirectory_data() { basicTest_data(); }
+    void watchDirectory_data();
     void watchDirectory();
 
     void addPath();
     void removePath();
     void addPaths();
     void removePaths();
+    void removePathsFilesInSameDirectory();
 
     void watchFileAndItsDirectory_data() { basicTest_data(); }
     void watchFileAndItsDirectory();
@@ -79,6 +70,10 @@ private slots:
     void QTBUG2331();
     void QTBUG2331_data() { basicTest_data(); }
 
+    void signalsEmittedAfterFileMoved();
+
+    void watchUnicodeCharacters();
+
 private:
     QString m_tempDirPattern;
 };
@@ -89,25 +84,42 @@ tst_QFileSystemWatcher::tst_QFileSystemWatcher()
     if (!m_tempDirPattern.endsWith(QLatin1Char('/')))
         m_tempDirPattern += QLatin1Char('/');
     m_tempDirPattern += QStringLiteral("tst_qfilesystemwatcherXXXXXX");
+
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+    QDir::setCurrent(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
+#endif
 }
 
 void tst_QFileSystemWatcher::basicTest_data()
 {
     QTest::addColumn<QString>("backend");
-    QTest::newRow("native backend") << "native";
-    QTest::newRow("poller backend") << "poller";
+    QTest::addColumn<QString>("testFileName");
+    const QString testFile = QStringLiteral("testfile.txt");
+    // QTBUG-31341: Test the UNICODE capabilities; ensure no QString::toLower()
+    // is in the code path since that will lower case for example
+    // LATIN_CAPITAL_LETTER_I_WITH_DOT_ABOVE with context, whereas the Windows file
+    // system will not.
+    const QString specialCharacterFile =
+        QString(QChar(ushort(0x130))) // LATIN_CAPITAL_LETTER_I_WITH_DOT_ABOVE
+        + QChar(ushort(0x00DC)) // LATIN_CAPITAL_LETTER_U_WITH_DIAERESIS
+        + QStringLiteral(".txt");
+
+#if !defined(Q_OS_QNX) || !defined(QT_NO_INOTIFY)
+    QTest::newRow("native backend-testfile") << "native" << testFile;
+    QTest::newRow("native backend-specialchars") << "native" << specialCharacterFile;
+#endif
+    QTest::newRow("poller backend-testfile") << "poller" << testFile;
 }
 
 void tst_QFileSystemWatcher::basicTest()
 {
     QFETCH(QString, backend);
+    QFETCH(QString, testFileName);
 
     // create test file
     QTemporaryDir temporaryDirectory(m_tempDirPattern);
-    QVERIFY(temporaryDirectory.isValid());
-    QFile testFile(temporaryDirectory.path() + QStringLiteral("/testfile.txt"));
-    testFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-    testFile.remove();
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
+    QFile testFile(temporaryDirectory.path() + QLatin1Char('/') + testFileName);
     QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
     testFile.write(QByteArray("hello"));
     testFile.close();
@@ -120,7 +132,7 @@ void tst_QFileSystemWatcher::basicTest()
     watcher.setObjectName(QLatin1String("_qt_autotest_force_engine_") + backend);
     QVERIFY(watcher.addPath(testFile.fileName()));
 
-    QSignalSpy changedSpy(&watcher, SIGNAL(fileChanged(QString)));
+    QSignalSpy changedSpy(&watcher, &QFileSystemWatcher::fileChanged);
     QVERIFY(changedSpy.isValid());
     QEventLoop eventLoop;
     QTimer timer;
@@ -131,12 +143,7 @@ void tst_QFileSystemWatcher::basicTest()
     // resolution of the modification time is system dependent, but it's at most 1 second when using
     // the polling engine. I've heard rumors that FAT32 has a 2 second resolution. So, we have to
     // wait a bit before we can modify the file (hrmph)...
-#ifndef Q_OS_WINCE
     QTest::qWait(2000);
-#else
-    // WinCE is always a little bit slower. Give it a little bit more time
-    QTest::qWait(5000);
-#endif
 
     testFile.open(QIODevice::WriteOnly | QIODevice::Append);
     testFile.write(QByteArray("world"));
@@ -238,27 +245,44 @@ void tst_QFileSystemWatcher::basicTest()
     QVERIFY(testFile.remove());
 }
 
+void tst_QFileSystemWatcher::watchDirectory_data()
+{
+    QTest::addColumn<QString>("backend");
+    QTest::addColumn<QStringList>("testDirNames");
+    const QStringList testDirNames = {QStringLiteral("testdir"), QStringLiteral("testdir2")};
+
+    QTest::newRow("native backend") << "native" << testDirNames;
+    QTest::newRow("poller backend") << "poller" << testDirNames;
+}
+
 void tst_QFileSystemWatcher::watchDirectory()
 {
     QFETCH(QString, backend);
 
     QTemporaryDir temporaryDirectory(m_tempDirPattern);
-    QVERIFY(temporaryDirectory.isValid());
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
+
+    QFETCH(QStringList, testDirNames);
 
     QDir temporaryDir(temporaryDirectory.path());
-    const QString testDirName = QStringLiteral("testDir");
-    QVERIFY(temporaryDir.mkdir(testDirName));
-    QDir testDir = temporaryDir;
-    QVERIFY(testDir.cd(testDirName));
+    QStringList testDirs;
+    QStringList testFiles;
 
-    QString testFileName = testDir.filePath("testFile.txt");
-    QFile::remove(testFileName);
+    for (const auto &testDirName : testDirNames) {
+        QVERIFY(temporaryDir.mkdir(testDirName));
+        QDir testDir = temporaryDir;
+        QVERIFY(testDir.cd(testDirName));
+
+        testFiles.append(testDir.filePath("testFile.txt"));
+        QFile::remove(testFiles.last());
+        testDirs.append(testDir.absolutePath());
+    }
 
     QFileSystemWatcher watcher;
     watcher.setObjectName(QLatin1String("_qt_autotest_force_engine_") + backend);
-    QVERIFY(watcher.addPath(testDir.absolutePath()));
+    QVERIFY(watcher.addPaths(testDirs).isEmpty());
 
-    QSignalSpy changedSpy(&watcher, SIGNAL(directoryChanged(QString)));
+    QSignalSpy changedSpy(&watcher, &QFileSystemWatcher::directoryChanged);
     QVERIFY(changedSpy.isValid());
     QEventLoop eventLoop;
     QTimer timer;
@@ -268,13 +292,13 @@ void tst_QFileSystemWatcher::watchDirectory()
     // the polling engine. From what I know, FAT32 has a 2 second resolution. So we have to
     // wait before modifying the directory...
     QTest::qWait(2000);
-    QFile testFile(testFileName);
-    QString fileName;
-
     // remove the watch, should not get notification of a new file
-    QVERIFY(watcher.removePath(testDir.absolutePath()));
-    QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    testFile.close();
+    QVERIFY(watcher.removePaths(testDirs).isEmpty());
+    for (const auto &testFileName : testFiles) {
+        QFile testFile(testFileName);
+        QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        testFile.close();
+    }
 
     // waiting max 5 seconds for notification for file recreationg to trigger
     timer.start(5000);
@@ -282,36 +306,50 @@ void tst_QFileSystemWatcher::watchDirectory()
 
     QCOMPARE(changedSpy.count(), 0);
 
-    QVERIFY(watcher.addPath(testDir.absolutePath()));
+    QVERIFY(watcher.addPaths(testDirs).isEmpty());
 
     // remove the file again, should get a signal from the watcher
-    QVERIFY(testFile.remove());
+    for (const auto &testFileName : testFiles)
+        QVERIFY(QFile::remove(testFileName));
 
     timer.start(5000);
     eventLoop.exec();
 
     // remove the directory, should get a signal from the watcher
-    QVERIFY(temporaryDir.rmdir(testDirName));
+    for (const auto &testDirName : testDirs)
+        QVERIFY(temporaryDir.rmdir(testDirName));
+
+    QMap<QString, int> signalCounter;
+    for (const auto &testDirName : testDirs)
+        signalCounter[testDirName] = 0;
 
     // waiting max 5 seconds for notification for directory removal to trigger
-#ifdef Q_OS_WINCE
-    QEXPECT_FAIL("poller", "Directory does not get updated on file removal(See #137910)", Abort);
-#endif
-    QTRY_COMPARE(changedSpy.count(), 2);
-    QCOMPARE(changedSpy.at(0).count(), 1);
-    QCOMPARE(changedSpy.at(1).count(), 1);
+    QTRY_COMPARE(changedSpy.count(), testDirs.size() * 2);
+    for (int i = 0; i < changedSpy.count(); i++) {
+        const auto &signal = changedSpy.at(i);
+        QCOMPARE(signal.count(), 1);
 
-    fileName = changedSpy.at(0).at(0).toString();
-    QCOMPARE(fileName, testDir.absolutePath());
-    fileName = changedSpy.at(1).at(0).toString();
-    QCOMPARE(fileName, testDir.absolutePath());
+        auto it = signalCounter.find(signal.at(0).toString());
+        QVERIFY(it != signalCounter.end());
+        QVERIFY(it.value() < 2);
+        it.value()++;
+    }
 
+    for (const auto &count : signalCounter)
+        QCOMPARE(count, 2);
+
+    // flush pending signals (like the one from the rmdir above)
+    timer.start(5000);
+    eventLoop.exec();
     changedSpy.clear();
 
     // recreate the file, we should not get any notification
-    if (!temporaryDir.mkdir(testDirName))
-        QSKIP(qPrintable(QString::fromLatin1("Failed to recreate directory '%1' under '%2', skipping final test.").
-                         arg(testDirName, temporaryDir.absolutePath())));
+    for (const auto &testDirName : testDirNames) {
+        if (!temporaryDir.mkdir(testDirName)) {
+            QSKIP(qPrintable(QString::fromLatin1("Failed to recreate directory '%1' under '%2', skipping final test.").
+                             arg(testDirName, temporaryDir.absolutePath())));
+        }
+    }
 
     // waiting max 5 seconds for notification for dir recreation to trigger
     timer.start(5000);
@@ -319,7 +357,8 @@ void tst_QFileSystemWatcher::watchDirectory()
 
     QCOMPARE(changedSpy.count(), 0);
 
-    QVERIFY(temporaryDir.rmdir(testDirName));
+    for (const auto &testDirName : testDirs)
+        QVERIFY(temporaryDir.rmdir(testDirName));
 }
 
 void tst_QFileSystemWatcher::addPath()
@@ -368,6 +407,60 @@ void tst_QFileSystemWatcher::addPaths()
     QCOMPARE(watcher.addPaths(paths), QStringList());
 }
 
+// A signal spy that records the paths and times received for better diagnostics.
+class FileSystemWatcherSpy : public QObject {
+    Q_OBJECT
+public:
+    enum Mode {
+        SpyOnDirectoryChanged,
+        SpyOnFileChanged
+    };
+
+    explicit FileSystemWatcherSpy(QFileSystemWatcher *watcher, Mode mode)
+    {
+        connect(watcher, mode == SpyOnDirectoryChanged ?
+                &QFileSystemWatcher::directoryChanged : &QFileSystemWatcher::fileChanged,
+                this, &FileSystemWatcherSpy::spySlot);
+        m_elapsedTimer.start();
+    }
+
+    int count() const { return m_entries.size(); }
+    void clear()
+    {
+        m_entries.clear();
+        m_elapsedTimer.restart();
+    }
+
+    QByteArray receivedFilesMessage() const
+    {
+        QString result;
+        QTextStream str(&result);
+        str << "At " << m_elapsedTimer.elapsed() << "ms, received "
+            << count() << " changes: ";
+        for (int i =0, e = m_entries.size(); i < e; ++i) {
+            if (i)
+                str << ", ";
+            str << m_entries.at(i).timeStamp << "ms: " << QDir::toNativeSeparators(m_entries.at(i).path);
+        }
+        return result.toLocal8Bit();
+    }
+
+private slots:
+    void spySlot(const QString &p) { m_entries.append(Entry(m_elapsedTimer.elapsed(), p)); }
+
+private:
+    struct Entry {
+        Entry() : timeStamp(0) {}
+        Entry(qint64 t, const QString &p) : timeStamp(t), path(p) {}
+
+        qint64 timeStamp;
+        QString path;
+    };
+
+    QElapsedTimer m_elapsedTimer;
+    QList<Entry> m_entries;
+};
+
 void tst_QFileSystemWatcher::removePaths()
 {
     QFileSystemWatcher watcher;
@@ -384,12 +477,44 @@ void tst_QFileSystemWatcher::removePaths()
     watcher.removePaths(paths);
 }
 
+void tst_QFileSystemWatcher::removePathsFilesInSameDirectory()
+{
+    // QTBUG-46449/Windows: Check the return values of removePaths().
+    // When adding the 1st file, a thread is started to watch the temp path.
+    // After adding and removing the 2nd file, the thread is still running and
+    // success should be reported.
+    QTemporaryFile file1(m_tempDirPattern);
+    QTemporaryFile file2(m_tempDirPattern);
+    QVERIFY2(file1.open(), qPrintable(file1.errorString()));
+    QVERIFY2(file2.open(), qPrintable(file1.errorString()));
+    const QString path1 = file1.fileName();
+    const QString path2 = file2.fileName();
+    file1.close();
+    file2.close();
+    QFileSystemWatcher watcher;
+    QVERIFY(watcher.addPath(path1));
+    QCOMPARE(watcher.files().size(), 1);
+    QVERIFY(watcher.addPath(path2));
+    QCOMPARE(watcher.files().size(), 2);
+    QVERIFY(watcher.removePath(path1));
+    QCOMPARE(watcher.files().size(), 1);
+    QVERIFY(watcher.removePath(path2));
+    QCOMPARE(watcher.files().size(), 0);
+}
+
+static QByteArray msgFileOperationFailed(const char *what, const QFile &f)
+{
+    return what + QByteArrayLiteral(" failed on \"")
+        + QDir::toNativeSeparators(f.fileName()).toLocal8Bit()
+        + QByteArrayLiteral("\": ") + f.errorString().toLocal8Bit();
+}
+
 void tst_QFileSystemWatcher::watchFileAndItsDirectory()
 {
     QFETCH(QString, backend);
 
     QTemporaryDir temporaryDirectory(m_tempDirPattern);
-    QVERIFY(temporaryDirectory.isValid());
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
 
     QDir temporaryDir(temporaryDirectory.path());
     const QString testDirName = QStringLiteral("testDir");
@@ -399,14 +524,10 @@ void tst_QFileSystemWatcher::watchFileAndItsDirectory()
 
     QString testFileName = testDir.filePath("testFile.txt");
     QString secondFileName = testDir.filePath("testFile2.txt");
-    QFile::remove(secondFileName);
 
     QFile testFile(testFileName);
-    testFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-    testFile.remove();
-
-    QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    testFile.write(QByteArray("hello"));
+    QVERIFY2(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate), msgFileOperationFailed("open", testFile));
+    QVERIFY2(testFile.write(QByteArrayLiteral("hello")) > 0, msgFileOperationFailed("write", testFile));
     testFile.close();
 
     QFileSystemWatcher watcher;
@@ -415,10 +536,9 @@ void tst_QFileSystemWatcher::watchFileAndItsDirectory()
     QVERIFY(watcher.addPath(testDir.absolutePath()));
     QVERIFY(watcher.addPath(testFileName));
 
-    QSignalSpy fileChangedSpy(&watcher, SIGNAL(fileChanged(QString)));
-    QSignalSpy dirChangedSpy(&watcher, SIGNAL(directoryChanged(QString)));
+    QSignalSpy fileChangedSpy(&watcher, &QFileSystemWatcher::fileChanged);
+    FileSystemWatcherSpy dirChangedSpy(&watcher, FileSystemWatcherSpy::SpyOnDirectoryChanged);
     QVERIFY(fileChangedSpy.isValid());
-    QVERIFY(dirChangedSpy.isValid());
     QEventLoop eventLoop;
     QTimer timer;
     connect(&timer, SIGNAL(timeout()), &eventLoop, SLOT(quit()));
@@ -428,8 +548,8 @@ void tst_QFileSystemWatcher::watchFileAndItsDirectory()
     // wait before modifying the directory...
     QTest::qWait(2000);
 
-    QVERIFY(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
-    testFile.write(QByteArray("hello again"));
+    QVERIFY2(testFile.open(QIODevice::WriteOnly | QIODevice::Truncate), msgFileOperationFailed("open", testFile));
+    QVERIFY2(testFile.write(QByteArrayLiteral("hello again")), msgFileOperationFailed("write", testFile));
     testFile.close();
 
 #ifdef Q_OS_MAC
@@ -438,49 +558,46 @@ void tst_QFileSystemWatcher::watchFileAndItsDirectory()
 #endif
 
     QTRY_VERIFY(fileChangedSpy.count() > 0);
-
-    //according to Qt 4 documentation:
-    //void QFileSystemWatcher::directoryChanged ( const QString & path )   [signal]
-    //This signal is emitted when the directory at a specified path, is modified
-    //(e.g., when a file is added, -->modified<-- or deleted) or removed from disk.
-    //Note that if there are several changes during a short period of time, some
-    //of the changes might not emit this signal. However, the last change in the
-    //sequence of changes will always generate this signal.
-    QVERIFY(dirChangedSpy.count() < 2);
+    QVERIFY2(dirChangedSpy.count() == 0, dirChangedSpy.receivedFilesMessage());
 
     fileChangedSpy.clear();
-    dirChangedSpy.clear();
     QFile secondFile(secondFileName);
-    secondFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-    secondFile.write("Foo");
+    QVERIFY2(secondFile.open(QIODevice::WriteOnly | QIODevice::Truncate), msgFileOperationFailed("open", secondFile));
+    QVERIFY2(secondFile.write(QByteArrayLiteral("Foo")) > 0, msgFileOperationFailed("write", secondFile));
     secondFile.close();
 
     timer.start(3000);
     eventLoop.exec();
-    QCOMPARE(fileChangedSpy.count(), 0);
-#ifdef Q_OS_WINCE
-    QEXPECT_FAIL("poller", "Directory does not get updated on file removal(See #137910)", Abort);
+    int fileChangedSpyCount = fileChangedSpy.count();
+#ifdef Q_OS_WIN
+    if (fileChangedSpyCount != 0)
+        QEXPECT_FAIL("", "See QTBUG-30943", Continue);
 #endif
+    QCOMPARE(fileChangedSpyCount, 0);
     QCOMPARE(dirChangedSpy.count(), 1);
 
     dirChangedSpy.clear();
 
-    QFile::remove(testFileName);
+    QVERIFY(QFile::remove(testFileName));
 
     QTRY_VERIFY(fileChangedSpy.count() > 0);
-    QCOMPARE(dirChangedSpy.count(), 1);
+    QTRY_COMPARE(dirChangedSpy.count(), 1);
 
     fileChangedSpy.clear();
     dirChangedSpy.clear();
 
     // removing a deleted file should fail
     QVERIFY(!watcher.removePath(testFileName));
-    QFile::remove(secondFileName);
+    QVERIFY(QFile::remove(secondFileName));
 
     timer.start(3000);
     eventLoop.exec();
     QCOMPARE(fileChangedSpy.count(), 0);
     QCOMPARE(dirChangedSpy.count(), 1);
+
+    // QTBUG-61792, removal should succeed (bug on Windows which uses one change
+    // notification per directory).
+    QVERIFY(watcher.removePath(testDir.absolutePath()));
 
     QVERIFY(temporaryDir.rmdir(testDirName));
 }
@@ -505,7 +622,7 @@ void tst_QFileSystemWatcher::nonExistingFile()
 void tst_QFileSystemWatcher::removeFileAndUnWatch()
 {
     QTemporaryDir temporaryDirectory(m_tempDirPattern);
-    QVERIFY(temporaryDirectory.isValid());
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
 
     const QString filename = temporaryDirectory.path() + QStringLiteral("/foo.txt");
 
@@ -564,13 +681,13 @@ void tst_QFileSystemWatcher::QTBUG2331()
     QFETCH(QString, backend);
 
     QTemporaryDir temporaryDirectory(m_tempDirPattern);
-    QVERIFY(temporaryDirectory.isValid());
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
     QFileSystemWatcher watcher;
     watcher.setObjectName(QLatin1String("_qt_autotest_force_engine_") + backend);
     QVERIFY(watcher.addPath(temporaryDirectory.path()));
 
     // watch signal
-    QSignalSpy changedSpy(&watcher, SIGNAL(directoryChanged(QString)));
+    QSignalSpy changedSpy(&watcher, &QFileSystemWatcher::directoryChanged);
     QVERIFY(changedSpy.isValid());
 
     // remove directory, we should get one change signal, and we should no longer
@@ -578,6 +695,110 @@ void tst_QFileSystemWatcher::QTBUG2331()
     QVERIFY(temporaryDirectory.remove());
     QTRY_COMPARE(changedSpy.count(), 1);
     QCOMPARE(watcher.directories(), QStringList());
+}
+
+class SignalReceiver : public QObject
+{
+    Q_OBJECT
+public:
+    SignalReceiver(const QDir &moveSrcDir,
+                   const QString &moveDestination,
+                   QFileSystemWatcher *watcher,
+                   QObject *parent = 0)
+        : QObject(parent),
+          added(false),
+          moveSrcDir(moveSrcDir),
+          moveDestination(QDir(moveDestination)),
+          watcher(watcher)
+    {}
+
+public slots:
+    void fileChanged(const QString &path)
+    {
+        QFileInfo finfo(path);
+
+        QCOMPARE(finfo.absolutePath(), moveSrcDir.absolutePath());
+
+        if (!added) {
+            foreach (const QFileInfo &fi, moveDestination.entryInfoList(QDir::Files | QDir::NoSymLinks))
+                watcher->addPath(fi.absoluteFilePath());
+            added = true;
+        }
+    }
+
+private:
+    bool added;
+    QDir moveSrcDir;
+    QDir moveDestination;
+    QFileSystemWatcher *watcher;
+};
+
+// regression test for QTBUG-33211.
+// using inotify backend if a file is moved and then added to the watcher
+// before all the fileChanged signals are emitted the remaining signals are
+// emitted with the destination path instead of the starting path
+void tst_QFileSystemWatcher::signalsEmittedAfterFileMoved()
+{
+    const int fileCount = 10;
+    QTemporaryDir temporaryDirectory(m_tempDirPattern);
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
+
+    QDir testDir(temporaryDirectory.path());
+    QVERIFY(testDir.mkdir("movehere"));
+    QString movePath = testDir.filePath("movehere");
+
+    for (int i = 0; i < fileCount; ++i) {
+        const QByteArray iB = QByteArray::number(i);
+        QFile f(testDir.filePath(QLatin1String("test") + QString::fromLatin1(iB) + QLatin1String(".txt")));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(QByteArray("i am ") + iB);
+        f.close();
+    }
+
+    QFileSystemWatcher watcher;
+    QVERIFY(watcher.addPath(testDir.path()));
+    QVERIFY(watcher.addPath(movePath));
+
+    // add files to watcher
+    QFileInfoList files = testDir.entryInfoList(QDir::Files | QDir::NoSymLinks);
+    QCOMPARE(files.size(), fileCount);
+    foreach (const QFileInfo &finfo, files)
+        QVERIFY(watcher.addPath(finfo.absoluteFilePath()));
+
+    // create the signal receiver
+    SignalReceiver signalReceiver(testDir, movePath, &watcher);
+    connect(&watcher, SIGNAL(fileChanged(QString)), &signalReceiver, SLOT(fileChanged(QString)));
+
+    // watch signals
+    FileSystemWatcherSpy changedSpy(&watcher, FileSystemWatcherSpy::SpyOnFileChanged);
+    QCOMPARE(changedSpy.count(), 0);
+
+    // move files to second directory
+    foreach (const QFileInfo &finfo, files)
+        QVERIFY(testDir.rename(finfo.fileName(), QString("movehere/%2").arg(finfo.fileName())));
+
+    QCoreApplication::processEvents();
+    QVERIFY2(changedSpy.count() <= fileCount, changedSpy.receivedFilesMessage());
+    QTRY_COMPARE(changedSpy.count(), fileCount);
+}
+
+void tst_QFileSystemWatcher::watchUnicodeCharacters()
+{
+    QTemporaryDir temporaryDirectory(m_tempDirPattern);
+    QVERIFY2(temporaryDirectory.isValid(), qPrintable(temporaryDirectory.errorString()));
+
+    QDir testDir(temporaryDirectory.path());
+    const QString subDir(QString::fromLatin1("caf\xe9"));
+    QVERIFY(testDir.mkdir(subDir));
+    testDir = QDir(temporaryDirectory.path() + QDir::separator() + subDir);
+
+    QFileSystemWatcher watcher;
+    QVERIFY(watcher.addPath(testDir.path()));
+
+    FileSystemWatcherSpy changedSpy(&watcher, FileSystemWatcherSpy::SpyOnDirectoryChanged);
+    QCOMPARE(changedSpy.count(), 0);
+    QVERIFY(testDir.mkdir("creme"));
+    QTRY_COMPARE(changedSpy.count(), 1);
 }
 
 QTEST_MAIN(tst_QFileSystemWatcher)

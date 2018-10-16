@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -51,119 +49,131 @@
 
 #include <qt_windows.h>
 #include <shlobj.h>
-#if !defined(Q_OS_WINCE)
-#  include <intshcut.h>
-#else
-#  if !defined(STANDARDSHELL_UI_MODEL)
-#    include <winx.h>
-#  endif
-#endif
-
-#ifndef CSIDL_MYMUSIC
-#define CSIDL_MYMUSIC 13
-#define CSIDL_MYVIDEO 14
-#endif
+#include <intshcut.h>
 
 #ifndef QT_NO_STANDARDPATHS
 
 QT_BEGIN_NAMESPACE
-
-typedef BOOL (WINAPI*GetSpecialFolderPath)(HWND, LPWSTR, int, BOOL);
-static GetSpecialFolderPath resolveGetSpecialFolderPath()
-{
-    static GetSpecialFolderPath gsfp = 0;
-    if (!gsfp) {
-#ifndef Q_OS_WINCE
-        QSystemLibrary library(QLatin1String("shell32"));
-#else
-        QSystemLibrary library(QLatin1String("coredll"));
-#endif // Q_OS_WINCE
-        gsfp = (GetSpecialFolderPath)library.resolve("SHGetSpecialFolderPathW");
-    }
-    return gsfp;
-}
 
 static QString convertCharArray(const wchar_t *path)
 {
     return QDir::fromNativeSeparators(QString::fromWCharArray(path));
 }
 
+static inline bool isGenericConfigLocation(QStandardPaths::StandardLocation type)
+{
+    return type == QStandardPaths::GenericConfigLocation || type == QStandardPaths::GenericDataLocation;
+}
+
+static inline bool isConfigLocation(QStandardPaths::StandardLocation type)
+{
+    return type == QStandardPaths::ConfigLocation || type == QStandardPaths::AppConfigLocation
+        || type == QStandardPaths::AppDataLocation || type == QStandardPaths::AppLocalDataLocation
+        || isGenericConfigLocation(type);
+}
+
+static void appendOrganizationAndApp(QString &path) // Courtesy qstandardpaths_unix.cpp
+{
+#ifndef QT_BOOTSTRAPPED
+    const QString &org = QCoreApplication::organizationName();
+    if (!org.isEmpty())
+        path += QLatin1Char('/') + org;
+    const QString &appName = QCoreApplication::applicationName();
+    if (!appName.isEmpty())
+        path += QLatin1Char('/') + appName;
+#else // !QT_BOOTSTRAPPED
+    Q_UNUSED(path)
+#endif
+}
+
+static inline QString displayName(QStandardPaths::StandardLocation type)
+{
+#ifndef QT_BOOTSTRAPPED
+    return QStandardPaths::displayName(type);
+#else
+    return QString::number(type);
+#endif
+}
+
+static inline void appendTestMode(QString &path)
+{
+    if (QStandardPaths::isTestModeEnabled())
+        path += QLatin1String("/qttest");
+}
+
+// Map QStandardPaths::StandardLocation to KNOWNFOLDERID of SHGetKnownFolderPath()
+static GUID writableSpecialFolderId(QStandardPaths::StandardLocation type)
+{
+    static const GUID folderIds[] = {
+        FOLDERID_Desktop,       // DesktopLocation
+        FOLDERID_Documents,     // DocumentsLocation
+        FOLDERID_Fonts,         // FontsLocation
+        FOLDERID_Programs,      // ApplicationsLocation
+        FOLDERID_Music,         // MusicLocation
+        FOLDERID_Videos,        // MoviesLocation
+        FOLDERID_Pictures,      // PicturesLocation
+        GUID(), GUID(),         // TempLocation/HomeLocation
+        FOLDERID_LocalAppData,  // AppLocalDataLocation ("Local" path), AppLocalDataLocation = DataLocation
+        GUID(),                 // CacheLocation
+        FOLDERID_LocalAppData,  // GenericDataLocation ("Local" path)
+        GUID(),                 // RuntimeLocation
+        FOLDERID_LocalAppData,  // ConfigLocation ("Local" path)
+        GUID(), GUID(),         // DownloadLocation/GenericCacheLocation
+        FOLDERID_LocalAppData,  // GenericConfigLocation ("Local" path)
+        FOLDERID_RoamingAppData,// AppDataLocation ("Roaming" path)
+        FOLDERID_LocalAppData,  // AppConfigLocation ("Local" path)
+    };
+
+    Q_STATIC_ASSERT(sizeof(folderIds) / sizeof(folderIds[0]) == size_t(QStandardPaths::AppConfigLocation + 1));
+    return size_t(type) < sizeof(folderIds) / sizeof(folderIds[0]) ? folderIds[type] : GUID();
+}
+
+// Convenience for SHGetKnownFolderPath().
+static QString sHGetKnownFolderPath(const GUID &clsid)
+{
+    QString result;
+    typedef HRESULT (WINAPI *GetKnownFolderPath)(const GUID&, DWORD, HANDLE, LPWSTR*);
+
+    static const GetKnownFolderPath sHGetKnownFolderPath = // Vista onwards.
+        reinterpret_cast<GetKnownFolderPath>(QSystemLibrary::resolve(QLatin1String("shell32"), "SHGetKnownFolderPath"));
+
+    LPWSTR path;
+    if (Q_LIKELY(sHGetKnownFolderPath && SUCCEEDED(sHGetKnownFolderPath(clsid, KF_FLAG_DONT_VERIFY, 0, &path)))) {
+        result = convertCharArray(path);
+        CoTaskMemFree(path);
+    }
+    return result;
+}
+
 QString QStandardPaths::writableLocation(StandardLocation type)
 {
     QString result;
-
-    static GetSpecialFolderPath SHGetSpecialFolderPath = resolveGetSpecialFolderPath();
-    if (!SHGetSpecialFolderPath)
-        return QString();
-
-    wchar_t path[MAX_PATH];
-
     switch (type) {
-    case ConfigLocation: // same as DataLocation, on Windows
-    case DataLocation:
-    case GenericDataLocation:
-#if defined Q_OS_WINCE
-        if (SHGetSpecialFolderPath(0, path, CSIDL_APPDATA, FALSE))
-#else
-        if (SHGetSpecialFolderPath(0, path, CSIDL_LOCAL_APPDATA, FALSE))
-#endif
-            result = convertCharArray(path);
-        if (isTestModeEnabled())
-            result += QLatin1String("/qttest");
-#ifndef QT_BOOTSTRAPPED
-        if (type != GenericDataLocation) {
-            if (!QCoreApplication::organizationName().isEmpty())
-                result += QLatin1Char('/') + QCoreApplication::organizationName();
-            if (!QCoreApplication::applicationName().isEmpty())
-                result += QLatin1Char('/') + QCoreApplication::applicationName();
-        }
-#endif
-        break;
-
-    case DesktopLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_DESKTOPDIRECTORY, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case DownloadLocation: // TODO implement with SHGetKnownFolderPath(FOLDERID_Downloads) (starting from Vista)
-    case DocumentsLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_PERSONAL, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case FontsLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_FONTS, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case ApplicationsLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_PROGRAMS, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case MusicLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_MYMUSIC, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case MoviesLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_MYVIDEO, FALSE))
-            result = convertCharArray(path);
-        break;
-
-    case PicturesLocation:
-        if (SHGetSpecialFolderPath(0, path, CSIDL_MYPICTURES, FALSE))
-            result = convertCharArray(path);
+    case DownloadLocation:
+        result = sHGetKnownFolderPath(FOLDERID_Downloads);
+        if (result.isEmpty())
+            result = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
         break;
 
     case CacheLocation:
         // Although Microsoft has a Cache key it is a pointer to IE's cache, not a cache
         // location for everyone.  Most applications seem to be using a
         // cache directory located in their AppData directory
-        return writableLocation(DataLocation) + QLatin1String("\\cache");
+        result = sHGetKnownFolderPath(writableSpecialFolderId(AppLocalDataLocation));
+        if (!result.isEmpty()) {
+            appendTestMode(result);
+            appendOrganizationAndApp(result);
+            result += QLatin1String("/cache");
+        }
+        break;
 
     case GenericCacheLocation:
-        return writableLocation(GenericDataLocation) + QLatin1String("\\cache");
+        result = sHGetKnownFolderPath(writableSpecialFolderId(GenericDataLocation));
+        if (!result.isEmpty()) {
+            appendTestMode(result);
+            result += QLatin1String("/cache");
+        }
+        break;
 
     case RuntimeLocation:
     case HomeLocation:
@@ -173,45 +183,57 @@ QString QStandardPaths::writableLocation(StandardLocation type)
     case TempLocation:
         result = QDir::tempPath();
         break;
+
+    default:
+        result = sHGetKnownFolderPath(writableSpecialFolderId(type));
+        if (!result.isEmpty() && isConfigLocation(type)) {
+            appendTestMode(result);
+            if (!isGenericConfigLocation(type))
+                appendOrganizationAndApp(result);
+        }
+        break;
     }
     return result;
 }
 
+#ifndef QT_BOOTSTRAPPED
+extern QString qAppFileName();
+#endif
+
 QStringList QStandardPaths::standardLocations(StandardLocation type)
 {
     QStringList dirs;
+    const QString localDir = writableLocation(type);
+    if (!localDir.isEmpty())
+        dirs.append(localDir);
 
     // type-specific handling goes here
-
-#ifndef Q_OS_WINCE
-    static GetSpecialFolderPath SHGetSpecialFolderPath = resolveGetSpecialFolderPath();
-    if (SHGetSpecialFolderPath) {
-        wchar_t path[MAX_PATH];
-        switch (type) {
-        case ConfigLocation: // same as DataLocation, on Windows
-        case DataLocation:
-        case GenericDataLocation:
-            if (SHGetSpecialFolderPath(0, path, CSIDL_COMMON_APPDATA, FALSE)) {
-                QString result = convertCharArray(path);
-                if (type != GenericDataLocation) {
-#ifndef QT_BOOTSTRAPPED
-                    if (!QCoreApplication::organizationName().isEmpty())
-                        result += QLatin1Char('/') + QCoreApplication::organizationName();
-                    if (!QCoreApplication::applicationName().isEmpty())
-                        result += QLatin1Char('/') + QCoreApplication::applicationName();
-#endif
-                }
-                dirs.append(result);
-            }
-            break;
-        default:
-            break;
+    if (isConfigLocation(type)) {
+        QString programData = sHGetKnownFolderPath(FOLDERID_ProgramData);
+        if (!programData.isEmpty()) {
+            if (!isGenericConfigLocation(type))
+                appendOrganizationAndApp(programData);
+            dirs.append(programData);
         }
-    }
-#endif
+#ifndef QT_BOOTSTRAPPED
+        // Note: QCoreApplication::applicationDirPath(), while static, requires
+        // an application instance. But we might need to resolve the standard
+        // locations earlier than that, so we fall back to qAppFileName().
+        QString applicationDirPath = qApp ? QCoreApplication::applicationDirPath()
+            : QFileInfo(qAppFileName()).path();
+        dirs.append(applicationDirPath);
+        const QString dataDir = applicationDirPath + QLatin1String("/data");
+        dirs.append(dataDir);
 
-    const QString localDir = writableLocation(type);
-    dirs.prepend(localDir);
+        if (!isGenericConfigLocation(type)) {
+            QString appDataDir = dataDir;
+            appendOrganizationAndApp(appDataDir);
+            if (appDataDir != dataDir)
+                dirs.append(appDataDir);
+        }
+#endif // !QT_BOOTSTRAPPED
+    } // isConfigLocation()
+
     return dirs;
 }
 

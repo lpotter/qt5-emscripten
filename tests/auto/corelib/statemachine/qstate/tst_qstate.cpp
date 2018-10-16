@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -49,23 +36,14 @@ class tst_QState : public QObject
 {
     Q_OBJECT
 
-public:
-    tst_QState();
-
 private slots:
     void assignProperty();
     void assignPropertyTwice();
     void historyInitialState();
     void transitions();
     void privateSignals();
-
-private:
-    bool functionCalled;
+    void parallelStateAndInitialState();
 };
-
-tst_QState::tst_QState() : functionCalled(false)
-{
-}
 
 class TestClass: public QObject
 {
@@ -77,48 +55,48 @@ public:
 public slots:
     void slot() { called = true; }
 
-    
+
 };
 
 void tst_QState::assignProperty()
 {
     QStateMachine machine;
 
-    QObject *object = new QObject();
-    object->setProperty("fooBar", 10);
+    QObject object;
+    object.setProperty("fooBar", 10);
 
     QState *s1 = new QState(&machine);
-    s1->assignProperty(object, "fooBar", 20);
-    
+    s1->assignProperty(&object, "fooBar", 20);
+
     machine.setInitialState(s1);
     machine.start();
     QCoreApplication::processEvents();
 
-    QCOMPARE(object->property("fooBar").toInt(), 20);
+    QCOMPARE(object.property("fooBar").toInt(), 20);
 }
 
 void tst_QState::assignPropertyTwice()
 {
     QStateMachine machine;
 
-    QObject *object = new QObject();
-    object->setProperty("fooBar", 10);
+    QObject object;
+    object.setProperty("fooBar", 10);
 
     QState *s1 = new QState(&machine);
-    s1->assignProperty(object, "fooBar", 20);
-    s1->assignProperty(object, "fooBar", 30);
-    
+    s1->assignProperty(&object, "fooBar", 20);
+    s1->assignProperty(&object, "fooBar", 30);
+
     machine.setInitialState(s1);
     machine.start();
     QCoreApplication::processEvents();
 
-    QCOMPARE(object->property("fooBar").toInt(), 30);
+    QCOMPARE(object.property("fooBar").toInt(), 30);
 }
 
 class EventTestTransition: public QAbstractTransition
 {
 public:
-    EventTestTransition(QEvent::Type type, QState *targetState) 
+    EventTestTransition(QEvent::Type type, QState *targetState)
         : QAbstractTransition(), m_type(type)
     {
         setTargetState(targetState);
@@ -134,18 +112,18 @@ protected:
 
 private:
     QEvent::Type m_type;
-    
+
 };
 
-void tst_QState::historyInitialState() 
+void tst_QState::historyInitialState()
 {
     QStateMachine machine;
 
     QState *s1 = new QState(&machine);
-    
+
     QState *s2 = new QState(&machine);
     QHistoryState *h1 = new QHistoryState(s2);
-    
+
     s2->setInitialState(h1);
 
     QState *s3 = new QState(s2);
@@ -213,12 +191,16 @@ void tst_QState::transitions()
     QVERIFY(s1.transitions().isEmpty());
 
     QAbstractTransition *t1 = s1.addTransition(this, SIGNAL(destroyed()), &s2);
+    QAbstractTransition *t1_1 = s1.addTransition(this, &tst_QState::destroyed, &s2);
     QVERIFY(t1 != 0);
-    QCOMPARE(s1.transitions().count(), 1);
+    QVERIFY(t1_1 != 0);
+    QCOMPARE(s1.transitions().count(), 2);
     QCOMPARE(s1.transitions().first(), t1);
+    QCOMPARE(s1.transitions().last(), t1_1);
     QVERIFY(s2.transitions().isEmpty());
 
     s1.removeTransition(t1);
+    s1.removeTransition(t1_1);
     QVERIFY(s1.transitions().isEmpty());
 
     s1.addTransition(t1);
@@ -356,6 +338,36 @@ void tst_QState::privateSignals()
     QVERIFY(s2Tester.testPassed);
     QVERIFY(t1Tester.testPassed);
 
+}
+
+void tst_QState::parallelStateAndInitialState()
+{
+    QStateMachine machine;
+
+    { // setting an initial state on a parallel state:
+        QState a(QState::ParallelStates, &machine);
+        QState b(&a);
+        QVERIFY(!a.initialState());
+        const QString warning
+            = QString::asprintf("QState::setInitialState: ignoring attempt to set initial state of parallel state group %p", &a);
+        QTest::ignoreMessage(QtWarningMsg, qPrintable(warning));
+        a.setInitialState(&b); // should produce a warning and do nothing.
+        QVERIFY(!a.initialState());
+    }
+
+    { // setting the child-mode from ExclusiveStates to ParallelStates should remove the initial state:
+        QState a(QState::ExclusiveStates, &machine);
+        QState b(&a);
+        a.setInitialState(&b);
+        QCOMPARE(a.initialState(), &b);
+        const QString warning
+            = QString::asprintf("QState::setChildMode: setting the child-mode of state %p to "
+                                "parallel removes the initial state", &a);
+        QTest::ignoreMessage(QtWarningMsg, qPrintable(warning));
+        a.setChildMode(QState::ParallelStates); // should produce a warning and remove the initial state
+        QVERIFY(!a.initialState());
+        QCOMPARE(a.childMode(), QState::ParallelStates);
+    }
 }
 
 QTEST_MAIN(tst_QState)

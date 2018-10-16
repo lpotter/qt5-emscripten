@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -33,11 +33,15 @@
     \keyword SSL
 
     The classes below provide support for secure network communication using
-    the Secure Sockets Layer (SSL) protocol, using the \l{OpenSSL Toolkit} to
-    perform encryption and protocol handling.
+    the Secure Sockets Layer (SSL) protocol, using the \l{OpenSSL Toolkit}
+    to perform encryption and protocol handling.
 
-    See the \l{General Qt Requirements} page for information about the
-    versions of OpenSSL that are known to work with Qt.
+    From Qt version 5.2 onwards, the officially supported version for OpenSSL
+    is 1.0.0 or later. Versions >= 0.9.7 and < 1.0.0 might work, but are not
+    guaranteed to work.
+
+    \annotatedlist ssl
+
 
     \section1 Enabling and Disabling SSL Support
 
@@ -57,22 +61,28 @@
     system:
 
     \code
-        ./configure -openssl-linked OPENSSL_LIBS='-L/opt/ssl/lib -lssl -lcrypto'
+        OPENSSL_LIBS='-L/opt/ssl/lib -lssl -lcrypto' ./configure -openssl-linked
     \endcode
 
     To disable SSL support in a Qt build, configure Qt with the \c{-no-openssl}
     option.
 
-    \section1 Licensing Information
+    \section1 Datagram Transport Layer Security
 
-    \note Due to import and export restrictions in some parts of the world, we
+    Datagram Transport Layer Security (DTLS) is a protocol that enables security
+    for datagram-based applications, providing them with protection against
+    eavesdropping, tampering, or message forgery. The DTLS protocol is based on the
+    stream-oriented Transport Layer Security (TLS) protocol. QtNetwork enables
+    the use of DTLS with User Datagram Protocol (UDP), as defined by
+    \l {https://tools.ietf.org/html/rfc6347}{RFC 6347}.
+
+    \section1 Import and Export Restrictions
+
+    Due to import and export restrictions in some parts of the world, we
     are unable to supply the OpenSSL Toolkit with Qt packages. Developers wishing
     to use SSL communication in their deployed applications should either ensure
     that their users have the appropriate libraries installed, or they should
     consult a suitably qualified legal professional to ensure that applications
     using code from the OpenSSL project are correctly certified for import
     and export in relevant regions of the world.
-
-    When the QtNetwork module is built with SSL support, the library is linked
-    against OpenSSL in a way that requires OpenSSL license compliance.
 */

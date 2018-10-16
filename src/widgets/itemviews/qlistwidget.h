@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -42,17 +40,15 @@
 #ifndef QLISTWIDGET_H
 #define QLISTWIDGET_H
 
+#include <QtWidgets/qtwidgetsglobal.h>
 #include <QtWidgets/qlistview.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qvector.h>
 #include <QtCore/qitemselectionmodel.h>
 
-QT_BEGIN_HEADER
+QT_REQUIRE_CONFIG(listwidget);
 
 QT_BEGIN_NAMESPACE
-
-
-#ifndef QT_NO_LISTWIDGET
 
 class QListWidget;
 class QListModel;
@@ -65,10 +61,10 @@ class Q_WIDGETS_EXPORT QListWidgetItem
     friend class QListWidget;
 public:
     enum ItemType { Type = 0, UserType = 1000 };
-    explicit QListWidgetItem(QListWidget *view = 0, int type = Type);
-    explicit QListWidgetItem(const QString &text, QListWidget *view = 0, int type = Type);
+    explicit QListWidgetItem(QListWidget *view = nullptr, int type = Type);
+    explicit QListWidgetItem(const QString &text, QListWidget *view = nullptr, int type = Type);
     explicit QListWidgetItem(const QIcon &icon, const QString &text,
-                             QListWidget *view = 0, int type = Type);
+                             QListWidget *view = nullptr, int type = Type);
     QListWidgetItem(const QListWidgetItem &other);
     virtual ~QListWidgetItem();
 
@@ -103,7 +99,7 @@ public:
     inline void setToolTip(const QString &toolTip);
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
     inline QString whatsThis() const
         { return data(Qt::WhatsThisRole).toString(); }
     inline void setWhatsThis(const QString &whatsThis);
@@ -183,7 +179,7 @@ inline void QListWidgetItem::setToolTip(const QString &atoolTip)
 { setData(Qt::ToolTipRole, atoolTip); }
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
 inline void QListWidgetItem::setWhatsThis(const QString &awhatsThis)
 { setData(Qt::WhatsThisRole, awhatsThis); }
 #endif
@@ -208,8 +204,10 @@ class Q_WIDGETS_EXPORT QListWidget : public QListView
     friend class QListWidgetItem;
     friend class QListModel;
 public:
-    explicit QListWidget(QWidget *parent = 0);
+    explicit QListWidget(QWidget *parent = nullptr);
     ~QListWidget();
+
+    void setSelectionModel(QItemSelectionModel *selectionModel) override;
 
     QListWidgetItem *item(int row) const;
     int row(const QListWidgetItem *item) const;
@@ -241,6 +239,8 @@ public:
     void editItem(QListWidgetItem *item);
     void openPersistentEditor(QListWidgetItem *item);
     void closePersistentEditor(QListWidgetItem *item);
+    using QAbstractItemView::isPersistentEditorOpen;
+    bool isPersistentEditorOpen(QListWidgetItem *item) const;
 
     QWidget *itemWidget(QListWidgetItem *item) const;
     void setItemWidget(QListWidgetItem *item, QWidget *widget);
@@ -253,8 +253,12 @@ public:
 
     bool isItemHidden(const QListWidgetItem *item) const;
     void setItemHidden(const QListWidgetItem *item, bool hide);
-    void dropEvent(QDropEvent *event);
-
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+protected:
+#endif
+#if QT_CONFIG(draganddrop)
+    void dropEvent(QDropEvent *event) override;
+#endif
 public Q_SLOTS:
     void scrollToItem(const QListWidgetItem *item, QAbstractItemView::ScrollHint hint = EnsureVisible);
     void clear();
@@ -265,6 +269,7 @@ Q_SIGNALS:
     void itemDoubleClicked(QListWidgetItem *item);
     void itemActivated(QListWidgetItem *item);
     void itemEntered(QListWidgetItem *item);
+    // ### Qt 6: add changed roles
     void itemChanged(QListWidgetItem *item);
 
     void currentItemChanged(QListWidgetItem *current, QListWidgetItem *previous);
@@ -274,20 +279,33 @@ Q_SIGNALS:
     void itemSelectionChanged();
 
 protected:
-    bool event(QEvent *e);
+    bool event(QEvent *e) override;
     virtual QStringList mimeTypes() const;
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    virtual QMimeData *mimeData(const QList<QListWidgetItem *> &items) const;
+#else
     virtual QMimeData *mimeData(const QList<QListWidgetItem*> items) const;
-#ifndef QT_NO_DRAGANDDROP
+#endif
+#if QT_CONFIG(draganddrop)
     virtual bool dropMimeData(int index, const QMimeData *data, Qt::DropAction action);
     virtual Qt::DropActions supportedDropActions() const;
 #endif
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+public:
+#else
+protected:
+#endif
     QList<QListWidgetItem*> items(const QMimeData *data) const;
 
-    QModelIndex indexFromItem(QListWidgetItem *item) const;
+    QModelIndex indexFromItem(const QListWidgetItem *item) const;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    QModelIndex indexFromItem(QListWidgetItem *item) const; // ### Qt 6: remove
+#endif
     QListWidgetItem *itemFromIndex(const QModelIndex &index) const;
 
 private:
-    void setModel(QAbstractItemModel *model);
+    void setModel(QAbstractItemModel *model) override;
     Qt::SortOrder sortOrder() const;
 
     Q_DECLARE_PRIVATE(QListWidget)
@@ -305,7 +323,7 @@ private:
 };
 
 inline void QListWidget::removeItemWidget(QListWidgetItem *aItem)
-{ setItemWidget(aItem, 0); }
+{ setItemWidget(aItem, nullptr); }
 
 inline void QListWidget::addItem(QListWidgetItem *aitem)
 { insertItem(count(), aitem); }
@@ -325,10 +343,6 @@ inline void QListWidgetItem::setHidden(bool ahide)
 inline bool QListWidgetItem::isHidden() const
 { return (view ? view->isItemHidden(this) : false); }
 
-#endif // QT_NO_LISTWIDGET
-
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QLISTWIDGET_H

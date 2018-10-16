@@ -1,39 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -46,6 +33,12 @@
 #include <QtTest/QtTest>
 #include "private/qapplication_p.h"
 
+#include <algorithm>
+
+#include <QtTest/private/qtesthelpers_p.h>
+
+using namespace QTestPrivate;
+
 #ifdef QT_BUILD_INTERNAL
 #define VERIFY_SPANS_CONSISTENCY(TEST_VIEW_) \
     QVERIFY(static_cast<QTableViewPrivate*>(QObjectPrivate::get(TEST_VIEW_))->spans.checkConsistency())
@@ -54,24 +47,12 @@
 #endif
 
 typedef QList<int> IntList;
-Q_DECLARE_METATYPE(IntList)
 
 typedef QList<bool> BoolList;
-Q_DECLARE_METATYPE(BoolList)
 
 class tst_QTableView : public QObject
 {
     Q_OBJECT
-
-public:
-    tst_QTableView();
-    virtual ~tst_QTableView();
-
-public slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
 
 private slots:
     void getSetCheck();
@@ -98,6 +79,8 @@ private slots:
     void moveCursorStrikesBack_data();
     void moveCursorStrikesBack();
 
+    void moveCursorBiggerJump();
+
     void hideRows_data();
     void hideRows();
 
@@ -112,6 +95,9 @@ private slots:
 
     void selectColumn_data();
     void selectColumn();
+
+    void selectall_data();
+    void selectall();
 
     void visualRect_data();
     void visualRect();
@@ -166,6 +152,8 @@ private slots:
     void spansAfterColumnInsertion();
     void spansAfterRowRemoval();
     void spansAfterColumnRemoval();
+    void editSpanFromDirections_data();
+    void editSpanFromDirections();
 
     void checkHeaderReset();
     void checkHeaderMinSize();
@@ -186,20 +174,28 @@ private slots:
     void task191545_dragSelectRows();
     void taskQTBUG_5062_spansInconsistency();
     void taskQTBUG_4516_clickOnRichTextLabel();
+#if QT_CONFIG(wheelevent)
     void taskQTBUG_5237_wheelEventOnHeader();
+#endif
     void taskQTBUG_8585_crashForNoGoodReason();
     void taskQTBUG_7774_RtoLVisualRegionForSelection();
     void taskQTBUG_8777_scrollToSpans();
     void taskQTBUG_10169_sizeHintForRow();
+    void taskQTBUG_30653_doItemsLayout();
+    void taskQTBUG_50171_selectRowAfterSwapColumns();
 
+#if QT_CONFIG(wheelevent)
     void mouseWheel_data();
     void mouseWheel();
+#endif
 
     void addColumnWhileEditing();
     void task234926_setHeaderSorting();
 
     void changeHeaderData();
     void viewOptions();
+
+    void taskQTBUG_7232_AllowUserToControlSingleStep();
 };
 
 // Testing get/set functions
@@ -311,8 +307,10 @@ public:
             return QVariant();
         }
 
-        if (role == Qt::DisplayRole || role == Qt::EditRole)
-            return QString("[%1,%2,%3]").arg(idx.row()).arg(idx.column()).arg(0);
+        if (role == Qt::DisplayRole || role == Qt::EditRole) {
+            return QLatin1Char('[') + QString::number(idx.row()) + QLatin1Char(',')
+                + QString::number(idx.column()) + QLatin1String(",0]");
+        }
 
         return QVariant();
     }
@@ -401,7 +399,8 @@ public:
 
     void reset()
     {
-        QAbstractTableModel::reset();
+        beginResetModel();
+        endResetModel();
     }
 
     int row_count;
@@ -424,11 +423,15 @@ public:
     {
         QTableView::setModel(model);
         connect(selectionModel(), SIGNAL(currentChanged(QModelIndex,QModelIndex)),
-                     this, SLOT(currentChanged(QModelIndex,QModelIndex)));
+                     this, SLOT(slotCurrentChanged(QModelIndex,QModelIndex)));
         connect(selectionModel(), SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
                      this, SLOT(itemSelectionChanged(QItemSelection,QItemSelection)));
+        // Allow small sections in this test, since this test was made before we correctly enforced minimum sizes.
+        horizontalHeader()->setMinimumSectionSize(0);
+        verticalHeader()->setMinimumSectionSize(0);
     }
 
+    // enum CursorAction and moveCursor() are protected in QTableView.
     enum CursorAction {
         MoveUp       = QAbstractItemView::MoveUp,
         MoveDown     = QAbstractItemView::MoveDown,
@@ -442,7 +445,7 @@ public:
         MovePrevious = QAbstractItemView::MovePrevious
     };
 
-    QModelIndex moveCursor(QtTestTableView::CursorAction cursorAction,
+    QModelIndex doMoveCursor(QtTestTableView::CursorAction cursorAction,
                            Qt::KeyboardModifiers modifiers)
     {
         return QTableView::moveCursor((QAbstractItemView::CursorAction)cursorAction, modifiers);
@@ -484,7 +487,7 @@ public:
 
     bool checkSignalOrder;
 public slots:
-    void currentChanged(QModelIndex , QModelIndex ) {
+    void slotCurrentChanged(QModelIndex, QModelIndex) {
         hasCurrentChanged++;
         if (checkSignalOrder)
             QVERIFY(hasCurrentChanged > hasSelectionChanged);
@@ -511,33 +514,6 @@ public:
 
     QSize hint;
 };
-
-tst_QTableView::tst_QTableView()
-{
-}
-
-tst_QTableView::~tst_QTableView()
-{
-}
-
-void tst_QTableView::initTestCase()
-{
-#ifdef Q_OS_WINCE //disable magic for WindowsCE
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
-
-void tst_QTableView::cleanupTestCase()
-{
-}
-
-void tst_QTableView::init()
-{
-}
-
-void tst_QTableView::cleanup()
-{
-}
 
 void tst_QTableView::noDelegate()
 {
@@ -714,12 +690,14 @@ void tst_QTableView::keyboardNavigation()
         case Qt::Key_Backtab:
             if (!tabKeyNavigation)
                 break;
+            Q_FALLTHROUGH();
         case Qt::Key_Left:
             column = qMax(0, column - 1);
             break;
         case Qt::Key_Tab:
             if (!tabKeyNavigation)
                 break;
+            Q_FALLTHROUGH();
         case Qt::Key_Right:
             column = qMin(columnCount - 1, column + 1);
             break;
@@ -763,6 +741,8 @@ void tst_QTableView::headerSections()
     QHeaderView *vheader = view.verticalHeader();
 
     view.setModel(&model);
+    hheader->setMinimumSectionSize(columnWidth);
+    vheader->setMinimumSectionSize(rowHeight);
     view.show();
 
     hheader->doItemsLayout();
@@ -787,7 +767,6 @@ void tst_QTableView::headerSections()
 }
 
 typedef QPair<int,int> IntPair;
-Q_DECLARE_METATYPE(IntPair)
 
 void tst_QTableView::moveCursor_data()
 {
@@ -1173,6 +1152,9 @@ void tst_QTableView::moveCursor()
     QtTestTableView view;
 
     view.setModel(&model);
+    // we have to make sure that PgUp/PgDown can scroll to the bottom/top
+    view.resize(view.horizontalHeader()->length() + 50,
+                view.verticalHeader()->length() + 50);
     view.hideRow(hideRow);
     view.hideColumn(hideColumn);
     if (moveColumn.first != moveColumn.second)
@@ -1185,7 +1167,7 @@ void tst_QTableView::moveCursor()
     QModelIndex index = model.index(startRow, startColumn);
     view.setCurrentIndex(index);
 
-    QModelIndex newIndex = view.moveCursor((QtTestTableView::CursorAction)cursorMoveAction,
+    QModelIndex newIndex = view.doMoveCursor((QtTestTableView::CursorAction)cursorMoveAction,
                                            (Qt::KeyboardModifiers)modifier);
     // expected fails, task 119433
     if(newIndex.row() == -1)
@@ -1227,28 +1209,28 @@ void tst_QTableView::moveCursorStrikesBack_data()
             << IntList()
             << QRect(1, 2, 2, 3)
             << 2 << 0 << (IntList() << int(QtTestTableView::MoveNext))
-            << 2 << 2;
+            << 2 << 1;
 
     QTest::newRow("Span, anchor column disabled") << -1 << -1
             << IntList()
             << (IntList() << 1)
             << QRect(1, 2, 2, 3)
             << 2 << 0 << (IntList() << int(QtTestTableView::MoveNext))
-            << 2 << 2;
+            << 2 << 1;
 
     QTest::newRow("Span, anchor row hidden") << 2 << -1
             << IntList()
             << IntList()
             << QRect(1, 2, 2, 3)
             << 1 << 2 << (IntList() << int(QtTestTableView::MoveDown))
-            << 3 << 2;
+            << 2 << 1;
 
     QTest::newRow("Span, anchor row disabled") << -1 << -1
             << (IntList() << 2)
             << IntList()
             << QRect(1, 2, 2, 3)
             << 1 << 2 << (IntList() << int(QtTestTableView::MoveDown))
-            << 3 << 2;
+            << 2 << 1;
 
     QTest::newRow("Move through span right") << -1 << -1
             << IntList()
@@ -1332,7 +1314,7 @@ void tst_QTableView::moveCursorStrikesBack()
     int newRow = -1;
     int newColumn = -1;
     foreach (int cursorMoveAction, cursorMoveActions) {
-        QModelIndex newIndex = view.moveCursor((QtTestTableView::CursorAction)cursorMoveAction, 0);
+        QModelIndex newIndex = view.doMoveCursor((QtTestTableView::CursorAction)cursorMoveAction, 0);
         view.setCurrentIndex(newIndex);
         newRow = newIndex.row();
         newColumn = newIndex.column();
@@ -1343,6 +1325,39 @@ void tst_QTableView::moveCursorStrikesBack()
         return;
     QCOMPARE(newRow, expectedRow);
     QCOMPARE(newColumn, expectedColumn);
+}
+
+void tst_QTableView::moveCursorBiggerJump()
+{
+    QtTestTableModel model(50, 7);
+    QTableView view;
+    view.setModel(&model);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+    int height = view.horizontalHeader()->height();
+    for (int i=0;i<8;i++)
+        height += view.verticalHeader()->sectionSize(i);
+    view.resize(view.width(), height);
+    view.setCurrentIndex(model.index(0,0));
+
+    QTest::keyClick(&view, Qt::Key_PageDown);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(1,0));
+    QTest::keyClick(&view, Qt::Key_PageDown);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(8,0));
+    QTest::keyClick(&view, Qt::Key_PageDown);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(15,0));
+    QTest::keyClick(&view, Qt::Key_PageUp);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(14,0));
+    QTest::keyClick(&view, Qt::Key_PageUp);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(7,0));
+    QTest::keyClick(&view, Qt::Key_PageUp);
+    QCOMPARE(view.indexAt(QPoint(0,0)), model.index(0,0));
+
+    QTest::keyClick(&view, Qt::Key_PageDown);
+    view.verticalHeader()->hideSection(0);
+    QTest::keyClick(&view, Qt::Key_PageUp);
+    QTRY_COMPARE(view.currentIndex().row(), view.rowAt(0));
 }
 
 void tst_QTableView::hideRows_data()
@@ -1604,7 +1619,7 @@ void tst_QTableView::selection()
         view.setColumnWidth(c, columnWidth);
 
     view.setSelection(QRect(x, y, width, height),
-		      QItemSelectionModel::SelectionFlags(command));
+                      QItemSelectionModel::SelectionFlags(command));
 
     QCOMPARE(view.selectedIndexes().count(), selectedCount);
 }
@@ -1849,7 +1864,162 @@ void tst_QTableView::selectColumn()
         QCOMPARE(view.selectionModel()->selectedIndexes().at(i).column(), column);
 }
 
-Q_DECLARE_METATYPE(QRect)
+void tst_QTableView::selectall_data()
+{
+    QTest::addColumn<int>("rowCount");
+    QTest::addColumn<int>("columnCount");
+    QTest::addColumn<int>("row");
+    QTest::addColumn<int>("column");
+    QTest::addColumn<int>("rowSpan");
+    QTest::addColumn<int>("columnSpan");
+    QTest::addColumn<int>("hideRow");
+    QTest::addColumn<int>("hideColumn");
+    QTest::addColumn<int>("moveRowFrom");
+    QTest::addColumn<int>("moveRowTo");
+    QTest::addColumn<int>("moveColumnFrom");
+    QTest::addColumn<int>("moveColumnTo");
+    QTest::addColumn<int>("rowHeight");
+    QTest::addColumn<int>("columnWidth");
+    QTest::addColumn<int>("selectedCount"); // ### make this more detailed
+
+    QTest::newRow("no span, no hidden, no moved")
+      << 10 << 10                          // dim
+      << -1 << -1                          // pos
+      << 1 << 1                            // span
+      << -1 << -1                          // hide
+      << -1 << -1                          // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 100;                              // selected count
+
+    QTest::newRow("row span, no hidden, no moved")
+      << 10 << 10                          // dim
+      << 1 << 1                            // pos
+      << 2 << 1                            // span
+      << -1 << -1                          // hide
+      << -1 << -1                          // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 99;                               // selected count
+
+    QTest::newRow("col span, no hidden, no moved")
+      << 10 << 10                          // dim
+      << 1 << 1                            // pos
+      << 1 << 2                            // span
+      << -1 << -1                          // hide
+      << -1 << -1                          // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 99;                               // selected count
+
+    QTest::newRow("no span, row hidden, no moved")
+      << 10 << 10                          // dim
+      << -1 << -1                          // pos
+      << 1 << 1                            // span
+      << 1 << -1                           // hide
+      << -1 << -1                          // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 90;                               // selected count
+
+    QTest::newRow("no span, col hidden, no moved")
+      << 10 << 10                          // dim
+      << -1 << -1                          // pos
+      << 1 << 1                            // span
+      << -1 << 1                           // hide
+      << -1 << -1                          // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 90;                               // selected count
+
+    QTest::newRow("no span, no hidden, row moved")
+      << 10 << 10                          // dim
+      << -1 << -1                          // pos
+      << 1 << 1                            // span
+      << -1 << -1                          // hide
+      << 1 << 3                            // move row
+      << -1 << -1                          // move col
+      << 40 << 40                          // cell size
+      << 100;                              // selected count
+
+    QTest::newRow("no span, no hidden, col moved")
+      << 10 << 10                          // dim
+      << -1 << -1                          // pos
+      << 1 << 1                            // span
+      << -1 << -1                          // hide
+      << -1 << -1                          // move row
+      << 1 << 3                            // move col
+      << 40 << 40                          // cell size
+      << 100;                              // selected count
+}
+
+void QTest__keySequence(QWidget* widget, QKeySequence ks)
+{
+    for (int i=0; i<ks.count(); ++i)
+    {
+        Qt::Key key = Qt::Key(ks[i] & ~Qt::KeyboardModifierMask);
+        Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers(ks[i] & Qt::KeyboardModifierMask);
+        QTest::keyClick(widget, key, modifiers);
+    }
+}
+
+void tst_QTableView::selectall()
+{
+    QFETCH(int, rowCount);
+    QFETCH(int, columnCount);
+    QFETCH(int, row);
+    QFETCH(int, column);
+    QFETCH(int, rowSpan);
+    QFETCH(int, columnSpan);
+    QFETCH(int, hideRow);
+    QFETCH(int, hideColumn);
+    QFETCH(int, moveRowFrom);
+    QFETCH(int, moveRowTo);
+    QFETCH(int, moveColumnFrom);
+    QFETCH(int, moveColumnTo);
+    QFETCH(int, rowHeight);
+    QFETCH(int, columnWidth);
+    QFETCH(int, selectedCount);
+
+    QtTestTableModel model(rowCount, columnCount);
+
+    QtTestTableView view;
+    view.show();
+    view.setModel(&model);
+
+    view.setSpan(row, column, rowSpan, columnSpan);
+
+    view.hideRow(hideRow);
+    view.hideColumn(hideColumn);
+
+    view.verticalHeader()->moveSection(moveRowFrom, moveRowTo);
+    view.horizontalHeader()->moveSection(moveColumnFrom, moveColumnTo);
+
+    for (int r = 0; r < rowCount; ++r)
+        view.setRowHeight(r, rowHeight);
+    for (int c = 0; c < columnCount; ++c)
+        view.setColumnWidth(c, columnWidth);
+
+    // try slot first
+    view.clearSelection();
+    QCOMPARE(view.selectedIndexes().count(), 0);
+    view.selectAll();
+    QCOMPARE(view.selectedIndexes().count(), selectedCount);
+
+    // try by key sequence
+    view.clearSelection();
+    QCOMPARE(view.selectedIndexes().count(), 0);
+    QTest__keySequence(&view, QKeySequence(QKeySequence::SelectAll));
+    QCOMPARE(view.selectedIndexes().count(), selectedCount);
+
+    // check again with no selection mode
+    view.clearSelection();
+    view.setSelectionMode(QAbstractItemView::NoSelection);
+    QCOMPARE(view.selectedIndexes().count(), 0);
+    QTest__keySequence(&view, QKeySequence(QKeySequence::SelectAll));
+    QCOMPARE(view.selectedIndexes().count(), 0);
+}
+
 void tst_QTableView::visualRect_data()
 {
     QTest::addColumn<int>("rowCount");
@@ -1928,6 +2098,8 @@ void tst_QTableView::visualRect()
 
     QTableView view;
     view.setModel(&model);
+    view.horizontalHeader()->setMinimumSectionSize(0);
+    view.verticalHeader()->setMinimumSectionSize(0);
     // Make sure that it has 1 pixel between each cell.
     view.setGridStyle(Qt::SolidLine);
     for (int i = 0; i < view.verticalHeader()->count(); ++i)
@@ -2052,11 +2224,11 @@ void tst_QTableView::resizeColumnsToContents_data()
     QTest::addColumn<int>("rowHeight");
     QTest::addColumn<int>("columnWidth");
 
-    QTest::newRow("10x10 grid shown 40x40")
-        << 10 << 10 << false << 40 << 40 << 40 << 40;
+    QTest::newRow("10x10 grid not shown 60x60")
+        << 10 << 10 << false << 60 << 60 << 60 << 60;
 
-    QTest::newRow("10x10 grid not shown 40x40")
-        << 10 << 10 << true << 40 << 40 << 41 << 41;
+    QTest::newRow("10x10 grid shown 60x60")
+        << 10 << 10 << true << 60 << 60 << 61 << 61;
 }
 
 void tst_QTableView::resizeColumnsToContents()
@@ -2151,6 +2323,7 @@ void tst_QTableView::rowViewportPosition()
 
     QtTestTableModel model(rowCount, 1);
     QtTestTableView view;
+    setFrameless(&view);
     view.resize(100, 2 * rowHeight);
     view.show();
 
@@ -2161,6 +2334,14 @@ void tst_QTableView::rowViewportPosition()
     view.setVerticalScrollMode((QAbstractItemView::ScrollMode)verticalScrollMode);
     view.verticalScrollBar()->setValue(verticalScrollValue);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("row 1, scroll per item, 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 5, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 9, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 1, scroll per pixel, 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 5, scroll per pixel, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 9, scroll per pixel, 5", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(view.rowViewportPosition(row), rowViewportPosition);
 }
 
@@ -2313,6 +2494,7 @@ void tst_QTableView::columnViewportPosition()
 
     QtTestTableModel model(1, columnCount);
     QtTestTableView view;
+    setFrameless(&view);
     view.resize(2 * columnWidth, 100);
     view.show();
 
@@ -2323,6 +2505,13 @@ void tst_QTableView::columnViewportPosition()
     view.setHorizontalScrollMode((QAbstractItemView::ScrollMode)horizontalScrollMode);
     view.horizontalScrollBar()->setValue(horizontalScrollValue);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("column 5, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 9, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 1, scroll per pixel 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 5, scroll per pixel 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 9, scroll per pixel 5", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(view.columnViewportPosition(column), columnViewportPosition);
 }
 
@@ -2590,6 +2779,7 @@ void tst_QTableView::scrollTo()
 
     QtTestTableModel model(rowCount, columnCount);
     QWidget toplevel;
+    setFrameless(&toplevel);
     QtTestTableView view(&toplevel);
 
     toplevel.show();
@@ -2611,15 +2801,14 @@ void tst_QTableView::scrollTo()
     for (int c = 0; c < columnCount; ++c)
         view.setColumnWidth(c, columnWidth);
 
-    QTest::qWait(150); // ### needed to pass the test
     view.horizontalScrollBar()->setValue(horizontalScroll);
     view.verticalScrollBar()->setValue(verticalScroll);
 
     QModelIndex index = model.index(row, column);
     QVERIFY(index.isValid());
     view.scrollTo(index, (QAbstractItemView::ScrollHint)scrollHint);
-    QCOMPARE(view.verticalScrollBar()->value(), expectedVerticalScroll);
-    QCOMPARE(view.horizontalScrollBar()->value(), expectedHorizontalScroll);
+    QTRY_COMPARE(view.verticalScrollBar()->value(), expectedVerticalScroll);
+    QTRY_COMPARE(view.horizontalScrollBar()->value(), expectedHorizontalScroll);
 }
 
 void tst_QTableView::indexAt_data()
@@ -2766,14 +2955,12 @@ void tst_QTableView::indexAt()
     for (int c = 0; c < columnCount; ++c)
         view.setColumnWidth(c, columnWidth);
 
-    QTest::qWait(20);
     view.horizontalScrollBar()->setValue(horizontalScroll);
     view.verticalScrollBar()->setValue(verticalScroll);
-    QTest::qWait(20);
 
     QModelIndex index = view.indexAt(QPoint(x, y));
-    QCOMPARE(index.row(), expectedRow);
-    QCOMPARE(index.column(), expectedColumn);
+    QTRY_COMPARE(index.row(), expectedRow);
+    QTRY_COMPARE(index.column(), expectedColumn);
 }
 
 void tst_QTableView::span_data()
@@ -2909,7 +3096,7 @@ void tst_QTableView::span()
 
     if (hiddenRow > -1) {
         QModelIndex hidden = model.index(hiddenRow, columnCount - 1);
-	QVERIFY(view.isIndexHidden(hidden));
+        QVERIFY(view.isIndexHidden(hidden));
     }
 
     if (hiddenColumn > -1) {
@@ -2925,7 +3112,6 @@ void tst_QTableView::span()
 }
 
 typedef QVector<QRect> SpanList;
-Q_DECLARE_METATYPE(SpanList)
 
 void tst_QTableView::spans_data()
 {
@@ -3092,7 +3278,7 @@ void tst_QTableView::spansAfterRowInsertion()
     view.setModel(&model);
     view.setSpan(3, 3, 3, 3);
     view.show();
-    QTest::qWait(50);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
 
     // Insertion before the span only shifts the span.
     view.model()->insertRows(0, 2);
@@ -3128,7 +3314,7 @@ void tst_QTableView::spansAfterColumnInsertion()
     view.setModel(&model);
     view.setSpan(3, 3, 3, 3);
     view.show();
-    QTest::qWait(50);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
 
     // Insertion before the span only shifts the span.
     view.model()->insertColumns(0, 2);
@@ -3176,7 +3362,7 @@ void tst_QTableView::spansAfterRowRemoval()
         view.setSpan(span.top(), span.left(), span.height(), span.width());
 
     view.show();
-    QTest::qWait(100);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
     view.model()->removeRows(3, 3);
 
     QList<QRect> expectedSpans;
@@ -3216,7 +3402,7 @@ void tst_QTableView::spansAfterColumnRemoval()
         view.setSpan(span.left(), span.top(), span.width(), span.height());
 
     view.show();
-    QTest::qWait(100);
+    QVERIFY(QTest::qWaitForWindowActive(&view));
     view.model()->removeColumns(3, 3);
 
     QList<QRect> expectedSpans;
@@ -3234,6 +3420,162 @@ void tst_QTableView::spansAfterColumnRemoval()
     }
 
     VERIFY_SPANS_CONSISTENCY(&view);
+}
+
+Q_DECLARE_METATYPE(Qt::Key)
+
+void tst_QTableView::editSpanFromDirections_data()
+{
+    QTest::addColumn<QList<Qt::Key> >("keyPresses");
+    QTest::addColumn<QSharedPointer<QStandardItemModel> >("model");
+    QTest::addColumn<int>("row");
+    QTest::addColumn<int>("column");
+    QTest::addColumn<int>("rowSpan");
+    QTest::addColumn<int>("columnSpan");
+    QTest::addColumn<QModelIndex>("expectedVisualCursorIndex");
+    QTest::addColumn<QModelIndex>("expectedEditedIndex");
+
+    /* x = the cell that should be edited
+       c = the cell that should actually be the current index
+       +---+---+
+       |   |   |
+       +---+---+
+       |   | x |
+       +---+   +
+       |   | c |
+       +---+---+
+       |   | ^ |
+       +---+---+ */
+    QList<Qt::Key> keyPresses;
+    keyPresses << Qt::Key_Right << Qt::Key_PageDown << Qt::Key_Up;
+    QSharedPointer<QStandardItemModel> model(new QStandardItemModel(4, 2));
+    QTest::newRow("row span, bottom up")
+        << keyPresses << model << 1 << 1 << 2 << 1 << model->index(2, 1) << model->index(1, 1);
+
+    /* +---+---+
+       |   | v |
+       +---+---+
+       |   |x,c|
+       +---+   +
+       |   |   |
+       +---+---+
+       |   |   |
+       +---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_Right << Qt::Key_Down;
+    model = QSharedPointer<QStandardItemModel>::create(4, 2);
+    QTest::newRow("row span, top down")
+        << keyPresses << model << 1 << 1 << 2 << 1 << model->index(1, 1) << model->index(1, 1);
+
+    /* +---+---+---+
+       |   |   |   |
+       +---+---+---+
+       |   |x,c| < |
+       +---+   +---+
+       |   |   |   |
+       +---+---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_End << Qt::Key_Down << Qt::Key_Left;
+    model = QSharedPointer<QStandardItemModel>::create(3, 3);
+    QTest::newRow("row span, right to left")
+        << keyPresses << model << 1 << 1 << 2 << 1 << model->index(1, 1) << model->index(1, 1);
+
+    /* +---+---+---+
+       |   |   |   |
+       +---+---+---+
+       |   | x |   |
+       +---+   +---+
+       | > | c |   |
+       +---+---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_PageDown << Qt::Key_Right;
+    model = QSharedPointer<QStandardItemModel>::create(3, 3);
+    QTest::newRow("row span, left to right")
+        << keyPresses << model << 1 << 1 << 2 << 1 << model->index(2, 1) << model->index(1, 1);
+
+    /* +---+---+---+
+       |   |   |   |
+       +---+---+---+
+       |x,c        |
+       +---+---+---+
+       | ^ |   |   |
+       +---+---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_PageDown << Qt::Key_Up;
+    model = QSharedPointer<QStandardItemModel>::create(3, 3);
+    QTest::newRow("col span, bottom up")
+        << keyPresses << model << 1 << 0 << 1 << 3 << model->index(1, 0) << model->index(1, 0);
+
+    /* +---+---+---+
+       |   |   |   |
+       +---+---+---+
+       | x   c     |
+       +---+---+---+
+       |   | ^ |   |
+       +---+---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_PageDown << Qt::Key_Right << Qt::Key_Up;
+    model = QSharedPointer<QStandardItemModel>::create(3, 3);
+    QTest::newRow("col span, bottom up #2")
+        << keyPresses << model << 1 << 0 << 1 << 3 << model->index(1, 1) << model->index(1, 0);
+
+    /* +---+---+---+
+       |   |   | v |
+       +---+---+---+
+       | x       c |
+       +---+---+---+
+       |   |   |   |
+       +---+---+---+ */
+    keyPresses.clear();
+    keyPresses << Qt::Key_End << Qt::Key_Down;
+    model = QSharedPointer<QStandardItemModel>::create(3, 3);
+    QTest::newRow("col span, top down")
+        << keyPresses << model << 1 << 0 << 1 << 3 << model->index(1, 2) << model->index(1, 0);
+}
+
+class TableViewWithCursorExposed : public QTableView
+{
+public:
+    TableViewWithCursorExposed() :
+        QTableView() {
+    }
+
+public:
+    QModelIndex visualCursorIndex() {
+        QTableViewPrivate *d = static_cast<QTableViewPrivate*>(qt_widget_private(this));
+        return d->model->index(d->visualCursor.y(), d->visualCursor.x());
+    }
+};
+
+void tst_QTableView::editSpanFromDirections()
+{
+    QFETCH(QList<Qt::Key>, keyPresses);
+    QFETCH(QSharedPointer<QStandardItemModel>, model);
+    QFETCH(int, row);
+    QFETCH(int, column);
+    QFETCH(int, rowSpan);
+    QFETCH(int, columnSpan);
+    QFETCH(QModelIndex, expectedVisualCursorIndex);
+    QFETCH(QModelIndex, expectedEditedIndex);
+
+    TableViewWithCursorExposed view;
+    view.setModel(model.data());
+    // we have to make sure that PgUp/PgDown can scroll to the bottom/top
+    view.resize(view.horizontalHeader()->length() + 50,
+                view.verticalHeader()->length() + 50);
+    view.setSpan(row, column, rowSpan, columnSpan);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowActive(&view));
+
+    foreach (Qt::Key key, keyPresses) {
+        QTest::keyClick(&view, key);
+    }
+    QCOMPARE(view.visualCursorIndex(), expectedVisualCursorIndex);
+    QCOMPARE(view.selectionModel()->currentIndex(), expectedEditedIndex);
+
+    QTest::keyClick(&view, Qt::Key_X);
+    QTest::keyClick(QApplication::focusWidget(), Qt::Key_Enter);
+    QTRY_COMPARE(view.model()->data(expectedEditedIndex).toString(), QLatin1String("x"));
 }
 
 class Model : public QAbstractTableModel {
@@ -3254,7 +3596,11 @@ public:
     {
         return QVariant();
     }
-    void res() { reset(); }
+    void res()
+    {
+        beginResetModel();
+        endResetModel();
+    }
 
     int rows;
     int columns;
@@ -3348,6 +3694,7 @@ void tst_QTableView::tabFocus()
     // to change focus on an empty table view, or on a table view that doesn't
     // have this property set.
     QWidget window;
+    window.resize(200, 200);
 
     QTableView *view = new QTableView(&window);
     QLineEdit *edit = new QLineEdit(&window);
@@ -3444,7 +3791,7 @@ public:
                           int role = Qt::DisplayRole) const
     {
         if (role == Qt::DisplayRole)
-            return QString("%1 - %2").arg(index.column()).arg(index.row());
+            return QString::number(index.column()) + QLatin1String(" - ") + QString::number(index.row());
         return QVariant();
     }
 
@@ -3556,7 +3903,7 @@ void tst_QTableView::task173773_updateVerticalHeader()
 
 void tst_QTableView::task227953_setRootIndex()
 {
-	QTableView tableView;
+    QTableView tableView;
 
     //model = tree with two items with tables as children
     QStandardItemModel model;
@@ -3566,28 +3913,28 @@ void tst_QTableView::task227953_setRootIndex()
 
     //setup the first table as a child of the first item
     for ( int row = 0; row < 40; ++row ) {
-        item1.appendRow(QList<QStandardItem*>() << new QStandardItem(QString("row %0").arg(row)));
+        item1.appendRow(QList<QStandardItem*>() << new QStandardItem(QLatin1String("row ") + QString::number(row)));
     }
 
     //setup the second table as a child of the second item
     for ( int row = 0; row < 10; ++row ) {
-        item2.appendRow(QList<QStandardItem*>() << new QStandardItem(QString("row %0").arg(row)));
+        item2.appendRow(QList<QStandardItem*>() << new QStandardItem(QLatin1String("row ") + QString::number(row)));
     }
 
     tableView.setModel(&model);
 
     //show the first 10 rows of the first table
     QModelIndex root = model.indexFromItem(&item1);
-	tableView.setRootIndex(root);
-	for (int i = 10; i != 40; ++i) {
-		tableView.setRowHidden(i, true);
-	}
+    tableView.setRootIndex(root);
+    for (int i = 10; i != 40; ++i) {
+        tableView.setRowHidden(i, true);
+    }
 
     QCOMPARE(tableView.verticalHeader()->count(), 40);
     QCOMPARE(tableView.verticalHeader()->hiddenSectionCount(), 30);
 
-	//show the first 10 rows of the second table
-	tableView.setRootIndex(model.indexFromItem(&item2));
+    //show the first 10 rows of the second table
+    tableView.setRootIndex(model.indexFromItem(&item2));
 
     QCOMPARE(tableView.verticalHeader()->count(), 10);
     QCOMPARE(tableView.verticalHeader()->hiddenSectionCount(), 0);
@@ -3629,8 +3976,8 @@ void tst_QTableView::task248688_autoScrollNavigation()
     QTableView view;
     view.setModel(&model);
 
-	view.hideColumn(8);
-	view.hideRow(8);
+    view.hideColumn(8);
+    view.hideRow(8);
     view.show();
     for (int r = 0; r < model.rowCount(); ++r) {
         if (view.isRowHidden(r))
@@ -3645,7 +3992,7 @@ void tst_QTableView::task248688_autoScrollNavigation()
     }
 }
 
-
+#if QT_CONFIG(wheelevent)
 void tst_QTableView::mouseWheel_data()
 {
     QTest::addColumn<int>("scrollMode");
@@ -3661,15 +4008,11 @@ void tst_QTableView::mouseWheel_data()
             << 10 + qApp->wheelScrollLines() << 10 + qApp->wheelScrollLines();
     QTest::newRow("scroll down per pixel")
             << int(QAbstractItemView::ScrollPerPixel) << -120
-            << 10 + qApp->wheelScrollLines() * 89 << 10 + qApp->wheelScrollLines() * 28;
+            << 10 + qApp->wheelScrollLines() * 91 << 10 + qApp->wheelScrollLines() * 46;
 }
 
 void tst_QTableView::mouseWheel()
 {
-#ifdef Q_OS_WINCE
-    QSKIP("Since different Windows CE versions sport different taskbars, we skip this test");
-#endif
-
     QFETCH(int, scrollMode);
     QFETCH(int, delta);
     QFETCH(int, horizontalPositon);
@@ -3679,15 +4022,16 @@ void tst_QTableView::mouseWheel()
     QWidget topLevel;
     QtTestTableView view(&topLevel);
     view.resize(500, 500);
-    for (int r = 0; r < 100; ++r)
-        view.setRowHeight(r, 50);
-    for (int c = 0; c < 100; ++c)
-        view.setColumnWidth(c, 100);
     topLevel.show();
 
     QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
 
     view.setModel(&model);
+
+    for (int r = 0; r < 100; ++r)
+        view.setRowHeight(r, 50);
+    for (int c = 0; c < 100; ++c)
+        view.setColumnWidth(c, 100);
 
     view.setHorizontalScrollMode((QAbstractItemView::ScrollMode)scrollMode);
     view.setVerticalScrollMode((QAbstractItemView::ScrollMode)scrollMode);
@@ -3698,10 +4042,11 @@ void tst_QTableView::mouseWheel()
     QWheelEvent verticalEvent(pos, delta, 0, 0, Qt::Vertical);
     QWheelEvent horizontalEvent(pos, delta, 0, 0, Qt::Horizontal);
     QApplication::sendEvent(view.viewport(), &horizontalEvent);
-    QVERIFY(qAbs(view.horizontalScrollBar()->value() - horizontalPositon) < 10);
+    QVERIFY(qAbs(view.horizontalScrollBar()->value() - horizontalPositon) < 15);
     QApplication::sendEvent(view.viewport(), &verticalEvent);
-    QVERIFY(qAbs(view.verticalScrollBar()->value() - verticalPosition) < 10);
+    QVERIFY(qAbs(view.verticalScrollBar()->value() - verticalPosition) < 15);
 }
+#endif // QT_CONFIG(wheelevent)
 
 void tst_QTableView::addColumnWhileEditing()
 {
@@ -3717,7 +4062,7 @@ void tst_QTableView::addColumnWhileEditing()
     //let's see if the editor is moved to the right location
     //after adding a column
     model.setColumnCount(model.columnCount() + 1);
-    QPointer<QLineEdit> editor = qFindChild<QLineEdit*>(&view);
+    QPointer<QLineEdit> editor = view.findChild<QLineEdit*>();
     QVERIFY(editor);
     QCOMPARE(editor->geometry(), view.visualRect(last));
 
@@ -3751,13 +4096,10 @@ void tst_QTableView::task259308_scrollVerticalHeaderSwappedSections()
     QTRY_COMPARE(tv.rowAt(0), tv.verticalHeader()->logicalIndex(0));
 
     int newRow = tv.rowAt(tv.viewport()->height());
-    if (newRow == tv.rowAt(tv.viewport()->height() - 1)) // Overlapping row
-        newRow++;
     QTest::keyClick(&tv, Qt::Key_PageDown); // Scroll down and check current
     QTRY_COMPARE(tv.currentIndex().row(), newRow);
 
     tv.setCurrentIndex(model.index(0, 0));
-    QTest::qWait(60);
     QTest::keyClick(&tv, Qt::Key_PageDown); // PageDown won't scroll when at the bottom
     QTRY_COMPARE(tv.rowAt(tv.viewport()->height() - 1), tv.verticalHeader()->logicalIndex(model.rowCount() - 1));
 }
@@ -3778,7 +4120,7 @@ void tst_QTableView::task191545_dragSelectRows()
     table.setSelectionMode(QAbstractItemView::ExtendedSelection);
     table.setMinimumSize(1000, 400);
     table.show();
-    QTest::qWait(200);
+    QVERIFY(QTest::qWaitForWindowActive(&table));
 
     ValueSaver<Qt::KeyboardModifiers> saver(QApplicationPrivate::modifier_buttons);
     QApplicationPrivate::modifier_buttons = Qt::ControlModifier;
@@ -3882,33 +4224,28 @@ void tst_QTableView::task234926_setHeaderSorting()
     data << "orange" << "apple" << "banana" << "lemon" << "pumpkin";
     QStringList sortedDataA = data;
     QStringList sortedDataD = data;
-    qSort(sortedDataA);
-    qSort(sortedDataD.begin(), sortedDataD.end(), qGreater<QString>());
+    std::sort(sortedDataA.begin(), sortedDataA.end());
+    std::sort(sortedDataD.begin(), sortedDataD.end(), qGreater<QString>());
     model.setStringList(data);
     QTableView view;
     view.setModel(&model);
 //    view.show();
-    QTest::qWait(20);
-    QCOMPARE(model.stringList(), data);
+    QTRY_COMPARE(model.stringList(), data);
     view.setSortingEnabled(true);
     view.sortByColumn(0, Qt::AscendingOrder);
-    QApplication::processEvents();
-    QCOMPARE(model.stringList() , sortedDataA);
+    QTRY_COMPARE(model.stringList() , sortedDataA);
 
     view.horizontalHeader()->setSortIndicator(0, Qt::DescendingOrder);
-    QApplication::processEvents();
-    QCOMPARE(model.stringList() , sortedDataD);
+    QTRY_COMPARE(model.stringList() , sortedDataD);
 
     QHeaderView *h = new QHeaderView(Qt::Horizontal);
     h->setModel(&model);
     view.setHorizontalHeader(h);
     h->setSortIndicator(0, Qt::AscendingOrder);
-    QApplication::processEvents();
-    QCOMPARE(model.stringList() , sortedDataA);
+    QTRY_COMPARE(model.stringList() , sortedDataA);
 
     h->setSortIndicator(0, Qt::DescendingOrder);
-    QApplication::processEvents();
-    QCOMPARE(model.stringList() , sortedDataD);
+    QTRY_COMPARE(model.stringList() , sortedDataD);
 }
 
 void tst_QTableView::taskQTBUG_5062_spansInconsistency()
@@ -3936,6 +4273,9 @@ void tst_QTableView::taskQTBUG_4516_clickOnRichTextLabel()
     QLabel label("rich text");
     label.setTextFormat(Qt::RichText);
     view.setIndexWidget(model.index(1,1), &label);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
     view.setCurrentIndex(model.index(0,0));
     QCOMPARE(view.currentIndex(), model.index(0,0));
 
@@ -3955,15 +4295,15 @@ void tst_QTableView::changeHeaderData()
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     QString text = "long long long text";
-    const int textWidth = view.verticalHeader()->fontMetrics().width(text);
+    const int textWidth = view.verticalHeader()->fontMetrics().horizontalAdvance(text);
     QVERIFY(view.verticalHeader()->width() < textWidth);
 
     model.setHeaderData(2, Qt::Vertical, text);
-    QTest::qWait(100); //leave time for layout
 
-    QVERIFY(view.verticalHeader()->width() > textWidth);
+    QTRY_VERIFY(view.verticalHeader()->width() > textWidth);
 }
 
+#if QT_CONFIG(wheelevent)
 void tst_QTableView::taskQTBUG_5237_wheelEventOnHeader()
 {
     QTableView view;
@@ -3980,6 +4320,7 @@ void tst_QTableView::taskQTBUG_5237_wheelEventOnHeader()
     int sbValueAfter = view.verticalScrollBar()->value();
     QVERIFY(sbValueBefore != sbValueAfter);
 }
+#endif
 
 class TestTableView : public QTableView {
 Q_OBJECT
@@ -4047,7 +4388,8 @@ void tst_QTableView::taskQTBUG_7774_RtoLVisualRegionForSelection()
     QItemSelection selection;
     selection << range;
     QRegion region = view.visualRegionForSelection(selection);
-    QCOMPARE(region.rects().at(0), view.visualRect(range.topLeft()) | view.visualRect(range.bottomRight()));
+    QVERIFY(!region.isEmpty());
+    QCOMPARE(region.begin()[0], view.visualRect(range.topLeft()) | view.visualRect(range.bottomRight()));
 }
 
 void tst_QTableView::taskQTBUG_8777_scrollToSpans()
@@ -4084,6 +4426,110 @@ void tst_QTableView::viewOptions()
     QtTestTableView view;
     QStyleOptionViewItem options = view.viewOptions();
     QVERIFY(options.showDecorationSelected);
+}
+
+void tst_QTableView::taskQTBUG_30653_doItemsLayout()
+{
+    QWidget topLevel;
+    QtTestTableView view(&topLevel);
+
+    QtTestTableModel model(5, 5);
+    view.setModel(&model);
+
+    QtTestItemDelegate delegate;
+    delegate.hint = QSize(50, 50);
+    view.setItemDelegate(&delegate);
+
+    view.resizeRowsToContents();
+    view.resizeColumnsToContents();
+
+    // show two and half rows/cols
+    int extraWidth = view.verticalHeader()->sizeHint().width() + view.verticalScrollBar()->sizeHint().width();
+    int extraHeight = view.horizontalHeader()->sizeHint().height() + view.horizontalScrollBar()->sizeHint().height();
+    view.resize(125 + extraWidth, 125 + extraHeight);
+
+    topLevel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
+
+    // the offset after scrollToBottom() and doItemsLayout() should not differ
+    // as the view content should stay aligned to the last section
+    view.scrollToBottom();
+    int scrollToBottomOffset = view.verticalHeader()->offset();
+    view.doItemsLayout();
+    int doItemsLayoutOffset = view.verticalHeader()->offset();
+
+    QCOMPARE(scrollToBottomOffset, doItemsLayoutOffset);
+}
+
+void tst_QTableView::taskQTBUG_7232_AllowUserToControlSingleStep()
+{
+    // When we set the scrollMode to ScrollPerPixel it will adjust the scrollbars singleStep automatically
+    // Setting a singlestep on a scrollbar should however imply that the user takes control (and it is not changed by geometry updates).
+    // Setting a singlestep to -1 return to an automatic control of the singleStep.
+    QTableView t;
+    t.setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    t.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    QStandardItemModel model(200, 200);
+    t.setModel(&model);
+    t.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&t));
+    t.setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    t.setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+
+    t.setGeometry(200, 200, 200, 200);
+    int vStep1 = t.verticalScrollBar()->singleStep();
+    int hStep1 = t.horizontalScrollBar()->singleStep();
+    QVERIFY(vStep1 > 1);
+    QVERIFY(hStep1 > 1);
+
+    t.verticalScrollBar()->setSingleStep(1);
+    t.setGeometry(300, 300, 300, 300);
+    QCOMPARE(t.verticalScrollBar()->singleStep(), 1);
+
+    t.horizontalScrollBar()->setSingleStep(1);
+    t.setGeometry(400, 400, 400, 400);
+    QCOMPARE(t.horizontalScrollBar()->singleStep(), 1);
+
+    t.setGeometry(200, 200, 200, 200);
+    t.verticalScrollBar()->setSingleStep(-1);
+    t.horizontalScrollBar()->setSingleStep(-1);
+    QCOMPARE(vStep1, t.verticalScrollBar()->singleStep());
+    QCOMPARE(hStep1, t.horizontalScrollBar()->singleStep());
+}
+
+void tst_QTableView::taskQTBUG_50171_selectRowAfterSwapColumns()
+{
+    {
+        QtTestTableView tableView;
+        QtTestTableModel model(2, 3);
+        tableView.setModel(&model);
+
+        tableView.horizontalHeader()->swapSections(1, 2);
+        tableView.horizontalHeader()->hideSection(0);
+        tableView.selectRow(1);
+
+        QItemSelectionModel* tableSelectionModel = tableView.selectionModel();
+        QCOMPARE(tableSelectionModel->isRowSelected(1, QModelIndex()), true);
+        QCOMPARE(tableSelectionModel->isSelected(tableView.model()->index(0, 0)), false);
+        QCOMPARE(tableSelectionModel->isSelected(tableView.model()->index(0, 1)), false);
+        QCOMPARE(tableSelectionModel->isSelected(tableView.model()->index(0, 2)), false);
+    }
+
+    {
+        QtTestTableView tableView;
+        QtTestTableModel model(3, 2);
+        tableView.setModel(&model);
+
+        tableView.verticalHeader()->swapSections(1, 2);
+        tableView.verticalHeader()->hideSection(0);
+        tableView.selectColumn(1);
+
+        QItemSelectionModel* sModel = tableView.selectionModel();
+        QCOMPARE(sModel->isColumnSelected(1, QModelIndex()), true);
+        QCOMPARE(sModel->isSelected(tableView.model()->index(0, 0)), false);
+        QCOMPARE(sModel->isSelected(tableView.model()->index(1, 0)), false);
+        QCOMPARE(sModel->isSelected(tableView.model()->index(2, 0)), false);
+    }
 }
 
 QTEST_MAIN(tst_QTableView)

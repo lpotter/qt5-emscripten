@@ -1,39 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -41,7 +39,7 @@
 
 #include "qabstractscrollarea.h"
 
-#ifndef QT_NO_SCROLLAREA
+#if QT_CONFIG(scrollarea)
 
 #include "qscrollbar.h"
 #include "qapplication.h"
@@ -52,7 +50,9 @@
 #include "qboxlayout.h"
 #include "qpainter.h"
 #include "qmargins.h"
+#if QT_CONFIG(itemviews)
 #include "qheaderview.h"
+#endif
 
 #include <QDebug>
 
@@ -62,12 +62,11 @@
 
 #include <private/qapplication_p.h>
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
 #include <private/qt_mac_p.h>
 #include <private/qt_cocoa_helpers_mac_p.h>
 #endif
 #ifdef Q_OS_WIN
-#  include <qlibrary.h>
 #  include <qt_windows.h>
 #endif
 
@@ -167,11 +166,16 @@ QT_BEGIN_NAMESPACE
 
 QAbstractScrollAreaPrivate::QAbstractScrollAreaPrivate()
     :hbar(0), vbar(0), vbarpolicy(Qt::ScrollBarAsNeeded), hbarpolicy(Qt::ScrollBarAsNeeded),
+     shownOnce(false), inResize(false), sizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored),
      viewport(0), cornerWidget(0), left(0), top(0), right(0), bottom(0),
      xoffset(0), yoffset(0), viewportFilter(0)
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
      , singleFingerPanEnabled(false)
 #endif
+{
+}
+
+QAbstractScrollAreaPrivate::~QAbstractScrollAreaPrivate()
 {
 }
 
@@ -213,10 +217,12 @@ QWidgetList QAbstractScrollAreaScrollBarContainer::widgets(LogicalPosition posit
     QWidgetList list;
     const int scrollBarIndex = scrollBarLayoutIndex();
     if (position == LogicalLeft) {
+        list.reserve(scrollBarIndex);
         for (int i = 0; i < scrollBarIndex; ++i)
             list.append(layout->itemAt(i)->widget());
     } else if (position == LogicalRight) {
         const int layoutItemCount = layout->count();
+        list.reserve(layoutItemCount - (scrollBarIndex + 1));
         for (int i = scrollBarIndex + 1; i < layoutItemCount; ++i)
             list.append(layout->itemAt(i)->widget());
     }
@@ -264,6 +270,7 @@ void QAbstractScrollAreaPrivate::replaceScrollBar(QScrollBar *scrollBar,
     scrollBar->setOrientation(oldBar->orientation());
     scrollBar->setPageStep(oldBar->pageStep());
     scrollBar->setSingleStep(oldBar->singleStep());
+    scrollBar->d_func()->viewMayChangeSingleStep = oldBar->d_func()->viewMayChangeSingleStep;
     scrollBar->setSliderDown(oldBar->isSliderDown());
     scrollBar->setSliderPosition(oldBar->sliderPosition());
     scrollBar->setTracking(oldBar->hasTracking());
@@ -304,18 +311,18 @@ void QAbstractScrollAreaPrivate::init()
     viewportFilter.reset(new QAbstractScrollAreaFilter(this));
     viewport->installEventFilter(viewportFilter.data());
     viewport->setFocusProxy(q);
-    q->setFocusPolicy(Qt::WheelFocus);
+    q->setFocusPolicy(Qt::StrongFocus);
     q->setFrameStyle(QFrame::StyledPanel | QFrame::Sunken);
     q->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     layoutChildren();
-#ifndef Q_WS_MAC
+#ifndef Q_OS_OSX
 #  ifndef QT_NO_GESTURES
     viewport->grabGesture(Qt::PanGesture);
 #  endif
 #endif
 }
 
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
 void QAbstractScrollAreaPrivate::setSingleFingerPanEnabled(bool on)
 {
     singleFingerPanEnabled = on;
@@ -323,23 +330,39 @@ void QAbstractScrollAreaPrivate::setSingleFingerPanEnabled(bool on)
     if (dd)
         dd->winSetupGestures();
 }
-#endif // Q_WS_WIN
+#endif
 
 void QAbstractScrollAreaPrivate::layoutChildren()
 {
-    Q_Q(QAbstractScrollArea);
-    bool needh = (hbarpolicy == Qt::ScrollBarAlwaysOn
-                  || (hbarpolicy == Qt::ScrollBarAsNeeded && hbar->minimum() < hbar->maximum() && !hbar->sizeHint().isEmpty()));
+    bool needH = false;
+    bool needV = false;
+    layoutChildren_helper(&needH, &needV);
+    // Call a second time if one scrollbar was needed and not the other to
+    // check if it needs to readjust accordingly
+    if (needH != needV)
+        layoutChildren_helper(&needH, &needV);
+}
 
-    bool needv = (vbarpolicy == Qt::ScrollBarAlwaysOn
-                  || (vbarpolicy == Qt::ScrollBarAsNeeded && vbar->minimum() < vbar->maximum() && !vbar->sizeHint().isEmpty()));
+void QAbstractScrollAreaPrivate::layoutChildren_helper(bool *needHorizontalScrollbar, bool *needVerticalScrollbar)
+{
+    Q_Q(QAbstractScrollArea);
+    bool htransient = hbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, hbar);
+    bool needh = *needHorizontalScrollbar || ((hbarpolicy != Qt::ScrollBarAlwaysOff) && ((hbarpolicy == Qt::ScrollBarAlwaysOn && !htransient)
+                            || ((hbarpolicy == Qt::ScrollBarAsNeeded || htransient)
+                            && hbar->minimum() < hbar->maximum() && !hbar->sizeHint().isEmpty())));
+
+    bool vtransient = vbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, vbar);
+    bool needv = *needVerticalScrollbar || ((vbarpolicy != Qt::ScrollBarAlwaysOff) && ((vbarpolicy == Qt::ScrollBarAlwaysOn && !vtransient)
+                            || ((vbarpolicy == Qt::ScrollBarAsNeeded || vtransient)
+                            && vbar->minimum() < vbar->maximum() && !vbar->sizeHint().isEmpty())));
 
     QStyleOption opt(0);
     opt.init(q);
-    const int scrollOverlap = q->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarOverlap,
-                                                      &opt, q);
 
-#ifdef Q_WS_MAC
+    const int hscrollOverlap = hbar->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarOverlap, &opt, hbar);
+    const int vscrollOverlap = vbar->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarOverlap, &opt, vbar);
+
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     QWidget * const window = q->window();
 
     // Use small scroll bars for tool windows, to match the native size grip.
@@ -382,7 +405,7 @@ void QAbstractScrollAreaPrivate::layoutChildren()
 
 // If the scroll bars are at the very right and bottom of the window we
 // move their positions to be aligned with the size grip.
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     // Check if a native sizegrip is present.
     bool hasMacReverseSizeGrip = false;
     bool hasMacSizeGrip = false;
@@ -404,7 +427,7 @@ void QAbstractScrollAreaPrivate::layoutChildren()
     }
 #endif
 
-    QPoint cornerOffset((needv && scrollOverlap == 0) ? vsbExt : 0, (needh && scrollOverlap == 0) ? hsbExt : 0);
+    QPoint cornerOffset((needv && vscrollOverlap == 0) ? vsbExt : 0, (needh && hscrollOverlap == 0) ? hsbExt : 0);
     QRect controlsRect;
     QRect viewportRect;
 
@@ -413,8 +436,8 @@ void QAbstractScrollAreaPrivate::layoutChildren()
     if ((frameStyle != QFrame::NoFrame) &&
         q->style()->styleHint(QStyle::SH_ScrollView_FrameOnlyAroundContents, &opt, q)) {
         controlsRect = widgetRect;
-        const int extra = scrollOverlap + q->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarSpacing, &opt, q);
-        const QPoint cornerExtra(needv ? extra : 0, needh ? extra : 0);
+        const int spacing = q->style()->pixelMetric(QStyle::PM_ScrollView_ScrollBarSpacing, &opt, q);
+        const QPoint cornerExtra(needv ? spacing + vscrollOverlap : 0, needh ? spacing + hscrollOverlap : 0);
         QRect frameRect = widgetRect;
         frameRect.adjust(0, 0, -cornerOffset.x() - cornerExtra.x(), -cornerOffset.y() - cornerExtra.y());
         q->setFrameRect(QStyle::visualRect(opt.direction, opt.rect, frameRect));
@@ -432,10 +455,10 @@ void QAbstractScrollAreaPrivate::layoutChildren()
 
     // If we have a corner widget and are only showing one scroll bar, we need to move it
     // to make room for the corner widget.
-    if (hasCornerWidget && (needv || needh) && scrollOverlap == 0)
+    if (hasCornerWidget && ((needv && vscrollOverlap == 0) || (needh && hscrollOverlap == 0)))
         cornerOffset =  extPoint;
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     // Also move the scroll bars if they are covered by the native Mac size grip.
     if (hasMacSizeGrip)
         cornerOffset =  extPoint;
@@ -446,21 +469,13 @@ void QAbstractScrollAreaPrivate::layoutChildren()
     const QPoint cornerPoint(controlsRect.bottomRight() + QPoint(1, 1) - cornerOffset);
 
     // Some styles paints the corner if both scorllbars are showing and there is
-    // no corner widget. Also, on the Mac we paint if there is a native
-    // (transparent) sizegrip in the area where a corner widget would be.
-    if ((needv && needh && hasCornerWidget == false && scrollOverlap == 0)
-        || ((needv || needh) 
-#ifdef Q_WS_MAC
-        && hasMacSizeGrip
-#endif
-        )
-    ) {
+    // no corner widget.
+    if (needv && needh && !hasCornerWidget && hscrollOverlap == 0 && vscrollOverlap == 0)
         cornerPaintingRect = QStyle::visualRect(opt.direction, opt.rect, QRect(cornerPoint, extSize));
-    } else {
+    else
         cornerPaintingRect = QRect();
-    }
 
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (hasMacReverseSizeGrip)
         reverseCornerPaintingRect = QRect(controlsRect.bottomRight() + QPoint(1, 1) - extPoint, extSize);
     else
@@ -470,10 +485,11 @@ void QAbstractScrollAreaPrivate::layoutChildren()
     // move the scrollbars away from top/left headers
     int vHeaderRight = 0;
     int hHeaderBottom = 0;
-    if (scrollOverlap > 0 && (needv || needh)) {
+#if QT_CONFIG(itemviews)
+    if ((vscrollOverlap > 0 && needv) || (hscrollOverlap > 0 && needh)) {
         const QList<QHeaderView *> headers = q->findChildren<QHeaderView*>();
         if (headers.count() <= 2) {
-            Q_FOREACH (const QHeaderView *header, headers) {
+            for (const QHeaderView *header : headers) {
                 const QRect geo = header->geometry();
                 if (header->orientation() == Qt::Vertical && header->isVisible() && QStyle::visualRect(opt.direction, opt.rect, geo).left() <= opt.rect.width() / 2)
                     vHeaderRight = QStyle::visualRect(opt.direction, opt.rect, geo).right();
@@ -482,19 +498,23 @@ void QAbstractScrollAreaPrivate::layoutChildren()
              }
          }
     }
-
+#endif // QT_CONFIG(itemviews)
     if (needh) {
         QRect horizontalScrollBarRect(QPoint(controlsRect.left() + vHeaderRight, cornerPoint.y()), QPoint(cornerPoint.x() - 1, controlsRect.bottom()));
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         if (hasMacReverseSizeGrip)
             horizontalScrollBarRect.adjust(vsbExt, 0, 0, 0);
 #endif
+        if (!hasCornerWidget && htransient)
+            horizontalScrollBarRect.adjust(0, 0, cornerOffset.x(), 0);
         scrollBarContainers[Qt::Horizontal]->setGeometry(QStyle::visualRect(opt.direction, opt.rect, horizontalScrollBarRect));
         scrollBarContainers[Qt::Horizontal]->raise();
     }
 
     if (needv) {
-        const QRect verticalScrollBarRect  (QPoint(cornerPoint.x(), controlsRect.top() + hHeaderBottom),  QPoint(controlsRect.right(), cornerPoint.y() - 1));
+        QRect verticalScrollBarRect  (QPoint(cornerPoint.x(), controlsRect.top() + hHeaderBottom),  QPoint(controlsRect.right(), cornerPoint.y() - 1));
+        if (!hasCornerWidget && vtransient)
+            verticalScrollBarRect.adjust(0, 0, 0, cornerOffset.y());
         scrollBarContainers[Qt::Vertical]->setGeometry(QStyle::visualRect(opt.direction, opt.rect, verticalScrollBarRect));
         scrollBarContainers[Qt::Vertical]->raise();
     }
@@ -513,7 +533,22 @@ void QAbstractScrollAreaPrivate::layoutChildren()
         viewportRect.adjust(left, top, -right, -bottom);
 
     viewport->setGeometry(QStyle::visualRect(opt.direction, opt.rect, viewportRect)); // resize the viewport last
+    *needHorizontalScrollbar = needh;
+    *needVerticalScrollbar = needv;
 }
+
+/*!
+    \enum QAbstractScrollArea::SizeAdjustPolicy
+    \since 5.2
+
+    This enum specifies how the size hint of the QAbstractScrollArea should
+    adjust when the size of the viewport changes.
+
+    \value AdjustIgnored                 The scroll area will behave like before - and not do any adjust.
+    \value AdjustToContents              The scroll area will always adjust to the viewport
+    \value AdjustToContentsOnFirstShow   The scroll area will adjust to its viewport the first time it is shown.
+*/
+
 
 /*!
     \internal
@@ -582,12 +617,15 @@ void QAbstractScrollArea::setViewport(QWidget *widget)
         d->viewport->setParent(this);
         d->viewport->setFocusProxy(this);
         d->viewport->installEventFilter(d->viewportFilter.data());
-#ifndef Q_WS_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
 #ifndef QT_NO_GESTURES
         d->viewport->grabGesture(Qt::PanGesture);
 #endif
 #endif
         d->layoutChildren();
+#ifndef QT_NO_OPENGL
+        QWidgetPrivate::get(d->viewport)->initializeViewportFramebuffer();
+#endif
         if (isVisible())
             d->viewport->show();
         setupViewport(widget);
@@ -614,7 +652,6 @@ QWidget *QAbstractScrollArea::viewport() const
 Returns the size of the viewport as if the scroll bars had no valid
 scrolling range.
 */
-// ### still thinking about the name
 QSize QAbstractScrollArea::maximumViewportSize() const
 {
     Q_D(const QAbstractScrollArea);
@@ -654,7 +691,6 @@ void QAbstractScrollArea::setVerticalScrollBarPolicy(Qt::ScrollBarPolicy policy)
         d->layoutChildren();
     if (oldPolicy != d->vbarpolicy)
         d->scrollBarPolicyChanged(Qt::Vertical, d->vbarpolicy);
-    d->setScrollBarTransient(d->vbar, policy == Qt::ScrollBarAsNeeded);
 }
 
 
@@ -684,7 +720,7 @@ QScrollBar *QAbstractScrollArea::verticalScrollBar() const
 void QAbstractScrollArea::setVerticalScrollBar(QScrollBar *scrollBar)
 {
     Q_D(QAbstractScrollArea);
-    if (!scrollBar) {
+    if (Q_UNLIKELY(!scrollBar)) {
         qWarning("QAbstractScrollArea::setVerticalScrollBar: Cannot set a null scroll bar");
         return;
     }
@@ -716,7 +752,6 @@ void QAbstractScrollArea::setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy polic
         d->layoutChildren();
     if (oldPolicy != d->hbarpolicy)
         d->scrollBarPolicyChanged(Qt::Horizontal, d->hbarpolicy);
-    d->setScrollBarTransient(d->hbar, policy == Qt::ScrollBarAsNeeded);
 }
 
 /*!
@@ -746,7 +781,7 @@ QScrollBar *QAbstractScrollArea::horizontalScrollBar() const
 void QAbstractScrollArea::setHorizontalScrollBar(QScrollBar *scrollBar)
 {
     Q_D(QAbstractScrollArea);
-    if (!scrollBar) {
+    if (Q_UNLIKELY(!scrollBar)) {
         qWarning("QAbstractScrollArea::setHorizontalScrollBar: Cannot set a null scroll bar");
         return;
     }
@@ -901,7 +936,7 @@ QWidgetList QAbstractScrollArea::scrollBarWidgets(Qt::Alignment alignment)
     they should not call this function.
 
     By default all margins are zero.
-
+    \sa viewportMargins()
 */
 void QAbstractScrollArea::setViewportMargins(int left, int top, int right, int bottom)
 {
@@ -921,7 +956,7 @@ void QAbstractScrollArea::setViewportMargins(int left, int top, int right, int b
     area.
 
     By default all margins are zero.
-
+    \sa viewportMargins()
 */
 void QAbstractScrollArea::setViewportMargins(const QMargins &margins)
 {
@@ -929,15 +964,30 @@ void QAbstractScrollArea::setViewportMargins(const QMargins &margins)
                        margins.right(), margins.bottom());
 }
 
+/*!
+    \since 5.5
+    Returns the margins around the scrolling area.
+    By default all the margins are zero.
+
+    \sa setViewportMargins()
+*/
+QMargins QAbstractScrollArea::viewportMargins() const
+{
+    Q_D(const QAbstractScrollArea);
+    return QMargins(d->left, d->top, d->right, d->bottom);
+}
+
 /*! \internal */
 bool QAbstractScrollArea::eventFilter(QObject *o, QEvent *e)
 {
     Q_D(QAbstractScrollArea);
     if ((o == d->hbar || o == d->vbar) && (e->type() == QEvent::HoverEnter || e->type() == QEvent::HoverLeave)) {
-        Qt::ScrollBarPolicy policy = o == d->hbar ? d->vbarpolicy : d->hbarpolicy;
-        if (policy == Qt::ScrollBarAsNeeded) {
-            QScrollBar *sibling = o == d->hbar ? d->vbar : d->hbar;
-            d->setScrollBarTransient(sibling, e->type() == QEvent::HoverLeave);
+        if (d->hbarpolicy == Qt::ScrollBarAsNeeded && d->vbarpolicy == Qt::ScrollBarAsNeeded) {
+            QScrollBar *sbar = static_cast<QScrollBar*>(o);
+            QScrollBar *sibling = sbar == d->hbar ? d->vbar : d->hbar;
+            if (sbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, sbar) &&
+                    sibling->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, sibling))
+                d->setScrollBarTransient(sibling, e->type() == QEvent::HoverLeave);
         }
     }
     return QFrame::eventFilter(o, e);
@@ -972,8 +1022,19 @@ bool QAbstractScrollArea::event(QEvent *e)
         d->viewport->setMouseTracking(hasMouseTracking());
         break;
     case QEvent::Resize:
+        if (!d->inResize) {
+            d->inResize = true;
             d->layoutChildren();
-            break;
+            d->inResize = false;
+        }
+        break;
+    case QEvent::Show:
+        if (!d->shownOnce && d->sizeAdjustPolicy == QAbstractScrollArea::AdjustToContentsOnFirstShow) {
+            d->sizeHint = QSize();
+            updateGeometry();
+        }
+        d->shownOnce = true;
+        return QFrame::event(e);
     case QEvent::Paint: {
         QStyleOption option;
         option.initFrom(this);
@@ -982,7 +1043,7 @@ bool QAbstractScrollArea::event(QEvent *e)
             QPainter p(this);
             style()->drawPrimitive(QStyle::PE_PanelScrollAreaCorner, &option, &p, this);
         }
-#ifdef Q_WS_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         if (d->reverseCornerPaintingRect.isValid()) {
             option.rect = d->reverseCornerPaintingRect;
             QPainter p(this);
@@ -1004,7 +1065,7 @@ bool QAbstractScrollArea::event(QEvent *e)
     case QEvent::MouseButtonDblClick:
     case QEvent::MouseMove:
     case QEvent::Wheel:
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     case QEvent::Drop:
     case QEvent::DragEnter:
     case QEvent::DragMove:
@@ -1061,7 +1122,7 @@ bool QAbstractScrollArea::event(QEvent *e)
         hBar->setValue(se->contentPos().x());
         vBar->setValue(se->contentPos().y());
 
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
         typedef BOOL (*PtrBeginPanningFeedback)(HWND);
         typedef BOOL (*PtrUpdatePanningFeedback)(HWND, LONG, LONG, BOOL);
         typedef BOOL (*PtrEndPanningFeedback)(HWND, BOOL);
@@ -1102,7 +1163,7 @@ bool QAbstractScrollArea::event(QEvent *e)
     case QEvent::ApplicationLayoutDirectionChange:
     case QEvent::LayoutRequest:
         d->layoutChildren();
-        // fall through
+        Q_FALLTHROUGH();
     default:
         return QFrame::event(e);
     }
@@ -1116,8 +1177,8 @@ bool QAbstractScrollArea::event(QEvent *e)
   It handles the \a event specified, and can be called by subclasses to
   provide reasonable default behavior.
 
-  Returns true to indicate to the event system that the event has been
-  handled, and needs no further processing; otherwise returns false to
+  Returns \c true to indicate to the event system that the event has been
+  handled, and needs no further processing; otherwise returns \c false to
   indicate that the event should be propagated further.
 
   You can reimplement this function in a subclass, but we recommend
@@ -1142,14 +1203,20 @@ bool QAbstractScrollArea::viewportEvent(QEvent *e)
     case QEvent::TouchEnd:
     case QEvent::MouseMove:
     case QEvent::ContextMenu:
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
     case QEvent::Wheel:
 #endif
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
     case QEvent::Drop:
     case QEvent::DragEnter:
     case QEvent::DragMove:
     case QEvent::DragLeave:
+#endif
+#ifndef QT_NO_OPENGL
+        // QOpenGLWidget needs special support because it has to know
+        // its size has changed, so that it can resize its fbo.
+        if (e->type() == QEvent::Resize)
+            QWidgetPrivate::get(viewport())->resizeViewportFramebuffer();
 #endif
         return QFrame::event(e);
     case QEvent::LayoutRequest:
@@ -1253,11 +1320,11 @@ void QAbstractScrollArea::mouseMoveEvent(QMouseEvent *e)
 
     \sa QWidget::wheelEvent()
 */
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
 void QAbstractScrollArea::wheelEvent(QWheelEvent *e)
 {
     Q_D(QAbstractScrollArea);
-    if (static_cast<QWheelEvent*>(e)->orientation() == Qt::Horizontal)
+    if (e->orientation() == Qt::Horizontal)
         QApplication::sendEvent(d->hbar, e);
     else
         QApplication::sendEvent(d->vbar, e);
@@ -1342,7 +1409,7 @@ void QAbstractScrollArea::keyPressEvent(QKeyEvent * e)
 }
 
 
-#ifndef QT_NO_DRAGANDDROP
+#if QT_CONFIG(draganddrop)
 /*!
     \fn void QAbstractScrollArea::dragEnterEvent(QDragEnterEvent *event)
 
@@ -1421,7 +1488,7 @@ bool QAbstractScrollAreaPrivate::canStartScrollingAt( const QPoint &startPos )
 {
     Q_Q(QAbstractScrollArea);
 
-#ifndef QT_NO_GRAPHICSVIEW
+#if QT_CONFIG(graphicsview)
     // don't start scrolling when a drag mode has been set.
     // don't start scrolling on a movable item.
     if (QGraphicsView *view = qobject_cast<QGraphicsView *>(q)) {
@@ -1445,9 +1512,11 @@ bool QAbstractScrollAreaPrivate::canStartScrollingAt( const QPoint &startPos )
 
 void QAbstractScrollAreaPrivate::flashScrollBars()
 {
-    if (hbarpolicy == Qt::ScrollBarAsNeeded)
+    bool htransient = hbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, hbar);
+    if ((hbarpolicy != Qt::ScrollBarAlwaysOff) && (hbarpolicy == Qt::ScrollBarAsNeeded || htransient))
         hbar->d_func()->flash();
-    if (vbarpolicy == Qt::ScrollBarAsNeeded)
+    bool vtransient = vbar->style()->styleHint(QStyle::SH_ScrollBar_Transient, 0, vbar);
+    if ((vbarpolicy != Qt::ScrollBarAlwaysOff) && (vbarpolicy == Qt::ScrollBarAsNeeded || vtransient))
         vbar->d_func()->flash();
 }
 
@@ -1477,13 +1546,13 @@ void QAbstractScrollAreaPrivate::_q_vslide(int y)
 void QAbstractScrollAreaPrivate::_q_showOrHideScrollBars()
 {
     layoutChildren();
-#ifdef Q_WS_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
     // Need to re-subscribe to gestures as the content changes to make sure we
     // enable/disable panning when needed.
     QWidgetPrivate *dd = static_cast<QWidgetPrivate *>(QObjectPrivate::get(viewport));
     if (dd)
         dd->winSetupGestures();
-#endif // Q_WS_WIN
+#endif
 }
 
 QPoint QAbstractScrollAreaPrivate::contentsOffset() const
@@ -1522,17 +1591,70 @@ QSize QAbstractScrollArea::minimumSizeHint() const
 }
 
 /*!
+    Returns the sizeHint property of the scroll area. The size is determined by using
+    viewportSizeHint() plus some extra space for scroll bars, if needed.
     \reimp
 */
 QSize QAbstractScrollArea::sizeHint() const
 {
-    return QSize(256, 192);
-#if 0
     Q_D(const QAbstractScrollArea);
-    int h = qMax(10, fontMetrics().height());
-    int f = 2 * d->frameWidth;
-    return QSize((6 * h) + f, (4 * h) + f);
-#endif
+    if (d->sizeAdjustPolicy == QAbstractScrollArea::AdjustIgnored)
+        return QSize(256, 192);
+
+    if (!d->sizeHint.isValid() || d->sizeAdjustPolicy == QAbstractScrollArea::AdjustToContents) {
+        const int f = 2 * d->frameWidth;
+        const QSize frame( f, f );
+        const QSize scrollbars(d->vbarpolicy == Qt::ScrollBarAlwaysOn ? d->vbar->sizeHint().width() : 0,
+                               d->hbarpolicy == Qt::ScrollBarAlwaysOn ? d->hbar->sizeHint().height() : 0);
+        d->sizeHint = frame + scrollbars + viewportSizeHint();
+    }
+    return d->sizeHint;
+}
+
+/*!
+   \since 5.2
+   Returns the recommended size for the viewport.
+   The default implementation returns viewport()->sizeHint().
+   Note that the size is just the viewport's size, without any scroll bars visible.
+ */
+QSize QAbstractScrollArea::viewportSizeHint() const
+{
+    Q_D(const QAbstractScrollArea);
+    if (d->viewport) {
+        const QSize sh = d->viewport->sizeHint();
+        if (sh.isValid()) {
+            return sh;
+        }
+    }
+    const int h = qMax(10, fontMetrics().height());
+    return QSize(6 * h, 4 * h);
+}
+
+/*!
+    \since 5.2
+    \property QAbstractScrollArea::sizeAdjustPolicy
+    This property holds the policy describing how the size of the scroll area changes when the
+    size of the viewport changes.
+
+    The default policy is QAbstractScrollArea::AdjustIgnored.
+    Changing this property might actually resize the scrollarea.
+*/
+
+QAbstractScrollArea::SizeAdjustPolicy QAbstractScrollArea::sizeAdjustPolicy() const
+{
+    Q_D(const QAbstractScrollArea);
+    return d->sizeAdjustPolicy;
+}
+
+void QAbstractScrollArea::setSizeAdjustPolicy(SizeAdjustPolicy policy)
+{
+    Q_D(QAbstractScrollArea);
+    if (d->sizeAdjustPolicy == policy)
+        return;
+
+    d->sizeAdjustPolicy = policy;
+    d->sizeHint = QSize();
+    updateGeometry();
 }
 
 /*!
@@ -1548,19 +1670,9 @@ void QAbstractScrollArea::setupViewport(QWidget *viewport)
     Q_UNUSED(viewport);
 }
 
-/*!
-    \internal
-
-    This method is reserved for future use.
-*/
-QSize QAbstractScrollArea::viewportSizeHint() const
-{
-    return QSize();
-}
-
 QT_END_NAMESPACE
 
 #include "moc_qabstractscrollarea.cpp"
 #include "moc_qabstractscrollarea_p.cpp"
 
-#endif // QT_NO_SCROLLAREA
+#endif // QT_CONFIG(scrollarea)

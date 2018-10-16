@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -63,7 +61,7 @@
 
     \li When using QPointer on a QWidget (or a subclass of QWidget), previously
     the QPointer would be cleared by the QWidget destructor. Now, the QPointer
-    is cleared by the QObject destructor (since this is when QWeakPointers are
+    is cleared by the QObject destructor (since this is when QWeakPointer objects are
     cleared). Any QPointers tracking a widget will \b NOT be cleared before the
     QWidget destructor destroys the children for the widget being tracked.
 
@@ -113,7 +111,7 @@
 */
 
 /*!
-    \fn QPointer::QPointer()
+    \fn template <class T> QPointer<T>::QPointer()
 
     Constructs a 0 guarded pointer.
 
@@ -121,14 +119,14 @@
 */
 
 /*!
-    \fn QPointer::QPointer(T* p)
+    \fn template <class T> QPointer<T>::QPointer(T* p)
 
     Constructs a guarded pointer that points to the same object that \a p
     points to.
 */
 
 /*!
-    \fn QPointer::~QPointer()
+    \fn template <class T> QPointer<T>::~QPointer()
 
     Destroys the guarded pointer. Just like a normal pointer,
     destroying a guarded pointer does \e not destroy the object being
@@ -136,28 +134,37 @@
 */
 
 /*!
-    \fn QPointer<T> & QPointer::operator=(T* p)
+    \fn template <class T> void QPointer<T>::swap(QPointer &other)
+    \since 5.6
+
+    Swaps the contents of this QPointer with the contents of \a other.
+    This operation is very fast and never fails.
+*/
+
+/*!
+    \fn template <class T> QPointer<T> & QPointer<T>::operator=(T* p)
 
     Assignment operator. This guarded pointer will now point to the
     same object that \a p points to.
 */
 
 /*!
-    \fn T* QPointer::data() const
+    \fn template <class T> T* QPointer<T>::data() const
     \since 4.4
 
     Returns the pointer to the object being guarded.
 */
 
 /*!
-    \fn bool QPointer::isNull() const
+    \fn template <class T> bool QPointer<T>::isNull() const
 
     Returns \c true if the referenced object has been destroyed or if
-    there is no referenced object; otherwise returns false.
+    there is no referenced object; otherwise returns \c false.
 */
 
 /*!
-    \fn void QPointer::clear()
+    \fn template <class T> void QPointer<T>::clear()
+    \since 5.0
 
     Clears this QPointer object.
 
@@ -165,21 +172,21 @@
 */
 
 /*!
-    \fn T* QPointer::operator->() const
+    \fn template <class T> T* QPointer<T>::operator->() const
 
     Overloaded arrow operator; implements pointer semantics. Just use
     this operator as you would with a normal C++ pointer.
 */
 
 /*!
-    \fn T& QPointer::operator*() const
+    \fn template <class T> T& QPointer<T>::operator*() const
 
     Dereference operator; implements pointer semantics. Just use this
     operator as you would with a normal C++ pointer.
 */
 
 /*!
-    \fn QPointer::operator T*() const
+    \fn template <class T> QPointer<T>::operator T*() const
 
     Cast operator; implements pointer semantics. Because of this
     function you can pass a QPointer\<T\> to a function where a T*
@@ -187,94 +194,94 @@
 */
 
 /*!
-    \fn bool operator==(const T *o, const QPointer<T> &p)
+    \fn template <class T> bool operator==(const T *o, const QPointer<T> &p)
     \relates QPointer
 
-    Equality operator. Returns true if \a o and the guarded
+    Equality operator. Returns \c true if \a o and the guarded
     pointer \a p are pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 
 */
 /*!
-    \fn bool operator==(const QPointer<T> &p, const T *o)
+    \fn template <class T> bool operator==(const QPointer<T> &p, const T *o)
     \relates QPointer
 
-    Equality operator. Returns true if \a o and the guarded
+    Equality operator. Returns \c true if \a o and the guarded
     pointer \a p are pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 
 */
 /*!
-    \fn bool operator==(T *o, const QPointer<T> &p)
+    \fn template <class T> bool operator==(T *o, const QPointer<T> &p)
     \relates QPointer
 
-    Equality operator. Returns true if \a o and the guarded
+    Equality operator. Returns \c true if \a o and the guarded
     pointer \a p are pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 
 */
 /*!
-    \fn bool operator==(const QPointer<T> &p, T *o)
+    \fn template <class T> bool operator==(const QPointer<T> &p, T *o)
     \relates QPointer
 
-    Equality operator. Returns true if \a o and the guarded
+    Equality operator. Returns \c true if \a o and the guarded
     pointer \a p are pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 
 */
 /*!
-    \fn bool operator==(const QPointer<T> &p1, const QPointer<T> &p2)
+    \fn template <class T> bool operator==(const QPointer<T> &p1, const QPointer<T> &p2)
     \relates QPointer
 
-    Equality operator. Returns true if the guarded pointers \a p1 and \a p2
+    Equality operator. Returns \c true if the guarded pointers \a p1 and \a p2
     are pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 
 */
 
 
 /*!
-    \fn bool operator!=(const T *o, const QPointer<T> &p)
+    \fn template <class T> bool operator!=(const T *o, const QPointer<T> &p)
     \relates QPointer
 
-    Inequality operator. Returns true if \a o and the guarded
+    Inequality operator. Returns \c true if \a o and the guarded
     pointer \a p are not pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 */
 /*!
-    \fn bool operator!=(const QPointer<T> &p, const T *o)
+    \fn template <class T> bool operator!=(const QPointer<T> &p, const T *o)
     \relates QPointer
 
-    Inequality operator. Returns true if \a o and the guarded
+    Inequality operator. Returns \c true if \a o and the guarded
     pointer \a p are not pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 */
 /*!
-    \fn bool operator!=(T *o, const QPointer<T> &p)
+    \fn template <class T> bool operator!=(T *o, const QPointer<T> &p)
     \relates QPointer
 
-    Inequality operator. Returns true if \a o and the guarded
+    Inequality operator. Returns \c true if \a o and the guarded
     pointer \a p are not pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 */
 /*!
-    \fn bool operator!=(const QPointer<T> &p, T *o)
+    \fn template <class T> bool operator!=(const QPointer<T> &p, T *o)
     \relates QPointer
 
-    Inequality operator. Returns true if \a o and the guarded
+    Inequality operator. Returns \c true if \a o and the guarded
     pointer \a p are not pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 */
 /*!
-    \fn bool operator!=(const QPointer<T> &p1, const QPointer<T> &p2)
+    \fn template <class T> bool operator!=(const QPointer<T> &p1, const QPointer<T> &p2)
     \relates QPointer
 
-    Inequality operator. Returns true if  the guarded pointers \a p1 and
+    Inequality operator. Returns \c true if  the guarded pointers \a p1 and
     \a p2 are not pointing to the same object, otherwise
-    returns false.
+    returns \c false.
 */
 /*!
-    \fn QPointer<T> qPointerFromVariant(const QVariant &variant)
+    \fn template <typename T> QPointer<T> qPointerFromVariant(const QVariant &variant)
 
     \internal
 

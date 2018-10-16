@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2018 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the plugins of the Qt Toolkit.
 **
@@ -10,30 +10,28 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
 ** GNU General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -75,9 +73,12 @@
 
 
 #import "qcocoaapplicationdelegate.h"
-#import "qnswindowdelegate.h"
-#import "qcocoamenuloader.h"
 #include "qcocoaintegration.h"
+#include "qcocoamenu.h"
+#include "qcocoamenuloader.h"
+#include "qcocoamenuitem.h"
+#include "qcocoansmenu.h"
+
 #include <qevent.h>
 #include <qurl.h>
 #include <qdebug.h>
@@ -88,86 +89,74 @@
 
 QT_USE_NAMESPACE
 
-static QT_MANGLE_NAMESPACE(QCocoaApplicationDelegate) *sharedCocoaApplicationDelegate = nil;
-
-static void cleanupCocoaApplicationDelegate()
-{
-    [sharedCocoaApplicationDelegate release];
+@implementation QCocoaApplicationDelegate {
+    bool startedQuit;
+    NSObject <NSApplicationDelegate> *reflectionDelegate;
+    bool inLaunch;
 }
 
-@implementation QT_MANGLE_NAMESPACE(QCocoaApplicationDelegate)
++ (instancetype)sharedDelegate
+{
+    static QCocoaApplicationDelegate *shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[self alloc] init];
+        atexit_b(^{
+            [shared release];
+            shared = nil;
+        });
+    });
+    return shared;
+}
 
-- (id)init
+- (instancetype)init
 {
     self = [super init];
-    if (self)
+    if (self) {
         inLaunch = true;
+        [[NSNotificationCenter defaultCenter]
+                addObserver:self
+                   selector:@selector(updateScreens:)
+                       name:NSApplicationDidChangeScreenParametersNotification
+                     object:NSApp];
+    }
     return self;
+}
+
+- (void)updateScreens:(NSNotification *)notification
+{
+    Q_UNUSED(notification);
+    if (QCocoaIntegration *ci = QCocoaIntegration::instance())
+        ci->updateScreens();
 }
 
 - (void)dealloc
 {
-    sharedCocoaApplicationDelegate = nil;
-    [dockMenu release];
-    [qtMenuLoader release];
+    [_dockMenu release];
     if (reflectionDelegate) {
-        [NSApp setDelegate:reflectionDelegate];
+        [[NSApplication sharedApplication] setDelegate:reflectionDelegate];
         [reflectionDelegate release];
     }
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+
     [super dealloc];
 }
 
-+ (id)allocWithZone:(NSZone *)zone
+- (NSMenu *)applicationDockMenu:(NSApplication *)sender
 {
-    @synchronized(self) {
-        if (sharedCocoaApplicationDelegate == nil) {
-            sharedCocoaApplicationDelegate = [super allocWithZone:zone];
-            return sharedCocoaApplicationDelegate;
-            qAddPostRoutine(cleanupCocoaApplicationDelegate);
-        }
-    }
-    return nil;
+    Q_UNUSED(sender);
+    // Manually invoke the delegate's -menuWillOpen: method.
+    // See QTBUG-39604 (and its fix) for details.
+    [self.dockMenu.delegate menuWillOpen:self.dockMenu];
+    return [[self.dockMenu retain] autorelease];
 }
 
-+ (QT_MANGLE_NAMESPACE(QCocoaApplicationDelegate)*)sharedDelegate
-{
-    @synchronized(self) {
-        if (sharedCocoaApplicationDelegate == nil)
-            [[self alloc] init];
-    }
-    return [[sharedCocoaApplicationDelegate retain] autorelease];
-}
-
-- (void)setDockMenu:(NSMenu*)newMenu
-{
-    [newMenu retain];
-    [dockMenu release];
-    dockMenu = newMenu;
-}
-
-- (NSMenu *)applicationDockMenu
-{
-    return [[dockMenu retain] autorelease];
-}
-
-- (void)setMenuLoader:(QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *)menuLoader
-{
-    [menuLoader retain];
-    [qtMenuLoader release];
-    qtMenuLoader = menuLoader;
-}
-
-- (QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *)menuLoader
-{
-    return [[qtMenuLoader retain] autorelease];
-}
-
-- (BOOL) canQuit
+- (BOOL)canQuit
 {
     [[NSApp mainMenu] cancelTracking];
 
     bool handle_quit = true;
-    NSMenuItem *quitMenuItem = [[[QT_MANGLE_NAMESPACE(QCocoaApplicationDelegate) sharedDelegate] menuLoader] quitMenuItem];
+    NSMenuItem *quitMenuItem = [[QT_MANGLE_NAMESPACE(QCocoaMenuLoader) sharedMenuLoader] quitMenuItem];
     if (!QGuiApplicationPrivate::instance()->modalWindowList.isEmpty()
         && [quitMenuItem isEnabled]) {
         int visible = 0;
@@ -194,14 +183,26 @@ static void cleanupCocoaApplicationDelegate()
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
 {
     // The reflection delegate gets precedence
-    if (reflectionDelegate
-        && [reflectionDelegate respondsToSelector:@selector(applicationShouldTerminate:)]) {
-        return [reflectionDelegate applicationShouldTerminate:sender];
+    if (reflectionDelegate) {
+        if ([reflectionDelegate respondsToSelector:@selector(applicationShouldTerminate:)])
+            return [reflectionDelegate applicationShouldTerminate:sender];
+        return NSTerminateNow;
     }
 
     if ([self canQuit]) {
         if (!startedQuit) {
             startedQuit = true;
+            // Close open windows. This is done in order to deliver de-expose
+            // events while the event loop is still running.
+            const QWindowList topLevels = QGuiApplication::topLevelWindows();
+            for (int i = 0; i < topLevels.size(); ++i) {
+                QWindow *topLevelWindow = topLevels.at(i);
+                // Already closed windows will not have a platform window, skip those
+                if (topLevelWindow->handle())
+                    QWindowSystemInterface::handleCloseEvent(topLevelWindow);
+            }
+            QWindowSystemInterface::flushWindowSystemEvents();
+
             QGuiApplication::exit(0);
             startedQuit = false;
         }
@@ -218,7 +219,7 @@ static void cleanupCocoaApplicationDelegate()
     return NSTerminateCancel;
 }
 
-- (void) applicationWillFinishLaunching:(NSNotification *)notification
+- (void)applicationWillFinishLaunching:(NSNotification *)notification
 {
     Q_UNUSED(notification);
 
@@ -248,24 +249,31 @@ static void cleanupCocoaApplicationDelegate()
 }
 
 // called by QCocoaIntegration's destructor before resetting the application delegate to nil
-- (void) removeAppleEventHandlers
+- (void)removeAppleEventHandlers
 {
     NSAppleEventManager *eventManager = [NSAppleEventManager sharedAppleEventManager];
     [eventManager removeEventHandlerForEventClass:kCoreEventClass andEventID:kAEQuitApplication];
     [eventManager removeEventHandlerForEventClass:kInternetEventClass andEventID:kAEGetURL];
 }
 
+- (bool)inLaunch
+{
+    return inLaunch;
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
     Q_UNUSED(aNotification);
     inLaunch = false;
-    // qt_release_apple_event_handler();
 
-
-    // Insert code here to initialize your application
+    if (qEnvironmentVariableIsEmpty("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM")) {
+        // Move the application window to front to avoid launching behind the terminal.
+        // Ignoring other apps is necessary (we must ignore the terminal), but makes
+        // Qt apps play slightly less nice with other apps when lanching from Finder
+        // (See the activateIgnoringOtherApps docs.)
+        [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
+    }
 }
-
-
 
 - (void)application:(NSApplication *)sender openFiles:(NSArray *)filenames
 {
@@ -273,7 +281,7 @@ static void cleanupCocoaApplicationDelegate()
     Q_UNUSED(sender);
 
     for (NSString *fileName in filenames) {
-        QString qtFileName = QCFString::toQString(fileName);
+        QString qtFileName = QString::fromNSString(fileName);
         if (inLaunch) {
             // We need to be careful because Cocoa will be nice enough to take
             // command line arguments and send them to us as events. Given the history
@@ -301,15 +309,33 @@ static void cleanupCocoaApplicationDelegate()
     return NO; // Someday qApp->quitOnLastWindowClosed(); when QApp and NSApp work closer together.
 }
 
+- (void)applicationWillHide:(NSNotification *)notification
+{
+    if (reflectionDelegate
+        && [reflectionDelegate respondsToSelector:@selector(applicationWillHide:)]) {
+        [reflectionDelegate applicationWillHide:notification];
+    }
+
+    // When the application is hidden Qt will hide the popup windows associated with
+    // it when it has lost the activation for the application. However, when it gets
+    // to this point it believes the popup windows to be hidden already due to the
+    // fact that the application itself is hidden, which will cause a problem when
+    // the application is made visible again.
+    const QWindowList topLevelWindows = QGuiApplication::topLevelWindows();
+    for (QWindow *topLevelWindow : qAsConst(topLevelWindows)) {
+        if ((topLevelWindow->type() & Qt::Popup) == Qt::Popup && topLevelWindow->isVisible())
+            topLevelWindow->hide();
+    }
+}
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification
 {
-    Q_UNUSED(notification);
-/*
     if (reflectionDelegate
         && [reflectionDelegate respondsToSelector:@selector(applicationDidBecomeActive:)])
         [reflectionDelegate applicationDidBecomeActive:notification];
 
+    QWindowSystemInterface::handleApplicationStateChanged(Qt::ApplicationActive);
+/*
     onApplicationChangedActivation(true);
 
     if (!QWidget::mouseGrabber()){
@@ -328,12 +354,12 @@ static void cleanupCocoaApplicationDelegate()
 
 - (void)applicationDidResignActive:(NSNotification *)notification
 {
-    Q_UNUSED(notification);
-/*
     if (reflectionDelegate
         && [reflectionDelegate respondsToSelector:@selector(applicationDidResignActive:)])
         [reflectionDelegate applicationDidResignActive:notification];
 
+    QWindowSystemInterface::handleApplicationStateChanged(Qt::ApplicationInactive);
+/*
     onApplicationChangedActivation(false);
 
     if (!QWidget::mouseGrabber())
@@ -342,6 +368,26 @@ static void cleanupCocoaApplicationDelegate()
     qt_last_native_mouse_receiver = 0;
     qt_button_down = 0;
 */
+}
+
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)theApplication hasVisibleWindows:(BOOL)flag
+{
+    Q_UNUSED(theApplication);
+    Q_UNUSED(flag);
+    if (reflectionDelegate
+        && [reflectionDelegate respondsToSelector:@selector(applicationShouldHandleReopen:hasVisibleWindows:)])
+        return [reflectionDelegate applicationShouldHandleReopen:theApplication hasVisibleWindows:flag];
+
+    /*
+       true to force delivery of the event even if the application state is already active,
+       because rapp (handle reopen) events are sent each time the dock icon is clicked regardless
+       of the active state of the application or number of visible windows. For example, a browser
+       app that has no windows opened would need the event be to delivered even if it was already
+       active in order to create a new window as per OS X conventions.
+     */
+    QWindowSystemInterface::handleApplicationStateChanged(Qt::ApplicationActive, true /*forcePropagate*/);
+
+    return YES;
 }
 
 - (void)setReflectionDelegate:(NSObject <NSApplicationDelegate> *)oldDelegate
@@ -381,7 +427,7 @@ static void cleanupCocoaApplicationDelegate()
 {
     Q_UNUSED(replyEvent);
     NSString *urlString = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
-    QWindowSystemInterface::handleFileOpenEvent(QCFString::toQString(urlString));
+    QWindowSystemInterface::handleFileOpenEvent(QUrl(QString::fromNSString(urlString)));
 }
 
 - (void)appleEventQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent
@@ -391,10 +437,49 @@ static void cleanupCocoaApplicationDelegate()
     [NSApp terminate:self];
 }
 
-- (void)qtDispatcherToQAction:(id)sender
+@end
+
+@implementation QCocoaApplicationDelegate (Menus)
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item
 {
-    Q_UNUSED(sender);
-    [qtMenuLoader qtDispatcherToQPAMenuItem:sender];
+    auto *nativeItem = qt_objc_cast<QCocoaNSMenuItem *>(item);
+    if (!nativeItem)
+        return item.enabled; // FIXME Test with with Qt as plugin or embedded QWindow.
+
+    auto *platformItem = nativeItem.platformMenuItem;
+    if (!platformItem) // Try a bit harder with orphan menu itens
+        return item.hasSubmenu || (item.enabled && (item.action != @selector(qt_itemFired:)));
+
+    // Menu-holding items are always enabled, as it's conventional in Cocoa
+    if (platformItem->menu())
+        return YES;
+
+    return platformItem->isEnabled();
+}
+
+@end
+
+@implementation QCocoaApplicationDelegate (MenuAPI)
+
+- (void)qt_itemFired:(QCocoaNSMenuItem *)item
+{
+    if (item.hasSubmenu)
+        return;
+
+    auto *nativeItem = qt_objc_cast<QCocoaNSMenuItem *>(item);
+    Q_ASSERT_X(nativeItem, qPrintable(__FUNCTION__), "Triggered menu item is not a QCocoaNSMenuItem.");
+    auto *platformItem = nativeItem.platformMenuItem;
+    // Menu-holding items also get a target to play nicely
+    // with NSMenuValidation but should not trigger.
+    if (!platformItem || platformItem->menu())
+        return;
+
+    QScopedScopeLevelCounter scopeLevelCounter(QGuiApplicationPrivate::instance()->threadData);
+    QGuiApplicationPrivate::modifier_buttons = [QNSView convertKeyModifiers:[NSEvent modifierFlags]];
+
+    static QMetaMethod activatedSignal = QMetaMethod::fromSignal(&QCocoaMenuItem::activated);
+    activatedSignal.invoke(platformItem, Qt::QueuedConnection);
 }
 
 @end

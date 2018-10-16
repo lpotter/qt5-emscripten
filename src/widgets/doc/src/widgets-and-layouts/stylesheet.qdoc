@@ -1,7 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
@@ -10,17 +10,17 @@
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Free Documentation License Usage
 ** Alternatively, this file may be used under the terms of the GNU Free
 ** Documentation License version 1.3 as published by the Free Software
 ** Foundation and appearing in the file included in the packaging of
-** this file.  Please review the following information to ensure
+** this file. Please review the following information to ensure
 ** the GNU Free Documentation License version 1.3 requirements
-** will be met: http://www.gnu.org/copyleft/fdl.html.
+** will be met: https://www.gnu.org/licenses/fdl-1.3.html.
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -80,7 +80,7 @@
     the QPalette::Button role to red for a QPushButton to obtain a
     red push button. However, this wasn't guaranteed to work for all
     styles, because style authors are restricted by the different
-    platforms' guidelines and (on Windows XP and Mac OS X) by the
+    platforms' guidelines and (on Windows and \macos) by the
     native theme engine.
 
     Style sheets let you perform all kinds of customizations that are
@@ -111,35 +111,31 @@
     will.
 
     \table
-    \row \li \inlineimage stylesheet-coffee-xp.png
-         \li \inlineimage stylesheet-pagefold.png
-    \row \li Coffee theme running on Windows XP
-         \li Pagefold theme running on Windows XP
+    \row \li \inlineimage stylesheet-pagefold.png
+    \row \li Pagefold theme running on Windows
     \endtable
 
     \table
     \row \li \inlineimage stylesheet-coffee-cleanlooks.png
          \li \inlineimage stylesheet-pagefold-mac.png
     \row \li Coffee theme running on Ubuntu Linux
-         \li Pagefold theme running on Mac OS X
+         \li Pagefold theme running on \macos
     \endtable
 
     When a style sheet is active, the QStyle returned by QWidget::style()
     is a wrapper "style sheet" style, \e not the platform-specific style. The
     wrapper style ensures that any active style sheet is respected and
     otherwise forwards the drawing operations to the underlying,
-    platform-specific style (e.g., QWindowsXPStyle on Windows XP).
+    platform-specific style (e.g., QWindowsVistaStyle on Windows).
 
-    Since Qt 4.5, Qt style sheets fully supports Mac OS X.
+    Since Qt 4.5, Qt style sheets fully supports \macos.
 
-    \warning Qt style sheets are currently not supported for custom QStyle
-    subclasses. We plan to address this in some future release.
 */
 
 /*!
     \page stylesheet-syntax.html
-    \contentspage {Qt Style Sheet}{Contents}
-    \previouspage Qt Style Sheet
+    \contentspage {Qt Style Sheets}{Contents}
+    \previouspage Qt Style Sheets
     \nextpage Qt Designer Integration
     \title The Style Sheet Syntax
 
@@ -494,9 +490,9 @@
     \section1 Inheritance
 
     In classic CSS, when font and color of an item is not explicitly set,
-    it gets automatically inherited from the parent. When using Qt Style Sheets,
-    a widget does \b{not} automatically inherit its font and color setting
-    from its parent widget.
+    it gets automatically inherited from the parent. By default, when using
+    Qt Style Sheets, a widget does \b{not} automatically inherit its font
+    and color setting from its parent widget.
 
     For example, consider a QPushButton inside a QGroupBox:
 
@@ -509,10 +505,24 @@
 
     \snippet code/doc_src_stylesheet.cpp 25
 
-    In contrast, setting a font and propagate using QWidget::setFont() and
+    In contrast, setting a font and palette using QWidget::setFont() and
     QWidget::setPalette() propagates to child widgets.
 
-    \section1 Widgets inside C++ namespaces
+    If you would prefer that the font and palette propagate to child widgets,
+    you can set the Qt::AA_UseStyleSheetPropagationInWidgetStyles flag, like
+    this:
+
+    Usage:
+    \snippet code/doc_src_stylesheet.cpp 96
+
+    When the widget-style font and palette propagation is enabled, font and
+    palette changes made through Qt Style Sheets will behave as though the
+    user had manually called the corresponding QWidget::setPalette() and
+    QWidget::setFont() methods on all of the QWidgets targeted by the style
+    sheet.  If this would have caused propagation in C++, it will cause
+    propagation in style sheets and visa versa.
+
+    \section1 Widgets Inside C++ Namespaces
 
     The Type Selector can be used to style widgets of a particular type. For
     example,
@@ -528,7 +538,7 @@
 
     \snippet code/doc_src_stylesheet.cpp 27
 
-    \section1 Setting QObject properties
+    \section1 Setting QObject Properties
 
     From 4.3 and above, any designable Q_PROPERTY
     can be set using the qproperty-<property name> syntax.
@@ -543,7 +553,7 @@
 
 /*!
     \page stylesheet-designer.html
-    \contentspage {Qt Style Sheet}{Contents}
+    \contentspage {Qt Style Sheets}{Contents}
     \previouspage The Style Sheet Syntax
     \nextpage Customizing Qt Widgets Using Style Sheets
     \title Qt Designer Integration
@@ -569,7 +579,7 @@
 
 /*!
     \page stylesheet-customizing.html
-    \contentspage {Qt Style Sheet}{Contents}
+    \contentspage {Qt Style Sheets}{Contents}
     \previouspage Qt Designer Integration
     \nextpage Qt Style Sheets Reference
     \title Customizing Qt Widgets Using Style Sheets
@@ -673,7 +683,7 @@
 
 /*!
     \page stylesheet-reference.html
-    \contentspage {Qt Style Sheet}{Contents}
+    \contentspage {Qt Style Sheets}{Contents}
     \previouspage Customizing Qt Widgets Using Style Sheets
     \nextpage Qt Style Sheets Examples
     \title Qt Style Sheets Reference
@@ -813,7 +823,7 @@
 
            In the case of a checkable QGroupBox, the title includes the
            check indicator. The indicator is styled using the
-           the \l{#indicator-sub}{::indicator} subcontrol. The
+           \l{#indicator-sub}{::indicator} subcontrol. The
            \l{#spacing-prop}{spacing} property can be used to control
            the spacing between the text and indicator.
 
@@ -831,7 +841,7 @@
            \l{#selected-ps}{:selected},
            and \l{#checked-ps}{:checked} pseudo states.
 
-           Sort indicator in can be styled using the
+           The sort indicator can be styled using the
            \l{#up-arrow-sub}{::up-arrow} and the
            \l{#down-arrow-sub}{::down-arrow} Sub-control.
 
@@ -861,6 +871,9 @@
            The password character can be styled using the
            \l{#lineedit-password-character-prop}{lineedit-password-character}
            property.
+
+           The password mask delay can be changed using the
+           \l{#lineedit-password-mask-delay-prop}{lineedit-password-mask-delay}
 
            See \l{Qt Style Sheets Examples#Customizing QLineEdit}{Customizing QLineEdit}
            for an example.
@@ -1754,7 +1767,7 @@
         \li \b{\c bottom} \target bottom-prop
         \li \l{#Length}{Length}
         \li If \l{#position-prop}{position} is \c relative (the
-           default), moves a \l{subcontrol} by a certain offset up;
+           default), moves a subcontrol by a certain offset up;
            specifying \tt{bottom: \e{y}} is then equivalent to
            specifying \tt{\l{Qt Style Sheets Reference#top-prop}{top}: -\e{y}}.
 
@@ -1778,8 +1791,9 @@
            a QMessageBox. The possible values are 0
            (\l{QDialogButtonBox::}{WinLayout}), 1
            (\l{QDialogButtonBox::}{MacLayout}), 2
-           (\l{QDialogButtonBox::}{KdeLayout}), and 3
-           (\l{QDialogButtonBox::}{GnomeLayout}).
+           (\l{QDialogButtonBox::}{KdeLayout}), 3
+           (\l{QDialogButtonBox::}{GnomeLayout}) and 5
+           (\l{QDialogButtonBox::}{AndroidLayout}).
 
            If this property is not specified, it defaults to the
            value specified by the current style for the
@@ -1906,7 +1920,7 @@
     \row
         \li \b{\c height} \target height-prop
         \li \l{#Length}{Length}
-        \li The height of a \l{subcontrol} (or in some case, a widget).
+        \li The height of a subcontrol (or in some case, a widget).
 
            If this property is not specified, it defaults to a value
            that depends on the subcontrol/widget and on the current style.
@@ -1944,7 +1958,7 @@
         \li \b{\c image}* \target image-prop
         \li \l{#Url}{Url}+
         \li The image that is drawn in the contents rectangle of a
-           \l{subcontrol}.
+           subcontrol.
 
            The image property accepts a list of \l{#Url}{Url}s or
            an \c{svg}. The actual image that is drawn is determined
@@ -1959,7 +1973,7 @@
            image within the rectangle can be specified using
            \l{image-position-prop}{image-position}.
 
-           This property is for \l{subcontrol}s only--we don't support it for
+           This property is for subcontrols only--we don't support it for
            other elements.
 
            \warning The QIcon SVG plugin is needed to render SVG images.
@@ -1978,7 +1992,7 @@
         \li \b{\c left} \target left-prop
         \li \l{#Length}{Length}
         \li If \l{#position-prop}{position} is \c relative (the
-           default), moves a \l{subcontrol} by a certain offset to
+           default), moves a subcontrol by a certain offset to
            the right.
 
            If \l{#position-prop}{position} is \c absolute, the \c
@@ -2007,6 +2021,23 @@
            Example:
 
            \snippet code/doc_src_stylesheet.qdoc 61
+
+    \row
+        \li \b{\c lineedit-password-mask-delay*} \target lineedit-password-mask-delay-prop
+        \li \l{#Number}{Number}
+        \li The QLineEdit password mask delay in milliseconds before
+           \l{#lineedit-password-character-prop}{lineedit-password-character} is applied to visible character.
+
+           If this property is not specified, it defaults to the
+           value specified by the current style for the
+           \l{QStyle::}{SH_LineEdit_PasswordMaskDelay} style hint.
+
+           \b{This property was added in Qt 5.4.}
+
+           Example:
+
+           \snippet code/doc_src_stylesheet.qdoc 160
+
 
     \row
         \li \b{\c margin} \target margin-prop
@@ -2168,6 +2199,54 @@
            \snippet code/doc_src_stylesheet.qdoc 68
 
     \row
+        \li \b outline
+        \li
+        \li The outline drawn around the object's border.
+
+    \row
+        \li \b outline-color
+        \li \l{#Color}{Color}
+        \li The color of the outline.
+            See also \l{Qt Style Sheets Reference#border-color-prop}{border-color}
+
+    \row
+        \li \b outline-offset
+        \li \l{#Length}{Length}
+        \li The outline's offset from the border of the widget.
+
+    \row
+        \li \b outline-style
+        \li
+        \li Specifies the pattern used to draw the outline.
+            See also \l{Qt Style Sheets Reference#border-style-prop}{border-style}
+
+    \row
+        \li \b outline-radius
+        \li
+        \li Adds rounded corners to the outline
+
+    \row
+        \li \b outline-bottom-left-radius
+        \li \l{#Radius}{Radius}
+        \li The radius for the bottom-left rounded corner of the outline.
+
+    \row
+        \li \b outline-bottom-right-radius
+        \li \l{#Radius}{Radius}
+        \li The radius for the bottom-right rounded corner of the outline.
+
+    \row
+        \li \b outline-top-left-radius
+        \li \l{#Radius}{Radius}
+        \li The radius for the top-left corner of the outline.
+
+    \row
+        \li \b outline-top-right-radius
+        \li \l{#Radius}{Radius}
+        \li The radius for the top-right rounded corner of the outline.
+
+
+    \row
         \li \b{\c padding} \target padding-prop
         \li \l{#Box Lengths}{Box Lengths}
         \li The widget's padding. Equivalent to specifying \c
@@ -2232,7 +2311,7 @@
         \li \b{\c right} \target right-prop
         \li \l{#Length}{Length}
         \li If \l{#position-prop}{position} is \c relative (the
-           default), moves a \l{subcontrol} by a certain offset to
+           default), moves a subcontrol by a certain offset to
            the left; specifying \tt{right: \e{x}} is then equivalent
            to specifying \tt{\l{Qt Style Sheets Reference#left-prop}{left}: -\e{x}}.
 
@@ -2323,7 +2402,7 @@
     \row
         \li \b{\c subcontrol-origin*} \target subcontrol-origin-prop
         \li \l{#Origin}{Origin}
-        \li The origin rectangle of the \l subcontrol within the
+        \li The origin rectangle of the subcontrol within the
            parent element.
 
            If this property is not specified, the default is \c
@@ -2339,7 +2418,7 @@
     \row
         \li \b{\c subcontrol-position*} \target subcontrol-position-prop
         \li \l{#Alignment}{Alignment}
-        \li The alignment of the \l subcontrol within the origin
+        \li The alignment of the subcontrol within the origin
            rectangle specified by \l{Qt Style Sheets Reference#subcontrol-origin-prop}
            {subcontrol-origin}.
 
@@ -2352,6 +2431,28 @@
 
            See also
            \l{Qt Style Sheets Reference#subcontrol-origin-prop}{subcontrol-origin}.
+
+    \row
+        \li \b{\c titlebar-show-tooltips-on-buttons}}
+            \target titlebar-show-tooltips-on-buttons-prop
+        \li \c bool
+        \li Whether tool tips are shown on window title bar buttons.
+
+    \row
+        \li \b{\c widget-animation-duration*} \target widget-animation-duration
+        \li \l{#Number}{Number}
+        \li How much an animation should last (in milliseconds).
+            A value equal to zero means that the animations will be disabled.
+
+           If this property is not specified, it defaults to the
+           value specified by the current style for the
+           \l{QStyle::}{SH_Widget_Animation_Duration} style hint.
+
+           \b{This property was added in Qt 5.10.}
+
+           Example:
+
+           \snippet code/doc_src_stylesheet.qdoc 162
 
     \row
         \li \b{\c text-align} \target text-align-prop
@@ -2380,7 +2481,7 @@
         \li \b{\c top} \target top-prop
         \li \l{#Length}{Length}
         \li If \l{#position-prop}{position} is \c relative (the
-           default), moves a \l{subcontrol} by a certain offset
+           default), moves a subcontrol by a certain offset
            down.
 
            If \l{#position-prop}{position} is \c absolute, the \c top
@@ -2400,7 +2501,7 @@
     \row
         \li \b{\c width} \target width-prop
         \li \l{#Length}{Length}
-        \li The width of a \l{subcontrol} (or a widget in some cases).
+        \li The width of a subcontrol (or a widget in some cases).
 
            If this property is not specified, it defaults to a value
            that depends on the subcontrol/widget and on the current style.
@@ -2881,6 +2982,9 @@
            \li \c ex: the ex width of the font (i.e., the height of 'x')
            \endlist
 
+           However, Qt is limited to font sizes in \c pt and \c px and any other
+           size must be in \c px, \c em or \c ex.
+
     \row
         \li \b{Number} \target Number
         \li A decimal integer or a real number
@@ -2960,7 +3064,7 @@
         \li \b{Url} \target Url
         \li \tt{url(\e{filename})}
         \li \tt{\e{filename}} is the name of a file on the local disk
-           or stored using \l{the Qt Resource System}. Setting an
+           or stored using \l{The Qt Resource System}. Setting an
            image implicitly sets the width and height of the element.
 
     \endtable
@@ -3358,7 +3462,7 @@
 
 /*!
     \page stylesheet-examples.html
-    \contentspage {Qt Style Sheet}{Contents}
+    \contentspage {Qt Style Sheets}{Contents}
     \previouspage Qt Style Sheets Reference
     \title Qt Style Sheets Examples
 
@@ -3442,7 +3546,7 @@
 
     \list
     \li We have made a request that cannot be satisfied using the
-       native styles alone (e.g., the Windows XP theme engine doesn't
+       native styles alone (e.g., the Windows Vista theme engine doesn't
        let us specify the background color of a button).
     \li Therefore, the button is rendered using style sheets.
     \li We haven't specified any values for
@@ -3526,7 +3630,7 @@
     [Hint: The \l{The Style Sheet Syntax#Conflict Resolution}{Conflict Resolution} section above explains
     what happens in cases like this.]
 
-    \section1 Customizing specific widgets
+    \section1 Customizing Specific Widgets
 
     This section provides examples to customize specific widgets using Style Sheets.
 
@@ -3724,7 +3828,7 @@
     \snippet code/doc_src_stylesheet.qdoc 135
 
     If you want the scroll buttons of the scroll bar to be placed together
-    (instead of the edges) like on Mac OS X, you can use the following
+    (instead of the edges) like on \macos, you can use the following
     stylesheet:
     \snippet code/doc_src_stylesheet.qdoc 136
 
@@ -3821,6 +3925,12 @@
 
     \snippet code/doc_src_stylesheet.qdoc 150
 
+    The QTableView's checkbox indicator can also be customized. In the
+    following snippet the indicator \c background-color in unchecked state is
+    customized:
+
+    \snippet code/doc_src_stylesheet.qdoc 161
+
     \section2 Customizing QToolBar
 
     The background and the handle of a QToolBar is customized as below:
@@ -3907,7 +4017,7 @@
     \sa {Style Sheet Example}, {Supported HTML Subset}, QStyle
 
 
-    \section1 Common mistakes
+    \section1 Common Mistakes
 
     This section lists some common mistakes when using stylesheets.
 

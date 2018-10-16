@@ -1,39 +1,48 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Digia Plc and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/legal
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the demonstration applications of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:BSD$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Digia.  For licensing terms and
-** conditions see http://qt.digia.com/licensing.  For further information
-** use the contact form at http://qt.digia.com/contact-us.
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** BSD License Usage
+** Alternatively, you may use this file under the terms of the BSD license
+** as follows:
 **
-** In addition, as a special exception, Digia gives you certain additional
-** rights.  These rights are described in the Digia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of The Qt Company Ltd nor the names of its
+**     contributors may be used to endorse or promote products derived
+**     from this software without specific prior written permission.
 **
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
 **
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 **
 ** $QT_END_LICENSE$
 **
@@ -41,6 +50,8 @@
 
 #include "gradients.h"
 #include "hoverpoints.h"
+
+#include <algorithm>
 
 ShadeWidget::ShadeWidget(ShadeType type, QWidget *parent)
     : QWidget(parent), m_shade_type(type), m_alpha_gradient(QLinearGradient(0, 0, 0, 0))
@@ -77,7 +88,8 @@ ShadeWidget::ShadeWidget(ShadeType type, QWidget *parent)
 
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-    connect(m_hoverPoints, SIGNAL(pointsChanged(QPolygonF)), this, SIGNAL(colorsChanged()));
+    connect(m_hoverPoints, &HoverPoints::pointsChanged,
+            this, &ShadeWidget::colorsChanged);
 }
 
 QPolygonF ShadeWidget::points() const
@@ -180,10 +192,14 @@ GradientEditor::GradientEditor(QWidget *parent)
     vbox->addWidget(m_blue_shade);
     vbox->addWidget(m_alpha_shade);
 
-    connect(m_red_shade, SIGNAL(colorsChanged()), this, SLOT(pointsUpdated()));
-    connect(m_green_shade, SIGNAL(colorsChanged()), this, SLOT(pointsUpdated()));
-    connect(m_blue_shade, SIGNAL(colorsChanged()), this, SLOT(pointsUpdated()));
-    connect(m_alpha_shade, SIGNAL(colorsChanged()), this, SLOT(pointsUpdated()));
+    connect(m_red_shade, &ShadeWidget::colorsChanged,
+            this, &GradientEditor::pointsUpdated);
+    connect(m_green_shade, &ShadeWidget::colorsChanged,
+           this, &GradientEditor::pointsUpdated);
+    connect(m_blue_shade, &ShadeWidget::colorsChanged,
+            this, &GradientEditor::pointsUpdated);
+    connect(m_alpha_shade, &ShadeWidget::colorsChanged,
+            this, &GradientEditor::pointsUpdated);
 }
 
 inline static bool x_less_than(const QPointF &p1, const QPointF &p2)
@@ -204,7 +220,7 @@ void GradientEditor::pointsUpdated()
     points += m_blue_shade->points();
     points += m_alpha_shade->points();
 
-    qSort(points.begin(), points.end(), x_less_than);
+    std::sort(points.begin(), points.end(), x_less_than);
 
     for (int i = 0; i < points.size(); ++i) {
         qreal x = int(points.at(i).x());
@@ -285,8 +301,15 @@ GradientWidget::GradientWidget(QWidget *parent)
     m_reflectSpreadButton = new QRadioButton(tr("Reflect Spread"), spreadGroup);
     m_repeatSpreadButton = new QRadioButton(tr("Repeat Spread"), spreadGroup);
 
+    QGroupBox *presetsGroup = new QGroupBox(mainGroup);
+    presetsGroup->setTitle(tr("Presets"));
+    QPushButton *prevPresetButton = new QPushButton(tr("<"), presetsGroup);
+    m_presetButton = new QPushButton(tr("(unset)"), presetsGroup);
+    QPushButton *nextPresetButton = new QPushButton(tr(">"), presetsGroup);
+    updatePresetName();
+
     QGroupBox *defaultsGroup = new QGroupBox(mainGroup);
-    defaultsGroup->setTitle(tr("Defaults"));
+    defaultsGroup->setTitle(tr("Examples"));
     QPushButton *default1Button = new QPushButton(tr("1"), defaultsGroup);
     QPushButton *default2Button = new QPushButton(tr("2"), defaultsGroup);
     QPushButton *default3Button = new QPushButton(tr("3"), defaultsGroup);
@@ -311,11 +334,12 @@ GradientWidget::GradientWidget(QWidget *parent)
     mainLayout->addWidget(m_renderer);
     mainLayout->addWidget(mainGroup);
 
-    mainGroup->setFixedWidth(180);
+    mainGroup->setFixedWidth(200);
     QVBoxLayout *mainGroupLayout = new QVBoxLayout(mainGroup);
     mainGroupLayout->addWidget(editorGroup);
     mainGroupLayout->addWidget(typeGroup);
     mainGroupLayout->addWidget(spreadGroup);
+    mainGroupLayout->addWidget(presetsGroup);
     mainGroupLayout->addWidget(defaultsGroup);
     mainGroupLayout->addStretch(1);
     mainGroupLayout->addWidget(showSourceButton);
@@ -337,39 +361,64 @@ GradientWidget::GradientWidget(QWidget *parent)
     spreadGroupLayout->addWidget(m_repeatSpreadButton);
     spreadGroupLayout->addWidget(m_reflectSpreadButton);
 
+    QHBoxLayout *presetsGroupLayout = new QHBoxLayout(presetsGroup);
+    presetsGroupLayout->addWidget(prevPresetButton);
+    presetsGroupLayout->addWidget(m_presetButton, 1);
+    presetsGroupLayout->addWidget(nextPresetButton);
+
     QHBoxLayout *defaultsGroupLayout = new QHBoxLayout(defaultsGroup);
     defaultsGroupLayout->addWidget(default1Button);
     defaultsGroupLayout->addWidget(default2Button);
     defaultsGroupLayout->addWidget(default3Button);
     editorGroupLayout->addWidget(default4Button);
 
-    connect(m_editor, SIGNAL(gradientStopsChanged(QGradientStops)),
-            m_renderer, SLOT(setGradientStops(QGradientStops)));
+    connect(m_editor, &GradientEditor::gradientStopsChanged,
+            m_renderer, &GradientRenderer::setGradientStops);
+    connect(m_linearButton, &QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setLinearGradient);
+    connect(m_radialButton, &QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setRadialGradient);
+    connect(m_conicalButton,&QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setConicalGradient);
 
-    connect(m_linearButton, SIGNAL(clicked()), m_renderer, SLOT(setLinearGradient()));
-    connect(m_radialButton, SIGNAL(clicked()), m_renderer, SLOT(setRadialGradient()));
-    connect(m_conicalButton, SIGNAL(clicked()), m_renderer, SLOT(setConicalGradient()));
+    connect(m_padSpreadButton, &QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setPadSpread);
+    connect(m_reflectSpreadButton, &QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setReflectSpread);
+    connect(m_repeatSpreadButton, &QRadioButton::clicked,
+            m_renderer, &GradientRenderer::setRepeatSpread);
 
-    connect(m_padSpreadButton, SIGNAL(clicked()), m_renderer, SLOT(setPadSpread()));
-    connect(m_reflectSpreadButton, SIGNAL(clicked()), m_renderer, SLOT(setReflectSpread()));
-    connect(m_repeatSpreadButton, SIGNAL(clicked()), m_renderer, SLOT(setRepeatSpread()));
+    connect(prevPresetButton, &QPushButton::clicked,
+            this, &GradientWidget::setPrevPreset);
+    connect(m_presetButton, &QPushButton::clicked,
+            this, &GradientWidget::setPreset);
+    connect(nextPresetButton, &QPushButton::clicked,
+            this, &GradientWidget::setNextPreset);
 
-    connect(default1Button, SIGNAL(clicked()), this, SLOT(setDefault1()));
-    connect(default2Button, SIGNAL(clicked()), this, SLOT(setDefault2()));
-    connect(default3Button, SIGNAL(clicked()), this, SLOT(setDefault3()));
-    connect(default4Button, SIGNAL(clicked()), this, SLOT(setDefault4()));
+    connect(default1Button, &QPushButton::clicked,
+            this, &GradientWidget::setDefault1);
+    connect(default2Button, &QPushButton::clicked,
+            this, &GradientWidget::setDefault2);
+    connect(default3Button, &QPushButton::clicked,
+            this, &GradientWidget::setDefault3);
+    connect(default4Button, &QPushButton::clicked,
+            this, &GradientWidget::setDefault4);
 
-    connect(showSourceButton, SIGNAL(clicked()), m_renderer, SLOT(showSource()));
+    connect(showSourceButton, &QPushButton::clicked,
+            m_renderer, &GradientRenderer::showSource);
 #ifdef QT_OPENGL_SUPPORT
-    connect(enableOpenGLButton, SIGNAL(clicked(bool)), m_renderer, SLOT(enableOpenGL(bool)));
-#endif    
-    connect(whatsThisButton, SIGNAL(clicked(bool)), m_renderer, SLOT(setDescriptionEnabled(bool)));
-    connect(whatsThisButton, SIGNAL(clicked(bool)),
-            m_renderer->hoverPoints(), SLOT(setDisabled(bool)));
-    connect(m_renderer, SIGNAL(descriptionEnabledChanged(bool)),
-            whatsThisButton, SLOT(setChecked(bool)));
-    connect(m_renderer, SIGNAL(descriptionEnabledChanged(bool)),
-            m_renderer->hoverPoints(), SLOT(setDisabled(bool)));
+    connect(enableOpenGLButton, QOverload<bool>::of(&QPushButton::clicked),
+            m_renderer, &ArthurFrame::enableOpenGL);
+#endif
+
+    connect(whatsThisButton, QOverload<bool>::of(&QPushButton::clicked),
+            m_renderer, &ArthurFrame::setDescriptionEnabled);
+    connect(whatsThisButton, QOverload<bool>::of(&QPushButton::clicked),
+            m_renderer->hoverPoints(), &HoverPoints::setDisabled);
+    connect(m_renderer, QOverload<bool>::of(&ArthurFrame::descriptionEnabledChanged),
+            whatsThisButton, &QPushButton::setChecked);
+    connect(m_renderer, QOverload<bool>::of(&ArthurFrame::descriptionEnabledChanged),
+            m_renderer->hoverPoints(), &HoverPoints::setDisabled);
 
     m_renderer->loadSourceFile(":res/gradients/gradients.cpp");
     m_renderer->loadDescription(":res/gradients/gradients.html");
@@ -440,6 +489,40 @@ void GradientWidget::setDefault(int config)
     m_editor->setGradientStops(stops);
     m_renderer->hoverPoints()->setPoints(pts);
     m_renderer->setGradientStops(stops);
+}
+
+void GradientWidget::updatePresetName()
+{
+    QMetaEnum presetEnum = QMetaEnum::fromType<QGradient::Preset>();
+    m_presetButton->setText(QLatin1String(presetEnum.key(m_presetIndex)));
+}
+
+void GradientWidget::changePresetBy(int indexOffset)
+{
+    QMetaEnum presetEnum = QMetaEnum::fromType<QGradient::Preset>();
+    m_presetIndex = qBound(0, m_presetIndex + indexOffset, presetEnum.keyCount() - 1);
+
+    QGradient::Preset preset = static_cast<QGradient::Preset>(presetEnum.value(m_presetIndex));
+    QGradient gradient(preset);
+    if (gradient.type() != QGradient::LinearGradient)
+        return;
+
+    QLinearGradient *linearGradientPointer = static_cast<QLinearGradient *>(&gradient);
+    QLineF objectStopsLine(linearGradientPointer->start(), linearGradientPointer->finalStop());
+    qreal scaleX = qFuzzyIsNull(objectStopsLine.dx()) ? 1.0 : (0.8 * m_renderer->width() / qAbs(objectStopsLine.dx()));
+    qreal scaleY = qFuzzyIsNull(objectStopsLine.dy()) ? 1.0 : (0.8 * m_renderer->height() / qAbs(objectStopsLine.dy()));
+    QLineF logicalStopsLine = QTransform::fromScale(scaleX, scaleY).map(objectStopsLine);
+    logicalStopsLine.translate(m_renderer->rect().center() - logicalStopsLine.center());
+    QPolygonF logicalStops;
+    logicalStops << logicalStopsLine.p1() << logicalStopsLine.p2();
+
+    m_linearButton->animateClick();
+    m_padSpreadButton->animateClick();
+    m_editor->setGradientStops(gradient.stops());
+    m_renderer->hoverPoints()->setPoints(logicalStops);
+    m_renderer->setGradientStops(gradient.stops());
+
+    updatePresetName();
 }
 
 GradientRenderer::GradientRenderer(QWidget *parent)
